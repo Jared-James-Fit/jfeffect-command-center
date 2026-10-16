@@ -39,6 +39,7 @@ import { useExerciseAliasIndex } from "@/hooks/use-exercise-alias-index";
 import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, barPrefixMatch, onPages, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
+import { OPEN_MORE_EVENT, pageOwnsTopBar } from "@/lib/shell-events";
 
 export interface NavItem {
   to: string;
@@ -254,6 +255,7 @@ export function AppShell({
   children,
   moreInHeader = false,
   simpleHeader = false,
+  ownTopBarOn,
 }: {
   items: NavItem[];
   bottomItems?: NavItem[];
@@ -271,6 +273,12 @@ export function AppShell({
    * More instead of sitting in the bar as a second menu and a toggle.
    */
   simpleHeader?: boolean;
+  /**
+   * Pages that draw their own phone top bar (Crew: + · JF Effect · heart ·
+   * you). On those the shell's bar (logo, title, ☰) steps aside so there's
+   * one bar, not two; their ☰ opens More through OPEN_MORE_EVENT.
+   */
+  ownTopBarOn?: readonly string[];
 }) {
   useKeyboardOpen();
   useExerciseLibraryRealtime();
@@ -282,6 +290,7 @@ export function AppShell({
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const hash = useRouterState({ select: (r) => r.location.hash });
+  const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);
   const clientBadges = useClientNavBadges();
   const navBadges = clientBadges;
   const [mode, setMode] = useSidebarMode();
@@ -289,6 +298,12 @@ export function AppShell({
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  // a page with its own top bar opens More from there (Crew: your profile's ☰)
+  useEffect(() => {
+    const open = () => setMoreOpen(true);
+    window.addEventListener(OPEN_MORE_EVENT, open);
+    return () => window.removeEventListener(OPEN_MORE_EVENT, open);
+  }, []);
   const [moreQuery, setMoreQuery] = useState("");
   const [moreOpenGroup, setMoreOpenGroup] = useState<string | null>(null);
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -893,7 +908,7 @@ export function AppShell({
           className="pointer-events-none fixed inset-x-0 top-0 z-[41] bg-background md:hidden"
           style={{ height: "env(safe-area-inset-top, 0px)" }}
         />
-        <header
+        {!pageBar && <header
           className="flex items-center justify-between gap-2 border-b border-border px-3 pb-3 md:hidden"
           style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
         >
@@ -946,10 +961,11 @@ export function AppShell({
               />
             )}
           </div>
-        </header>
+        </header>}
 
         <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
-          <DualAccountSwitcher />
+          {/* a page with its own bar puts the switch under it */}
+          {!pageBar && <DualAccountSwitcher />}
           <ShellPageContext.Provider value>{children}</ShellPageContext.Provider>
         </main>
 

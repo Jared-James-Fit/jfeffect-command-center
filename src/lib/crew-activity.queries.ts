@@ -1,9 +1,12 @@
+import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { fetchCommunityNotices } from "@/lib/community-notifications";
 import { signCommunityPaths } from "@/lib/community-media";
-import type { ActivityItem } from "@/lib/crew-activity";
+import { ACTIVITY_PREVIEW_STATE, type ActivityItem } from "@/lib/crew-activity";
+
+export const crewActivityKey = (userId: string | null | undefined) => ["notifications", "crew-activity", userId ?? null] as const;
 
 /**
  * The crew's activity on you, with what's unread. Under the bell's
@@ -13,9 +16,11 @@ import type { ActivityItem } from "@/lib/crew-activity";
 export function useCrewActivity(enabled = true) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ["notifications", "crew-activity", user?.id ?? null],
+    queryKey: crewActivityKey(user?.id),
     enabled: enabled && !!user,
     staleTime: 30_000,
+    // back from another app (or the phone's lock screen): anything new since? It's what the heart's bubble shows
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<ActivityItem[]> => {
       const notices = await fetchCommunityNotices();
       if (!notices.length || !user) return [];
@@ -43,6 +48,20 @@ export function useMarkCrewActivityRead() {
     const { error } = await (supabase.rpc as any)("notif_mark_read", { items: pairs });
     if (!error) void qc.invalidateQueries({ queryKey: ["notifications"] });
   };
+}
+
+/**
+ * The heart's bubble showed: note it on the server (every phone stops replaying
+ * it) and zero what's "fresh" here without a refetch. The unread dot stays
+ * until Activity is actually read.
+ */
+export function useMarkActivityPreviewed() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useCallback(() => {
+    qc.setQueryData<ActivityItem[]>(crewActivityKey(user?.id), (prev) => prev?.map((i) => (i.fresh ? { ...i, fresh: 0 } : i)));
+    void (supabase.rpc as any)("notif_mark_read", { items: [ACTIVITY_PREVIEW_STATE] });
+  }, [qc, user?.id]);
 }
 
 /** The thumbnails beside the lines: one storage call for all of them. */

@@ -56,12 +56,18 @@ describe("Crew Activity screen", () => {
   const page = read("src/components/community/crew-activity.tsx");
   const q = read("src/lib/crew-activity.queries.ts");
   it("opens from the heart in the Crew header (a dot when something's new), never as the coach while viewing as a client", () => {
-    expect(screen).toContain("useCrewActivity(!hideTabs && !previewOnly)");
-    expect(screen).toContain("{!previewOnly && (");
-    expect(screen).toContain("data-activity-dot");
+    const heart = read("src/components/community/activity-heart.tsx");
+    // the bar's right side (heart + your photo) is left out while a coach views as a client
+    expect(screen).toMatch(/right=\{\s*!previewOnly && \(\s*<>\s*\{\/\*[^*]*\*\/\}\s*<ActivityHeart onOpen=\{\(\) => go\(\{ kind: "activity" \}\)\}/);
+    expect(heart).toContain("const q = useCrewActivity(true);");
+    expect(heart).toContain("data-activity-dot");
+    // the coach's Crew page has the heart too, opening Activity on its Feed
+    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<ActivityHeart");
+    expect(screen).toContain("window.addEventListener(OPEN_ACTIVITY_EVENT, open);");
   });
   it("shares the bell's read state, and opening it reads what was new (kept as New while you're there)", () => {
-    expect(q).toContain('queryKey: ["notifications", "crew-activity"');
+    expect(q).toContain('["notifications", "crew-activity", userId ?? null]');
+    expect(q).toContain("queryKey: crewActivityKey(user?.id),");
     expect(q).toContain('.eq("kind", "community")');
     expect(q).toContain('"notif_mark_read"');
     expect(page).toContain("setNewKeys(new Set(unread.map((i) => i.key)));");

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Dumbbell, Heart, Search } from "lucide-react";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
+import { ArrowLeft, Dumbbell, Menu, Search, SquarePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,9 +19,13 @@ import { ShareNudge } from "@/components/community/share-nudge";
 import { DiscoverPage } from "@/components/community/discover";
 import { OPEN_DISCOVER_EVENT } from "@/lib/community-discover";
 import { CrewActivity } from "@/components/community/crew-activity";
-import { useCrewActivity } from "@/lib/crew-activity.queries";
+import { ActivityHeart } from "@/components/community/activity-heart";
+import { OPEN_ACTIVITY_EVENT } from "@/lib/crew-activity";
+import { BarBack, BarButton, BarTitle, CrewBar, CrewBrand, useBarHidden } from "@/components/community/crew-header";
+import { DualAccountSwitcher } from "@/components/dual-account-switcher";
+import { openAppMore } from "@/lib/shell-events";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
-import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { isPulsePost, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
@@ -31,11 +35,13 @@ import { CaughtUp, FeedItem, NewPostsPill, PostSkeleton, useNewPosts } from "@/c
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
- * Feed and Rankings are the two tabs. Activity (the heart: likes, comments,
- * follows) opens from beside them, and Members (the directory) from Activity's
- * search, Instagram's way.
+ * Crew opens on the feed, under one slim bar (Instagram's): + to post on the
+ * left with Find athletes, the JF Effect name in the middle (with people you
+ * follow, it's also the All / Following switch), Activity (the heart, with
+ * its bubble) and your photo (your profile) on the right. Rankings is the
+ * trophy on Crew's own button in the bar at the bottom. Each of those opens
+ * as a page with ‹ back, and back lands where you were in the feed.
  */
-/** "you" is your own profile, a tab of its own (Strava's You, Instagram's profile tab). */
 type Tab = "feed" | "rankings" | "you" | "members" | "activity";
 /** A tab, or someone else's profile opened from one. */
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
@@ -110,6 +116,7 @@ export function CommunityScreen({
   const [discoverBack, setDiscoverBack] = useState<Tab>("feed");
   const [discoverFocus, setDiscoverFocus] = useState(false);
   const openDiscover = (from: Tab, focus = false) => {
+    rememberFeedPlace();
     setDiscoverBack(from === "members" ? "feed" : from);
     setDiscoverFocus(focus);
     setScope({ kind: "members" });
@@ -117,9 +124,6 @@ export function CommunityScreen({
   };
   // someone else's profile is a page with a back arrow; yours is a tab
   const inProfile = scope.kind === "author";
-  // the heart's dot: something new in Activity (never the coach's own while viewing as a client)
-  const { data: activityItems } = useCrewActivity(!hideTabs && !previewOnly);
-  const activityNew = (activityItems ?? []).some((i) => i.unread);
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
   const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
@@ -186,11 +190,19 @@ export function CommunityScreen({
   showNew.current = newPosts.show;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
+  // Where you were in the feed: a page opened from it (a profile, Rankings, Activity) goes back to that spot.
+  // Taken the moment you tap your way out (rememberFeedPlace), and otherwise only once the page has
+  // settled on the feed, so a jump the router makes while switching views (the trophy) never counts.
+  const feedY = useRef(0);
+  const restoreY = useRef<number | null>(null);
+  const rememberFeedPlace = () => {
+    if (scopeRef.current.kind === "feed") feedY.current = window.scrollY;
+  };
   useEffect(() => {
     const onRetap = (e: Event) => {
       if ((e as CustomEvent).detail !== window.location.pathname) return;
       // out of someone's profile first, out of yours to the feed; on the feed, back to the top and fresh
-      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" ? { kind: "feed" } : sc));
+      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" || sc.kind === "activity" ? { kind: "feed" } : sc));
       if (scopeRef.current.kind === "feed") showNew.current();
     };
     window.addEventListener("nav-retap", onRetap);
@@ -221,18 +233,66 @@ export function CommunityScreen({
     else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" ? { kind: "feed" } : sc));
   }, [routeHash, hideTabs, previewOnly]);
   const parent = scope.kind === "members" ? discoverBack : PARENT[scope.kind as Tab];
-  // the coach's Crew page has no tab row: there your profile is a page with a way back to the feed
-  const youAsPage = hideTabs && scope.kind === "you";
+  // The clients' Crew draws its own bar (the shell's steps aside); the coach's Crew page has its own header and tabs.
+  const ownBar = !hideTabs;
+  // a coach viewing as a client: the shell's bar and the preview banner stay, so Crew's bar sits in the page
+  const barInline = previewOnly;
+  const barHidden = useBarHidden(ownBar && !barInline && scope.kind === "feed");
+  // your profile is a page with a way back to the feed (on the coach's page, and now on Crew's bar too)
+  const youAsPage = scope.kind === "you";
+
+  useEffect(() => {
+    let settle = 0;
+    const onScroll = () => {
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        if (scopeRef.current.kind === "feed") feedY.current = window.scrollY;
+      }, 120);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(settle);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+  useEffect(() => {
+    if (scope.kind !== "feed" || restoreY.current == null) return;
+    const y = restoreY.current;
+    restoreY.current = null;
+    // after the feed is back on the page (it comes straight from the cache)
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+  }, [scope.kind]);
+  /** Open a page from the feed (or anywhere): at its top. */
+  const go = (next: Scope) => {
+    rememberFeedPlace();
+    setDetailId(null);
+    setScope(next);
+    window.scrollTo({ top: 0 });
+  };
+  /** ‹ back: the feed comes back where you left it; Rankings / your profile drop their #hash so the bar lights Crew again. */
+  const goBack = (k: Tab) => {
+    if (k === "feed") restoreY.current = feedY.current;
+    setScope({ kind: k });
+    if (k !== "feed") window.scrollTo({ top: 0 });
+    // (back to Rankings or your profile from someone's page keeps its hash, or the hash effect would bounce it to the feed)
+    if (k === "feed" && /^#(rankings|league|you)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });
+  };
+  const openMe = () => {
+    go({ kind: "you" });
+    void navigate({ to: ".", hash: "you", replace: true, resetScroll: false });
+  };
+
+  // (Rankings keeps its own sideways swipe between boards, so no swipe-back there.)
   const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
   const leaveAuthor = () => {
-    if (youAsPage) return setScope({ kind: "feed" });
+    if (youAsPage) return goBack("feed");
     if (scope.kind !== "author") return;
-    setScope({ kind: scope.from });
+    goBack(scope.from);
     if (window.location.hash.includes("person=")) history.replaceState(null, "", window.location.pathname + window.location.search);
   };
   const swipeBack = () => {
     if (inProfile || youAsPage) return leaveAuthor();
-    if (parent) return setScope({ kind: parent });
+    if (parent) return goBack(parent);
     if (!backTo) return;
     if (router.history.canGoBack()) router.history.back();
     else void navigate({ to: backTo });
@@ -291,6 +351,7 @@ export function CommunityScreen({
     const open = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
       if (typeof id !== "string" || !id) return;
+      rememberFeedPlace();
       setDetailId(null);
       setScope((sc) => {
         const from = sc.kind === "author" ? sc.from : sc.kind;
@@ -300,6 +361,17 @@ export function CommunityScreen({
     };
     window.addEventListener(OPEN_PERSON_EVENT, open);
     return () => window.removeEventListener(OPEN_PERSON_EVENT, open);
+  }, []);
+
+  // The coach's Crew header opens Activity here (its heart), scrolled to it (it sits under the coach's week panel).
+  useEffect(() => {
+    const open = () => {
+      setDetailId(null);
+      setScope({ kind: "activity" });
+      requestAnimationFrame(() => rootRef.current?.scrollIntoView({ block: "start" }));
+    };
+    window.addEventListener(OPEN_ACTIVITY_EVENT, open);
+    return () => window.removeEventListener(OPEN_ACTIVITY_EVENT, open);
   }, []);
 
   // The coach's Crew header opens Find athletes here.
@@ -338,6 +410,7 @@ export function CommunityScreen({
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, posts.length, scope.kind]);
 
   const openAuthor = (a: CommunityAuthor) => {
+    rememberFeedPlace();
     setDetailId(null);
     if (a.user_id === user?.id || a.user_id === myId) setScope({ kind: "you" });
     else setScope({ kind: "author", author: a, from: tab });
@@ -350,10 +423,103 @@ export function CommunityScreen({
 
   const notAllowed = (feed.error as any)?.code === "42501";
 
+  // Crew's one bar, per page. Find athletes keeps its own search field at the top instead.
+  const crewBar = !ownBar ? null : scope.kind === "feed" ? (
+    <CrewBar
+      label="Crew"
+      hidden={barHidden}
+      inline={barInline}
+      left={
+        <>
+          {/* + : the camera and everything you can post (post, meal, lock in, workout, write), Instagram's spot */}
+          {canShare && (
+            <ShareWorkoutButton
+              unit={unit}
+              previewOnly={previewOnly}
+              trigger={(begin) => (
+                <BarButton label="Create a post" onClick={begin} data-crew-create>
+                  <SquarePlus className="h-[25px] w-[25px]" strokeWidth={1.9} />
+                </BarButton>
+              )}
+            />
+          )}
+          {/* Find athletes: search by name or @username, people to follow (not while a coach views as a client) */}
+          {!previewOnly && (
+            <BarButton label="Find athletes" onClick={() => openDiscover("feed", true)} data-discover-open>
+              <Search className="h-[23px] w-[23px]" strokeWidth={2} />
+            </BarButton>
+          )}
+        </>
+      }
+      center={
+        <CrewBrand
+          following={following}
+          canFilter={!previewOnly && followingIds.size > 0}
+          onFilter={(f) => {
+            setOnly(f);
+            window.scrollTo({ top: 0 });
+          }}
+          onTop={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        />
+      }
+      right={
+        !previewOnly && (
+          <>
+            {/* Activity: who liked, commented, followed; what's new rises out of it in a bubble, then a dot until it's read */}
+            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !commentsFor} />
+            {/* you: your own profile (posts, followers, edit), with your photo */}
+            <BarButton label="Your profile" onClick={openMe} data-my-profile>
+              <MyTabPhoto size={27} />
+            </BarButton>
+          </>
+        )
+      }
+    />
+  ) : scope.kind === "rankings" ? (
+    <CrewBar label="Rankings" inline={barInline} left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />
+  ) : scope.kind === "you" && user?.id ? (
+    <CrewBar
+      label="Your profile"
+      inline={barInline}
+      left={<BarBack label="Back to the feed" onClick={leaveAuthor} />}
+      center={<ProfileBarTitle userId={user.id} />}
+      // the app's menu (settings, account, everything else), where Instagram keeps it: your profile's ☰
+      right={
+        <BarButton label="More" onClick={openAppMore} data-crew-more>
+          <Menu className="h-[25px] w-[25px]" strokeWidth={1.9} />
+        </BarButton>
+      }
+    />
+  ) : scope.kind === "author" ? (
+    <CrewBar
+      label="Profile"
+      inline={barInline}
+      left={<BarBack label={`Back to ${TAB_LABEL[scope.from]}`} onClick={leaveAuthor} />}
+      center={<ProfileBarTitle userId={scope.author.user_id} fallback={scope.author.name} />}
+    />
+  ) : scope.kind === "activity" ? (
+    <CrewBar
+      label="Activity"
+      inline={barInline}
+      left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />}
+      center={<BarTitle>Activity</BarTitle>}
+      right={
+        <BarButton label="Find people" onClick={() => openDiscover("activity", true)}>
+          <Search className="h-[23px] w-[23px]" strokeWidth={2} />
+        </BarButton>
+      }
+    />
+  ) : null;
+
   return (
     <>
-    <div ref={rootRef} className="mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 pt-3 [touch-action:pan-x_pan-y] sm:px-4">
-      {inProfile || youAsPage ? (
+    {crewBar}
+    {/* Find athletes has no bar: its search field starts right under the status bar */}
+    {ownBar && !barInline && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "env(safe-area-inset-top, 0px)" }} />}
+    {/* a staff login that's also a client: its My Workouts / Staff switch, under Crew's bar instead of the shell's */}
+    {ownBar && !barInline && <DualAccountSwitcher />}
+    <div ref={rootRef} className={cn("mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 [touch-action:pan-x_pan-y] sm:px-4", ownBar ? "pt-1.5" : "pt-3")}>
+      {ownBar ? null : inProfile || youAsPage ? (
         <Button
           type="button"
           variant="ghost"
@@ -362,91 +528,20 @@ export function CommunityScreen({
         >
           <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[youAsPage ? "feed" : tab]}
         </Button>
-      ) : hideTabs || scope.kind === "activity" || scope.kind === "members" ? null : parent ? (
-        <Button type="button" variant="ghost" className="-ml-2 h-10 rounded-full px-3" onClick={() => setScope({ kind: parent })}>
-          <ArrowLeft className="mr-1.5 h-4 w-4" /> {TAB_LABEL[parent]}
-        </Button>
-      ) : (
-        <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1">
-        {backTo && (
-          <Link to={backTo} aria-label="Back to Home" className="-ml-1.5 inline-flex h-9 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-muted">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-        )}
-        <div className="inline-flex rounded-full bg-muted p-1" role="tablist" aria-label="Crew view">
-          {/* You: your own profile, with your photo on the tab (not while a coach views as a client: it'd be the coach's) */}
-          {((previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"]) as Tab[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={scope.kind === k}
-              onClick={() => {
-                setScope({ kind: k });
-                window.scrollTo({ top: 0 });
-                void navigate({ to: ".", hash: k === "feed" ? "" : k, replace: true, resetScroll: false });
-              }}
-              className={cn(
-                "inline-flex h-9 items-center rounded-full text-[13px] font-bold transition-colors",
-                // room for Search, Activity and + on small phones: tighter tabs under 400px, just your photo on "You" under 360px
-                k === "you" ? "gap-1.5 pl-1.5 pr-2.5 max-[359px]:pr-1.5 min-[400px]:pr-3.5" : "px-2.5 min-[400px]:px-3.5",
-                scope.kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
-              )}
-              data-crew-tab={k}
-            >
-              {k === "you" && <MyTabPhoto active={scope.kind === "you"} />}
-              {k === "you" ? <span className="max-[359px]:sr-only">{TAB_LABEL[k]}</span> : TAB_LABEL[k]}
-            </button>
-          ))}
-        </div>
-        </div>
-        <div className="flex shrink-0 items-center min-[400px]:gap-0.5">
-          {/* Find athletes: search by name or @username, people to follow (not while a coach views as a client) */}
-          {!previewOnly && (
-            <button
-              type="button"
-              aria-label="Find athletes"
-              onClick={() => openDiscover(tab, true)}
-              className="grid h-9 w-8 shrink-0 place-items-center rounded-full text-foreground transition-colors active:bg-muted min-[400px]:w-9"
-              data-discover-open
-            >
-              <Search className="h-[21px] w-[21px]" strokeWidth={2.1} />
-            </button>
-          )}
-          {/* Activity: who liked, commented, followed (Instagram's heart), a dot when there's something new */}
-          {!previewOnly && (
-            <button
-              type="button"
-              aria-label={activityNew ? "Activity, new" : "Activity"}
-              onClick={() => {
-                setScope({ kind: "activity" });
-                window.scrollTo({ top: 0 });
-              }}
-              className="relative grid h-9 w-8 shrink-0 place-items-center rounded-full text-foreground transition-colors active:bg-muted min-[400px]:w-9"
-              data-activity-open
-            >
-              <Heart className="h-[21px] w-[21px]" strokeWidth={2.1} />
-              {activityNew && <span className="absolute right-[5px] top-[5px] h-2 w-2 rounded-full bg-primary ring-2 ring-background" data-activity-dot />}
-            </button>
-          )}
-          {/* phones: just the round "+", so Feed · Rankings · You keep their room */}
-          {canShare && <ShareWorkoutButton unit={unit} label="Post" previewOnly={previewOnly} className="max-[419px]:w-9 max-[419px]:px-0" labelClassName="max-[419px]:sr-only" />}
-        </div>
-        </div>
-      )}
+      ) : null}
 
       {scope.kind === "rankings" ? (
         <RankingsHub />
       ) : scope.kind === "activity" ? (
         <CrewActivity
-          onBack={() => setScope({ kind: "feed" })}
+          header={!ownBar}
+          onBack={() => goBack("feed")}
           onOpenPost={(id) => setDetailId(id)}
           onOpenPerson={openAuthor}
           onFindPeople={() => openDiscover("activity", true)}
         />
       ) : scope.kind === "members" ? (
-        <DiscoverPage onBack={() => setScope({ kind: discoverBack })} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
+        <DiscoverPage onBack={() => goBack(discoverBack)} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => go({ kind: "you" })} autoFocus={discoverFocus} canInvite={!previewOnly} />
       ) : scope.kind === "you" && user?.id ? (
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : scope.kind === "author" ? (
@@ -485,25 +580,7 @@ export function CommunityScreen({
             addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} /> : undefined}
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} /> : null}
           />
-          {!hideTabs && followingIds.size > 0 && (
-            <div className="flex gap-1.5" role="tablist" aria-label="Show posts from">
-              {([["all", "All"], ["following", "Following"]] as const).map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="tab"
-                  aria-selected={only === k}
-                  onClick={() => {
-                    setOnly(k);
-                    window.scrollTo({ top: 0 });
-                  }}
-                  className={cn("h-8 rounded-full px-3.5 text-[13px] font-bold transition-colors", only === k ? "bg-foreground text-background" : "bg-muted text-muted-foreground active:bg-muted/70")}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* All / Following lives in the name at the top (its ⌄), Instagram's way: no second row of chips here */}
           {following && feedPosts.length === 0 && (
             <EmptyNote title="Nothing new from people you follow" body="Their posts land here. The whole crew is under All." action={<Button type="button" variant="outline" className="w-full" onClick={() => setOnly("all")}>Show all posts</Button>} />
           )}
@@ -559,6 +636,13 @@ export function CommunityScreen({
     {scope.kind === "feed" && <NewPostsPill count={newPosts.count} onShow={newPosts.show} />}
     </>
   );
+}
+
+/** A profile's bar title: their @username (Instagram's), else their name. */
+function ProfileBarTitle({ userId, fallback }: { userId: string; fallback?: string }) {
+  const { data } = useCommunityProfile(userId);
+  const title = data?.username ? `@${data.username}` : data?.author.name || fallback || "";
+  return <BarTitle>{title}</BarTitle>;
 }
 
 /** One row owns its mutation so an optimistic reaction only re-renders that card. */

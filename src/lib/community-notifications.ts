@@ -24,6 +24,8 @@ export type CommunityNotice = {
   post_media?: string | null;
   /** A words-only post: its first few words, for the thumbnail. */
   post_text?: string | null;
+  /** How many of this line's notifications came after the last bubble and after the line was last read (the heart's bubble). */
+  fresh?: number;
 };
 
 /** Open a post from anywhere: the community screen, when it's up, listens for this. */

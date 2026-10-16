@@ -19,6 +19,8 @@ import { WeightUnitPrompt } from "@/components/portal/weight-unit-prompt";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useCommunityActivity } from "@/lib/community.queries";
 
+const CREW_OWN_BAR = ["/portal/community"] as const;
+
 function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
@@ -34,7 +36,8 @@ function PortalLayout() {
     <>
       <PovFrame />
       <ClientPovBanner />
-      <AppShell items={isSelfServe ? selfServeNav : clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader>
+      {/* Crew draws its own top bar (+ · JF Effect · heart · you); a coach viewing as a client keeps the shell's */}
+      <AppShell items={isSelfServe ? selfServeNav : clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={isImpersonating ? undefined : CREW_OWN_BAR}>
         {isSelfServe && <MemberGates />}
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home
