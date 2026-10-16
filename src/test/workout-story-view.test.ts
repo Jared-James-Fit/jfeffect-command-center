@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { pickStoryStart } from "@/components/workout-day/workout-story";
+import { focusTapDirection, focusTapIgnored, pickStoryStart } from "@/components/workout-day/workout-story";
 import { resolveWorkoutView } from "@/lib/use-workout-view";
 import { TOP_FIRST_DOUBLE_TAP_MS, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 
@@ -26,6 +26,21 @@ describe("story view: where it opens", () => {
   });
 });
 
+describe("Focus: tap to move, like Crew's stories", () => {
+  it("the left third goes back, anywhere else forward", () => {
+    expect(focusTapDirection(50, 390)).toBe(-1);
+    expect(focusTapDirection(129, 390)).toBe(-1);
+    expect(focusTapDirection(131, 390)).toBe(1);
+    expect(focusTapDirection(380, 390)).toBe(1);
+  });
+  it("controls and the set table keep their taps", () => {
+    expect(focusTapIgnored(null)).toBe(true);
+    const story = read("src/components/workout-day/workout-story.tsx");
+    for (const sel of ["button", "input", '[role="switch"]', "[data-set-table]", "[data-swipe-open]"]) expect(story).toContain(sel);
+    expect(read("src/components/workout-day/WorkoutDayView.tsx")).toContain("<div data-set-table className=");
+  });
+});
+
 describe("story view: the choice is saved on the account", () => {
   it("a switch this phone hasn't saved yet wins, then the account, then the phone, then the list", () => {
     expect(resolveWorkoutView("list", "story", true)).toBe("story");
@@ -48,7 +63,7 @@ describe("story view: the same cards as the list, never a second copy", () => {
   it("one list of cards; story view only swaps its classes", () => {
     expect(day.match(/<ExerciseBlock\s*\n/g)).toHaveLength(1);
     expect(day).toContain('? "workout-story"');
-    expect(day).toContain("paused={storyOpen}");
+    expect(day).not.toContain("paused={storyOpen}");
     expect(day).toContain("focusMode={storyOpen}");
     expect(day).not.toContain("setFocusMode");
   });
@@ -62,11 +77,14 @@ describe("story view: the same cards as the list, never a second copy", () => {
     expect(day).toContain("onDone={closeStory}");
     expect(day).toContain('onExit={() => chooseWorkoutView("list")}');
   });
-  it("pull-to-refresh and swipe-to-delete stay out of it; the bottom bar hides", () => {
+  it("pull-to-refresh stays out of it, the bottom bar hides, and a sideways swipe is the card's (delete, like the list)", () => {
     expect(day).toContain('data-no-pull-refresh={storyOpen ? "" : undefined}');
     expect(day).toContain('document.querySelectorAll<HTMLElement>("[data-mobile-bottom-nav]")');
     const swipe = read("src/components/workout-day/swipe-to-reveal.tsx");
-    expect(swipe).toContain('!paused && "touch-pan-y"');
+    expect(swipe).toContain('className={cn("relative bg-background touch-pan-y",');
+    expect(swipe).not.toContain("paused");
+    // the row of screens only moves when told to (a tap, ‹ / Next, the bars)
+    expect(read("src/styles.css")).toMatch(/\.workout-story \{\n  position: fixed;\n  inset: 0;\n  z-index: 40;\n  display: flex;\n  overflow: hidden;/);
   });
 });
 

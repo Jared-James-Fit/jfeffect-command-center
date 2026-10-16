@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 /**
  * The Focus intro: a small card under the List / Focus switch that shows what
- * Focus is (a looping mini-phone swiping from one exercise to the next) and
+ * Focus is (a looping mini phone: a tap on the right, the next exercise) and
  * offers to try it. It appears once per app launch, in the first workout the
  * person opens to log, until they use the switch once (tried_at on their
  * account). "Not now" hides it until the next launch. A launch is a fresh load
@@ -57,7 +57,7 @@ export function useFocusIntro({
   return { show, dismiss };
 }
 
-/** A tiny phone: the exercise card swipes to the next while the bars fill (loops; still with reduced motion). */
+/** A tiny phone: a tap on the right and the next exercise slides in while the bars fill (loops; still with reduced motion). */
 function FocusIntroAnimation() {
   return (
     <div
@@ -84,7 +84,7 @@ function FocusIntroAnimation() {
           ))}
         </div>
       </div>
-      <span className="jf-fi-finger absolute bottom-5 right-1 h-3 w-3 rounded-full bg-foreground/60 ring-2 ring-background" />
+      <span className="jf-fi-finger absolute bottom-7 right-1.5 h-3.5 w-3.5 rounded-full bg-foreground/60 ring-2 ring-background" />
     </div>
   );
 }
@@ -104,7 +104,7 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
           <span className="text-sm font-bold text-foreground">Focus</span>
         </div>
         <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
-          One exercise at a time, full screen. Log your sets, then swipe to the next.
+          One exercise at a time, full screen. Log your sets, then tap the right side for the next one.
         </p>
         <div className="mt-2.5 flex items-center gap-1.5">
           <button

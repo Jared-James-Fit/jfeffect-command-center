@@ -556,18 +556,19 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
 }
 
 /* ============================================================
-   Workout story view (workout-story.tsx): the logger's own list, laid out
+   Workout Focus view (workout-story.tsx): the logger's own list, laid out
    one exercise per screen. Only classes change, so no card remounts.
-   Swipe sideways between exercises (one per flick), scroll a long card
-   up and down inside its own screen. The bars sit over the top and bottom.
+   Moving between exercises is a tap (or ‹ / Next): the row of screens only
+   moves when told to (overflow hidden), so a sideways swipe is the card's
+   own (swipe to delete, like the list). A long card scrolls up and down in
+   its own screen. The bars sit over the top and bottom.
    ============================================================ */
 .workout-story {
   position: fixed;
   inset: 0;
   z-index: 40;
   display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   scroll-snap-type: x mandatory;
   overscroll-behavior: contain;
   background-color: var(--background);
@@ -633,29 +634,44 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   .workout-story-list-in { animation: none; }
 }
 
-/* Focus intro (focus-intro.tsx): a mini phone swiping from one exercise to the
-   next while the bars fill. 4.8s loop, transform/opacity only (compositor). */
+/* Focus: the chevron that flashes on the side you tapped. */
+.jf-tap-flash { animation: jf-tap-flash 420ms ease-out forwards; }
+@keyframes jf-tap-flash {
+  0% { opacity: 0; transform: scale(0.8); }
+  25% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jf-tap-flash { animation: jf-list-in 120ms ease-out reverse forwards; }
+}
+
+/* Focus intro (focus-intro.tsx): a mini phone where a finger taps the right
+   side and the next exercise slides in, while the bars fill. 4.8s loop,
+   transform/opacity/colour only (compositor). */
 .jf-fi-track { animation: jf-fi-swipe 4.8s cubic-bezier(0.6, 0, 0.2, 1) infinite; }
-.jf-fi-finger { animation: jf-fi-finger 4.8s ease-in-out infinite; opacity: 0; }
+.jf-fi-finger { animation: jf-fi-finger 4.8s ease-out infinite; opacity: 0; }
 .jf-fi-bar-0 { background-color: var(--foreground); }
 .jf-fi-bar-1 { animation: jf-fi-bar-1 4.8s linear infinite; }
 .jf-fi-bar-2 { animation: jf-fi-bar-2 4.8s linear infinite; }
 @keyframes jf-fi-swipe {
-  0%, 28% { transform: translateX(0); opacity: 1; }
-  40%, 64% { transform: translateX(-33.333%); opacity: 1; }
+  0%, 31% { transform: translateX(0); opacity: 1; }
+  40%, 67% { transform: translateX(-33.333%); opacity: 1; }
   76%, 93% { transform: translateX(-66.666%); opacity: 1; }
   98% { transform: translateX(-66.666%); opacity: 0; }
   100% { transform: translateX(0); opacity: 0; }
 }
+/* the tap: in, press, lift, gone (twice per loop) */
 @keyframes jf-fi-finger {
-  0%, 24% { transform: translateX(0); opacity: 0; }
-  27% { transform: translateX(0); opacity: 1; }
-  38% { transform: translateX(-26px); opacity: 1; }
-  41%, 60% { transform: translateX(-26px); opacity: 0; }
-  61% { transform: translateX(0); opacity: 0; }
-  64% { transform: translateX(0); opacity: 1; }
-  75% { transform: translateX(-26px); opacity: 1; }
-  78%, 100% { transform: translateX(-26px); opacity: 0; }
+  0%, 22% { transform: scale(1.4); opacity: 0; }
+  26% { transform: scale(1); opacity: 1; }
+  29% { transform: scale(0.72); opacity: 1; }
+  33% { transform: scale(1); opacity: 0.9; }
+  37%, 58% { transform: scale(1); opacity: 0; }
+  59% { transform: scale(1.4); opacity: 0; }
+  63% { transform: scale(1); opacity: 1; }
+  66% { transform: scale(0.72); opacity: 1; }
+  70% { transform: scale(1); opacity: 0.9; }
+  74%, 100% { transform: scale(1); opacity: 0; }
 }
 @keyframes jf-fi-bar-1 {
   0%, 37% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
@@ -663,8 +679,8 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   100% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
 }
 @keyframes jf-fi-bar-2 {
-  0%, 74% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
-  77%, 96% { background-color: var(--foreground); }
+  0%, 73% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
+  76%, 96% { background-color: var(--foreground); }
   100% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) {
