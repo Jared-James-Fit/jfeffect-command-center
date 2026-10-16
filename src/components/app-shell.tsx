@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,8 @@ import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, barPrefixMatch, onPages, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 import { OPEN_MORE_EVENT, pageOwnsTopBar } from "@/lib/shell-events";
+import { requestTabRefresh, scrollPageToTop } from "@/lib/tab-refresh";
+import { TabRefresh } from "@/components/tab-refresh";
 
 export interface NavItem {
   to: string;
@@ -291,6 +293,13 @@ export function AppShell({
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const hash = useRouterState({ select: (r) => r.location.hash });
   const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);
+  // Tapping the tab you're already on (Instagram's): back to the top, the page's own retap (Crew: out of a
+  // profile, back to the feed), and a refresh of what's on screen with the spinner.
+  const retapTab = useCallback((to: string) => {
+    scrollPageToTop();
+    try { window.dispatchEvent(new CustomEvent("nav-retap", { detail: to })); } catch {}
+    requestTabRefresh();
+  }, []);
   const clientBadges = useClientNavBadges();
   const navBadges = clientBadges;
   const [mode, setMode] = useSidebarMode();
@@ -455,6 +464,7 @@ export function AppShell({
   const grouped = useMemo(() => groupNavItems(items), [items]);
   const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
+  const barItems = useMemo(() => resolveVisibleBarItems(bottomItems, { more: !moreInHeader }), [bottomItems, moreInHeader]);
   // The tabs people flip between: their code is fetched ahead of the first tap
   // (pages only; bar actions like Search or More aren't routes).
   usePreloadTabs(bottomItems.map((i) => i.to).filter((to) => to.startsWith("/")));
@@ -964,6 +974,12 @@ export function AppShell({
         </header>}
 
         <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
+          {/* Refreshing: the bar's re-tap, or a pull down at the top of a tab's own page (Instagram's).
+              First in the page, so the room it makes for its spinner opens right under the top bar. */}
+          <TabRefresh
+            pull={barItems.some((i) => i.to === pathname)}
+            top={pageBar ? "calc(env(safe-area-inset-top, 0px) + 3rem + 5px)" : "calc(env(safe-area-inset-top, 0px) + 70px)"}
+          />
           {/* a page with its own bar puts the switch under it */}
           {!pageBar && <DualAccountSwitcher />}
           <ShellPageContext.Provider value>{children}</ShellPageContext.Provider>
@@ -973,12 +989,13 @@ export function AppShell({
         <MobileBottomBar
           // Canonical contract: five buttons TOTAL, with "More" occupying one
           // of the five positions (never a fixed sixth button).
-          items={resolveVisibleBarItems(bottomItems, { more: !moreInHeader })}
+          items={barItems}
           pathname={pathname}
           search={search}
           hash={hash}
           navBadges={navBadges}
           onNavigate={(to) => markNavSeen(user?.id, to)}
+          onRetap={retapTab}
           moreOpen={moreOpen}
           onOpenMore={() => setMoreOpen(true)}
         />
@@ -1503,7 +1520,7 @@ function TabletFlyoutRow({
 const BAR_BOTTOM = "var(--mobile-bar-bottom)";
 
 /** The floating mobile tab bar (hidden from md up). */
-export function MobileBottomBar({ items, pathname, search, hash = "", navBadges, onNavigate, moreOpen, onOpenMore }: {
+export function MobileBottomBar({ items, pathname, search, hash = "", navBadges, onNavigate, onRetap, moreOpen, onOpenMore }: {
   /** Already resolved to the visible slots (resolveVisibleBarItems). */
   items: NavItem[];
   pathname: string;
@@ -1512,6 +1529,8 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
   hash?: string;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
+  /** The tab you're on, tapped again: back to the top and refresh. */
+  onRetap?: (to: string) => void;
   moreOpen: boolean;
   onOpenMore: () => void;
 }) {
@@ -1561,6 +1580,7 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
               hash={hash}
               navBadges={navBadges}
               onNavigate={onNavigate}
+              onRetap={onRetap}
               dense={dense}
               prefixActive={prefixTo === item.to}
             />
@@ -1601,13 +1621,14 @@ function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }
   return null;
 }
 
-function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigate, dense, prefixActive }: {
+function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigate, onRetap, dense, prefixActive }: {
   item: NavItem;
   pathname: string;
   search?: Record<string, unknown>;
   hash?: string;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
+  onRetap?: (to: string) => void;
   /** True when 6 columns share the bar — tightens icon/label sizing. */
   dense?: boolean;
   /** This tab is the deepest prefix of the current page (see barPrefixMatch). */
@@ -1680,14 +1701,20 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
         to={item.to}
         // with a satellite, the hash tells them apart (Link ignores it by default)
         activeOptions={shortcut ? { includeHash: true } : undefined}
-        onClick={() => {
-          // Tapping the tab you're already on goes back to the top (and the
-          // page can refresh itself), like every app with a feed.
+        onClick={(e) => {
+          // Tapping the tab you're already on goes back to the top and refreshes
+          // the page, like every app with a feed. With nothing in the URL to clear
+          // (Crew's #rankings is), the router stays out of it, so its own scroll
+          // reset never cuts the smooth trip up short.
           if (pathname === item.to) {
-            try {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-              window.dispatchEvent(new CustomEvent("nav-retap", { detail: item.to }));
-            } catch {}
+            if (!hash) e.preventDefault();
+            if (onRetap) onRetap(item.to);
+            else {
+              try {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                window.dispatchEvent(new CustomEvent("nav-retap", { detail: item.to }));
+              } catch {}
+            }
           }
           onNavigate(item.to);
         }}
@@ -1758,9 +1785,12 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           to={shortcut.to}
           hash={shortcut.hash}
           activeOptions={{ includeHash: true }}
-          onClick={() => {
+          onClick={(e) => {
+            // already there: back to the top and refresh, like any tab
             if (shortcutOn) {
-              try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+              e.preventDefault();
+              if (onRetap) onRetap(shortcut.to);
+              else try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
             }
           }}
           data-featured-shortcut
