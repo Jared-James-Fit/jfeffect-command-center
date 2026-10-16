@@ -15,6 +15,25 @@ import { listenChannel } from "@/lib/realtime-channel";
 
 const sb = supabase as any;
 
+type HistorySet = { set_index?: number | null; pl_exercise_rows?: { id?: string; sort_order?: number | null } | null };
+
+/**
+ * A day's sets in the order they were done: the exercise's place in the
+ * workout (the same lift can sit on two rows, each starting at set 1), then
+ * the set number. Never by when the row was saved: a weight that fills the
+ * sets below saves them all at once, in whatever order the writes land.
+ */
+export function historySetOrder(x: HistorySet, y: HistorySet): number {
+  const rx = x.pl_exercise_rows?.sort_order ?? 0;
+  const ry = y.pl_exercise_rows?.sort_order ?? 0;
+  if (rx !== ry) return rx - ry;
+  // two rows in the same spot: keep each row's sets together
+  const ix = x.pl_exercise_rows?.id ?? "";
+  const iy = y.pl_exercise_rows?.id ?? "";
+  if (ix !== iy) return ix < iy ? -1 : 1;
+  return (x.set_index ?? 0) - (y.set_index ?? 0);
+}
+
 /**
  * Exercise history sheet.
  *
@@ -111,7 +130,7 @@ export function ExerciseHistorySheet({
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit,
           pl_exercise_rows!inner(
-            id, exercise_id, exercise_name_override,
+            id, exercise_id, exercise_name_override, sort_order,
             pl_days!inner(id, day_index, title, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name)))
           )
         `)
@@ -213,18 +232,7 @@ export function ExerciseHistorySheet({
     // renders so ordering matches the visible date on each card.
     const list = [...byDay.values()];
     list.sort((a, b) => resolveGroupDate(b) - resolveGroupDate(a));
-    for (const g of list) {
-      g.sets.sort((x, y) => {
-        // Sort by created_at first (chronological order they were logged),
-        // falling back to set_index. This fixes ordering when the same
-        // exercise appears on multiple rows in one day (each row restarts
-        // set_index at 1), so we display them in the order performed.
-        const ax = x.created_at ?? x.completed_at ?? x.updated_at ?? "";
-        const bx = y.created_at ?? y.completed_at ?? y.updated_at ?? "";
-        if (ax && bx && ax !== bx) return ax < bx ? -1 : 1;
-        return (x.set_index ?? 0) - (y.set_index ?? 0);
-      });
-    }
+    for (const g of list) g.sets.sort(historySetOrder);
     return list;
   }, [rows, showPartial, completionMap]);
 
