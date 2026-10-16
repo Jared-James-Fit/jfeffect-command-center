@@ -8,6 +8,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import type { MyCommunitySettings } from "@/lib/community-discover";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import {
   FEED_PAGE_SIZE,
   FIRST_FEED_PAGE,
@@ -39,6 +40,7 @@ import {
   slideThumbPath,
   planDetail,
   pickLockInSession,
+  seenAs,
 } from "@/lib/community";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
@@ -61,8 +63,26 @@ export const communityKeys = {
 
 /* ---- feed ----------------------------------------------------------- */
 
+/**
+ * The client a coach is previewing ("View as client"), or null: the crew
+ * loads as the coach, so posts are shown as this person sees them (seenAs).
+ * "" = a client with no account yet (nothing is theirs).
+ */
+export function usePovViewer(): string | null {
+  const { user } = useAuth();
+  const { client } = useClientImpersonation();
+  if (!client || !user || client.user_id === user.id) return null;
+  return client.user_id ?? "";
+}
+
 export function useCommunityFeed(authorUserId: string | null = null) {
+  const pov = usePovViewer();
+  const asClient = useCallback(
+    (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
+    [pov],
+  );
   return useInfiniteQuery({
+    select: pov === null ? undefined : asClient,
     queryKey: communityKeys.feed(authorUserId),
     initialPageParam: null as { at: string; id: string } | null,
     staleTime: 30_000,
@@ -944,7 +964,10 @@ export function invalidateCommunity(qc: ReturnType<typeof useQueryClient>) {
 
 /** One post + its full exercise breakdown (the Strava-style activity page). */
 export function usePostDetail(postId: string | null) {
+  const pov = usePovViewer();
+  const asClient = useCallback((d: CommunityPostDetail | null) => (d ? seenAs(d, pov) : d), [pov]);
   return useQuery({
+    select: pov === null ? undefined : asClient,
     queryKey: communityKeys.post(postId),
     enabled: !!postId,
     staleTime: 30_000,

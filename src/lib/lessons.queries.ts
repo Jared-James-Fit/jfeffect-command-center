@@ -49,6 +49,15 @@ export function useAnswerSticker(post: Pick<CommunityPost, "id">) {
   });
 }
 
+/** Mark a response to your question answered by the story you just posted (Instagram's Share response). */
+export async function markStickerAnswered(qc: ReturnType<typeof useQueryClient>, a: { postId: string; userId: string; replyPostId: string }) {
+  const { data, error } = await db.rpc("community_sticker_mark_answered", { _post_id: a.postId, _user_id: a.userId, _reply_post_id: a.replyPostId });
+  if (error) throw error;
+  const sticker = (data ?? null) as PostSticker | null;
+  if (sticker) patchPost(qc, a.postId, (p) => ({ ...p, sticker }));
+  return sticker;
+}
+
 /** Put a sticker on your own post (null takes it off). */
 export async function setPostSticker(postId: string, sticker: StickerSpec | null): Promise<PostSticker | null> {
   const { data, error } = await db.rpc("community_set_sticker", { _post_id: postId, _sticker: sticker });

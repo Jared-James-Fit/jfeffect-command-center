@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
-import { Check, ChevronRight, Send, X } from "lucide-react";
+import { Check, ChevronRight, Reply, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, type CommunityAuthor, type CommunityPost } from "@/lib/community";
-import { STICKER_ANSWER_MAX, stickerCountLabel, stickerPercents, type PostSticker, type StickerAnswer, type StickerSpec } from "@/lib/lessons";
+import { PREVIEW_ONLY_MESSAGE, postTimeLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
+import { STICKER_ANSWER_MAX, questionResponses, stickerCountLabel, stickerPercents, type PostSticker, type StickerAnswer, type StickerSpec } from "@/lib/lessons";
 import { useAnswerSticker } from "@/lib/lessons.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
@@ -16,17 +16,22 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
  *   question  tap, type, send: only the poster sees it
  * The poster sees the tally and who answered what (and so does nobody else:
  * the card says so). Answers never push anyone. A coach previewing a client
- * can look but not answer.
+ * can look but not answer. A question's poster answers a response on their
+ * story (Instagram's Share response): the card goes on the story with the
+ * question and what was sent, never who sent it, and it shows as answered.
  */
-export function StorySticker({ post, onComposing, onOpenPerson, className }: {
+export function StorySticker({ post, onComposing, onOpenPerson, onReply, className }: {
   post: CommunityPost;
   onComposing?: (on: boolean) => void;
   /** The poster's list of who answered: a name opens that person's profile. */
   onOpenPerson?: (a: CommunityAuthor) => void;
+  /** The poster answers a question response with a story. */
+  onReply?: (a: StickerAnswer) => void;
   className?: string;
 }) {
   const s = post.sticker;
   const [sheet, setSheet] = useState(false);
+  const blocked = usePreviewGuard();
   if (!s) return null;
   const first = post.author.name.split(" ")[0];
   return (
@@ -48,7 +53,7 @@ export function StorySticker({ post, onComposing, onOpenPerson, className }: {
           {stickerCountLabel(s)} <ChevronRight className="h-3.5 w-3.5" />
         </button>
       ) : (
-        s.mine && <p className="mt-2 text-center text-[11px] font-semibold text-black/45">Only {first} sees your answer</p>
+        s.mine && <p className="mt-2 text-center text-[11px] font-semibold text-black/45">{s.type === "question" ? `Only ${first} sees who sent it` : `Only ${first} sees your answer`}</p>
       )}
       {s.is_mine && (
         <StickerAnswersSheet
@@ -56,6 +61,15 @@ export function StorySticker({ post, onComposing, onOpenPerson, className }: {
           onClose={() => setSheet(false)}
           sticker={s}
           onOpenPerson={onOpenPerson ? (a) => { setSheet(false); onOpenPerson(a); } : undefined}
+          onReply={
+            onReply && s.type === "question"
+              ? (a) => {
+                  if (blocked()) return;
+                  setSheet(false);
+                  onReply(a);
+                }
+              : undefined
+          }
         />
       )}
     </div>
@@ -270,45 +284,107 @@ function QuestionSticker({ post, first, onComposing }: { post: CommunityPost; fi
   );
 }
 
-/** The poster's view: everyone who answered, newest first. */
-export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson }: { open: boolean; onClose: () => void; sticker: PostSticker; onOpenPerson?: (a: CommunityAuthor) => void }) {
-  const answers: StickerAnswer[] = sticker.answers ?? [];
+/**
+ * The poster's view: everyone who answered, newest first. A question's
+ * responses are Instagram's: each one as its card, the ones not answered yet
+ * first, each with Answer on your story (Answered once you have).
+ */
+export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson, onReply }: {
+  open: boolean;
+  onClose: () => void;
+  sticker: PostSticker;
+  onOpenPerson?: (a: CommunityAuthor) => void;
+  onReply?: (a: StickerAnswer) => void;
+}) {
+  const question = sticker.type === "question";
+  const answers: StickerAnswer[] = question ? questionResponses(sticker.answers ?? []) : sticker.answers ?? [];
   const what = (a: StickerAnswer) =>
     sticker.type === "poll" ? sticker.options[a.choice ?? -1]?.label ?? "" : sticker.type === "slider" ? `${sticker.emoji} ${a.value ?? 0}` : a.body ?? "";
+  // a response's sender: photo and name (their profile)
+  const who = (a: StickerAnswer) => (
+    <>
+      <button
+        type="button"
+        disabled={!onOpenPerson}
+        onClick={() => onOpenPerson?.(a)}
+        className="shrink-0 rounded-full active:scale-95 disabled:active:scale-100"
+        aria-label={`Open ${a.name}'s profile`}
+        data-sticker-answer-person
+      >
+        <UserAvatar src={a.avatar_url} name={a.name} size={30} expandable={false} />
+      </button>
+      <button type="button" disabled={!onOpenPerson} onClick={() => onOpenPerson?.(a)} className="min-w-0 truncate text-left text-[14px] font-bold">
+        {a.name}
+      </button>
+    </>
+  );
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" hideCloseButton className="max-h-[75dvh] gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
+      <SheetContent side="bottom" hideCloseButton className="max-h-[80dvh] gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="truncate text-[16px] font-black">{sticker.q}</SheetTitle>
-            <SheetDescription className="text-[12px]">{stickerCountLabel(sticker)} · only you can see who answered</SheetDescription>
+            <SheetTitle className="truncate text-[16px] font-black">{question ? "Responses" : sticker.q}</SheetTitle>
+            <SheetDescription className="truncate text-[12px]">
+              {question ? `${sticker.q} · only you see who sent them` : `${stickerCountLabel(sticker)} · only you can see who answered`}
+            </SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
             <X className="h-4 w-4" />
           </SheetClose>
         </SheetHeader>
-        <div className="overflow-y-auto px-2 py-2">
-          {answers.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">No answers yet.</p>}
-          {answers.map((a) => (
-            <div key={a.user_id} className="flex items-start gap-3 rounded-xl px-3 py-2">
-              <button
-                type="button"
-                disabled={!onOpenPerson}
-                onClick={() => onOpenPerson?.(a)}
-                className="shrink-0 rounded-full active:scale-95 disabled:active:scale-100"
-                aria-label={`Open ${a.name}'s profile`}
-                data-sticker-answer-person
-              >
-                <UserAvatar src={a.avatar_url} name={a.name} size={36} expandable={false} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <button type="button" disabled={!onOpenPerson} onClick={() => onOpenPerson?.(a)} className="block max-w-full truncate text-left text-[14px] font-bold">
-                  {a.name}
-                </button>
-                <div className={cn("text-[14px]", sticker.type === "question" ? "whitespace-pre-wrap break-words" : "font-semibold text-muted-foreground")}>{what(a)}</div>
-              </div>
-            </div>
-          ))}
+        <div className={cn("overflow-y-auto", question ? "space-y-2.5 px-3 py-3" : "px-2 py-2")}>
+          {answers.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">{question ? "No responses yet." : "No answers yet."}</p>}
+          {question
+            ? answers.map((a) => {
+                const answered = !!a.answered_post_id;
+                return (
+                  <div key={a.user_id} className={cn("rounded-2xl border border-border/70 bg-card p-3", answered && "opacity-75")} data-sticker-response={answered ? "answered" : "open"}>
+                    <div className="flex items-center gap-2">
+                      {who(a)}
+                      {a.at && <span className="shrink-0 text-[12px] text-muted-foreground">{postTimeLabel(a.at)}</span>}
+                      {answered && (
+                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400" data-sticker-answered>
+                          <Check className="h-3 w-3" /> Answered
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-snug">{a.body}</p>
+                    {onReply && (
+                      <button
+                        type="button"
+                        onClick={() => onReply(a)}
+                        className={cn(
+                          "mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-black active:scale-95",
+                          answered ? "bg-muted text-foreground" : "bg-primary text-primary-foreground",
+                        )}
+                        data-sticker-reply
+                      >
+                        <Reply className="h-3.5 w-3.5" /> {answered ? "Answer again" : "Answer on your story"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            : answers.map((a) => (
+                <div key={a.user_id} className="flex items-start gap-3 rounded-xl px-3 py-2">
+                  <button
+                    type="button"
+                    disabled={!onOpenPerson}
+                    onClick={() => onOpenPerson?.(a)}
+                    className="shrink-0 rounded-full active:scale-95 disabled:active:scale-100"
+                    aria-label={`Open ${a.name}'s profile`}
+                    data-sticker-answer-person
+                  >
+                    <UserAvatar src={a.avatar_url} name={a.name} size={36} expandable={false} />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <button type="button" disabled={!onOpenPerson} onClick={() => onOpenPerson?.(a)} className="block max-w-full truncate text-left text-[14px] font-bold">
+                      {a.name}
+                    </button>
+                    <div className="text-[14px] font-semibold text-muted-foreground">{what(a)}</div>
+                  </div>
+                </div>
+              ))}
         </div>
       </SheetContent>
     </Sheet>

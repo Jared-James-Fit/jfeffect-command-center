@@ -13,7 +13,8 @@ import { StorySticker } from "@/components/community/story-sticker";
 import { InlineFollow } from "@/components/community/follow-button";
 import { STORY_DEVICE_INSETS, stickerSpot, storyFrameLayout } from "@/lib/lessons";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { openStoryReply } from "@/lib/story-reply";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { useFollowState } from "@/lib/community-social";
 import { useAuth } from "@/lib/auth";
 import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
@@ -75,8 +76,8 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
   // opens the camera (from the bubble's +, or the + on your own story)
   const addRef = useRef<(() => void) | null>(null);
   // your picture for "Your story" before there's anything in it
-  const { user } = useAuth();
-  const { data: me } = useCommunityProfile(addStory && !mine ? (user?.id ?? null) : null);
+  const viewer = usePortalUserId();
+  const { data: me } = useCommunityProfile(addStory && !mine ? (viewer ?? null) : null);
   // a quiet day with nothing to add either: no row at all
   if (!groups.length && !mine && !addStory) return null;
   /** i = a person's bubble; -1 = yours. */
@@ -562,7 +563,17 @@ function StoryViewer({
             // where the poster put it; else above the reply bar's fade, so the
             // whole sticker takes taps (the bar's top 40px is its fade, not buttons)
             <div className="absolute inset-x-0 z-40" style={stickerSpot(post.sticker.y, barH)}>
-              <StorySticker post={post} onComposing={setComposing} onOpenPerson={openPerson} />
+              <StorySticker
+                post={post}
+                onComposing={setComposing}
+                onOpenPerson={openPerson}
+                // answering a response: the story slides away and the story camera opens with it
+                onReply={(a) => {
+                  const r = { postId: post.id, question: post.sticker?.q ?? "", userId: a.user_id, answer: a.body ?? "" };
+                  close();
+                  window.setTimeout(() => openStoryReply(r), 240);
+                }}
+              />
             </div>
           )}
 
@@ -780,6 +791,7 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
 
 /** Your own story: who's seen it and the hearts (nothing to reply to). Tap Seen by for the names. */
 function MyStoryBar({ post, onOpen, onHold, onOpenPerson }: { post: CommunityPost; onOpen: () => void; onHold: (on: boolean) => void; onOpenPerson?: (a: CommunityAuthor) => void }) {
+  const { isImpersonating } = useClientImpersonation();
   const [viewers, setViewers] = useState(false);
   const [sticker, setSticker] = useState(false);
   // the story waits while the list (or the sticker editor) is open
@@ -815,7 +827,7 @@ function MyStoryBar({ post, onOpen, onHold, onOpenPerson }: { post: CommunityPos
       {post.visibility === "community" && (
         <button
           type="button"
-          onClick={() => setSticker(true)}
+          onClick={() => (isImpersonating ? toast.message(PREVIEW_ONLY_MESSAGE) : setSticker(true))}
           className="ml-auto grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/15 backdrop-blur-sm active:scale-95"
           aria-label={post.sticker ? "Change your sticker" : "Add a poll, slider or question"}
           data-story-add-sticker
@@ -910,7 +922,8 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing }: { post: Communit
   const win = frame === "win";
   const mine = post.my_reaction;
   const first = post.author.name.split(" ")[0];
-  const staff = role === "admin" || role === "coach";
+  // viewing as a client: their reply box ("Message <coach>…"), though nothing sends
+  const staff = (role === "admin" || role === "coach") && !isImpersonating;
   // the same rule as Message on a post (coaches use team chat with each other)
   const canMessage = !post.is_mine && !(post.author.is_coach && staff);
   // a request that's waiting on them can't take more until they reply

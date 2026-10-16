@@ -6,7 +6,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { NoteEditor } from "@/components/community/note-editor";
 import { attachOfPost } from "@/components/community/post-attach";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
-import type { CommunityPost } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, type CommunityPost } from "@/lib/community";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemoveNoteScene, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
 import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
@@ -33,6 +34,9 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const sceneKey = drawn && isSpiritScene(drawn) ? drawn : null;
   const leave = useLeavePost();
   const me = useMyCommunityId();
+  // a coach viewing as a client sees the client's menu, but nothing in it acts as them
+  const { isImpersonating } = useClientImpersonation();
+  const act = (fn: () => void) => () => (isImpersonating ? void toast.message(PREVIEW_ONLY_MESSAGE) : fn());
 
   const mine = post.is_mine;
   const isNote = post.kind === "note";
@@ -80,28 +84,28 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           {onIt && (
             <DropdownMenuItem
               disabled={leave.isPending}
-              onSelect={() =>
+              onSelect={act(() =>
                 leave.mutate(post.id, {
                   onSuccess: () => toast.success("You're off this post", { description: "It's no longer on your profile." }),
                   onError: (e: any) => toast.error(e?.message ?? "Couldn't do that"),
-                })
-              }
+                }),
+              )}
             >
               <UserMinus className="mr-2 h-4 w-4" /> Remove me from this post
             </DropdownMenuItem>
           )}
           {canEdit && (
-            <DropdownMenuItem onSelect={() => setEditing(true)}>
+            <DropdownMenuItem onSelect={act(() => setEditing(true))}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </DropdownMenuItem>
           )}
           {mine && post.visibility === "community" && !archived && (
-            <DropdownMenuItem onSelect={() => setSticker(true)}>
+            <DropdownMenuItem onSelect={act(() => setSticker(true))}>
               <Sticker className="mr-2 h-4 w-4" /> {post.sticker ? "Story sticker" : "Add a story sticker"}
             </DropdownMenuItem>
           )}
           {mine && (
-            <DropdownMenuItem onSelect={() => setArchived(!archived)} disabled={archive.isPending}>
+            <DropdownMenuItem onSelect={act(() => setArchived(!archived))} disabled={archive.isPending}>
               {archived ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
               {archived ? "Show on profile" : "Archive"}
             </DropdownMenuItem>
@@ -109,7 +113,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           {canDelete && (
             <>
               {canEdit && <DropdownMenuSeparator />}
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setConfirmDelete(true)}>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={act(() => setConfirmDelete(true))}>
                 <Trash2 className="mr-2 h-4 w-4" /> {mine ? "Delete" : "Remove post"}
               </DropdownMenuItem>
             </>

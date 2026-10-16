@@ -145,7 +145,24 @@ export type StickerSpec = (
 };
 export type StickerType = StickerSpec["type"];
 
-export type StickerAnswer = CommunityAuthor & { choice?: number; value?: number; body?: string; at?: string };
+export type StickerAnswer = CommunityAuthor & {
+  choice?: number;
+  value?: number;
+  body?: string;
+  at?: string;
+  /** A question response the poster answered on their story (and which story). */
+  answered_at?: string;
+  answered_post_id?: string;
+};
+
+/** A question's responses as the poster works through them: not answered yet first, newest first in each (tested). */
+export function questionResponses(answers: StickerAnswer[]): StickerAnswer[] {
+  const t = (a: StickerAnswer) => (a.at ? Date.parse(a.at) : 0);
+  return answers
+    .filter((a) => !!a.body)
+    .slice()
+    .sort((a, b) => Number(!!a.answered_post_id) - Number(!!b.answered_post_id) || t(b) - t(a));
+}
 
 /** A sticker as a viewer gets it: the tallies, their own answer, and (the poster) who answered. */
 export type PostSticker = (

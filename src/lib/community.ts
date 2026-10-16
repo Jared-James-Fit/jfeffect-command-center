@@ -1742,6 +1742,20 @@ export function storyPrs(items: { stats?: unknown }[]): number {
   return n;
 }
 
+/**
+ * A post the way `viewer` sees it, for a coach's "View as client": the crew
+ * loads as the coach, so whose post it is, and what only its poster sees, is
+ * worked out again for the client being previewed. Their own sticker answers
+ * aren't loaded, so a sticker shows unanswered; the poster-only list of who
+ * answered never reaches anyone else (tested).
+ */
+export function seenAs<T extends Pick<CommunityPost, "is_mine" | "author" | "sticker">>(p: T, viewer: string | null | undefined): T {
+  const mine = !!viewer && p.author.user_id === viewer;
+  const s = p.sticker;
+  if (!s) return mine === p.is_mine ? p : { ...p, is_mine: mine };
+  return { ...p, is_mine: mine, sticker: { ...s, is_mine: mine, mine: null, answers: mine ? s.answers : undefined } };
+}
+
 /** Your own last day of stories (you see them first, with who saw each). */
 export function myStory<T extends Pick<CommunityPost, "id" | "created_at" | "visibility" | "is_mine" | "seen" | "author" | "stats">>(posts: T[], now = Date.now()): StoryGroup<T> | null {
   const items = posts

@@ -912,7 +912,7 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     expect(studio).toContain('setPhase("edit");');
     expect(studio.match(/<Dialog /g)?.length).toBe(1);
     // text + stickers sit on the card in the same screen
-    expect(studio).toContain("<StickerLayer items={items} setItems={setItems}");
+    expect(studio).toContain("<StickerLayer\n                items={items}\n                setItems={setItems}");
     // posting goes through the one shared path
     expect(picker).toContain("await shareToCommunity(qc, {");
     expect(bar).toContain("await shareToCommunity(qc, {");

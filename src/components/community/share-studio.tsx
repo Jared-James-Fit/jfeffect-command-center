@@ -12,7 +12,12 @@ import { CaptionEditor, CaptionField, captionThumb } from "@/components/communit
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
 import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
-import { StickerLayer, drawStickers, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { StickerLayer, drawStickers, responseCardItem, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { paintReplyBackdrop } from "@/lib/story-reply";
+import { StickerEditorSheet } from "@/components/community/sticker-editor";
+import { StickerPreview } from "@/components/community/story-sticker";
+import { STICKER_Y_MAX, STICKER_Y_MIN, stickerY, type StickerSpec, type StickerType } from "@/lib/lessons";
+import { setPostSticker } from "@/lib/lessons.queries";
 import { context2d, releaseCanvas } from "@/lib/canvas-memory";
 import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-draft";
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
@@ -98,6 +103,9 @@ export type StudioPost = {
   beforeStory?: () => Promise<void>;
 };
 
+/** A reply to a question response (ShareStudio's `reply`). */
+export type StudioReply = { question: string; answer: string; onPosted: (postId: string) => Promise<void> };
+
 type Shot = { src: HTMLCanvasElement | HTMLImageElement; file: File | null; live: boolean; at: Date };
 /** Who can see a story: the crew (followers, on a private account) or Close friends. */
 const STORY_AUDIENCE: CommunityVisibility[] = ["community", "close_friends"];
@@ -154,6 +162,7 @@ export function ShareStudio({
   onWrite,
   videoContext = "post",
   startAs = "post",
+  reply = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -181,6 +190,12 @@ export function ShareStudio({
   videoContext?: VideoContext;
   /** What it opens on: a post, or (from Your story) a story. */
   startAs?: ShareKind;
+  /**
+   * Replying to a question response with a story (Instagram's Share
+   * response): opens on Story, on a backdrop with the response card on it
+   * and the text tool open; posting hands the new story to `onPosted`.
+   */
+  reply?: StudioReply | null;
 }) {
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
@@ -216,6 +231,11 @@ export function ShareStudio({
   const [cardFailed, setCardFailed] = useState(false);
   const [items, setItems] = useState<StickerItem[]>([]);
   const [request, setRequest] = useState<StickerRequest>(null);
+  // replying to a response: which backdrop colour it's on
+  const [backdrop, setBackdrop] = useState(0);
+  // a story's live sticker (Questions, Poll, Slider): shown where it'll sit, put on once the story's up
+  const [live, setLive] = useState<StickerSpec | null>(null);
+  const [liveForm, setLiveForm] = useState<StickerSpec | null>(null);
   const [caption, setCaption] = useState("");
   const [visibility, setVisibility] = useState<CommunityVisibility>("community");
   const [hideLoads, setHideLoads] = useState(false);
@@ -263,6 +283,16 @@ export function ShareStudio({
     setAspect("portrait");
     setFraming(CENTRED);
     setCoverFor(null);
+    setLive(null);
+    setLiveForm(null);
+    if (reply) {
+      // straight into the editor: the backdrop, the response card on it, the keyboard up for the answer
+      setKind("story");
+      setBackdrop(0);
+      freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });
+      setItems([responseCardItem(reply.question, reply.answer)]);
+      setRequest({ kind: "text", n: Date.now() });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   // The post it's for: start from what's already there (editing, not duplicating).
@@ -288,7 +318,7 @@ export function ShareStudio({
   // nothing is saved over the draft until it's been read back
   const restoring = useRef(false);
   useEffect(() => {
-    if (!open || !post || restoredFor.current === post.key) return;
+    if (!open || !post || reply || restoredFor.current === post.key) return;
     restoredFor.current = post.key;
     draftOff.current = false;
     const key = post.key;
@@ -324,7 +354,7 @@ export function ShareStudio({
   }, [open]);
   // Save as it changes (a beat after the last change). The photo is encoded once per shot.
   useEffect(() => {
-    if (!open || !post || posted || busy || draftOff.current || restoring.current) return;
+    if (!open || !post || reply || posted || busy || draftOff.current || restoring.current) return;
     const key = post.key;
     const t = setTimeout(async () => {
       let photo: Blob | null = null;
@@ -418,7 +448,7 @@ export function ShareStudio({
     if (video) video.srcObject = null;
   };
 
-  const shooting = open && phase === "shoot";
+  const shooting = open && phase === "shoot" && !reply;
   // Bumped to start the camera again (iOS ends it when you switch apps or lock the phone).
   const [camTry, setCamTry] = useState(0);
   const restarts = useRef(0);
@@ -941,9 +971,25 @@ export function ShareStudio({
     await post?.beforeStory?.();
     // (the button only offers the crew or Close friends; whatever the post it's for had, a story is one of those)
     const audience: CommunityVisibility = STORY_AUDIENCE.includes(visibility) ? visibility : "community";
-    await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true });
+    const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true });
     if (!photo) tray.commit();
     else tray.discard();
+    if (live) {
+      try {
+        await setPostSticker(id, live);
+      } catch (e: any) {
+        toast.warning("Your story is up without the sticker", { description: e?.message ?? "Add it again from your story." });
+      }
+    }
+    if (reply) {
+      try {
+        await reply.onPosted(id);
+        toast.success("Answered on your story", { description: "It's marked answered in your responses." });
+      } catch (e: any) {
+        toast.warning("It's on your story", { description: e?.message ?? "It couldn't be marked answered." });
+      }
+      return;
+    }
     toast.success(audience === "close_friends" ? "Added to your Close friends story" : "Added to your story", { description: "It's in the story row for 24 hours." });
   };
   const doPost = async () => {
@@ -1202,7 +1248,29 @@ export function ShareStudio({
               </div>
             )}
 
-            {phase === "edit" && <StickerLayer items={items} setItems={setItems} width={box.w} height={box.h} context={stickerContext} request={request} />}
+            {phase === "edit" && (
+              <StickerLayer
+                items={items}
+                setItems={setItems}
+                width={box.w}
+                height={box.h}
+                context={stickerContext}
+                request={request}
+                // a story (on a picture) can carry one Questions, Poll or Slider; picking another replaces it
+                interactive={story && shot ? { onPick: (type) => setLiveForm(live?.type === type ? live : blankSticker(type)) } : undefined}
+              />
+            )}
+            {phase === "edit" && story && live && (
+              <LiveStickerSpot
+                sticker={live}
+                height={box.h}
+                onMove={(y) => {
+                  setLive((cur) => (cur ? { ...cur, y } : cur));
+                  setPosted(false);
+                }}
+                onEdit={() => setLiveForm(live)}
+              />
+            )}
 
             {count != null && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -1273,9 +1341,33 @@ export function ShareStudio({
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={retake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
-                    <ChevronLeft className="h-6 w-6" />
-                  </button>
+                  {reply ? (
+                    <>
+                      <button type="button" onClick={onClose} className={pill} aria-label="Close">
+                        <X className="h-6 w-6" />
+                      </button>
+                      {/* the backdrop's colour, Instagram's colour wheel */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = backdrop + 1;
+                          setBackdrop(next);
+                          dropShot(shotRef.current);
+                          setShot({ src: paintReplyBackdrop(next), file: null, live: false, at: new Date() });
+                          setPosted(false);
+                        }}
+                        className={pill}
+                        aria-label="Change the background colour"
+                        data-reply-backdrop
+                      >
+                        <span className="h-6 w-6 rounded-full border-2 border-white bg-[conic-gradient(#ef3340,#f97316,#facc15,#22c55e,#2563eb,#a855f7,#ef3340)]" />
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={retake} className={pill} aria-label={shot ? "Retake" : "Back to the camera"}>
+                      <ChevronLeft className="h-6 w-6" />
+                    </button>
+                  )}
                   {/* text and stickers go on a card or a photo (never on a clip) */}
                   {(card || shot) && (
                     <>
@@ -1472,10 +1564,85 @@ export function ShareStudio({
             thumb={thumb}
           />
         )}
+        {/* a story's Questions / Poll / Slider: write it, it goes where it's dragged */}
+        <StickerEditorSheet
+          open={!!liveForm}
+          initial={liveForm}
+          title="Story sticker"
+          onClose={() => setLiveForm(null)}
+          onSave={(sticker) => {
+            setLive({ ...sticker, y: live?.y ?? sticker.y ?? 0.5 });
+            setLiveForm(null);
+            setPosted(false);
+          }}
+          onRemove={
+            live
+              ? () => {
+                  setLive(null);
+                  setLiveForm(null);
+                }
+              : undefined
+          }
+        />
         {/* a clip that's too long (or tapped in the strip) is trimmed here, on top of the studio */}
         {tray.trimmer}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A new live sticker of this kind, ready to write. */
+function blankSticker(type: StickerType): StickerSpec {
+  return type === "poll" ? { type, q: "", options: [{ label: "Yes" }, { label: "No" }] } : type === "slider" ? { type, q: "", emoji: "🔥" } : { type, q: "" };
+}
+
+/**
+ * A story's Questions / Poll / Slider in the editor, where the crew will see
+ * it (its middle at `y` of the story's height, the same band the story keeps
+ * it to): drag it up or down, tap it to change or remove it. It's never
+ * drawn into the picture; the story shows the real one, live.
+ */
+function LiveStickerSpot({ sticker, height, onMove, onEdit }: { sticker: StickerSpec; height: number; onMove: (y: number) => void; onEdit: () => void }) {
+  const drag = useRef<{ y0: number; at0: number; moved: boolean } | null>(null);
+  const at = stickerY(sticker.y) ?? 0.5;
+  return (
+    <div
+      className="absolute inset-x-0 z-[6] touch-none"
+      style={{ top: at * height, transform: "translateY(-50%)" }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        drag.current = { y0: e.clientY, at0: at, moved: false };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d || !height) return;
+        const dy = e.clientY - d.y0;
+        if (Math.abs(dy) > 4) d.moved = true;
+        if (d.moved) onMove(Math.min(STICKER_Y_MAX, Math.max(STICKER_Y_MIN, d.at0 + dy / height)));
+      }}
+      onPointerUp={() => {
+        const d = drag.current;
+        drag.current = null;
+        if (d && !d.moved) onEdit();
+      }}
+      onPointerCancel={() => (drag.current = null)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit();
+        } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          e.preventDefault();
+          onMove(Math.min(STICKER_Y_MAX, Math.max(STICKER_Y_MIN, at + (e.key === "ArrowUp" ? -0.04 : 0.04))));
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="Your story sticker. Drag to move it, tap to change it"
+      data-studio-live-sticker={sticker.type}
+    >
+      <StickerPreview sticker={sticker} />
+    </div>
   );
 }
 

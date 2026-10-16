@@ -4,6 +4,7 @@ import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
 import { Check, TextAlignCenter, TextAlignEnd, TextAlignStart, Trash2 } from "lucide-react";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { cn } from "@/lib/utils";
+import type { StickerType } from "@/lib/lessons";
 
 /**
  * Text and stickers, Instagram-style, placed right on the share card: text
@@ -390,6 +391,80 @@ function emojiSticker(e: string): Bitmap {
   return finish(c);
 }
 
+/** Lines of `text` that fit `max` px wide in the context's font (words kept whole; one too long is cut). */
+function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number, limit: number): string[] {
+  const out: string[] = [];
+  for (const para of text.split(/\n+/)) {
+    let line = "";
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      const next = line ? `${line} ${word}` : word;
+      if (ctx.measureText(next).width <= max || !line) line = next;
+      else {
+        out.push(line);
+        line = word;
+      }
+    }
+    if (line) out.push(line);
+  }
+  if (out.length > limit) {
+    const cut = out.slice(0, limit);
+    cut[limit - 1] = `${cut[limit - 1].replace(/\s*\S*$/, "")}…`;
+    return cut;
+  }
+  return out;
+}
+
+/**
+ * Instagram's shared response: the question across a red header, what they
+ * sent underneath in black on white. Never who sent it.
+ */
+function responseCard(question: string, answer: string): Bitmap {
+  const W = 780 * PX;
+  const pad = 44 * PX;
+  const qSize = 38 * PX;
+  const aSize = 46 * PX;
+  const mc = document.createElement("canvas");
+  const m = mc.getContext("2d")!;
+  m.font = `800 ${qSize}px ${SANS}`;
+  const qLines = wrapLines(m, question, W - pad * 2, 3);
+  m.font = `600 ${aSize}px ${SANS}`;
+  const aLines = wrapLines(m, answer, W - pad * 2, 9);
+  releaseCanvas(mc);
+  const qH = pad * 0.8 + qLines.length * qSize * 1.22 + pad * 0.8;
+  const aH = pad * 0.9 + aLines.length * aSize * 1.28 + pad * 0.9;
+  const c = document.createElement("canvas");
+  c.width = Math.round(W);
+  c.height = Math.round(qH + aH);
+  const ctx = c.getContext("2d")!;
+  const r = 40 * PX;
+  ctx.save();
+  roundRect(ctx, 0, 0, c.width, c.height, r);
+  ctx.clip();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  const g = ctx.createLinearGradient(0, 0, c.width, 0);
+  g.addColorStop(0, RED);
+  g.addColorStop(1, "#f97316");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, c.width, qH);
+  ctx.restore();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `800 ${qSize}px ${SANS}`;
+  qLines.forEach((l, i) => ctx.fillText(l, c.width / 2, pad * 0.8 + i * qSize * 1.22));
+  ctx.fillStyle = "#0a0a0a";
+  ctx.font = `600 ${aSize}px ${SANS}`;
+  aLines.forEach((l, i) => ctx.fillText(l, c.width / 2, qH + pad * 0.9 + i * aSize * 1.28));
+  return finish(c);
+}
+
+/** The response card as a story item, a little above the middle (replying to a question response). */
+export function responseCardItem(question: string, answer: string): StickerItem {
+  const { b, make } = made(() => responseCard(question, answer));
+  return { id: 1_000_000, kind: "sticker", sticker: "response", canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make, x: 0.5, y: 0.4, s: 1, r: 0 };
+}
+
 export type StickerDef = { key: string; label: string; render: (logo: HTMLImageElement | null) => Bitmap };
 
 /** Render at a density; returns the bitmap plus how to redo it at another one. */
@@ -519,6 +594,13 @@ export function remapStickers(
 
 export type StickerRequest = { kind: "text" | "stickers"; n: number } | null;
 
+/** The live stickers a story can carry, Questions first (Instagram's tray). */
+const INTERACTIVE: { type: StickerType; label: string; icon: string }[] = [
+  { type: "question", label: "Questions", icon: "❓" },
+  { type: "poll", label: "Poll", icon: "📊" },
+  { type: "slider", label: "Slider", icon: "😍" },
+];
+
 type TextDraft = { id: number | null; text: string; style: number; color: string; size: number; align: TextAlign };
 
 /**
@@ -532,6 +614,7 @@ export function StickerLayer({
   height,
   context,
   request,
+  interactive,
 }: {
   items: StickerItem[];
   setItems: React.Dispatch<React.SetStateAction<StickerItem[]>>;
@@ -540,6 +623,8 @@ export function StickerLayer({
   height: number;
   context: DecorContext;
   request: StickerRequest;
+  /** A story: Instagram's Questions, Poll and Slider lead the tray (they go on live, not drawn in). */
+  interactive?: { onPick: (type: StickerType) => void };
 }) {
   const [tray, setTray] = useState(false);
   const [editing, setEditing] = useState<TextDraft | null>(null);
@@ -924,6 +1009,26 @@ export function StickerLayer({
         <div className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/50 text-white" onClick={() => setTray(false)}>
           <div className="max-h-[62%] overflow-y-auto rounded-t-[24px] bg-[#16161a] p-4" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }} onClick={(e) => e.stopPropagation()}>
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
+            {interactive && (
+              <div className="mb-3 grid grid-cols-3 gap-2.5" data-tray-interactive>
+                {INTERACTIVE.map((t) => (
+                  <button
+                    key={t.type}
+                    type="button"
+                    onClick={() => {
+                      setTray(false);
+                      interactive.onPick(t.type);
+                    }}
+                    className="flex h-16 flex-col items-center justify-center gap-0.5 rounded-2xl bg-white text-black active:scale-95"
+                    aria-label={`${t.label} sticker`}
+                    data-tray-interactive-type={t.type}
+                  >
+                    <span className="text-[20px] leading-none">{t.icon}</span>
+                    <span className="text-[12px] font-black uppercase tracking-[0.04em]">{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2.5">
               {stickers
                 .filter((s) => !s.key.startsWith("emoji:"))

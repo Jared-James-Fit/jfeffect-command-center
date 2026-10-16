@@ -12,7 +12,7 @@ describe("ways into a profile (Instagram, TikTok, Strava)", () => {
     expect(stories).toContain("data-story-profile-name");
     // who saw your story, and who answered its sticker, open the same way
     expect(stories).toContain("<ViewersSheet postId={viewers ? post.id : null} onClose={() => setViewers(false)} onOpenAuthor={onOpenPerson} />");
-    expect(stories).toContain("<StorySticker post={post} onComposing={setComposing} onOpenPerson={openPerson} />");
+    expect(stories).toContain("<StorySticker\n                post={post}\n                onComposing={setComposing}\n                onOpenPerson={openPerson}");
     expect(read("src/components/community/story-sticker.tsx")).toContain("data-sticker-answer-person");
     expect(read("src/components/community/community-screen.tsx")).toContain("onOpenPerson={openAuthor}");
   });
