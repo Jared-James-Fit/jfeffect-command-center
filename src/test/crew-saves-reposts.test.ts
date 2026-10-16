@@ -45,6 +45,8 @@ describe("a repost's note", () => {
     expect(floatingNote({ reposted_by: [who("dwayne", "Dwayne"), who("marc", "Marc", "🔥")] })?.name).toBe("Marc");
     expect(floatingNote({ reposted_by: [who("dwayne", "Dwayne")] })).toBeNull();
     expect(floatingNote({ reposted_by: null })).toBeNull();
+    // yours shows from my_repost, never as someone else's
+    expect(floatingNote({ reposted_by: [who("me", "Jared", "mine", true), who("marc", "Marc", "🔥")] })?.name).toBe("Marc");
   });
 });
 
