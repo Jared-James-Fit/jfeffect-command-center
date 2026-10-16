@@ -17,6 +17,8 @@ export type TrayItem = {
   progress: number;
   /** Local preview (just picked / shot). */
   preview: string | null;
+  /** A clip just picked or recorded: its local file, to play while you write the caption. */
+  video?: string | null;
   /** Once uploaded (or when it was already on the post). */
   slide: PostSlide | null;
   /** Already on the saved post: its files only go once the post is saved without it. */
@@ -135,7 +137,10 @@ export function useSlideTray({ open, initial, resetKey, coverCount }: { open: bo
           setItems((list) => list.filter((it) => it.id !== f.id));
           continue;
         }
-        patch(f.id, { preview: res.media.kind === "image" ? res.media.previewUrl : (res.media.thumb ? URL.createObjectURL(res.media.thumb) : null) });
+        patch(f.id, {
+          preview: res.media.kind === "image" ? res.media.previewUrl : (res.media.thumb ? URL.createObjectURL(res.media.thumb) : null),
+          video: res.media.kind === "video" ? res.media.previewUrl : null,
+        });
         enqueue(f.id, res.media);
       }
     },

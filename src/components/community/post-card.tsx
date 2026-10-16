@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Play, Send, Star, Trophy } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Trophy } from "lucide-react";
+import { InlineVideo } from "@/components/community/inline-video";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -680,39 +681,19 @@ export function PostMedia({ post, thumbUrl, full = false }: { post: CommunityPos
   );
 }
 
-/** One photo or video, filling its frame. Video bytes only load when it's played. */
+/** One photo or video, filling its frame. A clip plays muted while it's on screen (InlineVideo). */
 function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide; thumbUrl: string | null; full: boolean; active?: boolean }) {
-  const [playing, setPlaying] = useState(false);
   const isVideo = slide.type === "video";
-  const { data: fullUrl } = useFullMediaUrl(slide.path, (full && active && !isVideo) || playing);
+  const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
-  // swiping away stops it
-  useEffect(() => {
-    if (!active) setPlaying(false);
-  }, [active]);
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
-  return isVideo && playing && fullUrl ? (
+  return isVideo ? (
     <div data-pinch-zoom className="absolute inset-0">
-      <video src={fullUrl} poster={thumbUrl ?? undefined} className="h-full w-full object-cover" controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
+      <InlineVideo path={slide.path} poster={thumbUrl} active={active} />
     </div>
   ) : (
     <div data-pinch-zoom className="absolute inset-0">
       {src ? <FadeImg src={src} /> : <div className="h-full w-full animate-pulse bg-muted" />}
-      {isVideo && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setPlaying(true);
-          }}
-          className="absolute inset-0 grid place-items-center bg-black/10"
-          aria-label="Play video"
-        >
-          <span className="grid h-14 w-14 place-items-center rounded-full bg-black/55 text-white backdrop-blur">
-            <Play className="ml-0.5 h-6 w-6 fill-current" />
-          </span>
-        </button>
-      )}
     </div>
   );
 }

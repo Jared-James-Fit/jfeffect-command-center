@@ -17,6 +17,8 @@ import { clearDraft, draftWorthKeeping, loadDraft, saveDraft } from "@/lib/post-
 import { getPlatform, iosAppTooOldForCamera, isNative, openAppSettings, openTestFlight } from "@/platform";
 import { reportCameraTrouble } from "@/lib/camera-report";
 import { LookCarousel } from "@/components/community/look-carousel";
+import { canRecordClips, useClipRecorder } from "@/components/community/clip-recorder";
+import { useHintsSeen, useMarkHintSeen } from "@/lib/community.queries";
 
 export type CameraMode = { key: string; label: string };
 
@@ -590,7 +592,32 @@ export function ShareStudio({
     setAdding(false);
     setPhase("edit");
   };
+  // Hold the shutter to film a clip (a plain post: looks and cards are painted on photos)
+  const recordable = useMemo(() => canRecordClips(), []) && !card && status === "live" && canShoot && count == null;
+  const hints = useHintsSeen();
+  const markHint = useMarkHintSeen();
+  const recorder = useClipRecorder({
+    getStream: () => streamRef.current,
+    onClip: (file) => {
+      markHint("hold_to_film");
+      // a clip is the post (or the next slide): it starts uploading now, and plays while you write the caption
+      if (adding) {
+        void tray.add([file]);
+        backToPost();
+        return;
+      }
+      skipPhoto();
+      void tray.add([file]);
+    },
+  });
+  // off the camera, or onto a mode with a card, mid-clip: it's thrown away
+  useEffect(() => {
+    if (recorder.recording && (!shooting || !recordable)) recorder.stop(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shooting, recordable, recorder.recording]);
   const shoot = () => {
+    // filming that kept going after the mic question: a tap stops it
+    if (recorder.recording) return recorder.stop();
     if (!canShoot) return;
     // the camera's still coming up: a tap here must not throw you into the phone's camera
     if (status === "starting") return;
@@ -818,7 +845,8 @@ export function ShareStudio({
         <DialogTitle className="sr-only">Share</DialogTitle>
         <DialogDescription className="sr-only">Take a photo, add text or stickers, then post it to the community or share it to your story.</DialogDescription>
         <input ref={libRef} type="file" accept={accept} multiple hidden onChange={(e) => fromInput(e, false)} />
-        <input ref={capRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => fromInput(e, true)} />
+        {/* the phone's own camera (no live camera here): a plain post can film too */}
+        <input ref={capRef} type="file" accept={card ? "image/*" : "image/*,video/*"} capture="environment" hidden onChange={(e) => fromInput(e, true)} />
 
         <div
           ref={setArea}
@@ -844,8 +872,22 @@ export function ShareStudio({
               />
             )}
             {phase === "edit" && !showCard && shotUrl && <img src={shotUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
-            {/* a plain post of clips: the first one, up front */}
-            {phase === "edit" && !card && !shot && tray.items[0]?.preview && <img src={tray.items[0].preview} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+            {/* a plain post of clips: the first one, up front (a clip plays, muted, while you write the caption) */}
+            {phase === "edit" && !card && !shot && tray.items[0]?.video ? (
+              <video
+                key={tray.items[0].video}
+                src={tray.items[0].video}
+                poster={tray.items[0].preview ?? undefined}
+                muted
+                loop
+                autoPlay
+                playsInline
+                className="absolute inset-0 h-full w-full object-cover"
+                data-studio-clip
+              />
+            ) : (
+              phase === "edit" && !card && !shot && tray.items[0]?.preview && <img src={tray.items[0].preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            )}
             {showCard && <canvas ref={setCardEl} className="pointer-events-none absolute inset-0 h-full w-full" aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined} />}
 
             {phase === "shoot" && status === "fallback" && (
@@ -995,7 +1037,8 @@ export function ShareStudio({
               </span>
             </div>
           ) : (
-            chip && (
+            // (hidden while filming: the clip's timer sits there)
+            chip && !recorder.recording && (
               <div className="pointer-events-none mb-2 flex justify-center px-4">
                 {/* over the camera it needs a backing to read on any picture */}
                 <div className={cn("pointer-events-auto max-w-full rounded-full", phase === "shoot" && fullScreen && "bg-black/45 backdrop-blur-md")}>{chip}</div>
@@ -1005,6 +1048,12 @@ export function ShareStudio({
           {phase === "shoot" ? (
             <>
               <div className="pointer-events-auto">
+                {/* first time on a plain post's camera: how to film, until the first clip */}
+                {recordable && !recorder.recording && hints.data && !hints.data.includes("hold_to_film") && (
+                  <div className="pointer-events-none mb-1 text-center text-[12px] font-bold text-white/80 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]" data-hold-hint>
+                    Tap for a photo, hold for video
+                  </div>
+                )}
                 <LookCarousel
                   looks={card?.looks ?? null}
                   look={card?.look ?? null}
@@ -1013,6 +1062,11 @@ export function ShareStudio({
                   disabled={!canShoot}
                   counting={count != null}
                   showName={fullScreen}
+                  hold={
+                    recordable || recorder.recording
+                      ? { onStart: () => void recorder.start(), onEnd: recorder.release, progress: recorder.recording ? recorder.progress : null, seconds: recorder.seconds }
+                      : undefined
+                  }
                 />
               </div>
               {/* under the camera: the library, then everything you can share, all in view */}

@@ -2,18 +2,25 @@
  * Browser-side media prep + upload for community posts.
  *
  * Nothing here runs until the athlete actually picks a file (no camera or
- * library permission is requested up front) and nothing is uploaded until they
- * press Post — choosing a photo only changes the local preview.
+ * library permission is requested up front). Uploads start as soon as
+ * something is picked (the studio's slides, the composer's photo or clip),
+ * so by the time the caption's written, Post only has to save.
  *
  *   photo → ≤1440px JPEG for the feed + ≤720px thumbnail (the feed only ever
  *           loads the thumbnail until a post is opened full-size).
- *   video → uploaded as-is (≤50 MB, ≤45 s, checked before upload) plus a
- *           poster frame JPEG, so the feed never loads video bytes up front.
+ *   video → ≤60 s. The original starts uploading at once while the phone
+ *           shrinks a 720p copy (WebCodecs); whichever lands first is the one
+ *           posted (raceVideoUpload, the chat's own pipeline). A clip over the
+ *           50 MB storage limit goes only as the shrunk copy. Plus a poster
+ *           frame JPEG, so the feed never loads video bytes up front.
  */
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { supabase } from "@/integrations/supabase/client";
-import { checkMediaFile, checkVideoDuration } from "@/lib/community";
+import { MAX_VIDEO_BYTES, checkMediaFile, checkVideoDuration, uploadableVideo } from "@/lib/community";
+import { captureVideoPoster } from "@/lib/video-poster";
+import { canCompressVideo, compressVideoDetailed, preloadVideoCompressor } from "@/lib/video-compress";
+import { raceVideoUpload } from "@/lib/video-upload-race";
 
 export const COMMUNITY_BUCKET = "community-media" as const;
 /** A post picture that ships with the app instead of living in the bucket ("app:community/x.jpg" → /community/x.jpg). */
@@ -33,7 +40,10 @@ export type PickedMedia = {
 };
 
 export function releasePicked(m: PickedMedia | null) {
-  if (m) URL.revokeObjectURL(m.previewUrl);
+  if (!m) return;
+  URL.revokeObjectURL(m.previewUrl);
+  // a clip's poster frame has its own local URL
+  if (m.drawable instanceof HTMLImageElement && m.drawable.src.startsWith("blob:") && m.drawable.src !== m.previewUrl) URL.revokeObjectURL(m.drawable.src);
 }
 
 function loadImageEl(url: string): Promise<HTMLImageElement | null> {
@@ -49,49 +59,39 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob 
   return new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
 }
 
-/** Poster frame + metadata for a video, or null when the browser can't decode it. */
-async function readVideo(url: string): Promise<{ canvas: HTMLCanvasElement; duration: number; width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    const v = document.createElement("video");
-    v.muted = true;
-    v.playsInline = true;
-    v.preload = "metadata";
-    let done = false;
-    const finish = (out: Awaited<ReturnType<typeof readVideo>>) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      v.removeAttribute("src");
-      v.load();
-      resolve(out);
-    };
-    const timer = setTimeout(() => finish(null), 8000);
-    v.onerror = () => finish(null);
-    v.onloadedmetadata = () => {
-      const target = Math.min(0.4, Math.max(0, (v.duration || 0) / 2));
-      v.currentTime = target;
-    };
-    v.onseeked = () => {
-      try {
-        const scale = Math.min(1, 1080 / Math.max(v.videoWidth, v.videoHeight));
-        const c = document.createElement("canvas");
-        c.width = Math.round(v.videoWidth * scale);
-        c.height = Math.round(v.videoHeight * scale);
-        c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
-        finish({ canvas: c, duration: v.duration, width: v.videoWidth, height: v.videoHeight });
-      } catch {
-        finish(null);
-      }
-    };
-    v.src = url;
-  });
+/**
+ * A video's size and length without decoding a frame (the container's own
+ * header, read in JS), for when the phone won't hand over a poster frame.
+ */
+async function readVideoMeta(file: File): Promise<{ duration: number; width: number; height: number } | null> {
+  try {
+    const mb = await import("mediabunny");
+    const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
+    const track = await input.getPrimaryVideoTrack();
+    if (!track) return null;
+    return { duration: await input.computeDuration(), width: track.displayWidth, height: track.displayHeight };
+  } catch {
+    return null;
+  }
+}
+
+function blankPoster(width: number, height: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = Math.max(2, Math.round(width / 8));
+  c.height = Math.max(2, Math.round(height / 8));
+  const ctx = c.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, c.width, c.height);
+  }
+  return c;
 }
 
 export type PickResult = { ok: true; media: PickedMedia } | { ok: false; reason: string };
 
 /** Validate + decode a chosen file for preview. Does not upload. */
 export async function pickMedia(file: File): Promise<PickResult> {
-  const check = checkMediaFile(file);
+  const check = checkMediaFile(file, { canShrink: canCompressVideo() });
   if (!check.ok) return check;
   const previewUrl = URL.createObjectURL(file);
 
@@ -108,19 +108,41 @@ export async function pickMedia(file: File): Promise<PickResult> {
     };
   }
 
-  const info = await readVideo(previewUrl);
-  if (!info) {
+  // the encoder downloads while the poster's read, so a big clip doesn't wait on it at Post
+  preloadVideoCompressor();
+  // The poster the iPhone way (in the page, from a presented frame); a phone
+  // that won't give a frame still gets the clip in, sized from its header.
+  const poster = await captureVideoPoster(file, { maxDimension: 1080, timeoutMs: 10_000 });
+  let duration = poster?.duration ?? NaN;
+  let width = poster?.width ?? 0;
+  let height = poster?.height ?? 0;
+  if (!poster || !duration) {
+    const meta = await readVideoMeta(file);
+    if (meta) {
+      duration = meta.duration;
+      if (!width || !height) {
+        width = meta.width;
+        height = meta.height;
+      }
+    }
+  }
+  if (!width || !height) {
     URL.revokeObjectURL(previewUrl);
     return { ok: false, reason: "Couldn't read that video. Try a short MP4 or MOV clip." };
   }
-  const dur = checkVideoDuration(info.duration);
+  const dur = checkVideoDuration(duration);
   if (!dur.ok) {
     URL.revokeObjectURL(previewUrl);
     return dur;
   }
+  let drawable: HTMLImageElement | HTMLCanvasElement = blankPoster(width, height);
+  if (poster) {
+    const img = await loadImageEl(URL.createObjectURL(poster.blob));
+    if (img) drawable = img;
+  }
   return {
     ok: true,
-    media: { kind: "video", file, previewUrl, drawable: info.canvas, width: info.width, height: info.height, thumb: await canvasToJpeg(info.canvas, 0.8) },
+    media: { kind: "video", file, previewUrl, drawable, width, height, thumb: poster?.blob ?? null },
   };
 }
 
@@ -134,6 +156,7 @@ export type UploadedMedia = {
 
 /** Upload the picked media (and its thumbnail) under `${userId}/…`. */
 export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: (pct: number) => void): Promise<UploadedMedia> {
+  if (m.kind === "video") return uploadVideo(m, userId, onProgress);
   let main: File | Blob = m.file;
   if (m.kind === "image") main = await compressImage(m.file, { maxDimension: 1440, quality: 0.84, skipUnder: 0 });
   const mainFile = main instanceof File ? main : new File([main], "photo.jpg", { type: main.type || "image/jpeg" });
@@ -160,6 +183,50 @@ export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: 
   }
   onProgress?.(100);
   return { media_path: up.path, media_thumb_path: thumbPath, media_type: m.kind, media_width: m.width, media_height: m.height };
+}
+
+/**
+ * A clip, as fast as this phone and connection allow: the original starts
+ * uploading at once while a 720p copy is shrunk on the phone, and the copy
+ * takes over only if it would land sooner (raceVideoUpload). Over the 50 MB
+ * storage limit only the copy can go. The poster uploads alongside.
+ */
+async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: number) => void): Promise<UploadedMedia> {
+  const file = uploadableVideo(m.file);
+  const ext = ((file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4");
+  const stem = `${userId}/${Date.now()}-${crypto.randomUUID()}`;
+  const originalPath = `${stem}.${ext}`;
+  const compressedPath = `${stem}-720p.mp4`;
+  const put = (f: File, path: string, progress?: (pct: number) => void, signal?: AbortSignal) =>
+    uploadLiftFileToStorage({ file: f, userId, bucket: COMMUNITY_BUCKET, path, onProgress: progress, signal });
+
+  const thumbP: Promise<string | null> = m.thumb
+    ? put(new File([m.thumb], "thumb.jpg", { type: "image/jpeg" }), `${stem}-poster.jpg`).then((r) => r.path, () => null) // a missing poster only costs feed speed
+    : Promise.resolve(null);
+
+  onProgress?.(2);
+  let path: string;
+  if (file.size <= MAX_VIDEO_BYTES) {
+    const r = await raceVideoUpload(
+      {
+        originalBytes: file.size,
+        uploadOriginal: (p, sig) => put(file, originalPath, (pct) => p(pct / 100), sig).then(() => {}),
+        compress: (p, sig) => compressVideoDetailed(file, "avc", { onProgress: p, signal: sig }),
+        uploadCompressed: (f, p, sig) => put(f, compressedPath, (pct) => p(pct / 100), sig).then(() => {}),
+      },
+      { onProgress: (f) => onProgress?.(Math.max(2, Math.round(f * 96))) },
+    );
+    path = r.sent === "compressed" ? compressedPath : originalPath;
+  } else {
+    // too big to go as it is: shrink first, then send the copy
+    const out = await compressVideoDetailed(file, "avc", { onProgress: (p) => onProgress?.(Math.max(2, Math.round(p * 55))) });
+    if (!out.file || out.file.size > MAX_VIDEO_BYTES) throw new Error("That clip's too big to post. Trim it shorter in Photos and try again.");
+    await put(out.file, compressedPath, (pct) => onProgress?.(55 + Math.round(pct * 0.41)));
+    path = compressedPath;
+  }
+  const thumbPath = await thumbP;
+  onProgress?.(100);
+  return { media_path: path, media_thumb_path: thumbPath, media_type: "video", media_width: m.width, media_height: m.height };
 }
 
 /* ---- community profile photo -------------------------------------- */
