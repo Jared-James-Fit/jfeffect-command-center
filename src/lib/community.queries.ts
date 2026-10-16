@@ -1021,7 +1021,14 @@ export type SeriesOverview = {
   this_week: Record<CommunitySeries, boolean>;
   /** Wednesday Wins is written from last week's training: what it would say right now. */
   wins_preview: { body: string; featured: number; trainers: number; week_of: string; next_week: boolean; stats?: WinsStats | null } | null;
+  /** The library series the coach turned on (they post alongside that day's lesson). Wins and Recap are always on. */
+  series_on?: LibrarySeries[];
+  /** Holiday posts coming up in the next ~4 months (9 am on the day), soonest first. */
+  holidays?: { key: string; name: string; date: string; body: string; posted: boolean }[];
 };
+
+/** The five series written from a library (the other two come from the crew's logs). */
+export type LibrarySeries = Extract<CommunitySeries, "monday_motivation" | "tuesday_tips" | "try_it_thursday" | "finish_strong_friday" | "saturday_spirit">;
 
 export function useSeriesOverview(enabled: boolean) {
   return useQuery({
@@ -1097,6 +1104,7 @@ export function useSeriesAction() {
     mutationFn: async (
       a:
         | { kind: "pause"; paused: boolean }
+        | { kind: "series_on"; series: LibrarySeries; on: boolean }
         | { kind: "publish"; series: CommunitySeries }
         | { kind: "item"; id: string; body: string; active?: boolean; media?: PostSlide[] }
         | { kind: "note"; body: string; poll?: string[] | null; media?: PostSlide[] },
@@ -1104,6 +1112,8 @@ export function useSeriesAction() {
       const call =
         a.kind === "pause"
           ? db.rpc("community_series_set_paused", { _paused: a.paused })
+          : a.kind === "series_on"
+            ? db.rpc("community_series_set_on", { _series: a.series, _on: a.on })
           : a.kind === "publish"
             ? db.rpc("community_publish_series", { _series: a.series, _force: true })
             : a.kind === "item"
@@ -1117,9 +1127,25 @@ export function useSeriesAction() {
       if (error) throw error;
       return data as { status?: string; id?: string } | null;
     },
-    onSuccess: () => {
+    // a series switch flips at once (and flips back if the save fails)
+    onMutate: async (a) => {
+      if (a.kind !== "series_on") return undefined;
+      await qc.cancelQueries({ queryKey: ["community-series"], exact: true });
+      const before = qc.getQueryData<SeriesOverview>(["community-series"]);
+      if (before) {
+        const rest = (before.series_on ?? []).filter((s) => s !== a.series);
+        qc.setQueryData<SeriesOverview>(["community-series"], { ...before, series_on: a.on ? [...rest, a.series] : rest });
+      }
+      return { before };
+    },
+    onError: (_e, _a, ctx) => {
+      if (ctx?.before) qc.setQueryData(["community-series"], ctx.before);
+    },
+    onSuccess: (_d, a) => {
       qc.invalidateQueries({ queryKey: ["community-series"] });
-      invalidateCommunity(qc);
+      // Tuesday Tips on/off decides whether Tuesday's lesson posts the crew's numbers
+      if (a.kind === "series_on") qc.invalidateQueries({ queryKey: ["community-lessons"] });
+      else invalidateCommunity(qc);
     },
   });
 }

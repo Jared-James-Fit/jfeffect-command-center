@@ -182,9 +182,9 @@ describe("the words sound like the coach and stay inside the lines", () => {
       for (const w of banned) expect(b.toLowerCase(), b).not.toContain(w);
     }
   });
-  it("the coach screen shows Wins and Recap as they'd read right now (the other five days are lessons)", () => {
+  it("the coach screen shows every day's series, Wins and Recap as they'd read right now (the other five on their own switches)", () => {
     const coach = read("src/components/community/coach-weekly-posts.tsx");
-    for (const k of ["wednesday_wins", "sunday_recap"]) expect(coach).toContain(`"${k}"`);
+    for (const k of Object.keys(SERIES_LABEL).filter((k) => k !== "lesson")) expect(coach).toContain(`"${k}"`);
     expect(coach).toContain('useSeriesPreview("sunday_recap", open === "sunday_recap")');
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachLessons />\n          <CoachWeeklyPosts />");
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.community_series_preview(_series text)");

@@ -98,7 +98,7 @@ export function CoachLessons() {
               onCheckedChange={(on) =>
                 seriesAct.mutate(
                   { kind: "pause", paused: !on },
-                  { onSuccess: () => toast.success(on ? "Coach posts are on" : "Coach posts paused", { description: on ? undefined : "Lessons, Wins and Recap all wait until you turn them back on." }) },
+                  { onSuccess: () => toast.success(on ? "Coach posts are on" : "Coach posts paused", { description: on ? undefined : "Lessons, the daily series and holidays all wait until you turn them back on." }) },
                 )
               }
               aria-label="Coach posts on"
