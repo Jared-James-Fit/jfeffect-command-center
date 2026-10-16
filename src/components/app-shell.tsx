@@ -40,7 +40,7 @@ import { useSalesRealtime } from "@/hooks/use-sales-realtime";
 import { MORE_BAR_TO, barPrefixMatch, onPages, resolveVisibleBarItems } from "@/lib/floating-bar";
 import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer";
 import { OPEN_MORE_EVENT, pageOwnsTopBar } from "@/lib/shell-events";
-import { requestTabRefresh, scrollPageToTop } from "@/lib/tab-refresh";
+import { pageScrolledPx, requestTabRefresh, scrollPageToTop, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 import { TabRefresh } from "@/components/tab-refresh";
 
 export interface NavItem {
@@ -1638,6 +1638,8 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
   const navigate = useNavigate();
   const Icon = item.icon;
   const badge = navBadgeFor(item, navBadges);
+  // Inside the workout logger: when the last tap on this tab only scrolled up.
+  const lastTopTapRef = useRef(0);
 
   if (!item.children) {
     if (item.to === "__search__") {
@@ -1715,6 +1717,17 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
                 window.dispatchEvent(new CustomEvent("nav-retap", { detail: item.to }));
               } catch {}
             }
+          } else if (prefixActive && topFirstPage(pathname)) {
+            // In a workout: the first tap goes back to its top, the next one
+            // (or a quick double tap) to the Workouts list.
+            const now = Date.now();
+            if (topFirstTap(pageScrolledPx(), now - lastTopTapRef.current) === "top") {
+              e.preventDefault();
+              lastTopTapRef.current = now;
+              scrollPageToTop();
+              return;
+            }
+            lastTopTapRef.current = 0;
           }
           onNavigate(item.to);
         }}

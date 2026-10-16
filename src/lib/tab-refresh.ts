@@ -84,3 +84,27 @@ export function requestTabRefresh() {
     /* no window */
   }
 }
+
+/**
+ * Pages under a tab where tapping that tab goes back to the top first and only
+ * the next tap goes to the tab itself: the workout logger, so a long workout
+ * is one tap from its top and two from the Workouts list.
+ */
+export function topFirstPage(pathname: string): boolean {
+  return /^\/portal\/workouts\/[^/]+\/?$/.test(pathname);
+}
+/** A second tap this soon after the first goes to the tab even mid-scroll (a double tap). */
+export const TOP_FIRST_DOUBLE_TAP_MS = 1200;
+/** Scrolled at least this far counts as "not at the top". */
+const TOP_SLACK_PX = 40;
+
+/** On a top-first page: this tap scrolls up ("top") or goes to the tab ("tab"). */
+export function topFirstTap(scrolledPx: number, msSinceLastTop: number): "top" | "tab" {
+  return scrolledPx > TOP_SLACK_PX && msSinceLastTop > TOP_FIRST_DOUBLE_TAP_MS ? "top" : "tab";
+}
+
+/** How far the page (or the list under the screen's middle that scrolls on its own) is from its top. */
+export function pageScrolledPx(): number {
+  if (typeof window === "undefined") return 0;
+  return Math.max(window.scrollY || 0, pageScroller()?.scrollTop ?? 0);
+}
