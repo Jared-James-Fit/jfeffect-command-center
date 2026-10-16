@@ -187,6 +187,7 @@ export function SwipeToReveal({
         </button>
       </div>
       <div
+        data-swipe-content
         className={cn("relative bg-background", !paused && "touch-pan-y", !dragging && "transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]")}
         style={{ transform: `translate3d(${offset}px,0,0)` }}
         onTouchStart={(e) => begin(e.touches[0].clientX, e.touches[0].clientY, e.target, null)}

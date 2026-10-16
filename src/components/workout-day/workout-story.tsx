@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, GalleryHorizontalEnd, Loader2, MessageCircle, Rows3 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkoutView } from "@/lib/use-workout-view";
+import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
 
 /**
- * Story view: the workout one exercise at a time, full screen, like Instagram
- * stories. Swipe (or Next ›) through the exercises; the bars up top show where
+ * Focus view (stored as "story"): the workout one exercise at a time, full
+ * screen. Swipe (or Next ›) through the exercises; the bars up top show where
  * you are and what's done. It's the same exercise cards as the list, laid out
  * side by side (WorkoutDayView switches the list's classes), so switching view
  * never reloads a card or loses what's typed into it.
@@ -75,11 +76,11 @@ export function runStoryTransition(update: () => void, card: HTMLElement | null)
   }
 }
 
-/** List ↔ Story, the same control in the list and in story view. */
+/** List ↔ Focus at the top of the workout. */
 export function WorkoutViewToggle({ view, onChange, className }: { view: WorkoutView; onChange: (view: WorkoutView) => void; className?: string }) {
   const options: Array<{ value: WorkoutView; label: string; icon: typeof Rows3 }> = [
     { value: "list", label: "List", icon: Rows3 },
-    { value: "story", label: "Story", icon: GalleryHorizontalEnd },
+    { value: "story", label: "Focus", icon: RectangleVertical },
   ];
   return (
     <div
@@ -96,11 +97,11 @@ export function WorkoutViewToggle({ view, onChange, className }: { view: Workout
             type="button"
             role="radio"
             aria-checked={on}
-            aria-label={value === "story" ? "Story view: one exercise at a time, full screen" : "List view: every exercise on one page"}
+            aria-label={value === "story" ? "Focus: one exercise at a time, full screen" : "List: every exercise on one page"}
             data-view={value}
             onClick={() => { if (!on) onChange(value); }}
             className={cn(
-              "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold transition-colors duration-200",
+              "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors duration-200",
               on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -113,11 +114,29 @@ export function WorkoutViewToggle({ view, onChange, className }: { view: Workout
   );
 }
 
+/** The workout clock as plain text for Focus's top bar: only while it's running (or paused). */
+export function FocusClock({ dayId }: { dayId: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const session = readWorkoutSession(dayId);
+  if (!session || session.stoppedAt != null || isSessionAbandoned(session, now)) return null;
+  const elapsed = formatElapsed(Math.floor(sessionElapsedMs(session, now) / 1000));
+  return (
+    <span data-testid="focus-clock" className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+      <Clock className="h-3 w-3" aria-hidden />
+      {session.pausedAt != null ? `Paused ${elapsed}` : elapsed}
+    </span>
+  );
+}
+
 export type StoryFinish =
   | { kind: "finish"; review: boolean; onFinish: () => Promise<void> | void }
   | { kind: "done" };
 
-/** Story view's top (progress bars, title, List ↔ Story) and bottom (‹ and Next ›) bars. */
+/** Focus's top (progress bars, where you are, List) and bottom (‹ and Next ›) bars. */
 export function StoryChrome({
   names,
   done,
@@ -135,12 +154,12 @@ export function StoryChrome({
   done: boolean[];
   index: number;
   title: string;
-  /** The workout clock, when it's running. */
+  /** The workout clock (FocusClock), while the workout is open. */
   timer?: ReactNode;
   /** What the last exercise's button does. */
   finish: StoryFinish;
   onJump: (index: number) => void;
-  /** The List switch: back to the list, and the list is the saved choice again. */
+  /** The List button: back to the list, and the list is the saved choice again. */
   onExit: () => void;
   /** "Back to the list" at the end of a finished workout: just for now. */
   onDone: () => void;
@@ -205,10 +224,10 @@ export function StoryChrome({
     <>
       <div
         data-testid="story-top"
-        className={cn("fixed inset-x-0 top-0 z-[41] bg-background/95 px-3 pb-2 pt-[calc(env(safe-area-inset-top,0px)+8px)]", anim)}
+        className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2.5 pt-[calc(env(safe-area-inset-top,0px)+6px)]", anim)}
       >
         <div className="mx-auto max-w-xl">
-          <div className="flex gap-1" aria-label="Exercises">
+          <div className="flex gap-1" role="group" aria-label="Exercises">
             {names.map((name, i) => (
               <button
                 key={i}
@@ -220,29 +239,41 @@ export function StoryChrome({
               >
                 <span
                   className={cn(
-                    "h-[3px] w-full rounded-full transition-colors duration-300",
-                    i === index ? (done[i] ? "bg-primary" : "bg-foreground") : done[i] ? "bg-primary/60" : "bg-foreground/15",
+                    "h-1 w-full rounded-full transition-colors duration-300",
+                    i === index ? (done[i] ? "bg-primary" : "bg-foreground") : done[i] ? "bg-primary/70" : "bg-foreground/20",
                   )}
                 />
               </button>
             ))}
           </div>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1.5 flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-bold leading-tight">{title}</div>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
-                <span data-testid="story-count">{index + 1} of {count}</span>
-                {timer && <><span aria-hidden>·</span>{timer}</>}
+              <div data-testid="story-count" className="text-base font-bold leading-tight tabular-nums text-foreground">
+                Exercise {index + 1} of {count}
+              </div>
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                {timer}
+                {timer && <span aria-hidden>·</span>}
+                <span className="truncate">{title}</span>
               </div>
             </div>
-            <WorkoutViewToggle view="story" onChange={onExit} />
+            <button
+              type="button"
+              data-testid="focus-exit"
+              onClick={onExit}
+              aria-label="Back to the list of all exercises"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3.5 text-[13px] font-bold text-foreground transition active:scale-95"
+            >
+              <Rows3 className="h-4 w-4" aria-hidden />
+              List
+            </button>
           </div>
         </div>
       </div>
       <div
         data-testid="story-bottom"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-[41] bg-gradient-to-t from-background from-60% to-background/0 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-4",
+          "fixed inset-x-0 bottom-0 z-[41] border-t border-border/60 bg-background px-3 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-2.5",
           anim,
         )}
       >

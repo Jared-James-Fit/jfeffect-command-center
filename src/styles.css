@@ -585,12 +585,27 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
   overscroll-behavior-y: contain;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  padding: calc(env(safe-area-inset-top, 0px) + 78px) 12px calc(env(safe-area-inset-bottom, 0px) + 92px);
+  /* clears the top bar (bars + "Exercise 5 of 7" + workout line) and the ‹ / Next bar */
+  padding: calc(env(safe-area-inset-top, 0px) + 92px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
+  /* the card fills the screen between the bars (a long one scrolls) */
+  display: flex;
+  flex-direction: column;
 }
 .workout-story > * > * {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   max-width: 36rem;
   margin-inline: auto;
 }
+.workout-story [data-swipe-content],
+.workout-story [data-story-fill] {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.workout-story [data-story-fill] > [data-workout-exercise] { flex: 1 0 auto; }
 /* Without view transitions: the stage is solid from the first frame (nothing
    behind shows through) and the cards rise in; leaving, the list fades in. */
 @keyframes jf-story-rise {
