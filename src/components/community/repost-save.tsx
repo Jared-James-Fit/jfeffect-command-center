@@ -12,6 +12,7 @@ import {
   REPOST_NOTE_EMOJI,
   REPOST_NOTE_MAX,
   cleanRepostNote,
+  floatingNote,
   isEmojiOnly,
   repostedLine,
   showRepostButton,
@@ -352,35 +353,74 @@ export function RepostedHeader({ post, onOpenAuthor }: { post: CommunityPost; on
 }
 
 /**
- * The note on a repost, floating on the post with its person's photo
- * (Instagram's). Only emoji show big. Yours can be tapped to change it; right
- * after you repost, an empty one asks for a note and drifts away on its own.
+ * A repost on the post, Instagram's way: the reposter's photo in the bottom
+ * left corner with a small 🔁 badge, and their note (words or emoji) in a
+ * bubble above it. Only emoji show big. Yours can be tapped to add or change
+ * the note; right after you repost, an empty bubble asks for one and drifts
+ * off on its own. `inline` (a post that's words) puts the bubble beside the
+ * photo instead of above it, so it never covers the words.
  */
-export function RepostNoteBubble({ who, note, onTap, ask = false, className }: {
+export function RepostStamp({ who, note, onTap, mine = false, ask = false, inline = false, className, label }: {
   who: Pick<CommunityAuthor, "name" | "avatar_url">;
   note: string | null;
   onTap?: () => void;
+  /** Your own repost (tap: your note). */
+  mine?: boolean;
   ask?: boolean;
+  inline?: boolean;
   className?: string;
+  label?: string;
 }) {
-  const big = isEmojiOnly(note);
-  const body = (
-    <>
-      <span className="shrink-0 rounded-full ring-2 ring-white/90 shadow-md">
-        <UserAvatar src={who.avatar_url} name={who.name} size={26} expandable={false} />
-      </span>
+  const text = ask ? null : note?.trim() || null;
+  const big = isEmojiOnly(text);
+  const bubble = text || ask ? (
+    <span
+      key={`${text ?? ""}${ask}`}
+      className={cn("repost-note relative block w-max", ask && "repost-note-ask", inline ? "ml-1.5" : "mb-1.5 ml-1")}
+      data-repost-bubble
+    >
       <span
         className={cn(
-          "relative -ml-1 max-w-[min(15rem,70vw)] rounded-2xl rounded-bl-md bg-white px-3 py-1.5 text-left text-black shadow-[0_8px_22px_-8px_rgba(0,0,0,0.55)]",
-          big ? "text-[22px] leading-none" : "text-[13px] font-semibold leading-snug",
-          ask && "text-black/55",
+          "block max-w-[min(16.5rem,68vw)] rounded-[18px] bg-white/95 px-3 py-[7px] text-left text-black shadow-[0_6px_20px_-6px_rgba(0,0,0,0.55)] backdrop-blur",
+          big ? "text-[24px] leading-[1.05]" : "text-[13px] font-semibold leading-snug",
+          ask && "font-bold text-black/50",
         )}
       >
-        <span className="line-clamp-2 break-words">{ask ? "Add a note…" : note}</span>
+        <span className="line-clamp-2 break-words">{ask ? "Add a note…" : text}</span>
       </span>
-    </>
+      {/* the thought tail, down to the photo (beside it, inline) */}
+      {inline ? (
+        <span className="absolute -left-1 bottom-2 h-2.5 w-2.5 rounded-full bg-white/95 shadow" aria-hidden />
+      ) : (
+        <>
+          <span className="absolute -bottom-1.5 left-3 h-2.5 w-2.5 rounded-full bg-white/95 shadow" aria-hidden />
+          <span className="absolute -bottom-[11px] left-[9px] h-1.5 w-1.5 rounded-full bg-white/95 shadow" aria-hidden />
+        </>
+      )}
+    </span>
+  ) : null;
+  const face = (
+    <span className="relative block shrink-0">
+      <span className="block rounded-full ring-2 ring-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.6)]">
+        <UserAvatar src={who.avatar_url} name={who.name} size={inline ? 30 : 38} expandable={false} />
+      </span>
+      <span className="absolute -bottom-0.5 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-white" aria-hidden>
+        <Repeat2 className="h-[11px] w-[11px]" strokeWidth={3} />
+      </span>
+    </span>
   );
-  const cls = cn("repost-note pointer-events-auto flex items-end gap-0 [touch-action:manipulation]", ask && "repost-note-ask", className);
+  const body = inline ? (
+    <span className="flex items-center">
+      {face}
+      {bubble}
+    </span>
+  ) : (
+    <span className="flex flex-col items-start">
+      {bubble}
+      {face}
+    </span>
+  );
+  const cls = cn("pointer-events-auto block text-left [touch-action:manipulation]", className);
   return onTap ? (
     <button
       type="button"
@@ -389,20 +429,20 @@ export function RepostNoteBubble({ who, note, onTap, ask = false, className }: {
         onTap();
       }}
       className={cls}
-      aria-label={ask ? "Add a note to your repost" : `Your note: ${note}. Tap to change it`}
-      data-repost-note={ask ? "ask" : "mine"}
+      aria-label={label ?? (ask || !text ? "Add a note to your repost" : `Your note: ${text}. Tap to change it`)}
+      data-repost-note={mine ? (ask ? "ask" : "mine") : "theirs"}
     >
       {body}
     </button>
   ) : (
-    <div className={cls} aria-label={`${who.name}: ${note}`} data-repost-note="theirs">
+    <div className={cls} aria-label={label ?? `${who.name} reposted${text ? `: ${text}` : ""}`} data-repost-note="theirs">
       {body}
     </div>
   );
 }
 
 /** Write (or change) the note on your repost: a line and quick emoji, with a live preview. */
-export function RepostNoteSheet({ post, open, onOpenChange }: { post: CommunityPost; open: boolean; onOpenChange: (o: boolean) => void }) {
+export function RepostNoteSheet({ post, open, onOpenChange, preview }: { post: CommunityPost; open: boolean; onOpenChange: (o: boolean) => void; preview?: string | null }) {
   const { user } = useAuth();
   const { data: me } = useCommunityProfile(open ? (user?.id ?? null) : null);
   const repost = useRepost();
@@ -429,9 +469,11 @@ export function RepostNoteSheet({ post, open, onOpenChange }: { post: CommunityP
           <SheetTitle className="text-[16px] font-black">{had ? "Your note" : "Add a note"}</SheetTitle>
           <SheetDescription className="mt-0.5 text-[12px] leading-snug text-muted-foreground">It floats on the post for the people who see your repost.</SheetDescription>
         </div>
-        {/* what they'll see */}
-        <div className="mx-5 mt-3 flex min-h-[64px] items-center rounded-2xl bg-[radial-gradient(120%_120%_at_0%_0%,rgba(239,51,64,0.35),#111114_70%)] px-3 py-3">
-          <RepostNoteBubble who={{ name: me?.author.name ?? "You", avatar_url: me?.author.avatar_url ?? null }} note={clean ?? "…"} />
+        {/* what they'll see: your photo and note in the post's corner */}
+        <div className="relative mx-5 mt-3 h-[150px] overflow-hidden rounded-2xl bg-[radial-gradient(120%_120%_at_0%_0%,rgba(239,51,64,0.35),#111114_70%)]" data-repost-preview>
+          {preview && <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" style={post.media_focus ? { objectPosition: `${post.media_focus.x * 100}% ${post.media_focus.y * 100}%` } : undefined} />}
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 to-transparent" aria-hidden />
+          <RepostStamp mine className="absolute bottom-3 left-3" who={{ name: me?.author.name ?? "You", avatar_url: me?.author.avatar_url ?? null }} note={clean} ask={!clean} />
         </div>
         <form
           className="px-5 pt-3"
@@ -453,13 +495,13 @@ export function RepostNoteSheet({ post, open, onOpenChange }: { post: CommunityP
             />
             <span className={cn("w-7 shrink-0 text-right text-[11px] font-bold tabular-nums", left < 10 ? "text-primary" : "text-muted-foreground")}>{left}</span>
           </div>
-          <div className="mt-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Quick emoji">
+          <div className="mt-2.5 grid grid-cols-8 gap-1.5" role="group" aria-label="Quick emoji">
             {REPOST_NOTE_EMOJI.map((em) => (
               <button
                 key={em}
                 type="button"
                 onClick={() => setText((t) => [...`${t}${em}`].slice(0, REPOST_NOTE_MAX).join(""))}
-                className="grid h-10 w-10 place-items-center rounded-full bg-muted text-[20px] active:scale-90"
+                className="grid aspect-square w-full max-w-11 place-items-center justify-self-center rounded-full bg-muted text-[20px] active:scale-90"
                 aria-label={`Add ${em}`}
               >
                 {em}
@@ -483,12 +525,13 @@ export function RepostNoteSheet({ post, open, onOpenChange }: { post: CommunityP
 }
 
 /**
- * The floating note on a post card, and "Add a note" right after you
- * repost. Yours first (tap to change); otherwise the first reposter's who
- * wrote one. Sits on a photo's top-left corner; on a post that's words, it
- * sits above them so it never covers them.
+ * The repost stamp on a post card: yours (always, once you've reposted: tap
+ * to add or change your note; "Add a note…" asks right after reposting), else
+ * the first reposter's who wrote a note (tap: their profile). Sits in the
+ * picture's bottom-left corner; on a post that's words, above them so it
+ * never covers them.
  */
-export function useRepostNote(post: CommunityPost) {
+export function useRepostNote(post: CommunityPost, opts: { preview?: string | null; onOpenAuthor?: (a: CommunityAuthor) => void; inline?: boolean } = {}) {
   const { user } = useAuth();
   const { data: me } = useCommunityProfile(post.my_repost ? (user?.id ?? null) : null);
   const [asking, setAsking] = useState(false);
@@ -496,20 +539,27 @@ export function useRepostNote(post: CommunityPost) {
   // "Add a note…" floats up after reposting, then drifts off if it's ignored
   useEffect(() => {
     if (!asking) return;
-    const t = window.setTimeout(() => setAsking(false), 6000);
+    const t = window.setTimeout(() => setAsking(false), 8000);
     return () => window.clearTimeout(t);
   }, [asking]);
   useEffect(() => {
     if (!post.my_repost) setAsking(false);
   }, [post.my_repost]);
   const myNote = post.my_repost?.note ?? null;
-  const theirs = (post.reposted_by ?? []).find((r) => !r.is_me && !!r.note?.trim()) ?? null;
+  const theirs = floatingNote(post);
   const meWho = { name: me?.author.name ?? "You", avatar_url: me?.author.avatar_url ?? null };
-  const bubble = post.my_repost && (myNote || asking)
-    ? <RepostNoteBubble who={meWho} note={myNote} ask={!myNote} onTap={() => { setAsking(false); setEditing(true); }} />
-    : theirs
-      ? <RepostNoteBubble who={theirs} note={theirs.note} />
-      : null;
-  const sheet = post.my_repost || editing ? <RepostNoteSheet post={post} open={editing} onOpenChange={setEditing} /> : null;
+  const open = opts.onOpenAuthor;
+  const bubble = post.my_repost ? (
+    <RepostStamp mine who={meWho} note={myNote} ask={!myNote && asking} inline={opts.inline} onTap={() => { setAsking(false); setEditing(true); }} />
+  ) : theirs ? (
+    <RepostStamp
+      who={theirs}
+      note={theirs.note}
+      inline={opts.inline}
+      onTap={open ? () => open(theirs) : undefined}
+      label={`${theirs.name} reposted: ${theirs.note}. Open their profile`}
+    />
+  ) : null;
+  const sheet = post.my_repost || editing ? <RepostNoteSheet post={post} open={editing} onOpenChange={setEditing} preview={opts.preview} /> : null;
   return { bubble, sheet, ask: () => setAsking(true) };
 }

@@ -277,9 +277,12 @@ export function isEmojiOnly(note: string | null | undefined): boolean {
   return glyphs.length <= 3 && glyphs.every((g) => /\p{Extended_Pictographic}/u.test(g));
 }
 
-/** The repost whose note floats on the post: the first (in feed order) that has one. */
-export function floatingNote(post: Pick<CommunityPost, "reposted_by" | "my_repost">): Reposter | null {
-  return (post.reposted_by ?? []).find((r) => !!r.note?.trim()) ?? null;
+/**
+ * Someone else's repost whose note floats on the post: the first (in feed
+ * order) that has one. Yours isn't one of them: it rides on `my_repost`.
+ */
+export function floatingNote(post: Pick<CommunityPost, "reposted_by">): Reposter | null {
+  return (post.reposted_by ?? []).find((r) => !r.is_me && !!r.note?.trim()) ?? null;
 }
 
 /** "Vicky reposted", "Vicky and Dwayne reposted", "Vicky and 3 others reposted", "You reposted". */

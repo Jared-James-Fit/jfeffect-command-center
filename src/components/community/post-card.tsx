@@ -390,7 +390,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [post.auto && s ? "Finished a session" : null, postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
   // a repost's note floats on the post (yours: tap to change it; "Add a note…" right after reposting)
-  const note = useRepostNote(post);
+  // a picture shows it in its bottom-left corner (Instagram's spot); words and coach posts above them
+  const overPicture = !!post.media_type && !(isNote && !isPhotoPost(post));
+  const note = useRepostNote(post, { preview: thumbUrl, onOpenAuthor, inline: !overPicture });
   const reposted = !!post.reposted_by?.length;
 
   // Instagram's taps: a tap on a picture does nothing (a post never opens from
@@ -447,8 +449,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       </header>
 
-      {/* on words or a workout card the note sits above it, never over the words */}
-      {note.bubble && !post.media_type && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
+      {/* on words, a workout card or a coach post the repost sits above it, never over the words */}
+      {note.bubble && !overPicture && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
       {/* Hero: the photo, or the workout itself when there isn't one. Taps never open the post (see onHeroTap). */}
       <div onClick={onHeroTap} className="relative select-none" data-post-hero>
         {isNote && !photo ? (
@@ -470,8 +472,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         )}
         {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
         <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
-        {/* on a photo the note floats on its top-left corner, Instagram's spot */}
-        {note.bubble && post.media_type && <div className={cn("pointer-events-none absolute z-[2]", isNote && !photo ? "left-6 top-3" : "left-3 top-3")} data-note-over>{note.bubble}</div>}
+        {/* on a picture: the reposter's photo and note in its bottom-left corner, Instagram's spot */}
+        {note.bubble && overPicture && <div className="pointer-events-none absolute bottom-3 left-3 z-[2]" data-note-over>{note.bubble}</div>}
       </div>
       {note.sheet}
 
