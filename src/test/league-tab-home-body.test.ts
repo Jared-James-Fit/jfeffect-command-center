@@ -20,16 +20,17 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(menu?.label).toBe("Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));
   });
-  it("Feed · Rankings · You; Activity is the heart beside them, Members opens from Activity, and your profile is its first row", () => {
-    expect(screen).toContain('(previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"])');
+  it("one bar, no Feed · Rankings · You toggle: Rankings is the trophy on Crew's button, Activity the heart, you your photo", () => {
+    expect(screen).not.toContain('aria-label="Crew view"');
     expect(screen).toContain("<RankingsHub />");
-    expect(screen).toContain('aria-label={activityNew ? "Activity, new" : "Activity"}');
+    expect(screen).toContain('<CrewBar label="Rankings" inline={barInline} left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />');
+    expect(read("src/components/community/activity-heart.tsx")).toContain('aria-label={unread ? "Activity, new" : "Activity"}');
     // Find athletes (the members directory) opens from Activity's search or the top bar, and goes back where it came from
     expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed" };');
     expect(screen).toContain('const parent = scope.kind === "members" ? discoverBack : PARENT[scope.kind as Tab];');
     expect(read("src/components/community/crew-activity.tsx")).toContain('aria-label="Find people"');
     expect(crew).toContain("data-crew-me");
-    expect(screen).toContain('onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })}');
+    expect(screen).toContain('onOpenMe={previewOnly ? undefined : () => go({ kind: "you" })}');
   });
   it("opens on the Feed; ranking links land on Rankings (Monthly or Strength)", () => {
     expect(screen).toContain('if (rankingsFromHash()) return { kind: "rankings" };');
@@ -46,8 +47,8 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(screen).toContain('{TAB_LABEL[youAsPage ? "feed" : tab]}');
     expect(screen).toContain("const tab: Tab = scope.kind === \"author\" ? scope.from : scope.kind;");
   });
-  it("phones get a round + for Share so Feed · Rankings · You keep their room", () => {
-    expect(screen).toContain('labelClassName="max-[419px]:sr-only"');
+  it("+ (post, meal, lock in, workout, write) is the bar's first button, Instagram's spot", () => {
+    expect(screen).toContain('<BarButton label="Create a post" onClick={begin} data-crew-create>');
     expect(read("src/components/community/share-workout-picker.tsx")).toContain("aria-label={labelClassName ? label : undefined}");
   });
 });

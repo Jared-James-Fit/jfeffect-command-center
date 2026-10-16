@@ -15,8 +15,10 @@ import { useActivityThumbs, useCrewActivity, useMarkCrewActivityRead } from "@/l
  * then Today / Yesterday / This week / Earlier. Follow back right on the line;
  * the post it's about on the right; people to follow at the bottom.
  */
-export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople }: {
+export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople, header = true }: {
   onBack: () => void;
+  /** Its own ‹ Activity 🔍 row; off where Crew's bar shows those. */
+  header?: boolean;
   onOpenPost: (postId: string) => void;
   onOpenPerson: (a: CommunityAuthor) => void;
   onFindPeople: () => void;
@@ -41,7 +43,7 @@ export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople }:
 
   return (
     <div className="space-y-3" data-crew-activity>
-      <div className="flex items-center gap-1">
+      {header && <div className="flex items-center gap-1">
         <button type="button" onClick={onBack} className="-ml-2 grid h-10 w-10 place-items-center rounded-full active:bg-muted" aria-label="Back to the feed">
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -49,7 +51,7 @@ export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople }:
         <button type="button" onClick={onFindPeople} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground active:bg-muted" aria-label="Find people">
           <Search className="h-5 w-5" />
         </button>
-      </div>
+      </div>}
       <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Show">
         {ACTIVITY_FILTERS.map((f) => (
           <button

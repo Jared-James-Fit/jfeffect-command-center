@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Lock, Search, UserPlus, X } from "lucide-react";
+import { ChevronLeft, Lock, Search, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
@@ -47,7 +47,7 @@ export function DiscoverPage({ onBack, onOpen, onOpenMe, autoFocus = false, canI
     <div className="space-y-3" data-discover>
       <div className="flex items-center gap-1.5">
         <button type="button" onClick={onBack} className="-ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-muted" aria-label="Back">
-          <ArrowLeft className="h-5 w-5" />
+          <ChevronLeft className="h-7 w-7" strokeWidth={2} />
         </button>
         <label className="relative flex h-10 min-w-0 flex-1 items-center rounded-full bg-muted pl-9 pr-1">
           <Search className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground" aria-hidden />

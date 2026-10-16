@@ -354,12 +354,12 @@ function PrivateSwitch() {
 }
 
 /** Your photo, small, for the You tab: a ring on it while you're there (Instagram's profile tab). */
-export function MyTabPhoto({ active = false }: { active?: boolean }) {
+export function MyTabPhoto({ active = false, size = 22 }: { active?: boolean; size?: number }) {
   const { user } = useAuth();
   const { data: me } = useCommunityProfile(user?.id ?? null);
   return (
     <span className={cn("shrink-0 rounded-full", active ? "ring-[1.5px] ring-foreground ring-offset-1 ring-offset-background" : "ring-1 ring-border")} aria-hidden>
-      <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={22} expandable={false} />
+      <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={size} expandable={false} />
     </span>
   );
 }
@@ -375,12 +375,13 @@ export function MyProfileButton({ onOpen, className }: { onOpen: () => void; cla
     <button
       type="button"
       onClick={onOpen}
-      className={cn("inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card pl-1.5 pr-3.5 text-[13px] font-bold shadow-sm transition-transform active:scale-95", className)}
+      className={cn("inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card pl-1.5 pr-3.5 text-[13px] font-bold shadow-sm transition-transform active:scale-95 max-[359px]:pr-1.5", className)}
       aria-label="Your profile"
       data-my-profile
     >
       <MyTabPhoto />
-      You
+      {/* small phones: just your photo, so Post, search and the heart keep their room */}
+      <span className="max-[359px]:sr-only">You</span>
     </button>
   );
 }

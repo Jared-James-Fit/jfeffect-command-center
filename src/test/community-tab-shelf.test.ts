@@ -29,7 +29,12 @@ describe("client tab bar: Crew in the centre", () => {
   });
 
   it("one control in the client top bar: More, with the account and appearance at its top", () => {
-    expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader>');
+    expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn={isImpersonating ? undefined : CREW_OWN_BAR}>');
+    // Crew draws its own bar, so the shell's steps aside there (one bar, not two) and its ☰ opens More by event
+    expect(portal).toContain('const CREW_OWN_BAR = ["/portal/community"] as const;');
+    expect(shell).toContain("const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);");
+    expect(shell).toContain("{!pageBar && <header");
+    expect(shell).toContain("window.addEventListener(OPEN_MORE_EVENT, open);");
     expect(shell).toContain('{!simpleHeader && <ThemeToggle className="mr-0.5" />}');
     expect(shell).toContain("{!simpleHeader && (");
     expect(shell).toContain('<span className="text-[15px] font-semibold">Appearance</span>');
@@ -109,7 +114,8 @@ describe("client tab bar: Crew in the centre", () => {
     // the Crew screen follows the hash, so the shortcut and Crew switch the view in place
     const crew = read("src/components/community/community-screen.tsx");
     expect(crew).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
-    expect(crew).toContain('void navigate({ to: ".", hash: k === "feed" ? "" : k, replace: true, resetScroll: false });');
+    // ‹ back out of Rankings (or your profile) drops the hash, so Crew's button lights again
+    expect(crew).toContain('if (k === "feed" && /^#(rankings|league|you)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
   });
 
   it("no community for this account: no centre button", () => {

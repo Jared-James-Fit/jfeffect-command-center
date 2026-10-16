@@ -20,7 +20,9 @@ describe("one staff app, laid out like the client app", () => {
 
   it("More opens from a big header button for staff, clients and members (members use the portal)", () => {
     expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("title={title} moreInHeader>");
-    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="JF Effect" moreInHeader simpleHeader>');
+    expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn=');
+    // on Crew (its own bar) More is your profile's ☰
+    expect(read("src/components/community/community-screen.tsx")).toContain("onClick={openAppMore} data-crew-more");
     expect(read("src/routes/_authenticated/portal/route.tsx")).toContain("items={isSelfServe ? selfServeNav : clientNav}");
     expect(read("src/components/app-shell.tsx")).toContain('className="h-10 w-10 shrink-0 rounded-xl px-0">');
   });

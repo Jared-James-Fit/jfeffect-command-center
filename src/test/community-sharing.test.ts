@@ -537,9 +537,10 @@ describe("the crew: find anyone's profile", () => {
     expect(sql).not.toMatch(/community_follow|is_following/i);
   });
   it("is the Members directory (you're its first row), and Home never dead-ends: a post opens over the feed", () => {
-    expect(screen).toContain('(previewOnly ? ["feed", "rankings"] : ["feed", "rankings", "you"])');
+    // your profile is your photo in Crew's bar (not while a coach views as a client)
+    expect(screen).toContain('<BarButton label="Your profile" onClick={openMe} data-my-profile>');
     // the Members directory is the second half of Find athletes (your own row first), under the search and suggestions
-    expect(screen).toContain('<DiscoverPage onBack={() => setScope({ kind: discoverBack })} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => setScope({ kind: "you" })}');
+    expect(screen).toContain('<DiscoverPage onBack={() => goBack(discoverBack)} onOpen={openAuthor} onOpenMe={previewOnly ? undefined : () => go({ kind: "you" })}');
     expect(read("src/components/community/discover.tsx")).toContain("<CrewList onOpen={onOpen} onOpenMe={onOpenMe} />");
     expect(entry).toContain("onOpen={() => openPost(post.id)}");
   });

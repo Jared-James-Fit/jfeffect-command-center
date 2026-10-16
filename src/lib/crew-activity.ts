@@ -102,3 +102,51 @@ export function activityAge(at: string, now = Date.now()): string {
   if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}d`;
   return `${Math.floor(s / (7 * 86_400))}w`;
 }
+
+/**
+ * The heart's bubble: what's new since it last showed, by kind (Instagram's
+ * ♥ 3 · 💬 1 · 👤 2). Only unread lines, and only their notifications that came
+ * after the last bubble (`fresh`, worked out on the server), so a line that
+ * got one more like counts 1, not every like it ever had.
+ */
+export type ActivityBubbleCounts = { likes: number; comments: number; follows: number; total: number };
+
+export function activityBubbleCounts(items: readonly Pick<ActivityItem, "kind" | "unread" | "fresh">[] | undefined | null): ActivityBubbleCounts {
+  const out: ActivityBubbleCounts = { likes: 0, comments: 0, follows: 0, total: 0 };
+  for (const it of items ?? []) {
+    const n = it.unread ? Math.max(0, Math.floor(it.fresh ?? 0)) : 0;
+    if (!n) continue;
+    if (matchesActivityFilter(it, "likes")) out.likes += n;
+    else if (matchesActivityFilter(it, "comments")) out.comments += n;
+    else out.follows += n;
+    out.total += n;
+  }
+  return out;
+}
+
+/** "3 new likes, 1 new comment" for screen readers. */
+export function activityBubbleLabel(c: ActivityBubbleCounts): string {
+  const part = (n: number, one: string, many: string) => (n ? `${n} new ${n === 1 ? one : many}` : null);
+  return [part(c.likes, "like", "likes"), part(c.comments, "comment", "comments"), part(c.follows, "follower", "followers")]
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** A count in the bubble: 99+ past two digits. */
+export function bubbleCount(n: number): string {
+  return n > 99 ? "99+" : String(n);
+}
+
+/** Where "the bubble last showed" is kept: one notification_state row per login (read_at = when). */
+export const ACTIVITY_PREVIEW_STATE = { kind: "crew_preview", source_id: "activity" } as const;
+
+/** Open Activity from outside the Crew screen (the coach's Crew header): the screen, when it's up, listens. */
+export const OPEN_ACTIVITY_EVENT = "community:open-activity";
+
+export function openCrewActivity() {
+  try {
+    window.dispatchEvent(new CustomEvent(OPEN_ACTIVITY_EVENT));
+  } catch {
+    /* no window */
+  }
+}

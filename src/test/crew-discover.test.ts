@@ -115,8 +115,7 @@ describe("privacy in the database", () => {
 describe("follow from anywhere", () => {
   it("finds people from the Crew's top bar (and Activity, and the coach's Crew page)", () => {
     const screen = read("src/components/community/community-screen.tsx");
-    expect(screen).toContain('aria-label="Find athletes"');
-    expect(screen).toContain("onClick={() => openDiscover(tab, true)}");
+    expect(screen).toContain('<BarButton label="Find athletes" onClick={() => openDiscover("feed", true)} data-discover-open>');
     expect(screen).toContain('onFindPeople={() => openDiscover("activity", true)}');
     expect(screen).toContain("window.addEventListener(OPEN_DISCOVER_EVENT, open);");
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("openCommunityDiscover");

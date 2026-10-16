@@ -138,7 +138,9 @@ describe("crew screen wiring", () => {
 
   it("full-width posts on phones, with Following as a filter (never a gate) and suggestions in the feed", () => {
     expect(screen).toContain("<SuggestedAthletes");
-    expect(screen).toContain('aria-label="Show posts from"');
+    // All / Following is the ⌄ on the name at the top (Instagram's), only once you follow someone
+    expect(screen).toContain("canFilter={!previewOnly && followingIds.size > 0}");
+    expect(screen).not.toContain('aria-label="Show posts from"');
     expect(screen).toContain("OPEN_PERSON_EVENT");
     expect(post).toMatch(/-mx-3 overflow-hidden border-b[^"]*sm:rounded-3xl/);
   });

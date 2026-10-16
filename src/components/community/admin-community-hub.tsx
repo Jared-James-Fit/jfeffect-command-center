@@ -12,6 +12,8 @@ import { CommunityScreen } from "@/components/community/community-screen";
 import { MyProfileButton } from "@/components/community/profile-view";
 import { openCommunityPerson } from "@/lib/community-notifications";
 import { openCommunityDiscover } from "@/lib/community-discover";
+import { openCrewActivity } from "@/lib/crew-activity";
+import { ActivityHeart } from "@/components/community/activity-heart";
 import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
 import { CoachLessons } from "@/components/community/coach-lessons";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
@@ -126,9 +128,9 @@ export function AdminCommunityHub() {
           <button
             type="button"
             onClick={() => setWriting(true)}
-            className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-sm active:scale-95"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-sm active:scale-95 max-[359px]:px-3"
           >
-            <PenLine className="h-4 w-4" /> Post
+            <PenLine className="h-4 w-4 shrink-0" /> Post
           </button>
           {/* Find athletes: search the Crew by name or @username (opens on the feed tab, where profiles live) */}
           <button
@@ -144,6 +146,14 @@ export function AdminCommunityHub() {
           >
             <Search className="h-5 w-5" />
           </button>
+          {/* Activity: likes, comments and follows on your posts, with the bubble when there's something new */}
+          <ActivityHeart
+            onOpen={() => {
+              if (tab === "feed") return openCrewActivity();
+              setTab("feed");
+              window.setTimeout(openCrewActivity, 0);
+            }}
+          />
           {/* your profile: the feed tab opens it (the feed is where profiles live) */}
           <MyProfileButton
             onOpen={() => {
