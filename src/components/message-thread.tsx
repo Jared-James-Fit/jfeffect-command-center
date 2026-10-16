@@ -1392,13 +1392,14 @@ export function MessageThread({
     return null;
   }, [visibleMessages, role]);
 
-  // Coach view: the latest message of mine the client has actually read, so
-  // "Read 6:01 PM" stays visible even after newer unread messages go out.
+  // Both sides: the latest message of mine the other side has actually read,
+  // so "Read 6:01 PM" stays visible even after newer unread messages go out.
+  // Clients see the coach's read time exactly the way the coach sees theirs.
   const lastReadOwnMessageId = useMemo(() => {
-    if (role !== "admin") return null;
     for (let i = visibleMessages.length - 1; i >= 0; i--) {
       const m = visibleMessages[i];
-      if (m.sender_role === role && !m.is_internal_note && !m.deleted_at && m.read_by_client_at) return m.id;
+      const readByThem = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
+      if (m.sender_role === role && !m.is_internal_note && !m.deleted_at && readByThem) return m.id;
     }
     return null;
   }, [visibleMessages, role]);
@@ -2327,8 +2328,8 @@ export function MessageThread({
                     </div>
                   );
                 })()}
-                {/* Read receipt: under my latest message, plus (coach view) the
-                    latest one the client has read. */}
+                {/* Read receipt, the same on both sides: under my latest message,
+                    plus the latest one the other side has read. */}
                 {mine && (m.id === lastOwnMessageId || m.id === lastReadOwnMessageId) && !selectionMode && (() => {
                   const readAt = role === "admin" ? m.read_by_client_at : m.read_by_admin_at;
                   const hasReactions = (reactionsByMsg.get(m.id)?.length ?? 0) > 0;
@@ -2339,9 +2340,7 @@ export function MessageThread({
                     ? "Not delivered · tap to retry"
                     : readAt
                     ? formatReadReceipt(readAt)
-                    : role === "admin"
-                    ? "Delivered · not read yet"
-                    : "Sent";
+                    : "Delivered · not read yet";
                   return (
                     // One line, anchored to the bubble's right edge. Without nowrap
                     // the label is capped at the bubble's width, so on short
