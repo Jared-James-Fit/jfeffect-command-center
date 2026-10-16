@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { baseMediaType, MAX_VIDEO_SECONDS } from "@/lib/community";
+import { baseMediaType } from "@/lib/community";
+import { RECORD_MAX_SECONDS } from "@/lib/video-edit/limits";
 
-/** The longest clip the camera records (a story / post clip's limit). */
-export const MAX_RECORD_MS = MAX_VIDEO_SECONDS * 1000;
+/** The longest clip the camera records (a story's length; longer clips come from the library and get trimmed). */
+export const MAX_RECORD_MS = RECORD_MAX_SECONDS * 1000;
 /** Holding the shutter this long starts recording; a shorter press is a photo. */
 export const HOLD_TO_RECORD_MS = 260;
 /** Anything shorter than this is a slip, not a clip. */

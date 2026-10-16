@@ -8,19 +8,22 @@
  *
  *   photo → ≤1440px JPEG for the feed + ≤720px thumbnail (the feed only ever
  *           loads the thumbnail until a post is opened full-size).
- *   video → ≤60 s. The original starts uploading at once while the phone
- *           shrinks a 720p copy (WebCodecs); whichever lands first is the one
- *           posted (raceVideoUpload, the chat's own pipeline). A clip over the
- *           50 MB storage limit goes only as the shrunk copy. Plus a poster
- *           frame JPEG, so the feed never loads video bytes up front.
+ *   video → any recording up to 20 minutes can be picked; one longer than its
+ *           place allows (a story 60 s, a workout recap 90 s, a post 3 min)
+ *           opens the trimmer first. Only the selection is cut out and, when
+ *           it pays, shrunk to 720p on the phone (video-edit/), then uploaded
+ *           resumably and checked by the server. Plus a poster frame JPEG from
+ *           the selection's first moment, so the feed never loads video bytes
+ *           up front.
  */
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { supabase } from "@/integrations/supabase/client";
-import { MAX_VIDEO_BYTES, checkMediaFile, checkVideoDuration, uploadableVideo } from "@/lib/community";
+import { checkMediaFile } from "@/lib/community";
 import { captureVideoPoster } from "@/lib/video-poster";
-import { canCompressVideo, compressVideoDetailed, preloadVideoCompressor } from "@/lib/video-compress";
-import { raceVideoUpload } from "@/lib/video-upload-race";
+import type { VideoContext } from "@/lib/video-edit/limits";
+import { pickVideo, preloadVideoEngine, retrimVideo, type PickedVideo, type TrimFn } from "@/lib/video-edit/pick";
+import { createVideoSend, videoErrorMessage, type VideoSend } from "@/lib/video-edit/pipeline";
 
 export const COMMUNITY_BUCKET = "community-media" as const;
 /** A post picture that ships with the app instead of living in the bucket ("app:community/x.jpg" → /community/x.jpg). */
@@ -37,6 +40,8 @@ export type PickedMedia = {
   height: number;
   /** JPEG thumbnail (images: downscaled copy; videos: poster frame). May be null for videos. */
   thumb: Blob | null;
+  /** A clip: what it is, where it's going and which part goes. */
+  video?: PickedVideo & { context: VideoContext };
 };
 
 export function releasePicked(m: PickedMedia | null) {
@@ -59,22 +64,6 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob 
   return new Promise((res) => canvas.toBlob(res, "image/jpeg", quality));
 }
 
-/**
- * A video's size and length without decoding a frame (the container's own
- * header, read in JS), for when the phone won't hand over a poster frame.
- */
-async function readVideoMeta(file: File): Promise<{ duration: number; width: number; height: number } | null> {
-  try {
-    const mb = await import("mediabunny");
-    const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
-    const track = await input.getPrimaryVideoTrack();
-    if (!track) return null;
-    return { duration: await input.computeDuration(), width: track.displayWidth, height: track.displayHeight };
-  } catch {
-    return null;
-  }
-}
-
 function blankPoster(width: number, height: number): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = Math.max(2, Math.round(width / 8));
@@ -87,15 +76,40 @@ function blankPoster(width: number, height: number): HTMLCanvasElement {
   return c;
 }
 
-export type PickResult = { ok: true; media: PickedMedia } | { ok: false; reason: string };
+export type PickResult = { ok: true; media: PickedMedia } | { ok: false; reason: string; cancelled?: boolean };
 
-/** Validate + decode a chosen file for preview. Does not upload. */
-export async function pickMedia(file: File): Promise<PickResult> {
-  const check = checkMediaFile(file, { canShrink: canCompressVideo() });
-  if (!check.ok) return check;
+export type PickOptions = {
+  /** Where a clip is going (its length limit). Defaults to a post. */
+  context?: VideoContext;
+  /** Opens the trimmer (useVideoTrimmer().request); without it a clip that's too long is refused. */
+  trim?: TrimFn;
+  /** "Clip 2 of 3" in the trimmer when several were picked at once. */
+  step?: { index: number; count: number };
+};
+
+/** A picked clip, ready to preview: its poster from the first moment of the selection. */
+async function clipMedia(file: File, video: PickedMedia["video"] & object): Promise<PickedMedia> {
   const previewUrl = URL.createObjectURL(file);
+  // The poster the iPhone way (in the page, from a presented frame); a phone
+  // that won't give a frame still gets the clip in, on a dark card.
+  const poster = await captureVideoPoster(file, { maxDimension: 1080, timeoutMs: 10_000, at: video.trim?.start ?? null });
+  const width = video.info.width || poster?.width || 0;
+  const height = video.info.height || poster?.height || 0;
+  let drawable: HTMLImageElement | HTMLCanvasElement = blankPoster(width || 720, height || 1280);
+  if (poster) {
+    const img = await loadImageEl(URL.createObjectURL(poster.blob));
+    if (img) drawable = img;
+  }
+  return { kind: "video", file, previewUrl, drawable, width, height, thumb: poster?.blob ?? null, video };
+}
+
+/** Validate + decode a chosen file for preview (a clip that's too long opens the trimmer). Does not upload. */
+export async function pickMedia(file: File, opts: PickOptions = {}): Promise<PickResult> {
+  const check = checkMediaFile(file);
+  if (!check.ok) return check;
 
   if (check.kind === "image") {
+    const previewUrl = URL.createObjectURL(file);
     const img = await loadImageEl(previewUrl);
     if (!img) {
       URL.revokeObjectURL(previewUrl);
@@ -108,42 +122,36 @@ export async function pickMedia(file: File): Promise<PickResult> {
     };
   }
 
-  // the encoder downloads while the poster's read, so a big clip doesn't wait on it at Post
-  preloadVideoCompressor();
-  // The poster the iPhone way (in the page, from a presented frame); a phone
-  // that won't give a frame still gets the clip in, sized from its header.
-  const poster = await captureVideoPoster(file, { maxDimension: 1080, timeoutMs: 10_000 });
-  let duration = poster?.duration ?? NaN;
-  let width = poster?.width ?? 0;
-  let height = poster?.height ?? 0;
-  if (!poster || !duration) {
-    const meta = await readVideoMeta(file);
-    if (meta) {
-      duration = meta.duration;
-      if (!width || !height) {
-        width = meta.width;
-        height = meta.height;
-      }
-    }
-  }
-  if (!width || !height) {
-    URL.revokeObjectURL(previewUrl);
-    return { ok: false, reason: "Couldn't read that video. Try a short MP4 or MOV clip." };
-  }
-  const dur = checkVideoDuration(duration);
-  if (!dur.ok) {
-    URL.revokeObjectURL(previewUrl);
-    return dur;
-  }
-  let drawable: HTMLImageElement | HTMLCanvasElement = blankPoster(width, height);
-  if (poster) {
-    const img = await loadImageEl(URL.createObjectURL(poster.blob));
-    if (img) drawable = img;
-  }
-  return {
-    ok: true,
-    media: { kind: "video", file, previewUrl, drawable, width, height, thumb: poster?.blob ?? null },
-  };
+  const context = opts.context ?? "post";
+  const picked = await pickVideo(file, context, { trim: opts.trim, step: opts.step });
+  if (!picked.ok) return picked;
+  return { ok: true, media: await clipMedia(file, { ...picked.video, context }) };
+}
+
+/**
+ * Change which part of a picked clip goes (the trimmer opens on the current
+ * selection). A new PickedMedia (its own poster) or null when they backed out;
+ * the caller releases the old one.
+ */
+export async function retrimPicked(m: PickedMedia, trim: TrimFn, context: VideoContext = m.video?.context ?? "post"): Promise<PickedMedia | null> {
+  if (!m.video) return null;
+  const next = await retrimVideo(m.video, context, trim);
+  if (!next) return null;
+  const same = (next.trim?.start ?? 0) === (m.video.trim?.start ?? 0) && (next.trim?.end ?? m.video.info.duration) === (m.video.trim?.end ?? m.video.info.duration);
+  if (same && context === m.video.context) return null;
+  return clipMedia(m.file, { ...next, context });
+}
+
+/** Seconds a picked clip will run once trimmed. */
+export function pickedSeconds(m: PickedMedia | null | undefined): number | null {
+  const v = m?.video;
+  if (!v) return null;
+  return v.trim ? v.trim.end - v.trim.start : v.info.duration;
+}
+
+/** Start loading the video tools while the picker is open (the first clip then doesn't wait on them). */
+export function preloadMediaTools() {
+  preloadVideoEngine();
 }
 
 export type UploadedMedia = {
@@ -155,8 +163,8 @@ export type UploadedMedia = {
 };
 
 /** Upload the picked media (and its thumbnail) under `${userId}/…`. */
-export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: (pct: number) => void): Promise<UploadedMedia> {
-  if (m.kind === "video") return uploadVideo(m, userId, onProgress);
+export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: (pct: number) => void, signal?: AbortSignal): Promise<UploadedMedia> {
+  if (m.kind === "video") return uploadVideo(m, userId, onProgress, signal);
   let main: File | Blob = m.file;
   if (m.kind === "image") main = await compressImage(m.file, { maxDimension: 1440, quality: 0.84, skipUnder: 0 });
   const mainFile = main instanceof File ? main : new File([main], "photo.jpg", { type: main.type || "image/jpeg" });
@@ -166,6 +174,7 @@ export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: 
     userId,
     bucket: COMMUNITY_BUCKET,
     onProgress: (p) => onProgress?.(m.thumb ? Math.round(p * 0.92) : p),
+    signal,
   });
 
   let thumbPath: string | null = null;
@@ -185,48 +194,48 @@ export async function uploadPicked(m: PickedMedia, userId: string, onProgress?: 
   return { media_path: up.path, media_thumb_path: thumbPath, media_type: m.kind, media_width: m.width, media_height: m.height };
 }
 
+/** One send per picked clip: trying again carries on from what's done (cut, uploaded, checked). */
+const clipSends = new WeakMap<PickedMedia, { userId: string; stem: string; send: VideoSend; poster: Promise<string | null> | null }>();
+
 /**
- * A clip, as fast as this phone and connection allow: the original starts
- * uploading at once while a 720p copy is shrunk on the phone, and the copy
- * takes over only if it would land sooner (raceVideoUpload). Over the 50 MB
- * storage limit only the copy can go. The poster uploads alongside.
+ * A clip: the selection cut (and shrunk when it pays) on the phone, uploaded
+ * resumably and checked by the server (video-edit/pipeline.ts). The poster
+ * uploads alongside.
  */
-async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: number) => void): Promise<UploadedMedia> {
-  const file = uploadableVideo(m.file);
-  const ext = ((file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4");
-  const stem = `${userId}/${Date.now()}-${crypto.randomUUID()}`;
-  const originalPath = `${stem}.${ext}`;
-  const compressedPath = `${stem}-720p.mp4`;
-  const put = (f: File, path: string, progress?: (pct: number) => void, signal?: AbortSignal) =>
-    uploadLiftFileToStorage({ file: f, userId, bucket: COMMUNITY_BUCKET, path, onProgress: progress, signal });
-
-  const thumbP: Promise<string | null> = m.thumb
-    ? put(new File([m.thumb], "thumb.jpg", { type: "image/jpeg" }), `${stem}-poster.jpg`).then((r) => r.path, () => null) // a missing poster only costs feed speed
-    : Promise.resolve(null);
-
-  onProgress?.(2);
-  let path: string;
-  if (file.size <= MAX_VIDEO_BYTES) {
-    const r = await raceVideoUpload(
-      {
-        originalBytes: file.size,
-        uploadOriginal: (p, sig) => put(file, originalPath, (pct) => p(pct / 100), sig).then(() => {}),
-        compress: (p, sig) => compressVideoDetailed(file, "avc", { onProgress: p, signal: sig }),
-        uploadCompressed: (f, p, sig) => put(f, compressedPath, (pct) => p(pct / 100), sig).then(() => {}),
-      },
-      { onProgress: (f) => onProgress?.(Math.max(2, Math.round(f * 96))) },
-    );
-    path = r.sent === "compressed" ? compressedPath : originalPath;
-  } else {
-    // too big to go as it is: shrink first, then send the copy
-    const out = await compressVideoDetailed(file, "avc", { onProgress: (p) => onProgress?.(Math.max(2, Math.round(p * 55))) });
-    if (!out.file || out.file.size > MAX_VIDEO_BYTES) throw new Error("That clip's too big to post. Trim it shorter in Photos and try again.");
-    await put(out.file, compressedPath, (pct) => onProgress?.(55 + Math.round(pct * 0.41)));
-    path = compressedPath;
+async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: number) => void, signal?: AbortSignal): Promise<UploadedMedia> {
+  const v = m.video;
+  if (!v) throw new Error("Pick that clip again.");
+  let entry = clipSends.get(m);
+  if (!entry || entry.userId !== userId) {
+    const stem = `${userId}/${Date.now()}-${crypto.randomUUID()}`;
+    entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem }), poster: null };
+    clipSends.set(m, entry);
   }
-  const thumbPath = await thumbP;
+  const e = entry;
+  // a missing poster only costs feed speed: never fails the post
+  if (!e.poster && m.thumb) {
+    e.poster = uploadLiftFileToStorage({ file: new File([m.thumb], "poster.jpg", { type: "image/jpeg" }), userId, bucket: COMMUNITY_BUCKET, path: `${e.stem}-poster.jpg` }).then((r) => r.path, () => {
+      e.poster = null;
+      return null;
+    });
+  }
+  let sent;
+  try {
+    sent = await e.send.run((pct) => onProgress?.(Math.max(1, Math.min(99, pct))), signal);
+  } catch (err) {
+    // stopped on purpose (removed, re-trimmed, closed): its poster goes too
+    if (signal?.aborted && e.poster) {
+      const poster = e.poster;
+      e.poster = null;
+      void poster.then((p) => {
+        if (p) void removeCommunityFiles([p]);
+      });
+    }
+    throw new Error(videoErrorMessage(err));
+  }
+  const thumbPath = e.poster ? await e.poster : null;
   onProgress?.(100);
-  return { media_path: path, media_thumb_path: thumbPath, media_type: "video", media_width: m.width, media_height: m.height };
+  return { media_path: sent.path, media_thumb_path: thumbPath, media_type: "video", media_width: m.width, media_height: m.height };
 }
 
 /* ---- community profile photo -------------------------------------- */

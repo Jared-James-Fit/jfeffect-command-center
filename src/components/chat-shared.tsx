@@ -20,8 +20,10 @@ import { ChatImageAttachment } from "@/components/chat-media-attachment";
 import { CommunityPostChatCard } from "@/components/community/post-chat-card";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { captureVideoPoster } from "@/lib/video-poster";
-import { compressVideoDetailed } from "@/lib/video-compress";
-import { raceVideoUpload } from "@/lib/video-upload-race";
+import type { VideoContext } from "@/lib/video-edit/limits";
+import { looksLikeVideo, pickVideo, type PickedVideo, type TrimFn } from "@/lib/video-edit/pick";
+import { createVideoSend, videoErrorMessage } from "@/lib/video-edit/pipeline";
+import { toast } from "sonner";
 import { chatUrlCache, useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { compressImage } from "@/lib/image-compress";
@@ -204,17 +206,49 @@ export function fileToAttachmentType(file: File): SharedAttachment["type"] {
   return "file";
 }
 
+/** What was picked for each chat video, and which part goes (set by prepareChatFiles). */
+const chatVideoPicks = new WeakMap<File, PickedVideo & { context: VideoContext }>();
+
+/**
+ * Before picked files become draft chips: read each video, and open the
+ * trimmer for one longer than this chat allows (10 minutes with your coach,
+ * 5 in a member chat) or than this phone can send. Returns the files to
+ * send; a clip they backed out of is left out, one that can't go says why.
+ */
+export async function prepareChatFiles(files: File[], context: VideoContext, trim: TrimFn): Promise<File[]> {
+  const out: File[] = [];
+  const clips = files.filter((f) => looksLikeVideo(f));
+  for (const f of files) {
+    if (!looksLikeVideo(f)) {
+      out.push(f);
+      continue;
+    }
+    const at = clips.indexOf(f);
+    const res = await pickVideo(f, context, { trim, step: clips.length > 1 ? { index: at + 1, count: clips.length } : undefined });
+    if (!res.ok) {
+      if (!res.cancelled) toast.error(res.reason);
+      continue;
+    }
+    chatVideoPicks.set(f, { ...res.video, context });
+    out.push(f);
+  }
+  return out;
+}
+
 /**
  * Upload one chat attachment into `message-attachments/<folder>/…`, shared by
  * 1:1 and group threads. Photos are shrunk first (a chat bubble never needs a
  * 12 MP original); everything goes through the progress/abort-aware uploader,
  * which streams small files in one request and uses resumable TUS for big videos.
+ * A video sends only its trimmed part, shrunk on the phone when that pays
+ * (video-edit/pipeline.ts), and is checked by the server before it can be sent.
  */
 export async function uploadChatAttachment(
   folder: string,
   file: File,
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
+  videoContext: VideoContext = "dm",
 ): Promise<SharedAttachment> {
   onProgress?.(1);
   let uploadFile = file;
@@ -268,14 +302,17 @@ export async function uploadChatAttachment(
     return att;
   }
 
-  // Videos. Everything starts at once:
-  //  - a still frame for the bubble, uploaded the moment it's ready;
-  //  - the original, uploading immediately;
-  //  - a 720p copy compressed on the phone, which takes over only if it would
-  //    land sooner (see raceVideoUpload).
+  // Videos: the poster (the first moment of what's sent) uploads while the clip is cut, shrunk and sent.
   const startedAt = Date.now();
+  let picked = chatVideoPicks.get(file);
+  if (!picked) {
+    // not read when it was picked (another way in): read it now; too long can't be trimmed from here
+    const res = await pickVideo(file, videoContext);
+    if (!res.ok) throw new Error(res.reason || "That video's too long to send here.");
+    picked = { ...res.video, context: videoContext };
+  }
   const thumbPath = `${stem}-poster.jpg`;
-  const posterP = captureVideoPoster(file);
+  const posterP = captureVideoPoster(file, { at: picked.trim?.start ?? null });
   const posterUpload = posterP.then(async (poster) => {
     if (!poster) return null;
     try {
@@ -288,38 +325,26 @@ export async function uploadChatAttachment(
     }
   });
 
-  onProgress?.(3);
-  const originalPath = pathFor(file);
-  let compressedPath = `${stem}.mp4`;
-  if (compressedPath === originalPath) compressedPath = `${stem}-720p.mp4`;
-  let result;
+  const send = createVideoSend({ file, info: picked.info, canEncode: picked.canEncode, trim: picked.trim, context: picked.context, bucket: "message-attachments", userId: folder, stem });
+  let sent;
   try {
-    result = await raceVideoUpload(
-      {
-        originalBytes: file.size,
-        uploadOriginal: (p, sig) => put(file, originalPath, (pct) => p(pct / 100), sig).then(() => {}),
-        compress: (p, sig) => compressVideoDetailed(file, "avc", { onProgress: p, signal: sig }),
-        uploadCompressed: (f, p, sig) => put(f, compressedPath, (pct) => p(pct / 100), sig).then(() => {}),
-      },
-      { signal, onProgress: (f) => onProgress?.(Math.max(3, Math.round(f * 100))) },
-    );
+    sent = await send.run((pct) => onProgress?.(Math.max(2, Math.min(99, pct))), signal);
   } catch (e) {
     if (signal?.aborted) throw new Error("Upload cancelled.");
-    throw e;
+    throw new Error(videoErrorMessage(e));
   }
-  const sentFile = result.sent === "compressed" && result.compressed ? result.compressed : file;
-  const path = result.sent === "compressed" ? compressedPath : originalPath;
 
   const att: SharedAttachment = {
     type: "video",
     url: "",
-    storage_path: path,
+    storage_path: sent.path,
     name: file.name,
-    size: sentFile.size,
-    mime: sentFile.type || file.type,
+    size: sent.file.size,
+    mime: sent.file.type || file.type,
+    duration: Math.round(sent.check.duration * 10) / 10,
   };
   // The sender already has the clip: keep it on the phone so it plays (and replays) without downloading.
-  keepChatVideo(path, sentFile);
+  keepChatVideo(sent.path, sent.file);
 
   // Don't wait long: the poster is a nicety, the message must go out.
   const poster = await Promise.race([posterUpload, new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
@@ -327,20 +352,23 @@ export async function uploadChatAttachment(
     att.thumbnail_storage_path = thumbPath;
     att.width = poster.width;
     att.height = poster.height;
-    att.duration = poster.duration || undefined;
+  } else if (sent.check.width && sent.check.height) {
+    att.width = sent.check.width;
+    att.height = sent.check.height;
   }
   // What actually happened on this phone. Stored with the message so slow
   // sends can be diagnosed from real devices (no message text involved).
   const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
+  const sel = picked.trim ? picked.trim.end - picked.trim.start : picked.info.duration;
   att.transfer = {
-    v: 1,
-    sent: result.sent,
-    why: result.why,
-    compress: result.compress?.reason ?? null,
-    compress_ms: result.compress?.ms ?? null,
-    dur: result.compress?.durationSec != null ? Math.round(result.compress.durationSec * 10) / 10 : null,
+    v: 2,
+    mode: sent.render.mode,
+    why: sent.render.reason,
+    prep_ms: sent.render.ms,
+    src_s: Math.round(picked.info.duration * 10) / 10,
+    sel_s: Math.round(sel * 10) / 10,
     orig_mb: mb(file.size),
-    sent_mb: mb(sentFile.size),
+    sent_mb: mb(sent.file.size),
     total_ms: Date.now() - startedAt,
     poster: poster ? "ok" : "none",
     ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : null,

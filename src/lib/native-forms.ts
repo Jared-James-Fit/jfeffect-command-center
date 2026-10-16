@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { PickedVideo } from "@/lib/video-edit/pick";
+import { createVideoSend, videoErrorMessage } from "@/lib/video-edit/pipeline";
 
 const db = supabase as any;
 
@@ -526,26 +528,49 @@ export async function listFiles(submissionId: string) {
   return (data ?? []) as NfFile[];
 }
 
+/**
+ * A check-in video: only the part picked in the trimmer goes, shrunk on the
+ * phone when that pays, uploaded resumably and checked by the server (it's for
+ * the coach: up to 10 minutes). Other files upload as they are.
+ */
+async function putFormFile(stem: string, file: File, video: PickedVideo | null | undefined, userId: string): Promise<{ path: string; type: string; size: number }> {
+  if (video) {
+    const send = createVideoSend({ file: video.file, info: video.info, canEncode: video.canEncode, trim: video.trim, context: "coach", bucket: "form-uploads", userId, stem });
+    try {
+      const sent = await send.run();
+      return { path: sent.path, type: sent.file.type || "video/mp4", size: sent.file.size };
+    } catch (e) {
+      throw new Error(videoErrorMessage(e));
+    }
+  }
+  const ext = file.name.split(".").pop() || "bin";
+  const path = `${stem}.${ext}`;
+  const { error: upErr } = await supabase.storage.from("form-uploads").upload(path, file, {
+    upsert: false,
+    contentType: file.type || undefined,
+  });
+  if (upErr) throw upErr;
+  return { path, type: file.type, size: file.size };
+}
+
 export async function uploadFormFile(opts: {
   clientId: string;
   submissionId: string;
   questionId: string;
   file: File;
+  /** A video picked through pickVideo (its trimmed part goes). */
+  video?: PickedVideo | null;
 }) {
-  const ext = opts.file.name.split(".").pop() || "bin";
-  const path = `${opts.clientId}/${opts.submissionId}/${opts.questionId}-${Date.now()}.${ext}`;
-  const { error: upErr } = await supabase.storage.from("form-uploads").upload(path, opts.file, {
-    upsert: false,
-    contentType: opts.file.type || undefined,
-  });
-  if (upErr) throw upErr;
+  const { data: auth } = await supabase.auth.getUser();
+  const up = await putFormFile(`${opts.clientId}/${opts.submissionId}/${opts.questionId}-${Date.now()}`, opts.file, opts.video, auth.user?.id ?? opts.clientId);
+  const path = up.path;
   const { error } = await db.from("nf_files").insert({
     submission_id: opts.submissionId,
     question_id: opts.questionId,
     storage_path: path,
     original_name: opts.file.name,
-    mime_type: opts.file.type,
-    size_bytes: opts.file.size,
+    mime_type: up.type,
+    size_bytes: up.size,
   });
   if (error) {
     // Roll back the orphan storage object if the DB row insert was rejected.
@@ -601,15 +626,12 @@ export async function replaceFormFile(opts: {
   fileId: string;
   clientId: string;
   file: File;
+  video?: PickedVideo | null;
 }) {
   const old = await assertEditableOwnedFile(opts.fileId);
-  const ext = opts.file.name.split(".").pop() || "bin";
-  const path = `${opts.clientId}/${old.submission_id}/${old.question_id}-${Date.now()}.${ext}`;
-
-  const { error: upErr } = await supabase.storage
-    .from("form-uploads")
-    .upload(path, opts.file, { upsert: false, contentType: opts.file.type || undefined });
-  if (upErr) throw upErr;
+  const { data: auth } = await supabase.auth.getUser();
+  const up = await putFormFile(`${opts.clientId}/${old.submission_id}/${old.question_id}-${Date.now()}`, opts.file, opts.video, auth.user?.id ?? opts.clientId);
+  const path = up.path;
 
   // Update the existing row in place (no duplicate rows).
   const { error: updErr } = await db
@@ -617,8 +639,8 @@ export async function replaceFormFile(opts: {
     .update({
       storage_path: path,
       original_name: opts.file.name,
-      mime_type: opts.file.type,
-      size_bytes: opts.file.size,
+      mime_type: up.type,
+      size_bytes: up.size,
     })
     .eq("id", opts.fileId);
   if (updErr) {

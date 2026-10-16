@@ -2,11 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   CAPTION_MAX,
-  MAX_VIDEO_BYTES,
-  MAX_VIDEO_SECONDS,
   REACTIONS,
   checkMediaFile,
-  checkVideoDuration,
   featuredLift,
   formatTopSet,
   formatWorkoutDuration,
@@ -118,16 +115,13 @@ describe("reactions", () => {
 });
 
 describe("media rules", () => {
-  it("accepts photos and short videos, rejects everything else", () => {
+  it("accepts photos and videos (a long recording is trimmed later), rejects everything else", () => {
     expect(checkMediaFile({ type: "image/jpeg", size: 9_000_000 })).toEqual({ ok: true, kind: "image" });
     expect(checkMediaFile({ type: "video/mp4", size: 10_000_000 })).toEqual({ ok: true, kind: "video" });
-    expect(checkMediaFile({ type: "video/mp4", size: MAX_VIDEO_BYTES + 1 }).ok).toBe(false);
+    // a whole session off the phone (gigabytes) can be picked: only the trimmed part ever uploads
+    expect(checkMediaFile({ type: "video/quicktime", size: 3 * 1024 ** 3 })).toEqual({ ok: true, kind: "video" });
+    expect(checkMediaFile({ type: "video/mp4", size: 17 * 1024 ** 3 }).ok).toBe(false);
     expect(checkMediaFile({ type: "application/pdf", size: 10 }).ok).toBe(false);
-  });
-
-  it("caps video length", () => {
-    expect(checkVideoDuration(MAX_VIDEO_SECONDS).ok).toBe(true);
-    expect(checkVideoDuration(MAX_VIDEO_SECONDS + 1).ok).toBe(false);
   });
 });
 

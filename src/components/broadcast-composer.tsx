@@ -15,6 +15,7 @@ import {
   setBroadcastSelectedClients,
   getBroadcastSelectedClients,
   uploadBroadcastFile,
+  uploadBroadcastVideo,
   BROADCAST_TYPES,
   BROADCAST_AUDIENCE_LABELS,
   type Broadcast,
@@ -24,6 +25,9 @@ import {
 } from "@/lib/broadcasts";
 import { runJob } from "@/lib/progress-jobs";
 import { RecipeAccessPicker } from "@/components/recipe-access-picker";
+import { useVideoTrimmer } from "@/components/video-trimmer";
+import { pickVideo, retrimVideo, type PickedVideo } from "@/lib/video-edit/pick";
+import { formatClock } from "@/lib/video-edit/limits";
 
 type Props = {
   open: boolean;
@@ -57,7 +61,18 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  // a video goes to clients from the coach (up to 10 minutes): longer ones are trimmed, and only that part uploads
+  const [videoFile, setVideoFile] = useState<PickedVideo | null>(null);
+  const trimmer = useVideoTrimmer();
+  const pickBroadcastVideo = async (f: File | undefined) => {
+    if (!f) return setVideoFile(null);
+    const res = await pickVideo(f, "coach", { trim: trimmer.request });
+    if (!res.ok) {
+      if (!res.cancelled) toast.error(res.reason);
+      return;
+    }
+    setVideoFile(res.video);
+  };
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -142,7 +157,7 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
         voicePath = await uploadBroadcastFile(f, "voice");
       }
       if (videoFile) {
-        videoPath = await uploadBroadcastFile(videoFile, "video");
+        videoPath = await uploadBroadcastVideo(videoFile, user?.id ?? "coach");
       }
 
       const publish_at = scheduleNow || !publishAt ? new Date().toISOString() : new Date(publishAt).toISOString();
@@ -267,7 +282,23 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
               <Label className="text-xs">Video</Label>
               <Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="YouTube / Vimeo / link" />
               <div className="text-[11px] text-muted-foreground">Or upload a file:</div>
-              <Input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] ?? null)} />
+              <Input type="file" accept="video/*" onChange={(e) => { void pickBroadcastVideo(e.target.files?.[0]); e.target.value = ""; }} />
+              {videoFile && (
+                <div className="flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
+                  <span className="truncate">{videoFile.file.name} · {formatClock(videoFile.trim ? videoFile.trim.end - videoFile.trim.start : videoFile.info.duration)}</span>
+                  <button
+                    type="button"
+                    className="font-semibold text-primary"
+                    onClick={async () => {
+                      const next = await retrimVideo(videoFile, "coach", trimmer.request);
+                      if (next) setVideoFile(next);
+                    }}
+                  >
+                    Trim
+                  </button>
+                </div>
+              )}
+              {trimmer.element}
             </Card>
           )}
 

@@ -18,6 +18,7 @@ import { useFollowState } from "@/lib/community-social";
 import { useAuth } from "@/lib/auth";
 import { useDirectThreads, useMessageAuthor } from "@/lib/direct-chats";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
+import { videoLimit } from "@/lib/video-edit/limits";
 
 /** How long one moment shows before the next. */
 const FRAME_MS = 5000;
@@ -642,6 +643,9 @@ let storySoundBlocked = false;
  * length runs the bar; holding the story pauses it; it moves on when it ends.
  * One that won't play hands back to the clock (onFail).
  */
+/** A story plays up to a minute of a clip (Instagram's story length); the post itself can run longer. */
+const STORY_CLIP_MAX_SECONDS = videoLimit("story");
+
 function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: string; poster: string | null } & ClipControl) {
   const { data: url, isError } = useFullMediaUrl(path, true);
   const vid = useRef<HTMLVideoElement | null>(null);
@@ -677,13 +681,25 @@ function StoryClip({ path, poster, paused, onProgress, onEnd, onFail }: { path: 
     });
   }, [paused, url]);
 
-  // a smooth bar from the clip's own clock
+  // a smooth bar from the clip's own clock; a story shows a clip's first minute (a longer post's clip moves on there)
+  const endRef = useRef(onEnd);
+  endRef.current = onEnd;
   useEffect(() => {
     if (!started || paused) return;
     let raf = 0;
+    let ended = false;
     const tick = () => {
       const v = vid.current;
-      if (v && v.duration && Number.isFinite(v.duration)) progressRef.current(v.currentTime / v.duration);
+      if (v && v.duration && Number.isFinite(v.duration)) {
+        const span = Math.min(v.duration, STORY_CLIP_MAX_SECONDS);
+        progressRef.current(Math.min(1, v.currentTime / span));
+        if (!ended && v.duration > STORY_CLIP_MAX_SECONDS + 0.5 && v.currentTime >= STORY_CLIP_MAX_SECONDS) {
+          ended = true;
+          v.pause();
+          endRef.current();
+          return;
+        }
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

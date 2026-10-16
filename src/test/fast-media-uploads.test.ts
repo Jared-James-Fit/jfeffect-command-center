@@ -31,7 +31,9 @@ describe("fast media upload paths", () => {
 
   it("starts progress storage and submission work concurrently", () => {
     expect(progress).toContain("const subPromise = getSubId()");
-    expect(progress).toContain("const uploadPromise = uploadProgressFile");
+    // (a video takes its own trimmed, checked path, still alongside the submission)
+    expect(progress).toContain("const uploadPromise = video\n        ? uploadProgressVideo({");
+    expect(progress).toContain(": uploadProgressFile({");
     expect(progress).toContain("Promise.all([subPromise, uploadPromise])");
   });
 

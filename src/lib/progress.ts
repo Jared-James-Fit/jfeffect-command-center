@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
+import type { PickedVideo } from "@/lib/video-edit/pick";
+import { createVideoSend, videoErrorMessage, type VideoPhase } from "@/lib/video-edit/pipeline";
 
 export type ProgressAngle = "front" | "left" | "back" | "right" | "all";
 export type ProgressOwnerType = "client" | "member";
@@ -302,6 +304,35 @@ export async function uploadProgressFile(args: {
     onProgress: args.onProgress,
     signal: args.signal,
   });
+}
+
+/**
+ * A progress video: only the part picked in the trimmer goes, shrunk on the
+ * phone when that pays, uploaded resumably and checked by the server (it's
+ * for your coach: up to 10 minutes).
+ */
+export async function uploadProgressVideo(args: {
+  video: PickedVideo;
+  userId: string;
+  onProgress?: (pct: number, phase: VideoPhase) => void;
+  signal?: AbortSignal;
+}): Promise<ProgressUploadResult> {
+  const send = createVideoSend({
+    file: args.video.file,
+    info: args.video.info,
+    canEncode: args.video.canEncode,
+    trim: args.video.trim,
+    context: "coach",
+    bucket: "progress-media",
+    userId: args.userId,
+    stem: `${args.userId}/${Date.now()}-${crypto.randomUUID()}`,
+  });
+  try {
+    const sent = await send.run(args.onProgress, args.signal);
+    return { path: sent.path, mimeType: sent.file.type || "video/mp4", sizeBytes: sent.file.size };
+  } catch (e) {
+    throw new Error(videoErrorMessage(e));
+  }
 }
 
 // ---------- Bodyweight ----------

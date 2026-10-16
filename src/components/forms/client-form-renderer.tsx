@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useVideoTrimmer } from "@/components/video-trimmer";
+import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -195,11 +197,25 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     !readOnly && Object.values(busyQ).some((v) => v === "uploading" || v === "replacing"),
   );
 
+  // a video for the coach runs up to 10 minutes: a longer one opens the trimmer, and only that part uploads
+  const trimmer = useVideoTrimmer();
+  const readVideo = async (file: File) => {
+    if (!looksLikeVideo(file)) return { ok: true as const, video: null };
+    const res = await pickVideo(file, "coach", { trim: trimmer.request });
+    if (!res.ok) {
+      if (!res.cancelled) toast.error(res.reason);
+      return { ok: false as const };
+    }
+    return { ok: true as const, video: res.video };
+  };
+
   async function handleFileUpload(q: NfQuestion, file: File) {
     if (!submission || !client) return;
     setBusyQ((s) => ({ ...s, [q.id]: "uploading" }));
     try {
-      await uploadFormFile({ clientId: client.id, submissionId: submission.id, questionId: q.id, file });
+      const read = await readVideo(file);
+      if (!read.ok) return;
+      await uploadFormFile({ clientId: client.id, submissionId: submission.id, questionId: q.id, file, video: read.video });
       toast.success("Uploaded");
       qc.invalidateQueries({ queryKey: ["nf-files", submission.id] });
     } catch (e: any) {
@@ -227,7 +243,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     if (!submission || !client) return;
     setBusyQ((s) => ({ ...s, [q.id]: "replacing" }));
     try {
-      await replaceFormFile({ fileId, clientId: client.id, file });
+      const read = await readVideo(file);
+      if (!read.ok) return;
+      await replaceFormFile({ fileId, clientId: client.id, file, video: read.video });
       toast.success("Replaced");
       qc.invalidateQueries({ queryKey: ["nf-files", submission.id] });
     } catch (e: any) {
@@ -328,6 +346,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
 
   return (
     <>
+      {trimmer.element}
       {embedded ? (
         <div className="flex items-center justify-end px-1 pb-1">
           <Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>

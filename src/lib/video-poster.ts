@@ -22,7 +22,7 @@ export function fitWithin(w: number, h: number, max: number): { width: number; h
  * explicitly, the frame is grabbed once one is actually presented, and if a
  * seek never lands it plays muted for a moment to force a frame out.
  */
-export function captureVideoPoster(file: File, opts: { maxDimension?: number; timeoutMs?: number } = {}): Promise<VideoPoster | null> {
+export function captureVideoPoster(file: File, opts: { maxDimension?: number; timeoutMs?: number; at?: number | null } = {}): Promise<VideoPoster | null> {
   if (typeof document === "undefined" || typeof URL.createObjectURL !== "function") return Promise.resolve(null);
   const { maxDimension = 720, timeoutMs = 10_000 } = opts;
 
@@ -97,8 +97,10 @@ export function captureVideoPoster(file: File, opts: { maxDimension?: number; ti
     v.style.cssText = "position:fixed;left:-10000px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
     v.onerror = () => finish(null);
     v.onloadedmetadata = () => {
-      // A hair in, so we skip a black first frame without waiting on a long seek.
-      const t = Math.min(0.15, (v.duration || 0) / 2);
+      // A hair in, so we skip a black first frame without waiting on a long seek
+      // (or a hair into the part that was trimmed to).
+      const d = Number.isFinite(v.duration) ? v.duration : 0;
+      const t = opts.at != null && opts.at > 0 ? Math.min(opts.at + 0.1, Math.max(0, d - 0.05)) : Math.min(0.15, d / 2);
       try { v.currentTime = t; } catch { whenFramePresented(); }
     };
     v.onseeked = () => whenFramePresented();

@@ -1,19 +1,23 @@
 import { useRef } from "react";
-import { AlertCircle, ImagePlus, Play, X } from "lucide-react";
+import { AlertCircle, ImagePlus, Play, Scissors, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MAX_SLIDES, MAX_SLIDE_VIDEOS, slideThumbPath, type PostSlide } from "@/lib/community";
 import { removeCommunityFiles } from "@/lib/community-media";
 import { useSlideThumbUrls } from "@/lib/community.queries";
 import { useSlideTray, type SlideTrayState } from "@/components/community/slide-tray";
+import { preloadMediaTools } from "@/lib/community-media";
+import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
 
 /**
  * Photos and videos for a post being written or edited (coach posts,
  * scheduled birthday and daily posts, swapping the photos on your own post).
  * Same rules as sharing a workout: up to 10, at most 3 videos, each starts
- * uploading as soon as it's picked.
+ * uploading as soon as it's picked. A clip longer than its place allows
+ * (`videoContext`: a post 3 min, a workout post 90 s) is trimmed first; tap a
+ * clip to change which part goes.
  */
-export function useMediaDraft({ open, initial, key }: { open: boolean; initial: PostSlide[] | null | undefined; key: string }) {
-  const tray = useSlideTray({ open, initial, resetKey: key, coverCount: 0 });
+export function useMediaDraft({ open, initial, key, videoContext = "post" }: { open: boolean; initial: PostSlide[] | null | undefined; key: string; videoContext?: VideoContext }) {
+  const tray = useSlideTray({ open, initial, resetKey: key, coverCount: 0, videoContext });
   const startPaths = (initial ?? []).flatMap((s) => [s.path, s.thumb]).filter((p): p is string => !!p);
   const changed = tray.items.some((it) => !it.existing) || tray.items.length !== (initial ?? []).length
     || tray.items.some((it, i) => it.slide?.path !== initial?.[i]?.path);
@@ -56,12 +60,14 @@ export function MediaStrip({ tray, className, label = "Photos & videos" }: { tra
             <div key={it.id} className="relative h-20 w-16 shrink-0">
               <button
                 type="button"
-                onClick={() => it.status === "error" && tray.retry(it.id)}
+                onClick={() => (it.status === "error" ? tray.retry(it.id) : it.video ? void tray.edit(it.id) : undefined)}
                 className="relative block h-full w-full overflow-hidden rounded-xl bg-muted"
-                aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : `${it.kind === "video" ? "Video" : "Photo"} ${i + 1}`}
+                aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : it.video ? `Video ${i + 1}: tap to trim` : `${it.kind === "video" ? "Video" : "Photo"} ${i + 1}`}
+                data-tray-item={it.kind}
               >
                 {src && <img src={src} alt="" className="h-full w-full object-cover" />}
-                {it.kind === "video" && <Play className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />}
+                {it.kind === "video" && (it.video ? <Scissors className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow" /> : <Play className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />)}
+                {it.seconds != null && !busy && it.status !== "error" && <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] font-black tabular-nums text-white">{formatClock(it.seconds)}</span>}
                 {i === 0 && <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] font-black text-white">Cover</span>}
                 {busy && (
                   <span className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-black/40">
@@ -103,12 +109,14 @@ export function MediaStrip({ tray, className, label = "Photos & videos" }: { tra
         accept="image/*,video/*"
         multiple
         className="hidden"
+        onClick={preloadMediaTools}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
           if (files.length) void tray.add(files);
         }}
       />
+      {tray.trimmer}
     </div>
   );
 }

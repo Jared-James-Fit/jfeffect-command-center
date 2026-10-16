@@ -5,6 +5,7 @@
  * workout number arrives as `WorkoutShareStats`, derived server-side from the
  * same records the recap uses (see migration 20261006090000_community_sharing).
  */
+import { SOURCE_MAX_BYTES } from "@/lib/video-edit/limits";
 import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
 import { dayScheduledDate, type WorkoutItem } from "@/lib/workout-today";
@@ -697,12 +698,8 @@ export function isPrMoment(s: WorkoutShareStats | null | undefined): boolean {
 /*  Media rules                                                        */
 /* ------------------------------------------------------------------ */
 
-/** The most a posted video file can be (the storage bucket's limit). */
-export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-/** A clip straight off a phone can be bigger than that when the phone can shrink it first (4K, 60 fps). */
-export const MAX_PICK_VIDEO_BYTES = 1024 * 1024 * 1024;
-/** A story or post clip: up to a minute (Instagram's story length). */
-export const MAX_VIDEO_SECONDS = 60;
+// Video lengths and sizes (what can be picked vs what gets published, per place)
+// live in video-edit/limits.ts; the trimmer and the server enforce them.
 
 export type MediaCheck = { ok: true; kind: "image" | "video" } | { ok: false; reason: string };
 
@@ -714,21 +711,18 @@ export function baseMediaType(type: string): string {
 const VIDEO_EXT = /\.(mp4|m4v|mov|qt|webm|3gp)$/i;
 
 /**
- * Cheap pre-flight (type + size). Duration is checked after metadata loads.
- * `canShrink`: this phone can re-encode a clip smaller before it uploads, so
- * one over the storage limit is still fine.
+ * Cheap pre-flight (type + size). A clip's length is checked once its header
+ * is read (a long one opens the trimmer), so size only rules out the absurd.
  */
-export function checkMediaFile(file: { type: string; size: number; name?: string }, opts: { canShrink?: boolean } = {}): MediaCheck {
+export function checkMediaFile(file: { type: string; size: number; name?: string }): MediaCheck {
   const type = baseMediaType(file.type);
   if (type.startsWith("image/")) return { ok: true, kind: "image" };
   // some phones hand over a clip with no type: go by its name
   if (type.startsWith("video/") || (!type && !!file.name && VIDEO_EXT.test(file.name))) {
-    if (file.size > MAX_VIDEO_BYTES && !(opts.canShrink && file.size <= MAX_PICK_VIDEO_BYTES)) {
-      return { ok: false, reason: "That clip is too big to post from this phone. Trim it in Photos and pick it again." };
-    }
+    if (file.size > SOURCE_MAX_BYTES) return { ok: false, reason: "That video is too big to open here. Trim it in Photos first." };
     return { ok: true, kind: "video" };
   }
-  return { ok: false, reason: "Choose a photo or a short video." };
+  return { ok: false, reason: "Choose a photo or a video." };
 }
 
 /** A clip's type the storage bucket accepts (no codec details; m4v and type-less clips as what they are). */
@@ -744,17 +738,11 @@ export function uploadableVideo(file: File): File {
   return new File([file], file.name, { type: fixed || "video/mp4", lastModified: file.lastModified });
 }
 
-export function checkVideoDuration(seconds: number): MediaCheck {
-  if (Number.isFinite(seconds) && seconds > MAX_VIDEO_SECONDS + 0.5) {
-    return { ok: false, reason: `Keep videos to ${MAX_VIDEO_SECONDS} seconds. Trim it in Photos and pick it again.` };
-  }
-  return { ok: true, kind: "video" };
-}
-
 /**
  * Carousels: up to 10 photos / videos on a post, at most 3 of them videos.
- * Photos are ~300 KB once resized, so 10 go up in seconds; three minute-long
- * clips is already a lot of upload on a phone connection, even shrunk.
+ * Photos are ~300 KB once resized, so 10 go up in seconds; three clips of up
+ * to three minutes each is already a lot of upload on a phone connection,
+ * even trimmed and shrunk.
  */
 export const MAX_SLIDES = 10;
 export const MAX_SLIDE_VIDEOS = 3;

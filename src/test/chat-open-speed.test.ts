@@ -96,7 +96,7 @@ describe("opening a chat", () => {
   it("draws videos from a poster and plays them in one tap", () => {
     expect(tile).toContain("playNativeFullscreen(playSrc, fallback)");
     expect(tile).toContain("expectPoster");
-    expect(shared).toContain("captureVideoPoster(file)");
+    expect(shared).toContain("captureVideoPoster(file, { at: picked.trim?.start ?? null })");
     expect(shared).toContain("thumbnail_storage_path");
   });
 });

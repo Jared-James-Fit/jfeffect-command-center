@@ -28,12 +28,29 @@ export type LiftStorageUploadArgs = {
   file: File;
   userId: string;
   /** Defaults to the existing lift-videos bucket; message attachments opt in explicitly. */
-  bucket?: "lift-videos" | "message-attachments" | "progress-media" | "community-media";
+  bucket?: "lift-videos" | "message-attachments" | "progress-media" | "community-media" | "form-uploads" | "broadcast-media";
   /** Preserve callers' established storage paths when they already own path generation. */
   path?: string;
   onProgress?: (pct: number) => void;
   signal?: AbortSignal;
+  /**
+   * Pick up where an interrupted upload of this same file to this same path
+   * left off (anything over 6 MB goes resumable). Videos use it: a dropped
+   * connection or a retry never sends the part that already landed again.
+   */
+  resume?: boolean;
 };
+
+/** Bytes a second recent uploads managed (an average), or null before any big enough to tell. */
+let uplinkBps: number | null = null;
+export function measuredUplink(): number | null {
+  return uplinkBps;
+}
+function noteUplink(bytes: number, ms: number) {
+  if (bytes < 512 * 1024 || ms < 300) return;
+  const rate = bytes / (ms / 1000);
+  uplinkBps = uplinkBps == null ? rate : uplinkBps * 0.6 + rate * 0.4;
+}
 
 /**
  * Upload a single file via Supabase's TUS resumable endpoint.
@@ -66,8 +83,10 @@ export async function uploadLiftFileToStorage(
   // Messenger videos benefit from a single streaming request on normal mobile
   // connections; TUS adds a create/resume handshake and 6 MB chunk round trips.
   // Keep resumable uploads for genuinely large files where recovery matters.
+  // (a resumable upload never sends a landed part twice, so a video over 6 MB always goes that way)
   const DIRECT_UPLOAD_MAX_BYTES =
-    bucket === "message-attachments" ? 40 * 1024 * 1024 : 6 * 1024 * 1024;
+    bucket === "message-attachments" && !args.resume ? 40 * 1024 * 1024 : 6 * 1024 * 1024;
+  const startedAt = Date.now();
   if (args.file.size <= DIRECT_UPLOAD_MAX_BYTES && typeof XMLHttpRequest !== "undefined") {
     await uploadDirectWithRetry({
       bucket,
@@ -80,6 +99,7 @@ export async function uploadLiftFileToStorage(
       onProgress: args.onProgress,
       signal: args.signal,
     });
+    noteUplink(args.file.size, Date.now() - startedAt);
     args.onProgress?.(100);
     return { path, mimeType: contentType, sizeBytes: args.file.size };
   }
@@ -95,6 +115,8 @@ export async function uploadLiftFileToStorage(
       },
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
+      // resuming: the same file to the same path only (never a stale upload of another file)
+      ...(args.resume ? { fingerprint: async (f: File) => `jf-${bucket}/${path}:${f.size}` } : {}),
       chunkSize: bucket === "message-attachments" ? 12 * 1024 * 1024 : 6 * 1024 * 1024,
       metadata: {
         bucketName: bucket,
@@ -118,9 +140,18 @@ export async function uploadLiftFileToStorage(
       if (args.signal.aborted) onAbort();
       else args.signal.addEventListener("abort", onAbort, { once: true });
     }
-    upload.start();
+    if (!args.resume) return upload.start();
+    void upload
+      .findPreviousUploads()
+      .then((previous) => {
+        if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
+      }, () => {})
+      .finally(() => {
+        if (!args.signal?.aborted) upload.start();
+      });
   });
 
+  noteUplink(args.file.size, Date.now() - startedAt);
   args.onProgress?.(100);
   return { path, mimeType: contentType, sizeBytes: args.file.size };
 }

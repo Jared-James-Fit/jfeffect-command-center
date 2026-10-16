@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { PickedVideo } from "@/lib/video-edit/pick";
+import { createVideoSend, videoErrorMessage } from "@/lib/video-edit/pipeline";
 
 const db = supabase as any;
 
@@ -220,6 +222,16 @@ export async function uploadBroadcastFile(file: File, kind: "voice" | "video") {
     .upload(path, file, { contentType: file.type, upsert: false });
   if (error) throw error;
   return path;
+}
+
+/** A broadcast video: its trimmed part, shrunk on the phone when that pays, uploaded resumably and checked by the server. */
+export async function uploadBroadcastVideo(video: PickedVideo, userId: string): Promise<string> {
+  const send = createVideoSend({ file: video.file, info: video.info, canEncode: video.canEncode, trim: video.trim, context: "coach", bucket: "broadcast-media", userId, stem: `video/${crypto.randomUUID()}` });
+  try {
+    return (await send.run()).path;
+  } catch (e) {
+    throw new Error(videoErrorMessage(e));
+  }
 }
 
 export async function getBroadcastFileSignedUrl(path: string, expiresInSeconds = 3600) {

@@ -41,7 +41,7 @@ import { fallbackEmoji } from "@/lib/gif-fallback";
 import {
   AttachmentView, LiveWaveform, WaveformBars, useVoiceRecorder,
   attachIcon, fakePeaks, fmtDuration, fmtTime,
-  uploadChatAttachment, LINK_RE, renderBodyWithMeet, type SharedAttachment,
+  uploadChatAttachment, prepareChatFiles, LINK_RE, renderBodyWithMeet, type SharedAttachment,
 } from "@/components/chat-shared";
 import { useDraftUploads, releaseDraft } from "@/hooks/use-draft-uploads";
 import { useViewingAsClient } from "@/lib/client-impersonation";
@@ -62,20 +62,23 @@ import { haptic } from "@/platform/haptics";
 import { doubleTapAdds, useLikePops } from "@/lib/message-like";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { listenChannel } from "@/lib/realtime-channel";
+import { useVideoTrimmer } from "@/components/video-trimmer";
+import type { VideoContext } from "@/lib/video-edit/limits";
 
 async function uploadGroupFile(
   groupId: string,
   file: File,
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
+  videoContext: VideoContext = "coach",
 ): Promise<GroupAttachment> {
-  const att = await uploadChatAttachment(`group/${groupId}`, file, onProgress, signal);
+  const att = await uploadChatAttachment(`group/${groupId}`, file, onProgress, signal, videoContext);
   return att as GroupAttachment;
 }
 
 export function GroupMessageThread({
   groupId, canPost, canManage, groupName,
-  canReact = true, textOnly = false, hidePresence = false, footer, placeholder, oneToOne = false,
+  canReact = true, textOnly = false, hidePresence = false, footer, placeholder, oneToOne = false, videoContext = "coach",
 }: {
   groupId: string;
   canPost: boolean;
@@ -92,6 +95,8 @@ export function GroupMessageThread({
   placeholder?: string;
   /** Two people: no name over every bubble, it's always them. */
   oneToOne?: boolean;
+  /** Video length here: a coach-run group 10 minutes ("coach"), a member 1:1 or crew 5 ("dm"). The database holds it to the same. */
+  videoContext?: VideoContext;
 }) {
   const { user, role: authRole } = useAuth();
   // Admins can silently delete any group message (no placeholder for anyone).
@@ -106,6 +111,7 @@ export function GroupMessageThread({
   // Picked media uploads in the background; Send clears the composer right
   // away and the message posts once its uploads land.
   const uploads = useDraftUploads<GroupAttachment>();
+  const trimmer = useVideoTrimmer();
   const [queuedUploadIds, setQueuedUploadIds] = useState<string[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -524,16 +530,19 @@ export function GroupMessageThread({
 
   /* ---------------- Composer actions ---------------- */
 
-  const onPickFiles = (files: FileList | null) => {
+  const onPickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
     const ok = Array.from(files).filter((f) => {
-      // Videos are shrunk on the phone before upload, so only other files are capped.
+      // Videos are trimmed and shrunk on the phone before upload, so only other files are capped.
       if (f.size > 50 * 1024 * 1024 && !f.type.startsWith("video/")) { toast.error(`${f.name} is over 50MB`); return false; }
       return true;
     });
+    // a video longer than this chat allows opens the trimmer first
+    const list = await prepareChatFiles(ok, videoContext, trimmer.request);
+    if (!list.length) return;
     uploads.add(
-      ok,
-      (file, onProgress, signal) => uploadGroupFile(groupId, file, onProgress, signal),
+      list,
+      (file, onProgress, signal) => uploadGroupFile(groupId, file, onProgress, signal, videoContext),
       (d, e: any) => toast.error(`${d.name}: ${e?.message ?? "upload failed"}`),
     );
   };
@@ -1004,13 +1013,14 @@ export function GroupMessageThread({
             </div>
           )}
           <DraftUploadChips drafts={uploads.drafts} store={uploads.store} onRemove={uploads.cancel} />
+          {trimmer.element}
 
           <input ref={fileInputRef} type="file" multiple className="hidden"
-            onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+            onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={photoInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
-            onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+            onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
           <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden"
-            onChange={(e) => { onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
+            onChange={(e) => { void onPickFiles(e.target.files); e.currentTarget.value = ""; }} />
 
           {recorder.recording ? (
             <div className="flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/5 px-3 py-2">
