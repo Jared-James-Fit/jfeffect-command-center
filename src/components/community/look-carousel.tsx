@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
+import { HOLD_TO_RECORD_MS } from "@/components/community/clip-recorder";
 
 const ICON: Record<ShareTemplate, LucideIcon> = {
   pr: Trophy,
@@ -45,6 +46,7 @@ export function LookCarousel({
   disabled = false,
   counting = false,
   showName = true,
+  hold,
 }: {
   looks: ShareTemplate[] | null;
   look: ShareTemplate | null;
@@ -55,19 +57,91 @@ export function LookCarousel({
   counting?: boolean;
   /** the look's name above the ring (left off where room is short: the card shows it) */
   showName?: boolean;
+  /** Hold to film (a plain post's camera): start / stop, and how far into the clip limit it is (null: not filming). */
+  hold?: { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
 }) {
   const many = !!looks && looks.length > 1 && !!look;
-  if (!many) {
-    return (
-      <div className="flex h-[88px] items-center justify-center">
-        <button type="button" disabled={disabled} onClick={onShoot} className="grid h-[78px] w-[78px] place-items-center rounded-full border-[5px] border-white active:scale-95 disabled:opacity-30" aria-label={counting ? "Cancel timer" : "Take photo"} data-shutter>
-          <span className={cn("block rounded-full bg-white transition-all", counting ? "h-7 w-7 rounded-md bg-red-500" : "h-[60px] w-[60px]")} />
-        </button>
-      </div>
-    );
-  }
+  if (!many) return <Shutter onShoot={onShoot} disabled={disabled} counting={counting} hold={hold} />;
   // a new set of looks (another mode) starts a fresh row, on its own look
   return <Glide key={looks!.join("|")} looks={looks!} look={look!} onLook={onLook} onShoot={onShoot} disabled={disabled} counting={counting} showName={showName} />;
+}
+
+/**
+ * The plain shutter: a tap takes a photo; with `hold`, holding it films
+ * (Instagram's camera), the ring filling red up to the clip limit.
+ */
+function Shutter({ onShoot, disabled, counting, hold }: {
+  onShoot: () => void;
+  disabled: boolean;
+  counting: boolean;
+  hold?: { onStart: () => void; onEnd: () => void; progress: number | null; seconds: number };
+}) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const filming = hold?.progress != null;
+  const down = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!hold || disabled || counting || filming) return;
+    // the finger can drift off the button while filming: it still ends where it lifts
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* not supported: fine */
+    }
+    held.current = false;
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      held.current = true;
+      hold.onStart();
+    }, HOLD_TO_RECORD_MS);
+  };
+  const up = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (held.current) hold?.onEnd();
+  };
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  const pct = Math.round((hold?.progress ?? 0) * 1000) / 10;
+  return (
+    <div className="relative flex h-[88px] items-center justify-center">
+      {filming && (
+        <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+          {`0:${String(hold!.seconds).padStart(2, "0")}`}
+        </span>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onPointerDown={down}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onContextMenu={(e) => e.preventDefault()}
+        onClick={() => {
+          // a hold was a clip, not a photo
+          if (held.current) {
+            held.current = false;
+            return;
+          }
+          onShoot();
+        }}
+        className={cn(
+          "grid h-[78px] w-[78px] touch-none select-none place-items-center rounded-full border-[5px] [-webkit-touch-callout:none] disabled:opacity-30",
+          filming ? "scale-110 border-transparent transition-transform" : "border-white active:scale-95",
+        )}
+        style={filming ? { background: `conic-gradient(rgb(239 68 68) ${pct}%, rgba(255,255,255,0.35) ${pct}% 100%)` } : undefined}
+        aria-label={filming ? "Stop filming" : counting ? "Cancel timer" : hold ? "Take photo, or hold to film" : "Take photo"}
+        data-shutter
+        data-filming={filming ? "" : undefined}
+      >
+        <span className={cn("block rounded-full transition-all", filming ? "h-[62px] w-[62px] bg-black/30 p-[14px]" : counting ? "h-7 w-7 rounded-md bg-red-500" : "h-[60px] w-[60px] bg-white")}>
+          {filming && <span className="block h-full w-full rounded-md bg-red-500" />}
+        </span>
+      </button>
+    </div>
+  );
 }
 
 function Glide({ looks, look, onLook, onShoot, disabled, counting, showName }: {

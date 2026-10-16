@@ -160,7 +160,9 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("<StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />");
     });
     it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens the post", () => {
-      expect(viewer).toContain("if (!frameKey || paused || end || composing) return;");
+      expect(viewer).toContain("if (!frameKey || paused || end || composing || clipDrives) return;");
+      // a clip pauses the same way (its own clock)
+      expect(viewer).toContain("paused: paused || !!end || composing,");
       expect(viewer).toContain("if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);");
       expect(viewer).toContain("onEscapeKeyDown={(e) => {");
     });
@@ -226,7 +228,7 @@ describe("Crew Stories", () => {
       expect(viewer).toContain("setEnd(storyEnd(groups, posts, watched.current));");
       expect(viewer).not.toContain("} else onClose();");
       // the clock stops on it
-      expect(viewer).toContain("if (!frameKey || paused || end || composing) return;");
+      expect(viewer).toContain("if (!frameKey || paused || end || composing || clipDrives) return;");
       // swipe down closes it, but never from the camera opened on top of it
       expect(viewer).toContain("if (!e.currentTarget.contains(e.target as Node)) return;");
       const screen = read("src/components/community/community-screen.tsx");
