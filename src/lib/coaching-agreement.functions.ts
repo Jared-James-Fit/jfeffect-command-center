@@ -17,6 +17,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PovInput, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
 import { AGREEMENT_CONTENT, AGREEMENT_VERSION, COACH } from "@/lib/coaching-agreement/content";
 import {
+  legalNameOfCoach,
+  personalizeAgreement,
+  resolveAgreementCoach,
+  type AgreementCoach,
+  type CoachRow,
+} from "@/lib/coaching-agreement/coach";
+import {
   buildRoster,
   summarizeRoster,
   type RosterClientInput,
@@ -147,14 +154,14 @@ async function assertAdmin(supabase: any, userId: string) {
   if (!data) throw new Error("Forbidden: admin only");
 }
 
-/** Admin, or the coach assigned to this client (read access only). */
+/** Admin, or the coach assigned to this client. */
 async function assertStaffForClient(supabase: any, userId: string, clientId: string) {
   const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
     supabase.rpc("has_role", { _user_id: userId, _role: "admin" }),
     supabase.rpc("is_assigned_coach", { _client_id: clientId }),
   ]);
   if (!isAdmin && !isCoach) throw new Error("Forbidden");
-  return { isAdmin: !!isAdmin };
+  return { isAdmin: !!isAdmin, isAssignedCoach: !!isCoach };
 }
 
 async function logEvent(
@@ -176,6 +183,53 @@ async function logEvent(
     actor_role: event.actorRole ?? "admin",
     details: event.details ?? {},
   });
+}
+
+const COACH_COLUMNS = "id, user_id, first_name, last_name, full_name, email, archived, status";
+
+/**
+ * The coach this client's agreement names, and who sent it (when someone did). Read with the
+ * service role: clients can't read the coaches table, and the name must come from the server.
+ */
+async function loadAgreementCoach(
+  admin: any,
+  clientId: string,
+): Promise<{ coach: AgreementCoach; sentBy: { userId: string; name: string | null } | null }> {
+  const [{ data: client }, { data: st }] = await Promise.all([
+    admin.from("clients").select("assigned_coach_id").eq("id", clientId).maybeSingle(),
+    admin
+      .from("coaching_agreement_client_state")
+      .select("resign_requested_by")
+      .eq("client_id", clientId)
+      .maybeSingle(),
+  ]);
+  const senderId: string | null = st?.resign_requested_by ?? null;
+  const [assignedRes, senderRes, profileRes] = await Promise.all([
+    client?.assigned_coach_id
+      ? admin.from("coaches").select(COACH_COLUMNS).eq("id", client.assigned_coach_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    senderId
+      ? admin
+          .from("coaches")
+          .select(COACH_COLUMNS)
+          .eq("user_id", senderId)
+          .order("created_at")
+          .limit(1)
+      : Promise.resolve({ data: [] }),
+    senderId
+      ? admin.from("profiles").select("full_name").eq("id", senderId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const assigned = (assignedRes?.data ?? null) as CoachRow | null;
+  const sender = ((senderRes?.data ?? [])[0] ?? null) as CoachRow | null;
+  const coach = resolveAgreementCoach({ assigned, sender });
+  const sentBy = senderId
+    ? {
+        userId: senderId,
+        name: (sender && legalNameOfCoach(sender)) || profileRes?.data?.full_name?.trim() || null,
+      }
+    : null;
+  return { coach, sentBy };
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +263,8 @@ export const getMyAgreementState = createServerFn({ method: "GET" })
         .maybeSingle();
       if (error || !client) return { ...base, applicable: false, reason: "no_client" };
       // the coaching agreement is for coaching: a JF member never signs it
-      if ((client as any).service_tier === "self_serve") return { ...base, clientId, applicable: false, reason: "self_serve" };
+      if ((client as any).service_tier === "self_serve")
+        return { ...base, clientId, applicable: false, reason: "self_serve" };
 
       if (!isActiveClient(client)) {
         return { ...base, clientId, applicable: false, reason: "inactive" };
@@ -257,6 +312,8 @@ export type SigningContext = {
   clientId: string;
   contentHash: string;
   currentVersion: string;
+  /** The coach the agreement names for this client; the reader fills it into the text. */
+  coach: { name: string; source: AgreementCoach["source"] };
   state: AgreementState;
   isMinor: boolean;
   profile: {
@@ -292,6 +349,7 @@ export const getAgreementSigningContext = createServerFn({ method: "GET" })
       throw new Error("Your account isn't active, so there's nothing to sign.");
 
     const { state } = await loadAgreementForClient(supabase, client.id);
+    const { coach } = await loadAgreementCoach(await getAdminClient(), client.id);
     const { data: consentRows } = await supabase
       .from("legal_consent_preferences")
       .select("consent_key, granted")
@@ -303,6 +361,7 @@ export const getAgreementSigningContext = createServerFn({ method: "GET" })
       clientId: client.id,
       contentHash: await currentHash(),
       currentVersion: AGREEMENT_VERSION,
+      coach: { name: coach.name, source: coach.source },
       state,
       isMinor: isMinor(client.date_of_birth, new Date()),
       profile: {
@@ -356,6 +415,15 @@ export const signCoachingAgreement = createServerFn({ method: "POST" })
         "agreement_changed: The agreement was updated while you were reading it. Please reopen it and review the latest version.",
       );
     }
+
+    // 2b) They must have seen the coach the agreement names right now (it is part of the text).
+    const { coach, sentBy } = await loadAgreementCoach(supabaseAdmin, client.id);
+    if (data.coachName.trim() !== coach.name) {
+      throw new Error(
+        "coach_changed: Your coach was updated while you were reading. Please reopen the agreement to see the latest version.",
+      );
+    }
+    const personalized = personalizeAgreement(AGREEMENT_CONTENT, coach.name);
 
     // 3) Date of birth: the profile is authoritative when it has one.
     const now = new Date();
@@ -427,6 +495,14 @@ export const signCoachingAgreement = createServerFn({ method: "POST" })
       emergency_contact_2: d.emergencyContact2
         ? { name: d.emergencyContact2.name.trim(), phone: d.emergencyContact2.phone.trim() }
         : null,
+      // The name filled into {{coach}} in the text they signed, so the signed copy shows it exactly.
+      coach: {
+        name: coach.name,
+        source: coach.source,
+        coach_id: coach.coachId,
+        user_id: coach.userId,
+        sent_by: sentBy ? { user_id: sentBy.userId, name: sentBy.name } : null,
+      },
       payor: d.payor
         ? {
             name: d.payor.name.trim(),
@@ -452,7 +528,7 @@ export const signCoachingAgreement = createServerFn({ method: "POST" })
           }
         : null;
 
-    const acknowledgements = AGREEMENT_CONTENT.acknowledgements.map((a) => ({
+    const acknowledgements = personalized.acknowledgements.map((a) => ({
       id: a.id,
       short: a.short,
       text: a.text,
@@ -718,6 +794,7 @@ export const adminClientAgreementDetail = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const { isAdmin } = await assertStaffForClient(supabase, userId, data.clientId);
+    const { coach } = await loadAgreementCoach(await getAdminClient(), data.clientId);
 
     const { data: client } = await supabase
       .from("clients")
@@ -738,6 +815,10 @@ export const adminClientAgreementDetail = createServerFn({ method: "GET" })
 
     return {
       canManage: isAdmin,
+      // Admins, and the coach assigned to this client, can send it to sign.
+      canSend: true,
+      /** The coach a new signature would name. */
+      agreementCoach: coach.name,
       hasAccount: !!client.user_id,
       currentVersion: AGREEMENT_VERSION,
       state,
@@ -807,7 +888,7 @@ export const adminRequestAgreement = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => requestResignSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
+    const { isAdmin } = await assertStaffForClient(supabase, userId, data.clientId);
     const supabaseAdmin = await getAdminClient();
 
     const { data: client } = await supabaseAdmin
@@ -817,6 +898,16 @@ export const adminRequestAgreement = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!client) throw new Error("Client not found");
     if (!client.user_id) throw new Error("This client doesn't have an app account yet.");
+    if (!isAdmin) {
+      // A coach can send to their own clients, but only an admin can override an exemption.
+      const { data: current } = await supabaseAdmin
+        .from("coaching_agreement_client_state")
+        .select("exempt_kind")
+        .eq("client_id", client.id)
+        .maybeSingle();
+      if (current?.exempt_kind)
+        throw new Error("An admin marked this client as not needing to sign.");
+    }
 
     const { count } = await supabaseAdmin
       .from("coaching_agreement_signatures")
@@ -845,6 +936,7 @@ export const adminRequestAgreement = createServerFn({ method: "POST" })
       clientId: client.id,
       type: "requested",
       actorUserId: userId,
+      actorRole: isAdmin ? "admin" : "coach",
       details: { note, first_time: (count ?? 0) === 0 },
     });
 

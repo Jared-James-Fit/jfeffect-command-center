@@ -3,6 +3,7 @@ import { ArrowLeft, FileSignature } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgreementReader } from "@/components/coaching-agreement/agreement-reader";
 import { AGREEMENT_CONTENT } from "@/lib/coaching-agreement/content";
+import { personalizeAgreement } from "@/lib/coaching-agreement/coach";
 import { formatSignedDate } from "@/components/coaching-agreement/agreement-copy";
 import { useAuth } from "@/lib/auth";
 
@@ -28,7 +29,8 @@ export const Route = createFileRoute("/coaching-agreement")({
 
 function PublicCoachingAgreement() {
   const { user } = useAuth();
-  const c = AGREEMENT_CONTENT;
+  // The public copy: each client's own coach is filled in when they sign in the app.
+  const c = personalizeAgreement(AGREEMENT_CONTENT, null);
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6 sm:pt-10">

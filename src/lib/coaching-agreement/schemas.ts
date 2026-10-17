@@ -94,6 +94,8 @@ export const signPayloadSchema = z
     idempotencyKey: z.string().uuid(),
     /** Hash of the agreement the client actually reviewed; must equal the server's current hash. */
     contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    /** The coach name the client saw in the text; the server checks it is still the current one. */
+    coachName: z.string().trim().min(1).max(160),
     typedLegalName: z
       .string()
       .trim()

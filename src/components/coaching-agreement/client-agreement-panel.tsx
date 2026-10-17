@@ -116,6 +116,12 @@ export function ClientAgreementPanel({
             Version {latest.version} signed {formatSignedDateTime(latest.signedAt)} by{" "}
             <span className="font-semibold">{latest.typedName}</span>
             {latest.hasGuardian ? " with a parent or guardian" : ""}.
+            {latest.version !== data.currentVersion && (
+              <span className="block text-xs text-muted-foreground">
+                New clients sign version {data.currentVersion}. This signature stays valid, so
+                there&apos;s nothing more to do.
+              </span>
+            )}
           </p>
         )}
         {data.state.state === "needs_signature" && (
@@ -134,6 +140,13 @@ export function ClientAgreementPanel({
           <p>
             {EXEMPT_LABEL[data.state.kind]}
             {data.state.note ? `: ${data.state.note}` : "."}
+          </p>
+        )}
+        {outstanding && data.agreementCoach && (
+          <p className="text-xs text-muted-foreground">
+            Their agreement names{" "}
+            <span className="font-semibold text-foreground">{data.agreementCoach}</span> as their
+            coach.
           </p>
         )}
         {data.resignRequestedAt && outstanding && (
@@ -162,7 +175,7 @@ export function ClientAgreementPanel({
             View signed copy
           </Button>
         )}
-        {data.canManage && data.hasAccount && data.state.state !== "exempt" && (
+        {data.canSend && data.hasAccount && data.state.state !== "exempt" && (
           <Button type="button" onClick={() => setSendOpen(true)}>
             {data.state.state === "signed"
               ? "Send another to sign"

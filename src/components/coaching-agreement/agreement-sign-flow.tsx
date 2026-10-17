@@ -45,6 +45,7 @@ import {
   AGREEMENT_CONTENT_JSON,
   type AgreementContent,
 } from "@/lib/coaching-agreement/content";
+import { personalizeAgreement } from "@/lib/coaching-agreement/coach";
 import { sha256HexAsync } from "@/lib/coaching-agreement/hash";
 import { isMinor } from "@/lib/coaching-agreement/rules";
 import {
@@ -206,7 +207,6 @@ export function AgreementSignFlow({
   const online = useOnlineStatus();
   const getContext = useServerFn(getAgreementSigningContext);
   const sign = useServerFn(signCoachingAgreement);
-  const content: AgreementContent = AGREEMENT_CONTENT;
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -260,6 +260,13 @@ export function AgreementSignFlow({
     refetchOnWindowFocus: false,
   });
   const ctx = ctxQuery.data;
+  // The text with this client's coach filled in. The fingerprint (localHash) stays the published
+  // text's, so the stale-version check is unaffected; the server re-checks the coach name.
+  const coachName = ctx?.coach?.name ?? null;
+  const content: AgreementContent = useMemo(
+    () => personalizeAgreement(AGREEMENT_CONTENT, coachName),
+    [coachName],
+  );
 
   // Restore a draft, or start from the profile.
   useEffect(() => {
@@ -461,6 +468,7 @@ export function AgreementSignFlow({
         data: {
           idempotencyKey: idempotencyKey.current,
           contentHash: localHash,
+          coachName: ctx.coach.name,
           typedLegalName: typedName.trim(),
           // Under 18: the parent or guardian provides the signature; the minor's typed name
           // is their own acknowledgement.
