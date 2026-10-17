@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { epley1RM } from "@/lib/analytics/e1rm";
+import { inWorkoutOrder } from "@/lib/logged-set-order";
 
 const sb = supabase as any;
 
@@ -74,6 +76,30 @@ function bestSet(results: Result[]): Result | null {
     if (lb !== la) return lb - la;
     return (b.actual_reps ?? 0) - (a.actual_reps ?? 0);
   })[0];
+}
+
+/**
+ * The latest session's top set: of the sets in the workout done last, the
+ * highest e1RM (a tie goes to the earlier set in the workout). Never "the set
+ * saved last": sets filled down together save in any order.
+ */
+export function latestSessionTop(results: Result[], rows: Pick<Row, "id" | "day_id" | "sort_order">[]): Result | null {
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const done = results.filter((r) => r.completed_at);
+  const ordered = inWorkoutOrder(done.length ? done : results, (r) => ({
+    workout: rowById.get(r.row_id)?.day_id,
+    at: r.completed_at,
+    rowOrder: rowById.get(r.row_id)?.sort_order,
+    rowId: r.row_id,
+    setIndex: r.set_index,
+  }));
+  const last = ordered[ordered.length - 1];
+  if (!last) return null;
+  const day = rowById.get(last.row_id)?.day_id;
+  const session = day ? ordered.filter((r) => rowById.get(r.row_id)?.day_id === day) : [last];
+  // compare in kg so a kg set and a lb set never mix
+  const e1 = (r: Result) => epley1RM((r.actual_load ?? 0) / (r.actual_load_unit === "lb" ? 2.2046226218 : 1), r.actual_reps ?? 0);
+  return session.reduce((top, r) => (e1(r) > e1(top) ? r : top));
 }
 
 function fmtSet(s: Result | null): string {
@@ -300,8 +326,7 @@ function ExerciseView({ a, b, loadingA, loadingB }: { a: BlockData | null; b: Bl
   const bResults = selected ? resultsFor(b, selected) : [];
   const aBest = bestSet(aResults);
   const bBest = bestSet(bResults);
-  const recent = (rs: Result[]) =>
-    [...rs].sort((x, y) => (y.completed_at ?? "").localeCompare(x.completed_at ?? ""))[0] ?? null;
+  const recent = (d: BlockData | null, rs: Result[]) => latestSessionTop(rs, d?.rows ?? []);
 
   const delta = aBest && bBest && aBest.actual_load != null && bBest.actual_load != null
     ? aBest.actual_load - bBest.actual_load : null;
@@ -322,8 +347,8 @@ function ExerciseView({ a, b, loadingA, loadingB }: { a: BlockData | null; b: Bl
         <Card className="p-6 text-center text-sm text-muted-foreground">No logged sets found for this exercise yet.</Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <ExerciseCard label={a?.block.name ?? "Block A"} best={aBest} recent={recent(aResults)} count={aResults.length} tone="primary" />
-          <ExerciseCard label={b?.block.name ?? "Block B"} best={bBest} recent={recent(bResults)} count={bResults.length} />
+          <ExerciseCard label={a?.block.name ?? "Block A"} best={aBest} recent={recent(a, aResults)} count={aResults.length} tone="primary" />
+          <ExerciseCard label={b?.block.name ?? "Block B"} best={bBest} recent={recent(b, bResults)} count={bResults.length} />
         </div>
       )}
 
@@ -347,7 +372,7 @@ function ExerciseCard({ label, best, recent, count, tone }: { label: string; bes
       <div className="truncate text-sm font-bold">{label}</div>
       <div className="mt-2 space-y-1 text-xs">
         <div className="flex justify-between gap-2"><span className="text-muted-foreground">Best set</span><span className="font-semibold">{fmtSet(best)}</span></div>
-        <div className="flex justify-between gap-2"><span className="text-muted-foreground">Most recent</span><span>{fmtSet(recent)}</span></div>
+        <div className="flex justify-between gap-2"><span className="text-muted-foreground">Latest session</span><span>{fmtSet(recent)}</span></div>
         <div className="flex justify-between gap-2"><span className="text-muted-foreground">Sets logged</span><span>{count}</span></div>
       </div>
       {recent?.notes && <div className="mt-2 line-clamp-2 rounded bg-secondary/40 p-1.5 text-[11px] text-foreground/80">"{recent.notes}"</div>}

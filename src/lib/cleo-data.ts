@@ -5,6 +5,8 @@
  * No I/O, so the same rules hold in tests.
  */
 
+import { inWorkoutOrder } from "@/lib/logged-set-order";
+
 const LB_PER_KG = 2.2046226218;
 
 function norm(s: string): string {
@@ -28,8 +30,12 @@ export type LoggedSet = {
   completed_at: string;
   /** The program row the set was logged against (to correct its exercise). */
   row_id?: string | null;
+  /** The workout (pl_days id) and the row's place in it: the order sets were done. */
+  day_id?: string | null;
+  row_order?: number | null;
   exercise: string;
   day_title: string | null;
+  /** 1-based set number. */
   set_index: number | null;
   entered_value: number | null;
   entered_unit: string | null;
@@ -84,10 +90,20 @@ export function dayIn(iso: string, tz: string): string {
 
 export type Session = { date: string; title: string | null; exercises: Array<{ name: string; rowId?: string | null; sets: LoggedSet[] }> };
 
-/** Sets grouped by training day (newest first), then by exercise in the order they were done. */
+/**
+ * Sets grouped by training day (newest first), then by exercise in the order
+ * they were done: the row's place in the workout, then the set number. Never
+ * by save time: sets filled down together save in any order.
+ */
 export function groupSessions(sets: LoggedSet[], tz: string): Session[] {
   const byDay = new Map<string, Session>();
-  const sorted = [...sets].sort((a, b) => a.completed_at.localeCompare(b.completed_at));
+  const sorted = inWorkoutOrder(sets, (s) => ({
+    workout: s.day_id ?? dayIn(s.completed_at, tz),
+    at: s.completed_at,
+    rowOrder: s.row_order,
+    rowId: s.row_id,
+    setIndex: s.set_index,
+  }));
   for (const s of sorted) {
     const date = dayIn(s.completed_at, tz);
     let session = byDay.get(date);
@@ -124,7 +140,7 @@ export function formatSessions(sessions: Session[], unit: "kg" | "lb" = "lb"): s
         .sort((a, b) => (b.e1 ?? 0) - (a.e1 ?? 0))[0];
       const e1 = top?.e1 != null ? ` (top set e1RM ~${round(unit === "kg" ? top.e1 : top.e1 * LB_PER_KG, 1)} ${unit})` : "";
       lines.push(`  ${ex.name}${e1}${ex.rowId ? ` (row id ${ex.rowId})` : ""}`);
-      for (const set of ex.sets) lines.push(`    ${set.set_index != null ? `set ${set.set_index + 1}: ` : ""}${formatSet(set, unit)}`);
+      for (const set of ex.sets) lines.push(`    ${set.set_index != null ? `set ${set.set_index}: ` : ""}${formatSet(set, unit)}`);
     }
   }
   return lines.join("\n");

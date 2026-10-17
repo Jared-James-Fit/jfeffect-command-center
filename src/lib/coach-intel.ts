@@ -3,6 +3,8 @@ import { epley1RM } from "@/lib/pl-programs";
 import { todayLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
 import { isPrimaryProgramBlock } from "@/lib/at-home-backup";
+import { inWorkoutOrder } from "@/lib/logged-set-order";
+import { fetchAllPages } from "@/lib/supabase-paginate";
 
 const sb = supabase as any;
 
@@ -84,6 +86,47 @@ function exerciseOf(r: any): string {
     ?? "Unknown";
 }
 
+/**
+ * e1RM PRs in a client's recent sets over `baseline` (best e1RM per
+ * `${clientId}::${exercise}` before the window), newest first. The sets are
+ * walked in the order they were done (workouts by time, then the row's place
+ * and set number, never save time: fill-down saves sets together in any
+ * order), so the running best rises the way the client lifted.
+ */
+export function findPrEvents(clientId: string, results: any[], baseline: Map<string, number>): PrEvent[] {
+  const ordered = inWorkoutOrder(results, (r) => ({
+    workout: r.pl_exercise_rows?.day_id,
+    at: r.completed_at,
+    rowOrder: r.pl_exercise_rows?.sort_order,
+    rowId: r.row_id,
+    setIndex: r.set_index,
+  }));
+  const localBaseline = new Map(baseline);
+  const prsAll: PrEvent[] = [];
+  for (const r of ordered) {
+    const load = Number(r.actual_load) || 0;
+    const reps = Number(r.actual_reps) || 0;
+    const kg = Number(r.normalized_kg) || 0;
+    if (!load || !reps || !kg || (r.load_type ?? "external") !== "external") continue;
+    const ex = exerciseOf(r);
+    const key = `${clientId}::${ex}`;
+    const est = epley1RM(kg, reps);
+    const base = localBaseline.get(key) ?? 0;
+    if (base > 0 && est > base + 0.25) {
+      // Display in the set's own unit; comparison above is unit-safe.
+      const toSetUnit = load / kg;
+      prsAll.push({
+        client_id: clientId, exercise: ex, est_1rm: Math.round(est * toSetUnit), baseline: Math.round(base * toSetUnit),
+        actual_load: load, actual_reps: reps, date: r.completed_at, result_id: r.id,
+        day_id: r.pl_exercise_rows?.day_id ?? null, alert_key: `pr:${r.id}`,
+      });
+      localBaseline.set(key, est);
+    }
+  }
+  // newest first: the last workout, its last set first
+  return prsAll.reverse();
+}
+
 export async function getCoachIntel(opts?: { coachId?: string | null }): Promise<ClientIntel[]> {
   const now = new Date();
   const windowStart = new Date(now); windowStart.setDate(now.getDate() - 14);
@@ -138,18 +181,26 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
     .in("client_id", clientIds)
     .gte("completed_at", recentCutoff.toISOString());
 
-  const { data: results = [] } = await sb
+  // Paged (PostgREST stops at 1,000 rows without a word): a cut-short read
+  // drops recent sets, and a cut-short baseline flags old lifts as PRs.
+  const results = await fetchAllPages((from, to) => sb
     .from("pl_row_results")
-    .select("id, client_id, actual_load, actual_reps, normalized_kg, load_type, notes, completed_at, pl_exercise_rows(day_id, exercise_name_override, exercises(name))")
+    .select("id, client_id, row_id, set_index, actual_load, actual_reps, normalized_kg, load_type, notes, completed_at, pl_exercise_rows(day_id, sort_order, exercise_name_override, exercises(name))")
     .in("client_id", clientIds)
-    .gte("completed_at", recentCutoff.toISOString());
+    .gte("completed_at", recentCutoff.toISOString())
+    .order("id")
+    .range(from, to));
 
-  const { data: allResults = [] } = await sb
+  // The PR baseline: everything before the 30-day window.
+  const allResults = await fetchAllPages((from, to) => sb
     .from("pl_row_results")
     .select("client_id, actual_load, actual_reps, normalized_kg, load_type, completed_at, pl_exercise_rows(exercise_name_override, exercises(name))")
     .in("client_id", clientIds)
     .not("actual_load", "is", null)
-    .not("actual_reps", "is", null);
+    .not("actual_reps", "is", null)
+    .lt("completed_at", recentCutoff.toISOString())
+    .order("id")
+    .range(from, to));
 
   const baseline = new Map<string, number>();
   for (const r of allResults as any[]) {
@@ -234,29 +285,7 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
     const duration_delta_min = deltas.length ? Math.round(deltas.reduce((s, v) => s + v, 0) / deltas.length) : null;
 
     const myResults = (results as any[]).filter((r) => r.client_id === c.id);
-    const localBaseline = new Map(baseline);
-    const prsAll: PrEvent[] = [];
-    for (const r of myResults) {
-      const load = Number(r.actual_load) || 0;
-      const reps = Number(r.actual_reps) || 0;
-      const kg = Number(r.normalized_kg) || 0;
-      if (!load || !reps || !kg || (r.load_type ?? "external") !== "external") continue;
-      const ex = exerciseOf(r);
-      const key = `${c.id}::${ex}`;
-      const est = epley1RM(kg, reps);
-      const base = localBaseline.get(key) ?? 0;
-      if (base > 0 && est > base + 0.25) {
-        // Display in the set's own unit; comparison above is unit-safe.
-        const toSetUnit = load / kg;
-        prsAll.push({
-          client_id: c.id, exercise: ex, est_1rm: Math.round(est * toSetUnit), baseline: Math.round(base * toSetUnit),
-          actual_load: load, actual_reps: reps, date: r.completed_at, result_id: r.id,
-          day_id: r.pl_exercise_rows?.day_id ?? null, alert_key: `pr:${r.id}`,
-        });
-        localBaseline.set(key, est);
-      }
-    }
-    const recent_prs = prsAll.filter((p) => !reviewedKeys.has(`${c.id}::${p.alert_key}`));
+    const recent_prs = findPrEvents(c.id, myResults, baseline).filter((p) => !reviewedKeys.has(`${c.id}::${p.alert_key}`));
 
     const recent_notes: NoteEntry[] = [];
     for (const cm of myComp) {

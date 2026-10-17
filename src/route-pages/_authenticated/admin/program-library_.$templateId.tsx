@@ -688,7 +688,8 @@ export function TemplateEditor() {
       } else {
         await persist(meta, payload);
       }
-      setDirty(false);
+      // an edit made while that was saving is still unsaved: it keeps its autosave
+      if (!autosave.hasPending()) setDirty(false);
     } finally { setSaving(false); }
   };
 

@@ -9,7 +9,7 @@ const set = (over: Partial<LoggedSet> = {}): LoggedSet => ({
   completed_at: "2026-10-08T23:10:00Z",
   exercise: "High-Bar Back Squat",
   day_title: "Lower A",
-  set_index: 0,
+  set_index: 1,
   entered_value: 315,
   entered_unit: "lb",
   normalized_kg: 142.88,
@@ -46,7 +46,7 @@ describe("logged sets", () => {
       [
         set({ completed_at: "2026-10-01T22:00:00Z", reps: 5, normalized_kg: 130 }),
         set({ is_working_set: false, reps: 5, entered_value: 225, normalized_kg: 102 }),
-        set({ set_index: 1 }),
+        set({ set_index: 2 }),
       ],
       "America/Winnipeg",
     );
@@ -56,6 +56,31 @@ describe("logged sets", () => {
     expect(out).toContain("225 lb x 5 @RPE 8 (warm-up)");
     expect(formatSessions(groupSessions([set({ row_id: "row-1" })], "America/Winnipeg"))).toContain("High-Bar Back Squat (top set e1RM ~346 lb) (row id row-1)");
     expect(out).toMatch(/top set e1RM ~346 lb/);
+    expect(out).toContain("set 1: 225 lb x 5 @RPE 8 (warm-up)");
+    expect(out).toContain("set 2: 315 lb x 3 @RPE 8");
+    expect(out).not.toContain("set 0:");
+  });
+
+  it("lists a workout's sets in the order they were done, never by when they saved", () => {
+    // fill-down saved bench 3, 1, 2 at the same second; squat (row 0) was first
+    const at = (s: number) => `2026-10-08T23:10:0${s}Z`;
+    const bench = (set_index: number, s: number) =>
+      set({ day_id: "day-1", row_id: "bench", row_order: 1, exercise: "Bench Press", set_index, completed_at: at(s), reps: set_index });
+    const sessions = groupSessions(
+      [
+        bench(3, 1),
+        bench(1, 2),
+        set({ day_id: "day-1", row_id: "squat", row_order: 0, set_index: 2, completed_at: at(3) }),
+        bench(2, 4),
+        set({ day_id: "day-1", row_id: "squat", row_order: 0, set_index: 1, completed_at: at(5) }),
+      ],
+      "America/Winnipeg",
+    );
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].exercises.map((e) => e.name)).toEqual(["High-Bar Back Squat", "Bench Press"]);
+    expect(sessions[0].exercises.map((e) => e.sets.map((x) => x.set_index))).toEqual([[1, 2], [1, 2, 3]]);
+    const lines = formatSessions(sessions, "lb").split("\n").filter((l) => l.includes("Bench") || l.startsWith("    set"));
+    expect(lines.slice(-3)).toEqual(["    set 1: 315 lb x 1 @RPE 8", "    set 2: 315 lb x 2 @RPE 8", "    set 3: 315 lb x 3 @RPE 8"]);
   });
 
   it("only estimates a 1RM from 1 to 12 reps", () => {

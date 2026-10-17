@@ -52,8 +52,12 @@ function MemberPlanEditor() {
   const [equip, setEquip] = useState("");
   const [tags, setTags] = useState("");
 
+  // Fill the fields once per plan: a refetch (every save refreshes) must never
+  // overwrite what's being typed; another coach's change shows as a conflict.
+  const hydratedPlanRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!plan) return;
+    if (!plan || hydratedPlanRef.current === planId) return;
+    hydratedPlanRef.current = planId;
     setName(plan.name ?? "");
     setDescription(plan.description ?? "");
     setAccess(plan.required_access_level ?? "app_membership");

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -57,8 +57,12 @@ function AccountPage() {
     },
   });
 
+  // Fill the form once per account: a refetch (after a save, or coming back
+  // to the app) must never overwrite what's being typed.
+  const hydratedIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!client) return;
+    if (!client || hydratedIdRef.current === client.id) return;
+    hydratedIdRef.current = client.id;
     const [first, ...rest] = (client.full_name ?? "").split(" ");
     setForm({
       ...client,

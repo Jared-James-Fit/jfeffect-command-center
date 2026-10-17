@@ -708,7 +708,8 @@ function BlockEditor() {
     } else {
       await persist();
     }
-    setDirty(false);
+    // an edit made while that was saving is still unsaved: it keeps its autosave
+    if (!autosave.hasPending()) setDirty(false);
   };
 
   // Restore the coach's vertical scroll for this block. Scoped per

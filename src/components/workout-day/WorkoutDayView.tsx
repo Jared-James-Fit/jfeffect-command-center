@@ -88,7 +88,7 @@ import { applyOptimisticSetResult } from "@/lib/optimistic-set-result";
 import { fetchAllPages } from "@/lib/supabase-paginate";
 import { getClientBodyweightKgSeries, smoothedBodyweightKgAt, type BodyweightKgPoint } from "@/lib/bodyweight";
 import { offersLastWarmup, pickFinalWarmup, warmupInUnit } from "@/lib/final-warmup";
-import { enqueueOfflineWrite, registerQueueHandler } from "@/lib/workout-offline-queue";
+import { enqueueOfflineWrite, registerQueueHandler, supersedeOfflineWrite } from "@/lib/workout-offline-queue";
 import { saveOfflineCompletion } from "@/lib/offline/workout-completion-store";
 import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-timer";
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
@@ -1844,6 +1844,7 @@ function WorkoutDay({
           actAsClientId: isImpersonating && client?.id ? client.id : null,
         } as any,
       });
+      supersedeOfflineWrite(`portal_meta:${dayId}:${client.id}`);
       if (!completion) qc.invalidateQueries({ queryKey: ["pl-day-completion", dayId] });
     },
   });
@@ -2376,13 +2377,14 @@ function WorkoutDay({
     else closeStory();
   }, [dayId, saveWorkoutView, openStory, closeStory]);
 
-  const jumpStory = useCallback((i: number) => {
+  const jumpStory = useCallback((i: number, opts?: { instant?: boolean }) => {
     const el = storyListRef.current;
     if (!el) return;
     const n = Math.max(0, Math.min(storyRowIds.length - 1, i));
     // a set being typed saves on blur, and the keyboard doesn't ride along
     (document.activeElement as HTMLElement | null)?.blur?.();
-    el.scrollTo({ left: n * el.clientWidth, behavior: storyReduced() ? "auto" : "smooth" });
+    // a swipe up / down brings its own (vertical) entrance, so no sideways glide
+    el.scrollTo({ left: n * el.clientWidth, behavior: opts?.instant || storyReduced() ? "auto" : "smooth" });
   }, [storyRowIds.length]);
 
   // Opening: land on the right exercise before the first frame shows.
@@ -4190,9 +4192,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         actual_load_unit: payload.unit,
         entered_value: loadNum,
         entered_unit: payload.unit,
-        actual_reps: repsNum,
-        actual_rpe: payload.rpe || null,
-        actual_rpe_num: rpeNum,
+        // a field the source set doesn't have keeps the set's own (the screen
+        // keeps showing it, so blanking it here would hide a wiped value)
+        actual_reps: repsNum ?? ex?.actual_reps ?? null,
+        actual_rpe: payload.rpe || ex?.actual_rpe || null,
+        actual_rpe_num: rpeNum ?? ex?.actual_rpe_num ?? null,
         load_type: fillLoadType,
         is_bodyweight: fillLoadType === "bodyweight",
         completed_at: null, // Draft only — must be confirmed per set
@@ -5293,6 +5297,21 @@ function SetRow({
   const committedLoadRef = useRef<{ load: string; loadType: LoadType } | null>(null);
   // Keep a live reference to the latest server result so the force-hydrate
   // effect can never read a stale closure when parent bumps fillToken.
+  // Values an effect here puts on screen that are already saved, or only shown
+  // (a unit switch, a fill from the set above, Fill All, undo / redo): adopted
+  // as the saved state once they've rendered (the effect after useAutosave),
+  // so they never save a second time — a fill-down must not turn untouched
+  // sets into drafts. `keepUnsaved`: a change of the person's that hasn't
+  // saved yet (waiting, retrying after a failure, offline) isn't adopted; it
+  // saves with the rest.
+  // 0 idle · 1 applied (values not rendered yet) · 2 rendered: adopt as saved
+  const adoptStepRef = useRef<0 | 1 | 2>(0);
+  const [, setAdoptTick] = useState(0);
+  const adoptShownAsSaved = (keepUnsaved: boolean) => {
+    if (keepUnsaved && saveRef.current?.hasPending()) return;
+    adoptStepRef.current = 1;
+    setAdoptTick((n) => n + 1);
+  };
   const latestExistingRef = useRef(existing);
   useEffect(() => { latestExistingRef.current = existing; }, [existing]);
   useEffect(() => { focusedFieldRef.current = focusedField; }, [focusedField]);
@@ -5358,7 +5377,7 @@ function SetRow({
     } else {
       setLoadUnit(unit);
     }
-    queueMicrotask(() => { saveRef.current?.markClean(); });
+    adoptShownAsSaved(true);
   }, [unit]);
 
   // Parent-initiated "Fill All Sets" / "Apply to remaining" — force-hydrate
@@ -5401,7 +5420,7 @@ function SetRow({
       if (latest?.actual_rpe_num != null) setRpe(String(latest.actual_rpe_num));
       else if (latest?.actual_rpe != null) setRpe(latest.actual_rpe);
     }
-    queueMicrotask(() => { saveRef.current?.markClean(); });
+    adoptShownAsSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceHydrateToken]);
 
@@ -5437,7 +5456,7 @@ function SetRow({
         durationSeconds: durationSec,
       }),
     );
-    queueMicrotask(() => { saveRef.current?.markClean(); });
+    adoptShownAsSaved(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cascade?.token]);
 
@@ -5446,9 +5465,6 @@ function SetRow({
   // unsaved draft, and adopt it as the saved baseline so nothing writes back.
   // Only a new token applies, never one that was already there at mount.
   const seenRestoreRef = useRef(restore?.token ?? 0);
-  // 0 idle · 1 restore applied (values not rendered yet) · 2 rendered: adopt as saved
-  const restoreCleanRef = useRef<0 | 1 | 2>(0);
-  const [, setRestoreSettled] = useState(0);
   useEffect(() => {
     if (!restore || restore.token === seenRestoreRef.current) return;
     seenRestoreRef.current = restore.token;
@@ -5468,8 +5484,7 @@ function SetRow({
     setRpeEdited(src?.actual_rpe_num != null || !!src?.actual_rpe);
     setVelocity(src?.mean_concentric_velocity_mps != null ? String(src.mean_concentric_velocity_mps) : "");
     setDurationSec(src?.completed_duration_seconds != null ? Number(src.completed_duration_seconds) : null);
-    restoreCleanRef.current = 1;
-    setRestoreSettled((n) => n + 1);
+    adoptShownAsSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore?.token]);
 
@@ -5504,8 +5519,12 @@ function SetRow({
     // focus cannot leave workout inputs unsaved. The server hydration effect
     // still refuses to overwrite the focused field, so active typing is safe.
     enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || velocity.length > 0 || bw || !!existing),
-    onPermanentFailure: ({ value }) => {
-      if (!clientId) return;
+    // A set that can't save right now (offline, or its first failed try) goes
+    // to the durable queue at once, so leaving the workout or the app closing
+    // can't lose it; the row's own later save supersedes it.
+    permanentFailureAfter: 1,
+    onPermanentFailure: ({ value, error }) => {
+      if (!clientId || (error as { invalid?: boolean } | null)?.invalid) return;
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const velocityNum = value.velocity ? Number(value.velocity) : null;
@@ -5560,10 +5579,12 @@ function SetRow({
       const repsNum = reps ? parseInt(reps, 10) : null;
       const rpeNum = rpe ? Number(rpe) : null;
       const velocityNum = velocity ? Number(velocity) : null;
-      if (velocity && (velocityNum == null || !isFinite(velocityNum) || velocityNum <= 0 || velocityNum > 3.5)) throw new Error("Velocity must be 0.01–3.50 m/s");
-      if (load && (displayLoadNum == null || !isFinite(displayLoadNum) || displayLoadNum < 0)) throw new Error("Weight must be a number");
-      if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw new Error("Reps must be a whole number");
-      if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw new Error("RPE must be 0–10");
+      // a value that can't be saved as typed (never queued: retrying can't fix it)
+      const invalid = (message: string) => Object.assign(new Error(message), { invalid: true });
+      if (velocity && (velocityNum == null || !isFinite(velocityNum) || velocityNum <= 0 || velocityNum > 3.5)) throw invalid("Velocity must be 0.01–3.50 m/s");
+      if (load && (displayLoadNum == null || !isFinite(displayLoadNum) || displayLoadNum < 0)) throw invalid("Weight must be a number");
+      if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw invalid("Reps must be a whole number");
+      if (rpe && (rpeNum == null || !isFinite(rpeNum) || rpeNum < 0 || rpeNum > 10)) throw invalid("RPE must be 0–10");
       const persistedLoad = bw
         ? { value: 0, unit }
         : persistedLoadForDisplayValue(load, loadUnit, existing);
@@ -5674,6 +5695,8 @@ function SetRow({
         void qc.invalidateQueries({ queryKey: ["pl-day-results", workoutId] });
         throw writeError;
       }
+      // this set's older offline copy (queued after earlier failures) must not replay over it
+      supersedeOfflineWrite(`portal_set:${rowId}:${clientId}:${setIndex}`);
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       // Block the server-reset effect for 3 s after a successful save so the
@@ -5711,17 +5734,18 @@ function SetRow({
   // Keep the forward-ref synced with the latest autosave handle so the
   // unit-toggle effect above can call markClean() / retry() safely.
   saveRef.current = save;
-  // A restore's values are the saved state. Its state updates render on the
-  // next pass, so adopt them there — after the autosave hook has seen them —
-  // never in the restore's own pass (that would adopt the old values and
-  // count the restored ones as unsaved). Then one more render so the row's
-  // save badge reads the clean state.
+  // adoptShownAsSaved: the effect's state updates render on a later pass, so
+  // adopt them there — after the autosave hook has seen them — never in the
+  // effect's own pass (that would adopt the old values and count the shown
+  // ones as unsaved, saving them again). Each step forces the next render so
+  // it never waits for (and adopts) a later edit. Then one more render so the
+  // row's save badge reads the clean state.
   useEffect(() => {
-    if (restoreCleanRef.current === 0) return;
-    if (restoreCleanRef.current === 1) { restoreCleanRef.current = 2; return; }
-    restoreCleanRef.current = 0;
+    if (adoptStepRef.current === 0) return;
+    if (adoptStepRef.current === 1) { adoptStepRef.current = 2; setAdoptTick((n) => n + 1); return; }
+    adoptStepRef.current = 0;
     save.markClean();
-    setRestoreSettled((n) => n + 1);
+    setAdoptTick((n) => n + 1);
   });
 
   // Canonical "commit now" signal for the inline weight cell.
@@ -5992,7 +6016,7 @@ function SetRow({
     // Marked edited so the prescription pre-fill can't snap it back.
     if (fieldCascade.field === "reps") { setReps(fieldCascade.value); setRepsEdited(true); }
     else { setRpe(fieldCascade.value); setRpeEdited(true); }
-    queueMicrotask(() => { saveRef.current?.markClean(); });
+    adoptShownAsSaved(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fieldCascade?.token]);
 
@@ -6111,6 +6135,9 @@ function SetRow({
           if (error) throw error;
         }
       }
+      // it carries the whole set: older queued copies must not replay over it
+      supersedeOfflineWrite(`portal_set:${rowId}:${clientId}:${setIndex}`);
+      supersedeOfflineWrite(`portal_set_time:${rowId}:${clientId}:${setIndex}`);
       await qc.refetchQueries({ queryKey: ["pl-day-results", workoutId] });
       onChange();
       if (!existing?.completed_at) onSetCompleted?.(setIndex);
