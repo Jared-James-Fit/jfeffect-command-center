@@ -8,10 +8,11 @@ import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs
 /**
  * Focus view (stored as "story"): the workout one exercise at a time, full
  * screen. Tap through the exercises like Crew's stories (the left third goes
- * back, anywhere else forward) or use ‹ / Next; the bars up top show where you
- * are and what's done. A sideways swipe is the card's own (swipe to delete). It's the same exercise cards as the list, laid out
- * side by side (WorkoutDayView switches the list's classes), so switching view
- * never reloads a card or loses what's typed into it.
+ * back, anywhere else forward), swipe up for the next and down to go back, or
+ * use ‹ / Next; the bars up top show where you are and what's done. A sideways
+ * swipe is the card's own (swipe to delete). It's the same exercise cards as
+ * the list, laid out side by side (WorkoutDayView switches the list's
+ * classes), so switching view never reloads a card or loses what's typed.
  */
 
 /**
@@ -40,6 +41,62 @@ export function focusTapIgnored(target: EventTarget | null): boolean {
 export function focusTapDirection(x: number, width: number): -1 | 1 {
   return x < width / 3 ? -1 : 1;
 }
+
+/** A swipe up or down this long moves to the next / previous exercise… */
+export const SWIPE_COMMIT_PX = 72;
+/** …or a quick flick: at least this long, moving this fast as the finger lifts (px per ms). */
+export const FLICK_MIN_PX = 28;
+export const FLICK_PX_PER_MS = 0.4;
+/** The flick's speed is read over the finger's last moments, not the whole drag… */
+export const FLICK_WINDOW_MS = 100;
+/** …and a finger that stopped this long before lifting wasn't flicking. */
+export const FLICK_IDLE_MS = 80;
+
+/**
+ * Where a swipe up or down goes: up (the finger moves up) is the next
+ * exercise, down the one before; 0 stays. `speed` is how fast the finger was
+ * still going that way as it lifted (px per ms). A long card scrolls first: up
+ * only from its bottom, down only from its top (where it was when the finger
+ * went down), so reading a long card never skips it.
+ */
+export function focusSwipeDirection(s: { dy: number; speed: number; atTop: boolean; atBottom: boolean }): -1 | 0 | 1 {
+  if (s.dy === 0) return 0;
+  const dir = s.dy < 0 ? 1 : -1;
+  if (dir === 1 ? !s.atBottom : !s.atTop) return 0;
+  const dist = Math.abs(s.dy);
+  if (dist >= SWIPE_COMMIT_PX) return dir;
+  return dist >= FLICK_MIN_PX && s.speed >= FLICK_PX_PER_MS ? dir : 0;
+}
+
+/**
+ * How fast the finger was moving along dy's direction as it lifted at `liftT`
+ * (px per ms): over its last FLICK_WINDOW_MS of moves, 0 if it had stopped.
+ */
+export function flickSpeed(samples: ReadonlyArray<{ y: number; t: number }>, dy: number, liftT: number): number {
+  if (samples.length < 2 || dy === 0) return 0;
+  const last = samples[samples.length - 1];
+  if (liftT - last.t > FLICK_IDLE_MS) return 0;
+  let first = samples[samples.length - 2];
+  // pulled back before letting go: not a flick that way
+  if ((last.y - first.y) * Math.sign(dy) < 0) return 0;
+  for (let i = samples.length - 2; i >= 0 && last.t - samples[i].t <= FLICK_WINDOW_MS; i--) first = samples[i];
+  const dt = Math.max(1, last.t - first.t);
+  return Math.max(0, ((last.y - first.y) * Math.sign(dy)) / dt);
+}
+
+/** Something between the finger and the screen that scrolls up and down by itself (a notes box): its drag is a scroll. */
+function scrollsOnItsOwn(from: Element | null, slide: HTMLElement): boolean {
+  for (let n = from; n && n !== slide; n = n.parentElement) {
+    if (n instanceof HTMLTextAreaElement) return true;
+    if (n.scrollHeight > n.clientHeight + 1) {
+      const oy = getComputedStyle(n).overflowY;
+      if (oy === "auto" || oy === "scroll") return true;
+    }
+  }
+  return false;
+}
+
+const TYPING = 'input, textarea, select, [contenteditable="true"]';
 
 /** Where story view opens: the exercise you were looking at, or the next one not done yet after it. */
 export function pickStoryStart(order: string[], done: ReadonlySet<string>, from: string | null): number {
@@ -197,7 +254,8 @@ export function StoryChrome({
   timer?: ReactNode;
   /** What the last exercise's button does. */
   finish: StoryFinish;
-  onJump: (index: number) => void;
+  /** Move to an exercise (`instant`: no sideways glide, a swipe brings its own). */
+  onJump: (index: number, opts?: { instant?: boolean }) => void;
   /** The List button: back to the list, and the list is the saved choice again. */
   onExit: () => void;
   /** "Back to the list" at the end of a finished workout: just for now. */
@@ -240,6 +298,9 @@ export function StoryChrome({
   // Quick taps queue: each one moves on from where the last one was going.
   // A chevron flashes on the side that was tapped; at either end it nudges and
   // the bottom button pulses, so a tap always shows it landed.
+  // Swipe up / down (touch): the card follows the finger, and a long enough
+  // swipe or a quick flick moves on, the next card rising in from where the
+  // finger went. A long card scrolls first (focusSwipeDirection).
   const latest = useRef({ index, count, onJump });
   latest.current = { index, count, onJump };
   const [flash, setFlash] = useState<{ dir: -1 | 1; k: number; end: boolean } | null>(null);
@@ -249,19 +310,32 @@ export function StoryChrome({
     if (!el) return;
     let heading: number | null = null; // where the last tap sent us, until we get there
     let settle: number | undefined;
-    const go = (dir: -1 | 1) => {
+    const go = (dir: -1 | 1, how: "tap" | "swipe" = "tap"): boolean => {
       const { index: i, count: n, onJump: jump } = latest.current;
       const to = (heading ?? i) + dir;
       if (to < 0 || to >= n) {
         setFlash({ dir, k: Date.now(), end: true });
         if (dir === 1) setBump(Date.now());
-        return;
+        return false;
       }
       heading = to;
       window.clearTimeout(settle);
       settle = window.setTimeout(() => { heading = null; }, 900);
-      setFlash({ dir, k: Date.now(), end: false });
-      jump(to);
+      if (how === "tap") {
+        setFlash({ dir, k: Date.now(), end: false });
+        jump(to);
+        return true;
+      }
+      // a swipe: straight there, and the card comes in from where the finger went
+      jump(to, { instant: true });
+      const card = el.querySelectorAll<HTMLElement>("[data-story-slide]")[to]?.firstElementChild as HTMLElement | null;
+      if (card && !reducedMotion()) {
+        card.animate(
+          [{ transform: `translateY(${dir * 64}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+          { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+        );
+      }
+      return true;
     };
     const press = { id: -1, x: 0, y: 0, t: 0, moved: false, skip: false };
     const onDown = (e: PointerEvent) => {
@@ -287,6 +361,86 @@ export function StoryChrome({
       go(focusTapDirection(e.clientX, window.innerWidth));
     };
     const onCancel = (e: PointerEvent) => { if (e.pointerId === press.id) press.id = -1; };
+
+    // ── Swipe up / down ──
+    const swipe = {
+      on: false, decided: false, x: 0, y: 0, dy: 0,
+      atTop: false, atBottom: false, card: null as HTMLElement | null,
+      samples: [] as Array<{ y: number; t: number }>,
+    };
+    let swallowUntil = 0; // the click a swipe's release would land on the new card
+    const dragTo = (card: HTMLElement, dy: number) => {
+      const { index: i, count: n } = latest.current;
+      const dir = dy < 0 ? 1 : -1;
+      const edge = (heading ?? i) + dir < 0 || (heading ?? i) + dir >= n;
+      card.style.transition = "none";
+      card.style.transform = dy ? `translateY(${dy * (edge ? 0.15 : 0.4)}px)` : "";
+      card.style.opacity = dy && !edge ? String(1 - Math.min(0.35, Math.abs(dy) / 700)) : "";
+    };
+    const settleBack = (card: HTMLElement | null) => {
+      if (!card) return;
+      card.style.transition = "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 220ms ease-out";
+      card.style.transform = "";
+      card.style.opacity = "";
+      window.setTimeout(() => { card.style.transition = ""; }, 240);
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      swipe.on = false;
+      if (e.touches.length !== 1 || document.querySelector(OPEN_LAYER)) return;
+      // keyboard up: a drag is reading the card, not moving on (a tap closes it first)
+      if (document.activeElement?.closest?.(TYPING)) return;
+      const target = e.target instanceof Element ? e.target : null;
+      const slide = target?.closest<HTMLElement>("[data-story-slide]") ?? null;
+      if (!slide || !el.contains(slide) || scrollsOnItsOwn(target, slide)) return;
+      const t = e.touches[0];
+      swipe.on = true;
+      swipe.decided = false;
+      swipe.x = t.clientX;
+      swipe.y = t.clientY;
+      swipe.samples = [{ y: t.clientY, t: e.timeStamp }];
+      swipe.dy = 0;
+      swipe.atTop = slide.scrollTop <= 1;
+      swipe.atBottom = slide.scrollTop + slide.clientHeight >= slide.scrollHeight - 1;
+      swipe.card = slide.firstElementChild as HTMLElement | null;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!swipe.on || e.touches.length !== 1) { swipe.on = false; return; }
+      const t = e.touches[0];
+      const dx = t.clientX - swipe.x;
+      const dy = t.clientY - swipe.y;
+      swipe.samples.push({ y: t.clientY, t: e.timeStamp });
+      if (swipe.samples.length > 12) swipe.samples.shift();
+      if (!swipe.decided) {
+        if (Math.hypot(dx, dy) < 10) return;
+        swipe.decided = true;
+        // sideways is the card's own (swipe to delete); toward more of a long card is a scroll
+        if (Math.abs(dy) < Math.abs(dx) * 1.2 || !(dy < 0 ? swipe.atBottom : swipe.atTop)) { swipe.on = false; return; }
+      }
+      if (e.cancelable) e.preventDefault();
+      // only the way it can go: back past the start toward more card is nothing
+      swipe.dy = dy < 0 ? (swipe.atBottom ? dy : 0) : (swipe.atTop ? dy : 0);
+      if (swipe.card) dragTo(swipe.card, swipe.dy);
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!swipe.on || !swipe.decided) { swipe.on = false; return; }
+      swipe.on = false;
+      const dir = focusSwipeDirection({ dy: swipe.dy, speed: flickSpeed(swipe.samples, swipe.dy, e.timeStamp), atTop: swipe.atTop, atBottom: swipe.atBottom });
+      const card = swipe.card;
+      if (dir !== 0) {
+        swallowUntil = performance.now() + 400;
+        if (card) { card.style.transition = ""; card.style.transform = ""; card.style.opacity = ""; }
+        if (go(dir, "swipe")) return;
+      }
+      settleBack(card);
+    };
+    const onTouchCancel = () => {
+      if (swipe.on && swipe.decided) settleBack(swipe.card);
+      swipe.on = false;
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (performance.now() < swallowUntil) { e.preventDefault(); e.stopPropagation(); }
+    };
+
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey) return;
       if (document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
@@ -298,6 +452,12 @@ export function StoryChrome({
     el.addEventListener("pointermove", onMove, { passive: true });
     el.addEventListener("pointerup", onUp, { passive: true });
     el.addEventListener("pointercancel", onCancel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    // not passive: a swipe holds the screen still (no rubber band) while the card follows
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchCancel, { passive: true });
+    el.addEventListener("click", onClickCapture, true);
     window.addEventListener("keydown", onKey);
     return () => {
       window.clearTimeout(settle);
@@ -305,6 +465,11 @@ export function StoryChrome({
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onCancel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchCancel);
+      el.removeEventListener("click", onClickCapture, true);
       window.removeEventListener("keydown", onKey);
     };
   }, [listRef]);

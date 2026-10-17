@@ -15,7 +15,10 @@ type Options<T> = {
   delay?: number;
   /** Disable autosave entirely (e.g. while focused on a different control). */
   enabled?: boolean;
-  /** Fired once when a save has failed N times in a row (default 3). */
+  /** The value can't land for now: its save has failed N times in a row
+   * (default 3; fired again on each later failure, with the latest value) or
+   * the device is offline. Hand it to a durable queue so it survives leaving
+   * the screen; a later successful save should supersede what was queued. */
   onPermanentFailure?: (info: { value: T; attempt: number; error: unknown }) => void;
   /** Threshold for onPermanentFailure (default 3). */
   permanentFailureAfter?: number;
@@ -64,7 +67,6 @@ export function useAutosave<T>({
   delayRef.current = delay;
   const onPermFailRef = useRef(onPermanentFailure);
   onPermFailRef.current = onPermanentFailure;
-  const reportedFailRef = useRef(false);
   // Waiters for flush(). flush() must only resolve after a CONFIRMED write
   // and must reject on failure — otherwise a manual "Save now" click can
   // show a green success state while the save actually failed (the
@@ -140,6 +142,7 @@ export function useAutosave<T>({
     if (!online) {
       setState("offline");
       writeDraft(v);
+      try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: new Error("offline") }); } catch {}
       settleFlush(new Error("You're offline — the save will retry when you're back online."));
       return;
     }
@@ -170,7 +173,6 @@ export function useAutosave<T>({
       lastSaved.current = v;
       lastSavedSet.current = true;
       retryAttempt.current = 0;
-      reportedFailRef.current = false;
       setSavedAt(Date.now());
       clearDraft();
       if (!equals(pendingValue.current, v)) {
@@ -185,8 +187,8 @@ export function useAutosave<T>({
       setState("error");
       writeDraft(v);
       retryAttempt.current = Math.min(retryAttempt.current + 1, 5);
-      if (retryAttempt.current >= permanentFailureAfter && !reportedFailRef.current) {
-        reportedFailRef.current = true;
+      // every failure from the threshold on: the queue keeps the latest value
+      if (retryAttempt.current >= permanentFailureAfter) {
         try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: err }); } catch {}
       }
       const retryDelay = Math.min(30_000, 1000 * 2 ** retryAttempt.current);
@@ -259,12 +261,14 @@ export function useAutosave<T>({
   }, [online]);
 
   // Never flush on unmount; unmount/page-load saves caused workout corruption.
-  // Unmount only: callers pass `equals` inline, so with it (or doSave) as a
-  // dependency this cleared the pending save on every re-render, and a row
-  // that re-rendered inside the debounce (an RPE fill-down does) never saved.
+  // A pending save is dropped only on unmount or when the key (the record)
+  // changes, never on a re-render: callers pass `equals` inline, so with it
+  // (or doSave) as a dependency this cleared the pending save on every render,
+  // and a row that re-rendered inside the debounce (an RPE fill-down does)
+  // never saved.
   useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+  }, [key]);
 
   const flush = useCallback(async () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
@@ -299,7 +303,6 @@ export function useAutosave<T>({
   /** Manual retry for callers showing an error state. */
   const retry = useCallback(() => {
     retryAttempt.current = 0;
-    reportedFailRef.current = false;
     void doSave();
   }, [doSave]);
 

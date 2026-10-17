@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { focusTapDirection, focusTapIgnored, pickStoryStart } from "@/components/workout-day/workout-story";
+import { FLICK_IDLE_MS, SWIPE_COMMIT_PX, flickSpeed, focusSwipeDirection, focusTapDirection, focusTapIgnored, pickStoryStart } from "@/components/workout-day/workout-story";
 import { resolveWorkoutView } from "@/lib/use-workout-view";
 import { TOP_FIRST_DOUBLE_TAP_MS, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 
@@ -42,7 +42,9 @@ describe("Focus: tap to move, like Crew's stories", () => {
   it("a tap is read from the finger (with a little wander), queues behind the last, and always shows", () => {
     const story = read("src/components/workout-day/workout-story.tsx");
     expect(story).toContain('el.addEventListener("pointerup", onUp, { passive: true });');
-    expect(story).not.toContain('el.addEventListener("click"');
+    // the only click listener is the swipe's swallow, never the tap
+    expect(story.match(/addEventListener\("click"/g)).toHaveLength(1);
+    expect(story).toContain('el.addEventListener("click", onClickCapture, true);');
     expect(story).toContain("const to = (heading ?? i) + dir;");
     expect(story).toContain("if (typing) { typing.blur(); return; }");
     expect(story).toContain('flash.end ? "jf-tap-end" : "jf-tap-flash"');
@@ -52,6 +54,45 @@ describe("Focus: tap to move, like Crew's stories", () => {
     expect(day).toContain("if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);");
     expect(day).toContain("onHelp={() => setFocusTipsOpen(true)}");
     expect(read("supabase/migrations/20261209090000_focus_tips_seen.sql")).toContain("focus_tips_at = coalesce(public.workout_view_prefs.focus_tips_at, now());");
+  });
+});
+
+describe("Focus: swipe up for the next exercise, down to go back", () => {
+  const fits = { atTop: true, atBottom: true };
+  it("a long enough swipe moves, up is next and down is back", () => {
+    expect(focusSwipeDirection({ dy: -SWIPE_COMMIT_PX, speed: 0, ...fits })).toBe(1);
+    expect(focusSwipeDirection({ dy: SWIPE_COMMIT_PX, speed: 0, ...fits })).toBe(-1);
+    expect(focusSwipeDirection({ dy: -40, speed: 0.1, ...fits })).toBe(0);
+  });
+  it("a quick flick moves; a drag that stopped before lifting doesn't", () => {
+    const flick = [{ y: 500, t: 0 }, { y: 485, t: 16 }, { y: 470, t: 32 }, { y: 455, t: 48 }];
+    expect(focusSwipeDirection({ dy: -45, speed: flickSpeed(flick, -45, 56), ...fits })).toBe(1);
+    expect(flickSpeed(flick, -45, 48 + FLICK_IDLE_MS + 1)).toBe(0);
+    expect(focusSwipeDirection({ dy: -45, speed: flickSpeed(flick, -45, 300), ...fits })).toBe(0);
+    // moving back the other way at the end isn't a flick this way
+    expect(flickSpeed([{ y: 500, t: 0 }, { y: 460, t: 16 }, { y: 480, t: 32 }], -20, 40)).toBe(0);
+  });
+  it("a long card scrolls first: up only from its bottom, down only from its top", () => {
+    expect(focusSwipeDirection({ dy: -200, speed: 1, atTop: true, atBottom: false })).toBe(0);
+    expect(focusSwipeDirection({ dy: 200, speed: 1, atTop: false, atBottom: true })).toBe(0);
+    expect(focusSwipeDirection({ dy: -200, speed: 1, atTop: false, atBottom: true })).toBe(1);
+    expect(focusSwipeDirection({ dy: 200, speed: 1, atTop: true, atBottom: false })).toBe(-1);
+  });
+  it("touch only, never while typing or over a menu; the release can't tap the next card; no sideways glide", () => {
+    const story = read("src/components/workout-day/workout-story.tsx");
+    expect(story).toContain('el.addEventListener("touchmove", onTouchMove, { passive: false });');
+    expect(story).toContain("if (document.activeElement?.closest?.(TYPING)) return;");
+    expect(story).toContain("if (e.touches.length !== 1 || document.querySelector(OPEN_LAYER)) return;");
+    expect(story).toContain('el.addEventListener("click", onClickCapture, true);');
+    expect(story).toContain("jump(to, { instant: true });");
+    const day = read("src/components/workout-day/WorkoutDayView.tsx");
+    expect(day).toContain('behavior: opts?.instant || storyReduced() ? "auto" : "smooth"');
+  });
+  it("a ⋯ menu opens on a finger's tap, not as it lands (a swipe or scroll starting on it)", () => {
+    const menu = read("src/components/ui/dropdown-menu.tsx");
+    expect(menu).toContain('touch.current = e.pointerType === "touch";');
+    expect(menu).toContain("if (touch.current && toggle) e.preventDefault();");
+    expect(menu).toContain("if (!openAtDown.current) toggle.setOpen(true);");
   });
 });
 

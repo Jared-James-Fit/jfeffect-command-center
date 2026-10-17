@@ -105,9 +105,12 @@ export function AccountProfileSettings({
       if (!user) return;
       const trimmed = next.trim();
       if (!trimmed) return;
-      await supabase.from("profiles").update({ full_name: trimmed }).eq("id", user.id);
+      // a failed write must show as failed (and retry), never as saved
+      const { error } = await supabase.from("profiles").update({ full_name: trimmed }).eq("id", user.id);
+      if (error) throw error;
       if (coachId) {
-        await supabase.from("coaches").update({ full_name: trimmed }).eq("id", coachId);
+        const { error: coachError } = await supabase.from("coaches").update({ full_name: trimmed }).eq("id", coachId);
+        if (coachError) throw coachError;
       }
       setOriginalName(trimmed);
     },
@@ -121,9 +124,11 @@ export function AccountProfileSettings({
     onSave: async (next) => {
       if (!user) return;
       const trimmed = next.trim();
-      await supabase.from("profiles").update({ phone: trimmed } as any).eq("id", user.id);
+      const { error } = await supabase.from("profiles").update({ phone: trimmed } as any).eq("id", user.id);
+      if (error) throw error;
       if (coachId) {
-        await supabase.from("coaches").update({ phone: trimmed } as any).eq("id", coachId);
+        const { error: coachError } = await supabase.from("coaches").update({ phone: trimmed } as any).eq("id", coachId);
+        if (coachError) throw coachError;
       } else {
         // Create a coach row so call routing works (only if user is a coach/admin viewing this card)
         try {

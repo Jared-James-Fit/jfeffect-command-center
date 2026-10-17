@@ -168,7 +168,7 @@ export function cleoReadTools(ctx: ToolCtx) {
         const [res, comps] = await Promise.all([
           db
             .from("pl_row_results")
-            .select("*, pl_exercise_rows!inner(day_id, exercise_name_override, exercises(name))")
+            .select("*, pl_exercise_rows!inner(day_id, sort_order, exercise_name_override, exercises(name))")
             .eq("client_id", client_id)
             .not("completed_at", "is", null)
             .gte("completed_at", since)
@@ -188,6 +188,8 @@ export function cleoReadTools(ctx: ToolCtx) {
         const sets: LoggedSet[] = picked.map(({ r, name }) => ({
           completed_at: r.completed_at,
           row_id: r.row_id ?? null,
+          day_id: r.pl_exercise_rows?.day_id ?? null,
+          row_order: r.pl_exercise_rows?.sort_order ?? null,
           exercise: name,
           day_title: titles.get(r.pl_exercise_rows?.day_id) ?? null,
           set_index: r.set_index ?? null,

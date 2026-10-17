@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { parseISO, format, startOfDay } from "date-fns";
+import { inWorkoutOrder } from "@/lib/logged-set-order";
 
 const sb = supabase as any;
 
@@ -17,6 +18,8 @@ export interface SetRow {
   day_index: number;
   day_title: string | null;
   block_id: string;
+  /** The row's place in its workout (pl_exercise_rows.sort_order). */
+  row_order: number;
   set_index: number;
   weight: number | null;
   reps: number | null;
@@ -96,6 +99,35 @@ function isBodyweightCategory(c: string | null): boolean {
   return k.includes("cardio") || k.includes("mobility") || k.includes("conditioning");
 }
 
+/**
+ * Sets in the order they were done: workouts by date, then the row's place
+ * and the set number. Never save time inside a workout: fill-down saves sets
+ * together in any order.
+ */
+export function orderBlockSets(sets: SetRow[]): SetRow[] {
+  return inWorkoutOrder(sets, (s) => ({ workout: s.day_id || null, at: s.date, rowOrder: s.row_order, rowId: s.row_id, setIndex: s.set_index }));
+}
+
+/**
+ * Each lift's e1RM change: its best set in its first session against its best
+ * in its last (`sets` in `orderBlockSets` order). Never one set against
+ * another: which set saved first or last is chance.
+ */
+export function liftProgress(sets: SetRow[]): { name: string; delta: number }[] {
+  const byEx = new Map<string, { name: string; best: Map<string, number> }>();
+  for (const s of sets) {
+    if (!s.completed || !s.exercise_id || !s.weight || !s.reps || s.reps <= 0 || isBodyweightCategory(s.category)) continue;
+    const e1 = epley(s.weight, s.reps);
+    let ex = byEx.get(s.exercise_id);
+    if (!ex) byEx.set(s.exercise_id, (ex = { name: s.exercise_name, best: new Map() }));
+    ex.best.set(s.day_id, Math.max(ex.best.get(s.day_id) ?? 0, e1));
+  }
+  return [...byEx.values()].map((ex) => {
+    const sessions = [...ex.best.values()]; // first seen = first done
+    return { name: ex.name, delta: sessions[sessions.length - 1] - sessions[0] };
+  });
+}
+
 /** Load everything needed to compute analytics for a single block. */
 export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics | null> {
   const { data: block } = await sb.from("pl_blocks").select("*").eq("id", blockId).maybeSingle();
@@ -126,7 +158,7 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
   const rowById = new Map(rows.map((r: any) => [r.id, r]));
   const compByDay = new Map(comps.map((c: any) => [c.day_id, c]));
 
-  const sets: SetRow[] = (results as any[]).map((r) => {
+  const sets: SetRow[] = orderBlockSets((results as any[]).map((r) => {
     const row = rowById.get(r.row_id) as any;
     const day = row ? dayById.get(row.day_id) as any : null;
     const week = day ? weekById.get(day.week_id) as any : null;
@@ -147,6 +179,7 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
       day_index: day?.day_index ?? 0,
       day_title: day?.title ?? null,
       block_id: blockId,
+      row_order: row?.sort_order ?? 0,
       set_index: r.set_index ?? 0,
       weight: weight != null ? Number(weight) : (r.actual_load != null ? Number(r.actual_load) : null),
       reps: r.actual_reps ?? null,
@@ -154,7 +187,7 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
       completed: !!r.completed_at,
       date: r.completed_at ?? comp?.completed_at ?? day?.scheduled_date ?? null,
     };
-  });
+  }));
 
   const exercises = Array.from(
     new Map(
@@ -278,23 +311,11 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
       });
     }
   }
-  // Per-exercise improvement: largest e1RM gain
-  const byEx = new Map<string, { name: string; first: number; last: number; firstDate: string; lastDate: string }>();
-  for (const s of completedSets) {
-    if (!s.exercise_id || !s.weight || !s.reps || s.reps <= 0 || isBodyweightCategory(s.category)) continue;
-    const e1 = epley(s.weight, s.reps);
-    const cur = byEx.get(s.exercise_id);
-    const date = s.date ?? "";
-    if (!cur) { byEx.set(s.exercise_id, { name: s.exercise_name, first: e1, last: e1, firstDate: date, lastDate: date }); }
-    else {
-      if (date && date < cur.firstDate) { cur.first = e1; cur.firstDate = date; }
-      if (date && date > cur.lastDate) { cur.last = e1; cur.lastDate = date; }
-    }
-  }
+  // Per-exercise improvement: largest e1RM gain, session best to session best
   let mostImproved: { name: string; delta: number } | null = null;
   let mostStalled: { name: string; delta: number } | null = null;
-  for (const v of byEx.values()) {
-    const d = v.last - v.first;
+  for (const v of liftProgress(completedSets)) {
+    const d = v.delta;
     if (!mostImproved || d > mostImproved.delta) mostImproved = { name: v.name, delta: d };
     if (!mostStalled || Math.abs(d) < Math.abs(mostStalled.delta)) mostStalled = { name: v.name, delta: d };
   }

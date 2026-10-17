@@ -166,6 +166,17 @@ function scheduleRetry(ms: number) {
   }, ms);
 }
 
+/**
+ * A newer save of the same thing landed: drop its queued (older) copy, which
+ * would otherwise replay over it on the next run.
+ */
+export function supersedeOfflineWrite(id: string) {
+  if (!items.some((i) => i.id === id)) return;
+  items = items.filter((i) => i.id !== id);
+  persist();
+  notify();
+}
+
 export function clearStuckItem(id: string) {
   items = items.filter((i) => i.id !== id);
   persist();

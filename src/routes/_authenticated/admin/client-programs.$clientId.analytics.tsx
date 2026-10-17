@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, TrendingUp, Trophy, Dumbbell } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Cell } from "recharts";
-import { getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs } from "@/lib/pl-programs";
+import { getClientResults, buildExerciseHistory, weeklyMuscleVolume, recentPRs, resultsInWorkoutOrder } from "@/lib/pl-programs";
 import { format } from "date-fns";
 import { SearchableSelect, type SearchableOption } from "@/components/analytics/searchable-select";
 import { ANALYTICS_COLORS, exerciseColor, exerciseGroup, fmtNum, fmtDelta, muscleColor, shortMuscleLabel } from "@/lib/analytics-format";
@@ -115,11 +115,13 @@ function AnalyticsPage() {
   const filteredResults = useMemo(() => {
     const startMs = filter.start.getTime();
     const endMs = filter.end.getTime();
-    return (results as any[]).filter((r: any) => {
+    // in the order they were done (a day's sets by row, then set number), so
+    // the per-set e1RM chart never jumps around within a day
+    return resultsInWorkoutOrder((results as any[]).filter((r: any) => {
       if (!r.date) return false;
       const t = new Date(r.date).getTime();
       return t >= startMs && t <= endMs;
-    });
+    }));
   }, [results, filter.start, filter.end]);
   const BIG_DAYS = 365000;
   const history = useMemo(() => buildExerciseHistory(filteredResults as any), [filteredResults]);

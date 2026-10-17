@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -384,21 +384,31 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
     qc.invalidateQueries({ queryKey: ["submission-reviews-list"] });
   };
 
-  // Internal-notes autosave (debounced)
+  // Internal-notes autosave (debounced). Notes belong to the review they were
+  // typed in: switching review or leaving saves them there, never drops them.
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (notesLocal == null) return;
+  const notesPending = useRef<{ reviewId: string; notes: string } | null>(null);
+  const saveNotesRef = useRef(saveNotes);
+  saveNotesRef.current = saveNotes;
+  const shownReviewRef = useRef(reviewId);
+  shownReviewRef.current = reviewId;
+  const flushNotes = useCallback(() => {
+    if (notesTimer.current) { clearTimeout(notesTimer.current); notesTimer.current = null; }
+    const pending = notesPending.current;
+    notesPending.current = null;
+    if (!pending) return;
+    saveNotesRef.current({ data: pending }).then(
+      () => { if (shownReviewRef.current === pending.reviewId) setNotesSavedAt(new Date()); },
+      (e: any) => toast.error(e?.message ?? "Notes save failed"),
+    );
+  }, []);
+  const typeNotes = (notes: string) => {
+    setNotesLocal(notes);
+    notesPending.current = { reviewId, notes };
     if (notesTimer.current) clearTimeout(notesTimer.current);
-    notesTimer.current = setTimeout(async () => {
-      try {
-        await saveNotes({ data: { reviewId, notes: notesLocal } });
-        setNotesSavedAt(new Date());
-      } catch (e: any) {
-        toast.error(e?.message ?? "Notes save failed");
-      }
-    }, 800);
-    return () => { if (notesTimer.current) clearTimeout(notesTimer.current); };
-  }, [notesLocal, reviewId, saveNotes]);
+    notesTimer.current = setTimeout(flushNotes, 800);
+  };
+  useEffect(() => flushNotes, [reviewId, flushNotes]);
 
   const generateMutation = useMutation({
     mutationFn: () => generate({ data: { reviewId, submissionInstruction: instruction || undefined } }),
@@ -714,7 +724,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
         </div>
         <Textarea
           value={currentNotes}
-          onChange={(e) => setNotesLocal(e.target.value)}
+          onChange={(e) => typeNotes(e.target.value)}
           placeholder="Anything the team should know about this submission. Not visible to the client."
           className="min-h-[100px] text-sm"
         />

@@ -105,7 +105,7 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
           <span className="text-sm font-bold text-foreground">Focus</span>
         </div>
         <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
-          One exercise at a time, full screen. Log your sets, then tap the right side for the next one.
+          One exercise at a time, full screen. Log your sets, then tap the right side or swipe up for the next one.
         </p>
         <div className="mt-2.5 flex items-center gap-1.5">
           <button
@@ -171,8 +171,8 @@ export function FocusTips({ onClose }: { onClose: () => void }) {
       >
         <div className="text-base font-bold">Focus: one exercise at a time</div>
         <ul className="mt-2.5 space-y-2 text-[13px] leading-snug text-muted-foreground">
-          <li className="flex gap-2.5"><ChevronRight className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Tap the right side</b> for the next exercise</span></li>
-          <li className="flex gap-2.5"><ChevronLeft className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Tap the left side</b> to go back</span></li>
+          <li className="flex gap-2.5"><ChevronRight className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Tap the right side</b> or <b className="text-foreground">swipe up</b> for the next exercise</span></li>
+          <li className="flex gap-2.5"><ChevronLeft className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Tap the left side</b> or <b className="text-foreground">swipe down</b> to go back</span></li>
           <li className="flex gap-2.5"><Trash2 className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe a card left</b> to delete it. You can undo.</span></li>
           <li className="flex gap-2.5"><MousePointerClick className="mt-px h-4 w-4 shrink-0 text-foreground" /><span>Buttons and your sets work as usual</span></li>
         </ul>

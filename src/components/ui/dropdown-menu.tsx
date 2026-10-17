@@ -6,9 +6,65 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
+type MenuToggle = { open: boolean; setOpen: (open: boolean) => void };
+const MenuToggleContext = React.createContext<MenuToggle | null>(null);
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+/**
+ * Radix's Root, holding the open state (or following the caller's `open`) so
+ * the trigger below can open on a finger's tap.
+ */
+function DropdownMenu({ open: openProp, defaultOpen, onOpenChange, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  const [inner, setInner] = React.useState(defaultOpen ?? false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? !!openProp : inner;
+  const onChangeRef = React.useRef(onOpenChange);
+  onChangeRef.current = onOpenChange;
+  const setOpen = React.useCallback((next: boolean) => {
+    if (!controlled) setInner(next);
+    onChangeRef.current?.(next);
+  }, [controlled]);
+  const toggle = React.useMemo(() => ({ open, setOpen }), [open, setOpen]);
+  return (
+    <MenuToggleContext.Provider value={toggle}>
+      <DropdownMenuPrimitive.Root open={open} onOpenChange={setOpen} {...props} />
+    </MenuToggleContext.Provider>
+  );
+}
+
+/**
+ * A finger opens the menu on the tap, like a phone's own menus, not the moment
+ * it lands (Radix opens on pointerdown): a scroll or swipe that starts on a ⋯
+ * never pops it open. Mouse and keyboard work as Radix does.
+ */
+const DropdownMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(({ onPointerDown, onClick, ...props }, ref) => {
+  const toggle = React.useContext(MenuToggleContext);
+  const touch = React.useRef(false);
+  const openAtDown = React.useRef(false);
+  return (
+    <DropdownMenuPrimitive.Trigger
+      ref={ref}
+      onPointerDown={(e) => {
+        onPointerDown?.(e);
+        touch.current = e.pointerType === "touch";
+        openAtDown.current = !!toggle?.open;
+        // skips Radix's open-on-press (it checks defaultPrevented); the click opens it
+        if (touch.current && toggle) e.preventDefault();
+      }}
+      onClick={(e) => {
+        onClick?.(e);
+        if (!touch.current || !toggle || e.defaultPrevented || props.disabled) return;
+        touch.current = false;
+        // open when pressed: the press outside the menu already closed it
+        if (!openAtDown.current) toggle.setOpen(true);
+      }}
+      {...props}
+    />
+  );
+});
+DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName;
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 

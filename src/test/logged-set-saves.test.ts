@@ -5,15 +5,46 @@ import { historySetOrder } from "@/components/exercise-history-sheet";
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("a typed reps / RPE saves on the set it was typed in", () => {
-  it("a pending autosave survives re-renders (cleared only on unmount)", () => {
+  it("a pending autosave survives re-renders (dropped only on unmount or a different record)", () => {
     const hook = read("src/hooks/use-autosave.ts");
-    expect(hook).toMatch(/useEffect\(\(\) => \(\) => \{\n    if \(timer\.current\) clearTimeout\(timer\.current\);\n  \}, \[\]\);/);
+    expect(hook).toContain("if (timer.current) { clearTimeout(timer.current); timer.current = null; }\n  }, [key]);");
     expect(hook).not.toContain("}, [doSave, equals]);");
   });
   it("the set saves now, then the sets below fill down", () => {
     const day = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(day).toContain('setCommitFlushToken((t) => t + 1);\n    void onFieldCascade?.(setIndex, "reps", v, previous);');
     expect(day).toContain('setCommitFlushToken((t) => t + 1);\n    void onFieldCascade?.(setIndex, "rpe", stored, previous);');
+  });
+});
+
+describe("nothing typed is lost between the screen and the database", () => {
+  const day = read("src/components/workout-day/WorkoutDayView.tsx");
+  const hook = read("src/hooks/use-autosave.ts");
+  it("values an effect shows are adopted as saved only after they render, never over unsaved work", () => {
+    expect(day).not.toContain("queueMicrotask(() => { saveRef.current?.markClean");
+    expect(day).toContain("if (keepUnsaved && saveRef.current?.hasPending()) return;");
+    expect(day.match(/adoptShownAsSaved\(true\)/g)).toHaveLength(3); // unit, fill from above, fill-down
+    expect(day.match(/adoptShownAsSaved\(false\)/g)).toHaveLength(2); // Fill All, undo / redo
+  });
+  it("a set that can't save goes to the durable queue at once, and a newer save supersedes it", () => {
+    expect(day).toContain("permanentFailureAfter: 1,");
+    expect(day).toContain("if (!clientId || (error as { invalid?: boolean } | null)?.invalid) return;");
+    expect(day).toContain("supersedeOfflineWrite(`portal_set:${rowId}:${clientId}:${setIndex}`);");
+    expect(hook).toContain('try { onPermFailRef.current?.({ value: v, attempt: retryAttempt.current, error: new Error("offline") }); } catch {}');
+    expect(read("src/lib/workout-offline-queue.ts")).toContain("export function supersedeOfflineWrite(id: string)");
+  });
+  it("Apply to remaining keeps a set's own reps / RPE when the source has none", () => {
+    expect(day).toContain("actual_reps: repsNum ?? ex?.actual_reps ?? null,");
+    expect(day).toContain("actual_rpe_num: rpeNum ?? ex?.actual_rpe_num ?? null,");
+  });
+  it("forms fill once per record, notes save to their own review, failed profile writes show", () => {
+    expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("if (!client || hydratedIdRef.current === client.id) return;");
+    expect(read("src/routes/_authenticated/admin/member-plans.$planId.tsx")).toContain("if (!plan || hydratedPlanRef.current === planId) return;");
+    expect(read("src/components/forms/reviews-tab.tsx")).toContain("useEffect(() => flushNotes, [reviewId, flushNotes]);");
+    expect(read("src/components/account-profile-settings.tsx")).toContain("if (error) throw error;");
+    for (const f of ["src/routes/_authenticated/admin/blocks.$blockId.tsx", "src/route-pages/_authenticated/admin/program-library_.$templateId.tsx"]) {
+      expect(read(f)).toContain("if (!autosave.hasPending()) setDirty(false);");
+    }
   });
 });
 
