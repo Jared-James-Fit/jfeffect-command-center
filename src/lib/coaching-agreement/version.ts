@@ -3,7 +3,7 @@
  * that only compares versions (the status rules and the launch popup, which load on every
  * signed-in page) doesn't pull the whole text into the app's main bundle.
  */
-export const AGREEMENT_VERSION = "2.1";
+export const AGREEMENT_VERSION = "2.2";
 
 /**
  * Clients whose latest signed version is below this must sign again. Raise it only
@@ -13,8 +13,15 @@ export const AGREEMENT_VERSION = "2.1";
  * 2.1 changed only how the Coach is named (the individual, Jared McIntyre, carrying on
  * business as JF Effect, instead of the "Jared James Fit" trade name). The signed 2.0
  * text already named him personally as the operator and in the release, so it stays
- * valid and nobody who signed 2.0 is asked again. This must stay "2.0" (the database
- * view coaching_agreement_resign_below_version() says the same, and a test checks it).
+ * valid and nobody who signed 2.0 is asked again.
+ *
+ * 2.2 names each client's coach (filled in per client and saved with the signature), and adds
+ * the app, Community and in-person session rules. New signers get it; everyone who already
+ * signed 2.0 or 2.1 stays signed on the version they agreed to and is never asked again for it.
+ * Their signed versions already cover in-person training, the app and the release.
+ *
+ * This must stay "2.0" (the database view coaching_agreement_resign_below_version() says the
+ * same, and a test checks it).
  */
 export const RESIGN_REQUIRED_BELOW_VERSION = "2.0";
 

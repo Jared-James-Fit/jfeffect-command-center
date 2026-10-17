@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getAgreementRecord, type AgreementRecord } from "@/lib/coaching-agreement.functions";
 import type { AgreementContent } from "@/lib/coaching-agreement/content";
+import { personalizeAgreement } from "@/lib/coaching-agreement/coach";
 import { isNative } from "@/platform";
 import { AGREEMENT_QUERY_ROOT } from "./agreement-context";
 import { AgreementReader } from "./agreement-reader";
@@ -32,7 +33,10 @@ export function AgreementRecordViewer({ signatureId, open, onOpenChange }: Props
   const content = useMemo<AgreementContent | null>(() => {
     if (!data) return null;
     try {
-      return JSON.parse(data.contentJson) as AgreementContent;
+      // Fill in the coach exactly as the client saw it when they signed (versions before 2.2
+      // have no coach to fill in and come back unchanged).
+      const stored = JSON.parse(data.contentJson) as AgreementContent;
+      return personalizeAgreement(stored, data.details?.coach?.name ?? null);
     } catch {
       return null;
     }
@@ -203,6 +207,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
         </h2>
         <dl className="mt-2 divide-y divide-border/60">
           <Row label="Name">{record.typedName}</Row>
+          {d.coach?.name && <Row label="Coach named">{d.coach.name}</Row>}
           <Row label="Email">{d.email ?? record.clientEmail ?? "—"}</Row>
           <Row label="Phone">{d.phone ?? "—"}</Row>
           <Row label="Date of birth">

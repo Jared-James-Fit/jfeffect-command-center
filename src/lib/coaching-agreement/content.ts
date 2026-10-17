@@ -11,31 +11,30 @@
  * record the new hash in PUBLISHED_CONTENT_HASHES (tests fail until you do both, so
  * published wording can never be changed silently or lost). Clients re-sign
  * automatically only when RESIGN_REQUIRED_BELOW_VERSION rises above the version they
- * signed; a wording-only fix (like 2.1, which only changes how the Coach is named)
- * leaves everyone who signed earlier exactly as they were.
+ * signed; a revision that new signers get but earlier signers don't need (like 2.1, which
+ * changed how the Coach is named, and 2.2, which names each client's coach and adds the app
+ * and in-person rules) leaves everyone who signed earlier exactly as they were.
  *
  * Inline markup: `**bold**` only. Cross-references use `{{n:section-id}}`, which
- * resolves to that section's number so numbering can never drift.
+ * resolves to that section's number so numbering can never drift. `{{coach}}` is the
+ * client's coach, filled in when the agreement is shown and saved with the signature
+ * (see ./coach.ts); it stays a token in the published text so every client signs the
+ * same words.
  */
 
+import { COACH } from "./business";
 import { AGREEMENT_VERSION } from "./version";
 
 export const AGREEMENT_SLUG = "coaching-agreement";
 export const AGREEMENT_TITLE = "JF Effect Coaching Agreement";
 export const AGREEMENT_SUBTITLE =
   "Liability Waiver, Release of Claims, Assumption of Risk & Indemnity";
-export const AGREEMENT_EFFECTIVE_DATE = "2026-10-07";
+export const AGREEMENT_EFFECTIVE_DATE = "2026-10-17";
 
 // Version numbers live in ./version so the always-loaded status rules never import this file.
 export { AGREEMENT_VERSION, RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
 
-export const COACH = {
-  business: "JF Effect",
-  operator: "Jared McIntyre",
-  location: "Winnipeg, Manitoba, Canada",
-  email: "jaredjamesfit@gmail.com",
-  timezone: "America/Winnipeg",
-} as const;
+export { COACH } from "./business";
 
 export type AgreementClause = {
   /** Bold lead-in, e.g. "No refunds." */
@@ -96,6 +95,14 @@ const RAW_SECTIONS: RawSection[] = [
         text: "Jared McIntyre (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada.",
       },
       {
+        label: "Your coach.",
+        text: "The coach working with you is **{{coach}}**. JF Effect may change your coach, or have another JF Effect coach, trainer or staff member help with your Services (for example to cover a session, review your technique, or handle scheduling and billing). This Agreement applies to whoever delivers your Services for JF Effect, and you do not need to sign it again when your coach changes.",
+      },
+      {
+        label: "The Coach’s team.",
+        text: "In this Agreement, “the Coach” includes JF Effect’s coaches, trainers, employees and contractors when they deliver Services or act for JF Effect. Only Jared McIntyre, carrying on business as JF Effect, is a party to this Agreement and responsible for its obligations; the people who work with him do not take on those obligations personally.",
+      },
+      {
         label: "Official email.",
         text: "Cancellations, freeze requests, billing questions and other written notices to the Coach must be sent to **jaredjamesfit@gmail.com**.",
       },
@@ -116,7 +123,7 @@ const RAW_SECTIONS: RawSection[] = [
     clauses: [
       {
         label: "Services covered.",
-        text: "This Agreement covers all Services, including (but not limited to) online coaching, in-person personal training, hybrid coaching, strength training, bodybuilding, powerlifting, conditioning, mobility work, templates, programs, guides, consultations, education, form review, digital products and any future service offered by the Coach.",
+        text: "This Agreement covers all Services, including (but not limited to) online coaching, in-person personal training, semi-private and group training, events and workshops, hybrid coaching, strength training, bodybuilding, powerlifting, conditioning, mobility work, templates, programs, guides, consultations, education, form review, nutrition guidance, the JF Effect app and its Community, digital products and any future service offered by the Coach.",
       },
       {
         label: "One agreement covers every purchase.",
@@ -139,7 +146,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "If records differ.",
-        text: "If a purchase record shows a price, term or billing schedule that differs from this Agreement, the purchase record controls for those details only, and this Agreement controls everything else. If a price is not written anywhere else, the price on the invoice, receipt or checkout confirmation is the agreed price.",
+        text: "If a purchase record shows a price, term or billing schedule that differs from this Agreement, or a session package lists its own number of sessions, session length, location, expiry date, cancellation window, or late-arrival, no-show or transfer rules, the purchase record controls for those details only, and this Agreement controls everything else. If a price is not written anywhere else, the price on the invoice, receipt or checkout confirmation is the agreed price.",
       },
       {
         label: "Your receipts.",
@@ -273,20 +280,53 @@ const RAW_SECTIONS: RawSection[] = [
   },
   {
     id: "in-person",
-    title: "In-Person Training Rules",
-    inShort: "Use sessions within 6 months. Give 24 hours’ notice to reschedule.",
+    title: "In-Person Training & Sessions",
+    inShort:
+      "Book in the app, give 24 hours’ notice to change, and use your sessions before they expire.",
     clauses: [
       {
-        label: "Session expiry.",
-        text: "All in-person personal training sessions and packages must be used within **6 months** of the date of purchase. Unused sessions expire after 6 months and are not refundable.",
+        label: "Booking.",
+        text: "Sessions are booked in the app or with your coach. A session is confirmed once it shows in your app. Reminders by push notification, text or email are a courtesy; you are responsible for knowing when your sessions are.",
       },
       {
-        label: "Rescheduling and no-shows.",
-        text: "You must give at least **24 hours’ notice** to reschedule. Late cancellations or no-shows may be counted as used sessions. If you arrive late, the session still ends at the scheduled time.",
+        label: "Where sessions happen.",
+        text: "Sessions take place at the location shown on your booking or package, which may be a third-party gym. You may need that facility’s own membership, day pass or waiver, and you must follow its rules (see Section {{n:facilities}}).",
       },
       {
-        label: "If the Coach reschedules.",
-        text: "The Coach may reschedule sessions because of illness, emergencies, facility issues or scheduling conflicts. In that case, the session will be rebooked within a reasonable time or credited toward a future session.",
+        label: "Session credits and expiry.",
+        text: "Session packages add credits to your account, which you can see in the app. Credits expire on the date shown on your package or receipt or, if no date is shown, **6 months** after purchase. Expired or unused credits are not refundable and cannot be swapped for other Services unless your coach agrees in writing.",
+      },
+      {
+        label: "Cancelling or rescheduling.",
+        text: "Give at least **24 hours’ notice** (or the cancellation window shown on your package) to cancel or reschedule, in the app or by message to your coach. A late cancellation or no-show may be counted as a used session, at your coach’s discretion. If you have a contagious illness, please don’t come in; tell your coach as early as you can so the session can be moved.",
+      },
+      {
+        label: "Arriving late.",
+        text: "If you arrive late, the session still ends at its scheduled time and counts in full. If you are more than **15 minutes** late without letting your coach know, the session may be treated as a no-show.",
+      },
+      {
+        label: "If your coach reschedules.",
+        text: "Your coach may reschedule a session because of illness, emergencies, facility issues or scheduling conflicts. The session will then be rebooked within a reasonable time, or the credit returned to your account.",
+      },
+      {
+        label: "Before every session.",
+        text: "Tell your coach before each session about any new pain, injury, illness, medication change, pregnancy or anything else that could affect your training that day, and arrive ready to train (suitable clothing and footwear, water, and anything you need). Your coach may change, shorten or stop a session for your safety; that is not a reason for a refund or credit.",
+      },
+      {
+        label: "Training safely with your coach.",
+        text: "During a session, use only the exercises and loads your coach approves, use collars, safeties and spotters as instructed, and tell your coach straight away if something hurts or feels wrong.",
+      },
+      {
+        label: "Hands-on coaching.",
+        text: "Your coach may use brief, professional touch to cue your position or to spot a lift. You can ask for no touch at any time, and your coach will coach you with words and demonstrations instead.",
+      },
+      {
+        label: "Filming.",
+        text: "Your coach may film your sets during a session to review your technique; those recordings are Client Content (Section {{n:content}}) and stay private to your coaching unless you give permission for public use. Do not film other gym members without their permission, and follow the facility’s rules on filming.",
+      },
+      {
+        label: "Group sessions and events.",
+        text: "If you join a semi-private, partner or group session, an event or a workshop, these terms apply to it too, along with any details shown on the event or booking.",
       },
       {
         label: "Medical emergencies.",
@@ -351,7 +391,7 @@ const RAW_SECTIONS: RawSection[] = [
   },
   {
     id: "risk",
-    title: "Assumption of Risk, Safe Training & Online Coaching",
+    title: "Assumption of Risk & Safe Training",
     inShort: "Training can hurt you. You accept that risk and train within your limits.",
     clauses: [
       {
@@ -367,6 +407,10 @@ const RAW_SECTIONS: RawSection[] = [
         text: "You are responsible for maintaining a safe training environment, especially when you train independently or in a home gym. The Coach is not responsible for unsafe environments, broken equipment or lack of supervision.",
       },
       {
+        label: "In-person sessions.",
+        text: "During in-person sessions your coach supervises and cues you, but supervision cannot remove every risk. You remain responsible for telling your coach how you feel and for stopping when something does not feel right.",
+      },
+      {
         label: "Online coaching.",
         text: "For online coaching, you understand the Coach is not physically present during your workouts, that feedback is limited to what you show and tell the Coach, and that you accept full responsibility for execution and safety.",
       },
@@ -374,7 +418,7 @@ const RAW_SECTIONS: RawSection[] = [
   },
   {
     id: "facilities",
-    title: "Facilities, Property & Technology",
+    title: "Facilities & Property",
     inShort: "Follow the gym’s rules. Damage you cause is on you.",
     clauses: [
       {
@@ -385,9 +429,49 @@ const RAW_SECTIONS: RawSection[] = [
         label: "Property damage.",
         text: "To the fullest extent permitted by law, the Coach is not responsible for any property damage, equipment damage or loss of personal belongings that occurs during or in connection with training sessions, workouts or Services, whether at a gym, facility, home gym or any other location. You are solely responsible for your own conduct and equipment use, and for any damage you cause to facility property, equipment or third-party property, and for any resulting costs, charges or claims.",
       },
+    ],
+  },
+  {
+    id: "app",
+    title: "The JF Effect App & Community",
+    inShort:
+      "Your account is personal and your logs drive your program. Community posts are seen by other clients.",
+    clauses: [
       {
-        label: "Technology.",
-        text: "The Coach is not responsible for app outages, internet issues, email delivery failures, payment-platform errors, device problems or other third-party service failures. You are responsible for your login and for keeping your account secure. App access is for your personal use and may be paused when Services end, payments fail or during a freeze.",
+        label: "Your account.",
+        text: "The app is part of your Services. Your account is for you alone: do not share your login, keep it secure, and tell your coach straight away if you think someone else has used it. You are responsible for what happens on your account.",
+      },
+      {
+        label: "Your logs drive your program.",
+        text: "Your coach programs from what you log and send, including sets, reps, loads, effort, bodyweight, check-ins, nutrition and videos. Log honestly and accurately. The Coach is not responsible for decisions based on information that was missing or inaccurate.",
+      },
+      {
+        label: "App tools are guides.",
+        text: "Calculators, estimated maxes, suggested weights, warm-ups, exercise swaps, readiness and recovery scores, points and other automated features support your coaching. They are estimates, not medical advice, and not a promise that a load or exercise is safe for you on a given day. Use your judgment and stop if something hurts.",
+      },
+      {
+        label: "Connected devices.",
+        text: "If you connect Apple Health, Health Connect or another device or app, you agree to the app importing the data you allow (for example steps, sleep, heart rate, heart-rate variability and active energy) to use in your coaching. Device data can be inaccurate. You can disconnect at any time in the app or in your phone’s settings.",
+      },
+      {
+        label: "Community and the Performance League.",
+        text: "The Community and the Performance League are for active clients. What you post (photos, videos, captions, comments and reactions) is seen by the people in the audience you choose. Unless you switch off “Share my workouts” in your Community settings, your finished workouts are shared with other clients automatically, and you can hide your weights on any post. The Performance League shows the clients who qualify each month with their first name and last initial, photo, points, workouts and records.",
+      },
+      {
+        label: "Community rules.",
+        text: "Be respectful and supportive. Do not post anything abusive, sexual, hateful, misleading or unsafe, or anyone else’s personal information, and do not copy or share other members’ posts outside the app. The Coach may remove content and limit or end your Community access for breaking these rules. Posts and comments from other members are their own and are not coaching advice.",
+      },
+      {
+        label: "Messages and calls.",
+        text: "Messages, voice notes and calls in the app are for your coaching. They are not monitored around the clock and are not for emergencies. Coaching questions belong in Messages, not in Community comments.",
+      },
+      {
+        label: "Changes and outages.",
+        text: "App features may be added, changed or removed over time. The Coach is not responsible for app outages, internet issues, email delivery failures, payment-platform errors, device problems or other third-party service failures. App access is for your personal use and may be paused when Services end, payments fail or during a freeze.",
+      },
+      {
+        label: "App stores.",
+        text: "If you use the iPhone or Android app, Apple and Google are not parties to this Agreement and are not responsible for the app or your Services.",
       },
     ],
   },
@@ -431,15 +515,19 @@ const RAW_SECTIONS: RawSection[] = [
     clauses: [
       {
         label: "What the Coach collects.",
-        text: "To coach you, the Coach collects and uses information you provide or create in the app, including your contact details, date of birth, emergency contacts, injury and health information, training, nutrition and bodyweight data, check-ins, messages, photos, videos and payment records. Card details are handled by Stripe and are not stored by the Coach.",
+        text: "To coach you, the Coach collects and uses information you provide or create in the app, including your contact details, date of birth, emergency contacts, injury and health information, training, nutrition and bodyweight data, check-ins, messages, photos, videos, bookings and session history, data from devices you connect, Community activity and payment records. Card details are handled by Stripe and are not stored by the Coach.",
       },
       {
         label: "Your consent.",
         text: "Some of this information is sensitive health information. By signing, you consent to the Coach collecting, using and storing it to provide and administer the Services, keep you safe, bill you, communicate with you and meet legal and tax obligations.",
       },
       {
+        label: "Who sees it.",
+        text: "Your information is available to your coach and to the JF Effect team members who need it for their role (for example scheduling, billing or support). Other clients only see what the Community and the Performance League show (Section {{n:app}}).",
+      },
+      {
         label: "Service providers and storage.",
-        text: "The Coach uses trusted service providers for hosting, databases, payments, email, messaging, notifications and video. Some of them store or process information outside Canada (including in the United States), where it may be subject to local laws and accessible to authorities there. The Coach does not sell your personal information.",
+        text: "The Coach uses trusted service providers for hosting, databases, payments, email, messaging, notifications and video, and AI tools that help the Coach’s team review your information and prepare programs, meal plans, summaries and messages. Your coach remains responsible for the coaching you receive. Some providers store or process information outside Canada (including in the United States), where it may be subject to local laws and accessible to authorities there. The Coach does not sell your personal information.",
       },
       {
         label: "Your choices.",
@@ -478,11 +566,11 @@ const RAW_SECTIONS: RawSection[] = [
     clauses: [
       {
         label: "Released Parties.",
-        text: "“Released Parties” means the Coach (including Jared McIntyre personally), the Coach’s business, employees, contractors, assistants, agents, representatives, successors and anyone acting on the Coach’s behalf.",
+        text: "“Released Parties” means the Coach (including Jared McIntyre personally), your coach and every other coach, trainer, employee, contractor, assistant, agent and representative of the Coach’s business, the Coach’s successors, and anyone acting on the Coach’s behalf.",
       },
       {
         label: "Release and waiver (including negligence).",
-        text: "To the fullest extent permitted by law, you waive, release and discharge the Coach and the Released Parties from any and all claims, demands, causes of action, injuries, damages, losses, costs or liabilities arising from your participation in the Services. **This includes claims related to negligence**, where permitted by law, including coaching cues, programming decisions, exercise selection, load guidance, lack of supervision, facility conditions, equipment issues and the actions of others. This release also binds your heirs, executors, successors and assigns.",
+        text: "To the fullest extent permitted by law, you waive, release and discharge the Coach and the Released Parties from any and all claims, demands, causes of action, injuries, damages, losses, costs or liabilities arising from your participation in the Services. **This includes claims related to negligence**, where permitted by law, including coaching cues, hands-on cues and spotting, programming decisions, exercise selection, load guidance, app features and estimates, lack of supervision, facility conditions, equipment issues and the actions of others. This release also binds your heirs, executors, successors and assigns.",
       },
       {
         label: "Indemnity.",
@@ -647,6 +735,10 @@ export function resolveRefs(text: string): string {
 
 const KEY_TERMS: { title: string; text: string }[] = [
   {
+    title: "Your coach",
+    text: "The coach working with you is {{coach}}. If your coach changes, this Agreement still applies and you don’t sign again.",
+  },
+  {
     title: "One agreement for everything",
     text: "This covers every service and purchase you make with the Coach, now and later.",
   },
@@ -672,7 +764,11 @@ const KEY_TERMS: { title: string; text: string }[] = [
   },
   {
     title: "In-person sessions",
-    text: "Reschedule with at least 24 hours’ notice. Sessions expire 6 months after you buy them.",
+    text: "Book in the app. Give at least 24 hours’ notice to cancel or reschedule; late cancellations and no-shows may count as used. Sessions expire on the date on your package, or 6 months after purchase if none is shown.",
+  },
+  {
+    title: "The app and Community",
+    text: "Your account is personal and your logs drive your program. Community posts are seen by other clients, and finished workouts share automatically unless you switch it off.",
   },
   {
     title: "Health and safety",
@@ -684,7 +780,7 @@ const KEY_TERMS: { title: string; text: string }[] = [
   },
   {
     title: "Your privacy and content",
-    text: "Your health information and coaching content are used to coach you. Public use of your photos or results needs your permission, which you choose when you sign.",
+    text: "Your health information and coaching content are used to coach you, with trusted providers and AI tools. Public use of your photos or results needs your permission, which you choose when you sign.",
   },
   {
     title: "Disputes",
@@ -704,9 +800,14 @@ const ACKNOWLEDGEMENTS: AgreementAcknowledgement[] = [
     text: "I understand training carries real risk, including serious injury or death. I accept those risks and release the Coach from claims, including negligence, to the fullest extent the law allows. (Sections {{n:risk}} and {{n:release}})",
   },
   {
+    id: "sessions-app",
+    short: "In-person sessions, the app and Community",
+    text: "I will follow the in-person session rules (24 hours’ notice, late arrival and expiry) and the app and Community rules, and I understand what other clients can see when I use the Community and the Performance League. (Sections {{n:in-person}} and {{n:app}})",
+  },
+  {
     id: "health",
     short: "Health disclosure and privacy consent",
-    text: "I have told the Coach about my injuries, health conditions and limits, and I will keep them updated. The Coach is not a doctor, therapist or dietitian. I consent to my health and personal information being collected and used as described in Section {{n:privacy}}, including by service providers that may be outside Canada. (Sections {{n:health}} and {{n:privacy}})",
+    text: "I have told the Coach about my injuries, health conditions and limits, and I will keep them updated. The Coach is not a doctor, therapist or dietitian. I consent to my health and personal information being collected and used as described in Section {{n:privacy}}, including by service providers and AI tools that may be outside Canada. (Sections {{n:health}} and {{n:privacy}})",
   },
   {
     id: "disputes",
@@ -754,7 +855,9 @@ function finalize(): AgreementContent {
         text: "**READ CAREFULLY. THIS IS A LEGALLY BINDING AGREEMENT.** By signing, you confirm that you have read and understood it and agree to be legally bound by it. You may be giving up certain legal rights, including the right to make claims for negligence. Headings, the Key Terms summary and the “In short” notes are for convenience only and do not change the full terms.",
       },
       {
-        text: "This Agreement is between you (the “Client” or “you”) and **Jared McIntyre** (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada (the “Coach”). It applies to every service the Coach provides, including online coaching, in-person personal training, hybrid coaching, programs, templates, guides, consultations, education, form review, feedback, app access and any future service the Coach offers (the “Services”).",
+        text: resolveRefs(
+          "This Agreement is between you (the “Client” or “you”) and **Jared McIntyre** (also known as Jared James McIntyre), an individual carrying on business as JF Effect in Winnipeg, Manitoba, Canada (the “Coach”). The coach working with you is **{{coach}}** (see Section {{n:parties}}). It applies to every service the Coach provides, including online coaching, in-person personal training, group training and events, hybrid coaching, programs, templates, guides, consultations, education, form review, feedback, the JF Effect app and its Community, and any future service the Coach offers (the “Services”).",
+        ),
       },
       {
         label: "Start date.",
@@ -790,6 +893,7 @@ export const AGREEMENT_CONTENT_JSON: string = JSON.stringify(AGREEMENT_CONTENT);
 export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.0": "4229b1a2f2913bbbc6728de7b3ad42b0257009cbea547d97de722d6c0a820711",
   "2.1": "a5ae2ab9930c92b6637ebdfa12ee243f43cac1219aa89e4418026e2d12a729d0",
+  "2.2": "6d231b21d08cd23cfea6ba7041444926ebf3d9c2a0396bad9a4a90b1209f7fc3",
 };
 
 export function sectionNumber(id: string): number {

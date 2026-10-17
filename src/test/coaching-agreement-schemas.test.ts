@@ -26,6 +26,7 @@ const validDetails = {
 const valid = {
   idempotencyKey: "3d8f0c3e-7c63-4a4e-9f0a-1a2b3c4d5e6f",
   contentHash: "a".repeat(64),
+  coachName: "Jared McIntyre",
   typedLegalName: "Jane Doe",
   signatureMethod: "drawn" as const,
   signatureImage: png,

@@ -13,6 +13,7 @@ import {
   resolveRefs,
   sectionNumber,
 } from "@/lib/coaching-agreement/content";
+import { personalizeAgreement } from "@/lib/coaching-agreement/coach";
 import { sha256HexAsync } from "@/lib/coaching-agreement/hash";
 import { resolveAgreementState } from "@/lib/coaching-agreement/rules";
 
@@ -34,7 +35,9 @@ describe("agreement content integrity", () => {
   });
 
   it("resolves every cross-reference and leaves no tokens behind", () => {
-    expect(AGREEMENT_CONTENT_JSON).not.toContain("{{");
+    // The only token left in the published text is the coach's name, filled in per client.
+    expect(AGREEMENT_CONTENT_JSON.replaceAll("{{coach}}", "")).not.toContain("{{");
+    expect(JSON.stringify(personalizeAgreement(AGREEMENT_CONTENT, "Jared McIntyre"))).not.toContain("{{");
     expect(() => resolveRefs("see {{n:does-not-exist}}")).toThrow(/Unknown agreement section/);
     expect(resolveRefs("Section {{n:refunds}}")).toBe(`Section ${sectionNumber("refunds")}`);
   });
@@ -201,10 +204,11 @@ describe("people who signed an earlier version are left exactly as they are", ()
     resolveAgreementState({ latestSignature: sig(version), exempt: null, resignRequestedAt: null, resignNote: null }).state;
 
   it("does not ask anyone who signed 2.0 to sign again", () => {
-    expect(AGREEMENT_VERSION).toBe("2.1");
+    expect(AGREEMENT_VERSION).toBe("2.2");
     expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
     expect(state("2.0")).toBe("signed");
     expect(state("2.1")).toBe("signed");
+    expect(state("2.2")).toBe("signed");
     expect(state("1.0")).toBe("needs_signature");
   });
 
