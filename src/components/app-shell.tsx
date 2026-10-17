@@ -1985,6 +1985,21 @@ function MoreNavSlot({ active, onOpenMore, dense }: { active: boolean; onOpenMor
   );
 }
 
+/**
+ * A page's back button: back through the app's own history when there is
+ * some, otherwise to `backTo` (opened from a link or a notification).
+ */
+export function usePageBack(backTo?: string): () => void {
+  const navigate = useNavigate();
+  return () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    if (backTo) navigate({ to: backTo });
+  };
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -2003,15 +2018,7 @@ export function PageHeader({
   /** Optional compact breadcrumb trail (hidden on mobile). */
   breadcrumbs?: Crumb[];
 }) {
-  const navigate = useNavigate();
-  const handleBack = () => {
-    // Prefer in-app history when present, otherwise fall back to parent route.
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    if (backTo) navigate({ to: backTo });
-  };
+  const handleBack = usePageBack(backTo);
   const showBack = !!backTo;
   return (
     <div className="flex flex-col gap-1.5 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:px-5 md:py-2 xl:px-6 xl:py-3">

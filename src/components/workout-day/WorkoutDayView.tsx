@@ -3,7 +3,7 @@ import { Component, createContext, useCallback, useContext, useEffect, useLayout
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, usePageBack } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2377,6 +2377,15 @@ function WorkoutDay({
     else closeStory();
   }, [dayId, saveWorkoutView, openStory, closeStory]);
 
+  // Focus's ← Workouts: leaves the workout like the list page's back button,
+  // and Focus stays the saved view. A number still being typed commits first
+  // (its set saves on the commit), then the page goes.
+  const pageBack = usePageBack(navigation.backTo);
+  const leaveFromStory = () => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    requestAnimationFrame(() => requestAnimationFrame(pageBack));
+  };
+
   const jumpStory = useCallback((i: number, opts?: { instant?: boolean }) => {
     const el = storyListRef.current;
     if (!el) return;
@@ -2989,6 +2998,7 @@ function WorkoutDay({
           onExit={() => chooseWorkoutView("list")}
           onDone={closeStory}
           onHelp={() => setFocusTipsOpen(true)}
+          back={{ label: "Workouts", onBack: leaveFromStory }}
         />
       )}
       {storyOpen && focusTipsOpen && (

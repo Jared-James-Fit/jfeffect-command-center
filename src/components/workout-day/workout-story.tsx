@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkoutView } from "@/lib/use-workout-view";
 import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
@@ -225,7 +225,7 @@ export type StoryFinish =
   | { kind: "finish"; review: boolean; onFinish: () => Promise<void> | void }
   | { kind: "done" };
 
-/** Focus's top (progress bars, where you are, List) and bottom (‹ and Next ›) bars. */
+/** Focus's top (progress bars, ← Workouts, ? and List, where you are) and bottom (‹ and Next ›) bars. */
 export function StoryChrome({
   names,
   done,
@@ -239,6 +239,7 @@ export function StoryChrome({
   onExit,
   onDone,
   onHelp,
+  back,
 }: {
   /** Exercise names in order. */
   names: string[];
@@ -262,6 +263,8 @@ export function StoryChrome({
   onDone: () => void;
   /** The ? in the top bar: how Focus works (the tips). */
   onHelp?: () => void;
+  /** Leaving the workout, like the list page's own back button (Focus stays the saved view). */
+  back?: { label: string; onBack: () => void };
 }) {
   const count = names.length;
   const [rawIndex, setIndex] = useState(initialIndex);
@@ -570,17 +573,21 @@ export function StoryChrome({
               </button>
             ))}
           </div>
-          <div className="mt-1.5 flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <div data-testid="story-count" className="text-base font-bold leading-tight tabular-nums text-foreground">
-                Exercise {index + 1} of {count}
-              </div>
-              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                {/* the clock brings its own "·", so nothing dangles before it starts */}
-                {timer}
-                <span className="truncate">{title}</span>
-              </div>
-            </div>
+          {/* the way out where the list has it (top left), then help and the switch to the list */}
+          <div className="mt-2 flex items-center gap-2">
+            {back && (
+              <button
+                type="button"
+                data-testid="focus-leave"
+                onClick={back.onBack}
+                aria-label={`Leave the workout: back to ${back.label}`}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3 text-[13px] font-bold text-foreground transition active:scale-95"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                {back.label}
+              </button>
+            )}
+            <div className="flex-1" />
             {onHelp && (
               <button
                 type="button"
@@ -602,6 +609,16 @@ export function StoryChrome({
               <Rows3 className="h-4 w-4" aria-hidden />
               List
             </button>
+          </div>
+          <div className="mt-1.5 flex min-w-0 items-baseline gap-2">
+            <div data-testid="story-count" className="shrink-0 text-base font-bold leading-tight tabular-nums text-foreground">
+              Exercise {index + 1} of {count}
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              {/* the clock brings its own "·", so nothing dangles before it starts */}
+              {timer}
+              <span className="truncate">{title}</span>
+            </div>
           </div>
         </div>
       </div>

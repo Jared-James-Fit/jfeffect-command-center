@@ -586,8 +586,8 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
   overscroll-behavior-y: contain;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  /* clears the top bar (bars + "Exercise 5 of 7" + workout line) and the ‹ / Next bar */
-  padding: calc(env(safe-area-inset-top, 0px) + 92px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
+  /* clears the top bar (bars, ← Workouts / ? / List, "Exercise 5 of 7" + workout line) and the ‹ / Next bar */
+  padding: calc(env(safe-area-inset-top, 0px) + 114px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
   /* the card fills the screen between the bars (a long one scrolls) */
   display: flex;
   flex-direction: column;
