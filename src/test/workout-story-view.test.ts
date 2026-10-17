@@ -152,6 +152,14 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(story).not.toContain('label: "Story"');
     expect(story).toContain('data-testid="focus-exit"');
   });
+  it("← Workouts leaves the workout like the list's back button, keeping Focus as the saved view", () => {
+    expect(story).toContain('data-testid="focus-leave"');
+    expect(day).toContain("const pageBack = usePageBack(navigation.backTo);");
+    expect(day).toContain('back={{ label: "Workouts", onBack: leaveFromStory }}');
+    // a number being typed commits (and saves) before the page goes
+    expect(day).toContain("(document.activeElement as HTMLElement | null)?.blur?.();\n    requestAnimationFrame(() => requestAnimationFrame(pageBack));");
+    expect(read("src/components/app-shell.tsx")).toContain("const handleBack = usePageBack(backTo);");
+  });
   it("the top bar leads with where you are; the clock is plain and hides once stopped", () => {
     expect(story).toContain("Exercise {index + 1} of {count}");
     expect(story).toContain("if (!session || session.stoppedAt != null || isSessionAbandoned(session, now)) return null;");
