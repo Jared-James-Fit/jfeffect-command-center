@@ -158,16 +158,18 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
         </div>
       )}
 
-      <Button
-        variant="ghost"
-        size="sm"
-        className="mt-2 h-9 w-full text-xs text-muted-foreground hover:text-foreground"
-        onClick={undoLast}
-        disabled={!lastEntry}
-      >
-        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-        {lastEntry ? `Undo last (−${formatWater(lastEntry.amount_ml, "ml")})` : "Nothing to undo"}
-      </Button>
+      {/* only when there's something to take back (a greyed "Nothing to undo" was just noise) */}
+      {lastEntry && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-2 h-9 w-full text-xs text-muted-foreground hover:text-foreground"
+          onClick={undoLast}
+        >
+          <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+          Undo last (−{formatWater(lastEntry.amount_ml, "ml")})
+        </Button>
+      )}
     </Card>
     <HomeCustomWaterDialog
       open={customOpen}

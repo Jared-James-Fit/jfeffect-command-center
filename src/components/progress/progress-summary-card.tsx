@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Camera, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck, ChevronRight, History } from "lucide-react";
+import { Camera, Images, Scale, Ruler, ArrowRight, Video, MessageSquare, Dumbbell, ClipboardCheck, ChevronRight, History } from "lucide-react";
 import { CoachCheckinReplies } from "./coach-checkin-replies";
 
 /**
@@ -130,9 +130,10 @@ export function ProgressSummaryCard({
       .pop() ?? null;
     return (
       <Card className="overflow-hidden">
-        <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-bold">Progress</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">Add an update in one tap.</p>
+        {/* the same header as Home's Bodyweight and Water cards, which sit right above it */}
+        <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+          <Images className="h-5 w-5 shrink-0 text-primary" />
+          <h3 className="text-base font-bold">Progress</h3>
         </div>
         <div className="divide-y divide-border">
           {primary.map((p) => {
@@ -143,7 +144,7 @@ export function ProgressSummaryCard({
                 key={p.action}
                 to="/portal/progress"
                 search={{ action: p.action } as never}
-                className="flex min-h-14 items-center gap-3 px-4 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
+                className="flex min-h-14 items-center gap-3 px-5 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
               >
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10">
                   <Icon className="h-4.5 w-4.5 text-primary" />
@@ -156,7 +157,7 @@ export function ProgressSummaryCard({
           })}
           <Link
             to="/portal/progress"
-            className="flex min-h-14 items-center gap-3 bg-primary/[0.04] px-4 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
+            className="flex min-h-14 items-center gap-3 bg-primary/[0.04] px-5 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
               <History className="h-4.5 w-4.5" />

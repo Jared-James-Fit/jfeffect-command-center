@@ -81,12 +81,11 @@ describe("Recap: always at the top of Rankings, never dismissible", () => {
 });
 
 describe("Home order", () => {
-  it("Today → Rankings → Progress", () => {
+  it("Today → Progress (Rankings live in Crew, not on Home)", () => {
     const today = home.indexOf('aria-label="Today"');
-    const rankings = home.indexOf("<HomeLeaguePreviews />");
     const progress = home.indexOf('aria-label="Progress"');
     expect(today).toBeGreaterThan(-1);
-    expect(today).toBeLessThan(rankings);
-    expect(rankings).toBeLessThan(progress);
+    expect(today).toBeLessThan(progress);
+    expect(home).not.toContain("HomeLeaguePreviews");
   });
 });

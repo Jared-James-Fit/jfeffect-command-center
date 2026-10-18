@@ -5,7 +5,6 @@ import { clientBottomNav, clientNav } from "@/lib/admin-nav";
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const home = read("src/routes/_authenticated/portal/index.tsx");
 const card = read("src/components/portal/athlete-level-card.tsx");
-const swipe = read("src/components/portal/swipe-cards.tsx");
 const board = read("src/components/portal/strength-board.tsx");
 const recap = read("src/components/portal/league-recap.tsx");
 const hub = read("src/components/community/league-hub.tsx");
@@ -112,22 +111,15 @@ describe("Rankings", () => {
   });
 });
 
-describe("Home: what you do today, and one Body swipe", () => {
-  it("Bodyweight, Water and Progress share one spot; the standings left Home", () => {
-    expect(home).toContain('storageKey="jf-home-body"');
-    const swipeAt = home.indexOf("<SwipeCards");
+describe("Home: what you do today, then one card each for Bodyweight, Water and Progress", () => {
+  it("the three cards follow each other (no tabs to find them); the standings left Home", () => {
+    expect(home).not.toContain("<SwipeCards");
     const order = ["<BodyweightSummaryCard", "<HomeWaterCard", "<ProgressSummaryCard"].map((x) => home.indexOf(x));
-    expect(order.every((i) => i > swipeAt)).toBe(true);
+    expect(order.every((i) => i > home.indexOf('aria-label="Progress"'))).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(home).not.toContain("<AthleteLevelCard");
     expect(home).not.toContain("<StrengthBoardSlide");
-  });
-  it("swipe or tap the labels; the height follows the card you're on; opens on the one you looked at last", () => {
-    expect(swipe).toContain("snap-x snap-mandatory");
-    expect(swipe).toContain('role="tab"');
-    expect(swipe).toContain("new ResizeObserver(sync)");
-    expect(swipe).toContain("style={height ? { height } : undefined}");
-    expect(swipe).toContain("localStorage.setItem(storageKey, String(i));");
+    expect(home).not.toContain("<HomeLeaguePreviews");
   });
   it("billing, agreements and account aren't repeated on Home (they're in the menus)", () => {
     expect(home).not.toContain("ManageAccordion");
@@ -135,13 +127,3 @@ describe("Home: what you do today, and one Body swipe", () => {
   });
 });
 
-describe("SwipeCards always lands on a whole card", () => {
-  it("height follows only after the swipe settles, and settle snaps to the nearest card", async () => {
-    const { readFileSync } = await import("node:fs");
-    const src = readFileSync("src/components/portal/swipe-cards.tsx", "utf8");
-    expect(src).toMatch(/settleTimer\.current = window\.setTimeout\(settle, 140\)/);
-    expect(src).toMatch(/addEventListener\("scrollend", onEnd\)/);
-    expect(src).toMatch(/el\.scrollTo\(\{ left: target, behavior: "smooth" \}\)/);
-    expect(src).toMatch(/snap-center snap-always/);
-  });
-});
