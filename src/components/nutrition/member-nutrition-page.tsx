@@ -64,7 +64,7 @@ export function MemberNutritionPage() {
     <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
       <PageHeader
         title="Nutrition"
-        subtitle="Suggested targets, recipes, and recovery — all in one place."
+        subtitle="Your daily targets, meals and recipes."
       />
       <SectionErrorBoundary label="Meal plan">
         <MemberMealPlanPanel />
@@ -78,18 +78,6 @@ export function MemberNutritionPage() {
           hasCoachApprovedTargets={(saved as any)?.source === "coach"}
         />
       </SectionErrorBoundary>
-      {saved && (
-        <div className="px-4 md:px-6 -mt-2 mb-4 text-xs text-muted-foreground flex items-center gap-2">
-          <span className="rounded-full bg-secondary px-2 py-0.5 uppercase tracking-wide text-[10px] font-semibold">
-            {(saved as any).source === "coach" ? "Set by coach" : "Suggested"}
-          </span>
-          <span>
-            {(saved as any).source === "coach"
-              ? "Coach-set targets are shown above."
-              : "Use Recalculate in Suggested Nutrition Targets whenever you want a fresh estimate."}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

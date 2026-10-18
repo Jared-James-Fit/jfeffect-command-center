@@ -24,6 +24,7 @@ import { useAutosave } from "@/hooks/use-autosave";
 import { SavedIndicator } from "@/components/saved-indicator";
 import { ClientLegalSafety } from "@/components/legal/client-legal-safety";
 import { AgreementAccountCard } from "@/components/coaching-agreement/agreement-account-card";
+import { MemberAgreementCard } from "@/components/member/member-agreement";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { WearablesCard } from "@/components/portal/wearables-card";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
@@ -354,6 +355,8 @@ function AccountPage() {
         <div id="coaching-agreement" className="md:col-span-3 scroll-mt-32">
           <SectionErrorBoundary label="Coaching Agreement">
             <AgreementAccountCard />
+            {/* a JF member's agreement (the coaching one never applies to them) */}
+            {!isImpersonating && <MemberAgreementCard />}
           </SectionErrorBoundary>
         </div>
 

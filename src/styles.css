@@ -371,7 +371,7 @@ html[data-keyboard-open="true"] {
    top of the admin messenger on notched iPhones. */
 :root { --shell-topbar-h: 0px; }
 @media (max-width: 768px) {
-  :root { --shell-topbar-h: 57px; }
+  :root { --shell-topbar-h: 49px; }
 }
 /* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */

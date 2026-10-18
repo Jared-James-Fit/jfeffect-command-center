@@ -1,8 +1,9 @@
-import { type ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { HelpCircle, Calculator, AlertTriangle } from "lucide-react";
+import { HelpCircle, Calculator, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { RecipeProfile } from "./RecipeBrowser";
 import { CookbookEntryCard } from "./CookbookSheet";
 import { ensureWaterTarget, formatWater } from "@/lib/water";
@@ -64,7 +65,11 @@ export function NutritionDashboard({
           {viewer === "member" && !hasCoachApprovedTargets ? (
             <SuggestedTargetsSection targets={targets} userId={userId} />
           ) : (
-            <TargetsStrip targets={targets} userId={userId} />
+            <TargetsStrip
+              targets={targets}
+              userId={userId}
+              badge={viewer === "member" ? <TargetBadge>Set by coach</TargetBadge> : undefined}
+            />
           )}
         </SectionErrorBoundary>
       </div>
@@ -101,55 +106,96 @@ function SuggestedTargetsSection({
   userId?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const hasSuggestion = Boolean(
     targets && [targets.calories, targets.protein, targets.carbs, targets.fats].some((v) => v != null),
   );
 
+  // after a save the new numbers are what they look at
+  useEffect(() => {
+    if (!justSaved) return;
+    document.getElementById("targets")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const t = window.setTimeout(() => setJustSaved(false), 1800);
+    return () => window.clearTimeout(t);
+  }, [justSaved]);
+
+  const calculator = (
+    <MacroCalculatorDialog
+      open={open}
+      onOpenChange={setOpen}
+      viewer="member"
+      hasCoachApprovedTargets={false}
+      onSaved={() => setJustSaved(true)}
+    />
+  );
+
+  if (!hasSuggestion) {
+    return (
+      <>
+        <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-primary">Suggested Nutrition Targets</div>
+          <div className="mt-1 text-base font-black leading-tight">Get your daily calories and macros</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Six quick answers about you and your goal. We fill in what we already know.
+          </p>
+          <Button onClick={() => setOpen(true)} className="mt-3 h-11 w-full font-bold">
+            <Calculator className="mr-2 h-4 w-4" /> Get my targets
+          </Button>
+          <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+            These are general educational estimates, not medical advice.
+          </p>
+        </Card>
+        {calculator}
+      </>
+    );
+  }
+
   return (
-    <div className="space-y-3">
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-sm font-black">
-              <Calculator className="h-4 w-4 text-primary" />
-              Suggested Nutrition Targets
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              A simple membership estimate you can use as a starting point and adjust based on your results.
-            </p>
-          </div>
+    <>
+      <TargetsStrip
+        targets={targets}
+        userId={userId}
+        highlight={justSaved}
+        badge={<TargetBadge>Suggested</TargetBadge>}
+        action={
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="shrink-0 rounded-lg border border-primary/30 bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] font-semibold text-foreground transition hover:border-primary/50 active:scale-[0.97]"
           >
-            {hasSuggestion ? "Recalculate" : "Get suggestion"}
+            <RefreshCw className="h-3 w-3" /> Recalculate
           </button>
-        </div>
-
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-border/70 bg-background/70 p-3 text-[11px] text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-          <p>
-            Suggested targets are general educational estimates for Membership users, not medical advice,
-            a prescription, or individualized nutrition care. Health conditions, medications, pregnancy,
-            training load, recovery, and eating history can change your needs.
-          </p>
-        </div>
-      </Card>
-
-      {hasSuggestion && <TargetsStrip targets={targets} userId={userId} />}
-
-      <MacroCalculatorDialog
-        open={open}
-        onOpenChange={setOpen}
-        viewer="member"
-        hasCoachApprovedTargets={false}
+        }
+        footnote="From your body data and goal: general educational estimates, not medical advice."
       />
-    </div>
+      {calculator}
+    </>
   );
 }
 
-function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?: string }) {
+function TargetBadge({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+function TargetsStrip({
+  targets,
+  userId,
+  badge,
+  action,
+  footnote,
+  highlight,
+}: {
+  targets?: NutritionTargets;
+  userId?: string;
+  badge?: ReactNode;
+  action?: ReactNode;
+  footnote?: string;
+  highlight?: boolean;
+}) {
   const { user, role } = useAuth();
   const [waterOpen, setWaterOpen] = useState(false);
 
@@ -186,8 +232,14 @@ function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?
   if (targets?.sleep != null) extras.push({ label: "Sleep", value: String(targets.sleep) });
 
   return (
-    <Card className="space-y-4 p-4 md:p-5">
-      <div className="text-sm font-black uppercase tracking-widest">Daily Targets</div>
+    <Card className={cn("space-y-4 p-4 transition-shadow duration-500 md:p-5", highlight && "ring-2 ring-primary")}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="text-sm font-black uppercase tracking-widest">Daily Targets</div>
+          {badge}
+        </div>
+        {action}
+      </div>
       <MacroTargetsChart
         calories={targets?.calories}
         protein={targets?.protein}
@@ -195,6 +247,7 @@ function TargetsStrip({ targets, userId }: { targets?: NutritionTargets; userId?
         fats={targets?.fats}
         extras={extras}
       />
+      {footnote && <p className="text-[10px] leading-snug text-muted-foreground">{footnote}</p>}
       {userId && user?.id && (
         <WaterTargetDialog
           open={waterOpen}

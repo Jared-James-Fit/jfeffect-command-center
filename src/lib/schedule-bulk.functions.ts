@@ -523,6 +523,39 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
     });
   });
 
+/**
+ * Save someone's committed training days (frequency = the number of days) the
+ * way the Training Schedule card does, with its activity-log line. Callers
+ * realign afterwards. A DB trigger mirrors the days onto their app_members row.
+ */
+export async function writeCommittedDays(args: {
+  clientId: string;
+  userId: string;
+  role: Role;
+  days: WeekDay[];
+}): Promise<void> {
+  const { clientId, userId, role, days } = args;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error } = await supabaseAdmin
+    .from("clients")
+    .update({
+      committed_training_frequency: days.length,
+      committed_training_days: days,
+      training_schedule_completed: true,
+      training_schedule_last_updated: new Date().toISOString(),
+      training_schedule_updated_by: userId,
+    })
+    .eq("id", clientId);
+  if (error) throw new Error(error.message);
+  await supabaseAdmin.from("client_activity_log").insert({
+    client_id: clientId,
+    actor_user_id: userId,
+    actor_role: role,
+    action: "training_schedule_updated",
+    details: { committed_training_frequency: days.length, committed_training_days: days },
+  });
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // saveCommittedSchedule — ONE call that saves the committed training days and
 // re-dates every future, unstarted workout (all blocks, including Draft ones)
@@ -553,26 +586,7 @@ export const saveCommittedSchedule = createServerFn({ method: "POST" })
       throw new Error(`Select exactly ${data.frequency} valid training day${data.frequency === 1 ? "" : "s"}.`);
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error: saveErr } = await supabaseAdmin
-      .from("clients")
-      .update({
-        committed_training_frequency: data.frequency,
-        committed_training_days: days,
-        training_schedule_completed: true,
-        training_schedule_last_updated: new Date().toISOString(),
-        training_schedule_updated_by: userId,
-      })
-      .eq("id", data.clientId);
-    if (saveErr) throw new Error(saveErr.message);
-
-    await supabaseAdmin.from("client_activity_log").insert({
-      client_id: data.clientId,
-      actor_user_id: userId,
-      actor_role: role,
-      action: "training_schedule_updated",
-      details: { committed_training_frequency: data.frequency, committed_training_days: days },
-    });
+    await writeCommittedDays({ clientId: data.clientId, userId, role, days });
 
     try {
       // Changing the committed schedule is the explicit instruction to realign

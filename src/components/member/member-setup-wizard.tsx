@@ -37,6 +37,8 @@ type Step = "photo" | "contact" | "basics" | "goals" | "schedule";
 const STEPS: Step[] = ["photo", "contact", "basics", "goals", "schedule"];
 
 import { WEEK_DAYS, SHORT_DAY } from "@/lib/training-schedule";
+import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
+import { useServiceTier } from "@/lib/service-tier";
 
 export function MemberSetupWizard({
   open,
@@ -47,6 +49,7 @@ export function MemberSetupWizard({
 }) {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { clientId } = useServiceTier();
   const fetchStatus = useServerFn(getMySetupStatus);
   const update = useServerFn(updateMyMemberProfile);
   const { data } = useQuery({ queryKey: ["m-setup-status"], queryFn: () => fetchStatus(), enabled: open });
@@ -147,6 +150,13 @@ export function MemberSetupWizard({
         const r = await update({ data: patch });
         await qc.invalidateQueries({ queryKey: ["m-setup-status"] });
         await qc.invalidateQueries({ queryKey: ["current-member-access"] });
+        if (patch.committed_training_days) {
+          // the days are the committed schedule now: the Workouts card, calendar and plan picker re-read them
+          for (const key of ["my-client", "my-client-schedule", "my-client-schedule-gate", "client-training-schedule", "my-committed-days"]) {
+            void qc.invalidateQueries({ queryKey: [key] });
+          }
+          invalidateScheduleQueries(qc, { clientId: clientId ?? null });
+        }
         if (next === undefined) {
           if (r.setupComplete) {
             toast.success("Setup complete! Welcome.");
@@ -276,7 +286,7 @@ export function MemberSetupWizard({
                 Which days will you train? <span className="text-destructive">*</span>
               </Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Pick the days you commit to training each week. We use this to build your workout library and schedule. You can update it anytime in Account Settings.
+                Pick the days you commit to training each week. Your plan's workouts go on these days, and the Plan Library shows plans that fit this many. Change it anytime from Workouts.
               </p>
             </div>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
