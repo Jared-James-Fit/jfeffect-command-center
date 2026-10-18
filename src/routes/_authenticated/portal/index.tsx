@@ -1,5 +1,4 @@
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
-import { HomeLeaguePreviews } from "@/components/portal/home-league-previews";
 import { HomeSectionLabel } from "@/components/portal/home-section-label";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,7 +23,6 @@ import { SessionsCard } from "@/components/portal/sessions-card";
 import { SetupChecklistBanner } from "@/components/portal/setup-checklist-banner";
 import { AgreementDashboardCard } from "@/components/coaching-agreement/agreement-dashboard-card";
 import { LevelCelebrations } from "@/components/portal/athlete-level-card";
-import { SwipeCards } from "@/components/portal/swipe-cards";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
 import { useEffect, useState } from "react";
@@ -228,8 +226,8 @@ function PortalHome() {
       )}
 
       <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-safe-bottom pt-3 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
-        {/* Home is three sections: Today (what to do), Progress (what to log),
-            Crew (who's training). Anything else shows only while it needs you. */}
+        {/* Home is two sections: Today (what to do) and Progress (what to log).
+            Rankings and the feed live in Crew. Anything else shows only while it needs you. */}
 
         {/* ── Today ───────────────────────────────────────────── */}
         <section className="space-y-3" aria-label="Today">
@@ -280,62 +278,37 @@ function PortalHome() {
           </DeferRender>
         </section>
 
-        {/* ── Rankings ────────────────────────────────────────── */}
-        {/* laid out like Progress: League (first) and Hall of Strength tabs; the feed lives in Crew */}
-        {client?.id && (
-          <SectionErrorBoundary label="Rankings">
-            <HomeLeaguePreviews />
-          </SectionErrorBoundary>
-        )}
-
         {/* ── Progress ────────────────────────────────────────── */}
+        {/* One card each, in the order people log them: weigh-in, water, then
+            photos and measurements. No tabs: every card is right there as you
+            scroll. Rankings aren't repeated here (Crew → Rankings has them). */}
         {client?.id && portalUserId ? (
           <section className="space-y-3" aria-label="Progress">
             <HomeSectionLabel>Progress</HomeSectionLabel>
-            {/* weigh-in first (most clients log it), then water and progress, one swipe apart */}
-            <DeferRender placeholderHeight="h-52">
-              <SwipeCards
-                storageKey="jf-home-body"
-                cards={[
-                  {
-                    key: "bodyweight",
-                    label: "Bodyweight",
-                    node: (
-                      <SectionErrorBoundary label="Bodyweight">
-                        <BodyweightSummaryCard
-                          clientId={client.id}
-                          userId={portalUserId}
-                          defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
-                        />
-                      </SectionErrorBoundary>
-                    ),
-                  },
-                  {
-                    key: "water",
-                    label: "Water",
-                    node: (
-                      <SectionErrorBoundary label="Water">
-                        <HomeWaterCard userId={portalUserId} currentUserId={portalUserId} surface="portal" />
-                      </SectionErrorBoundary>
-                    ),
-                  },
-                  {
-                    key: "progress",
-                    label: "Progress",
-                    node: (
-                      <SectionErrorBoundary label="Progress">
-                        <ProgressSummaryCard
-                          userId={portalUserId}
-                          currentUserId={portalUserId}
-                          viewerRole="owner"
-                          progressHref={{ kind: "portal" }}
-                          liftHref="/portal/lift-videos"
-                        />
-                      </SectionErrorBoundary>
-                    ),
-                  },
-                ]}
-              />
+            <DeferRender placeholderHeight="h-80">
+              <SectionErrorBoundary label="Bodyweight">
+                <BodyweightSummaryCard
+                  clientId={client.id}
+                  userId={portalUserId}
+                  defaultUnit={((client as any)?.preferred_weight_unit as WeightUnit) ?? "lb"}
+                />
+              </SectionErrorBoundary>
+            </DeferRender>
+            <DeferRender placeholderHeight="h-72">
+              <SectionErrorBoundary label="Water">
+                <HomeWaterCard userId={portalUserId} currentUserId={portalUserId} surface="portal" />
+              </SectionErrorBoundary>
+            </DeferRender>
+            <DeferRender placeholderHeight="h-80">
+              <SectionErrorBoundary label="Progress">
+                <ProgressSummaryCard
+                  userId={portalUserId}
+                  currentUserId={portalUserId}
+                  viewerRole="owner"
+                  progressHref={{ kind: "portal" }}
+                  liftHref="/portal/lift-videos"
+                />
+              </SectionErrorBoundary>
             </DeferRender>
             <SectionErrorBoundary label="Devices">
               <WearablesCard mode="summary" />
