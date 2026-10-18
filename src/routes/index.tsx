@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { DashboardSplash } from "@/components/dashboard-splash";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { cachedLaunchTarget, launchTarget } from "@/lib/launch-home";
+import { CLIENT_VIEW_HOME, cachedLaunchTarget, launchTarget } from "@/lib/launch-home";
 import { getViewMode } from "@/lib/view-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { hasPersistedAuthSession } from "@/lib/session-hint";
@@ -65,9 +65,9 @@ function IndexRedirect() {
     launched.current = true;
     if (user && role) {
       // Respect active Client POV: admins/coaches impersonating a client
-      // must land in /portal, not their own admin dashboard.
+      // land where the client's app opens (Crew), not their own dashboard.
       if (isImpersonating && (role === "admin" || role === "coach")) {
-        navigate({ to: "/portal", replace: true });
+        navigate({ to: CLIENT_VIEW_HOME, replace: true });
         return;
       }
 
