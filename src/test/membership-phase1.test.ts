@@ -43,8 +43,10 @@ describe("one athlete record, the service tier decides the coach's layer", () =>
 
 describe("/m lands on the same screen in the portal", () => {
   it("maps every member path, keeps the Fillout landing", () => {
-    expect(memberPathToPortal("/m")).toBe("/portal");
-    expect(memberPathToPortal("/m/")).toBe("/portal");
+    // the old member app's start opens where the app opens now (Crew)
+    expect(memberPathToPortal("/m")).toBe("/portal/community");
+    expect(memberPathToPortal("/m/")).toBe("/portal/community");
+    expect(memberPathToPortal("/m/more")).toBe("/portal");
     expect(memberPathToPortal("/m/billing")).toBe("/portal/membership");
     expect(memberPathToPortal("/m/upgrade")).toBe("/portal/upgrade");
     expect(memberPathToPortal("/m/support")).toBe("/portal/support");
@@ -59,7 +61,7 @@ describe("/m lands on the same screen in the portal", () => {
 
   it("signup, login and Stripe returns all land in the portal", () => {
     expect(read("src/routes/m.welcome.tsx")).not.toContain('navigate({ to: "/m"');
-    expect(read("src/routes/auth.tsx")).toContain('role === "member" || role === "client" ? "/portal"');
+    expect(read("src/routes/auth.tsx")).toContain('const fallback = viewOnly ? "/finance" : launchTarget(user.id, role);');
     const billing = read("src/lib/jf-billing.functions.ts");
     expect(billing).toContain("/portal/membership?restarted=1");
     expect(read("src/lib/member-checkout.functions.ts")).toContain("/portal?upgrade=success");

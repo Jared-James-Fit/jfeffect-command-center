@@ -2,6 +2,7 @@ import { cachedSessionRole } from "@/lib/auth";
 import { hasStoredClientPov } from "@/lib/client-impersonation";
 import { getViewMode } from "@/lib/view-mode";
 import { resumableWorkoutRoute } from "@/lib/route-persistence";
+import { CLIENT_VIEW_HOME } from "@/lib/client-home";
 
 /**
  * Where a fresh launch of the app lands (a cold launch always starts at "/").
@@ -19,12 +20,7 @@ import { resumableWorkoutRoute } from "@/lib/route-persistence";
 
 export type LaunchRole = string | null | undefined;
 
-/**
- * Where the client app opens: a client's or member's own launch, and every
- * "View as client" / member preview a coach enters, so the coach sees the app
- * the way the person does when they open it.
- */
-export const CLIENT_VIEW_HOME = "/portal/community" as const;
+export { CLIENT_VIEW_HOME };
 
 /** The Crew page for this role (or its desk / dashboard when it has no Crew). */
 export function crewHome(role: LaunchRole, view: "client" | "staff" | null = null): string {

@@ -1,3 +1,5 @@
+import { CLIENT_VIEW_HOME } from "@/lib/client-home";
+
 /**
  * The old JF Membership area (/m) now lives in the portal: one app for
  * coaching clients and members (service tier decides the coach's screens).
@@ -6,7 +8,9 @@
  */
 export function memberPathToPortal(pathname: string): string | null {
   const p = pathname.replace(/\/+$/, "") || "/m";
-  if (p === "/m" || p === "/m/more") return "/portal";
+  // the old member app's start: where the app opens now (Crew)
+  if (p === "/m") return CLIENT_VIEW_HOME;
+  if (p === "/m/more") return "/portal";
   if (p.startsWith("/m/forms/")) return null;
   const exact: Record<string, string> = {
     "/m/workouts": "/portal/workouts",

@@ -1,3 +1,5 @@
+import { CLIENT_VIEW_HOME } from "@/lib/client-home";
+
 /**
  * Shared, PURE notification payload/identity normalizer.
  *
@@ -144,7 +146,7 @@ export function notificationDeepLink(
     case "agreement":
       return staff && ids.clientId
         ? `/admin/clients/${ids.clientId}?tab=agreements`
-        : "/portal";
+        : "/portal/agreements";
     case "payment":
       return staff ? "/admin/payments" : "/portal/purchases";
     case "program":
@@ -152,7 +154,8 @@ export function notificationDeepLink(
         ? `/admin/clients/${ids.clientId}?tab=training`
         : "/portal/workouts";
     default:
-      return staff ? "/admin" : "/portal";
+      // nothing more specific: where the app opens (Crew)
+      return staff ? "/admin/community" : CLIENT_VIEW_HOME;
   }
 }
 
