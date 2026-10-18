@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkoutView } from "@/lib/use-workout-view";
 import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
@@ -20,14 +20,20 @@ import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs
 const OPEN_LAYER = '[data-swipe-open], [role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
 /** A swipe up or down this long moves to the next / previous exercise… */
-export const SWIPE_COMMIT_PX = 72;
+export const SWIPE_COMMIT_PX = 56;
 /** …or a quick flick: at least this long, moving this fast as the finger lifts (px per ms). */
-export const FLICK_MIN_PX = 28;
-export const FLICK_PX_PER_MS = 0.4;
+export const FLICK_MIN_PX = 24;
+export const FLICK_PX_PER_MS = 0.3;
 /** The flick's speed is read over the finger's last moments, not the whole drag… */
 export const FLICK_WINDOW_MS = 100;
 /** …and a finger that stopped this long before lifting wasn't flicking. */
-export const FLICK_IDLE_MS = 80;
+export const FLICK_IDLE_MS = 120;
+/** A swipe is up / down when it's at least this steep (|dy| ≥ ratio × |dx|): a thumb swiping up one-handed arcs sideways. Swipe to delete only claims |dx| ≥ 1.6 × |dy|. */
+export const SWIPE_VERTICAL_RATIO = 0.8;
+/** Scroll positions within this of a card's end count as the end (phones report fractions of a pixel). */
+export const EDGE_SLOP_PX = 4;
+/** A card with no more than this to scroll is "a little too tall": one swipe or flick scrolls it and moves on. A longer one is read first: only a deliberate swipe past its end (no flick) moves on. */
+export const NEARLY_FITS_PX = 96;
 
 /**
  * Where a swipe up or down goes: up (the finger moves up) is the next
@@ -61,11 +67,30 @@ export function flickSpeed(samples: ReadonlyArray<{ y: number; t: number }>, dy:
   return Math.max(0, ((last.y - first.y) * Math.sign(dy)) / dt);
 }
 
+/**
+ * A swipe on a card that had more to show that way: the card scrolls to its
+ * end first, and what the finger travelled past the end is the swipe (so a
+ * card a little taller than the screen never takes two swipes). `travel` is
+ * the finger's distance, `scrolled` how far the card moved, `room` how far it
+ * could; all in the swipe's direction.
+ */
+export function pastEdge(travel: number, scrolled: number, room: number): number {
+  return Math.max(0, travel - Math.min(Math.max(0, room), Math.max(0, scrolled)));
+}
+
+/** Where a swipe that first scrolled its card goes (see pastEdge): a card that nearly fits moves on like any swipe; a long one only on a deliberate pull past its end. */
+export function pastEdgeDirection(s: { up: boolean; past: number; room: number; speed: number }): -1 | 0 | 1 {
+  const dir = s.up ? 1 : -1;
+  if (s.room <= NEARLY_FITS_PX) return focusSwipeDirection({ dy: s.up ? -s.past : s.past, speed: s.speed, atTop: true, atBottom: true });
+  return s.past >= SWIPE_COMMIT_PX ? dir : 0;
+}
+
 /** Something between the finger and the screen that scrolls up and down by itself (a notes box): its drag is a scroll. */
 function scrollsOnItsOwn(from: Element | null, slide: HTMLElement): boolean {
   for (let n = from; n && n !== slide; n = n.parentElement) {
     if (n instanceof HTMLTextAreaElement) return true;
-    if (n.scrollHeight > n.clientHeight + 1) {
+    // more than a rounding's worth: a sideways row's 1px overflow isn't a scroller
+    if (n.scrollHeight - n.clientHeight > EDGE_SLOP_PX) {
       const oy = getComputedStyle(n).overflowY;
       if (oy === "auto" || oy === "scroll") return true;
     }
@@ -279,6 +304,9 @@ export function StoryChrome({
   // the card holds, a chevron nudges and the bottom button pulses. Arrow keys
   // on a keyboard.
   const latest = useRef({ index, count, onJump });
+  // the bars are part of the swipe area too (the thumb rests on the bottom one)
+  const topRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
   latest.current = { index, count, onJump };
   // at either end: a chevron nudges on that side (and Next / Finish pulses)
   const [nudge, setNudge] = useState<{ dir: -1 | 1; k: number } | null>(null);
@@ -315,10 +343,20 @@ export function StoryChrome({
       return true;
     };
     // ── Swipe up / down ──
+    // A swipe starts anywhere on the card's screen or on Focus's own bars (the
+    // thumb rests on the bottom one). "drag": the card fits that way, so it
+    // follows the finger; "scroll": it had more to show, so it scrolls to its
+    // end and what the finger travels past the end is the swipe (pastEdge).
     const swipe = {
-      on: false, decided: false, x: 0, y: 0, dy: 0,
-      atTop: false, atBottom: false, card: null as HTMLElement | null,
+      on: false, decided: false, mode: "drag" as "drag" | "scroll", x: 0, y: 0, dy: 0,
+      atTop: false, atBottom: false, card: null as HTMLElement | null, slide: null as HTMLElement | null,
+      startScroll: 0, maxScroll: 0,
       samples: [] as Array<{ y: number; t: number }>,
+    };
+    const zones = [el, topRef.current, bottomRef.current].filter((z): z is HTMLDivElement => !!z);
+    const slideOnScreen = () => {
+      const { index: i } = latest.current;
+      return el.querySelectorAll<HTMLElement>("[data-story-slide]")[heading ?? i] ?? null;
     };
     let swallowUntil = 0; // the click a swipe's release would land on the new card
     const dragTo = (card: HTMLElement, dy: number) => {
@@ -339,20 +377,30 @@ export function StoryChrome({
     const onTouchStart = (e: TouchEvent) => {
       swipe.on = false;
       if (e.touches.length !== 1 || document.querySelector(OPEN_LAYER)) return;
-      // keyboard up: a drag is reading the card, not moving on (a tap closes it first)
+      // keyboard up: a drag is reading the card, not moving on (Done closes it first)
       if (document.activeElement?.closest?.(TYPING)) return;
       const target = e.target instanceof Element ? e.target : null;
-      const slide = target?.closest<HTMLElement>("[data-story-slide]") ?? null;
-      if (!slide || !el.contains(slide) || scrollsOnItsOwn(target, slide)) return;
+      let slide = target?.closest<HTMLElement>("[data-story-slide]") ?? null;
+      if (slide && el.contains(slide)) {
+        if (scrollsOnItsOwn(target, slide)) return;
+      } else {
+        // on the top or bottom bar: the exercise on screen
+        slide = slideOnScreen();
+        if (!slide) return;
+      }
       const t = e.touches[0];
       swipe.on = true;
       swipe.decided = false;
+      swipe.mode = "drag";
       swipe.x = t.clientX;
       swipe.y = t.clientY;
       swipe.samples = [{ y: t.clientY, t: e.timeStamp }];
       swipe.dy = 0;
-      swipe.atTop = slide.scrollTop <= 1;
-      swipe.atBottom = slide.scrollTop + slide.clientHeight >= slide.scrollHeight - 1;
+      swipe.slide = slide;
+      swipe.startScroll = slide.scrollTop;
+      swipe.maxScroll = Math.max(0, slide.scrollHeight - slide.clientHeight);
+      swipe.atTop = swipe.startScroll <= EDGE_SLOP_PX;
+      swipe.atBottom = swipe.startScroll >= swipe.maxScroll - EDGE_SLOP_PX;
       swipe.card = slide.firstElementChild as HTMLElement | null;
     };
     const onTouchMove = (e: TouchEvent) => {
@@ -365,9 +413,12 @@ export function StoryChrome({
       if (!swipe.decided) {
         if (Math.hypot(dx, dy) < 10) return;
         swipe.decided = true;
-        // sideways is the card's own (swipe to delete); toward more of a long card is a scroll
-        if (Math.abs(dy) < Math.abs(dx) * 1.2 || !(dy < 0 ? swipe.atBottom : swipe.atTop)) { swipe.on = false; return; }
+        // sideways is the card's own (swipe to delete)
+        if (Math.abs(dy) < Math.abs(dx) * SWIPE_VERTICAL_RATIO) { swipe.on = false; return; }
+        // toward more of the card: it scrolls (natively) first
+        swipe.mode = (dy < 0 ? swipe.atBottom : swipe.atTop) ? "drag" : "scroll";
       }
+      if (swipe.mode === "scroll") return;
       if (e.cancelable) e.preventDefault();
       // only the way it can go: back past the start toward more card is nothing
       swipe.dy = dy < 0 ? (swipe.atBottom ? dy : 0) : (swipe.atTop ? dy : 0);
@@ -376,17 +427,35 @@ export function StoryChrome({
     const onTouchEnd = (e: TouchEvent) => {
       if (!swipe.on || !swipe.decided) { swipe.on = false; return; }
       swipe.on = false;
+      if (swipe.mode === "scroll") {
+        // the card scrolled; if it reached its end, the rest of the travel is the swipe
+        const slide = swipe.slide;
+        const lift = e.changedTouches[0];
+        if (!slide || !lift) return;
+        const fingerDy = lift.clientY - swipe.y;
+        const up = fingerDy < 0;
+        const atEnd = up ? slide.scrollTop >= swipe.maxScroll - EDGE_SLOP_PX : slide.scrollTop <= EDGE_SLOP_PX;
+        if (!atEnd || fingerDy === 0) return;
+        const room = up ? swipe.maxScroll - swipe.startScroll : swipe.startScroll;
+        const past = pastEdge(Math.abs(fingerDy), up ? slide.scrollTop - swipe.startScroll : swipe.startScroll - slide.scrollTop, room);
+        const dir = pastEdgeDirection({ up, past, room, speed: flickSpeed(swipe.samples, fingerDy, e.timeStamp) });
+        if (dir !== 0) {
+          swallowUntil = performance.now() + 300;
+          go(dir, "swipe");
+        }
+        return;
+      }
       const dir = focusSwipeDirection({ dy: swipe.dy, speed: flickSpeed(swipe.samples, swipe.dy, e.timeStamp), atTop: swipe.atTop, atBottom: swipe.atBottom });
       const card = swipe.card;
       if (dir !== 0) {
-        swallowUntil = performance.now() + 400;
+        swallowUntil = performance.now() + 300;
         if (card) { card.style.transition = ""; card.style.transform = ""; card.style.opacity = ""; }
         if (go(dir, "swipe")) return;
       }
       settleBack(card);
     };
     const onTouchCancel = () => {
-      if (swipe.on && swipe.decided) settleBack(swipe.card);
+      if (swipe.on && swipe.decided && swipe.mode === "drag") settleBack(swipe.card);
       swipe.on = false;
     };
     const onClickCapture = (e: MouseEvent) => {
@@ -400,26 +469,48 @@ export function StoryChrome({
       if (e.key === "ArrowRight") go(1, "key");
       else if (e.key === "ArrowLeft") go(-1, "key");
     };
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    // not passive: a swipe holds the screen still (no rubber band) while the card follows
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", onTouchCancel, { passive: true });
-    el.addEventListener("click", onClickCapture, true);
+    for (const z of zones) {
+      z.addEventListener("touchstart", onTouchStart, { passive: true });
+      // not passive: a swipe holds the screen still (no rubber band) while the card follows
+      z.addEventListener("touchmove", onTouchMove, { passive: false });
+      z.addEventListener("touchend", onTouchEnd, { passive: true });
+      z.addEventListener("touchcancel", onTouchCancel, { passive: true });
+      z.addEventListener("click", onClickCapture, true);
+    }
     window.addEventListener("keydown", onKey);
     return () => {
       window.clearTimeout(settle);
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchCancel);
-      el.removeEventListener("click", onClickCapture, true);
+      for (const z of zones) {
+        z.removeEventListener("touchstart", onTouchStart);
+        z.removeEventListener("touchmove", onTouchMove);
+        z.removeEventListener("touchend", onTouchEnd);
+        z.removeEventListener("touchcancel", onTouchCancel);
+        z.removeEventListener("click", onClickCapture, true);
+      }
       window.removeEventListener("keydown", onKey);
     };
   }, [listRef]);
 
   const last = index >= count - 1;
   const currentDone = !!done[index];
+  // An exercise that becomes done while Focus is open: its bar fills green
+  // once and "Done" pops by "Exercise N of M". Ones already done when Focus
+  // opened just show green.
+  const prevDoneRef = useRef<boolean[] | null>(null);
+  const [justDone, setJustDone] = useState<{ i: number; k: number } | null>(null);
+  useEffect(() => {
+    const prev = prevDoneRef.current;
+    prevDoneRef.current = done;
+    if (!prev || prev.length !== done.length) return;
+    const i = done.findIndex((d, j) => d && !prev[j]);
+    if (i >= 0) setJustDone({ i, k: Date.now() });
+  }, [done]);
+  // once played, it's just green: coming back to that exercise doesn't replay it
+  useEffect(() => {
+    if (!justDone) return;
+    const t = window.setTimeout(() => setJustDone(null), 900);
+    return () => window.clearTimeout(t);
+  }, [justDone]);
   const [finishing, setFinishing] = useState(false);
   const anim = "animate-in fade-in-0 duration-300";
 
@@ -489,6 +580,7 @@ export function StoryChrome({
         </div>
       )}
       <div
+        ref={topRef}
         data-testid="story-top"
         className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2.5 pt-[calc(var(--focus-top)+6px)]", anim)}
       >
@@ -503,12 +595,25 @@ export function StoryChrome({
                 aria-current={i === index ? "step" : undefined}
                 className="flex h-4 min-w-0 flex-1 items-center"
               >
+                {/* done is green; the one you're on is a little thicker */}
                 <span
+                  data-done={done[i] ? "" : undefined}
                   className={cn(
-                    "h-1 w-full rounded-full transition-colors duration-300",
-                    i === index ? (done[i] ? "bg-primary" : "bg-foreground") : done[i] ? "bg-primary/70" : "bg-foreground/20",
+                    "relative w-full rounded-full bg-foreground/20 transition-[height] duration-300",
+                    i === index ? "h-1.5" : "h-1",
                   )}
-                />
+                >
+                  {(done[i] || i === index) && (
+                    <span
+                      key={justDone?.i === i ? justDone.k : "fill"}
+                      className={cn(
+                        "absolute inset-0 rounded-full transition-colors duration-300",
+                        done[i] ? "bg-emerald-500" : "bg-foreground",
+                        done[i] && justDone?.i === i && "jf-bar-fill",
+                      )}
+                    />
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -553,6 +658,19 @@ export function StoryChrome({
             <div data-testid="story-count" className="shrink-0 text-base font-bold leading-tight tabular-nums text-foreground">
               Exercise {index + 1} of {count}
             </div>
+            {currentDone && (
+              <span
+                key={justDone?.i === index ? justDone.k : "done"}
+                data-testid="story-done"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-500",
+                  justDone?.i === index && "jf-done-pop",
+                )}
+              >
+                <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                Done
+              </span>
+            )}
             <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
               {/* the clock brings its own "·", so nothing dangles before it starts */}
               {timer}
@@ -562,6 +680,7 @@ export function StoryChrome({
         </div>
       </div>
       <div
+        ref={bottomRef}
         data-testid="story-bottom"
         className={cn(
           "fixed inset-x-0 bottom-0 z-[41] border-t border-border/60 bg-background px-3 pb-[calc(env(safe-area-inset-bottom,0px)+10px)] pt-2.5",

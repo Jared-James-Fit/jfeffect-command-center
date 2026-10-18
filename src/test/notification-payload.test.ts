@@ -106,10 +106,11 @@ describe("role-aware deep links", () => {
     ["workout_review", "/admin/lift-videos", "/portal/lift-videos"],
     ["check_in", `/admin/clients/${UUID}?tab=check-ins`, "/portal/check-in"],
     ["appointment", "/admin/appointments", "/portal/appointments"],
-    ["agreement", `/admin/clients/${UUID}?tab=agreements`, "/portal"],
+    ["agreement", `/admin/clients/${UUID}?tab=agreements`, "/portal/agreements"],
     ["payment", "/admin/payments", "/portal/purchases"],
     ["program", `/admin/clients/${UUID}?tab=training`, "/portal/workouts"],
-    ["generic", "/admin", "/portal"],
+    // nothing more specific: where the app opens (Crew)
+    ["generic", "/admin/community", "/portal/community"],
   ];
   it.each(cases)("%s routes per role", (kind, staffUrl, clientUrl) => {
     const ids = { clientId: UUID, groupId: UUID };

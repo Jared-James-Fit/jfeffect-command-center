@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { FLICK_IDLE_MS, SWIPE_COMMIT_PX, flickSpeed, focusSwipeDirection, pickStoryStart } from "@/components/workout-day/workout-story";
+import { FLICK_IDLE_MS, NEARLY_FITS_PX, SWIPE_COMMIT_PX, SWIPE_VERTICAL_RATIO, flickSpeed, focusSwipeDirection, pastEdge, pastEdgeDirection, pickStoryStart } from "@/components/workout-day/workout-story";
+import { SWIPE_LOCK_RATIO } from "@/components/workout-day/swipe-to-reveal";
 import { FOCUS_TIPS_SINCE, resolveWorkoutView, tipsSeenSince } from "@/lib/use-workout-view";
 import { TOP_FIRST_DOUBLE_TAP_MS, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 
@@ -33,7 +34,7 @@ describe("Focus: a tap never moves (swipe, ‹ / Next, the bars or arrow keys do
     expect(story).not.toContain("focusTapDirection");
     // the only click listener is the swipe's swallow
     expect(story.match(/addEventListener\("click"/g)).toHaveLength(1);
-    expect(story).toContain('el.addEventListener("click", onClickCapture, true);');
+    expect(story).toContain('z.addEventListener("click", onClickCapture, true);');
     expect(story).toContain("const to = (heading ?? i) + dir;");
     expect(story).toContain('data-testid="focus-end-nudge"');
   });
@@ -67,6 +68,33 @@ describe("Focus: swipe up for the next exercise, down to go back", () => {
     // moving back the other way at the end isn't a flick this way
     expect(flickSpeed([{ y: 500, t: 0 }, { y: 460, t: 16 }, { y: 480, t: 32 }], -20, 40)).toBe(0);
   });
+  it("one swipe is enough: a card that had more to show scrolls to its end, and the travel past it moves on", () => {
+    // a card 30px too tall, swiped up 140px: 30 scrolls it, 110 is the swipe
+    expect(pastEdge(140, 30, 30)).toBe(110);
+    expect(focusSwipeDirection({ dy: -pastEdge(140, 30, 30), speed: 0, atTop: true, atBottom: true })).toBe(1);
+    // reading a long card: the finger only scrolled it
+    expect(pastEdge(100, 100, 400)).toBe(0);
+    // a phone that reports the bounce past the end: only the real room counts
+    expect(pastEdge(140, 45, 30)).toBe(110);
+  });
+  it("a card that nearly fits moves on with any swipe or flick; a long card only on a deliberate pull past its end", () => {
+    expect(pastEdgeDirection({ up: true, past: 30, room: 40, speed: 0.8 })).toBe(1);
+    expect(pastEdgeDirection({ up: false, past: SWIPE_COMMIT_PX, room: 40, speed: 0 })).toBe(-1);
+    // reading a long card: a quick flick that just reaches the end stays on it
+    expect(pastEdgeDirection({ up: true, past: 35, room: NEARLY_FITS_PX + 100, speed: 0.8 })).toBe(0);
+    expect(pastEdgeDirection({ up: true, past: SWIPE_COMMIT_PX, room: NEARLY_FITS_PX + 100, speed: 0 })).toBe(1);
+  });
+  it("a thumb's arc still counts as up / down, and never overlaps swipe to delete", () => {
+    expect(SWIPE_VERTICAL_RATIO).toBeLessThan(1);
+    // delete claims |dx| ≥ 1.6|dy|, i.e. |dy| ≤ |dx| / 1.6: the vertical rule starts above that
+    expect(SWIPE_VERTICAL_RATIO).toBeGreaterThan(1 / SWIPE_LOCK_RATIO);
+  });
+  it("the bars swipe too (the thumb rests on the bottom one), from the exercise on screen", () => {
+    const story = read("src/components/workout-day/workout-story.tsx");
+    expect(story).toContain("const zones = [el, topRef.current, bottomRef.current]");
+    expect(story).toContain("ref={bottomRef}");
+    expect(story).toContain("slide = slideOnScreen();");
+  });
   it("a long card scrolls first: up only from its bottom, down only from its top", () => {
     expect(focusSwipeDirection({ dy: -200, speed: 1, atTop: true, atBottom: false })).toBe(0);
     expect(focusSwipeDirection({ dy: 200, speed: 1, atTop: false, atBottom: true })).toBe(0);
@@ -75,10 +103,10 @@ describe("Focus: swipe up for the next exercise, down to go back", () => {
   });
   it("touch only, never while typing or over a menu; the release can't tap the next card; no sideways glide", () => {
     const story = read("src/components/workout-day/workout-story.tsx");
-    expect(story).toContain('el.addEventListener("touchmove", onTouchMove, { passive: false });');
+    expect(story).toContain('z.addEventListener("touchmove", onTouchMove, { passive: false });');
     expect(story).toContain("if (document.activeElement?.closest?.(TYPING)) return;");
     expect(story).toContain("if (e.touches.length !== 1 || document.querySelector(OPEN_LAYER)) return;");
-    expect(story).toContain('el.addEventListener("click", onClickCapture, true);');
+    expect(story).toContain('z.addEventListener("click", onClickCapture, true);');
     expect(story).toContain("jump(to, { instant: true });");
     const day = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(day).toContain('behavior: opts?.instant || storyReduced() ? "auto" : "smooth"');
@@ -142,6 +170,15 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
   const story = read("src/components/workout-day/workout-story.tsx");
   const day = read("src/components/workout-day/WorkoutDayView.tsx");
   const css = read("src/styles.css");
+  it("a finished exercise is green (fills once, \"Done\" pops), the one you're on is thicker", () => {
+    expect(story).toContain('done[i] ? "bg-emerald-500" : "bg-foreground"');
+    expect(story).toContain('i === index ? "h-1.5" : "h-1"');
+    expect(story).toContain('done[i] && justDone?.i === i && "jf-bar-fill"');
+    expect(story).toContain('data-testid="story-done"');
+    expect(story).toContain("window.setTimeout(() => setJustDone(null), 900);");
+    expect(css).toContain(".jf-bar-fill { transform-origin: left center;");
+    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{\n  \.jf-bar-fill, \.jf-done-pop \{ animation: none; \}/);
+  });
   it("is called Focus, and the way out says List", () => {
     expect(story).toContain('{ value: "story", label: "Focus", icon: RectangleVertical }');
     expect(story).not.toContain('label: "Story"');
