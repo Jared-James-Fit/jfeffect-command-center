@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { FLICK_IDLE_MS, SWIPE_COMMIT_PX, flickSpeed, focusSwipeDirection, focusTapDirection, focusTapIgnored, pickStoryStart } from "@/components/workout-day/workout-story";
-import { resolveWorkoutView } from "@/lib/use-workout-view";
+import { FLICK_IDLE_MS, SWIPE_COMMIT_PX, flickSpeed, focusSwipeDirection, pickStoryStart } from "@/components/workout-day/workout-story";
+import { FOCUS_TIPS_SINCE, resolveWorkoutView, tipsSeenSince } from "@/lib/use-workout-view";
 import { TOP_FIRST_DOUBLE_TAP_MS, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -26,34 +26,29 @@ describe("story view: where it opens", () => {
   });
 });
 
-describe("Focus: tap to move, like Crew's stories", () => {
-  it("the left third goes back, anywhere else forward", () => {
-    expect(focusTapDirection(50, 390)).toBe(-1);
-    expect(focusTapDirection(129, 390)).toBe(-1);
-    expect(focusTapDirection(131, 390)).toBe(1);
-    expect(focusTapDirection(380, 390)).toBe(1);
-  });
-  it("only controls (and a card swiped open) keep their taps; empty space anywhere moves, the set table's included", () => {
-    expect(focusTapIgnored(null)).toBe(true);
+describe("Focus: a tap never moves (swipe, ‹ / Next, the bars or arrow keys do)", () => {
+  it("no tap-to-move: a tap that misses a set box can't throw you to another exercise", () => {
     const story = read("src/components/workout-day/workout-story.tsx");
-    for (const sel of ["button", "input", '[role="switch"]', "[data-swipe-open]"]) expect(story).toContain(sel);
-    expect(story).not.toContain("[data-set-table]");
-  });
-  it("a tap is read from the finger (with a little wander), queues behind the last, and always shows", () => {
-    const story = read("src/components/workout-day/workout-story.tsx");
-    expect(story).toContain('el.addEventListener("pointerup", onUp, { passive: true });');
-    // the only click listener is the swipe's swallow, never the tap
+    expect(story).not.toContain('addEventListener("pointerup"');
+    expect(story).not.toContain("focusTapDirection");
+    // the only click listener is the swipe's swallow
     expect(story.match(/addEventListener\("click"/g)).toHaveLength(1);
     expect(story).toContain('el.addEventListener("click", onClickCapture, true);');
     expect(story).toContain("const to = (heading ?? i) + dir;");
-    expect(story).toContain("if (typing) { typing.blur(); return; }");
-    expect(story).toContain('flash.end ? "jf-tap-end" : "jf-tap-flash"');
+    expect(story).toContain('data-testid="focus-end-nudge"');
   });
-  it("How Focus works: by itself once per account, and from the ? any time", () => {
+  it("How Focus works: by itself once per account (again for anyone who saw the tap version), and from the ? any time", () => {
     const day = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(day).toContain("if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);");
     expect(day).toContain("onHelp={() => setFocusTipsOpen(true)}");
-    expect(read("supabase/migrations/20261209090000_focus_tips_seen.sql")).toContain("focus_tips_at = coalesce(public.workout_view_prefs.focus_tips_at, now());");
+    expect(tipsSeenSince(null)).toBe(false);
+    expect(tipsSeenSince("2026-10-17T12:00:00Z")).toBe(false);
+    expect(tipsSeenSince(FOCUS_TIPS_SINCE)).toBe(true);
+    expect(tipsSeenSince("2026-10-19T08:00:00Z")).toBe(true);
+    expect(read("supabase/migrations/20261218090000_focus_tips_swipe.sql")).toContain("SET focus_tips_at = now();");
+    const intro = read("src/components/workout-day/focus-intro.tsx");
+    expect(intro).toContain("<b className=\"text-foreground\">Swipe up</b> for the next exercise");
+    expect(intro).not.toContain("Tap the right side");
   });
 });
 
@@ -138,7 +133,7 @@ describe("story view: the same cards as the list, never a second copy", () => {
     const swipe = read("src/components/workout-day/swipe-to-reveal.tsx");
     expect(swipe).toContain('className={cn("relative bg-background touch-pan-y",');
     expect(swipe).not.toContain("paused");
-    // the row of screens only moves when told to (a tap, ‹ / Next, the bars)
+    // the row of screens only moves when told to (a swipe, ‹ / Next, the bars)
     expect(read("src/styles.css")).toMatch(/\.workout-story \{\n  position: fixed;\n  inset: 0;\n  z-index: 40;\n  display: flex;\n  overflow: hidden;/);
   });
 });
@@ -166,11 +161,17 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(story).toContain("border-b border-border/60 bg-background");
     expect(day).toContain("timer={!completion?.completed_at ? <FocusClock dayId={dayId} /> : undefined}");
   });
-  it("the card fills the screen and its sets sit at the bottom (Focus only); adding exercises stays in the list", () => {
-    expect(css).toContain(".workout-story [data-story-fill] > [data-workout-exercise] { flex: 1 0 auto; }");
-    expect(day).toContain('focusMode && "flex flex-col"');
-    expect(day).toContain('{focusMode && <div aria-hidden className="flex-1" data-focus-spacer />}');
+  it("the card sits at its own height under the top bar, no gap in it; adding exercises stays in the list", () => {
+    expect(css).not.toContain("data-story-fill");
+    expect(day).not.toContain("data-focus-spacer");
+    expect(day).not.toContain("data-story-fill");
     expect(day).toContain("{canEditWorkoutStructure && !storyOpen && (");
+  });
+  it("starts under the View as client banner, never behind it", () => {
+    expect(css).toContain(":root { --focus-top: var(--pov-banner-h, env(safe-area-inset-top, 0px)); }");
+    expect(css).toContain("padding: calc(var(--focus-top) + 114px) 12px");
+    expect(story).toContain("pt-[calc(var(--focus-top)+6px)]");
+    expect(read("src/components/client-pov-banner.tsx")).toContain('root.style.setProperty("--pov-banner-h", `${el.getBoundingClientRect().height}px`);');
   });
 });
 

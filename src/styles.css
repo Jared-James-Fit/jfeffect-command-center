@@ -563,6 +563,10 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
    is the card's own (swipe to delete, like the list). A long card scrolls up
    and down in its own screen first. The bars sit over the top and bottom.
    ============================================================ */
+/* where Focus's own top starts (its top bar and its cards): under the phone's
+   notch, or under the View as client banner (ClientPovBanner sets
+   --pov-banner-h, notch included) */
+:root { --focus-top: var(--pov-banner-h, env(safe-area-inset-top, 0px)); }
 .workout-story {
   position: fixed;
   inset: 0;
@@ -586,27 +590,17 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
   overscroll-behavior-y: contain;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  /* clears the top bar (bars, ← Workouts / ? / List, "Exercise 5 of 7" + workout line) and the ‹ / Next bar */
-  padding: calc(env(safe-area-inset-top, 0px) + 114px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
-  /* the card fills the screen between the bars (a long one scrolls) */
-  display: flex;
-  flex-direction: column;
+  /* clears the top bar (bars, ← Workouts / ? / List, "Exercise 5 of 7" + workout line;
+     under the View as client banner when there is one) and the ‹ / Next bar */
+  padding: calc(var(--focus-top) + 114px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
 }
+/* the card at its own height, right under the top bar like the list (a long
+   one scrolls); the room under it is just more space to swipe */
 .workout-story > * > * {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   max-width: 36rem;
   margin-inline: auto;
 }
-.workout-story [data-swipe-content],
-.workout-story [data-story-fill] {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-}
-.workout-story [data-story-fill] > [data-workout-exercise] { flex: 1 0 auto; }
 /* Without view transitions: the stage is solid from the first frame (nothing
    behind shows through) and the cards rise in; leaving, the list fades in. */
 @keyframes jf-story-rise {
@@ -634,14 +628,7 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   .workout-story-list-in { animation: none; }
 }
 
-/* Focus: the chevron that flashes on the side you tapped. */
-.jf-tap-flash { animation: jf-tap-flash 420ms ease-out forwards; }
-@keyframes jf-tap-flash {
-  0% { opacity: 0; transform: scale(0.8); }
-  25% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.05); }
-}
-/* at either end: the chevron nudges (nothing further that way) and the bottom button pulses */
+/* Focus, at either end: the chevron nudges (nothing further that way) and the bottom button pulses */
 .jf-tap-end { animation: jf-tap-end 480ms ease-out forwards; }
 @keyframes jf-tap-end {
   0% { opacity: 0; transform: translateX(0); }
@@ -658,24 +645,24 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
   65% { transform: scale(0.99); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .jf-tap-flash, .jf-tap-end { animation: jf-list-in 120ms ease-out reverse forwards; }
+  .jf-tap-end { animation: jf-list-in 120ms ease-out reverse forwards; }
   .jf-bump { animation: none; }
 }
 
-/* Focus tips (FocusTips): each zone's ring taps in turn, next then back. */
-.jf-tips-tap { animation: jf-tips-tap 2.4s ease-out infinite; }
-.jf-tips-back { animation-delay: 1.2s; }
-@keyframes jf-tips-tap {
-  0%, 40%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.45); }
-  8% { transform: scale(0.8); }
-  22% { transform: scale(1); box-shadow: 0 0 0 16px rgba(255, 255, 255, 0); }
+/* Focus tips (FocusTips): a finger swiping up, on loop. */
+.jf-tips-swipe { animation: jf-tips-swipe 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+@keyframes jf-tips-swipe {
+  0% { transform: translateY(34px); opacity: 0; }
+  15% { transform: translateY(34px); opacity: 1; }
+  65% { transform: translateY(-34px); opacity: 1; }
+  80%, 100% { transform: translateY(-34px); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .jf-tips-tap { animation: none; }
+  .jf-tips-swipe { animation: none; }
 }
 
-/* Focus intro (focus-intro.tsx): a mini phone where a finger taps the right
-   side and the next exercise slides in, while the bars fill. 4.8s loop,
+/* Focus intro (focus-intro.tsx): a mini phone where a finger swipes up and
+   the next exercise rises in, while the bars fill. 4.8s loop,
    transform/opacity/colour only (compositor). */
 .jf-fi-track { animation: jf-fi-swipe 4.8s cubic-bezier(0.6, 0, 0.2, 1) infinite; }
 .jf-fi-finger { animation: jf-fi-finger 4.8s ease-out infinite; opacity: 0; }
@@ -683,24 +670,22 @@ html.jf-story-vt::view-transition-group(jf-story-card) {
 .jf-fi-bar-1 { animation: jf-fi-bar-1 4.8s linear infinite; }
 .jf-fi-bar-2 { animation: jf-fi-bar-2 4.8s linear infinite; }
 @keyframes jf-fi-swipe {
-  0%, 31% { transform: translateX(0); opacity: 1; }
-  40%, 67% { transform: translateX(-33.333%); opacity: 1; }
-  76%, 93% { transform: translateX(-66.666%); opacity: 1; }
-  98% { transform: translateX(-66.666%); opacity: 0; }
-  100% { transform: translateX(0); opacity: 0; }
+  0%, 31% { transform: translateY(0); opacity: 1; }
+  40%, 67% { transform: translateY(-33.333%); opacity: 1; }
+  76%, 93% { transform: translateY(-66.666%); opacity: 1; }
+  98% { transform: translateY(-66.666%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 0; }
 }
-/* the tap: in, press, lift, gone (twice per loop) */
+/* the swipe: lands low, rises, lifts (twice per loop, just ahead of the card) */
 @keyframes jf-fi-finger {
-  0%, 22% { transform: scale(1.4); opacity: 0; }
-  26% { transform: scale(1); opacity: 1; }
-  29% { transform: scale(0.72); opacity: 1; }
-  33% { transform: scale(1); opacity: 0.9; }
-  37%, 58% { transform: scale(1); opacity: 0; }
-  59% { transform: scale(1.4); opacity: 0; }
-  63% { transform: scale(1); opacity: 1; }
-  66% { transform: scale(0.72); opacity: 1; }
-  70% { transform: scale(1); opacity: 0.9; }
-  74%, 100% { transform: scale(1); opacity: 0; }
+  0%, 20% { transform: translateY(0); opacity: 0; }
+  24% { transform: translateY(0); opacity: 1; }
+  36% { transform: translateY(-30px); opacity: 1; }
+  40%, 56% { transform: translateY(-30px); opacity: 0; }
+  57% { transform: translateY(0); opacity: 0; }
+  60% { transform: translateY(0); opacity: 1; }
+  72% { transform: translateY(-30px); opacity: 1; }
+  76%, 100% { transform: translateY(-30px); opacity: 0; }
 }
 @keyframes jf-fi-bar-1 {
   0%, 37% { background-color: color-mix(in oklab, var(--foreground) 20%, transparent); }
