@@ -170,6 +170,15 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
   const story = read("src/components/workout-day/workout-story.tsx");
   const day = read("src/components/workout-day/WorkoutDayView.tsx");
   const css = read("src/styles.css");
+  it("a finished exercise is green (fills once, \"Done\" pops), the one you're on is thicker", () => {
+    expect(story).toContain('done[i] ? "bg-emerald-500" : "bg-foreground"');
+    expect(story).toContain('i === index ? "h-1.5" : "h-1"');
+    expect(story).toContain('done[i] && justDone?.i === i && "jf-bar-fill"');
+    expect(story).toContain('data-testid="story-done"');
+    expect(story).toContain("window.setTimeout(() => setJustDone(null), 900);");
+    expect(css).toContain(".jf-bar-fill { transform-origin: left center;");
+    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{\n  \.jf-bar-fill, \.jf-done-pop \{ animation: none; \}/);
+  });
   it("is called Focus, and the way out says List", () => {
     expect(story).toContain('{ value: "story", label: "Focus", icon: RectangleVertical }');
     expect(story).not.toContain('label: "Story"');
