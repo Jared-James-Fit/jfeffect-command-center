@@ -155,7 +155,7 @@ describe("one field, kept honest", () => {
     const calc = read("src/components/nutrition/MacroCalculatorDialog.tsx");
     expect(calc).toContain("useState<BiologicalSex | null>(null)");
     expect(read("src/lib/nutrition-targets/member-targets.functions.ts")).toContain(
-      '.select("sex, date_of_birth, height_cm")',
+      '.select("sex, date_of_birth, height_cm, preferred_weight_unit, committed_training_frequency")',
     );
   });
 });

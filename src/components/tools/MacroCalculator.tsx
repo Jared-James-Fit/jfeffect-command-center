@@ -59,7 +59,8 @@ export function MacroCalculator() {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["m-nutrition-targets"] }),
         qc.invalidateQueries({ queryKey: ["m-nutrition-context"] }),
-        qc.invalidateQueries({ queryKey: ["member-targets-history"] }),
+        qc.invalidateQueries({ queryKey: ["m-targets-history"] }),
+        qc.invalidateQueries({ queryKey: ["nutrition-dashboard"] }),
       ]);
       toast.success("Nutrition targets updated", {
         description: "Your new targets are now live on the Nutrition page.",

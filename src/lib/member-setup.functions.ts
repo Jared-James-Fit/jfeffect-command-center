@@ -51,6 +51,30 @@ export const updateMyMemberProfile = createServerFn({ method: "POST" })
     const { error } = await supabase.from("app_members").update(patch as any).eq("id", me.id);
     if (error) throw new Error(error.message);
 
+    // the days they train are the committed schedule the calendar runs on
+    // (clients), not just a setup answer: save them there and move their
+    // upcoming workouts onto them, the same as the Training Schedule card
+    if (data.committed_training_days?.length) {
+      try {
+        const { normalizeCommittedDays } = await import("@/lib/committed-schedule-realign");
+        const days = normalizeCommittedDays(data.committed_training_days);
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: client } = await supabaseAdmin
+          .from("clients")
+          .select("id, committed_training_days, training_schedule_completed")
+          .eq("user_id", userId)
+          .maybeSingle();
+        const c = client as { id: string; committed_training_days: string[] | null; training_schedule_completed: boolean | null } | null;
+        if (c && days.length && (days.join() !== (c.committed_training_days ?? []).join() || !c.training_schedule_completed)) {
+          const { writeCommittedDays, realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
+          await writeCommittedDays({ clientId: c.id, userId, role: "client", days });
+          await realignClientToCommittedDays({ clientId: c.id, userId, role: "client", includePinned: true });
+        }
+      } catch (e) {
+        console.error("[updateMyMemberProfile] committed schedule sync failed", e);
+      }
+    }
+
     // Mark setup complete if all required fields are now present.
     const { data: ok } = await supabase.rpc("member_setup_complete", { _member_id: me.id });
     if (ok) {

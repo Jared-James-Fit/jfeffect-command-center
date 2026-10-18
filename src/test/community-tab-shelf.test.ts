@@ -38,7 +38,12 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain('{!simpleHeader && <ThemeToggle className="mr-0.5" />}');
     expect(shell).toContain("{!simpleHeader && (");
     expect(shell).toContain('<span className="text-[15px] font-semibold">Appearance</span>');
-    expect(shell).toContain('<Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">');
+    expect(shell).toContain('<Button variant="ghost" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-full px-0">');
+    // the JF Effect mark sits in the middle of the bar, Crew's look, on every shell page
+    expect(shell).toContain('className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"');
+    expect(shell).toContain("<ShellBrand title={title} compact={!simpleHeader} />");
+    // the bar is Crew's height, so the refresh spinner opens at the same spot on every tab
+    expect(shell).toContain('top="calc(env(safe-area-inset-top, 0px) + 3rem + 5px)"');
     expect(shell).toContain("resolveVisibleBarItems(bottomItems, { more: !moreInHeader })");
   });
 

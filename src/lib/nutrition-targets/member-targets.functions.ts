@@ -255,11 +255,12 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
       .eq("id", member.id);
 
     // Deactivate previous active row, then insert a fresh active one.
-    await supabase
+    const { error: offErr } = await supabase
       .from("member_nutrition_targets")
       .update({ active: false })
       .eq("member_id", member.id)
       .eq("active", true);
+    if (offErr) throw offErr;
 
     const { data: inserted, error: insErr } = await supabase
       .from("member_nutrition_targets")
@@ -287,6 +288,33 @@ export const saveCalculatedTargets = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (insErr) throw insErr;
+
+    // water follows the suggestion too, unless someone set it by hand
+    try {
+      const { data: w } = await supabase
+        .from("progress_water_targets")
+        .select("mode")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!w || (w as any).mode === "auto") {
+        const ml = Math.max(2000, Math.min(5000, Math.round(targets.water_ml / 100) * 100));
+        await supabase.from("progress_water_targets").upsert(
+          {
+            user_id: userId,
+            suggested_ml: ml,
+            active_ml: ml,
+            target_source: "auto",
+            mode: "auto",
+            calc_bodyweight_kg: data.bodyweightKg,
+            last_recalculated_at: new Date().toISOString(),
+            set_by_user_id: userId,
+          } as never,
+          { onConflict: "user_id" },
+        );
+      }
+    } catch (e) {
+      console.error("[saveCalculatedTargets] water target", e);
+    }
     return inserted;
   });
 
@@ -345,6 +373,7 @@ export const getTargetsSetupPrefill = createServerFn({ method: "GET" })
 
     // Latest bodyweight from progress_bodyweight (preferred), then progress_metrics.
     let bodyweightKg: number | null = null;
+    let bodyweightDate: string | null = null;
     const { data: bw } = await supabase
       .from("progress_bodyweight")
       .select("weight_value, weight_unit, logged_date")
@@ -354,13 +383,14 @@ export const getTargetsSetupPrefill = createServerFn({ method: "GET" })
     if (bw && bw[0]) {
       const v = Number(bw[0].weight_value);
       bodyweightKg = bw[0].weight_unit === "kg" ? v : v * 0.45359237;
+      bodyweightDate = bw[0].logged_date ?? null;
     }
 
     // Coached clients answer sex / DOB / height on their client profile;
     // fill any gaps from there so they're never asked twice.
     const { data: c } = await supabase
       .from("clients")
-      .select("sex, date_of_birth, height_cm")
+      .select("sex, date_of_birth, height_cm, preferred_weight_unit, committed_training_frequency")
       .eq("user_id", userId)
       .maybeSingle();
     const member =
@@ -371,12 +401,18 @@ export const getTargetsSetupPrefill = createServerFn({ method: "GET" })
               m?.biological_sex ?? (c?.sex === "male" || c?.sex === "female" ? c.sex : null),
             date_of_birth: m?.date_of_birth ?? c?.date_of_birth ?? null,
             height_cm: m?.height_cm ?? c?.height_cm ?? null,
+            // their chosen weight unit decides lb / kg when the calculator has none saved
+            units_preference:
+              m?.units_preference ?? ((c as any)?.preferred_weight_unit === "kg" ? "metric" : (c as any)?.preferred_weight_unit === "lb" ? "imperial" : null),
           }
         : null;
 
     return {
       member,
       bodyweightKg,
+      bodyweightDate,
+      /** sessions a week they committed to: a starting guess for activity */
+      trainingDaysPerWeek: (c as any)?.committed_training_frequency ?? null,
     };
   });
 

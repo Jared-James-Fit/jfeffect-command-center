@@ -5,6 +5,7 @@ import { clientNav, clientBottomNav, selfServeNav, selfServeBottomNav } from "@/
 import { isCoachingOnlyPath, isLapsedMemberPath, useServiceTier } from "@/lib/service-tier";
 import { useMemberAccess } from "@/lib/member-access";
 import { MemberSetupGate } from "@/components/member/member-setup-gate";
+import { MemberAgreementGate } from "@/components/member/member-agreement";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
@@ -90,6 +91,8 @@ function MemberGates() {
         </div>
       )}
       {!isImpersonating && <MemberSetupGate />}
+      {/* the Membership Agreement, asked once per launch until accepted */}
+      {!isImpersonating && <MemberAgreementGate />}
     </>
   );
 }

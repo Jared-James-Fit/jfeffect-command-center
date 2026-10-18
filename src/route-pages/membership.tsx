@@ -204,7 +204,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
   // Build the *exact* bundled acknowledgement statement displayed to the user.
   const monthlyPrice = settings?.monthly_price_display ?? "$29 USD/month";
   const trialDaysLocal = settings?.trial_days ?? 3;
-  const bundledStatement = `I agree to the JF Membership Terms, recurring billing, and cancellation policy, and acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
+  const bundledStatement = `I agree to the JF Membership Agreement, Terms of Service, recurring billing, and cancellation policy, and acknowledge the Privacy Policy. Billing: ${trialDaysLocal}-day free trial, then ${monthlyPrice} plus applicable taxes, renews automatically until cancelled.`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -553,7 +553,8 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
                   />
                   <span>
                     I agree to the{" "}
-                    <DocLink slug="membership-agreement">JF Membership Terms</DocLink>,{" "}
+                    <DocLink slug="membership-agreement">JF Membership Agreement</DocLink>,{" "}
+                    <DocLink slug="terms-of-service">Terms of Service</DocLink>,{" "}
                     <DocLink slug="recurring-billing-disclosure">recurring billing</DocLink>, and{" "}
                     <DocLink slug="cancellation-and-refund-policy">cancellation policy</DocLink>, and acknowledge the{" "}
                     <DocLink slug="privacy-policy">Privacy Policy</DocLink>.

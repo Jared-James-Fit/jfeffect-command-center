@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertMemberCanReadProtected } from "@/lib/jf-access.server";
+import type { WeekDay } from "@/lib/training-schedule";
 
 const FULL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
@@ -42,7 +43,7 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
 
     const { data: client } = await supabaseAdmin
       .from("clients")
-      .select("id, service_tier, committed_training_days")
+      .select("id, service_tier, committed_training_days, training_schedule_completed")
       .eq("user_id", userId)
       .maybeSingle();
     if (!client || (client as any).service_tier !== "self_serve") {
@@ -52,7 +53,7 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
 
     const { data: plan } = await supabaseAdmin
       .from("member_plans")
-      .select("id, name, public_title, source_template_id, status, membership_status, imports_count")
+      .select("id, name, public_title, source_template_id, status, membership_status, imports_count, days_per_week")
       .eq("id", data.planId)
       .maybeSingle();
     const p = plan as any;
@@ -72,9 +73,23 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
       return { conflict: true as const, currentName: running[0].name };
     }
 
-    const days = normalizeTrainingDays(data.trainingDays);
-    if (days.length) {
-      await supabaseAdmin.from("clients").update({ committed_training_days: days } as any).eq("id", (client as any).id);
+    // the days the plan runs on: the ones they picked, else their committed
+    // schedule (the setup wizard's copy on app_members if the client row has none)
+    const committed = normalizeTrainingDays((client as any).committed_training_days);
+    let days = normalizeTrainingDays(data.trainingDays);
+    if (!days.length) days = committed;
+    if (!days.length) {
+      const { data: member } = await supabaseAdmin
+        .from("app_members")
+        .select("committed_training_days")
+        .eq("user_id", userId)
+        .maybeSingle();
+      days = normalizeTrainingDays((member as any)?.committed_training_days);
+    }
+    // every workout of the week gets its own day, or the extras land off their schedule
+    const perWeek = Number(p.days_per_week) || 0;
+    if (perWeek && days.length && days.length !== perWeek) {
+      throw new Error(`This plan has ${perWeek} workouts a week. Pick ${perWeek} training days so each one has its own day.`);
     }
 
     const startDate = data.startDate ?? new Date().toISOString().slice(0, 10);
@@ -118,12 +133,20 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
       }
     }
 
-    // onto the days they train (no committed days: the template's own pattern)
+    // the plan's days become their committed schedule (one schedule, so the
+    // calendar, Home and reminders agree), then every workout goes onto them
+    // (no days at all: the template's own pattern)
+    let unplaced = 0;
     try {
-      const { realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
-      await realignClientToCommittedDays({ clientId: (client as any).id, userId, role: "client", includePinned: false });
+      const { realignClientToCommittedDays, writeCommittedDays } = await import("@/lib/schedule-bulk.functions");
+      const changed = days.join() !== committed.join() || !(client as any).training_schedule_completed;
+      if (days.length && changed) {
+        await writeCommittedDays({ clientId: (client as any).id, userId, role: "client", days: days as WeekDay[] });
+      }
+      const res = await realignClientToCommittedDays({ clientId: (client as any).id, userId, role: "client", includePinned: false });
+      unplaced = res.unplaced ?? 0;
     } catch (e) {
-      console.error("[startLibraryPlan] realign failed", e);
+      console.error("[startLibraryPlan] schedule failed", e);
     }
 
     // library stats for the admin
@@ -143,7 +166,7 @@ export const startLibraryPlan = createServerFn({ method: "POST" })
       console.error("[startLibraryPlan] stats failed", e);
     }
 
-    return { conflict: false as const, blockId: result.block_id ?? null, prepId: result.prep_id ?? null };
+    return { conflict: false as const, blockId: result.block_id ?? null, prepId: result.prep_id ?? null, days, unplaced };
   });
 
 /** The plan a member is running, if they started one (for the library's "Current plan" badge). */

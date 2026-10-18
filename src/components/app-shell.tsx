@@ -918,30 +918,31 @@ export function AppShell({
           className="pointer-events-none fixed inset-x-0 top-0 z-[41] bg-background md:hidden"
           style={{ height: "env(safe-area-inset-top, 0px)" }}
         />
+        {/* Phone top bar: the JF Effect mark in the middle (Crew's look), tools left, More / you right */}
         {!pageBar && <header
-          className="flex items-center justify-between gap-2 border-b border-border px-3 pb-3 md:hidden"
-          style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+          className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+          data-shell-bar
         >
-          <div className="flex min-w-0 items-center gap-2">
-            <img src="/logo.png" alt="JF Effect" className="h-8 w-8 shrink-0 rounded-md object-cover" />
-            <span className="truncate text-sm font-black tracking-tight">{title}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex h-12 min-w-0 items-center justify-start gap-1">
             {isStaffRole && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setPaletteOpen(true)}
                 aria-label="Search workout library"
-                className="h-8 w-8 shrink-0 px-0"
+                className="h-10 w-10 shrink-0 rounded-full px-0"
               >
-                <Search className="h-4 w-4" />
+                <Search className="h-[18px] w-[18px]" />
               </Button>
             )}
             {!simpleHeader && <ThemeToggle className="mr-0.5" />}
+          </div>
+          <ShellBrand title={title} compact={!simpleHeader} />
+          <div className="flex h-12 min-w-0 items-center justify-end gap-1.5">
             {moreInHeader ? (
               // Big enough to find and hit without looking: every account opens More here.
-              <Button variant="outline" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-xl px-0">
+              <Button variant="ghost" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-full px-0">
                 <Menu className="h-[22px] w-[22px]" />
               </Button>
             ) : (
@@ -951,7 +952,7 @@ export function AppShell({
                 mePic={me?.pic ?? null}
                 onSignOut={handleSignOut}
                 trigger={
-                  <Button variant="ghost" size="sm" aria-label="Settings" className="h-8 w-8 shrink-0 px-0">
+                  <Button variant="ghost" size="sm" aria-label="Settings" className="h-10 w-10 shrink-0 rounded-full px-0">
                     <SettingsIcon className="h-4 w-4" />
                   </Button>
                 }
@@ -978,7 +979,7 @@ export function AppShell({
               First in the page, so the room it makes for its spinner opens right under the top bar. */}
           <TabRefresh
             pull={barItems.some((i) => i.to === pathname)}
-            top={pageBar ? "calc(env(safe-area-inset-top, 0px) + 3rem + 5px)" : "calc(env(safe-area-inset-top, 0px) + 70px)"}
+            top="calc(env(safe-area-inset-top, 0px) + 3rem + 5px)"
           />
           {/* a page with its own bar puts the switch under it */}
           {!pageBar && <DualAccountSwitcher />}
@@ -2000,6 +2001,33 @@ export function usePageBack(backTo?: string): () => void {
   };
 }
 
+/**
+ * The JF Effect mark centred in the phone bar, drawn like Crew's (the logo and
+ * the italic name), so every screen opens under the same brand. A staff
+ * shell's own name (Admin, Coach, Finance) sits small underneath.
+ */
+function ShellBrand({ title, compact }: { title: string; compact?: boolean }) {
+  const sub = title && title.trim().toLowerCase() !== "jf effect" ? title : null;
+  return (
+    <div className="flex min-w-0 items-center justify-center gap-2 max-[359px]:gap-1.5" data-shell-brand>
+      <img
+        src="/logo.png"
+        alt="JF Effect"
+        className="h-[26px] w-[26px] shrink-0 rounded-[7px] object-cover max-[359px]:h-[22px] max-[359px]:w-[22px] max-[359px]:rounded-[6px]"
+      />
+      <div className={cn("flex min-w-0 flex-col items-start", compact && "max-[359px]:hidden")}>
+        {/* italic letters lean past their box: a little room on the right so the T isn't clipped */}
+        <span className="truncate pr-[3px] text-[19px] font-black uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
+          JF Effect
+        </span>
+        {sub && (
+          <span className="truncate text-[9px] font-bold uppercase leading-none tracking-[0.18em] text-muted-foreground">{sub}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,
@@ -2021,7 +2049,7 @@ export function PageHeader({
   const handleBack = usePageBack(backTo);
   const showBack = !!backTo;
   return (
-    <div className="flex flex-col gap-1.5 border-b border-border bg-gradient-to-b from-card to-background px-4 py-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:px-5 md:py-2 xl:px-6 xl:py-3">
+    <div className="flex flex-col gap-1.5 border-b border-border/60 bg-background px-4 py-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:px-5 md:py-2 xl:px-6 xl:py-3">
       <div className="order-2 min-w-0 w-full md:order-1 md:flex-1">
         {showBack && (
           <div className="mb-1 hidden items-center gap-2 md:flex">

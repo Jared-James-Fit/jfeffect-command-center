@@ -340,11 +340,13 @@ export const getAgreementSigningContext = createServerFn({ method: "GET" })
     const { data: client, error } = await supabase
       .from("clients")
       .select(
-        "id, full_name, email, phone, date_of_birth, address, city, province, postal_code, country, emergency_contact_name, emergency_contact_phone, archived, status, portal_access_disabled, agreement_signed, agreement_version, agreement_signed_date",
+        "id, full_name, email, phone, date_of_birth, address, city, province, postal_code, country, emergency_contact_name, emergency_contact_phone, archived, status, portal_access_disabled, agreement_signed, agreement_version, agreement_signed_date, service_tier",
       )
       .eq("user_id", userId)
       .maybeSingle();
     if (error || !client) throw new Error("We couldn't find your client profile.");
+    // a JF member accepts the Membership Agreement, never this one (e.g. via /setup)
+    if (client.service_tier === "self_serve") throw new Error("JF Membership accounts don't sign the Coaching Agreement.");
     if (!isActiveClient(client))
       throw new Error("Your account isn't active, so there's nothing to sign.");
 
@@ -401,11 +403,12 @@ export const signCoachingAgreement = createServerFn({ method: "POST" })
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select(
-        "id, user_id, full_name, first_name, preferred_name, email, date_of_birth, archived, status, portal_access_disabled",
+        "id, user_id, full_name, first_name, preferred_name, email, date_of_birth, archived, status, portal_access_disabled, service_tier",
       )
       .eq("user_id", userId)
       .maybeSingle();
     if (clientError || !client) throw new Error("We couldn't find your client profile.");
+    if ((client as any).service_tier === "self_serve") throw new Error("JF Membership accounts don't sign the Coaching Agreement.");
     if (!isActiveClient(client))
       throw new Error("Your account isn't active, so there's nothing to sign.");
 
@@ -893,11 +896,13 @@ export const adminRequestAgreement = createServerFn({ method: "POST" })
 
     const { data: client } = await supabaseAdmin
       .from("clients")
-      .select("id, user_id, email, full_name, first_name, preferred_name")
+      .select("id, user_id, email, full_name, first_name, preferred_name, service_tier")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
     if (!client.user_id) throw new Error("This client doesn't have an app account yet.");
+    if ((client as any).service_tier === "self_serve")
+      throw new Error("This is a JF Membership account: they accept the Membership Agreement in the app, not the Coaching Agreement.");
     if (!isAdmin) {
       // A coach can send to their own clients, but only an admin can override an exemption.
       const { data: current } = await supabaseAdmin

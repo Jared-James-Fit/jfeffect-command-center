@@ -73,7 +73,23 @@ describe("the Plan Library lives in the portal", () => {
     const dialog = read("src/components/programs/start-plan-dialog.tsx");
     expect(dialog).toContain("startLibraryPlan");
     expect(dialog).toContain('navigate({ to: "/portal/workouts" })');
-    expect(dialog).toContain("disabled={pending || isImpersonating || !plan}");
+    expect(dialog).toContain("disabled={pending || isImpersonating || !plan || !daysReady}");
+  });
+
+  it("a plan starts on the days they train: fitted to its workouts a week, saved as the committed schedule", () => {
+    const fn = read("src/lib/member-plan-start.functions.ts");
+    // every workout of the week gets a day, so none lands off the schedule
+    expect(fn).toContain("if (perWeek && days.length && days.length !== perWeek) {");
+    // the setup wizard's days count when the schedule has none yet
+    expect(fn).toContain('.from("app_members")\n        .select("committed_training_days")');
+    expect(fn).toContain('await writeCommittedDays({ clientId: (client as any).id, userId, role: "client", days: days as WeekDay[] });');
+    const dialog = read("src/components/programs/start-plan-dialog.tsx");
+    expect(dialog).toContain("const f = fitTrainingDays(mine, perWeek);");
+    expect(dialog).toContain("const daysReady = perWeek ? short === 0 : true;");
+    // the setup wizard's days are the committed schedule the calendar runs on
+    const setup = read("src/lib/member-setup.functions.ts");
+    expect(setup).toContain("await writeCommittedDays({ clientId: c.id, userId, role: \"client\", days });");
+    expect(setup).toContain("await realignClientToCommittedDays({ clientId: c.id, userId, role: \"client\", includePinned: true });");
   });
 
   it("a member with no program is pointed at the library on Home and Workouts; coaching clients still wait on their coach", () => {
