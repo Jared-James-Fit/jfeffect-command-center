@@ -2813,7 +2813,7 @@ function WorkoutDay({
                 actionLabel={`Delete ${r.exercises?.name ?? r.exercise_name_override ?? "Exercise"} from this workout`}
                 onAction={() => removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
               >
-              <div className="space-y-1.5" data-story-fill>
+              <div className="space-y-1.5">
                 {unsupportedRows[r.id] ? (
                   <UnsupportedExerciseCard row={r} />
                 ) : (
@@ -4239,8 +4239,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       data-workout-row={row?.id}
       className={cn(
         "workout-card-surface relative scroll-mt-24 overflow-hidden p-3.5 pl-4 transition-[colors,box-shadow] hover:border-builder-card-border-strong sm:p-5 sm:pl-6",
-        // Focus: the card fills the screen and its sets sit at the bottom, by the thumb and Next
-        focusMode && "flex flex-col",
       )}
     >
       {/* Left stripe: inset top/bottom so it doesn't visually connect between cards */}
@@ -4580,7 +4578,6 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         </p>
       )}
 
-      {focusMode && <div aria-hidden className="flex-1" data-focus-spacer />}
       <div className={cn("mt-3 overflow-hidden rounded-md border border-builder-card-border bg-builder-inset", focusMode && "text-base")}>
         <div
           className={cn(

@@ -7,40 +7,17 @@ import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs
 
 /**
  * Focus view (stored as "story"): the workout one exercise at a time, full
- * screen. Tap through the exercises like Crew's stories (the left third goes
- * back, anywhere else forward), swipe up for the next and down to go back, or
- * use ‹ / Next; the bars up top show where you are and what's done. A sideways
- * swipe is the card's own (swipe to delete). It's the same exercise cards as
- * the list, laid out side by side (WorkoutDayView switches the list's
- * classes), so switching view never reloads a card or loses what's typed.
+ * screen. Swipe up for the next exercise and down to go back, or use ‹ / Next
+ * and the bars up top (where you are and what's done). A tap never moves: in
+ * a logger, a tap that misses a set box by a hair must not throw you to
+ * another exercise mid-set. A sideways swipe is the card's own (swipe to
+ * delete). It's the same exercise cards as the list, laid out side by side
+ * (WorkoutDayView switches the list's classes), so switching view never
+ * reloads a card or loses what's typed.
  */
 
-/**
- * What keeps its own tap in Focus (never "next exercise"): every control
- * (buttons, the set boxes, links, switches) and a card swiped open to Delete.
- * Everything else on the screen moves, the set table's empty space included,
- * so a tap is never silently lost.
- */
-const TAP_KEEPS =
-  'button, a, input, textarea, select, label, summary, [role="button"], [role="slider"], [role="switch"], ' +
-  '[role="checkbox"], [role="radio"], [role="menuitem"], [role="tab"], [role="link"], [contenteditable="true"], ' +
-  "[data-no-tap], [data-swipe-open]";
-/** A finger can wander this far and still count as a tap. */
-export const TAP_SLOP_PX = 12;
-/** Held longer than this it's a press, not a tap. */
-export const TAP_MAX_MS = 550;
-/** Something on top of Focus that a tap should close, not move under. */
+/** Something open over Focus (a swiped-open card, a menu, a sheet): a swipe under it isn't a move. */
 const OPEN_LAYER = '[data-swipe-open], [role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
-
-export function focusTapIgnored(target: EventTarget | null): boolean {
-  const el = typeof Element !== "undefined" && target instanceof Element ? target : null;
-  return !el || !!el.closest(TAP_KEEPS);
-}
-
-/** A tap at x on a screen this wide: the left third goes back, anywhere else forward (Crew's stories). */
-export function focusTapDirection(x: number, width: number): -1 | 1 {
-  return x < width / 3 ? -1 : 1;
-}
 
 /** A swipe up or down this long moves to the next / previous exercise… */
 export const SWIPE_COMMIT_PX = 72;
@@ -295,37 +272,34 @@ export function StoryChrome({
     };
   }, [listRef]);
 
-  // Tap to move, like Crew's stories; arrow keys on a keyboard. Read from the
-  // finger itself (down → up, a little wander allowed), not the browser's
-  // click, which phones drop after a tiny drag or while a scroll settles.
-  // Quick taps queue: each one moves on from where the last one was going.
-  // A chevron flashes on the side that was tapped; at either end it nudges and
-  // the bottom button pulses, so a tap always shows it landed.
   // Swipe up / down (touch): the card follows the finger, and a long enough
   // swipe or a quick flick moves on, the next card rising in from where the
-  // finger went. A long card scrolls first (focusSwipeDirection).
+  // finger went. A long card scrolls first (focusSwipeDirection). Quick swipes
+  // queue: each moves on from where the last one was heading. At either end
+  // the card holds, a chevron nudges and the bottom button pulses. Arrow keys
+  // on a keyboard.
   const latest = useRef({ index, count, onJump });
   latest.current = { index, count, onJump };
-  const [flash, setFlash] = useState<{ dir: -1 | 1; k: number; end: boolean } | null>(null);
+  // at either end: a chevron nudges on that side (and Next / Finish pulses)
+  const [nudge, setNudge] = useState<{ dir: -1 | 1; k: number } | null>(null);
   const [bump, setBump] = useState(0);
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    let heading: number | null = null; // where the last tap sent us, until we get there
+    let heading: number | null = null; // where the last move sent us, until we get there
     let settle: number | undefined;
-    const go = (dir: -1 | 1, how: "tap" | "swipe" = "tap"): boolean => {
+    const go = (dir: -1 | 1, how: "key" | "swipe"): boolean => {
       const { index: i, count: n, onJump: jump } = latest.current;
       const to = (heading ?? i) + dir;
       if (to < 0 || to >= n) {
-        setFlash({ dir, k: Date.now(), end: true });
+        setNudge({ dir, k: Date.now() });
         if (dir === 1) setBump(Date.now());
         return false;
       }
       heading = to;
       window.clearTimeout(settle);
       settle = window.setTimeout(() => { heading = null; }, 900);
-      if (how === "tap") {
-        setFlash({ dir, k: Date.now(), end: false });
+      if (how === "key") {
         jump(to);
         return true;
       }
@@ -340,31 +314,6 @@ export function StoryChrome({
       }
       return true;
     };
-    const press = { id: -1, x: 0, y: 0, t: 0, moved: false, skip: false };
-    const onDown = (e: PointerEvent) => {
-      if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) { press.id = -1; return; }
-      press.id = e.pointerId;
-      press.x = e.clientX;
-      press.y = e.clientY;
-      press.t = performance.now();
-      press.moved = false;
-      // a control, or something open on top (a swiped card, a menu), keeps this tap
-      press.skip = focusTapIgnored(e.target) || !!document.querySelector(OPEN_LAYER);
-    };
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) press.moved = true;
-    };
-    const onUp = (e: PointerEvent) => {
-      if (e.pointerId !== press.id) return;
-      press.id = -1;
-      if (press.skip || press.moved || performance.now() - press.t > TAP_MAX_MS) return;
-      // typing a number: the first tap just puts the keyboard away
-      const typing = document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]') as HTMLElement | null;
-      if (typing) { typing.blur(); return; }
-      go(focusTapDirection(e.clientX, window.innerWidth));
-    };
-    const onCancel = (e: PointerEvent) => { if (e.pointerId === press.id) press.id = -1; };
-
     // ── Swipe up / down ──
     const swipe = {
       on: false, decided: false, x: 0, y: 0, dy: 0,
@@ -448,13 +397,9 @@ export function StoryChrome({
       if (e.defaultPrevented || e.altKey || e.metaKey || e.ctrlKey) return;
       if (document.activeElement?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       if (document.querySelector(OPEN_LAYER)) return;
-      if (e.key === "ArrowRight") go(1);
-      else if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "ArrowRight") go(1, "key");
+      else if (e.key === "ArrowLeft") go(-1, "key");
     };
-    el.addEventListener("pointerdown", onDown, { passive: true });
-    el.addEventListener("pointermove", onMove, { passive: true });
-    el.addEventListener("pointerup", onUp, { passive: true });
-    el.addEventListener("pointercancel", onCancel, { passive: true });
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     // not passive: a swipe holds the screen still (no rubber band) while the card follows
     el.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -464,10 +409,6 @@ export function StoryChrome({
     window.addEventListener("keydown", onKey);
     return () => {
       window.clearTimeout(settle);
-      el.removeEventListener("pointerdown", onDown);
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onCancel);
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
@@ -534,24 +475,22 @@ export function StoryChrome({
 
   return (
     <>
-      {flash && (
+      {nudge && (
         <div
-          key={flash.k}
+          key={nudge.k}
           aria-hidden
-          data-testid="focus-tap-flash"
-          data-end={flash.end ? "" : undefined}
+          data-testid="focus-end-nudge"
           className={cn(
-            "pointer-events-none fixed top-[calc(50%-24px)] z-[42] grid h-12 w-12 place-items-center rounded-full bg-foreground/15 text-foreground",
-            flash.end ? "jf-tap-end" : "jf-tap-flash",
-            flash.dir === 1 ? "right-3" : "left-3",
+            "jf-tap-end pointer-events-none fixed top-[calc(50%-24px)] z-[42] grid h-12 w-12 place-items-center rounded-full bg-foreground/15 text-foreground",
+            nudge.dir === 1 ? "right-3" : "left-3",
           )}
         >
-          {flash.dir === 1 ? <ChevronRight className="h-6 w-6" /> : <ChevronLeft className="h-6 w-6" />}
+          {nudge.dir === 1 ? <ChevronRight className="h-6 w-6" /> : <ChevronLeft className="h-6 w-6" />}
         </div>
       )}
       <div
         data-testid="story-top"
-        className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2.5 pt-[calc(env(safe-area-inset-top,0px)+6px)]", anim)}
+        className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2.5 pt-[calc(var(--focus-top)+6px)]", anim)}
       >
         <div className="mx-auto max-w-xl">
           <div className="flex gap-1" role="group" aria-label="Exercises">
