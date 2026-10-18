@@ -446,11 +446,16 @@ export function MacroCalculatorDialog({
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                 Save my targets
               </Button>
-            ) : (
-              <Button asChild className="h-12 w-full gap-1.5 text-base font-bold" onClick={handleSendToCoach} disabled={!computed}>
+            ) : computed ? (
+              <Button asChild className="h-12 w-full gap-1.5 text-base font-bold" onClick={handleSendToCoach}>
                 <Link to="/portal/messages">
                   <MessageCircle className="h-4 w-4" /> Send to Coach for Review
                 </Link>
+              </Button>
+            ) : (
+              // a link can't be disabled: no estimate yet, nothing to send
+              <Button disabled className="h-12 w-full gap-1.5 text-base font-bold">
+                <MessageCircle className="h-4 w-4" /> Send to Coach for Review
               </Button>
             )}
           </div>
