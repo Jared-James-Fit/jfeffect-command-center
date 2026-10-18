@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkoutView } from "@/lib/use-workout-view";
 import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
@@ -493,6 +493,24 @@ export function StoryChrome({
 
   const last = index >= count - 1;
   const currentDone = !!done[index];
+  // An exercise that becomes done while Focus is open: its bar fills green
+  // once and "Done" pops by "Exercise N of M". Ones already done when Focus
+  // opened just show green.
+  const prevDoneRef = useRef<boolean[] | null>(null);
+  const [justDone, setJustDone] = useState<{ i: number; k: number } | null>(null);
+  useEffect(() => {
+    const prev = prevDoneRef.current;
+    prevDoneRef.current = done;
+    if (!prev || prev.length !== done.length) return;
+    const i = done.findIndex((d, j) => d && !prev[j]);
+    if (i >= 0) setJustDone({ i, k: Date.now() });
+  }, [done]);
+  // once played, it's just green: coming back to that exercise doesn't replay it
+  useEffect(() => {
+    if (!justDone) return;
+    const t = window.setTimeout(() => setJustDone(null), 900);
+    return () => window.clearTimeout(t);
+  }, [justDone]);
   const [finishing, setFinishing] = useState(false);
   const anim = "animate-in fade-in-0 duration-300";
 
@@ -577,12 +595,25 @@ export function StoryChrome({
                 aria-current={i === index ? "step" : undefined}
                 className="flex h-4 min-w-0 flex-1 items-center"
               >
+                {/* done is green; the one you're on is a little thicker */}
                 <span
+                  data-done={done[i] ? "" : undefined}
                   className={cn(
-                    "h-1 w-full rounded-full transition-colors duration-300",
-                    i === index ? (done[i] ? "bg-primary" : "bg-foreground") : done[i] ? "bg-primary/70" : "bg-foreground/20",
+                    "relative w-full rounded-full bg-foreground/20 transition-[height] duration-300",
+                    i === index ? "h-1.5" : "h-1",
                   )}
-                />
+                >
+                  {(done[i] || i === index) && (
+                    <span
+                      key={justDone?.i === i ? justDone.k : "fill"}
+                      className={cn(
+                        "absolute inset-0 rounded-full transition-colors duration-300",
+                        done[i] ? "bg-emerald-500" : "bg-foreground",
+                        done[i] && justDone?.i === i && "jf-bar-fill",
+                      )}
+                    />
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -627,6 +658,19 @@ export function StoryChrome({
             <div data-testid="story-count" className="shrink-0 text-base font-bold leading-tight tabular-nums text-foreground">
               Exercise {index + 1} of {count}
             </div>
+            {currentDone && (
+              <span
+                key={justDone?.i === index ? justDone.k : "done"}
+                data-testid="story-done"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-500",
+                  justDone?.i === index && "jf-done-pop",
+                )}
+              >
+                <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                Done
+              </span>
+            )}
             <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
               {/* the clock brings its own "·", so nothing dangles before it starts */}
               {timer}
