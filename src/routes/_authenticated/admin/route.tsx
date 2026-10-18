@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
@@ -24,12 +25,8 @@ function AdminLayout() {
   useEffect(() => {
     if (loading || !role) return;
     if (role === "admin" || role === "coach") return;
-    if (role === "member") {
-      navigate({ to: "/portal", replace: true });
-      return;
-    }
-    // Any other role (client / unknown / the retired media_manager) → portal
-    navigate({ to: "/portal", replace: true });
+    // Members, clients and any other role (unknown / the retired media_manager): the client app, on Crew
+    navigate({ to: CLIENT_VIEW_HOME, replace: true });
   }, [role, loading, navigate]);
 
   const isCoach = role === "coach";

@@ -133,4 +133,19 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
       expect(src, f).not.toContain('navigate({ to: "/portal" });');
     }
   });
+
+  it("signing in, an old member link, a wrong area and a notification with nowhere specific all open Crew too", () => {
+    // signed in (an expired session, a new phone): the same place as a launch, unless they were following a link
+    const auth = read("src/routes/auth.tsx");
+    expect(auth).toContain('const fallback = viewOnly ? "/finance" : launchTarget(user.id, role);');
+    expect(auth).toContain("navigate({ href: fallback, replace: true });");
+    expect(auth).not.toContain('"/portal" : viewOnly');
+    // a client on a staff page, and View as client on a fresh launch
+    expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("navigate({ to: CLIENT_VIEW_HOME, replace: true });");
+    expect(read("src/routes/index.tsx")).toContain("navigate({ to: CLIENT_VIEW_HOME, replace: true });");
+    // the monthly recap and birthday pushes (both popups show on any client screen)
+    expect(read("src/lib/push/scheduled-pushes.server.ts")).toContain("url: CLIENT_VIEW_HOME,");
+    expect(read("src/routes/api/public/hooks/birthday-notifications.ts")).toContain("url: CLIENT_VIEW_HOME,");
+    expect(read("src/lib/client-home.ts")).toContain('export const CLIENT_VIEW_HOME = "/portal/community" as const;');
+  });
 });

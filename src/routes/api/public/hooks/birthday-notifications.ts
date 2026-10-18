@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CLIENT_VIEW_HOME } from "@/lib/client-home";
 import { birthdayPushYear } from "@/lib/birthday-push";
 
 /**
@@ -60,7 +61,7 @@ export const Route = createFileRoute("/api/public/hooks/birthday-notifications")
             {
               title: `Happy Birthday, ${first}! 🎂`,
               body: "Your JF Effect coach left you a birthday message — tap to open it.",
-              url: "/portal",
+              url: CLIENT_VIEW_HOME,
               tag: `bday:${year}`,
               data: { kind: "birthday", clientId: c.id, year },
             },

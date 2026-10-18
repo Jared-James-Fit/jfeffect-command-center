@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
+import { launchTarget } from "@/lib/launch-home";
 import { AuthSplash } from "@/components/auth-splash";
 import { AuthShell, AuthLogo } from "@/components/auth/auth-shell";
 import { SignInForm } from "@/components/auth/sign-in-form";
@@ -19,14 +20,17 @@ function AuthPage() {
 
   useEffect(() => {
     if (!loading && user && role) {
-      const fallback = role === "member" || role === "client" ? "/portal" : viewOnly ? "/finance" : "/admin";
+      // Signed in: where every launch goes (Crew, or the workout they were in
+      // the middle of); the finance login starts at its desk. A link they
+      // were following (next) wins.
+      const fallback = viewOnly ? "/finance" : launchTarget(user.id, role);
       // Only honor in-app relative paths to prevent open-redirect.
       const safeNext =
         next && next.startsWith("/") && !next.startsWith("//") ? next : null;
       if (safeNext) {
         navigate({ to: safeNext, replace: true });
       } else {
-        navigate({ to: fallback, replace: true });
+        navigate({ href: fallback, replace: true });
       }
     }
   }, [user, role, viewOnly, loading, navigate, next]);

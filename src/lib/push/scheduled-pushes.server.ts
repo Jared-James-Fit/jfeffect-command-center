@@ -4,6 +4,7 @@
 //   2. one morning game plan per person (8am local, only if something's due)
 //   3. monthly recap ready (the 1st, 9am local, only if they played)
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CLIENT_VIEW_HOME } from "@/lib/client-home";
 import { deliverQueuedPushes, localDate, localHour, sendWebPushToUser } from "@/lib/push/push.server";
 
 const DEFAULT_TZ = "America/Winnipeg";
@@ -89,7 +90,7 @@ export async function runPushTick(admin: SupabaseClient, now = new Date()) {
         const r = await sendWebPushToUser(admin, uid, {
           title: `Your ${monthName} Recap is Ready 🎬`,
           body: "See your rank, points and records — then share it.",
-          url: "/portal",
+          url: CLIENT_VIEW_HOME,
           tag: `recap:${prevMonth}`,
           data: { kind: "league_recap", month: prevMonth },
         }, { category: "wins", eventKey: `recap:${uid}:${prevMonth}`, priority: "normal" });
