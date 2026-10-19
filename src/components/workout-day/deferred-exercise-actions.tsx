@@ -1,10 +1,7 @@
 import { Suspense, useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, History, Loader2, Play } from "lucide-react";
+import { ArrowLeftRight, History, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { chunkFailureAction, lazyWithRetry, type ChunkFallbackContext } from "@/lib/lazy-chunk";
-import { exerciseGuideKey, fetchExerciseGuide } from "@/lib/exercise-guide";
-import { warmDemoPlayer } from "@/lib/demo-video";
 
 // A failed chunk fetch stays inside the action row as a small retry chip; it
 // never escalates to the full-page reload screen.
@@ -26,7 +23,6 @@ function ActionChunkFallback(ctx: ChunkFallbackContext) {
 const chunkOptions = { fallback: ActionChunkFallback };
 
 const LazyExerciseHistorySheet = lazyWithRetry(() => import("./deferred-exercise-history-sheet"), chunkOptions);
-const LazyExerciseHowToSheet = lazyWithRetry(() => import("./deferred-exercise-how-to-sheet"), chunkOptions);
 const LazyQuickSwapButton = lazyWithRetry(
   () => import("./QuickSwapButton").then((module) => ({ default: module.QuickSwapButton })),
   chunkOptions,
@@ -35,18 +31,16 @@ const LazyQuickSwapButton = lazyWithRetry(
 let idlePreloadScheduled = false;
 
 /**
- * Fetch the small secondary sheets while the logger is idle so the first tap
- * opens instantly instead of waiting on the network. Quick Swap is large, so it
- * is only preloaded on touch-down. Runs once per page load.
+ * Fetch the History sheet while the logger is idle so the first tap opens
+ * instantly instead of waiting on the network. Quick Swap is large, so it is
+ * only preloaded on touch-down. Runs once per page load. (How To is part of
+ * the logger itself: exercise-how-to.tsx.)
  */
-function useIdleActionPreload() {
+export function useIdleActionPreload() {
   useEffect(() => {
     if (idlePreloadScheduled || typeof window === "undefined") return;
     idlePreloadScheduled = true;
-    const run = () => {
-      void LazyExerciseHowToSheet.preload();
-      void LazyExerciseHistorySheet.preload();
-    };
+    const run = () => void LazyExerciseHistorySheet.preload();
     const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void })
       .requestIdleCallback;
     if (typeof idle === "function") idle(run, { timeout: 4000 });
@@ -122,65 +116,6 @@ export function DeferredExerciseHistoryButton({
         exerciseName={exerciseName}
         displayUnit={displayUnit}
         currentDayIndex={currentDayIndex}
-        onClose={() => setRequested(false)}
-      />
-    </Suspense>
-  );
-}
-
-export function DeferredExerciseHowToButton({
-  exerciseId,
-  fallbackName,
-  className,
-}: {
-  exerciseId: string | null;
-  fallbackName: string;
-  className?: string;
-}) {
-  const [requested, setRequested] = useState(false);
-  const qc = useQueryClient();
-  useIdleActionPreload();
-  // Touch-down starts everything the sheet needs: its code, the exercise's
-  // guide (video link, cues) and the connection to the video player, so the
-  // demo is already loading by the time the sheet is up.
-  const warm = () => {
-    void LazyExerciseHowToSheet.preload();
-    warmDemoPlayer();
-    void qc.prefetchQuery({
-      queryKey: exerciseGuideKey(exerciseId, fallbackName),
-      queryFn: () => fetchExerciseGuide(exerciseId, fallbackName),
-      staleTime: 10 * 60_000,
-    });
-  };
-
-  const button = (loading: boolean) => (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={() => setRequested(true)}
-      onPointerDown={warm}
-      onFocus={warm}
-      aria-busy={loading || undefined}
-      className={className ?? "h-7 rounded-full px-2.5 text-xs"}
-    >
-      {loading ? (
-        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-      ) : (
-        <Play className="mr-1 h-3 w-3 fill-current" />
-      )}{" "}
-      How&nbsp;To
-    </Button>
-  );
-
-  if (!requested) return button(false);
-
-  // While the sheet resolves, keep the very same button in place (spinner in
-  // the icon slot) so the action row never jumps.
-  return (
-    <Suspense fallback={button(true)}>
-      <LazyExerciseHowToSheet
-        exerciseId={exerciseId}
-        fallbackName={fallbackName}
         onClose={() => setRequested(false)}
       />
     </Suspense>

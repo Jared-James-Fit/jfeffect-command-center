@@ -1,8 +1,13 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createElement, Suspense } from "react";
+import { renderToString } from "react-dom/server";
 import { importWithRetry } from "@/lib/chunk-import";
 import { holdChunkRecovery, isChunkLoadError, isChunkRecoveryPaused } from "@/lib/chunk-recovery";
+
+// lazy-chunk's fallback chip is a Button; the render test below never shows it
+vi.mock("@/components/ui/button", () => ({ Button: () => null }));
 
 const chunkError = () => new TypeError("Failed to fetch dynamically imported module: /assets/how-to-abc.js");
 
@@ -92,8 +97,27 @@ describe("lazy loading contract", () => {
 
   it("preloads workout action sheets before the first tap", () => {
     const actions = readFileSync(resolve(process.cwd(), "src/components/workout-day/deferred-exercise-actions.tsx"), "utf8");
-    expect(actions).toContain("LazyExerciseHowToSheet.preload()");
+    expect(actions).toContain("const run = () => void LazyExerciseHistorySheet.preload();");
     expect(actions).toContain("onPointerDown");
     expect(actions).toContain("requestIdleCallback");
+    // every exercise card schedules it ("Last time" opens History)
+    const view = readFileSync(resolve(process.cwd(), "src/components/workout-day/WorkoutDayView.tsx"), "utf8");
+    expect(view).toContain("const [historyOpen, setHistoryOpen] = useState(false);\n  // The History sheet's code comes down while the logger is idle (\"Last time\" opens it).\n  useIdleActionPreload();");
+  });
+
+  it("a chunk that's already fetched renders in the same frame, with no Suspense fallback", async () => {
+    const { lazyWithRetry } = await import("@/lib/lazy-chunk");
+    const Hello = ({ who }: { who: string }) => createElement("p", null, `hi ${who}`);
+    const tree = (Lazy: ReturnType<typeof lazyWithRetry<typeof Hello>>) =>
+      renderToString(createElement(Suspense, { fallback: createElement("i", null, "loading") }, createElement(Lazy, { who: "nicole" })));
+    // not fetched yet: the fallback, as with lazy()
+    expect(tree(lazyWithRetry(async () => ({ default: Hello })))).toContain("loading");
+    // fetched before its first render (idle / touch-down): the component
+    // itself, where lazy() would still suspend this once
+    const preloaded = lazyWithRetry(async () => ({ default: Hello }));
+    await preloaded.preload();
+    const html = tree(preloaded);
+    expect(html).toContain("<p>hi nicole</p>");
+    expect(html).not.toContain("loading");
   });
 });

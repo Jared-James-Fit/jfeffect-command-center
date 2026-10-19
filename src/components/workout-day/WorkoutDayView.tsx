@@ -96,10 +96,11 @@ import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import {
   DeferredExerciseHistoryButton,
-  DeferredExerciseHowToButton,
   DeferredQuickSwapSheet,
   DeferredExerciseHistorySheet,
+  useIdleActionPreload,
 } from "@/components/workout-day/deferred-exercise-actions";
+import { ExerciseHowToButton } from "@/components/workout-day/exercise-how-to";
 import { CardToolsRow, WorkoutToolsProvider, useWorkoutToolsActions } from "@/components/workout-tools/workout-tools";
 import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
 import { addExerciseToWorkout, listRemovedExercises, reorderWorkoutExercises, removeExerciseFromWorkout, restoreExerciseToWorkout } from "@/lib/quick-swap.functions";
@@ -4007,6 +4008,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const [swapOpen, setSwapOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The History sheet's code comes down while the logger is idle ("Last time" opens it).
+  useIdleActionPreload();
 
   // Timer results follow the same controlled downward cascade as weight:
   // blank / auto-derived sets below adopt the value, manual ones are protected.
@@ -4358,7 +4361,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       <ExerciseActionRow
         name={name}
         howTo={hasGuide ? (
-          <DeferredExerciseHowToButton
+          <ExerciseHowToButton
             exerciseId={exerciseId}
             fallbackName={name}
             className="h-10 shrink-0 gap-0 rounded-full px-3 text-xs @max-[20rem]:h-9 @max-[20rem]:px-2.5"

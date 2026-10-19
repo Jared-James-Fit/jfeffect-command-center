@@ -35,7 +35,9 @@ describe("workout critical payload contract", () => {
     expect(view).toContain("adapter.listRowResultsRaw(dayId, rowIds)");
     expect(adapter).toContain("async listRowResultsRaw(dayId: string, knownRowIds?: string[])");
     expect(actions).toContain('lazyWithRetry(() => import("./deferred-exercise-history-sheet")');
-    expect(actions).toContain('lazyWithRetry(() => import("./deferred-exercise-how-to-sheet")');
+    // How To is part of the logger: nothing to fetch on the tap (see exercise-how-to.test.ts)
+    expect(actions).not.toContain("HowTo");
+    expect(view).toContain('import { ExerciseHowToButton } from "@/components/workout-day/exercise-how-to";');
     expect(actions).toContain('import("./QuickSwapButton")');
   });
 });

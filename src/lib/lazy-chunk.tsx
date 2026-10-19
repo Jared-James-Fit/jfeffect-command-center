@@ -24,7 +24,8 @@ import { flagUpdateAvailable } from "@/lib/pwa/register-sw";
  *    (and "Update app" once Retry has failed), never the page-level screen;
  *  - nudges the app's normal "update available" prompt when the bundle is stale;
  *  - exposes `.preload()` so callers can fetch the chunk before it is needed
- *    (on idle / touch-down) and the first tap opens instantly.
+ *    (on idle / touch-down), and renders a fetched chunk straight away (no
+ *    Suspense fallback), so the first tap opens instantly.
  *
  * Usage matches `lazy`: render inside a <Suspense>.
  */
@@ -102,6 +103,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
   options: LazyWithRetryOptions = {},
 ): ComponentType<ComponentProps<T>> & { preload: () => Promise<void> } {
   let promise: Promise<{ default: T }> | null = null;
+  let loaded: T | null = null;
   let failures = 0;
   let needsReset = false;
 
@@ -110,6 +112,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       promise = importWithRetry(factory, flagUpdateAvailable).then(
         (mod) => {
           failures = 0;
+          loaded = mod.default;
           return mod;
         },
         (err) => {
@@ -127,6 +130,12 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 
   function LazyWithRetry(props: ComponentProps<T>) {
     const [nonce, setNonce] = useState(0);
+    // Already fetched (preloaded on idle / touch-down, or opened before):
+    // render it in this frame. Through lazy() it would still suspend once,
+    // and React holds a fallback it has shown for ~300ms, so a preloaded
+    // sheet opened late behind a spinner. Picked once per mount: switching
+    // between the two later would remount it.
+    const [Ready] = useState<T | null>(() => loaded);
     // React caches a rejected lazy for good; swap in a fresh one before the
     // next attempt (retry, or a later mount after an earlier failure). Only
     // armed once the boundary has shown the failure (onCaught): arming it at
@@ -151,7 +160,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
           needsReset = true;
         }}
       >
-        <Inner {...(props as any)} />
+        {Ready ? <Ready {...(props as any)} /> : <Inner {...(props as any)} />}
       </ChunkBoundary>
     );
   }

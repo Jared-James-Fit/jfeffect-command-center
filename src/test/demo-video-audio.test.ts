@@ -102,14 +102,13 @@ describe("the How To guide", () => {
   });
 
   it("sheet: one shared player, the borrowed demo is labelled, the touch-down warms everything", () => {
-    const sheet = read("src/components/workout-day/deferred-exercise-how-to-sheet.tsx");
+    const sheet = read("src/components/workout-day/exercise-how-to.tsx");
     expect(sheet).toContain("<ExerciseDemoVideo url={videoUrl}");
     expect(sheet).toContain("data-borrowed-demo");
     expect(sheet).not.toContain("<iframe");
-    const actions = read("src/components/workout-day/deferred-exercise-actions.tsx");
-    expect(actions).toContain("warmDemoPlayer();");
-    expect(actions).toContain("queryKey: exerciseGuideKey(exerciseId, fallbackName)");
-    expect(actions).toContain("onPointerDown={warm}");
+    expect(sheet).toContain("warmDemoPlayer();");
+    expect(sheet).toContain("void qc.prefetchQuery(exerciseGuideQuery(exerciseId, fallbackName));");
+    expect(sheet).toContain("onPointerDown={warm}");
   });
 
   it("every demo player is the shared one (no muted autoplay left in Quick Swap)", () => {
