@@ -9,21 +9,23 @@ const KEY = "exercise_video_set";
  * across the app. Returns null when no override is set (per-exercise
  * `active_video_set` is used instead).
  */
+export const exerciseVideoSetGlobalQuery = {
+  queryKey: ["app_settings", KEY],
+  staleTime: 60_000,
+  queryFn: async (): Promise<VideoSet | null> => {
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", KEY)
+      .maybeSingle();
+    const raw = (data?.value as any) ?? null;
+    const v = typeof raw === "string" ? raw : raw?.value;
+    return v === "primary" || v === "secondary" ? v : null;
+  },
+};
+
 export function useExerciseVideoSetGlobal() {
-  return useQuery({
-    queryKey: ["app_settings", KEY],
-    staleTime: 60_000,
-    queryFn: async (): Promise<VideoSet | null> => {
-      const { data } = await supabase
-        .from("app_settings")
-        .select("value")
-        .eq("key", KEY)
-        .maybeSingle();
-      const raw = (data?.value as any) ?? null;
-      const v = typeof raw === "string" ? raw : raw?.value;
-      return v === "primary" || v === "secondary" ? v : null;
-    },
-  });
+  return useQuery(exerciseVideoSetGlobalQuery);
 }
 
 export async function setExerciseVideoSetGlobal(value: VideoSet | null) {

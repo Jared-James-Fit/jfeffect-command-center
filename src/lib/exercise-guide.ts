@@ -36,6 +36,13 @@ export type ExerciseGuide = VideoFields & {
 export const exerciseGuideKey = (exerciseId: string | null, fallbackName: string) =>
   ["workout-exercise-guide", exerciseId ?? fallbackName] as const;
 
+/** The guide's query: the How To touch-down prefetches it and the sheet reads it. */
+export const exerciseGuideQuery = (exerciseId: string | null, fallbackName: string) => ({
+  queryKey: exerciseGuideKey(exerciseId, fallbackName),
+  queryFn: () => fetchExerciseGuide(exerciseId, fallbackName),
+  staleTime: 10 * 60_000,
+});
+
 const blank = (v: unknown) => typeof v !== "string" || v.trim() === "";
 
 /** True when the row carries no playable video of its own. */
