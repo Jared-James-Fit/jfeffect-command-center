@@ -265,7 +265,9 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(story).toContain('root.setAttribute("data-focus-open", "");\n    return () => root.removeAttribute("data-focus-open");');
     const banner = read("src/components/client-pov-banner.tsx");
     expect(banner).toContain("data-pov-banner");
-    expect(banner).not.toContain("--pov-banner-h");
+    // Focus never makes room for the banner (it steps aside); its height is only for the app's top bars
+    expect(story).not.toContain("--pov-banner-h");
+    expect(css).not.toContain("--focus-top: var(--pov-banner-h");
     expect(banner).toContain("export function PovFrame()");
     expect(story).toContain("pt-[calc(var(--focus-top)+6px)]");
   });

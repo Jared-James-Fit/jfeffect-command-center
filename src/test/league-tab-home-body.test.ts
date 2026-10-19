@@ -22,7 +22,7 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
   it("one bar, no Feed · Rankings · You toggle: Rankings is the trophy on Crew's button, Activity the heart, you your photo", () => {
     expect(screen).not.toContain('aria-label="Crew view"');
     expect(screen).toContain("<RankingsHub />");
-    expect(screen).toContain('<CrewBar label="Rankings" inline={barInline} left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />');
+    expect(screen).toContain('<CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />');
     expect(read("src/components/community/activity-heart.tsx")).toContain('aria-label={unread ? "Activity, new" : "Activity"}');
     // Find athletes (the members directory) opens from Activity's search or the top bar, and goes back where it came from
     expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed" };');

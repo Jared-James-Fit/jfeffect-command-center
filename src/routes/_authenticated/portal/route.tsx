@@ -37,8 +37,8 @@ function PortalLayout() {
     <>
       <PovFrame />
       <ClientPovBanner />
-      {/* Crew draws its own top bar (+ · JF Effect · heart · you); a coach viewing as a client keeps the shell's */}
-      <AppShell items={isSelfServe ? selfServeNav : clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={isImpersonating ? undefined : CREW_OWN_BAR}>
+      {/* Crew draws its own top bar (+ · JF Effect · heart · you), for a coach viewing as a client too (under the banner) */}
+      <AppShell items={isSelfServe ? selfServeNav : clientNav} bottomItems={bottomNav} title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>
         {isSelfServe && <MemberGates />}
         {/* Onboarding requirements (profile photo, basic info, training schedule,
             Goals & Setup) are surfaced as a non-blocking checklist on the Home

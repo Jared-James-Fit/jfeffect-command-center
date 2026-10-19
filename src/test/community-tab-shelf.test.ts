@@ -29,7 +29,7 @@ describe("client tab bar: Crew in the centre", () => {
   });
 
   it("the client top bar: search and light / dark on the left, More on the right (account and appearance also at the top of More)", () => {
-    expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn={isImpersonating ? undefined : CREW_OWN_BAR}>');
+    expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>');
     // Crew draws its own bar, so the shell's steps aside there (one bar, not two) and its ☰ opens More by event
     expect(portal).toContain('const CREW_OWN_BAR = ["/portal/community"] as const;');
     expect(shell).toContain("const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);");
@@ -47,7 +47,7 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain('className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"');
     expect(shell).toContain("<ShellBrand title={title} compact={!simpleHeader} />");
     // the bar is Crew's height, so the refresh spinner opens at the same spot on every tab
-    expect(shell).toContain('top="calc(env(safe-area-inset-top, 0px) + 3rem + 5px)"');
+    expect(shell).toContain('top="calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem + 5px)"');
     expect(shell).toContain("resolveVisibleBarItems(bottomItems, { more: !moreInHeader })");
   });
 

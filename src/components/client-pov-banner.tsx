@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRightLeft, Eye, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,9 +25,31 @@ export function PovFrame() {
   );
 }
 
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export function ClientPovBanner() {
   const { client, isImpersonating, stop, returnTo } = useClientImpersonation();
   const navigate = useNavigate();
+  // The banner sits where the app's top bars normally start (notch included),
+  // so they start under it instead (--app-chrome-top / --app-safe-top in
+  // styles.css): one bar under the banner, never a notch's worth of gap.
+  const ref = useRef<HTMLDivElement | null>(null);
+  const shown = isImpersonating && !!client;
+  useIsomorphicLayoutEffect(() => {
+    const el = ref.current;
+    const root = document.documentElement;
+    if (!shown || !el) return;
+    const set = () => root.style.setProperty("--pov-banner-h", `${el.getBoundingClientRect().height}px`);
+    set();
+    root.setAttribute("data-pov-banner-on", "");
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => {
+      ro?.disconnect();
+      root.removeAttribute("data-pov-banner-on");
+      root.style.removeProperty("--pov-banner-h");
+    };
+  }, [shown]);
   if (!isImpersonating || !client) return null;
 
   const back = returnTo ?? `/admin/clients/${client.id}`;
@@ -44,6 +67,7 @@ export function ClientPovBanner() {
   return (
     // data-pov-banner: it steps aside while the workout's Focus fills the screen (styles.css)
     <div
+      ref={ref}
       data-pov-banner
       className="sticky top-0 z-50 w-full border-b border-destructive/40 bg-destructive/10 text-foreground backdrop-blur"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
