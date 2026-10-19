@@ -10,11 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Send, MessageCircle, Upload, ArrowLeft, ExternalLink, Check, X, RotateCcw } from "lucide-react";
 import { ActionButton } from "@/components/action-button";
@@ -44,6 +40,8 @@ import { prefillAnswer, questionPrefill } from "@/lib/form-prefill";
 import { sexFromAnswer } from "@/lib/athlete-sex";
 import { playAppSound } from "@/lib/app-sounds";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
+import { cn } from "@/lib/utils";
+import { choiceLayout, formProgress, numberIssue, numberRange, quickAnswers, quickExclusive, quickNumberLabel, quickPicked, toggleQuick } from "@/lib/form-quick";
 
 export type ClientFormRendererProps = {
   /** Form to render. */
@@ -151,24 +149,81 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
 
   const readOnly = submission && submission.status !== "in_progress";
 
-  async function saveAnswer(q: NfQuestion, raw: any) {
-    if (!submission) return;
-    setLocal((s) => ({ ...s, [q.id]: raw }));
-    if (readOnly) return;
-    let payload: any = { submission_id: submission.id, question_id: q.id };
+  // Typed answers save a beat after the last key (and when the box is left),
+  // and each question's writes go one at a time, so an older keystroke can
+  // never land after a newer one. Taps save at once.
+  const pendingSaves = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => Promise<void> }>());
+  const saveChains = useRef(new Map<string, Promise<void>>());
+  function writeAnswer(q: NfQuestion, raw: any): Promise<void> {
+    if (!submission || readOnly) return Promise.resolve();
+    const payload: any = { submission_id: submission.id, question_id: q.id };
     if (q.question_type === "number" || q.question_type === "rating") {
-      payload.value_number = raw === "" || raw == null ? null : Number(raw);
+      payload.value_number = raw === "" || raw == null || !Number.isFinite(Number(raw)) ? null : Number(raw);
     } else if (q.question_type === "multi_choice") {
       payload.value_json = raw ?? [];
     } else {
       payload.value_text = raw == null ? null : String(raw);
     }
-    try {
-      await upsertAnswer(payload);
-    } catch (e: any) {
-      toast.error("Couldn't save: " + e.message);
-    }
+    const next = (saveChains.current.get(q.id) ?? Promise.resolve())
+      .then(() => upsertAnswer(payload))
+      .catch((e: any) => {
+        toast.error("Couldn't save: " + e.message);
+      });
+    saveChains.current.set(q.id, next);
+    return next;
   }
+  function saveAnswer(q: NfQuestion, raw: any, opts: { defer?: boolean } = {}) {
+    if (!submission) return;
+    setLocal((s) => ({ ...s, [q.id]: raw }));
+    setFlagged((f) => (f.has(q.id) ? new Set([...f].filter((id) => id !== q.id)) : f));
+    if (readOnly) return;
+    const waiting = pendingSaves.current.get(q.id);
+    if (waiting) clearTimeout(waiting.timer);
+    if (opts.defer) {
+      const run = () => {
+        pendingSaves.current.delete(q.id);
+        return writeAnswer(q, raw);
+      };
+      pendingSaves.current.set(q.id, { timer: setTimeout(() => void run(), 700), run });
+      return;
+    }
+    pendingSaves.current.delete(q.id);
+    return writeAnswer(q, raw);
+  }
+  /** Save whatever's still waiting (leaving a box, Submit). */
+  async function flushSaves(id?: string) {
+    const waiting = [...pendingSaves.current.entries()].filter(([qid]) => !id || qid === id);
+    for (const [, w] of waiting) clearTimeout(w.timer);
+    await Promise.all(waiting.map(([, w]) => w.run()));
+    await Promise.all([...saveChains.current.values()]);
+  }
+  // leaving the form: nothing typed is lost
+  useEffect(
+    () => () => {
+      for (const w of pendingSaves.current.values()) {
+        clearTimeout(w.timer);
+        void w.run();
+      }
+    },
+    [],
+  );
+  // questions Submit found unanswered (or out of range): outlined until they're answered
+  const [flagged, setFlagged] = useState<Set<string>>(() => new Set());
+  // what's on screen now decides the follow-up questions, not just what was saved when it opened
+  const liveAnswers = useMemo(() => {
+    const m: Record<string, NfAnswer | undefined> = { ...answersMap };
+    for (const [qid, v] of Object.entries(local)) {
+      m[qid] = {
+        id: "",
+        submission_id: submission?.id ?? "",
+        question_id: qid,
+        value_text: typeof v === "string" ? v : null,
+        value_number: typeof v === "number" ? v : null,
+        value_json: Array.isArray(v) ? v : null,
+      };
+    }
+    return m;
+  }, [answersMap, local, submission?.id]);
 
   // Save profile values as real answers the first time the form opens, so
   // required checks, the coach and the AI all see them. Never overwrites an
@@ -256,20 +311,25 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
 
   async function handleSubmit() {
     if (!submission) return;
-    // Validate required
-    const missing = questions
-      .filter((q) => q.required && shouldShowQuestion(q, answersMap))
-      .filter((q) => {
-        const v = local[q.id];
-        if (q.question_type === "file" || q.question_type === "video") {
-          return files.filter((f) => f.question_id === q.id).length === 0;
-        }
-        if (Array.isArray(v)) return v.length === 0;
-        return v === undefined || v === null || v === "";
-      });
-    if (missing.length > 0) {
-      throw new Error(`Please answer required: ${missing.map((m) => m.label).join(", ")}`);
+    const visible = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
+    const missing = visible.filter((q) => q.required && !isAnswered(q, local[q.id], files));
+    const off = visible.filter((q) => q.question_type === "number" && numberIssue(q, local[q.id]));
+    if (missing.length > 0 || off.length > 0) {
+      // outline them and take them to the first one
+      const ids = new Set([...missing, ...off].map((q) => q.id));
+      setFlagged(ids);
+      const first = visible.find((q) => ids.has(q.id));
+      if (first) document.getElementById(`q-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      throw new Error(
+        missing.length > 0
+          ? missing.length === 1
+            ? "Answer the highlighted question"
+            : `Answer the ${missing.length} highlighted questions`
+          : "Check the highlighted answer",
+      );
     }
+    // typed answers still waiting to save go first
+    await flushSaves();
     await submitSubmission(submission.id);
     // A sex answer here is the athlete's answer everywhere: keep the profile in step.
     const sexQ = prefillQs.find((q) => questionPrefill(q) === "sex");
@@ -338,6 +398,9 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     );
   }
 
+  const shownQuestions = questions.filter((q) => shouldShowQuestion(q, liveAnswers));
+  const progress = formProgress(shownQuestions.filter((q) => q.required).map((q) => ({ answered: isAnswered(q, local[q.id], files) })));
+
   return (
     <>
       {trimmer.element}
@@ -372,62 +435,106 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
           </Card>
         )}
 
-        {questions
-          .filter((q) => shouldShowQuestion(q, answersMap))
-          .map((q, idx) => (
-            <Card key={q.id} className="border-border bg-card p-5">
-              <Label className="text-base font-bold">
-                {idx + 1}. {q.label}
-                {q.required && <span className="ml-1 text-destructive">*</span>}
-              </Label>
-              {q.help_text && <p className="mt-1 text-xs text-muted-foreground">{q.help_text}</p>}
+        {shownQuestions.map((q, idx) => {
+          const issue = q.question_type === "number" ? numberIssue(q, local[q.id]) : null;
+          const flag = flagged.has(q.id);
+          return (
+            <section
+              key={q.id}
+              id={`q-${q.id}`}
+              className={cn("scroll-mt-24 rounded-2xl border bg-card p-4 transition-colors sm:p-5", flag ? "border-destructive ring-2 ring-destructive/20" : "border-border")}
+              data-form-question={q.question_type}
+            >
+              <div className="flex items-start gap-3">
+                <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-black tabular-nums text-muted-foreground" aria-hidden>
+                  {idx + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[17px] font-bold leading-snug">
+                    {q.label}
+                    {q.required && <span className="ml-1 text-destructive">*</span>}
+                  </h3>
+                  {q.help_text && <p className="mt-1 text-[14px] leading-snug text-muted-foreground">{q.help_text}</p>}
+                </div>
+              </div>
               {getQuestionReferenceImage(q) && (
                 <QuestionReferenceImage src={getQuestionReferenceImage(q)!} label={q.label} />
               )}
 
-              <div className="mt-3">
+              <div className="mt-3.5">
                 <QuestionInput
                   q={q}
                   value={local[q.id]}
                   files={files.filter((f) => f.question_id === q.id)}
                   readOnly={!!readOnly}
                   busy={busyQ[q.id]}
-                  onChange={(v) => saveAnswer(q, v)}
+                  onChange={(v, typed) => saveAnswer(q, v, { defer: typed })}
+                  onDone={() => void flushSaves(q.id)}
                   onUpload={(file) => handleFileUpload(q, file)}
                   onRemove={(fileId) => handleFileRemove(q, fileId)}
                   onReplace={(fileId, file) => handleFileReplace(q, fileId, file)}
                 />
               </div>
-            </Card>
-          ))}
+              {issue ? (
+                <p className="mt-2 text-[13px] font-semibold text-amber-600 dark:text-amber-400" data-form-number-issue>{issue}</p>
+              ) : (
+                flag && <p className="mt-2 text-[13px] font-semibold text-destructive">This one needs an answer</p>
+              )}
+            </section>
+          );
+        })}
 
         {!readOnly && (
-          <div className="sticky bottom-4 z-10">
-            <Card className="border-primary/30 bg-card/95 p-4 backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs text-muted-foreground">Auto-saving as you type.</div>
-                <ActionButton
-                  onAction={handleSubmit}
-                  loadingLabel="Submitting…"
-                  successLabel="Submitted"
-                  successToast="Submitted! Coach Jared will reply in messenger."
-                  jobLabel="Submitting onboarding form"
-                  jobDescription={form?.title ?? undefined}
-                  className="bg-gradient-primary font-bold"
-                  icon={<Send className="h-4 w-4" />}
-                >
-                  {form.button_label ||
-                    (form.title?.toLowerCase().includes("check")
-                      ? "Submit Weekly Check-In"
-                      : `Submit ${form.title}`)}
-                </ActionButton>
-              </div>
-            </Card>
+          // Submit sits above the tab bar (or the sheet's bottom), full width for a thumb
+          <div
+            className={cn("sticky z-10 border-t border-border/70 bg-background/95 pt-3 backdrop-blur", embedded ? "px-1" : "-mx-4 px-4 md:mx-0 md:rounded-2xl md:border")}
+            style={{
+              bottom: embedded ? 0 : "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))",
+              paddingBottom: embedded ? "max(env(safe-area-inset-bottom), 0.75rem)" : "0.75rem",
+            }}
+            data-form-submit-bar
+          >
+            {progress.total > 0 && (
+              <>
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-[13px]">
+                  <span className="font-semibold tabular-nums">
+                    {progress.done} of {progress.total} answered
+                  </span>
+                  <span className="text-muted-foreground">Saves as you go</span>
+                </div>
+                <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+                </div>
+              </>
+            )}
+            <ActionButton
+              onAction={handleSubmit}
+              loadingLabel="Submitting…"
+              successLabel="Submitted"
+              successToast="Submitted! Coach Jared will reply in messenger."
+              jobLabel="Submitting onboarding form"
+              jobDescription={form?.title ?? undefined}
+              className="h-14 w-full rounded-2xl bg-gradient-primary text-[16px] font-black"
+              icon={<Send className="h-5 w-5" />}
+            >
+              {form.button_label ||
+                (form.title?.toLowerCase().includes("check")
+                  ? "Submit Weekly Check-In"
+                  : `Submit ${form.title}`)}
+            </ActionButton>
           </div>
         )}
       </div>
     </>
   );
+}
+
+/** Answered: a file uploaded, something picked, or words typed (spaces don't count). */
+function isAnswered(q: NfQuestion, v: any, files: { question_id: string }[]): boolean {
+  if (q.question_type === "file" || q.question_type === "video") return files.some((f) => f.question_id === q.id);
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === "string") return v.trim() !== "";
+  return v !== undefined && v !== null;
 }
 
 function QuestionInput({
@@ -437,6 +544,7 @@ function QuestionInput({
   readOnly,
   busy,
   onChange,
+  onDone,
   onUpload,
   onRemove,
   onReplace,
@@ -446,39 +554,95 @@ function QuestionInput({
   files: any[];
   readOnly: boolean;
   busy?: "uploading" | "removing" | "replacing";
-  onChange: (v: any) => void;
+  /** `typed`: from the keyboard (saved a beat later); taps save at once. */
+  onChange: (v: any, typed?: boolean) => void;
+  /** Left the box: save what was typed now. */
+  onDone: () => void;
   onUpload: (f: File) => void;
   onRemove: (fileId: string) => void;
   onReplace: (fileId: string, file: File) => void;
 }) {
   const opts = (q.options ?? []) as string[];
-  if (q.question_type === "short_text") {
-    return <Input value={value ?? ""} disabled={readOnly} onChange={(e) => onChange(e.target.value)} />;
-  }
-  if (q.question_type === "long_text") {
-    return <Textarea rows={4} value={value ?? ""} disabled={readOnly} onChange={(e) => onChange(e.target.value)} />;
+  const quick = quickAnswers(q);
+  const exclusive = quickExclusive(q);
+  // big enough for a thumb, 16px so iOS never zooms the page in
+  const field = "h-12 rounded-xl px-3.5 text-[16px]";
+  if (q.question_type === "short_text" || q.question_type === "long_text") {
+    const text = typeof value === "string" ? value : value == null ? "" : String(value);
+    const placeholder = quick.length ? "Or type your own…" : "Type your answer…";
+    return (
+      <div>
+        {quick.length > 0 && (
+          <QuickChips chips={quick} readOnly={readOnly} isOn={(c) => quickPicked(text, c)} onPick={(c) => onChange(toggleQuick(text, c, exclusive))} />
+        )}
+        {q.question_type === "short_text" ? (
+          <Input className={field} value={text} disabled={readOnly} placeholder={placeholder} enterKeyHint="done" onChange={(e) => onChange(e.target.value, true)} onBlur={onDone} />
+        ) : (
+          <Textarea
+            rows={3}
+            className="min-h-[104px] rounded-xl px-3.5 py-3 text-[16px] leading-snug"
+            value={text}
+            disabled={readOnly}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value, true)}
+            onBlur={onDone}
+          />
+        )}
+      </div>
+    );
   }
   if (q.question_type === "number") {
-    return <Input type="number" value={value ?? ""} disabled={readOnly} onChange={(e) => onChange(e.target.value)} />;
+    const { unit } = numberRange(q);
+    const text = value == null ? "" : String(value);
+    return (
+      <div>
+        {quick.length > 0 && (
+          <QuickChips
+            chips={quick}
+            readOnly={readOnly}
+            label={quickNumberLabel}
+            isOn={(c) => text !== "" && Number(text) === Number(c)}
+            onPick={(c) => onChange(text !== "" && Number(text) === Number(c) ? "" : c)}
+          />
+        )}
+        <div className="relative">
+          <Input
+            // the number pad, without a number box's spinners or scroll-to-change
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9]*[.,]?[0-9]*"
+            className={cn(field, "text-[17px] font-semibold tabular-nums", unit && "pr-16")}
+            value={text}
+            disabled={readOnly}
+            placeholder={quick.length ? "Or type the number" : "Type a number"}
+            enterKeyHint="done"
+            onChange={(e) => onChange(e.target.value.replace(",", ".").replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"), true)}
+            onBlur={onDone}
+          />
+          {unit && <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-[14px] font-semibold text-muted-foreground">{unit}</span>}
+        </div>
+      </div>
+    );
   }
   if (q.question_type === "date") {
-    return <Input type="date" value={value ?? ""} disabled={readOnly} onChange={(e) => onChange(e.target.value)} />;
+    return <Input type="date" className={field} value={value ?? ""} disabled={readOnly} onChange={(e) => onChange(e.target.value)} />;
   }
   if (q.question_type === "rating") {
     const n = Number(value) || 0;
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label={q.label}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((i) => (
           <button
             key={i}
             type="button"
+            role="radio"
+            aria-checked={n === i}
             disabled={readOnly}
-            onClick={() => onChange(i)}
-            className={`h-10 w-10 rounded-md border text-sm font-bold transition ${
-              n === i
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-muted/30 hover:bg-muted"
-            }`}
+            onClick={() => onChange(n === i ? "" : i)}
+            className={cn(
+              "h-12 rounded-xl border-2 text-[17px] font-bold tabular-nums transition-colors active:scale-[0.97]",
+              n === i ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
+            )}
           >
             {i}
           </button>
@@ -486,43 +650,20 @@ function QuestionInput({
       </div>
     );
   }
-  if (q.question_type === "single_choice") {
-    return (
-      <RadioGroup value={value ?? ""} onValueChange={onChange} disabled={readOnly}>
-        {opts.map((o) => (
-          <div key={o} className="flex items-center gap-2">
-            <RadioGroupItem value={o} id={`${q.id}-${o}`} />
-            <Label htmlFor={`${q.id}-${o}`} className="font-normal">{o}</Label>
-          </div>
-        ))}
-      </RadioGroup>
-    );
-  }
-  if (q.question_type === "dropdown") {
-    return (
-      <Select value={value ?? ""} onValueChange={onChange} disabled={readOnly}>
-        <SelectTrigger><SelectValue placeholder="Choose…" /></SelectTrigger>
-        <SelectContent>
-          {opts.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    );
+  if (q.question_type === "single_choice" || q.question_type === "dropdown") {
+    return <ChoiceButtons options={opts} label={q.label} picked={(o) => value === o} readOnly={readOnly} onPick={(o) => onChange(value === o ? "" : o)} />;
   }
   if (q.question_type === "multi_choice") {
     const arr: string[] = Array.isArray(value) ? value : [];
-    const toggle = (o: string) => {
-      const next = arr.includes(o) ? arr.filter((x) => x !== o) : [...arr, o];
-      onChange(next);
-    };
     return (
-      <div className="space-y-2">
-        {opts.map((o) => (
-          <label key={o} className="flex items-center gap-2 text-sm">
-            <Checkbox checked={arr.includes(o)} disabled={readOnly} onCheckedChange={() => toggle(o)} />
-            {o}
-          </label>
-        ))}
-      </div>
+      <ChoiceButtons
+        multi
+        options={opts}
+        label={q.label}
+        picked={(o) => arr.includes(o)}
+        readOnly={readOnly}
+        onPick={(o) => onChange(arr.includes(o) ? arr.filter((x) => x !== o) : [...arr, o])}
+      />
     );
   }
   if (q.question_type === "file" || q.question_type === "video") {
@@ -596,6 +737,128 @@ function QuestionInput({
     );
   }
   return null;
+}
+
+/** One-tap answers above a box: tap to add (or take out), then type anything else. */
+function QuickChips({ chips, readOnly, isOn, onPick, label }: { chips: string[]; readOnly: boolean; isOn: (c: string) => boolean; onPick: (c: string) => void; label?: (c: string) => string }) {
+  return (
+    <div className="mb-2.5 flex flex-wrap gap-2" data-quick-answers>
+      {chips.map((c) => {
+        const on = isOn(c);
+        return (
+          <button
+            key={c}
+            type="button"
+            disabled={readOnly}
+            aria-pressed={on}
+            onClick={() => onPick(c)}
+            className={cn(
+              "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border-2 px-4 text-[15px] font-semibold transition-colors active:scale-[0.97] disabled:opacity-60",
+              on ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-foreground",
+            )}
+            data-quick-answer
+          >
+            {on && <Check className="h-4 w-4 text-primary" />}
+            {label ? label(c) : c}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A question's choices as buttons a thumb can't miss: a single "Yes, I
+ * agree" is one big tick, short ones share a row, the rest are full-width
+ * rows (choiceLayout). Tap again to take it back.
+ */
+function ChoiceButtons({ options, label, picked, onPick, readOnly, multi = false }: { options: string[]; label: string; picked: (o: string) => boolean; onPick: (o: string) => void; readOnly: boolean; multi?: boolean }) {
+  const layout = choiceLayout(options);
+  const role = multi ? "checkbox" : "radio";
+  const mark = (on: boolean) => (
+    <span
+      className={cn(
+        "grid h-6 w-6 shrink-0 place-items-center border-2 transition-colors",
+        multi || layout === "agree" ? "rounded-md" : "rounded-full",
+        on ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40 bg-background",
+      )}
+      aria-hidden
+    >
+      {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+    </span>
+  );
+  if (layout === "agree") {
+    const o = options[0];
+    const on = picked(o);
+    return (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={on}
+        disabled={readOnly}
+        onClick={() => onPick(o)}
+        className={cn(
+          "flex min-h-[56px] w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left text-[16px] font-bold transition-colors active:scale-[0.99] disabled:opacity-60",
+          on ? "border-primary bg-primary/10" : "border-border bg-background",
+        )}
+        data-choice-agree
+      >
+        {mark(on)}
+        <span className="min-w-0">{o}</span>
+      </button>
+    );
+  }
+  if (layout === "row") {
+    return (
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }} role={multi ? "group" : "radiogroup"} aria-label={label}>
+        {options.map((o) => {
+          const on = picked(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              role={role}
+              aria-checked={on}
+              disabled={readOnly}
+              onClick={() => onPick(o)}
+              className={cn(
+                "min-h-[52px] rounded-2xl border-2 px-2 text-[16px] font-bold leading-tight transition-colors active:scale-[0.97] disabled:opacity-60",
+                on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
+              )}
+              data-choice
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2" role={multi ? "group" : "radiogroup"} aria-label={label}>
+      {options.map((o) => {
+        const on = picked(o);
+        return (
+          <button
+            key={o}
+            type="button"
+            role={role}
+            aria-checked={on}
+            disabled={readOnly}
+            onClick={() => onPick(o)}
+            className={cn(
+              "flex min-h-[52px] w-full items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left text-[16px] font-semibold leading-snug transition-colors active:scale-[0.99] disabled:opacity-60",
+              on ? "border-primary bg-primary/10" : "border-border bg-background",
+            )}
+            data-choice
+          >
+            {mark(on)}
+            <span className="min-w-0">{o}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function ExternalFormView({
