@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FLICK_PX_PER_MS, NO_SIDE_SWIPE, SWIPE_PAGE_EVENT, flickSpeed, focusAxis } from "@/components/workout-day/workout-story";
 
 /**
  * iOS-style swipe-to-reveal for workout exercise cards.
@@ -15,8 +16,11 @@ import { cn } from "@/lib/utils";
  *    the Delete button must still be tapped.
  *  - One open card at a time; tapping elsewhere or scrolling closes it.
  *  - Gestures that start on inputs or [data-no-swipe] controls are ignored.
- *  - Works the same in Focus (one exercise per screen), where moving between
- *    exercises is a tap, so a sideways swipe is always this card's.
+ *  - In Focus (one exercise per screen, a list marked data-swipe-pager)
+ *    swiping also moves between exercises, so the card takes only a swipe
+ *    left (pagerGesture), keeps Delete hidden while the finger moves fast,
+ *    and on release asks Focus first (SWIPE_PAGE_EVENT): a quick swipe moves
+ *    on, only a slow drag opens Delete.
  */
 
 export const SWIPE_SLOP = 24;
@@ -26,8 +30,24 @@ const OPEN_DISTANCE = SWIPE_ACTION_WIDTH * 0.55;
 const MIN_FLICK_DISTANCE = SWIPE_ACTION_WIDTH * 0.3;
 const FLICK_VELOCITY = 0.45; // px per ms
 const OPEN_EVENT = "jf:swipe-reveal-open";
+/**
+ * In Focus: Delete shows only while letting go would open it. It hides while
+ * the finger moves fast enough to move on (FLICK_PX_PER_MS, read over its
+ * last moments like the flick itself), and shows again once it's clearly
+ * slower (this share of it), so a drag near the line doesn't flicker.
+ */
+export function revealHidden(wasHidden: boolean, speed: number): boolean {
+  return speed >= (wasHidden ? 0.8 : 1) * FLICK_PX_PER_MS;
+}
 
 export type GestureMode = "pending" | "swipe" | "scroll";
+
+/** In Focus: up / down and right are Focus's (moving between exercises), left is this card's (Focus still takes a quick one on release). */
+export function pagerGesture(dx: number, dy: number): GestureMode {
+  const axis = focusAxis(dx, dy);
+  if (!axis) return "pending";
+  return axis === "x" && dx < 0 ? "swipe" : "scroll";
+}
 
 /** Decide what a gesture is once it has moved (dx, dy) from its start. */
 export function classifyGesture(dx: number, dy: number): GestureMode {
@@ -61,7 +81,7 @@ export function releaseOpen(offset: number, velocity: number): boolean {
 
 function ignoreTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
-  return !!el?.closest?.("input, textarea, select, [contenteditable='true'], [data-no-swipe], [role='slider']");
+  return !!el?.closest?.(NO_SIDE_SWIPE);
 }
 
 export function SwipeToReveal({
@@ -80,8 +100,16 @@ export function SwipeToReveal({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
+  // Focus: the finger is moving fast (Delete stays hidden)
+  const [quick, setQuick] = useState(false);
   const open = offset <= -SWIPE_ACTION_WIDTH + 1 && !dragging;
-  const g = useRef<{ x: number; y: number; base: number; mode: GestureMode; lastX: number; lastT: number; v: number; pointerId: number | null } | null>(null);
+  const g = useRef<{
+    x: number; y: number; base: number; mode: GestureMode; lastX: number; lastT: number; v: number; pointerId: number | null;
+    /** In Focus, from a closed card. */
+    pager: boolean;
+    /** The finger's x over the last moves (flickSpeed reads them as `y`). */
+    samples: Array<{ y: number; t: number }>;
+  } | null>(null);
   // Swipes don't emit clicks on touch, so a boolean flag could swallow the
   // next real tap; suppress only clicks that land right after a gesture.
   const suppressClickUntil = useRef(0);
@@ -118,7 +146,9 @@ export function SwipeToReveal({
       if (offset !== 0) close(); // interacting with the card's inputs closes it
       return;
     }
-    g.current = { x, y, base: offset, mode: "pending", lastX: x, lastT: performance.now(), v: 0, pointerId };
+    const now = performance.now();
+    const pager = offset === 0 && !!rootRef.current?.closest("[data-swipe-pager]");
+    g.current = { x, y, base: offset, mode: "pending", lastX: x, lastT: now, v: 0, pointerId, pager, samples: [{ y: x, t: now }] };
   };
   const move = (x: number, y: number) => {
     const s = g.current;
@@ -126,7 +156,7 @@ export function SwipeToReveal({
     const dx = x - s.x;
     const dy = y - s.y;
     if (s.mode === "pending") {
-      s.mode = classifyGesture(dx, dy);
+      s.mode = s.pager ? pagerGesture(dx, dy) : classifyGesture(dx, dy);
       if (s.mode === "scroll") { if (offset !== 0) close(); return; }
       if (s.mode !== "swipe") return;
       setDragging(true);
@@ -137,6 +167,12 @@ export function SwipeToReveal({
     s.v = 0.7 * s.v + 0.3 * ((x - s.lastX) / dt);
     s.lastX = x;
     s.lastT = now;
+    s.samples.push({ y: x, t: now });
+    if (s.samples.length > 12) s.samples.shift();
+    if (s.pager) {
+      const speed = flickSpeed(s.samples, dx, now);
+      setQuick((q) => revealHidden(q, speed));
+    }
     setOffset(dragOffset(s.base, dx));
   };
   const end = () => {
@@ -146,6 +182,14 @@ export function SwipeToReveal({
     if (s.mode === "swipe") {
       suppressClickUntil.current = performance.now() + 400; // a swipe is never also a tap
       setDragging(false);
+      setQuick(false);
+      if (s.pager) {
+        // Focus first: a quick swipe moves on and the card closes; a slow one opens Delete
+        const dx = s.lastX - s.x;
+        const ask = new CustomEvent(SWIPE_PAGE_EVENT, { bubbles: true, cancelable: true, detail: { dx, speed: flickSpeed(s.samples, dx, performance.now()) } });
+        rootRef.current?.dispatchEvent(ask);
+        if (ask.defaultPrevented) { setOffset(0); return; }
+      }
       setOffset((cur) => (releaseOpen(cur, s.v) ? -SWIPE_ACTION_WIDTH : 0));
     } else if (s.mode === "pending" && offset !== 0) {
       // A plain tap on an open card closes it instead of activating content.
@@ -159,8 +203,8 @@ export function SwipeToReveal({
   return (
     <div ref={rootRef} className="relative overflow-hidden rounded-[1.35rem]" data-swipe-open={open ? "true" : undefined}>
       <div
-        className="absolute inset-y-0 right-0 flex items-center justify-center"
-        style={{ width: SWIPE_ACTION_WIDTH, opacity: reveal, pointerEvents: open ? "auto" : "none" }}
+        className="absolute inset-y-0 right-0 flex items-center justify-center transition-opacity duration-150"
+        style={{ width: SWIPE_ACTION_WIDTH, opacity: quick ? 0 : reveal, pointerEvents: open ? "auto" : "none" }}
         aria-hidden={!open}
       >
         <button
@@ -181,7 +225,7 @@ export function SwipeToReveal({
         onTouchStart={(e) => begin(e.touches[0].clientX, e.touches[0].clientY, e.target, null)}
         onTouchMove={(e) => move(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={end}
-        onTouchCancel={() => { g.current = null; setDragging(false); setOffset((cur) => (cur <= -SWIPE_ACTION_WIDTH + 1 ? cur : 0)); }}
+        onTouchCancel={() => { g.current = null; setDragging(false); setQuick(false); setOffset((cur) => (cur <= -SWIPE_ACTION_WIDTH + 1 ? cur : 0)); }}
         onPointerDown={(e) => { if (e.pointerType === "mouse") begin(e.clientX, e.clientY, e.target, e.pointerId); }}
         onPointerMove={(e) => { if (e.pointerType === "mouse" && g.current) move(e.clientX, e.clientY); }}
         onPointerUp={(e) => { if (e.pointerType === "mouse") end(); }}

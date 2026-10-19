@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { FLICK_IDLE_MS, NEARLY_FITS_PX, SWIPE_COMMIT_PX, SWIPE_VERTICAL_RATIO, flickSpeed, focusSwipeDirection, pastEdge, pastEdgeDirection, pickStoryStart } from "@/components/workout-day/workout-story";
-import { SWIPE_LOCK_RATIO } from "@/components/workout-day/swipe-to-reveal";
+import { FLICK_IDLE_MS, FLICK_MIN_PX, FLICK_PX_PER_MS, NEARLY_FITS_PX, SWIPE_COMMIT_PX, SWIPE_VERTICAL_RATIO, flickSpeed, focusAxis, focusSideDirection, focusSwipeDirection, pastEdge, pastEdgeDirection, pickStoryStart } from "@/components/workout-day/workout-story";
+import { pagerGesture, revealHidden } from "@/components/workout-day/swipe-to-reveal";
 import { FOCUS_TIPS_SINCE, resolveWorkoutView, tipsSeenSince } from "@/lib/use-workout-view";
 import { TOP_FIRST_DOUBLE_TAP_MS, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 
@@ -38,17 +38,20 @@ describe("Focus: a tap never moves (swipe, ‹ / Next, the bars or arrow keys do
     expect(story).toContain("const to = (heading ?? i) + dir;");
     expect(story).toContain('data-testid="focus-end-nudge"');
   });
-  it("How Focus works: by itself once per account (again for anyone who saw the tap version), and from the ? any time", () => {
+  it("How Focus works: by itself once per account (again for anyone who saw an older version), and from the ? any time", () => {
     const day = read("src/components/workout-day/WorkoutDayView.tsx");
     expect(day).toContain("if (storyOpen && focusKnown && !focusTipsSeen && !isImpersonating) setFocusTipsOpen(true);");
     expect(day).toContain("onHelp={() => setFocusTipsOpen(true)}");
     expect(tipsSeenSince(null)).toBe(false);
-    expect(tipsSeenSince("2026-10-17T12:00:00Z")).toBe(false);
+    expect(tipsSeenSince("2026-10-17T12:00:00Z")).toBe(false); // the tap version
+    expect(tipsSeenSince("2026-10-18T12:00:00Z")).toBe(false); // swipe left to delete
     expect(tipsSeenSince(FOCUS_TIPS_SINCE)).toBe(true);
     expect(tipsSeenSince("2026-10-19T08:00:00Z")).toBe(true);
     expect(read("supabase/migrations/20261218090000_focus_tips_swipe.sql")).toContain("SET focus_tips_at = now();");
     const intro = read("src/components/workout-day/focus-intro.tsx");
-    expect(intro).toContain("<b className=\"text-foreground\">Swipe up</b> for the next exercise");
+    expect(intro).toContain("<b className=\"text-foreground\">Swipe up or left</b> for the next exercise");
+    expect(intro).toContain("<b className=\"text-foreground\">Swipe down or right</b> to go back");
+    expect(intro).toContain("<b className=\"text-foreground\">Drag a card left slowly</b> to delete it.");
     expect(intro).not.toContain("Tap the right side");
   });
 });
@@ -84,10 +87,19 @@ describe("Focus: swipe up for the next exercise, down to go back", () => {
     expect(pastEdgeDirection({ up: true, past: 35, room: NEARLY_FITS_PX + 100, speed: 0.8 })).toBe(0);
     expect(pastEdgeDirection({ up: true, past: SWIPE_COMMIT_PX, room: NEARLY_FITS_PX + 100, speed: 0 })).toBe(1);
   });
-  it("a thumb's arc still counts as up / down, and never overlaps swipe to delete", () => {
+  it("a thumb's arc still counts as up / down; every swipe is up / down or sideways, never neither", () => {
     expect(SWIPE_VERTICAL_RATIO).toBeLessThan(1);
-    // delete claims |dx| ≥ 1.6|dy|, i.e. |dy| ≤ |dx| / 1.6: the vertical rule starts above that
-    expect(SWIPE_VERTICAL_RATIO).toBeGreaterThan(1 / SWIPE_LOCK_RATIO);
+    expect(focusAxis(-6, -7)).toBeNull(); // not decided yet
+    expect(focusAxis(-90, -100)).toBe("y"); // a one-handed arc
+    expect(focusAxis(-100, -60)).toBe("x");
+    for (let deg = 0; deg < 360; deg += 3) {
+      const dx = 40 * Math.cos((deg * Math.PI) / 180);
+      const dy = 40 * Math.sin((deg * Math.PI) / 180);
+      const axis = focusAxis(dx, dy);
+      expect(axis === "x" || axis === "y").toBe(true);
+      // the card under the finger reads it the same way: it takes only sideways to the left
+      expect(pagerGesture(dx, dy)).toBe(axis === "x" && dx < 0 ? "swipe" : "scroll");
+    }
   });
   it("the bars swipe too (the thumb rests on the bottom one), from the exercise on screen", () => {
     const story = read("src/components/workout-day/workout-story.tsx");
@@ -104,7 +116,8 @@ describe("Focus: swipe up for the next exercise, down to go back", () => {
   it("touch only, never while typing or over a menu; the release can't tap the next card; no sideways glide", () => {
     const story = read("src/components/workout-day/workout-story.tsx");
     expect(story).toContain('z.addEventListener("touchmove", onTouchMove, { passive: false });');
-    expect(story).toContain("if (document.activeElement?.closest?.(TYPING)) return;");
+    expect(story).toContain("swipe.typing = !!document.activeElement?.closest?.(TYPING);");
+    expect(story).toContain("if (swipe.typing) { swipe.on = false; return; }");
     expect(story).toContain("if (e.touches.length !== 1 || document.querySelector(OPEN_LAYER)) return;");
     expect(story).toContain('z.addEventListener("click", onClickCapture, true);');
     expect(story).toContain("jump(to, { instant: true });");
@@ -155,7 +168,7 @@ describe("story view: the same cards as the list, never a second copy", () => {
     expect(day).toContain("onDone={closeStory}");
     expect(day).toContain('onExit={() => chooseWorkoutView("list")}');
   });
-  it("pull-to-refresh stays out of it, the bottom bar hides, and a sideways swipe is the card's (delete, like the list)", () => {
+  it("pull-to-refresh stays out of it, the bottom bar hides, and the card keeps its swipe to delete", () => {
     expect(day).toContain('data-no-pull-refresh={storyOpen ? "" : undefined}');
     expect(day).toContain('document.querySelectorAll<HTMLElement>("[data-mobile-bottom-nav]")');
     const swipe = read("src/components/workout-day/swipe-to-reveal.tsx");
@@ -163,6 +176,48 @@ describe("story view: the same cards as the list, never a second copy", () => {
     expect(swipe).not.toContain("paused");
     // the row of screens only moves when told to (a swipe, ‹ / Next, the bars)
     expect(read("src/styles.css")).toMatch(/\.workout-story \{\n  position: fixed;\n  inset: 0;\n  z-index: 40;\n  display: flex;\n  overflow: hidden;/);
+  });
+});
+
+describe("Focus: left / right move too, and only a slow drag left on a card is Delete", () => {
+  const story = read("src/components/workout-day/workout-story.tsx");
+  const swipe = read("src/components/workout-day/swipe-to-reveal.tsx");
+  it("left is next, right is back; a quick flick or a long enough swipe moves", () => {
+    expect(focusSideDirection({ dx: -SWIPE_COMMIT_PX, speed: 0, reveal: false })).toBe(1);
+    expect(focusSideDirection({ dx: SWIPE_COMMIT_PX, speed: 0, reveal: false })).toBe(-1);
+    expect(focusSideDirection({ dx: -40, speed: 0.1, reveal: false })).toBe(0);
+    expect(focusSideDirection({ dx: FLICK_MIN_PX, speed: FLICK_PX_PER_MS, reveal: false })).toBe(-1);
+    expect(focusSideDirection({ dx: 0, speed: 2, reveal: false })).toBe(0);
+  });
+  it("on a card: a quick swipe left moves on, a slow drag left (however long) is Delete; right is still back", () => {
+    expect(focusSideDirection({ dx: -60, speed: 0.9, reveal: true })).toBe(1);
+    expect(focusSideDirection({ dx: -200, speed: 0, reveal: true })).toBe(0);
+    expect(focusSideDirection({ dx: -60, speed: FLICK_PX_PER_MS - 0.01, reveal: true })).toBe(0);
+    expect(focusSideDirection({ dx: SWIPE_COMMIT_PX, speed: 0, reveal: true })).toBe(-1);
+    // a drag that stopped before lifting isn't quick, however fast it started
+    const drag = [{ y: 300, t: 0 }, { y: 200, t: 60 }, { y: 190, t: 90 }];
+    expect(flickSpeed(drag, -110, 90 + FLICK_IDLE_MS + 1)).toBe(0);
+  });
+  it("the card asks Focus as it lifts, and keeps Delete hidden while the finger moves fast", () => {
+    expect(swipe).toContain("const pager = offset === 0 && !!rootRef.current?.closest(\"[data-swipe-pager]\");");
+    expect(swipe).toContain("rootRef.current?.dispatchEvent(ask);\n        if (ask.defaultPrevented) { setOffset(0); return; }");
+    expect(swipe).toContain("const speed = flickSpeed(s.samples, dx, now);\n      setQuick((q) => revealHidden(q, speed));");
+    expect(swipe).toContain("opacity: quick ? 0 : reveal");
+    // hidden exactly when letting go would move on, back only once clearly slower (no flicker)
+    expect(revealHidden(false, FLICK_PX_PER_MS)).toBe(true);
+    expect(revealHidden(false, FLICK_PX_PER_MS - 0.01)).toBe(false);
+    expect(revealHidden(true, FLICK_PX_PER_MS - 0.01)).toBe(true);
+    expect(revealHidden(true, FLICK_PX_PER_MS * 0.7)).toBe(false);
+    expect(story).toContain('el.setAttribute("data-swipe-pager", "");');
+    expect(story).toContain('el.removeAttribute("data-swipe-pager");');
+    expect(story).toContain("el.addEventListener(SWIPE_PAGE_EVENT, onCardSwipe);");
+    expect(story).toContain("const dir = focusSideDirection({ dx, speed, reveal: true });");
+  });
+  it("off the card (the space under it, the bars) any sideways swipe moves; boxes and sliders keep theirs", () => {
+    expect(story).toContain("if (swipe.keepSide || (dx < 0 && swipe.onCard)) { swipe.on = false; return; }");
+    expect(story).toContain("focusSideDirection({ dx: swipe.dx, speed: flickSpeed(swipe.samples.map((p) => ({ y: p.x, t: p.t })), swipe.dx, e.timeStamp), reveal: false })");
+    // the next card comes in from the side the finger went
+    expect(story).toContain('[{ transform: `translate${axis === "x" ? "X" : "Y"}(${dir * 64}px)`, opacity: 0 }');
   });
 });
 

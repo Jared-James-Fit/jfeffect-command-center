@@ -134,7 +134,7 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
  * How Focus works, over Focus itself: a finger swiping up on loop, and the
  * four things to know. Shown once per account the first time someone is in
  * Focus (`workout_view_prefs.focus_tips_at` on or after FOCUS_TIPS_SINCE, so
- * everyone who learned the old tap version sees it once more) and any time
+ * everyone who learned an older version sees it once more) and any time
  * from the ? in Focus's top bar. A tap anywhere closes it.
  */
 export function FocusTips({ onClose }: { onClose: () => void }) {
@@ -154,8 +154,8 @@ export function FocusTips({ onClose }: { onClose: () => void }) {
             <ChevronUp className="h-6 w-6" />
           </span>
         </div>
-        <div className="mt-3 text-sm font-bold">Swipe up</div>
-        <div className="text-xs text-white/75">next exercise · down to go back</div>
+        <div className="mt-3 text-sm font-bold">Swipe up or left</div>
+        <div className="text-xs text-white/75">next exercise · down or right to go back</div>
       </div>
       <div
         className="absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+16px)] mx-auto max-w-md rounded-2xl border border-border bg-card p-4 text-foreground shadow-2xl animate-in slide-in-from-bottom-4 duration-500"
@@ -163,9 +163,9 @@ export function FocusTips({ onClose }: { onClose: () => void }) {
       >
         <div className="text-base font-bold">Focus: one exercise at a time</div>
         <ul className="mt-2.5 space-y-2 text-[13px] leading-snug text-muted-foreground">
-          <li className="flex gap-2.5"><ChevronUp className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe up</b> for the next exercise</span></li>
-          <li className="flex gap-2.5"><ChevronDown className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe down</b> to go back</span></li>
-          <li className="flex gap-2.5"><Trash2 className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe a card left</b> to delete it. You can undo.</span></li>
+          <li className="flex gap-2.5"><ChevronUp className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe up or left</b> for the next exercise</span></li>
+          <li className="flex gap-2.5"><ChevronDown className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Swipe down or right</b> to go back</span></li>
+          <li className="flex gap-2.5"><Trash2 className="mt-px h-4 w-4 shrink-0 text-foreground" /><span><b className="text-foreground">Drag a card left slowly</b> to delete it. You can undo.</span></li>
           <li className="flex gap-2.5"><ChevronRight className="mt-px h-4 w-4 shrink-0 text-foreground" /><span>Or use <b className="text-foreground">‹ and Next</b> at the bottom</span></li>
         </ul>
         <button
