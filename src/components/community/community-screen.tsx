@@ -240,8 +240,7 @@ export function CommunityScreen({
   // The clients' Crew draws its own bar (the shell's steps aside); the coach's Crew page has its own header and tabs.
   const ownBar = !hideTabs;
   // a coach viewing as a client: the shell's bar and the preview banner stay, so Crew's bar sits in the page
-  const barInline = previewOnly;
-  const barHidden = useBarHidden(ownBar && !barInline && scope.kind === "feed");
+  const barHidden = useBarHidden(ownBar && scope.kind === "feed");
   // your profile is a page with a way back to the feed (on the coach's page, and now on Crew's bar too)
   const youAsPage = scope.kind === "you";
 
@@ -432,7 +431,7 @@ export function CommunityScreen({
     <CrewBar
       label="Crew"
       hidden={barHidden}
-      inline={barInline}
+     
       left={
         <>
           {/* + : the camera and everything you can post (post, meal, lock in, workout, write), Instagram's spot */}
@@ -480,11 +479,11 @@ export function CommunityScreen({
       }
     />
   ) : scope.kind === "rankings" ? (
-    <CrewBar label="Rankings" inline={barInline} left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />
+    <CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />
   ) : scope.kind === "you" && user?.id ? (
     <CrewBar
       label="Your profile"
-      inline={barInline}
+     
       left={<BarBack label="Back to the feed" onClick={leaveAuthor} />}
       center={<ProfileBarTitle userId={user.id} />}
       // the app's menu (settings, account, everything else), where Instagram keeps it: your profile's ☰
@@ -497,14 +496,14 @@ export function CommunityScreen({
   ) : scope.kind === "author" ? (
     <CrewBar
       label="Profile"
-      inline={barInline}
+     
       left={<BarBack label={`Back to ${TAB_LABEL[scope.from]}`} onClick={leaveAuthor} />}
       center={<ProfileBarTitle userId={scope.author.user_id} fallback={scope.author.name} />}
     />
   ) : scope.kind === "activity" ? (
     <CrewBar
       label="Activity"
-      inline={barInline}
+     
       left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />}
       center={<BarTitle>Activity</BarTitle>}
       right={
@@ -519,9 +518,9 @@ export function CommunityScreen({
     <>
     {crewBar}
     {/* Find athletes has no bar: its search field starts right under the status bar */}
-    {ownBar && !barInline && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "env(safe-area-inset-top, 0px)" }} />}
+    {ownBar && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "var(--app-safe-top)" }} />}
     {/* a staff login that's also a client: its My Workouts / Staff switch, under Crew's bar instead of the shell's */}
-    {ownBar && !barInline && <DualAccountSwitcher />}
+    {ownBar && <DualAccountSwitcher />}
     <div ref={rootRef} className={cn("mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 [touch-action:pan-x_pan-y] sm:px-4", ownBar ? "pt-1.5" : "pt-3")}>
       {ownBar ? null : inProfile || youAsPage ? (
         <Button

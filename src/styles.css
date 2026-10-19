@@ -369,6 +369,14 @@ html[data-keyboard-open="true"] {
    regardless of this constant. Inflating it by the safe-area inset only shifts
    the whole shell down by the notch height, producing a large dead gap at the
    top of the admin messenger on notched iPhones. */
+/* Where the app's own phone top bars start (the shell's, Crew's). Normally at
+   the very top, padded for the notch; while a coach views as a client the red
+   banner is up there with the notch inside it (ClientPovBanner sets
+   --pov-banner-h), so the bars sit right under it with no notch padding of
+   their own: one bar under the banner, as the client sees it, no gap. */
+:root { --app-safe-top: env(safe-area-inset-top, 0px); --app-chrome-top: 0px; }
+html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); }
+
 :root { --shell-topbar-h: 0px; }
 @media (max-width: 768px) {
   :root { --shell-topbar-h: 49px; }
@@ -1138,7 +1146,7 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 .activity-spin { animation: activity-spin 0.8s steps(8) infinite; transform-origin: 50% 50%; }
 /* The Crew bar slides away as you read down and comes back the moment you scroll up. */
 .crew-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
-.crew-bar[data-hidden] { transform: translateY(-100%); }
+.crew-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
 @media (min-width: 768px) { .crew-bar[data-hidden] { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .crew-bar { transition: none; }

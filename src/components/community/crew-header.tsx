@@ -50,16 +50,15 @@ export function useBarHidden(enabled: boolean): boolean {
 /**
  * Crew's one top bar: left, a centred title, right. On phones it's fixed under
  * the status bar (the shell's own bar steps aside on Crew) and slides away
- * while you read down; on wider screens it sits at the top of the column.
- * `inline` keeps it in the page (a coach previewing a client, where the
- * shell's bar and the preview banner stay).
+ * while you read down; on wider screens it sits at the top of the column. A
+ * coach viewing as a client gets the very same bar, under the preview banner
+ * (--app-chrome-top), so there's still one bar.
  */
-export function CrewBar({ left, center, right, hidden = false, inline = false, label }: {
+export function CrewBar({ left, center, right, hidden = false, label }: {
   left?: ReactNode;
   center?: ReactNode;
   right?: ReactNode;
   hidden?: boolean;
-  inline?: boolean;
   label: string;
 }) {
   return (
@@ -67,12 +66,9 @@ export function CrewBar({ left, center, right, hidden = false, inline = false, l
       <header
         aria-label={label}
         data-crew-bar
-        data-hidden={hidden && !inline ? "" : undefined}
-        className={cn(
-          "crew-bar z-40 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80",
-          inline ? "relative" : "fixed inset-x-0 top-0 md:relative md:inset-auto",
-        )}
-        style={inline ? undefined : { paddingTop: "env(safe-area-inset-top, 0px)" }}
+        data-hidden={hidden ? "" : undefined}
+        className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:relative md:inset-auto"
+        style={{ paddingTop: "var(--app-safe-top)" }}
       >
         <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-between px-1.5" style={{ height: CREW_BAR_HEIGHT }}>
           <div className="relative z-10 flex min-w-0 items-center">{left}</div>
@@ -85,7 +81,7 @@ export function CrewBar({ left, center, right, hidden = false, inline = false, l
         </div>
       </header>
       {/* holds the bar's room in the page, so nothing jumps under it */}
-      {!inline && <div aria-hidden className="md:hidden" style={{ height: `calc(env(safe-area-inset-top, 0px) + ${CREW_BAR_HEIGHT})` }} />}
+      <div aria-hidden className="md:hidden" style={{ height: `calc(var(--app-safe-top) + ${CREW_BAR_HEIGHT})` }} />
     </>
   );
 }

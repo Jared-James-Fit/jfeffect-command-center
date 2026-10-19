@@ -921,9 +921,10 @@ export function AppShell({
           style={{ height: "env(safe-area-inset-top, 0px)" }}
         />
         {/* Phone top bar: the JF Effect mark in the middle (Crew's look), tools left, More / you right */}
+        {/* under the notch, or right under the View as client banner (it holds the notch) */}
         {!pageBar && <header
           className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
+          style={{ paddingTop: "var(--app-safe-top)" }}
           data-shell-bar
         >
           {/* search and light / dark on every screen, clients included: staff search everything
@@ -986,7 +987,7 @@ export function AppShell({
               First in the page, so the room it makes for its spinner opens right under the top bar. */}
           <TabRefresh
             pull={barItems.some((i) => i.to === pathname)}
-            top="calc(env(safe-area-inset-top, 0px) + 3rem + 5px)"
+            top="calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem + 5px)"
           />
           {/* a page with its own bar puts the switch under it */}
           {!pageBar && <DualAccountSwitcher />}

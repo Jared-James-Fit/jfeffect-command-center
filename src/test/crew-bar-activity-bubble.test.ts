@@ -88,9 +88,10 @@ describe("Crew's one bar", () => {
   it("slides away reading down, back on any scroll up, fixed on phones with its room held", () => {
     expect(bar).toContain("} else if (dy > 8) {");
     expect(bar).toContain("} else if (dy < -8) {");
-    expect(bar).toContain('"fixed inset-x-0 top-0 md:relative md:inset-auto"');
-    expect(bar).toContain("calc(env(safe-area-inset-top, 0px) + ${CREW_BAR_HEIGHT})");
-    expect(screen).toContain('const barHidden = useBarHidden(ownBar && !barInline && scope.kind === "feed");');
+    expect(bar).toContain('className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40');
+    expect(bar).toContain("md:relative md:inset-auto");
+    expect(bar).toContain("calc(var(--app-safe-top) + ${CREW_BAR_HEIGHT})");
+    expect(screen).toContain('const barHidden = useBarHidden(ownBar && scope.kind === "feed");');
   });
 
   it("back from a profile, Rankings or Activity lands where you were in the feed", () => {
@@ -106,6 +107,28 @@ describe("Crew's one bar", () => {
     expect(pageOwnsTopBar("/portal/community", undefined)).toBe(false);
     // and the dual-account switch moves under Crew's bar instead of disappearing
     expect(read("src/components/app-shell.tsx")).toContain("{!pageBar && <DualAccountSwitcher />}");
-    expect(screen).toContain("{ownBar && !barInline && <DualAccountSwitcher />}");
+    expect(screen).toContain("{ownBar && <DualAccountSwitcher />}");
+  });
+
+  it("View as client: one bar, Crew's own, right under the preview banner (no shell bar on top, no notch gap)", () => {
+    // the shell's bar steps aside on Crew for a coach previewing too, and Crew's bar is never drawn inline
+    const portal = read("src/routes/_authenticated/portal/route.tsx");
+    expect(portal).toContain("ownTopBarOn={CREW_OWN_BAR}>");
+    expect(portal).not.toContain("isImpersonating ? undefined : CREW_OWN_BAR");
+    expect(bar).not.toContain("inline?: boolean");
+    expect(screen).not.toContain("barInline");
+    // the banner holds the notch, so bars start under it with none of their own
+    const banner = read("src/components/client-pov-banner.tsx");
+    expect(banner).toContain('root.style.setProperty("--pov-banner-h", `${el.getBoundingClientRect().height}px`);');
+    expect(banner).toContain('root.setAttribute("data-pov-banner-on", "");');
+    const css = read("src/styles.css");
+    expect(css).toContain(":root { --app-safe-top: env(safe-area-inset-top, 0px); --app-chrome-top: 0px; }");
+    expect(css).toContain("html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); }");
+    // sliding away reading down clears the banner too
+    expect(css).toContain(".crew-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }");
+    // every other page's shell bar: no second notch under the banner
+    const shell = read("src/components/app-shell.tsx");
+    expect(shell).toContain('style={{ paddingTop: "var(--app-safe-top)" }}\n          data-shell-bar');
+    expect(shell).toContain('top="calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem + 5px)"');
   });
 });

@@ -115,7 +115,7 @@ export function useNewPosts(enabled: boolean, myId: string | null) {
 export function NewPostsPill({ count, onShow }: { count: number; onShow: () => void }) {
   if (count <= 0) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.25rem)] z-40 flex justify-center">
+    <div className="pointer-events-none fixed inset-x-0 top-[calc(var(--app-chrome-top)+var(--app-safe-top)+4.25rem)] z-40 flex justify-center">
       <button
         type="button"
         onClick={onShow}
