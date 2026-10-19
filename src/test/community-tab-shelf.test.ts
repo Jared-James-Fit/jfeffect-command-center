@@ -28,14 +28,18 @@ describe("client tab bar: Crew in the centre", () => {
     expect(visible[4].to).toBe(MORE_BAR_TO);
   });
 
-  it("one control in the client top bar: More, with the account and appearance at its top", () => {
+  it("the client top bar: search and light / dark on the left, More on the right (account and appearance also at the top of More)", () => {
     expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn={isImpersonating ? undefined : CREW_OWN_BAR}>');
     // Crew draws its own bar, so the shell's steps aside there (one bar, not two) and its ☰ opens More by event
     expect(portal).toContain('const CREW_OWN_BAR = ["/portal/community"] as const;');
     expect(shell).toContain("const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);");
     expect(shell).toContain("{!pageBar && <header");
     expect(shell).toContain("window.addEventListener(OPEN_MORE_EVENT, open);");
-    expect(shell).toContain('{!simpleHeader && <ThemeToggle className="mr-0.5" />}');
+    // search and the light / dark switch are in every shell bar, clients included; a client's search is More's
+    expect(shell).not.toContain("{!simpleHeader && <ThemeToggle");
+    expect(shell).toContain("if (isStaffRole) return setPaletteOpen(true);");
+    expect(shell).toContain("focusSearch={moreSearch}");
+    expect(shell).toContain("searchRef.current.focus();");
     expect(shell).toContain("{!simpleHeader && (");
     expect(shell).toContain('<span className="text-[15px] font-semibold">Appearance</span>');
     expect(shell).toContain('<Button variant="ghost" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-full px-0">');
