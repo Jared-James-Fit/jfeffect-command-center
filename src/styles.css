@@ -558,9 +558,9 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
 /* ============================================================
    Workout Focus view (workout-story.tsx): the logger's own list, laid out
    one exercise per screen. Only classes change, so no card remounts.
-   Moving between exercises is a tap, a swipe up / down or ‹ / Next: the row
-   of screens only moves when told to (overflow hidden), so a sideways swipe
-   is the card's own (swipe to delete, like the list). A long card scrolls up
+   Moving between exercises is a swipe (up / left next, down / right back) or
+   ‹ / Next: the row of screens only moves when told to (overflow hidden), and
+   on a card only a slow drag left is swipe to delete. A long card scrolls up
    and down in its own screen first. The bars sit over the top and bottom.
    ============================================================ */
 /* where Focus's own top starts (its top bar and its cards): under the phone's

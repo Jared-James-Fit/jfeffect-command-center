@@ -13,12 +13,12 @@ const isView = (v: unknown): v is WorkoutView => v === "list" || v === "story";
 const cacheKey = (userId: string) => `jf-workout-view:${userId}`;
 const dirtyKey = (userId: string) => `jf-workout-view-dirty:${userId}`;
 const triedKey = (userId: string) => `jf-workout-view-tried:${userId}`;
-// v2: the tips were rewritten for swiping (taps no longer move), so a phone's
-// old "seen" from the tap version doesn't count
-const tipsKey = (userId: string) => `jf-focus-tips-v2:${userId}`;
+// v3: the tips were rewritten for sideways swipes (a quick one moves, only a
+// slow drag deletes), so a phone's "seen" from an older version doesn't count
+const tipsKey = (userId: string) => `jf-focus-tips-v3:${userId}`;
 
-/** "How Focus works" seen before this was the tap version: it opens once more. */
-export const FOCUS_TIPS_SINCE = "2026-10-18T00:00:00Z";
+/** "How Focus works" seen before this was an older version (taps, then swipe left to delete): it opens once more. */
+export const FOCUS_TIPS_SINCE = "2026-10-19T02:00:00Z";
 /** Pure: the account's tips stamp counts as seen (the current version). */
 export function tipsSeenSince(focusTipsAt: string | null | undefined): boolean {
   if (!focusTipsAt) return false;

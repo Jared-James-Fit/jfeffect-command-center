@@ -7,13 +7,14 @@ import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs
 
 /**
  * Focus view (stored as "story"): the workout one exercise at a time, full
- * screen. Swipe up for the next exercise and down to go back, or use ‹ / Next
- * and the bars up top (where you are and what's done). A tap never moves: in
- * a logger, a tap that misses a set box by a hair must not throw you to
- * another exercise mid-set. A sideways swipe is the card's own (swipe to
- * delete). It's the same exercise cards as the list, laid out side by side
- * (WorkoutDayView switches the list's classes), so switching view never
- * reloads a card or loses what's typed.
+ * screen. Swipe up or left for the next exercise, down or right to go back,
+ * or use ‹ / Next and the bars up top (where you are and what's done). On a
+ * card, only a quick swipe left moves on: a slow drag left reveals Delete
+ * (swipe-to-reveal.tsx). A tap never moves: in a logger, a tap that misses a
+ * set box by a hair must not throw you to another exercise mid-set. It's the
+ * same exercise cards as the list, laid out side by side (WorkoutDayView
+ * switches the list's classes), so switching view never reloads a card or
+ * loses what's typed.
  */
 
 /** Something open over Focus (a swiped-open card, a menu, a sheet): a swipe under it isn't a move. */
@@ -28,8 +29,10 @@ export const FLICK_PX_PER_MS = 0.3;
 export const FLICK_WINDOW_MS = 100;
 /** …and a finger that stopped this long before lifting wasn't flicking. */
 export const FLICK_IDLE_MS = 120;
-/** A swipe is up / down when it's at least this steep (|dy| ≥ ratio × |dx|): a thumb swiping up one-handed arcs sideways. Swipe to delete only claims |dx| ≥ 1.6 × |dy|. */
+/** A swipe is up / down when it's at least this steep (|dy| ≥ ratio × |dx|): a thumb swiping up one-handed arcs sideways. Anything flatter is sideways. */
 export const SWIPE_VERTICAL_RATIO = 0.8;
+/** A Focus gesture's way is decided once the finger has moved this far. */
+export const AXIS_DECIDE_PX = 10;
 /** Scroll positions within this of a card's end count as the end (phones report fractions of a pixel). */
 export const EDGE_SLOP_PX = 4;
 /** A card with no more than this to scroll is "a little too tall": one swipe or flick scrolls it and moves on. A longer one is read first: only a deliberate swipe past its end (no flick) moves on. */
@@ -52,8 +55,41 @@ export function focusSwipeDirection(s: { dy: number; speed: number; atTop: boole
 }
 
 /**
- * How fast the finger was moving along dy's direction as it lifted at `liftT`
+ * Up / down ("y") or sideways ("x"): one rule for Focus and the card under
+ * the finger, so every swipe is exactly one of them (no gap where neither
+ * answers). Null until the finger has moved AXIS_DECIDE_PX.
+ */
+export function focusAxis(dx: number, dy: number): "x" | "y" | null {
+  if (Math.hypot(dx, dy) < AXIS_DECIDE_PX) return null;
+  return Math.abs(dy) >= Math.abs(dx) * SWIPE_VERTICAL_RATIO ? "y" : "x";
+}
+
+/**
+ * Where a sideways swipe goes: left (the finger moves left) is the next
+ * exercise, right the one before; 0 stays. A quick flick always moves. A slow
+ * one moves when it's long enough, except a drag left on a card that can be
+ * deleted (`reveal`): that's how Delete is revealed.
+ */
+export function focusSideDirection(s: { dx: number; speed: number; reveal: boolean }): -1 | 0 | 1 {
+  if (s.dx === 0) return 0;
+  const dir = s.dx < 0 ? 1 : -1;
+  const dist = Math.abs(s.dx);
+  if (dist >= FLICK_MIN_PX && s.speed >= FLICK_PX_PER_MS) return dir;
+  if (dir === 1 && s.reveal) return 0;
+  return dist >= SWIPE_COMMIT_PX ? dir : 0;
+}
+
+/** Where a swipe starts that the sideways swipe leaves alone: typing, a slider, anything marked data-no-swipe. */
+export const NO_SIDE_SWIPE = 'input, textarea, select, [contenteditable="true"], [data-no-swipe], [role="slider"]';
+
+/** A card's swipe left, as it lifts (detail: { dx, speed }): Focus calls preventDefault when it moves on, and the card stays closed. */
+export const SWIPE_PAGE_EVENT = "jf:swipe-page";
+
+/**
+ * How fast the finger was moving along the swipe as it lifted at `liftT`
  * (px per ms): over its last FLICK_WINDOW_MS of moves, 0 if it had stopped.
+ * `y` is the finger's place along the swipe (its x for a sideways one), `d`
+ * how far it went.
  */
 export function flickSpeed(samples: ReadonlyArray<{ y: number; t: number }>, dy: number, liftT: number): number {
   if (samples.length < 2 || dy === 0) return 0;
@@ -297,12 +333,15 @@ export function StoryChrome({
     };
   }, [listRef]);
 
-  // Swipe up / down (touch): the card follows the finger, and a long enough
-  // swipe or a quick flick moves on, the next card rising in from where the
-  // finger went. A long card scrolls first (focusSwipeDirection). Quick swipes
-  // queue: each moves on from where the last one was heading. At either end
-  // the card holds, a chevron nudges and the bottom button pulses. Arrow keys
-  // on a keyboard.
+  // Swipes (touch): up or left is the next exercise, down or right the one
+  // before. The card follows the finger, and a long enough swipe or a quick
+  // flick moves on, the next card coming in from where the finger went. A
+  // long card scrolls first (focusSwipeDirection). A swipe left that starts
+  // on a card is the card's own (swipe-to-reveal.tsx): it asks here on
+  // release (SWIPE_PAGE_EVENT), a quick one moves on and a slow one opens
+  // Delete. Quick swipes queue: each moves on from where the last one was
+  // heading. At either end the card holds, a chevron nudges and the bottom
+  // button pulses. Arrow keys on a keyboard.
   const latest = useRef({ index, count, onJump });
   // the bars are part of the swipe area too (the thumb rests on the bottom one)
   const topRef = useRef<HTMLDivElement | null>(null);
@@ -314,9 +353,11 @@ export function StoryChrome({
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
+    // the cards in it hand a quick swipe left to Focus (swipe-to-reveal.tsx)
+    el.setAttribute("data-swipe-pager", "");
     let heading: number | null = null; // where the last move sent us, until we get there
     let settle: number | undefined;
-    const go = (dir: -1 | 1, how: "key" | "swipe"): boolean => {
+    const go = (dir: -1 | 1, how: "key" | "swipe", axis: "x" | "y" = "y"): boolean => {
       const { index: i, count: n, onJump: jump } = latest.current;
       const to = (heading ?? i) + dir;
       if (to < 0 || to >= n) {
@@ -336,22 +377,24 @@ export function StoryChrome({
       const card = el.querySelectorAll<HTMLElement>("[data-story-slide]")[to]?.firstElementChild as HTMLElement | null;
       if (card && !reducedMotion()) {
         card.animate(
-          [{ transform: `translateY(${dir * 64}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+          [{ transform: `translate${axis === "x" ? "X" : "Y"}(${dir * 64}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
           { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
         );
       }
       return true;
     };
-    // ── Swipe up / down ──
+    // ── Swipes ──
     // A swipe starts anywhere on the card's screen or on Focus's own bars (the
-    // thumb rests on the bottom one). "drag": the card fits that way, so it
-    // follows the finger; "scroll": it had more to show, so it scrolls to its
-    // end and what the finger travels past the end is the swipe (pastEdge).
+    // thumb rests on the bottom one), and goes up / down or sideways
+    // (focusAxis). "drag": the card fits that way, so it follows the finger;
+    // "scroll": it had more to show, so it scrolls to its end and what the
+    // finger travels past the end is the swipe (pastEdge).
     const swipe = {
-      on: false, decided: false, mode: "drag" as "drag" | "scroll", x: 0, y: 0, dy: 0,
-      atTop: false, atBottom: false, card: null as HTMLElement | null, slide: null as HTMLElement | null,
+      on: false, decided: false, axis: "y" as "x" | "y", mode: "drag" as "drag" | "scroll", x: 0, y: 0, dx: 0, dy: 0,
+      atTop: false, atBottom: false, typing: false, onCard: false, keepSide: false,
+      card: null as HTMLElement | null, slide: null as HTMLElement | null,
       startScroll: 0, maxScroll: 0,
-      samples: [] as Array<{ y: number; t: number }>,
+      samples: [] as Array<{ x: number; y: number; t: number }>,
     };
     const zones = [el, topRef.current, bottomRef.current].filter((z): z is HTMLDivElement => !!z);
     const slideOnScreen = () => {
@@ -359,13 +402,13 @@ export function StoryChrome({
       return el.querySelectorAll<HTMLElement>("[data-story-slide]")[heading ?? i] ?? null;
     };
     let swallowUntil = 0; // the click a swipe's release would land on the new card
-    const dragTo = (card: HTMLElement, dy: number) => {
+    const dragTo = (card: HTMLElement, d: number, axis: "x" | "y") => {
       const { index: i, count: n } = latest.current;
-      const dir = dy < 0 ? 1 : -1;
+      const dir = d < 0 ? 1 : -1;
       const edge = (heading ?? i) + dir < 0 || (heading ?? i) + dir >= n;
       card.style.transition = "none";
-      card.style.transform = dy ? `translateY(${dy * (edge ? 0.15 : 0.4)}px)` : "";
-      card.style.opacity = dy && !edge ? String(1 - Math.min(0.35, Math.abs(dy) / 700)) : "";
+      card.style.transform = d ? `translate${axis === "x" ? "X" : "Y"}(${d * (edge ? 0.15 : 0.4)}px)` : "";
+      card.style.opacity = d && !edge ? String(1 - Math.min(0.35, Math.abs(d) / 700)) : "";
     };
     const settleBack = (card: HTMLElement | null) => {
       if (!card) return;
@@ -377,8 +420,6 @@ export function StoryChrome({
     const onTouchStart = (e: TouchEvent) => {
       swipe.on = false;
       if (e.touches.length !== 1 || document.querySelector(OPEN_LAYER)) return;
-      // keyboard up: a drag is reading the card, not moving on (Done closes it first)
-      if (document.activeElement?.closest?.(TYPING)) return;
       const target = e.target instanceof Element ? e.target : null;
       let slide = target?.closest<HTMLElement>("[data-story-slide]") ?? null;
       if (slide && el.contains(slide)) {
@@ -391,11 +432,18 @@ export function StoryChrome({
       const t = e.touches[0];
       swipe.on = true;
       swipe.decided = false;
+      swipe.axis = "y";
       swipe.mode = "drag";
       swipe.x = t.clientX;
       swipe.y = t.clientY;
-      swipe.samples = [{ y: t.clientY, t: e.timeStamp }];
+      swipe.samples = [{ x: t.clientX, y: t.clientY, t: e.timeStamp }];
+      swipe.dx = 0;
       swipe.dy = 0;
+      // keyboard up: an up / down drag is reading the card, not moving on (Done closes it first)
+      swipe.typing = !!document.activeElement?.closest?.(TYPING);
+      // a swipe left on a card that can be deleted is the card's (it asks on release)
+      swipe.onCard = !!target?.closest("[data-swipe-content]");
+      swipe.keepSide = !!target?.closest(NO_SIDE_SWIPE);
       swipe.slide = slide;
       swipe.startScroll = slide.scrollTop;
       swipe.maxScroll = Math.max(0, slide.scrollHeight - slide.clientHeight);
@@ -408,21 +456,32 @@ export function StoryChrome({
       const t = e.touches[0];
       const dx = t.clientX - swipe.x;
       const dy = t.clientY - swipe.y;
-      swipe.samples.push({ y: t.clientY, t: e.timeStamp });
+      swipe.samples.push({ x: t.clientX, y: t.clientY, t: e.timeStamp });
       if (swipe.samples.length > 12) swipe.samples.shift();
       if (!swipe.decided) {
-        if (Math.hypot(dx, dy) < 10) return;
+        const axis = focusAxis(dx, dy);
+        if (!axis) return;
         swipe.decided = true;
-        // sideways is the card's own (swipe to delete)
-        if (Math.abs(dy) < Math.abs(dx) * SWIPE_VERTICAL_RATIO) { swipe.on = false; return; }
-        // toward more of the card: it scrolls (natively) first
-        swipe.mode = (dy < 0 ? swipe.atBottom : swipe.atTop) ? "drag" : "scroll";
+        swipe.axis = axis;
+        if (axis === "x") {
+          // a box or slider keeps its own; a swipe left on a card is the card's
+          if (swipe.keepSide || (dx < 0 && swipe.onCard)) { swipe.on = false; return; }
+        } else {
+          if (swipe.typing) { swipe.on = false; return; }
+          // toward more of the card: it scrolls (natively) first
+          swipe.mode = (dy < 0 ? swipe.atBottom : swipe.atTop) ? "drag" : "scroll";
+        }
       }
       if (swipe.mode === "scroll") return;
       if (e.cancelable) e.preventDefault();
+      if (swipe.axis === "x") {
+        swipe.dx = dx;
+        if (swipe.card) dragTo(swipe.card, dx, "x");
+        return;
+      }
       // only the way it can go: back past the start toward more card is nothing
       swipe.dy = dy < 0 ? (swipe.atBottom ? dy : 0) : (swipe.atTop ? dy : 0);
-      if (swipe.card) dragTo(swipe.card, swipe.dy);
+      if (swipe.card) dragTo(swipe.card, swipe.dy, "y");
     };
     const onTouchEnd = (e: TouchEvent) => {
       if (!swipe.on || !swipe.decided) { swipe.on = false; return; }
@@ -445,12 +504,14 @@ export function StoryChrome({
         }
         return;
       }
-      const dir = focusSwipeDirection({ dy: swipe.dy, speed: flickSpeed(swipe.samples, swipe.dy, e.timeStamp), atTop: swipe.atTop, atBottom: swipe.atBottom });
+      const dir = swipe.axis === "x"
+        ? focusSideDirection({ dx: swipe.dx, speed: flickSpeed(swipe.samples.map((p) => ({ y: p.x, t: p.t })), swipe.dx, e.timeStamp), reveal: false })
+        : focusSwipeDirection({ dy: swipe.dy, speed: flickSpeed(swipe.samples, swipe.dy, e.timeStamp), atTop: swipe.atTop, atBottom: swipe.atBottom });
       const card = swipe.card;
       if (dir !== 0) {
         swallowUntil = performance.now() + 300;
         if (card) { card.style.transition = ""; card.style.transform = ""; card.style.opacity = ""; }
-        if (go(dir, "swipe")) return;
+        if (go(dir, "swipe", swipe.axis)) return;
       }
       settleBack(card);
     };
@@ -460,6 +521,16 @@ export function StoryChrome({
     };
     const onClickCapture = (e: MouseEvent) => {
       if (performance.now() < swallowUntil) { e.preventDefault(); e.stopPropagation(); }
+    };
+    // A swipe left that started on a card, as it lifts: a quick one moves on
+    // (and the card closes), a slow one is left to the card (Delete).
+    const onCardSwipe = (e: Event) => {
+      const { dx, speed } = (e as CustomEvent<{ dx: number; speed: number }>).detail;
+      const dir = focusSideDirection({ dx, speed, reveal: true });
+      if (dir === 0) return;
+      e.preventDefault();
+      swallowUntil = performance.now() + 300;
+      go(dir, "swipe", "x");
     };
 
     const onKey = (e: KeyboardEvent) => {
@@ -477,9 +548,11 @@ export function StoryChrome({
       z.addEventListener("touchcancel", onTouchCancel, { passive: true });
       z.addEventListener("click", onClickCapture, true);
     }
+    el.addEventListener(SWIPE_PAGE_EVENT, onCardSwipe);
     window.addEventListener("keydown", onKey);
     return () => {
       window.clearTimeout(settle);
+      el.removeAttribute("data-swipe-pager");
       for (const z of zones) {
         z.removeEventListener("touchstart", onTouchStart);
         z.removeEventListener("touchmove", onTouchMove);
@@ -487,6 +560,7 @@ export function StoryChrome({
         z.removeEventListener("touchcancel", onTouchCancel);
         z.removeEventListener("click", onClickCapture, true);
       }
+      el.removeEventListener(SWIPE_PAGE_EVENT, onCardSwipe);
       window.removeEventListener("keydown", onKey);
     };
   }, [listRef]);
