@@ -307,6 +307,8 @@ export function AppShell({
   const [collapsedSections, toggleSection, setAllSections] = useCollapsedSections();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  /** More opened from the bar's search (a client's search is More's "Search pages…"). */
+  const [moreSearch, setMoreSearch] = useState(false);
   // a page with its own top bar opens More from there (Crew: your profile's ☰)
   useEffect(() => {
     const open = () => setMoreOpen(true);
@@ -924,19 +926,24 @@ export function AppShell({
           style={{ paddingTop: "env(safe-area-inset-top)" }}
           data-shell-bar
         >
+          {/* search and light / dark on every screen, clients included: staff search everything
+              (the palette), anyone else the app's pages (More, its search field ready) */}
           <div className="flex h-12 min-w-0 items-center justify-start gap-1">
-            {isStaffRole && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPaletteOpen(true)}
-                aria-label="Search workout library"
-                className="h-10 w-10 shrink-0 rounded-full px-0"
-              >
-                <Search className="h-[18px] w-[18px]" />
-              </Button>
-            )}
-            {!simpleHeader && <ThemeToggle className="mr-0.5" />}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (isStaffRole) return setPaletteOpen(true);
+                setMoreSearch(true);
+                setMoreOpen(true);
+              }}
+              aria-label={isStaffRole ? "Search workout library" : "Search the app"}
+              className="h-10 w-10 shrink-0 rounded-full px-0"
+              data-bar-search
+            >
+              <Search className="h-[18px] w-[18px]" />
+            </Button>
+            <ThemeToggle />
           </div>
           <ShellBrand title={title} compact={!simpleHeader} />
           <div className="flex h-12 min-w-0 items-center justify-end gap-1.5">
@@ -1007,8 +1014,9 @@ export function AppShell({
         open={moreOpen}
         onOpenChange={(o) => {
           setMoreOpen(o);
-          if (!o) { setMoreQuery(""); }
+          if (!o) { setMoreQuery(""); setMoreSearch(false); }
         }}
+        focusSearch={moreSearch}
         title={title}
         grouped={grouped}
         activeTo={activeTo}
@@ -2122,8 +2130,10 @@ export function PageHeader({
  */
 function MobileNavDrawer({
   open, onOpenChange, title, grouped, activeTo, pathname, navBadges,
-  query, setQuery, filteredResults, account,
+  query, setQuery, filteredResults, account, focusSearch = false,
 }: {
+  /** Opened from the top bar's search: the search field takes focus, not the first button. */
+  focusSearch?: boolean;
   /** Shown at the top of the root list (client portal: account + appearance). */
   account?: ReactNode;
   open: boolean;
@@ -2144,6 +2154,7 @@ function MobileNavDrawer({
   }, [open]);
 
   const close = () => onOpenChange(false);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -2151,6 +2162,11 @@ function MobileNavDrawer({
           side="bottom"
           hideCloseButton
           className="h-[100dvh] max-h-[100dvh] w-full overflow-hidden p-0 md:hidden"
+          onOpenAutoFocus={(e) => {
+            if (!focusSearch || !searchRef.current) return;
+            e.preventDefault();
+            searchRef.current.focus();
+          }}
         >
           <SheetHeader
             className="border-b border-border px-4 pb-3"
@@ -2189,10 +2205,12 @@ function MobileNavDrawer({
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search pages…"
                 className="h-10 pl-8"
+                data-more-search
               />
             </div>
           </div>
