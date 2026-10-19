@@ -85,7 +85,7 @@ describe("wiring", () => {
     expect(checkins).toContain("loadProgramContext(sb, row.client_id, periodStart ? isoDateAdd(periodStart, 3) : null)");
     expect(checkins).toContain("program: publicProgramContext(program)");
     expect(readFileSync("src/lib/submission-reviews.functions.ts", "utf8")).toContain("PROGRAM CONTEXT:");
-    expect(readFileSync("src/lib/nutrition-ai-plans.functions.ts", "utf8")).toContain("programContextText(program, { readout: false })");
+    expect(readFileSync("src/lib/nutrition-ai-plans.server.ts", "utf8")).toContain("programContextText(program, { readout: false })");
   });
 });
 
