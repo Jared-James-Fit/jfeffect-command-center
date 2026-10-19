@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -587,6 +587,13 @@ export function StoryChrome({
   }, [justDone]);
   const [finishing, setFinishing] = useState(false);
   const anim = "animate-in fade-in-0 duration-300";
+  // Focus is the whole screen: the View as client banner steps aside while
+  // it's open (the red frame stays), so a coach previewing gets a client's room.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-focus-open", "");
+    return () => root.removeAttribute("data-focus-open");
+  }, []);
 
   let primary: ReactNode;
   if (!last) {
@@ -656,7 +663,7 @@ export function StoryChrome({
       <div
         ref={topRef}
         data-testid="story-top"
-        className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2.5 pt-[calc(var(--focus-top)+6px)]", anim)}
+        className={cn("fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2 pt-[calc(var(--focus-top)+6px)]", anim)}
       >
         <div className="mx-auto max-w-xl">
           <div className="flex gap-1" role="group" aria-label="Exercises">
@@ -669,7 +676,7 @@ export function StoryChrome({
                 aria-current={i === index ? "step" : undefined}
                 className="flex h-4 min-w-0 flex-1 items-center"
               >
-                {/* done is green; the one you're on is a little thicker */}
+                {/* the one you're on is the only one at full strength (and taller); done is green */}
                 <span
                   data-done={done[i] ? "" : undefined}
                   className={cn(
@@ -682,7 +689,7 @@ export function StoryChrome({
                       key={justDone?.i === i ? justDone.k : "fill"}
                       className={cn(
                         "absolute inset-0 rounded-full transition-colors duration-300",
-                        done[i] ? "bg-emerald-500" : "bg-foreground",
+                        i === index ? (done[i] ? "bg-emerald-500" : "bg-foreground") : "bg-emerald-500/50",
                         done[i] && justDone?.i === i && "jf-bar-fill",
                       )}
                     />
@@ -691,21 +698,44 @@ export function StoryChrome({
               </button>
             ))}
           </div>
-          {/* the way out where the list has it (top left), then help and the switch to the list */}
-          <div className="mt-2 flex items-center gap-2">
+          {/* one row: the way out top left (like the list's back), where you are, then help and the switch to the list */}
+          <div className="mt-1.5 flex h-10 items-center gap-2">
             {back && (
               <button
                 type="button"
                 data-testid="focus-leave"
                 onClick={back.onBack}
                 aria-label={`Leave the workout: back to ${back.label}`}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3 text-[13px] font-bold text-foreground transition active:scale-95"
+                title={back.label}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-foreground transition active:scale-95"
               >
-                <ArrowLeft className="h-4 w-4" aria-hidden />
-                {back.label}
+                <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
               </button>
             )}
-            <div className="flex-1" />
+            {/* where you are, whole on any phone; under it Done (it pops in once), the clock and the workout */}
+            <div className="min-w-0 flex-1">
+              <div data-testid="story-count" className="truncate text-[15px] font-bold leading-tight tabular-nums text-foreground">
+                Exercise {index + 1} of {count}
+              </div>
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs font-medium leading-tight text-muted-foreground">
+                {currentDone && (
+                  <span
+                    key={justDone?.i === index ? justDone.k : "done"}
+                    data-testid="story-done"
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 font-bold text-emerald-500",
+                      justDone?.i === index && "jf-done-pop",
+                    )}
+                  >
+                    <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                    Done
+                  </span>
+                )}
+                {/* the clock brings its own "·", so nothing dangles before it starts */}
+                {timer}
+                <span className="truncate">{title}</span>
+              </div>
+            </div>
             {onHelp && (
               <button
                 type="button"
@@ -722,34 +752,11 @@ export function StoryChrome({
               data-testid="focus-exit"
               onClick={onExit}
               aria-label="Back to the list of all exercises"
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3.5 text-[13px] font-bold text-foreground transition active:scale-95"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3 text-[13px] font-bold text-foreground transition active:scale-95"
             >
               <Rows3 className="h-4 w-4" aria-hidden />
               List
             </button>
-          </div>
-          <div className="mt-1.5 flex min-w-0 items-baseline gap-2">
-            <div data-testid="story-count" className="shrink-0 text-base font-bold leading-tight tabular-nums text-foreground">
-              Exercise {index + 1} of {count}
-            </div>
-            {currentDone && (
-              <span
-                key={justDone?.i === index ? justDone.k : "done"}
-                data-testid="story-done"
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-500",
-                  justDone?.i === index && "jf-done-pop",
-                )}
-              >
-                <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
-                Done
-              </span>
-            )}
-            <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              {/* the clock brings its own "·", so nothing dangles before it starts */}
-              {timer}
-              <span className="truncate">{title}</span>
-            </div>
           </div>
         </div>
       </div>

@@ -564,9 +564,11 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
    and down in its own screen first. The bars sit over the top and bottom.
    ============================================================ */
 /* where Focus's own top starts (its top bar and its cards): under the phone's
-   notch, or under the View as client banner (ClientPovBanner sets
-   --pov-banner-h, notch included) */
-:root { --focus-top: var(--pov-banner-h, env(safe-area-inset-top, 0px)); }
+   notch. The View as client banner steps aside while Focus is open (StoryChrome
+   sets data-focus-open; the red frame stays), so a coach previewing gets the
+   room a client has. */
+:root { --focus-top: env(safe-area-inset-top, 0px); }
+html[data-focus-open] [data-pov-banner] { visibility: hidden; }
 .workout-story {
   position: fixed;
   inset: 0;
@@ -590,9 +592,9 @@ mark.gh-mark.gh-flash { animation: ghFlashPulse 1.4s ease-out 2; }
   overscroll-behavior-y: contain;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  /* clears the top bar (bars, ← Workouts / ? / List, "Exercise 5 of 7" + workout line;
-     under the View as client banner when there is one) and the ‹ / Next bar */
-  padding: calc(var(--focus-top) + 114px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
+  /* clears the top bar (the bars, then ← · "Exercise 5 of 7" over the clock and
+     workout · ? · List) and the ‹ / Next bar */
+  padding: calc(var(--focus-top) + 86px) 12px calc(env(safe-area-inset-bottom, 0px) + 82px);
 }
 /* the card at its own height, right under the top bar like the list (a long
    one scrolls); the room under it is just more space to swipe */
