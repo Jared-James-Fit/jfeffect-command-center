@@ -55,9 +55,16 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
     switch (data.event) {
       case "form_submitted": {
         const { data: s } = await db.from("nf_submissions").select("client_id, form_id, status").eq("id", data.id).maybeSingle();
-        // Nutrition requests get their own "AI plan ready" push instead.
-        if (!s || s.status === "in_progress" || s.form_id === NUTRITION_REQUEST_FORM_ID) return { skipped: true };
+        if (!s || s.status === "in_progress") return { skipped: true };
         if ((await clientUserId(s.client_id)) !== userId) return { skipped: true };
+        // A Nutrition Update Request: the coach hears it's in right now, then
+        // the AI targets and meal plan are written here (never on the phone,
+        // which can close or miss a file after a publish), with "plan ready" after.
+        if (s.form_id === NUTRITION_REQUEST_FORM_ID) {
+          await notifyAppEvent(sb, "nutrition_submitted", { clientId: s.client_id, sourceId: data.id, actorUserId: userId });
+          const { startNutritionPlan } = await import("@/lib/nutrition-ai-plans.server");
+          return startNutritionPlan(sb, data.id);
+        }
         clientId = s.client_id;
         break;
       }
