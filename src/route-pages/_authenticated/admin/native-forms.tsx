@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { quickAnswers, quickExclusive } from "@/lib/form-quick";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -550,6 +551,24 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
   }
 
   const needsOptions = ["single_choice", "multi_choice", "dropdown"].includes(local.question_type);
+  // one-tap answers above a typed answer, and a number's sanity range (nf_questions.validation)
+  const canQuick = ["short_text", "long_text", "number"].includes(local.question_type);
+  const v = (local.validation ?? {}) as Record<string, unknown>;
+  const [quickDraft, setQuickDraft] = useState(() => quickAnswers(q).join(", "));
+  const saveValidation = (patch: Record<string, unknown>) => {
+    const next: Record<string, unknown> = { ...v, ...patch };
+    for (const k of Object.keys(next)) if (next[k] == null || next[k] === "" || (Array.isArray(next[k]) && !(next[k] as unknown[]).length)) delete next[k];
+    void save({ validation: next });
+  };
+  const saveQuick = () => {
+    const list = [...new Set(quickDraft.split(",").map((x) => x.trim()).filter(Boolean))].slice(0, 12);
+    // a stand-alone answer ("None") stays stand-alone while it's still there
+    saveValidation({ quick: list, quick_exclusive: quickExclusive(q).filter((x) => list.includes(x)) });
+  };
+  const numberField = (key: "min" | "max") => {
+    const raw = v[key];
+    return raw == null ? "" : String(raw);
+  };
 
   return (
     <Card className="border-border bg-card p-3">
@@ -578,6 +597,25 @@ function QuestionRow({ q, formId, allQuestions, onMoveUp, onMoveDown }: { q: NfQ
               onChange={(e) => setLocal({ ...local, options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
               onBlur={() => save({ options: local.options })}
             />
+          )}
+          {canQuick && (
+            <div>
+              <Input
+                placeholder={local.question_type === "number" ? "Quick numbers they can tap, e.g. 3, 4, 5 (optional)" : "Quick answers they can tap, e.g. None, Walking, Sports (optional)"}
+                value={quickDraft}
+                onChange={(e) => setQuickDraft(e.target.value)}
+                onBlur={saveQuick}
+                data-quick-answers-input
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">Shown as buttons above the box. They can tap one or more and still type their own.</p>
+            </div>
+          )}
+          {local.question_type === "number" && (
+            <div className="grid grid-cols-3 gap-2">
+              <Input inputMode="decimal" placeholder="Min" defaultValue={numberField("min")} onBlur={(e) => saveValidation({ min: e.target.value.trim() === "" ? null : Number(e.target.value) })} />
+              <Input inputMode="decimal" placeholder="Max" defaultValue={numberField("max")} onBlur={(e) => saveValidation({ max: e.target.value.trim() === "" ? null : Number(e.target.value) })} />
+              <Input placeholder="Unit (lb, steps)" defaultValue={typeof v.unit === "string" ? v.unit : ""} onBlur={(e) => saveValidation({ unit: e.target.value.trim() || null })} />
+            </div>
           )}
           <div className="flex items-center gap-3 text-xs">
             <label className="flex items-center gap-1">
