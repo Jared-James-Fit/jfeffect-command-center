@@ -225,8 +225,8 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
   const story = read("src/components/workout-day/workout-story.tsx");
   const day = read("src/components/workout-day/WorkoutDayView.tsx");
   const css = read("src/styles.css");
-  it("a finished exercise is green (fills once, \"Done\" pops), the one you're on is thicker", () => {
-    expect(story).toContain('done[i] ? "bg-emerald-500" : "bg-foreground"');
+  it("a finished exercise is green (fills once, \"Done\" pops); the one you're on is the only bar at full strength, and taller", () => {
+    expect(story).toContain('i === index ? (done[i] ? "bg-emerald-500" : "bg-foreground") : "bg-emerald-500/50"');
     expect(story).toContain('i === index ? "h-1.5" : "h-1"');
     expect(story).toContain('done[i] && justDone?.i === i && "jf-bar-fill"');
     expect(story).toContain('data-testid="story-done"');
@@ -259,11 +259,24 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(day).not.toContain("data-story-fill");
     expect(day).toContain("{canEditWorkoutStructure && !storyOpen && (");
   });
-  it("starts under the View as client banner, never behind it", () => {
-    expect(css).toContain(":root { --focus-top: var(--pov-banner-h, env(safe-area-inset-top, 0px)); }");
-    expect(css).toContain("padding: calc(var(--focus-top) + 114px) 12px");
+  it("starts under the notch; the View as client banner steps aside while it's open (the red frame stays), no blank band", () => {
+    expect(css).toContain(":root { --focus-top: env(safe-area-inset-top, 0px); }");
+    expect(css).toContain("html[data-focus-open] [data-pov-banner] { visibility: hidden; }");
+    expect(story).toContain('root.setAttribute("data-focus-open", "");\n    return () => root.removeAttribute("data-focus-open");');
+    const banner = read("src/components/client-pov-banner.tsx");
+    expect(banner).toContain("data-pov-banner");
+    expect(banner).not.toContain("--pov-banner-h");
+    expect(banner).toContain("export function PovFrame()");
     expect(story).toContain("pt-[calc(var(--focus-top)+6px)]");
-    expect(read("src/components/client-pov-banner.tsx")).toContain('root.style.setProperty("--pov-banner-h", `${el.getBoundingClientRect().height}px`);');
+  });
+  it("one row under the bars: ←, where you are (whole on any phone) over Done · clock · workout, ? and List", () => {
+    // the bars (16) + 6 + the row (40) + 8 + the border: the cards start just under it
+    expect(story).toContain('"fixed inset-x-0 top-0 z-[41] border-b border-border/60 bg-background px-3 pb-2 pt-[calc(var(--focus-top)+6px)]"');
+    expect(story).toContain('<div className="mt-1.5 flex h-10 items-center gap-2">');
+    expect(css).toContain("padding: calc(var(--focus-top) + 86px) 12px");
+    expect(story).toContain('data-testid="story-count" className="truncate text-[15px] font-bold');
+    // the way out is the arrow alone (its name is in its label)
+    expect(story).toContain('<ArrowLeft className="h-[18px] w-[18px]" aria-hidden />\n              </button>');
   });
 });
 
