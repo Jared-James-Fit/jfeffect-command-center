@@ -3,7 +3,7 @@
  * work the AI output (targets + paste-ready meal plan) into the client's
  * nutrition targets.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { currentRequest, planMissing } from "@/lib/form-request-state";
 import {
   generateNutritionPlanFn,
   listNutritionRequestsFn,
@@ -43,6 +44,7 @@ type Req = {
     error: string | null;
     generated_at: string | null;
     applied_at: string | null;
+    updated_at?: string | null;
     phase: string | null;
     workout_meals?: WorkoutMealsMode | null;
   };
@@ -143,15 +145,25 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     queryFn: () => listFn({ data: { clientId } }),
     refetchInterval: (q) => {
       const reqs = (q.state.data as any)?.requests as Req[] | undefined;
-      const r = reqs?.[0];
+      const r = currentRequest(reqs ?? [], (q.state.data as any)?.requestedAt ?? null);
       const waiting = r && r.status !== "in_progress" && (!r.plan || r.plan.status === "generating" || r.plan.status === "pending");
       return waiting ? 4000 : false;
     },
   });
   const requests = (data?.requests ?? []) as Req[];
-  const latest = requests[0] ?? null;
+  const latest = currentRequest(requests, data?.requestedAt ?? null);
   const submitted = latest && latest.status !== "in_progress";
   const plan = latest?.plan ?? null;
+  // Sent, but no plan being written (or one that stalled): write it now, once.
+  const kicked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!latest || !submitted || !planMissing(plan) || kicked.current === latest.id) return;
+    kicked.current = latest.id;
+    void genFn({ data: { submissionId: latest.id } })
+      .catch(() => {})
+      .finally(() => qc.invalidateQueries({ queryKey: key }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latest?.id, submitted, plan?.status, plan?.updated_at]);
 
   const prefill = useMemo(() => {
     if (!plan?.meal_plan_text) return null;

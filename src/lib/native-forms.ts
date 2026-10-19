@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { sentSinceAsked } from "@/lib/form-request-state";
 import type { PickedVideo } from "@/lib/video-edit/pick";
 import { createVideoSend, videoErrorMessage } from "@/lib/video-edit/pipeline";
 
@@ -407,6 +408,18 @@ function dayToNum(day: string): number {
 
 export async function getOrCreateCurrentSubmission(form: NfForm, clientId: string) {
   const period = form.recurrence === "none" ? null : currentPeriodStart(form.recurrence, form.recurrence_day);
+  // A one-off form they were asked for (the Nutrition Update Request): once
+  // it's sent it stays sent, shown as submitted, until it's asked for again.
+  // A blank copy right after Submit read as "it didn't go through", so people
+  // filled it in twice.
+  if (!period) {
+    const [{ data: lastRows }, { data: asked }] = await Promise.all([
+      db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId).order("created_at", { ascending: false }).limit(1),
+      db.from("nf_assignments").select("created_at, updated_at").eq("form_id", form.id).eq("client_id", clientId).maybeSingle(),
+    ]);
+    const last = lastRows?.[0];
+    if (last && last.status !== "in_progress" && sentSinceAsked(last, asked)) return last as NfSubmission;
+  }
   let q = db.from("nf_submissions").select("*").eq("form_id", form.id).eq("client_id", clientId);
   if (period) q = q.eq("period_start", period);
   else q = q.in("status", ["in_progress"]);

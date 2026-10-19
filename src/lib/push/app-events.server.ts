@@ -13,6 +13,7 @@ export type AppEvent =
   // → coach / admins
   | "checkin_submitted"
   | "form_submitted"
+  | "nutrition_submitted"
   | "nutrition_plan_ready"
   | "lift_video_uploaded"
   | "client_lift_comment"
@@ -87,6 +88,12 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `Form from ${n}`,
     body: () => "Submitted a form. Tap to view.",
     url: (id) => `/admin/clients/${id}?tab=documents`, rateMinutes: 60,
+  },
+  nutrition_submitted: {
+    to: "staff", category: "check_ins",
+    title: (n) => `Nutrition update from ${n}`,
+    body: () => "Their answers are in. The AI targets and meal plan are on the way.",
+    url: (id) => `/admin/clients/${id}?tab=nutrition`, rateMinutes: 10,
   },
   nutrition_plan_ready: {
     to: "staff", category: "check_ins",

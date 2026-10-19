@@ -40,7 +40,6 @@ import {
 } from "@/lib/native-forms";
 import { buildFilloutUrl } from "@/lib/fillout";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
-import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
 import { prefillAnswer, questionPrefill } from "@/lib/form-prefill";
 import { sexFromAnswer } from "@/lib/athlete-sex";
 import { playAppSound } from "@/lib/app-sounds";
@@ -286,13 +285,8 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
         });
     }
     playAppSound("success");
+    // tells the coach, and (a Nutrition Update Request) writes the AI targets + meal plan on the server
     fireAppEvent("form_submitted", submission.id);
-    // Nutrition Update Request: start the AI targets + meal plan for the coach.
-    if (formId === NUTRITION_REQUEST_FORM_ID) {
-      void import("@/lib/nutrition-ai-plans.functions")
-        .then(({ generateNutritionPlanFn }) => generateNutritionPlanFn({ data: { submissionId: submission.id } }))
-        .catch((e) => console.warn("Nutrition AI kickoff failed", e));
-    }
     qc.invalidateQueries({ queryKey: ["nf-current-submission", formId, client?.id] });
     qc.invalidateQueries({ queryKey: ["nf-submissions-for-client", client?.id] });
   }
