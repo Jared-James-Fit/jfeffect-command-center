@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   REACTION,
   SCOPE_WORD,
+  canShareToStory,
   extraHoliday,
   extraScene,
   featuredLift,
@@ -49,7 +50,10 @@ import { PostExtras } from "@/components/community/post-attach";
 import { NoteCaption } from "@/components/community/note-caption";
 import { PollCard } from "@/components/community/poll";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
+import { PostShareSheet } from "@/components/community/post-share-sheet";
+import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
+import { useClientImpersonation } from "@/lib/client-impersonation";
 import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 import { CollaboratorsSheet } from "@/components/community/mentions";
@@ -628,9 +632,13 @@ export function ReactionBar({
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const { role } = useAuth();
+  const { isImpersonating } = useClientImpersonation();
   // Message the person who posted (never yourself; coaches use team chat with each other).
   const canMessage = !post.is_mine && !(post.author.is_coach && (role === "admin" || role === "coach"));
+  // Add to your story: yours, or a crew-wide post (only where the story camera can open, never in View as client)
+  const canStory = useStoryShareReady() && !isImpersonating && canShareToStory(post);
   const who = reactorsLine(post);
   // the little ❤️🔥😂 beside the names, once it's not just hearts
   const kinds = reactionKinds(post);
@@ -663,13 +671,14 @@ export function ReactionBar({
           </button>
         )}
         <RepostButton post={post} onReposted={onReposted} />
-        {canMessage && (
+        {(canMessage || canStory) && (
           <button
             type="button"
-            onClick={() => setMessaging(true)}
+            onClick={() => (canStory ? setSharing(true) : setMessaging(true))}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground/80 hover:bg-muted hover:text-foreground"
-            aria-label={`Message ${post.author.name}`}
-            title={`Message ${post.author.name}`}
+            aria-label={canStory ? "Share" : `Message ${post.author.name}`}
+            title={canStory ? "Share" : `Message ${post.author.name}`}
+            data-post-share
           >
             <Send className="h-[22px] w-[22px] -rotate-12" />
           </button>
@@ -703,6 +712,16 @@ export function ReactionBar({
       )}
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
       {canMessage && <MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />}
+      {canStory && (
+        <PostShareSheet
+          post={post}
+          open={sharing}
+          onOpenChange={setSharing}
+          // a beat after the sheet goes, so the story camera opens on a clear screen
+          onStory={() => window.setTimeout(() => openStoryShare({ post }), 200)}
+          onMessage={canMessage ? () => window.setTimeout(() => setMessaging(true), 200) : undefined}
+        />
+      )}
     </div>
   );
 }

@@ -465,6 +465,184 @@ export function responseCardItem(question: string, answer: string): StickerItem 
   return { id: 1_000_000, kind: "sticker", sticker: "response", canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make, x: 0.5, y: 0.4, s: 1, r: 0 };
 }
 
+/** A picture ready to draw (a decoded bitmap, so the story canvas never gets tainted). */
+export type SharePicture = { img: CanvasImageSource; w: number; h: number };
+export type ShareCardInput = {
+  name: string;
+  avatar: SharePicture | null;
+  /** The post's picture (a clip's poster), if it has one. */
+  picture: SharePicture | null;
+  video: boolean;
+  title: string | null;
+  body: string | null;
+};
+
+/** The id the shared post's card has in a story's items (one per story). */
+export const SHARE_CARD_ID = 1_000_001;
+
+/** A photo, cropped from its middle to fill the box. */
+function drawCover(ctx: CanvasRenderingContext2D, p: SharePicture, x: number, y: number, w: number, h: number) {
+  const k = Math.max(w / p.w, h / p.h);
+  const sw = w / k;
+  const sh = h / k;
+  ctx.drawImage(p.img, (p.w - sw) / 2, (p.h - sh) / 2, sw, sh, x, y, w, h);
+}
+
+/**
+ * Instagram's shared post: a white card with who posted it, the picture at
+ * its own shape (4:5 to 16:9, as the feed shows it) and the caption under it,
+ * "name caption". A post with no picture (a lesson, words, a workout win)
+ * shows its words on the app's dark red glow instead.
+ */
+function postShareCard(c0: ShareCardInput): Bitmap {
+  const W = 760 * PX;
+  const pad = 26 * PX;
+  const av = 60 * PX;
+  const nameSize = 30 * PX;
+  const capSize = 28 * PX;
+  let titleSize = 50 * PX;
+  const bodySize = 30 * PX;
+  const headH = pad * 2 + av;
+  const mc = document.createElement("canvas");
+  const m = mc.getContext("2d")!;
+  // the picture at the feed's shape, else the words block
+  let midH: number;
+  let titleLines: string[] = [];
+  let bodyLines: string[] = [];
+  let capLines: string[] = [];
+  const first = c0.name.split(" ")[0] || c0.name;
+  if (c0.picture) {
+    const ratio = Math.max(9 / 16, Math.min(5 / 4, c0.picture.h / Math.max(1, c0.picture.w)));
+    midH = W * ratio;
+    if (c0.body) {
+      // the name goes first on the first line, so leave it room
+      m.font = `700 ${capSize}px ${SANS}`;
+      const nameW = m.measureText(`${first} `).width;
+      m.font = `400 ${capSize}px ${SANS}`;
+      capLines = wrapLines(m, c0.body.replace(/\s+/g, " "), W - pad * 2 - nameW, 2);
+    }
+  } else {
+    const inner = W - pad * 2.4;
+    // every paragraph, whole, up to 7 lines (the last one cut with …); long words a size down
+    if ((c0.title?.length ?? 0) > 70) titleSize = 40 * PX;
+    m.font = `800 ${titleSize}px ${SANS}`;
+    const paras = (c0.title ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+    titleLines = paras.flatMap((l) => wrapLines(m, l, inner, 99));
+    if (titleLines.length > 7) {
+      titleLines = titleLines.slice(0, 7);
+      titleLines[6] = `${titleLines[6].replace(/\s*\S*$/, "")}…`;
+    }
+    m.font = `600 ${bodySize}px ${SANS}`;
+    bodyLines = c0.body ? wrapLines(m, c0.body.replace(/\s+/g, " "), inner, titleLines.length ? 4 : 8) : [];
+    const textH = titleLines.length * titleSize * 1.12 + (titleLines.length && bodyLines.length ? 22 * PX : 0) + bodyLines.length * bodySize * 1.32;
+    midH = Math.max(W * 0.62, textH + pad * 3.2);
+  }
+  releaseCanvas(mc);
+  const footH = capLines.length ? pad * 0.9 + capLines.length * capSize * 1.3 + pad * 0.9 : c0.picture ? pad * 0.6 : 0;
+  const c = document.createElement("canvas");
+  c.width = Math.round(W);
+  c.height = Math.round(headH + midH + footH);
+  const ctx = c.getContext("2d")!;
+  const r = 34 * PX;
+  ctx.save();
+  roundRect(ctx, 0, 0, c.width, c.height, r);
+  ctx.clip();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  // header: their photo and name
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pad + av / 2, pad + av / 2, av / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  if (c0.avatar) drawCover(ctx, c0.avatar, pad, pad, av, av);
+  else {
+    ctx.fillStyle = "#e4e4e7";
+    ctx.fillRect(pad, pad, av, av);
+    ctx.fillStyle = "#3f3f46";
+    ctx.font = `800 ${av * 0.42}px ${SANS}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const initials = c0.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+    ctx.fillText(initials || "•", pad + av / 2, pad + av / 2 + PX);
+  }
+  ctx.restore();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#0a0a0a";
+  ctx.font = `800 ${nameSize}px ${SANS}`;
+  ctx.fillText(c0.name, pad * 1.6 + av, pad + av / 2, W - pad * 2.6 - av);
+  // the middle
+  const y0 = headH;
+  if (c0.picture) {
+    drawCover(ctx, c0.picture, 0, y0, W, midH);
+    if (c0.video) {
+      const cx = W / 2;
+      const cy = y0 + midH / 2;
+      const rr = 52 * PX;
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(cx - rr * 0.32, cy - rr * 0.46);
+      ctx.lineTo(cx + rr * 0.5, cy);
+      ctx.lineTo(cx - rr * 0.32, cy + rr * 0.46);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (capLines.length) {
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "#0a0a0a";
+      let y = y0 + midH + pad * 0.9;
+      capLines.forEach((l, i) => {
+        let x = pad;
+        if (i === 0) {
+          ctx.font = `700 ${capSize}px ${SANS}`;
+          ctx.fillText(first, x, y);
+          x += ctx.measureText(`${first} `).width;
+        }
+        ctx.font = `400 ${capSize}px ${SANS}`;
+        ctx.fillText(l, x, y);
+        y += capSize * 1.3;
+      });
+    }
+  } else {
+    ctx.fillStyle = "#0b0b0d";
+    ctx.fillRect(0, y0, W, midH);
+    const g = ctx.createRadialGradient(W, y0, 0, W, y0, W * 1.1);
+    g.addColorStop(0, "rgba(239,51,64,0.45)");
+    g.addColorStop(1, "rgba(239,51,64,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y0, W, midH);
+    const textH = titleLines.length * titleSize * 1.12 + (titleLines.length && bodyLines.length ? 22 * PX : 0) + bodyLines.length * bodySize * 1.32;
+    let y = y0 + (midH - textH) / 2;
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `800 ${titleSize}px ${SANS}`;
+    titleLines.forEach((l) => {
+      ctx.fillText(l, pad * 1.2, y);
+      y += titleSize * 1.12;
+    });
+    if (titleLines.length && bodyLines.length) y += 22 * PX;
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.font = `600 ${bodySize}px ${SANS}`;
+    bodyLines.forEach((l) => {
+      ctx.fillText(l, pad * 1.2, y);
+      y += bodySize * 1.32;
+    });
+  }
+  ctx.restore();
+  return finish(c);
+}
+
+/** The shared post's card as a story item, a little above the middle (move, pinch or turn it like any sticker). */
+export function postShareCardItem(input: ShareCardInput): StickerItem {
+  const { b, make } = made(() => postShareCard(input));
+  return { id: SHARE_CARD_ID, kind: "sticker", sticker: "post", canvas: b.canvas, url: b.url, bw: b.bw, bh: b.bh, res: b.px, make, x: 0.5, y: 0.45, s: 1, r: 0 };
+}
+
 export type StickerDef = { key: string; label: string; render: (logo: HTMLImageElement | null) => Bitmap };
 
 /** Render at a density; returns the bitmap plus how to redo it at another one. */

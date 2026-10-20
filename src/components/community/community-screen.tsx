@@ -637,7 +637,7 @@ export function CommunityScreen({
       )}
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
       {/* answering a question response on your story (never while viewing as a client) */}
-      {!previewOnly && <StoryReplyHost />}
+      {!previewOnly && <StoryReplyHost unit={unit} />}
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
     </div>
     {/* outside the page that slides, so they stay put */}
