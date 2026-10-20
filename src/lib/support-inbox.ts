@@ -2,6 +2,7 @@
  * Support messenger: member support tickets and app alerts in one chat-style inbox.
  * Pure helpers (tested) — the screen is src/components/support/support-messenger.tsx.
  */
+import { latestOf, newestFirst } from "@/lib/recency";
 
 export type SupportFilter = "needs" | "members" | "alerts" | "done";
 
@@ -58,8 +59,7 @@ export function ticketItem(t: Ticket): SupportItem {
     avatar: t.member?.avatar_url ?? null,
     title: CATEGORY_LABEL[last?.category ?? ""] ?? "Support",
     preview: `${you}${(last?.body ?? "").replace(/\s+/g, " ").trim()}` || "New ticket",
-    at: [t.last_member_message_at, t.last_team_message_at, t.updated_at, t.created_at]
-      .filter(Boolean).sort().pop() as string,
+    at: latestOf(t.last_member_message_at, t.last_team_message_at, t.updated_at, t.created_at) as string,
     unread: Math.max(0, t.unread_for_team ?? 0),
     needsYou: t.status === "open" || (t.unread_for_team ?? 0) > 0,
     done: t.status === "closed",
@@ -88,7 +88,7 @@ export function filterSupportItems(items: SupportItem[], f: SupportFilter): Supp
     : f === "alerts" ? i.kind === "alert" && !i.done
     : i.done,
   );
-  return keep.sort((a, b) => b.at.localeCompare(a.at));
+  return keep.sort((a, b) => newestFirst(a.at, b.at));
 }
 
 export function supportCounts(items: SupportItem[]): Record<SupportFilter, number> {

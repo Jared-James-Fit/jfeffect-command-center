@@ -44,6 +44,7 @@ import {
   MAX_PINS, deletePatch, isHidden, isMarkedUnread, isMuted, isPinned, pinnedKeys, useChatPrefs, useSetChatPrefs,
   type ChatPrefPatch,
 } from "@/lib/chat-prefs";
+import { newestFirst } from "@/lib/recency";
 import {
   BlockedPeopleSheet, ChatActionsSheet, ChatRowShell, NewMessageSheet, NewRequestView, PinTile, swipeActionsFor,
   type ChatMenuAction, type ChatMenuTarget,
@@ -270,11 +271,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
         const unread = last && new Date(last.created_at).getTime() > lastRead && last.sender_id !== (viewerId ?? user?.id) ? 1 : 0;
         return { group: g, last, unread };
       })
-      .sort((a, b) => {
-        const at = a.last?.created_at ?? a.group.updated_at ?? "";
-        const bt = b.last?.created_at ?? b.group.updated_at ?? "";
-        return bt.localeCompare(at);
-      });
+      .sort((a, b) => newestFirst(a.last?.created_at ?? a.group.updated_at, b.last?.created_at ?? b.group.updated_at));
   }, [groupRows, lastMsgByGroup, lastReadByGroup, user?.id, viewerId]);
 
   // Coach groups, member groups and 1:1 chats in one list, newest activity
@@ -310,7 +307,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
         search: `${t.name} ${t.last?.body ?? ""}`, crew: t, natural: isCrewUnread(t, me),
       });
     }
-    return rows.sort((a, b) => b.at.localeCompare(a.at));
+    return rows.sort((a, b) => newestFirst(a.at, b.at));
   }, [visibleGroups, directChats, crewChats, prefs, canEdit, me]);
 
   // Search + filter, the same way for every messenger list.

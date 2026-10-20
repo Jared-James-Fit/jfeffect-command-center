@@ -135,8 +135,9 @@ describe("inbox wiring", () => {
     expect(route).toContain("it.workflow.isFormOrCheckin || it.hasRequests");
     expect(route).toContain('queryKey: ["message-form-checkin-inbox", "status"]');
   });
-  it("pins chats waiting on me to the top of the Inbox and lets me clear waiting chats with a swipe", () => {
-    expect(route).toContain('a.workflow.state === "needs_response" ? 0 : 1');
+  it("orders the Inbox newest first like iMessage (needs-response is a chip, not the order) and lets me clear waiting chats with a swipe", () => {
+    expect(route).not.toContain('a.workflow.state === "needs_response" ? 0 : 1');
+    expect(route).toContain(".sort((a, b) => newestFirst(");
     expect(route).toContain('workflow.state === "needs_response" || workflow.state === "waiting_on_client"');
   });
 });
