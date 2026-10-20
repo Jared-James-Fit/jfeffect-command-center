@@ -130,7 +130,8 @@ describe("Crew Stories", () => {
       const viewer = read("src/components/community/crew-stories.tsx");
       expect(viewer).toContain("const who = group.author;");
       expect(viewer).not.toContain("ActivityCoverFrame");
-      expect(viewer).toContain("<MyStoryBar post={post} onOpen={() => onOpenPost(post.id)} onHold={setComposing} onOpenPerson={openPerson} />");
+      expect(viewer).toContain("<MyStoryBar\n              post={post}\n              moments={group.items.map((it) => posts.find((p) => p.id === it.id) ?? it)}");
+      expect(viewer).toContain("onOpen={() => onOpenPost(storyTarget(post))}\n              onHold={setComposing}\n              onOpenPerson={openPerson}");
       expect(viewer).toContain("const j = groups.findIndex((g, k) => k > gi && !g.mine && g.items.some(fresh));");
     });
   });
@@ -157,13 +158,13 @@ describe("Crew Stories", () => {
       expect(viewer).toContain('const QUICK_WIN = ["🔥", "💪", "👏", "🙌", "😤", "🐐", "💯", "🎉"];');
       expect(viewer).toContain("quick.slice(0, 2).map((e) =>");
       expect(viewer).toContain("placeholder={full ? `You can message ${first} again once they reply` : `Message ${first}…`}");
-      expect(viewer).toContain("<StoryBar post={post} viewerIsStaff={viewerIsStaff} onOpen={() => onOpenPost(post.id)} onComposing={setComposing} />");
+      expect(viewer).toContain("<StoryBar\n              post={post}\n              viewerIsStaff={viewerIsStaff}\n              onOpen={() => onOpenPost(storyTarget(post))}\n              onComposing={setComposing}");
     });
-    it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens the post", () => {
+    it("the story waits while you write; a tap or Esc puts the keyboard away; swipe up opens the post (on yours, its Activity)", () => {
       expect(viewer).toContain("if (!frameKey || paused || end || composing || clipDrives) return;");
       // a clip pauses the same way (its own clock)
       expect(viewer).toContain("paused: paused || !!end || composing,");
-      expect(viewer).toContain("if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return onOpenPost(post.id);");
+      expect(viewer).toContain("if (dy < -80 && Math.abs(dy) > Math.abs(e.clientX - p.x)) return post.is_mine ? setAskActivity((n) => n + 1) : onOpenPost(storyTarget(post));");
       expect(viewer).toContain("onEscapeKeyDown={(e) => {");
     });
     it("goes the same private way as Message on a post, tagged as a story; never as a client the coach is previewing", () => {
