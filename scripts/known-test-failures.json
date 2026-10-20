@@ -1,0 +1,15 @@
+{
+  "note": "Tests already failing on main (65b6c7d) when the CI gate was added. Fix a test, then delete its line. Never add a new failure here to get CI green.",
+  "failures": [
+    "src/test/fast-media-uploads.test.ts > fast media upload paths uses one direct storage request for small media and TUS only for larger files",
+    "src/test/instant-notifications-pov.test.ts > instant notification center opens on the complete inbox and acknowledges current notifications once",
+    "src/test/lift-reviews-in-messages.test.ts > lift reviews live inside Messages gives both sides a direct lift-review action in the message composer",
+    "src/test/lift-reviews-in-messages.test.ts > lift reviews live inside Messages removes the standalone coaching tab and nav destinations",
+    "src/test/notifications-page-layout.test.ts > notifications page responsive layout opens the full page on All while preserving New as the compact bell default",
+    "src/test/workout-execution-status-boundary.test.ts > workout execution status boundary keeps the normal finish-workout completion path in the execution view",
+    "src/test/workout-mobile-navigation-recap.test.ts > workout mobile navigation and recap UX uses the current PageHeader back control instead of the legacy floating back pill",
+    "src/test/workout-mobile-navigation-recap.test.ts > workout mobile navigation and recap UX keeps the workout recap compact and scannable on mobile",
+    "src/test/workout-submission-summary-mobile.test.ts > workout submission summary mobile layout uses a bounded mobile sheet with a scrollable body and fixed footer",
+    "src/test/workout-submission-summary-mobile.test.ts > workout submission summary mobile layout does not repeat the PR takeaway when a dedicated PR reveal is present"
+  ]
+}
