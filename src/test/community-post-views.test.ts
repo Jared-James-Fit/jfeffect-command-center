@@ -39,6 +39,8 @@ describe("post views", () => {
   });
   it("you can view privately: still counted, never named", () => {
     expect(sql).toContain("AND NOT coalesce(cp.private_views, false)");
-    expect(ui).toContain("View posts privately");
+    // the switch sits under your Activity (views, likes, shares, reposts)
+    expect(read("src/components/community/post-activity.tsx")).toContain("View posts privately");
+    expect(ui).toContain("<PostActivitySheet postId={open ? post.id : null}");
   });
 });

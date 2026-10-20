@@ -100,13 +100,13 @@ describe("answering question responses on your story (Instagram's Share response
   it("the story camera opens on a backdrop with the response card and the keyboard up, and posting marks it answered", () => {
     const stories = read("src/components/community/crew-stories.tsx");
     expect(stories).toContain("window.setTimeout(() => openStoryReply(r), 240);");
-    expect(read("src/components/community/community-screen.tsx")).toContain("{!previewOnly && <StoryReplyHost />}");
+    expect(read("src/components/community/community-screen.tsx")).toContain("{!previewOnly && <StoryReplyHost unit={unit} />}");
     const studio = read("src/components/community/share-studio.tsx");
-    expect(studio).toContain('const shooting = open && phase === "shoot" && !reply;');
+    expect(studio).toContain('const shooting = open && phase === "shoot" && !reply && !share;');
     expect(studio).toContain("freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });\n      setItems([responseCardItem(reply.question, reply.answer)]);\n      setRequest({ kind: \"text\", n: Date.now() });");
     expect(studio).toContain("await reply.onPosted(id);");
     // a reply never reopens on an old draft (its card would be lost)
-    expect(studio).toContain("if (!open || !post || reply || restoredFor.current === post.key) return;");
+    expect(studio).toContain("if (!open || !post || reply || share || restoredFor.current === post.key) return;");
     expect(read("src/components/community/story-reply-host.tsx")).toContain("await markStickerAnswered(qc, { postId: reply.postId, userId: reply.userId, replyPostId: id });");
     // the card: the question and what was sent, never who sent it
     const layer = read("src/components/community/sticker-layer.tsx");
@@ -141,7 +141,7 @@ describe("who answered stays between the asker and the poster (Instagram's)", ()
     expect(layer).toContain("export function responseCardItem(question: string, answer: string): StickerItem {");
     expect(layer).toContain("function responseCard(question: string, answer: string): Bitmap {");
     const studio = read("src/components/community/share-studio.tsx");
-    expect(studio).toContain('const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true });');
+    expect(studio).toContain('const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true, sharedPostId });');
     // the asker's id only ever goes to marking it answered (the poster's own call)
     const host = read("src/components/community/story-reply-host.tsx");
     expect(host.match(/reply\.userId/g)?.length).toBe(2);

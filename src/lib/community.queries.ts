@@ -29,6 +29,7 @@ import {
   type CommunityPostDetail,
   type CommunityProfile,
   type CommunityVisibility,
+  type PostActivity,
   type PostPointsStatus,
   type PostSlide,
   type ReactionKey,
@@ -229,6 +230,20 @@ export function useReact(post: CommunityPost, viewerIsCoach: boolean) {
       qc.invalidateQueries({ queryKey: ["community-feed"] });
       qc.invalidateQueries({ queryKey: communityKeys.post(post.id) });
       qc.invalidateQueries({ queryKey: communityKeys.reactors(post.id) });
+    },
+  });
+}
+
+/** A post's Activity (views, likes, shares, reposts and who), for the person who posted it. */
+export function usePostActivity(postId: string | null) {
+  return useQuery({
+    queryKey: ["community-post-activity", postId],
+    enabled: !!postId,
+    staleTime: 15_000,
+    queryFn: async (): Promise<PostActivity> => {
+      const { data, error } = await db.rpc("community_post_activity", { _post_id: postId });
+      if (error) throw error;
+      return data as PostActivity;
     },
   });
 }
@@ -877,6 +892,8 @@ export async function createCommunityPost(
     attach?: (postId: string) => Promise<void>;
     /** STORY on the camera: 24h in the story rail, never in the feed or on the profile grid. */
     story?: boolean;
+    /** Add to your story: the post this story shares (View post opens it). */
+    sharedPostId?: string | null;
   },
 ): Promise<string> {
   const media: PostSlide[] = [];
@@ -893,7 +910,13 @@ export async function createCommunityPost(
   }
   media.push(...(i.extras ?? []));
   // (_story is only sent for a story, so a post never depends on it)
-  const { data, error } = await db.rpc("community_create_post", { _caption: i.caption, _media: media, _visibility: i.visibility, ...(i.story ? { _story: true } : {}) });
+  const { data, error } = await db.rpc("community_create_post", {
+    _caption: i.caption,
+    _media: media,
+    _visibility: i.visibility,
+    ...(i.story ? { _story: true } : {}),
+    ...(i.story && i.sharedPostId ? { _shared_post_id: i.sharedPostId } : {}),
+  });
   if (error) {
     if (up && error.code) await removeCommunityFiles([up.media_path, up.media_thumb_path]);
     throw error;

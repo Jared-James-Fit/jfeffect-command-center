@@ -12,7 +12,7 @@ import { CaptionEditor, CaptionField, captionThumb } from "@/components/communit
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
 import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
-import { StickerLayer, drawStickers, responseCardItem, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
+import { StickerLayer, drawStickers, SHARE_CARD_ID, responseCardItem, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { paintReplyBackdrop } from "@/lib/story-reply";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
 import { StickerPreview } from "@/components/community/story-sticker";
@@ -105,6 +105,8 @@ export type StudioPost = {
 
 /** A reply to a question response (ShareStudio's `reply`). */
 export type StudioReply = { question: string; answer: string; onPosted: (postId: string) => Promise<void> };
+/** Add to your story (ShareStudio's `share`): the post it shares and its card (null while it's drawn). */
+export type StudioShare = { postId: string; item: StickerItem | null };
 
 type Shot = { src: HTMLCanvasElement | HTMLImageElement; file: File | null; live: boolean; at: Date };
 /** Who can see a story: the crew (followers, on a private account) or Close friends. */
@@ -163,6 +165,7 @@ export function ShareStudio({
   videoContext = "post",
   startAs = "post",
   reply = null,
+  share = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -196,6 +199,11 @@ export function ShareStudio({
    * and the text tool open; posting hands the new story to `onPosted`.
    */
   reply?: StudioReply | null;
+  /**
+   * Add to your story (Instagram's, from a post's ✈️): opens on Story, on a
+   * backdrop with the post's card on it; the story keeps which post it shares.
+   */
+  share?: StudioShare | null;
 }) {
   // No iOS focus-zoom anywhere in the studio: it left the editor zoomed and off-centre.
   useNoAutoZoom(open);
@@ -292,9 +300,21 @@ export function ShareStudio({
       freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });
       setItems([responseCardItem(reply.question, reply.answer)]);
       setRequest({ kind: "text", n: Date.now() });
+    } else if (share) {
+      // the post's card on a backdrop, ready to write on or post as it is
+      setKind("story");
+      setBackdrop(0);
+      freeze({ src: paintReplyBackdrop(0), file: null, live: false, at: new Date() });
+      if (share.item) setItems([share.item]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+  // Add to your story: the post's card lands once it's drawn (its pictures load first)
+  const shareItem = share?.item ?? null;
+  useEffect(() => {
+    if (!open || !shareItem) return;
+    setItems((cur) => (cur.some((i) => i.id === shareItem.id) ? cur : [shareItem, ...cur]));
+  }, [open, shareItem]);
   // The post it's for: start from what's already there (editing, not duplicating).
   // Not while posting: saving changes the post's key, and the caption must not blink.
   const postingRef = useRef(false);
@@ -318,7 +338,7 @@ export function ShareStudio({
   // nothing is saved over the draft until it's been read back
   const restoring = useRef(false);
   useEffect(() => {
-    if (!open || !post || reply || restoredFor.current === post.key) return;
+    if (!open || !post || reply || share || restoredFor.current === post.key) return;
     restoredFor.current = post.key;
     draftOff.current = false;
     const key = post.key;
@@ -354,7 +374,7 @@ export function ShareStudio({
   }, [open]);
   // Save as it changes (a beat after the last change). The photo is encoded once per shot.
   useEffect(() => {
-    if (!open || !post || reply || posted || busy || draftOff.current || restoring.current) return;
+    if (!open || !post || reply || share || posted || busy || draftOff.current || restoring.current) return;
     const key = post.key;
     const t = setTimeout(async () => {
       let photo: Blob | null = null;
@@ -448,7 +468,7 @@ export function ShareStudio({
     if (video) video.srcObject = null;
   };
 
-  const shooting = open && phase === "shoot" && !reply;
+  const shooting = open && phase === "shoot" && !reply && !share;
   // Bumped to start the camera again (iOS ends it when you switch apps or lock the phone).
   const [camTry, setCamTry] = useState(0);
   const restarts = useRef(0);
@@ -971,7 +991,9 @@ export function ShareStudio({
     await post?.beforeStory?.();
     // (the button only offers the crew or Close friends; whatever the post it's for had, a story is one of those)
     const audience: CommunityVisibility = STORY_AUDIENCE.includes(visibility) ? visibility : "community";
-    const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true });
+    // (a shared post's story links to it while its card is on it)
+    const sharedPostId = share && items.some((i) => i.id === SHARE_CARD_ID) ? share.postId : null;
+    const id = await createCommunityPost(qc, { userId: user.id, caption: "", visibility: audience, photo, extras, story: true, sharedPostId });
     if (!photo) tray.commit();
     else tray.discard();
     if (live) {
@@ -1341,7 +1363,7 @@ export function ShareStudio({
                 </>
               ) : (
                 <>
-                  {reply ? (
+                  {reply || share ? (
                     <>
                       <button type="button" onClick={onClose} className={pill} aria-label="Close">
                         <X className="h-6 w-6" />

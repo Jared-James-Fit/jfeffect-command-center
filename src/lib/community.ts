@@ -250,7 +250,55 @@ export type CommunityPost = {
   reposted_by?: Reposter[] | null;
   /** The feed: how many reposts of it you may see. */
   reposters_count?: number;
+  /** A story made with Add to your story: the post it shares (null when it's gone or you can't see it). */
+  shared_post?: SharedPostRef | null;
 };
+
+/** The post a story shares (Instagram's "Add to your story"): View post opens it. */
+export type SharedPostRef = { id: string; author: CommunityAuthor; kind: string | null; series: string | null };
+
+/**
+ * Instagram's "Add to your story": your own post, or someone's post shared
+ * with the whole crew; never a story or an automatic workout story (the
+ * database says the same, community_share_refusal).
+ */
+export function canShareToStory(p: Pick<CommunityPost, "story" | "auto" | "is_mine" | "visibility" | "archived_at">): boolean {
+  if (p.story || p.auto || p.archived_at) return false;
+  return p.is_mine || p.visibility === "community";
+}
+
+/** The post "View post" opens from a story: the one it shares, else itself. */
+export function storyTarget(p: Pick<CommunityPost, "id" | "shared_post">): string {
+  return p.shared_post?.id ?? p.id;
+}
+
+/** Someone on a post's Activity: what they did with it (only what they did shows). */
+export type ActivityPerson = CommunityAuthor & {
+  viewed_at?: string;
+  reaction?: ReactionKey;
+  reacted_at?: string;
+  shared_at?: string;
+  share_id?: string;
+  reposted_at?: string;
+};
+/** A post's (or story's) Activity, for the person who posted it (community_post_activity). */
+export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[]; private_count: number; me_private: boolean };
+export type ActivityFilter = "all" | "likes" | "shares";
+
+/** Who to show under a filter: likes = reacted, shares = added it to their story or reposted it. */
+export function activityPeople(people: readonly ActivityPerson[], f: ActivityFilter): ActivityPerson[] {
+  if (f === "likes") return people.filter((p) => !!p.reaction);
+  if (f === "shares") return people.filter((p) => !!p.shared_at || !!p.reposted_at);
+  return [...people];
+}
+
+/** What someone did, the most telling first, with when: "Shared to their story", "Reposted", "Liked", "Viewed". */
+export function activityDid(p: ActivityPerson): { label: string; at: string | null } {
+  if (p.shared_at) return { label: "Shared to their story", at: p.shared_at };
+  if (p.reposted_at) return { label: "Reposted", at: p.reposted_at };
+  if (p.reaction) return { label: p.reaction === "heart" ? "Liked" : "Reacted", at: p.reacted_at ?? null };
+  return { label: "Viewed", at: p.viewed_at ?? null };
+}
 
 /** Someone who reposted a post, with the note they put on it. */
 export type Reposter = CommunityAuthor & { note: string | null; at: string; is_me?: boolean };
