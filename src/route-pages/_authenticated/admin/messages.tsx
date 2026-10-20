@@ -44,6 +44,7 @@ import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { listenChannel } from "@/lib/realtime-channel";
+import { latestOf, newestFirst } from "@/lib/recency";
 
 type StaffInboxRow = {
   client_id: string;
@@ -479,18 +480,13 @@ export function MessagesInbox({
           default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
         }
       })
-      .sort((a, b) => {
-        // Inbox: chats waiting on ME float to the top; everything else is newest first.
-        if (filter === "Inbox") {
-          const pa = a.workflow.state === "needs_response" ? 0 : 1;
-          const pb = b.workflow.state === "needs_response" ? 0 : 1;
-          if (pa !== pb) return pa - pb;
-        }
-        const at = [a.last?.created_at ?? "", a.liftReview?.latestAt ?? ""].sort().pop() ?? "";
-        const bt = [b.last?.created_at ?? "", b.liftReview?.latestAt ?? ""].sort().pop() ?? "";
-        // Follow Up: the longest-unanswered first.
-        return filter === "Follow Up" ? at.localeCompare(bt) : bt.localeCompare(at);
-      });
+      // Like iMessage / Instagram DMs: the newest activity on top, in every
+      // filter. What needs me is the NEEDS RESPONSE chip and its filter, not a
+      // different order (a chat from a minute ago sat under 4-day-old ones).
+      .sort((a, b) => newestFirst(
+        latestOf(a.last?.created_at, a.liftReview?.latestAt),
+        latestOf(b.last?.created_at, b.liftReview?.latestAt),
+      ));
     return items;
   }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, requestsByClient, search, filter]);
 
