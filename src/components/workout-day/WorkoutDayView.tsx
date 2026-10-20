@@ -161,6 +161,8 @@ import {
   type LoggedSetSpec,
   type RowMetricKind,
 } from "@/lib/workout-completeness";
+import { shouldPromptReview, workoutSetProgress } from "@/lib/workout-set-progress";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
@@ -403,6 +405,8 @@ export function WorkoutDayView({
 }
 
 const sb = supabase as any;
+/** How long after the last set is logged the finish review opens. */
+const REVIEW_PROMPT_DELAY_MS = 600;
 
 // Sets this device just wrote ("rowId:setIndex" -> when). Live sync skips its
 // own echo: the save already refetched the day's results.
@@ -1858,7 +1862,13 @@ function WorkoutDay({
     { warnOnUnload: false },
   );
 
+  // A set saved from this screen on this visit (keyed to the workout): a coach
+  // viewing as a client only gets the finish review after logging here.
+  const promptKey = `${dayId}:${scheduledWorkoutId ?? "legacy"}`;
+  const [loggedHereFor, setLoggedHereFor] = useState<string | null>(null);
+  const loggedHere = loggedHereFor === promptKey;
   const refresh = () => {
+    setLoggedHereFor(promptKey);
     // A set save refetches the day's results itself just before calling this;
     // don't fetch them a second time.
     const resultsAge = Math.min(
@@ -2239,95 +2249,48 @@ function WorkoutDay({
     return true;
   }
 
-  // When every prescribed set has been fully confirmed, remove the extra
-  // "Finish Workout" tap. Persist the workout automatically, then the existing
-  // review sheet opens as the final athlete action. Until that review is
-  // submitted the UI stays amber ("Review pending"), not green-complete.
-  const autoFinishReady = useMemo(() => {
-    try {
-      const required: RequiredRowSpec[] = (rows as any[])
-        .filter((r: any) => !r?.skipped)
-        .map((r: any) => ({
-          rowId: String(r.id),
-          prescribedSets: Math.max(1, Number(r.sets) || 1),
-          skipped: false,
-          metricKind: ((
-            r?.tracking_type === "time" ||
-            r?.measurement_type === "time" ||
-            (r as any)?.exercises?.default_measurement_type === "time" ||
-            (r?.duration_seconds != null && Number(r.duration_seconds) > 0) ||
-            /\b(sec(onds?)?|min(utes?)?)\b/i.test(String(r?.reps_text ?? ""))
-          ) ? "timed" : "load_reps") as RowMetricKind,
-        }));
-      if (required.length === 0) return false;
+  // Where the workout is, set by set: the Focus bars, the progress ring and
+  // the finish review all read this one (workout-set-progress.ts), so the
+  // review can't pop early (an extra set on one exercise standing in for a
+  // missing one on another) or never (bodyweight, reps-only, weight-only sets).
+  const loggedProgress = useMemo(() => workoutSetProgress(rows as any[], results as any[]), [rows, results]);
+  // When every set is logged, there's no extra "Finish Workout" tap: the review
+  // opens as the athlete's last step and saving it finishes the workout.
+  // The workout remains amber/in-progress until that review is submitted.
+  const autoFinishReady = loggedProgress.allDone;
 
-      const confirmed: LoggedSetSpec[] = (results as any[])
-        .filter((x: any) => !!x?.completed_at)
-        .map((x: any) => ({
-          rowId: String(x.row_id),
-          setIndex: x.set_index ?? 0,
-          reps: x.actual_reps,
-          loadLb: x.actual_load_unit === "kg" ? null : x.actual_load,
-          loadKg: x.actual_load_unit === "kg" ? x.actual_load : null,
-          rpe: x.actual_rpe_num ?? x.actual_rpe,
-          completedDurationSeconds: x.completed_duration_seconds ?? null,
-        }));
-      const summary = summarizeCompleteness(required, confirmed);
-      return summary.requiredSets > 0 && summary.loggedSets >= summary.requiredSets;
-    } catch {
-      return false;
-    }
-  }, [rows, results]);
-
-  const autoFinishAttemptRef = useRef<string | null>(null);
+  const online = useOnlineStatus();
+  const { dismissRestTimer } = useRestTimer();
+  const reviewPromptedRef = useRef<string | null>(null);
+  // Re-armed whenever the workout isn't fully logged (a set cleared or added).
+  if (!autoFinishReady && reviewPromptedRef.current === promptKey) reviewPromptedRef.current = null;
+  const promptReview = shouldPromptReview({
+    allDone: autoFinishReady,
+    settled: !readonly && !workoutBodyError && !rowsIsError && authReady && rowsLoaded && !rowsFetching && resultsLoaded && !!client?.id,
+    finished: !!completion?.completed_at,
+    online,
+    previewing: isImpersonating,
+    loggedHere,
+    alreadyPrompted: reviewPromptedRef.current === promptKey,
+  });
   useEffect(() => {
-    const key = `${dayId}:${scheduledWorkoutId ?? "legacy"}`;
-
-    if (
-      readonly ||
-      isImpersonating ||
-      workoutBodyError ||
-      rowsIsError ||
-      !authReady ||
-      !rowsLoaded ||
-      rowsFetching ||
-      completion?.completed_at ||
-      !autoFinishReady ||
-      (typeof navigator !== "undefined" && navigator.onLine === false)
-    ) {
-      if (!autoFinishReady && autoFinishAttemptRef.current === key) {
-        autoFinishAttemptRef.current = null;
-      }
-      return;
-    }
-
-    if (autoFinishAttemptRef.current === key) return;
-    autoFinishAttemptRef.current = key;
-
-    // Let the final set autosave/refetch settle, then go straight to the
-    // 5-second review. The workout remains amber/in-progress until that review
-    // is actually submitted.
+    if (!promptReview) return;
+    // A beat for the last set's tick and its bar filling green, then the review.
+    // Marked as shown only when it actually opens: a refetch landing inside
+    // this beat just runs it again instead of losing it.
     const id = window.setTimeout(() => {
-      void (async () => {
-        await markInProgress();
-        setQuickFinishReviewOpen(true);
-      })();
-    }, 250);
-
+      reviewPromptedRef.current = promptKey;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) el.blur();
+      setQuickFinishReviewOpen(true);
+      // nothing left to rest for: no countdown or beep over the review
+      dismissRestTimer();
+      // never waits on the network: the session's start is stamped behind it
+      void markInProgress();
+    }, REVIEW_PROMPT_DELAY_MS);
     return () => window.clearTimeout(id);
-  }, [
-    autoFinishReady,
-    authReady,
-    completion?.completed_at,
-    dayId,
-    isImpersonating,
-    readonly,
-    rowsFetching,
-    rowsIsError,
-    rowsLoaded,
-    scheduledWorkoutId,
-    workoutBodyError,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promptReview, promptKey]);
 
   // ── Story view ─────────────────────────────────────────────────────────
   const storyRowKey = (rows as any[]).map((r) => String(r.id)).join("|");
@@ -2515,50 +2478,15 @@ function WorkoutDay({
         completedDurationSeconds: x.completed_duration_seconds ?? null,
       }));
       const sum = required.length > 0 ? summarizeCompleteness(required, logged) : null;
-      // Per-row sets logged → derive exercises done.
-      const loggedByRow = new Map<string, number>();
-      for (const s of logged) {
-        // Only count confirmed (completed_at) sets toward exercise-done.
-        const raw = (results as any[]).find(
-          (x: any) => String(x.row_id) === s.rowId && (x.set_index ?? 0) === s.setIndex,
-        );
-        if (!raw?.completed_at) continue;
-        // A set is only "done" if it actually has the values its kind requires.
-        // A green completed_at flag without a weight / duration / reps does not
-        // count — otherwise blank sets show up as completed in the status bar.
-        const kind = required.find((r) => r.rowId === s.rowId)?.metricKind ?? "load_reps";
-        const num = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) > 0;
-        // Load of 0 is a valid log (bodyweight / unloaded). Reps still required.
-        const numOrZero = (v: any) => v != null && Number.isFinite(Number(v)) && Number(v) >= 0;
-        const meaningful =
-          kind === "timed"
-            ? num(s.completedDurationSeconds)
-            : kind === "bodyweight"
-              ? num(s.reps)
-              : num(s.reps) && (numOrZero(s.loadLb) || numOrZero(s.loadKg));
-        if (!meaningful) continue;
-        loggedByRow.set(s.rowId, (loggedByRow.get(s.rowId) ?? 0) + 1);
-      }
-      let exercisesDone = 0;
-      // Every set logged (skipped exercises count as done): story view's bars.
-      const doneRowIds = new Set<string>((rows as any[]).filter((r: any) => r?.skipped).map((r: any) => String(r.id)));
-      for (const r of required) {
-        const need = Math.max(1, Number(r.prescribedSets) || 1);
-        if ((loggedByRow.get(r.rowId) ?? 0) >= need) {
-          exercisesDone++;
-          doneRowIds.add(r.rowId);
-        }
-      }
-      // Confirmed sets count (for the status bar).
-      let confirmedSets = 0;
-      for (const n of loggedByRow.values()) confirmedSets += n;
+      // Done per exercise, every set on screen (skipped exercises count as done):
+      // story view's bars and the ring, the same reading as the finish review.
       return {
         summary: sum,
-        exercisesDone,
-        exercisesTotal: required.length,
-        setsDone: confirmedSets,
-        setsTotal: sum?.requiredSets ?? 0,
-        doneRowIds,
+        exercisesDone: loggedProgress.exercisesDone,
+        exercisesTotal: loggedProgress.exercisesTotal,
+        setsDone: loggedProgress.setsDone,
+        setsTotal: loggedProgress.setsTotal,
+        doneRowIds: loggedProgress.doneRowIds,
       };
     } catch {
       return { summary: null, exercisesDone: 0, exercisesTotal: 0, setsDone: 0, setsTotal: 0, doneRowIds: new Set<string>() };

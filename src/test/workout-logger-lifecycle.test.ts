@@ -36,19 +36,17 @@ describe("workout logger lifecycle", () => {
   it("opens the quick review before final completion once every prescribed set is confirmed", () => {
     const source = loggerSource();
 
-    expect(source).toContain("const autoFinishReady = useMemo(() => {");
-    expect(source).toContain("summary.requiredSets > 0 && summary.loggedSets >= summary.requiredSets");
+    // every exercise's sets on screen, the same reading as the bars (finish-review-prompt.test.ts)
+    expect(source).toContain("const autoFinishReady = loggedProgress.allDone;");
     expect(source).toContain("setQuickFinishReviewOpen(true)");
     expect(source).toContain('handleFinishWorkout("automatic", false)');
     expect(source).not.toContain('void handleFinishWorkout("automatic")');
   });
 
-  it("does not auto-finish previews, coach POV, errored, or offline workouts", () => {
+  it("does not auto-finish previews, errored or offline workouts; a coach viewing as a client only after logging here", () => {
     const source = loggerSource();
 
-    expect(source).toContain("readonly ||");
-    expect(source).toContain("isImpersonating ||");
-    expect(source).toContain("workoutBodyError ||");
-    expect(source).toContain('navigator.onLine === false');
+    expect(source).toContain("settled: !readonly && !workoutBodyError && !rowsIsError && authReady && rowsLoaded && !rowsFetching && resultsLoaded && !!client?.id,");
+    expect(source).toContain("    online,\n    previewing: isImpersonating,\n    loggedHere,");
   });
 });
