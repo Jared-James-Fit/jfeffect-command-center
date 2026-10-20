@@ -2260,6 +2260,7 @@ function WorkoutDay({
   const autoFinishReady = loggedProgress.allDone;
 
   const online = useOnlineStatus();
+  const { dismissRestTimer } = useRestTimer();
   const reviewPromptedRef = useRef<string | null>(null);
   // Re-armed whenever the workout isn't fully logged (a set cleared or added).
   if (!autoFinishReady && reviewPromptedRef.current === promptKey) reviewPromptedRef.current = null;
@@ -2282,6 +2283,8 @@ function WorkoutDay({
       const el = document.activeElement as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) el.blur();
       setQuickFinishReviewOpen(true);
+      // nothing left to rest for: no countdown or beep over the review
+      dismissRestTimer();
       // never waits on the network: the session's start is stamped behind it
       void markInProgress();
     }, REVIEW_PROMPT_DELAY_MS);

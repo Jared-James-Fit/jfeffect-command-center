@@ -83,7 +83,7 @@ describe("the finish review pops the moment it's all logged", () => {
   it("the logger: marked shown only when it opens, re-armed when a set is cleared or added, never waits on the network", () => {
     expect(day).toContain("if (!autoFinishReady && reviewPromptedRef.current === promptKey) reviewPromptedRef.current = null;");
     expect(day).toContain("const id = window.setTimeout(() => {\n      reviewPromptedRef.current = promptKey;");
-    expect(day).toContain("      setQuickFinishReviewOpen(true);\n      // never waits on the network: the session's start is stamped behind it\n      void markInProgress();");
+    expect(day).toContain("      setQuickFinishReviewOpen(true);\n      // nothing left to rest for: no countdown or beep over the review\n      dismissRestTimer();\n      // never waits on the network: the session's start is stamped behind it\n      void markInProgress();");
     expect(day).not.toContain("await markInProgress();\n        setQuickFinishReviewOpen(true);");
     // a set saved from this screen (every save path calls the page's refresh)
     expect(day).toContain("  const refresh = () => {\n    setLoggedHereFor(promptKey);");
