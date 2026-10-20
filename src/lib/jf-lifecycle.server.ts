@@ -239,6 +239,31 @@ async function fireGatedTrigger(memberId: string, trigger: string, vars: Record<
 }
 
 /**
+ * Turn the membership's own entitlements on or off. Only rows the membership
+ * granted are touched: the account type's default keys, granted without an
+ * offer (apply_default_member_access writes offer_id NULL). Purchases (rows
+ * with an offer_id) and one-time admin grants survive a lapse, and a refunded
+ * purchase isn't switched back on when the membership recovers.
+ */
+async function setMembershipAccessActive(supabaseAdmin: any, member: any, active: boolean) {
+  const { data: defaults, error } = await supabaseAdmin
+    .from("member_access_defaults")
+    .select("access_level_key")
+    .eq("account_type", member.account_type ?? "jf_member");
+  // Throw rather than guess: the webhook returns 500 and Stripe retries.
+  if (error) throw new Error(`member_access_defaults lookup failed: ${error.message}`);
+  const keys = Array.from(new Set(((defaults ?? []) as any[]).map((d) => d.access_level_key as string)));
+  if (keys.length === 0) return;
+  await supabaseAdmin
+    .from("member_access")
+    .update({ active })
+    .eq("member_id", member.id)
+    .is("offer_id", null)
+    .neq("source", "one_time")
+    .in("access_level_key", keys);
+}
+
+/**
  * Apply a resolved lifecycle to the member row + member_access in one place.
  * Also fires the gated lifecycle trigger when state changes (the dry-run
  * safety gate inside sms-trigger.server decides whether to actually send).
@@ -347,7 +372,7 @@ export async function applyJfLifecycle(args: {
   await supabaseAdmin.from("app_members").update(patch).eq("id", member.id);
 
   // Entitlements
-  await supabaseAdmin.from("member_access").update({ active: resolved.grants_access }).eq("member_id", member.id);
+  await setMembershipAccessActive(supabaseAdmin, member, resolved.grants_access);
 
   const changed = fromStatus !== resolved.status;
 
@@ -478,7 +503,7 @@ export async function enforceGraceIfExpired(supabaseAdmin: any, member: any): Pr
     access_restricted_at: now,
     last_billing_event_at: now,
   }).eq("id", member.id);
-  await supabaseAdmin.from("member_access").update({ active: false }).eq("member_id", member.id);
+  await setMembershipAccessActive(supabaseAdmin, member, false);
   await recordTransition(supabaseAdmin, member.id, "grace_expired_access_restricted", {
     from_status: member.subscription_status, to_status: "Past Due (Access Restricted)",
     reason: "lazy_enforcement",
