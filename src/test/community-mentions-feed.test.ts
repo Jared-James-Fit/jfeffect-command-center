@@ -72,7 +72,7 @@ describe("typing @", () => {
 });
 
 describe("usernames on the server", () => {
-  const u = read("supabase/migrations/20261222090000_mention_usernames.sql");
+  const u = read("supabase/migrations/20261223090000_mention_usernames.sql");
   it("every person card carries the username, from the profile row it already reads", () => {
     expect(u).toContain("'username', cp.username)");
     expect(u).toContain("LEFT JOIN public.community_profiles cp ON cp.user_id = me.uid");
