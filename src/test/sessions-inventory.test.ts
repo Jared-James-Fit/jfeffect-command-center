@@ -15,12 +15,46 @@ import {
 
 describe("sessions inventory", () => {
   it("summarizes purchased / used / scheduled / remaining consistently", () => {
+    // session_balance's remaining is the sum of every event: 16 - 3 used - 2 held.
     const s = summarizeSessions(
-      [{ purchase_id: "p1", granted: 16, used: 3, reserved: 2, remaining: 13 }],
+      [{ purchase_id: "p1", granted: 16, used: 3, reserved: 2, remaining: 11 }],
       [{ session_count: 1, event_type: "granted" }],
       2,
     );
-    expect(s).toEqual({ purchased: 17, used: 3, scheduled: 2, remaining: 14, available: 12 });
+    expect(s).toEqual({ purchased: 17, used: 3, scheduled: 2, remaining: 14, available: 12, overdrawn: 0 });
+  });
+
+  it("takes a booking off once, not twice", () => {
+    const s = summarizeSessions([{ purchase_id: "p", granted: 10, used: 0, reserved: 4, remaining: 6 }], [], 4);
+    expect(s).toMatchObject({ remaining: 10, scheduled: 4, available: 6 });
+  });
+
+  it("counts self-booked sessions that have no package", () => {
+    const s = summarizeSessions(
+      [],
+      [
+        { session_count: 72, event_type: "granted", source: "package_grant" },
+        { session_count: -1, event_type: "reserved", source: "reserve_on_book" },
+        { session_count: 1, event_type: "released", source: "convert_on_complete" },
+        { session_count: -1, event_type: "used", source: "auto_use_on_complete" },
+        { session_count: -1, event_type: "used", source: "manual" },
+      ],
+      0,
+    );
+    expect(s).toEqual({ purchased: 72, used: 2, scheduled: 0, remaining: 70, available: 70, overdrawn: 0 });
+  });
+
+  it("shows how far a client is over instead of hiding it", () => {
+    // 32 bought, 42 used, 10 booked ahead.
+    const s = summarizeSessions(
+      [
+        { purchase_id: "a", granted: 16, used: 22, reserved: 10, remaining: -16 },
+        { purchase_id: "b", granted: 16, used: 20, reserved: 0, remaining: -4 },
+      ],
+      [],
+      10,
+    );
+    expect(s).toMatchObject({ purchased: 32, used: 42, scheduled: 10, remaining: 0, available: 0, overdrawn: 10 });
   });
 
   it("never reports negative remaining or available", () => {

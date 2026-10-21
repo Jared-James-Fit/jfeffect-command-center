@@ -351,6 +351,9 @@ function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMark
 
 function InstallmentSummary({ display }: { display: PaymentDisplay }) {
   const plan = display.installmentPlan;
-  if (!plan) return <div className="text-xs text-muted-foreground tabular-nums">{formatMoney(display.contractTotal, display.currency)}{display.amountOutstanding > 0 && ` · ${formatMoney(display.amountOutstanding, display.currency)} remaining`}</div>;
+  // Prices are stored before tax and payments include GST, so show what was
+  // actually paid whenever it differs from the price.
+  const paidDiffers = display.amountPaid > 0 && Math.abs(display.amountPaid - display.contractTotal) >= 0.01;
+  if (!plan) return <div className="text-xs text-muted-foreground tabular-nums">{formatMoney(display.contractTotal, display.currency)}{paidDiffers && ` · ${formatMoney(display.amountPaid, display.currency)} paid`}{display.amountOutstanding > 0 && ` · ${formatMoney(display.amountOutstanding, display.currency)} remaining`}</div>;
   return <div className="text-xs text-muted-foreground tabular-nums"><div>{formatMoney(plan.contractTotal, display.currency)} total · {formatMoney(plan.amountPaid, display.currency)} paid · {formatMoney(plan.amountRemaining, display.currency)} remaining</div><div>{plan.numberOfPayments} × {formatMoney(plan.installmentAmount, display.currency)} · {plan.paymentsMade} / {plan.numberOfPayments} paid</div></div>;
 }
