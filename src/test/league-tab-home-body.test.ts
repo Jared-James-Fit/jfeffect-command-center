@@ -56,7 +56,7 @@ describe("Rankings", () => {
   it("Monthly and Strength: one board at a time, never stacked", () => {
     expect(hub).toContain('([["monthly", "Monthly"], ["strength", "Strength"]] as const)');
     expect(hub).toContain('board === "strength" ? (');
-    expect(hub).toContain("<StrengthBoardSlide />");
+    expect(hub).toContain("<StrengthBoardSlide initialSource={opened.source} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id}");
   });
   it("one Live mark in the Rankings header (not on each board); scoring rules folded under the board", () => {
@@ -88,7 +88,7 @@ describe("Rankings", () => {
     expect(board).toContain('{showAll ? "Show top 10" : `Show all ${count} athletes`}');
     expect(board).toContain('aria-pressed={source === "meets"}');
     expect(board).toContain("Meets only");
-    const slide = board.slice(board.indexOf("export function StrengthBoardSlide()"), board.indexOf("function KingTile("));
+    const slide = board.slice(board.indexOf("export function StrengthBoardSlide("), board.indexOf("function KingTile("));
     expect(slide).not.toContain("View Rankings");
   });
   it("everything still opens: athlete details, careers, recap story", () => {

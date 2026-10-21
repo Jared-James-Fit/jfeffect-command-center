@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { StrengthBoardSlide } from "@/components/portal/strength-board";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { RankingsSpotlight } from "@/components/community/rankings-spotlight";
+import type { SpotlightKey } from "@/lib/rankings-spotlight";
+import type { BoardSource } from "@/lib/strength-board";
 
 export type RankingsBoard = "monthly" | "strength";
 
@@ -50,12 +53,17 @@ export function RankingsHub() {
     },
   });
   const [board, setBoardState] = useState<RankingsBoard>(() => rankingsFromHash() ?? "monthly");
+  // a podium tapped in the spotlight: which view of the board to open on (a new `n` remounts it there)
+  const [opened, setOpened] = useState<{ n: number; source: BoardSource; previous: boolean }>({ n: 0, source: "all", previous: false });
+  const tabsRef = useRef<HTMLDivElement | null>(null);
   // which way the new board slides in (from a swipe or a tab tap)
   const [enterFrom, setEnterFrom] = useState<"left" | "right" | null>(null);
   const setBoard = (next: RankingsBoard) => {
     if (next === board) return;
     setEnterFrom(next === "strength" ? "right" : "left");
     setBoardState(next);
+    // a tab or a swipe opens a board as usual (not on whatever a podium tap asked for)
+    setOpened((o) => ({ ...o, source: "all", previous: false }));
   };
 
   // Swipe sideways on the board to switch Monthly ⇄ Strength (the tabs follow).
@@ -81,11 +89,22 @@ export function RankingsHub() {
     if (next) setBoard(next);
   };
 
+  const openFromSpotlight = (key: SpotlightKey) => {
+    const next: RankingsBoard = key === "monthly" || key === "fame" ? "monthly" : "strength";
+    setEnterFrom(next === board ? null : next === "strength" ? "right" : "left");
+    setBoardState(next);
+    setOpened((o) => ({ n: o.n + 1, source: key === "competition" ? "meets" : "all", previous: key === "fame" }));
+    // the board sits right under the spotlight: bring it up
+    requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   return (
     <div data-league-hub className="space-y-3">
       {/* last month's recap: always here at the top, replaced by next month's on the 1st */}
       <LeagueRecapButton />
-      <div className="flex items-center gap-2">
+      {/* every board's podium, flipping (pause-able); tap one to open that board */}
+      <RankingsSpotlight onOpen={openFromSpotlight} />
+      <div ref={tabsRef} className="flex scroll-mt-3 items-center gap-2">
       <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
         {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (
           <button
@@ -105,7 +124,7 @@ export function RankingsHub() {
       </div>
       <div
         ref={boardRef}
-        key={board}
+        key={`${board}:${opened.n}`}
         data-rankings-board={board}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
@@ -119,10 +138,10 @@ export function RankingsHub() {
       >
       {board === "strength" ? (
         <section data-standing="strength" className="overflow-hidden rounded-2xl border bg-card">
-          <StrengthBoardSlide />
+          <StrengthBoardSlide initialSource={opened.source} />
         </section>
       ) : client?.id ? (
-        <AthleteLevelCard clientId={client.id} />
+        <AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />
       ) : isPending && userId ? (
         <Skeleton className="h-64 w-full rounded-2xl" />
       ) : (
