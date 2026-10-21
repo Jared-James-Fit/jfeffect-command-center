@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 
 const sales = fs.readFileSync("src/components/admin/client-sales-table.tsx", "utf8");
+// How a sale row reads (status, next payment) lives beside the table.
+const saleRow = fs.readFileSync("src/components/admin/sale-row-parts.tsx", "utf8");
 const share = fs.readFileSync("src/components/payments/copy-payment-link-button.tsx", "utf8");
 const archive = fs.readFileSync("src/lib/purchase-archive.functions.ts", "utf8");
 const checkout = fs.readFileSync("src/lib/stripe-checkout.functions.ts", "utf8");
 
 describe("client sales payment links and archive controls", () => {
   it("does not claim a payment request/link exists when Stripe has no destination", () => {
-    expect(sales).toContain("Payment link not created. Use Create payment link to retry this sale.");
+    expect(saleRow).toContain("Payment link not created. Use Create payment link to retry this sale.");
     expect(sales).toContain('linkReady ? "Copy payment link" : "Create payment link"');
   });
 
