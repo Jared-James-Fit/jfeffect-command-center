@@ -63,11 +63,13 @@ describe("Monthly board: you first, one board, the rest folded", () => {
   });
 });
 
-describe("Recap: always at the top of Rankings, never dismissible", () => {
-  it("above the Monthly / Strength switch, nowhere else in Rankings, and no ✕ or hidden state", () => {
-    expect(hub.indexOf("<LeagueRecapButton />")).toBeGreaterThan(-1);
+describe("Recap: on top in recap week, a quiet row under the board after, never dismissible", () => {
+  it("the banner above the Monthly / Strength switch only in recap week; then one row under the board; no ✕ or hidden state", () => {
+    expect(hub).toContain("{inRecapWindow() && <LeagueRecapButton />}");
     expect(hub.indexOf("<LeagueRecapButton />")).toBeLessThan(hub.indexOf('aria-label="Leaderboard"'));
-    expect(card).not.toContain("LeagueRecapButton");
+    // never both: the row is the rest of the month
+    expect(card).toContain('{!inRecapWindow() && <LeagueRecapButton variant="row" />}');
+    expect(card.indexOf('<LeagueRecapButton variant="row" />')).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
     expect(recap).not.toContain("Dismiss recap");
     expect(recap).not.toContain("jf-recap-dismissed");
     expect(recap).not.toMatch(/localStorage/);

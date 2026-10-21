@@ -77,6 +77,9 @@ describe("Rankings spotlight: every board's podium, one at a time", () => {
     expect(hub).toContain('source: key === "competition" ? "meets" : "all", previous: key === "fame"');
     expect(hub).toContain("<StrengthBoardSlide initialSource={opened.source} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />");
+    // never repeats the board open under it: it shows the other boards' podiums
+    expect(hub).toContain('skip={board === "monthly" ? "monthly" : "strength"}');
+    expect(read("src/components/community/rankings-spotlight.tsx")).toContain(".filter((s) => s.key !== skip)");
     // a normal tab switch or swipe never reopens what a podium asked for
     expect(hub).toContain('setOpened((o) => ({ ...o, source: "all", previous: false }));');
   });

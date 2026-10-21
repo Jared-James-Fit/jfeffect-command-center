@@ -31,7 +31,7 @@ describe("live indicators: one animated look across the app", () => {
     expect(read("src/components/community/crew-list.tsx")).toContain('<LiveAvatar live={m.live} size={44} tone="red" tag={false}>');
     expect(read("src/components/community/post-card.tsx")).toContain('<LiveDot size={6} tone="white" ring={false} /> Training now');
     expect(read("src/components/community/community-entry.tsx")).toContain('<LivePill className="shrink-0" />');
-    for (const f of ["src/components/community/league-hub.tsx", "src/components/portal/powerlifting-career.tsx", "src/components/community/post-tile.tsx"]) {
+    for (const f of ["src/components/portal/athlete-level-card.tsx", "src/components/portal/powerlifting-career.tsx", "src/components/community/post-tile.tsx"]) {
       expect(read(f), f).not.toContain("animate-ping");
       expect(read(f), f).toContain('from "@/components/live-indicator"');
     }

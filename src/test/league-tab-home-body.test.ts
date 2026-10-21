@@ -59,11 +59,12 @@ describe("Rankings", () => {
     expect(hub).toContain("<StrengthBoardSlide initialSource={opened.source} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id}");
   });
-  it("one Live mark in the Rankings header (not on each board); scoring rules folded under the board", () => {
-    expect(hub).toContain("one Live mark for the page");
-    // the app's shared live indicator, once
-    expect(hub.match(/<LiveMark /g)?.length).toBe(1);
-    expect(card).not.toContain("<LiveMark");
+  it("one Live mark, beside the days left on the month's board (not in the tabs); scoring rules folded under the board", () => {
+    // the tabs are just the switch: nothing loud beside them
+    expect(hub).not.toContain("<LiveMark");
+    // the app's shared live indicator, once, and only while the month is open
+    expect(card.match(/<LiveMark /g)?.length).toBe(1);
+    expect(card).toContain("{!me?.month_closed && <><LiveMark size={6}>Live</LiveMark>");
     expect(card).not.toContain("animate-ping");
     expect(card).toContain("How points work");
     expect(card.match(/How to earn points/g)).toBeNull();
