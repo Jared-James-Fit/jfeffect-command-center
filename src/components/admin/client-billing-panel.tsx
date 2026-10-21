@@ -12,6 +12,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { todayLocalISO } from "@/lib/today";
 import { resolvePaymentDisplay } from "@/lib/payment-display";
+import { clientOwed, saleOwedCents } from "@/lib/client-owed";
+import { summarizeSessions } from "@/lib/sessions-inventory";
 import {
   getClientBillingOverview,
   recordPayment,
@@ -55,29 +57,19 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
   const totalRefunded = (data.ledger as any[])
     .filter((l) => !l.voided && ["refund","partial_refund"].includes(l.txn_type))
     .reduce((s, l) => s + Number(l.amount_minor), 0);
-  const PAID_STATUSES = new Set(["paid", "paid in full", "active subscription", "completed"]);
-  const isPurchasePaid = (p: any) =>
-    PAID_STATUSES.has(String(p.payment_status ?? "").toLowerCase());
-  const netPaidFor = (purchaseId: string) => {
-    const rows = (data.ledger as any[]).filter(
-      (l) => l.purchase_id === purchaseId && !l.voided && ["payment", "deposit", "legacy_backfill"].includes(l.txn_type),
-    );
-    if (rows.length === 0) return null;
-    return rows.reduce((s, l) => s + Number(l.amount_minor ?? 0) - Number(l.tax_minor ?? 0), 0);
-  };
-  const totalOutstanding = (data.purchases as any[])
-    .filter((p) => !isPurchasePaid(p))
-    .reduce((s, p) => {
-      const contract = Number(p.contract_value_cents ?? Math.round(Number(p.full_payable_amount ?? 0) * 100));
-      const net = netPaidFor(p.id);
-      const paid = net ?? Number(p.amount_paid_cents ?? 0);
-      const out = net != null
-        ? Math.max(0, contract - net)
-        : p.amount_outstanding_cents != null
-          ? Number(p.amount_outstanding_cents)
-          : Math.max(0, contract - paid);
-      return s + out;
-    }, 0);
+  // Owes = what's left on sales (an installment plan's remaining payments
+  // included) + sessions trained beyond what was bought, before tax.
+  const sessions = summarizeSessions(
+    data.session_balance as any[],
+    (data.session_events as any[]).filter((e) => !e.purchase_id),
+  );
+  const owed = clientOwed(data.purchases as any[], sessions.overdrawn);
+  const owedParts = [
+    owed.salesCents > 0 ? `${fmt(owed.salesCents)} left on sales` : null,
+    owed.unbilledSessions > 0
+      ? `${owed.unbilledSessions} session${owed.unbilledSessions === 1 ? "" : "s"} not billed yet${owed.unbilledCents > 0 ? ` · ${fmt(owed.unbilledCents)}` : ""}`
+      : null,
+  ].filter(Boolean);
 
 
   return (
@@ -86,7 +78,12 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
       <div className="grid gap-4 md:grid-cols-4">
         <SummaryTile label="Total paid (before tax)" value={fmt(totalPaid)} sub={taxPaid > 0 ? `+ ${fmt(taxPaid)} tax · ${fmt(grossPaid)} charged` : undefined} />
         <SummaryTile label="Total refunded" value={fmt(totalRefunded)} />
-        <SummaryTile label="Outstanding" value={fmt(totalOutstanding)} highlight={totalOutstanding > 0} />
+        <SummaryTile
+          label={owed.taxed ? "Owes (before tax)" : "Owes"}
+          value={fmt(owed.totalCents)}
+          highlight={owed.totalCents > 0 || owed.unbilledSessions > 0}
+          sub={owedParts.length ? owedParts.join(" · ") : undefined}
+        />
         <SummaryTile label="Credit balance" value={fmt(data.credit_balance_minor)} />
       </div>
 
@@ -108,7 +105,6 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
               clientId={clientId}
               onChanged={invalidate}
               ledger={(data.ledger as any[]).filter((l) => l.purchase_id === p.id)}
-              isPaid={isPurchasePaid(p)}
             />
           ))}
         </TabsContent>
@@ -132,19 +128,19 @@ function SummaryTile({ label, value, highlight, sub }: { label: string; value: s
   );
 }
 
-function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purchase: any; clientId: string; onChanged: () => void; ledger: any[]; isPaid: boolean }) {
+function PurchaseRow({ purchase, clientId, onChanged, ledger }: { purchase: any; clientId: string; onChanged: () => void; ledger: any[] }) {
   const currency = purchase.currency ?? "CAD";
   const contract = Number(purchase.contract_value_cents ?? Math.round(Number(purchase.full_payable_amount ?? 0) * 100));
   const paidRows = ledger.filter((l) => !l.voided && ["payment", "deposit", "legacy_backfill"].includes(l.txn_type));
   const grossPaid = paidRows.reduce((s, l) => s + Number(l.amount_minor ?? 0), 0);
   const taxPaid = paidRows.reduce((s, l) => s + Number(l.tax_minor ?? 0), 0);
   const paid = paidRows.length > 0 ? Math.max(grossPaid - taxPaid, 0) : Number(purchase.amount_paid_cents ?? 0);
-  const outstandingRaw = paidRows.length > 0
-    ? Math.max(0, contract - paid)
-    : Number(purchase.amount_outstanding_cents ?? Math.max(0, contract - paid));
-  const outstanding = isPaid ? 0 : outstandingRaw;
-
-  const renewal = resolvePaymentDisplay(purchase).renewal;
+  const outstanding = saleOwedCents(purchase);
+  const display = resolvePaymentDisplay(purchase);
+  const renewal = display.renewal;
+  const statusText = String(purchase.payment_status ?? "");
+  const openEndedSub = statusText === "Active Subscription" && !display.installmentPlan;
+  const closed = ["cancelled", "refunded", "voided", "draft", "expired"].includes(statusText.toLowerCase());
 
   return (
     <Card className="p-4 space-y-3">
@@ -173,8 +169,10 @@ function PurchaseRow({ purchase, clientId, onChanged, ledger, isPaid }: { purcha
               Tax <span className="font-mono">{fmt(taxPaid, currency)}</span> · charged <span className="font-mono">{fmt(grossPaid, currency)}</span>
             </div>
           )}
-          <div className={isPaid || outstanding <= 0 ? "text-green-600" : "text-destructive"}>
-            {isPaid || outstanding <= 0 ? "Paid in full" : `Owes ${fmt(outstanding, currency)}`}
+          <div className={outstanding > 0 ? "text-destructive" : closed ? "text-muted-foreground" : "text-green-600"}>
+            {outstanding > 0
+              ? `Owes ${fmt(outstanding, currency)}${taxPaid > 0 ? " + tax" : ""}`
+              : closed ? statusText : openEndedSub ? "Up to date" : "Paid in full"}
           </div>
         </div>
 

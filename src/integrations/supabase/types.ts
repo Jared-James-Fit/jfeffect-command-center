@@ -20128,6 +20128,7 @@ export type Database = {
           amount_paid: number | null
           amount_paid_cents: number
           amount_refunded_cents: number
+          amount_tax_paid_cents: number
           archived_at: string | null
           archived_by: string | null
           assigned_at: string
@@ -20228,6 +20229,7 @@ export type Database = {
           amount_paid?: number | null
           amount_paid_cents?: number
           amount_refunded_cents?: number
+          amount_tax_paid_cents?: number
           archived_at?: string | null
           archived_by?: string | null
           assigned_at?: string
@@ -20328,6 +20330,7 @@ export type Database = {
           amount_paid?: number | null
           amount_paid_cents?: number
           amount_refunded_cents?: number
+          amount_tax_paid_cents?: number
           archived_at?: string | null
           archived_by?: string | null
           assigned_at?: string
