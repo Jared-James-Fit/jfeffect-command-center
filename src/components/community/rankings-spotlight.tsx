@@ -58,7 +58,11 @@ function useReducedMotion() {
  * device, swipe or tap the dots to move yourself. The progress line is the
  * clock: its fill finishing is what moves it on, so pausing pauses exactly.
  */
-export function RankingsSpotlight({ onOpen }: { onOpen: (key: SpotlightKey) => void }) {
+export function RankingsSpotlight({ onOpen, skip }: {
+  onOpen: (key: SpotlightKey) => void;
+  /** The board already open right under it: its podium isn't repeated up here. */
+  skip?: SpotlightKey;
+}) {
   const { data: monthly = [] } = usePerformanceLeague("current");
   const { data: previous = [] } = usePerformanceLeague("previous");
   const { data: strength = [] } = useStrengthBoard();
@@ -73,8 +77,8 @@ export function RankingsSpotlight({ onOpen }: { onOpen: (key: SpotlightKey) => v
         division: defaultDivision(strength),
         monthStart: monthly[0]?.month_start ?? `${leagueToday().slice(0, 7)}-01`,
         previousMonthStart: previous[0]?.month_start ?? previousLeagueMonth(),
-      }),
-    [monthly, previous, strength, meets],
+      }).filter((s) => s.key !== skip),
+    [monthly, previous, strength, meets, skip],
   );
 
   const n = slides.length;

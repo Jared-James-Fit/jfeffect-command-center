@@ -736,7 +736,11 @@ export function LeagueRecapGate() {
  * hide), and always just last month's. It rolls over by itself on the 1st,
  * so it never piles up. "New" for the first week, while it's fresh.
  */
-export function LeagueRecapButton({ className }: { className?: string }) {
+export function LeagueRecapButton({ className, variant = "banner" }: {
+  className?: string;
+  /** "banner": the loud one, for recap week. "row": a quiet list row the rest of the month. */
+  variant?: "banner" | "row";
+}) {
   const viewerId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
   const [open, setOpen] = useState(false);
@@ -748,6 +752,29 @@ export function LeagueRecapButton({ className }: { className?: string }) {
   });
   if (!recap) return null;
   const fresh = inRecapWindow();
+  if (variant === "row") {
+    return (
+      <>
+        <button
+          type="button"
+          data-league-recap="row"
+          onClick={() => setOpen(true)}
+          aria-label={`Play your ${monthName(recap.month_start)} recap`}
+          className={cn("flex min-h-12 w-full items-center gap-3 px-4 text-left text-[13px] font-bold active:bg-muted", className)}
+        >
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+            <span className="ml-px text-[9px] font-black">▶</span>
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            Your {monthName(recap.month_start)} recap
+            {recap.me.rank ? <span className="font-semibold text-muted-foreground"> · {ordinal(recap.me.rank)}</span> : null}
+          </span>
+          <Clapperboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
+        <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />
+      </>
+    );
+  }
   return (
     <>
       <button

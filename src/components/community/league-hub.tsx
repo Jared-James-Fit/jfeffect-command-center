@@ -1,5 +1,4 @@
 import { useRef, useState, type TouchEvent } from "react";
-import { LiveMark } from "@/components/live-indicator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -8,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { StrengthBoardSlide } from "@/components/portal/strength-board";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { inRecapWindow } from "@/lib/league-recap";
 import { RankingsSpotlight } from "@/components/community/rankings-spotlight";
 import type { SpotlightKey } from "@/lib/rankings-spotlight";
 import type { BoardSource } from "@/lib/strength-board";
@@ -100,12 +100,11 @@ export function RankingsHub() {
 
   return (
     <div data-league-hub className="space-y-3">
-      {/* last month's recap: always here at the top, replaced by next month's on the 1st */}
-      <LeagueRecapButton />
-      {/* every board's podium, flipping (pause-able); tap one to open that board */}
-      <RankingsSpotlight onOpen={openFromSpotlight} />
-      <div ref={tabsRef} className="flex scroll-mt-3 items-center gap-2">
-      <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
+      {/* last month's recap: the banner up here in recap week (news); the rest of the month it's a row under the Monthly board */}
+      {inRecapWindow() && <LeagueRecapButton />}
+      {/* the other boards' podiums, flipping (pause-able); tap one to open that board */}
+      <RankingsSpotlight onOpen={openFromSpotlight} skip={board === "monthly" ? "monthly" : "strength"} />
+      <div ref={tabsRef} className="grid scroll-mt-3 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
         {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (
           <button
             key={k}
@@ -118,9 +117,6 @@ export function RankingsHub() {
             {label}
           </button>
         ))}
-      </div>
-        {/* both boards update as people train: one Live mark for the page */}
-        <LiveMark className="shrink-0 px-1 text-[11px] uppercase tracking-wide" />
       </div>
       <div
         ref={boardRef}
