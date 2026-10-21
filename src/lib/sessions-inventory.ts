@@ -20,12 +20,13 @@ export type SessionBalanceRow = {
   granted?: number | null;
   used?: number | null;
   reserved?: number | null;
+  expired?: number | null;
   remaining?: number | null;
   expires_at?: string | null;
   currency?: string | null;
 };
 
-export type AdhocLedgerEvent = { session_count: number | null; event_type: string };
+export type AdhocLedgerEvent = { session_count: number | null; event_type: string; source?: string | null };
 
 export type SessionsSummary = {
   purchased: number;
@@ -33,6 +34,8 @@ export type SessionsSummary = {
   scheduled: number;
   remaining: number;
   available: number;
+  /** Sessions used beyond what was purchased (0 when not over). */
+  overdrawn: number;
 };
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -49,22 +52,50 @@ export function adhocTotals(events: AdhocLedgerEvent[]): { granted: number; net:
   return { granted, net };
 }
 
+/**
+ * `balance` rows come from session_balance(): `remaining` there is the sum of
+ * every event, so a booking's hold is already taken out of it. Ad-hoc events
+ * (no purchase) count the same way: a self-booked session that was completed
+ * is a used session even though it never got a package.
+ */
 export function summarizeSessions(
   balance: SessionBalanceRow[],
   adhoc: AdhocLedgerEvent[] = [],
   scheduledCount = 0,
 ): SessionsSummary {
-  const extra = adhocTotals(adhoc);
-  const purchased = balance.reduce((s, r) => s + n(r.granted), 0) + extra.granted;
-  const used = balance.reduce((s, r) => s + n(r.used), 0);
-  const remaining = balance.reduce((s, r) => s + n(r.remaining), 0) + extra.net;
-  const scheduled = Math.max(scheduledCount, 0);
+  let net = 0;
+  let used = 0;
+  let held = 0;
+  let expired = 0;
+  for (const r of balance) {
+    net += n(r.remaining);
+    used += n(r.used);
+    held += n(r.reserved);
+    expired += n(r.expired);
+  }
+  let adhocHolds = 0;
+  for (const e of adhoc) {
+    const c = n(e.session_count);
+    net += c;
+    if (e.event_type === "used") used -= c;
+    else if (e.event_type === "expired") expired -= c;
+    else if (e.source === "revert_on_uncomplete") used -= c;
+    else if (e.event_type === "reserved" || e.event_type === "released") adhocHolds += c;
+  }
+  held += Math.max(-adhocHolds, 0);
+
+  const owned = net + held; // purchased - used
+  const scheduled = Math.max(scheduledCount, held, 0);
+  // Bookings without a hold (uses_credit off, or made before holds existed)
+  // still take a session when they happen.
+  const unheld = Math.max(scheduledCount - held, 0);
   return {
-    purchased,
+    purchased: owned + used + expired,
     used,
     scheduled,
-    remaining: Math.max(remaining, 0),
-    available: Math.max(remaining - scheduled, 0),
+    remaining: Math.max(owned, 0),
+    available: Math.max(net - unheld, 0),
+    overdrawn: Math.max(-owned, 0),
   };
 }
 
