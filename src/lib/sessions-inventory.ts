@@ -40,6 +40,15 @@ export type SessionsSummary = {
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 
+/**
+ * An adjustment that gives a used session back: un-completing a session
+ * (revert_on_uncomplete) or moving it to another package (reattribute, whose
+ * matching 'used' lands on the new package).
+ */
+export function isUseReversal(e: { event_type: string; source?: string | null }): boolean {
+  return e.event_type === "adjusted" && (e.source === "revert_on_uncomplete" || e.source === "reattribute");
+}
+
 /** Ad-hoc (no purchase attached) grants/adjustments net into the balance. */
 export function adhocTotals(events: AdhocLedgerEvent[]): { granted: number; net: number } {
   let granted = 0;
@@ -79,7 +88,7 @@ export function summarizeSessions(
     net += c;
     if (e.event_type === "used") used -= c;
     else if (e.event_type === "expired") expired -= c;
-    else if (e.source === "revert_on_uncomplete") used -= c;
+    else if (isUseReversal(e)) used -= c;
     else if (e.event_type === "reserved" || e.event_type === "released") adhocHolds += c;
   }
   held += Math.max(-adhocHolds, 0);
@@ -293,13 +302,15 @@ export function sessionEventLabel(eventType: string, source?: string | null): st
     case "granted":
       return source === "admin_adjust" ? "Sessions added" : "Sessions added";
     case "reserved":
-      return "Session reserved (booked)";
+      return source === "reattribute" ? "Booking moved to this package" : "Session reserved (booked)";
     case "released":
+      if (source === "reattribute") return "Booking moved to another package";
       return source === "convert_on_complete" ? "Reserved session used" : "Session returned";
     case "used":
     case "consumed":
-      return "Session used";
+      return source === "reattribute" ? "Session used (moved to this package)" : "Session used";
     case "adjusted":
+      if (source === "reattribute") return "Session moved to another package";
       return source === "revert_on_uncomplete" ? "Session returned" : "Manual session adjustment";
     case "expired":
       return "Sessions expired";

@@ -7,7 +7,9 @@ import {
   sessionsToGrant,
   sessionEventLabel,
   fmtMoneyMinor,
+  isUseReversal,
 } from "@/lib/sessions-inventory";
+import { creditImpact } from "@/lib/pt-session-manage";
 import {
   WORKSPACE_CONTAINER_CLASS,
   WORKSPACE_GRID_CLASS,
@@ -55,6 +57,35 @@ describe("sessions inventory", () => {
       10,
     );
     expect(s).toMatchObject({ purchased: 32, used: 42, scheduled: 10, remaining: 0, available: 0, overdrawn: 10 });
+  });
+
+  it("reads a session moved off a full package once (Marc: 2 × 16 bought, 42 used, 10 booked)", () => {
+    // session_balance nets the move on each package; off-package rows arrive as ad-hoc events.
+    const moved = (type: "used" | "reserved") => ({ session_count: -1, event_type: type, source: "reattribute" });
+    const s = summarizeSessions(
+      [
+        { purchase_id: "p1", granted: 16, used: 16, reserved: 0, remaining: 0 },
+        { purchase_id: "p2", granted: 16, used: 16, reserved: 0, remaining: 0 },
+      ],
+      [...Array.from({ length: 10 }, () => moved("used")), ...Array.from({ length: 10 }, () => moved("reserved"))],
+      10,
+    );
+    expect(s).toEqual({ purchased: 32, used: 42, scheduled: 10, remaining: 0, available: 0, overdrawn: 10 });
+  });
+
+  it("counts a used session moved between packages as one use", () => {
+    expect(isUseReversal({ event_type: "adjusted", source: "reattribute" })).toBe(true);
+    expect(isUseReversal({ event_type: "adjusted", source: "revert_on_uncomplete" })).toBe(true);
+    expect(isUseReversal({ event_type: "adjusted", source: "admin_adjust" })).toBe(false);
+    const impact = creditImpact("Completed", [
+      { event_type: "reserved", session_count: -1, source: "reserve_on_book" },
+      { event_type: "released", session_count: 1, source: "convert_on_complete" },
+      { event_type: "used", session_count: -1, source: "auto_use_on_complete" },
+      { event_type: "adjusted", session_count: 1, source: "reattribute" },
+      { event_type: "used", session_count: -1, source: "reattribute" },
+    ] as any);
+    expect(impact.label).toBe("Used 1");
+    expect(sessionEventLabel("adjusted", "reattribute")).toBe("Session moved to another package");
   });
 
   it("never reports negative remaining or available", () => {
