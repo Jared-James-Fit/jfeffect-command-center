@@ -284,22 +284,22 @@ export type ActivityPerson = CommunityAuthor & {
   reposted_at?: string;
 };
 /** A post's (or story's) Activity, for the person who posted it (community_post_activity). */
-export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[]; private_count: number; me_private: boolean };
-export type ActivityFilter = "all" | "likes" | "shares";
+export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[] };
+export type ActivityFilter = "all" | "likes" | "shares" | "reposts";
 
-/** Who to show under a filter: likes = reacted, shares = added it to their story or reposted it. */
+/** Who to show under a tab: likes = reacted, shares = added it to their story, reposts = reposted it. */
 export function activityPeople(people: readonly ActivityPerson[], f: ActivityFilter): ActivityPerson[] {
   if (f === "likes") return people.filter((p) => !!p.reaction);
-  if (f === "shares") return people.filter((p) => !!p.shared_at || !!p.reposted_at);
+  if (f === "shares") return people.filter((p) => !!p.shared_at);
+  if (f === "reposts") return people.filter((p) => !!p.reposted_at);
   return [...people];
 }
 
-/** What someone did, the most telling first, with when: "Shared to their story", "Reposted", "Liked", "Viewed". */
-export function activityDid(p: ActivityPerson): { label: string; at: string | null } {
-  if (p.shared_at) return { label: "Shared to their story", at: p.shared_at };
-  if (p.reposted_at) return { label: "Reposted", at: p.reposted_at };
-  if (p.reaction) return { label: p.reaction === "heart" ? "Liked" : "Reacted", at: p.reacted_at ?? null };
-  return { label: "Viewed", at: p.viewed_at ?? null };
+/** The line under someone's name, only when it says more than their photo's badge: they shared it or reposted it. */
+export function activityNote(p: ActivityPerson): string | null {
+  if (p.shared_at) return "Shared to their story";
+  if (p.reposted_at) return "Reposted";
+  return null;
 }
 
 /** Someone who reposted a post, with the note they put on it. */

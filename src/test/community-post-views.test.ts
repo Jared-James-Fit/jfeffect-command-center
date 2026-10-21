@@ -37,10 +37,10 @@ describe("post views", () => {
     expect(everywhere).toContain("FROM public.community_poll_votes v");
     expect(everywhere).toContain("WHERE x.viewer IS NOT NULL AND x.viewer IS DISTINCT FROM p.author_user_id");
   });
-  it("you can view privately: still counted, never named", () => {
-    expect(sql).toContain("AND NOT coalesce(cp.private_views, false)");
-    // the switch sits under your Activity (views, likes, shares, reposts)
-    expect(read("src/components/community/post-activity.tsx")).toContain("View posts privately");
+  it("no viewing privately (Instagram's): every viewer is named, except views made while it was still a switch", () => {
+    const named = read("supabase/migrations/20261222090000_views_always_named.sql");
+    expect(named).toContain("ADD CONSTRAINT community_profiles_views_named CHECK (NOT private_views);");
+    expect(named).toContain("WHERE v.post_id = _post_id AND NOT v.anonymous");
     expect(ui).toContain("<PostActivitySheet postId={open ? post.id : null}");
   });
 });
