@@ -52,14 +52,18 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  * points still accrue (DB triggers) and feed Milestones; the level itself
  * isn't shown to clients. New-milestone reveals pop on Home (LevelCelebrations).
  */
-export function AthleteLevelCard({ clientId }: { clientId: string }) {
+export function AthleteLevelCard({ clientId, openPrevious = false }: {
+  clientId: string;
+  /** Open on last month's final standings (the Rankings spotlight's Hall of Fame). */
+  openPrevious?: boolean;
+}) {
   const { data: events = [] } = useXpEvents(clientId);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
   const { data: rows = [], isPending } = usePerformanceLeague("current");
   // The sheet holds only an athlete's details or last month's final standings.
-  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(null);
+  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(() => (openPrevious ? { kind: "previous" } : null));
 
   const me = rows.find((r) => r.client_id === clientId) ?? rows.find((r) => r.is_me) ?? null;
   const ranked = rankedRows(rows);

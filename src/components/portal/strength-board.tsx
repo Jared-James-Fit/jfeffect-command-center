@@ -71,7 +71,7 @@ function useStrengthRoster() {
   });
 }
 
-function useMeetBoard() {
+export function useMeetBoard() {
   const viewerId = usePortalUserId() ?? null;
   return useQuery({
     queryKey: ["strength-board", "meets", viewerId],
@@ -267,11 +267,11 @@ export function defaultDivision(rows: StrengthRow[]): Division {
   return rows.find((r) => r.is_me && r.sex)?.sex ?? "all";
 }
 
-export function StrengthBoardSlide() {
+export function StrengthBoardSlide({ initialSource = "all" }: { initialSource?: BoardSource } = {}) {
   // Tapping a powerlifter opens their career (the only sheet left).
   const [careerId, setCareerId] = useState<string | null>(null);
   const show = (athleteId: string | null = null) => { if (athleteId) setCareerId(athleteId); };
-  const [source, setSource] = useState<BoardSource>("all");
+  const [source, setSource] = useState<BoardSource>(initialSource);
   const [mode, setMode] = useState<BoardMode>("p4p");
   const [lift, setLift] = useState<BoardLift>("total");
   // Opens on your own division (the board Home shows you); All if we don't know it yet.
