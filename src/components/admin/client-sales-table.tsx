@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { accessBadge } from "@/lib/service-access-status";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,87 +28,16 @@ import {
   restorePurchaseRecord,
   removeUnpaidPurchaseRecord,
 } from "@/lib/purchase-archive.functions";
-import { resolvePaymentDisplay, formatMoney, type PaymentDisplay } from "@/lib/payment-display";
+import { resolvePaymentDisplay, type PaymentDisplay } from "@/lib/payment-display";
+import { clientTaxRate } from "@/lib/client-billing-summary";
+import {
+  AccessBadge, SaleDates, SaleMoney, hasPaymentDestination, nextPaymentCell, nextText, resolveSaleStatus,
+} from "@/components/admin/sale-row-parts";
 import { paymentReminderStatus, paymentLinkExpiryText } from "@/lib/payment-reminder-status";
 import { PaymentLinkExpiryDialog } from "@/components/admin/payment-link-expiry-dialog";
 
 type SortKey = "recent" | "name" | "status" | "next";
 type ArchiveFilter = "current" | "archived" | "all";
-
-function fmtDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
-}
-
-const TONE = {
-  ok: "border-emerald-500/40 text-emerald-500 bg-emerald-500/10",
-  info: "border-blue-500/40 text-blue-500 bg-blue-500/10",
-  warn: "border-amber-500/40 text-amber-500 bg-amber-500/10",
-  bad: "border-destructive/40 text-destructive bg-destructive/5",
-  muted: "border-border text-muted-foreground",
-};
-
-function hasPaymentDestination(r: any) {
-  return Boolean(r?.stripe_payment_link || r?.stripe_checkout_session_id || r?.stripe_subscription_id);
-}
-
-function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: string } {
-  if (r.archived_at) return { label: "Archived", tone: TONE.muted };
-  if (d.status === "draft") return { label: "Draft", tone: TONE.muted };
-  if (d.status === "pending_payment") {
-    return hasPaymentDestination(r)
-      ? { label: "Payment Link Ready", tone: TONE.warn }
-      : { label: "Pending Payment", tone: TONE.warn };
-  }
-  if ((r.payment_status ?? "") === "Failed") return { label: "Failed", tone: TONE.bad };
-  const kind = d.renewal.kind;
-  if (kind === "cancelled") return { label: "Cancelled", tone: TONE.muted };
-  if (kind === "cancels") return { label: "Cancelling", tone: TONE.warn };
-  if (kind === "first_payment") return { label: "Trialing", tone: TONE.info };
-  if (kind === "retry" || kind === "past_due") return { label: "Past Due", tone: TONE.bad };
-  if (kind === "renew" || kind === "unavailable") return { label: "Active", tone: TONE.ok };
-  if (kind === "free") return { label: "Free", tone: TONE.muted };
-  const end = r.term_end_date ?? r.package_expiry_date ?? null;
-  const expired = end ? new Date(`${String(end).slice(0, 10)}T23:59:59`) < new Date() : false;
-  if (expired) return { label: d.isPaidInFull ? "Completed" : "Expired", tone: TONE.muted };
-  if (d.isPaidInFull) return { label: "Paid in Full", tone: TONE.ok };
-  if (d.status === "partially_paid") return { label: "Partially Paid", tone: TONE.warn };
-  if (d.status === "unpaid" || d.status === "past_due") return { label: "Past Due", tone: TONE.bad };
-  if (d.status === "pending_setup") return { label: "Payment setup pending", tone: TONE.warn };
-  return { label: "Unknown", tone: TONE.muted };
-}
-
-function AccessBadge({ raw }: { raw: any }) {
-  const { state, label } = accessBadge(raw);
-  const tone = state === "active" ? TONE.ok : state === "upcoming" ? TONE.info : TONE.muted;
-  return <Badge variant="outline" className={`${tone} ml-1 whitespace-nowrap text-[10px]`}>{label}</Badge>;
-}
-
-function nextPaymentCell(d: PaymentDisplay, raw?: any) {
-  if (d.status === "draft") return { text: "Not started", tone: "text-muted-foreground", helper: "Draft record — no payment requested." as string | null };
-  if (d.status === "pending_payment") {
-    const ready = hasPaymentDestination(raw);
-    return {
-      text: "Awaiting payment",
-      tone: "text-amber-500",
-      helper: ready
-        ? "Payment link ready — waiting on Stripe confirmation."
-        : "Payment link not created. Use Create payment link to retry this sale.",
-    };
-  }
-  const r = d.renewal;
-  if (r.kind === "none") return { text: "No renewal", tone: "text-muted-foreground", helper: null as string | null };
-  if (r.kind === "free") return { text: "No payment", tone: "text-muted-foreground", helper: null };
-  if (r.kind === "cancelled") return { text: r.date ? `Ended ${fmtDate(r.date)}` : "Cancelled", tone: "text-muted-foreground", helper: null };
-  if (r.kind === "cancels") return { text: `Cancels on ${r.valueText}`, tone: "text-amber-500", helper: null };
-  if (r.kind === "first_payment") return { text: `First payment ${r.valueText}`, tone: "text-foreground", helper: r.helper };
-  if (r.kind === "retry") return { text: `Retry ${r.valueText}`, tone: "text-destructive", helper: null };
-  if (r.kind === "past_due") return { text: "Past due", tone: "text-destructive", helper: "No retry date synced." };
-  if (r.kind === "unavailable") return { text: "Next payment unavailable", tone: "text-amber-500", helper: r.helper };
-  return { text: r.valueText, tone: "text-foreground", helper: null };
-}
 
 type Row = { raw: any; display: PaymentDisplay; status: { label: string; tone: string }; next: ReturnType<typeof nextPaymentCell> };
 
@@ -142,6 +70,17 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
       return waiting ? 45_000 : false;
     },
   });
+
+  // Sessions per package (shared with the Sessions panel) and the client's tax rate.
+  const { data: sessionBalance = [] } = useQuery<any[]>({
+    queryKey: ["pt-balance", clientId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc("session_balance", { _client_id: clientId });
+      return (data ?? []) as any[];
+    },
+  });
+  const sessionsBySale = useMemo(() => new Map(sessionBalance.map((b: any) => [b.purchase_id, b])), [sessionBalance]);
+  const taxRate = useMemo(() => clientTaxRate((records ?? []) as any[]), [records]);
 
   const rows: Row[] = useMemo(() => {
     const visible = (records ?? []).filter((raw: any) => {
@@ -214,13 +153,12 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
 
       {!isLoading && !isError && rows.length > 0 && <>
         <div className="hidden overflow-x-auto md:block">
-          <Table><TableHeader><TableRow><TableHead>Product</TableHead><TableHead>Type</TableHead><TableHead>Date added</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Next payment</TableHead><TableHead>Status</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
+          <Table><TableHeader><TableRow><TableHead>Package</TableHead><TableHead>Dates</TableHead><TableHead>Next payment</TableHead><TableHead>Status</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
             <TableBody>{rows.map(({ raw, display, status, next }) => (
               <TableRow key={raw.id} className={raw.archived_at ? "opacity-70" : undefined}>
-                <TableCell className="max-w-[220px]"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="font-medium hover:underline">{raw.offer_name ?? "Product"}</Link><InstallmentSummary display={display} /></TableCell>
-                <TableCell className="text-sm text-muted-foreground">{raw.offer_type ?? "—"}</TableCell><TableCell className="text-sm">{fmtDate(raw.purchased_at) ?? "—"}</TableCell>
-                <TableCell className="text-sm">{fmtDate(raw.term_start_date) ?? <span className="text-muted-foreground italic">Not set</span>}</TableCell><TableCell className="text-sm">{fmtDate(raw.term_end_date) ?? <span className="text-muted-foreground italic">Not set</span>}</TableCell>
-                <TableCell className="text-sm"><span className={next.tone}>{next.text}</span>{next.helper && <div className="text-[11px] text-muted-foreground">{next.helper}</div>}<ReminderLines raw={raw} /></TableCell>
+                <TableCell className="max-w-[300px] space-y-1"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="font-medium hover:underline">{raw.offer_name ?? "Product"}</Link><SaleMoney display={display} rate={taxRate} sessions={sessionsBySale.get(raw.id)} /></TableCell>
+                <TableCell className="text-sm"><SaleDates raw={raw} /></TableCell>
+                <TableCell className="text-sm"><span className={next.tone}>{nextText(display, next, taxRate)}</span>{next.helper && <div className="text-[11px] text-muted-foreground">{next.helper}</div>}<ReminderLines raw={raw} /></TableCell>
                 <TableCell><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}</TableCell>
                 <TableCell><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></TableCell>
               </TableRow>
@@ -229,10 +167,10 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
 
         <ul className="space-y-3 md:hidden">{rows.map(({ raw, display, status, next }) => (
           <li key={raw.id} className={`rounded-lg border border-border bg-secondary/20 p-3 space-y-2 ${raw.archived_at ? "opacity-70" : ""}`}>
-            <div className="flex items-start justify-between gap-2"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="min-w-0"><div className="truncate font-semibold">{raw.offer_name ?? "Product"}</div><div className="text-xs text-muted-foreground">{raw.offer_type ?? "—"}</div></Link><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></div>
-            <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}<span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>{display.amountOutstanding > 0 && <Badge variant="outline" className={TONE.warn}>{formatMoney(display.amountOutstanding, display.currency)}{display.amountTaxPaid > 0 ? " + GST" : ""} left</Badge>}</div>
-            <InstallmentSummary display={display} />
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs"><Field label="Date added" value={fmtDate(raw.purchased_at) ?? "—"} /><Field label="Start" value={fmtDate(raw.term_start_date) ?? "Not set"} /><Field label="End" value={fmtDate(raw.term_end_date) ?? "Not set"} /><div><dt className="text-muted-foreground">Next payment</dt><dd className={next.tone}>{next.text}</dd></div></dl>
+            <div className="flex items-start justify-between gap-2"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="min-w-0"><div className="font-semibold">{raw.offer_name ?? "Product"}</div></Link><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></div>
+            <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}</div>
+            <SaleMoney display={display} rate={taxRate} sessions={sessionsBySale.get(raw.id)} />
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs"><div><dt className="text-muted-foreground">Dates</dt><dd className="font-medium"><SaleDates raw={raw} /></dd></div><div><dt className="text-muted-foreground">Next payment</dt><dd className={next.tone}>{nextText(display, next, taxRate)}</dd></div></dl>
             {next.helper && <p className="text-[11px] text-muted-foreground">{next.helper}</p>}
             <ReminderLines raw={raw} />
           </li>
@@ -255,10 +193,6 @@ function ReminderLines({ raw }: { raw: any }) {
     {reminder && <div className={`text-[11px] ${reminder.tone === "warn" ? "text-amber-500" : "text-muted-foreground"}`}>{reminder.text}</div>}
     {expiry && <div className="text-[11px] text-muted-foreground">{expiry}</div>}
   </div>;
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return <div><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>;
 }
 
 function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMarkOverdue, onEmailLink, onChanged }: {
@@ -347,17 +281,4 @@ function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMark
       {removable && <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => void remove()}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete unpaid setup</DropdownMenuItem>}
     </DropdownMenuContent>
   </DropdownMenu>;
-}
-
-function InstallmentSummary({ display }: { display: PaymentDisplay }) {
-  // Prices are stored before tax and payments include it: say so, and show
-  // what was actually paid whenever it differs from the price.
-  const tax = display.amountTaxPaid > 0 ? " + GST" : "";
-  const money = (n: number) => formatMoney(n, display.currency);
-  const plan = display.installmentPlan;
-  if (!plan) {
-    const paidDiffers = display.amountPaid > 0 && Math.abs(display.amountPaid - display.contractTotal) >= 0.01;
-    return <div className="text-xs text-muted-foreground tabular-nums">{money(display.contractTotal)}{tax}{paidDiffers && ` · ${money(display.amountPaid)} paid`}{display.amountOutstanding > 0 && ` · ${money(display.amountOutstanding)}${tax} left`}</div>;
-  }
-  return <div className="text-xs text-muted-foreground tabular-nums"><div>{money(plan.contractTotal)}{tax} total · {money(plan.amountPaid)} paid{plan.amountRemaining > 0 && ` · ${money(plan.amountRemaining)}${tax} left`}</div><div>{plan.numberOfPayments} × {money(plan.installmentAmount)}{tax} · {plan.paymentsMade} / {plan.numberOfPayments} paid</div></div>;
 }

@@ -421,7 +421,9 @@ function resolveRenewal(
 
 export function formatMoney(amount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
+    // en-CA: the business bills in CAD, so CAD reads "$" on every phone (an
+    // en-US browser would say "CA$") and anything else is marked ("US$").
+    return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(amount);
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
   }

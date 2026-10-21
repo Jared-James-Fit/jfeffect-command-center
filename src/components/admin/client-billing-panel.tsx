@@ -12,8 +12,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { todayLocalISO } from "@/lib/today";
 import { resolvePaymentDisplay } from "@/lib/payment-display";
-import { clientOwed, saleOwedCents } from "@/lib/client-owed";
-import { summarizeSessions } from "@/lib/sessions-inventory";
+import { saleOwedCents } from "@/lib/client-owed";
+import { buildBillingSummary } from "@/lib/client-billing-summary";
+import { ClientBalanceCard } from "@/components/admin/client-balance-card";
 import {
   getClientBillingOverview,
   recordPayment,
@@ -33,7 +34,12 @@ function fmt(amountMinor: number | null | undefined, currency = "CAD") {
 
 const PAYMENT_METHODS = ["stripe","etransfer","cash","debit","credit_card","bank_transfer","cheque","credit_balance","other"] as const;
 
-export function ClientBillingPanel({ clientId }: { clientId: string }) {
+/**
+ * A client's billing, in two parts the Purchases tab places around the Sales
+ * table: "summary" (what they owe, in plain words) above it and "records"
+ * (payment history and the money tools) below it, closed by default.
+ */
+export function ClientBillingPanel({ clientId, part = "summary" }: { clientId: string; part?: "summary" | "records" }) {
   const qc = useQueryClient();
   const overview = useServerFn(getClientBillingOverview);
   const { data, isLoading } = useQuery({
@@ -43,87 +49,67 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["client-billing", clientId] });
 
-  if (isLoading) return <Card className="p-6 md:col-span-3 text-sm text-muted-foreground">Loading billing…</Card>;
-  if (!data?.ok) return <Card className="p-6 md:col-span-3 text-sm text-destructive">Failed to load billing.</Card>;
+  if (isLoading) return part === "summary" ? <Card className="p-6 md:col-span-3 text-sm text-muted-foreground">Loading billing…</Card> : null;
+  if (!data?.ok) return part === "summary" ? <Card className="p-6 md:col-span-3 text-sm text-destructive">Failed to load billing.</Card> : null;
 
-  // Stripe charges are gross (subtotal + tax); contract values are pre-tax.
-  // Net the tax out so "paid" and "outstanding" compare like for like.
-  const paidRows = (data.ledger as any[]).filter(
-    (l) => !l.voided && ["payment", "deposit", "legacy_backfill"].includes(l.txn_type),
-  );
-  const grossPaid = paidRows.reduce((s, l) => s + Number(l.amount_minor ?? 0), 0);
-  const taxPaid = paidRows.reduce((s, l) => s + Number(l.tax_minor ?? 0), 0);
-  const totalPaid = Math.max(grossPaid - taxPaid, 0);
-  const totalRefunded = (data.ledger as any[])
-    .filter((l) => !l.voided && ["refund","partial_refund"].includes(l.txn_type))
-    .reduce((s, l) => s + Number(l.amount_minor), 0);
-  // Owes = what's left on sales (an installment plan's remaining payments
-  // included) + sessions trained beyond what was bought, before tax.
-  const sessions = summarizeSessions(
-    data.session_balance as any[],
-    (data.session_events as any[]).filter((e) => !e.purchase_id),
-  );
-  const owed = clientOwed(data.purchases as any[], sessions.overdrawn);
-  const owedParts = [
-    owed.salesCents > 0 ? `${fmt(owed.salesCents)} left on sales` : null,
-    owed.unbilledSessions > 0
-      ? `${owed.unbilledSessions} session${owed.unbilledSessions === 1 ? "" : "s"} not billed yet${owed.unbilledCents > 0 ? ` · ${fmt(owed.unbilledCents)}` : ""}`
-      : null,
-  ].filter(Boolean);
+  if (part === "summary") {
+    const summary = buildBillingSummary({
+      sales: data.purchases as any[],
+      ledger: data.ledger as any[],
+      balance: data.session_balance as any[],
+      events: data.session_events as any[],
+    });
+    return <ClientBalanceCard summary={summary} />;
+  }
 
+  const current = (data.purchases as any[]).filter((p) => !p.archived_at);
+  const refunded = (data.ledger as any[])
+    .filter((l) => !l.voided && ["refund", "partial_refund"].includes(l.txn_type))
+    .reduce((s, l) => s + Math.abs(Number(l.amount_minor ?? 0)), 0);
 
   return (
-    <div className="md:col-span-3 space-y-6">
-      {/* Summary tiles */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <SummaryTile label="Total paid (before tax)" value={fmt(totalPaid)} sub={taxPaid > 0 ? `+ ${fmt(taxPaid)} tax · ${fmt(grossPaid)} charged` : undefined} />
-        <SummaryTile label="Total refunded" value={fmt(totalRefunded)} />
-        <SummaryTile
-          label={owed.taxed ? "Owes (before tax)" : "Owes"}
-          value={fmt(owed.totalCents)}
-          highlight={owed.totalCents > 0 || owed.unbilledSessions > 0}
-          sub={owedParts.length ? owedParts.join(" · ") : undefined}
-        />
-        <SummaryTile label="Credit balance" value={fmt(data.credit_balance_minor)} />
-      </div>
+    <Card className="md:col-span-3 border-border bg-card p-0">
+      <details>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm md:px-6 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="text-xs uppercase tracking-widest text-muted-foreground">Payment history & tools</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              Record a payment, refund, credit or sessions by hand
+              {refunded > 0 && ` · ${fmt(refunded)} refunded`}
+              {Number(data.credit_balance_minor ?? 0) > 0 && ` · ${fmt(data.credit_balance_minor)} credit`}
+            </span>
+          </span>
+          <span className="text-xs text-muted-foreground">Show</span>
+        </summary>
+        <div className="space-y-3 border-t border-border p-4 md:p-6">
+          <Tabs defaultValue="purchases">
+            <TabsList>
+              <TabsTrigger value="purchases">Payments</TabsTrigger>
+              <TabsTrigger value="sessions">Session ledger</TabsTrigger>
+            </TabsList>
 
+            <TabsContent value="purchases" className="space-y-3">
+              {current.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">No purchases yet.</p>
+              )}
+              {current.map((p) => (
+                <PurchaseRow
+                  key={p.id}
+                  purchase={p}
+                  clientId={clientId}
+                  onChanged={invalidate}
+                  ledger={(data.ledger as any[]).filter((l) => l.purchase_id === p.id)}
+                />
+              ))}
+            </TabsContent>
 
-      <Tabs defaultValue="purchases">
-        <TabsList>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="sessions">PT sessions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="purchases" className="space-y-3">
-          {(data.purchases as any[]).length === 0 && (
-            <p className="text-sm text-muted-foreground py-4">No purchases yet.</p>
-          )}
-          {(data.purchases as any[]).map((p) => (
-            <PurchaseRow
-              key={p.id}
-              purchase={p}
-              clientId={clientId}
-              onChanged={invalidate}
-              ledger={(data.ledger as any[]).filter((l) => l.purchase_id === p.id)}
-            />
-          ))}
-        </TabsContent>
-
-        <TabsContent value="sessions" className="space-y-3">
-          <ExpireButton onDone={invalidate} />
-          <SessionBalanceTable balance={data.session_balance as any[]} events={data.session_events as any[]} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
-function SummaryTile({ label, value, highlight, sub }: { label: string; value: string; highlight?: boolean; sub?: string }) {
-  return (
-    <Card className={`p-4 ${highlight ? "border-destructive/40 bg-destructive/5" : ""}`}>
-      <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      {sub && <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">{sub}</div>}
+            <TabsContent value="sessions" className="space-y-3">
+              <ExpireButton onDone={invalidate} />
+              <SessionBalanceTable balance={data.session_balance as any[]} events={data.session_events as any[]} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </details>
     </Card>
   );
 }
