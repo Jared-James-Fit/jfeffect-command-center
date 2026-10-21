@@ -56,7 +56,7 @@ describe("Rankings", () => {
   it("Monthly and Strength: one board at a time, never stacked", () => {
     expect(hub).toContain('([["monthly", "Monthly"], ["strength", "Strength"]] as const)');
     expect(hub).toContain('board === "strength" ? (');
-    expect(hub).toContain("<StrengthBoardSlide initialSource={opened.source} />");
+    expect(hub).toContain("<StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />");
     expect(hub).toContain("<AthleteLevelCard clientId={client.id}");
   });
   it("one Live mark, beside the days left on the month's board (not in the tabs); scoring rules folded under the board", () => {

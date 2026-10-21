@@ -736,10 +736,12 @@ export function LeagueRecapGate() {
  * hide), and always just last month's. It rolls over by itself on the 1st,
  * so it never piles up. "New" for the first week, while it's fresh.
  */
+const RECAP_GRADIENT = "linear-gradient(120deg, #450a0a 0%, #991b1b 45%, #3b0764 100%)";
+
 export function LeagueRecapButton({ className, variant = "banner" }: {
   className?: string;
-  /** "banner": the loud one, for recap week. "row": a quiet list row the rest of the month. */
-  variant?: "banner" | "row";
+  /** "banner": the loud one, for recap week. "tile": a card with a video-style thumbnail the rest of the month. */
+  variant?: "banner" | "tile";
 }) {
   const viewerId = usePortalUserId() ?? null;
   const month = previousLeagueMonth();
@@ -752,24 +754,28 @@ export function LeagueRecapButton({ className, variant = "banner" }: {
   });
   if (!recap) return null;
   const fresh = inRecapWindow();
-  if (variant === "row") {
+  const result = `${recap.me.rank ? `You finished ${ordinal(recap.me.rank)} · ` : ""}${recap.me.total_points} pts`;
+  if (variant === "tile") {
     return (
       <>
         <button
           type="button"
-          data-league-recap="row"
+          data-league-recap="tile"
           onClick={() => setOpen(true)}
           aria-label={`Play your ${monthName(recap.month_start)} recap`}
-          className={cn("flex min-h-12 w-full items-center gap-3 px-4 text-left text-[13px] font-bold active:bg-muted", className)}
+          className={cn("flex w-full items-center gap-3 rounded-2xl border bg-card p-2.5 pr-4 text-left transition active:scale-[0.99]", className)}
         >
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
-            <span className="ml-px text-[9px] font-black">▶</span>
+          {/* a thumbnail, like a video: it plays */}
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl shadow-sm" style={{ background: RECAP_GRADIENT }} aria-hidden>
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-black">
+              <span className="ml-0.5 text-xs font-black">▶</span>
+            </span>
           </span>
-          <span className="min-w-0 flex-1 truncate">
-            Your {monthName(recap.month_start)} recap
-            {recap.me.rank ? <span className="font-semibold text-muted-foreground"> · {ordinal(recap.me.rank)}</span> : null}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-black leading-5 tracking-tight">Your {monthName(recap.month_start)} recap</span>
+            <span className="mt-0.5 block truncate text-[12px] font-semibold text-muted-foreground">{result}</span>
           </span>
-          <Clapperboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Clapperboard className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
         </button>
         <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />
       </>
@@ -782,22 +788,20 @@ export function LeagueRecapButton({ className, variant = "banner" }: {
         data-league-recap
         onClick={() => setOpen(true)}
         aria-label={`Play your ${monthName(recap.month_start)} recap`}
-        className={cn("relative flex min-h-12 w-full items-center gap-3 overflow-hidden rounded-2xl py-2 pl-2.5 pr-3 text-left text-white shadow-sm transition active:scale-[0.99]", className)}
-        style={{ background: "linear-gradient(120deg, #450a0a 0%, #991b1b 45%, #3b0764 100%)" }}
+        className={cn("relative flex min-h-[68px] w-full items-center gap-3 overflow-hidden rounded-2xl py-3 pl-3 pr-4 text-left text-white shadow-sm transition active:scale-[0.99]", className)}
+        style={{ background: RECAP_GRADIENT }}
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-black">
-          <span className="ml-0.5 text-xs font-black">▶</span>
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-black">
+          <span className="ml-0.5 text-sm font-black">▶</span>
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-black leading-tight">Your {monthName(recap.month_start)} recap</span>
-            {fresh && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[9px] font-black uppercase leading-4 text-black">New</span>}
+            <span className="truncate text-[16px] font-black leading-5 tracking-tight">Your {monthName(recap.month_start)} recap</span>
+            {fresh && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[10px] font-black uppercase leading-4 text-black">New</span>}
           </span>
-          <span className="block truncate text-xs text-white/75">
-            {recap.me.rank ? `You finished ${ordinal(recap.me.rank)} · ` : ""}{recap.me.total_points} pts
-          </span>
+          <span className="mt-0.5 block truncate text-[13px] font-semibold text-white/80">{result}</span>
         </span>
-        <Clapperboard className="h-4 w-4 shrink-0 text-white/70" aria-hidden />
+        <Clapperboard className="h-5 w-5 shrink-0 text-white/75" aria-hidden />
         <span aria-hidden className="jf-record-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/2" />
       </button>
       <LeagueRecapStory recap={recap} open={open} onClose={() => setOpen(false)} />

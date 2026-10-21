@@ -56,7 +56,7 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  */
 export function AthleteLevelCard({ clientId, openPrevious = false }: {
   clientId: string;
-  /** Open on last month's final standings (the Rankings spotlight's Hall of Fame). */
+  /** Open on last month's final standings (the Rankings spotlight's Champions podium). */
   openPrevious?: boolean;
 }) {
   const { data: events = [] } = useXpEvents(clientId);
@@ -133,8 +133,10 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
           </div>
         </section>
 
+        {/* last month's recap: the banner above the tabs in recap week, this tile under the board the rest of the month */}
+        {!inRecapWindow() && <LeagueRecapButton variant="tile" />}
+
         <section className="divide-y divide-border/70 overflow-hidden rounded-2xl border bg-card">
-          {!inRecapWindow() && <LeagueRecapButton variant="row" />}
           <button
             type="button"
             onClick={() => setSheet({ kind: "previous" })}

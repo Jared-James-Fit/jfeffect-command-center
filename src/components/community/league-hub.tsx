@@ -9,8 +9,7 @@ import { StrengthBoardSlide } from "@/components/portal/strength-board";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
 import { inRecapWindow } from "@/lib/league-recap";
 import { RankingsSpotlight } from "@/components/community/rankings-spotlight";
-import type { SpotlightKey } from "@/lib/rankings-spotlight";
-import type { BoardSource } from "@/lib/strength-board";
+import type { SpotlightSlide, StrengthView } from "@/lib/rankings-spotlight";
 
 export type RankingsBoard = "monthly" | "strength";
 
@@ -54,7 +53,7 @@ export function RankingsHub() {
   });
   const [board, setBoardState] = useState<RankingsBoard>(() => rankingsFromHash() ?? "monthly");
   // a podium tapped in the spotlight: which view of the board to open on (a new `n` remounts it there)
-  const [opened, setOpened] = useState<{ n: number; source: BoardSource; previous: boolean }>({ n: 0, source: "all", previous: false });
+  const [opened, setOpened] = useState<{ n: number; view: StrengthView | null; previous: boolean }>({ n: 0, view: null, previous: false });
   const tabsRef = useRef<HTMLDivElement | null>(null);
   // which way the new board slides in (from a swipe or a tab tap)
   const [enterFrom, setEnterFrom] = useState<"left" | "right" | null>(null);
@@ -63,7 +62,7 @@ export function RankingsHub() {
     setEnterFrom(next === "strength" ? "right" : "left");
     setBoardState(next);
     // a tab or a swipe opens a board as usual (not on whatever a podium tap asked for)
-    setOpened((o) => ({ ...o, source: "all", previous: false }));
+    setOpened((o) => ({ ...o, view: null, previous: false }));
   };
 
   // Swipe sideways on the board to switch Monthly ⇄ Strength (the tabs follow).
@@ -89,11 +88,12 @@ export function RankingsHub() {
     if (next) setBoard(next);
   };
 
-  const openFromSpotlight = (key: SpotlightKey) => {
-    const next: RankingsBoard = key === "monthly" || key === "fame" ? "monthly" : "strength";
+  const openFromSpotlight = (slide: SpotlightSlide) => {
+    const next: RankingsBoard = slide.board === "strength" ? "strength" : "monthly";
     setEnterFrom(next === board ? null : next === "strength" ? "right" : "left");
     setBoardState(next);
-    setOpened((o) => ({ n: o.n + 1, source: key === "competition" ? "meets" : "all", previous: key === "fame" }));
+    // Women · Heaviest total opens the board on Women, Heaviest; Champions on last month's standings
+    setOpened((o) => ({ n: o.n + 1, view: slide.view ?? null, previous: slide.board === "champions" }));
     // the board sits right under the spotlight: bring it up
     requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
@@ -103,7 +103,7 @@ export function RankingsHub() {
       {/* last month's recap: the banner up here in recap week (news); the rest of the month it's a row under the Monthly board */}
       {inRecapWindow() && <LeagueRecapButton />}
       {/* the other boards' podiums, flipping (pause-able); tap one to open that board */}
-      <RankingsSpotlight onOpen={openFromSpotlight} skip={board === "monthly" ? "monthly" : "strength"} />
+      <RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} />
       <div ref={tabsRef} className="grid scroll-mt-3 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
         {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (
           <button
@@ -134,7 +134,7 @@ export function RankingsHub() {
       >
       {board === "strength" ? (
         <section data-standing="strength" className="overflow-hidden rounded-2xl border bg-card">
-          <StrengthBoardSlide initialSource={opened.source} />
+          <StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />
         </section>
       ) : client?.id ? (
         <AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />

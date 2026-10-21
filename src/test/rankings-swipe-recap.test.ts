@@ -63,13 +63,18 @@ describe("Monthly board: you first, one board, the rest folded", () => {
   });
 });
 
-describe("Recap: on top in recap week, a quiet row under the board after, never dismissible", () => {
-  it("the banner above the Monthly / Strength switch only in recap week; then one row under the board; no ✕ or hidden state", () => {
+describe("Recap: on top in recap week, a big tile under the board after, never dismissible", () => {
+  it("the banner above the Monthly / Strength switch only in recap week; then one tile under the board; no ✕ or hidden state", () => {
     expect(hub).toContain("{inRecapWindow() && <LeagueRecapButton />}");
     expect(hub.indexOf("<LeagueRecapButton />")).toBeLessThan(hub.indexOf('aria-label="Leaderboard"'));
     // never both: the row is the rest of the month
-    expect(card).toContain('{!inRecapWindow() && <LeagueRecapButton variant="row" />}');
-    expect(card.indexOf('<LeagueRecapButton variant="row" />')).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
+    expect(card).toContain('{!inRecapWindow() && <LeagueRecapButton variant="tile" />}');
+    expect(card.indexOf('<LeagueRecapButton variant="tile" />')).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
+    // big enough to find: a 56px video-style thumbnail with the play button, your finish under the title
+    const tile = recap.slice(recap.indexOf('if (variant === "tile")'));
+    expect(tile).toContain('className="grid h-14 w-14 shrink-0 place-items-center rounded-xl shadow-sm"');
+    expect(tile).toContain("text-[15px] font-black");
+    expect(tile).toContain("{result}");
     expect(recap).not.toContain("Dismiss recap");
     expect(recap).not.toContain("jf-recap-dismissed");
     expect(recap).not.toMatch(/localStorage/);
