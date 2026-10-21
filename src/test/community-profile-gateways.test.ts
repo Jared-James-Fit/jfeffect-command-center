@@ -10,8 +10,8 @@ describe("ways into a profile (Instagram, TikTok, Strava)", () => {
     expect(stories).toContain("window.setTimeout(() => onOpenPerson(a), 230);");
     expect(stories).toContain('aria-label={group.mine ? "Open your profile" : `Open ${who.name}\'s profile`} data-story-profile');
     expect(stories).toContain("data-story-profile-name");
-    // who saw your story (its Activity), and who answered its sticker, open the same way
-    expect(stories).toContain('<PostActivitySheet postId={activity ? post.id : null} start={activity ?? "all"} story moments={moments} onPick={onPick} onClose={() => setActivity(null)} onOpenAuthor={onOpenPerson} />');
+    // who saw your story (its viewers), and who answered its sticker, open the same way
+    expect(stories).toContain("onOpenAuthor={onOpenPerson}\n        renderPreview={(m) => <StoryFrame post={m} unit={unit} />}");
     expect(stories).toContain("<StorySticker\n                post={post}\n                onComposing={setComposing}\n                onOpenPerson={openPerson}");
     expect(read("src/components/community/story-sticker.tsx")).toContain("data-sticker-answer-person");
     expect(read("src/components/community/community-screen.tsx")).toContain("onOpenPerson={openAuthor}");
