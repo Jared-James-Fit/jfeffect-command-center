@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { isUseReversal } from "@/lib/sessions-inventory";
 
 /**
  * Shared helpers for PT session management (PT Calendar + edit dialog).
@@ -77,8 +78,9 @@ export function creditImpact(
   const usedCount = events
     .filter((e) => e.event_type === "used")
     .reduce((s, e) => s + -Number(e.session_count ?? 0), 0);
+  // A moved session has two 'used' rows and one reversal: still one used.
   const revertedCount = events
-    .filter((e) => e.event_type === "adjusted" && e.source === "revert_on_uncomplete")
+    .filter((e) => isUseReversal(e))
     .reduce((s, e) => s + Number(e.session_count ?? 0), 0);
   const outstanding = Math.max(reservedCount - releasedCount, 0);
   const netUsed = Math.max(usedCount - revertedCount, 0);
