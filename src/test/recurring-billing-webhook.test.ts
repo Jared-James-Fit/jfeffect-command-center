@@ -230,6 +230,32 @@ describe("Stripe webhook — recurring billing sync", () => {
     expect(p.cancel_at_period_end).toBe(false);
   });
 
+  it("customer.subscription.deleted on a paid-off installment plan marks it Paid, not Cancelled", async () => {
+    // 4 × $160 + GST, all four collected: the subscription ended because it was done.
+    Object.assign(purchaseRow, {
+      payment_status: "Active Subscription", service_status: "Active", is_recurring: true,
+      number_of_payments: 4, installment_amount: 160, contract_value_cents: 64000,
+      amount_paid_cents: 67200, amount_tax_paid_cents: 3200,
+    });
+    try {
+      const res = await postEvent({
+        id: "evt_sub_deleted_paid_plan",
+        type: "customer.subscription.deleted",
+        livemode: false,
+        data: { object: { id: "sub_test", customer: "cus_test", status: "canceled", metadata: {} } },
+      });
+      expect(res.status).toBe(200);
+      const p = lastPurchaseUpdate();
+      expect(p.payment_status).toBe("Paid");
+      expect(p.is_recurring).toBe(false);
+      expect(p.service_status).toBeUndefined();
+      expect(p.stripe_subscription_status).toBe("canceled");
+    } finally {
+      for (const k of ["number_of_payments", "installment_amount", "contract_value_cents", "amount_paid_cents", "amount_tax_paid_cents"]) delete (purchaseRow as any)[k];
+      Object.assign(purchaseRow, { payment_status: "Active Subscription", service_status: "Active", is_recurring: true });
+    }
+  });
+
   it("invoice.payment_succeeded rolls next_billing_date forward and does not duplicate purchases", async () => {
     const periodEnd = Math.floor(new Date("2027-03-10T00:00:00Z").getTime() / 1000);
     const res = await postEvent({

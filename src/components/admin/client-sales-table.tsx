@@ -73,7 +73,7 @@ function resolveSaleStatus(r: any, d: PaymentDisplay): { label: string; tone: st
   if (kind === "free") return { label: "Free", tone: TONE.muted };
   const end = r.term_end_date ?? r.package_expiry_date ?? null;
   const expired = end ? new Date(`${String(end).slice(0, 10)}T23:59:59`) < new Date() : false;
-  if (expired) return { label: "Expired", tone: TONE.muted };
+  if (expired) return { label: d.isPaidInFull ? "Completed" : "Expired", tone: TONE.muted };
   if (d.isPaidInFull) return { label: "Paid in Full", tone: TONE.ok };
   if (d.status === "partially_paid") return { label: "Partially Paid", tone: TONE.warn };
   if (d.status === "unpaid" || d.status === "past_due") return { label: "Past Due", tone: TONE.bad };
@@ -230,7 +230,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
         <ul className="space-y-3 md:hidden">{rows.map(({ raw, display, status, next }) => (
           <li key={raw.id} className={`rounded-lg border border-border bg-secondary/20 p-3 space-y-2 ${raw.archived_at ? "opacity-70" : ""}`}>
             <div className="flex items-start justify-between gap-2"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="min-w-0"><div className="truncate font-semibold">{raw.offer_name ?? "Product"}</div><div className="text-xs text-muted-foreground">{raw.offer_type ?? "—"}</div></Link><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></div>
-            <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}<span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>{display.amountOutstanding > 0 && <Badge variant="outline" className={TONE.warn}>{formatMoney(display.amountOutstanding, display.currency)} remaining</Badge>}</div>
+            <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}<span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>{display.amountOutstanding > 0 && <Badge variant="outline" className={TONE.warn}>{formatMoney(display.amountOutstanding, display.currency)}{display.amountTaxPaid > 0 ? " + GST" : ""} left</Badge>}</div>
             <InstallmentSummary display={display} />
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs"><Field label="Date added" value={fmtDate(raw.purchased_at) ?? "—"} /><Field label="Start" value={fmtDate(raw.term_start_date) ?? "Not set"} /><Field label="End" value={fmtDate(raw.term_end_date) ?? "Not set"} /><div><dt className="text-muted-foreground">Next payment</dt><dd className={next.tone}>{next.text}</dd></div></dl>
             {next.helper && <p className="text-[11px] text-muted-foreground">{next.helper}</p>}
@@ -350,10 +350,14 @@ function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMark
 }
 
 function InstallmentSummary({ display }: { display: PaymentDisplay }) {
+  // Prices are stored before tax and payments include it: say so, and show
+  // what was actually paid whenever it differs from the price.
+  const tax = display.amountTaxPaid > 0 ? " + GST" : "";
+  const money = (n: number) => formatMoney(n, display.currency);
   const plan = display.installmentPlan;
-  // Prices are stored before tax and payments include GST, so show what was
-  // actually paid whenever it differs from the price.
-  const paidDiffers = display.amountPaid > 0 && Math.abs(display.amountPaid - display.contractTotal) >= 0.01;
-  if (!plan) return <div className="text-xs text-muted-foreground tabular-nums">{formatMoney(display.contractTotal, display.currency)}{paidDiffers && ` · ${formatMoney(display.amountPaid, display.currency)} paid`}{display.amountOutstanding > 0 && ` · ${formatMoney(display.amountOutstanding, display.currency)} remaining`}</div>;
-  return <div className="text-xs text-muted-foreground tabular-nums"><div>{formatMoney(plan.contractTotal, display.currency)} total · {formatMoney(plan.amountPaid, display.currency)} paid · {formatMoney(plan.amountRemaining, display.currency)} remaining</div><div>{plan.numberOfPayments} × {formatMoney(plan.installmentAmount, display.currency)} · {plan.paymentsMade} / {plan.numberOfPayments} paid</div></div>;
+  if (!plan) {
+    const paidDiffers = display.amountPaid > 0 && Math.abs(display.amountPaid - display.contractTotal) >= 0.01;
+    return <div className="text-xs text-muted-foreground tabular-nums">{money(display.contractTotal)}{tax}{paidDiffers && ` · ${money(display.amountPaid)} paid`}{display.amountOutstanding > 0 && ` · ${money(display.amountOutstanding)}${tax} left`}</div>;
+  }
+  return <div className="text-xs text-muted-foreground tabular-nums"><div>{money(plan.contractTotal)}{tax} total · {money(plan.amountPaid)} paid{plan.amountRemaining > 0 && ` · ${money(plan.amountRemaining)}${tax} left`}</div><div>{plan.numberOfPayments} × {money(plan.installmentAmount)}{tax} · {plan.paymentsMade} / {plan.numberOfPayments} paid</div></div>;
 }

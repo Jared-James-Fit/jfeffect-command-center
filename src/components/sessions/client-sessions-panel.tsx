@@ -30,12 +30,26 @@ import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { deviceTodayISO } from "@/lib/schedule-time";
 import { useAuth } from "@/lib/auth";
 import { listenChannel } from "@/lib/realtime-channel";
+import { sessionPriceCents } from "@/lib/client-owed";
 
 const ADJUST_REASONS = ["Bonus session", "Complimentary", "Correction", "Refund / manual adjustment", "No-show deduction", "Other"];
 
 // Local date, not UTC: after 7 PM in Winnipeg the UTC date is already tomorrow.
 function todayISO() {
   return deviceTodayISO();
+}
+
+/** Sessions trained beyond what was bought: what they're worth at the latest package's price. */
+function UnbilledNote({ sessions, priceCents }: { sessions: number; priceCents: number | null }) {
+  const money = (cents: number) => new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(cents / 100);
+  return (
+    <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
+      <strong>{sessions} session{sessions === 1 ? "" : "s"} not paid for yet</strong>
+      {priceCents
+        ? <> · {money(sessions * priceCents)} before tax at {money(priceCents)} each (latest package price). Bill them on the next package so they come off.</>
+        : <>. Add a sale with sessions so they come off.</>}
+    </p>
+  );
 }
 
 function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "primary" | "warning" | "success" }) {
@@ -121,7 +135,7 @@ export function ClientSessionsPanel({
     queryFn: async () => {
       const { data } = await supabase
         .from("purchase_records")
-        .select("id, offer_name, payment_status, contract_value_cents, full_payable_amount, amount_paid_cents, amount_outstanding_cents, currency, sessions_purchased, package_expiry_date, purchased_at, created_at, stripe_checkout_session_id")
+        .select("id, offer_name, payment_status, contract_value_cents, full_payable_amount, installment_amount, number_of_payments, is_recurring, amount_paid_cents, amount_tax_paid_cents, amount_outstanding_cents, currency, sessions_purchased, package_expiry_date, purchased_at, created_at, archived_at, stripe_checkout_session_id")
         .eq("client_id", clientId)
         .gt("sessions_purchased", 0)
         .order("created_at", { ascending: false });
@@ -192,6 +206,7 @@ export function ClientSessionsPanel({
         <p className="text-[11px] text-muted-foreground">
           Available to book: <strong className="text-foreground">{summary.available}</strong> (remaining minus scheduled).
         </p>
+        {summary.overdrawn > 0 && <UnbilledNote sessions={summary.overdrawn} priceCents={sessionPriceCents(purchases)} />}
 
         {isAdmin && (
           <div className="flex flex-wrap gap-2">

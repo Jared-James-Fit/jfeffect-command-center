@@ -25,6 +25,32 @@ describe("resolveInstallmentPlan", () => {
     expect(resolveInstallmentPlan({ full_payable_amount: 200, is_recurring: true })).toBeNull();
   });
 
+  it("compares a before-tax price with payments that include GST (Marc: 2 of 4 × $160 + GST)", () => {
+    const plan = resolveInstallmentPlan({
+      contract_value_cents: 64000,
+      installment_amount: 160,
+      number_of_payments: 4,
+      amount_paid_cents: 33600,
+      amount_tax_paid_cents: 1600,
+      is_recurring: true,
+    });
+    expect(plan!.amountPaid).toBe(336);
+    expect(plan!.amountRemaining).toBe(320);
+    expect(plan!.paymentsMade).toBe(2);
+  });
+
+  it("counts a plan paid off early in fewer payments as done (210 + 210 + 420 on 4 × $200)", () => {
+    const plan = resolveInstallmentPlan({
+      contract_value_cents: 80000,
+      installment_amount: 200,
+      number_of_payments: 4,
+      amount_paid_cents: 84000,
+      amount_tax_paid_cents: 4000,
+    });
+    expect(plan!.amountRemaining).toBe(0);
+    expect(plan!.paymentsMade).toBe(4);
+  });
+
   it("prefers a stored contract value when present", () => {
     const plan = resolveInstallmentPlan({
       contract_value_cents: 90000,
