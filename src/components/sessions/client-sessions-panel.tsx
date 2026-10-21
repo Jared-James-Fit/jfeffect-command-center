@@ -185,7 +185,9 @@ export function ClientSessionsPanel({
           <Stat label="Purchased" value={summary.purchased} />
           <Stat label="Used" value={summary.used} />
           <Stat label="Scheduled" value={summary.scheduled} tone={needsReview.length > 0 ? "warning" : undefined} />
-          <Stat label="Remaining" value={summary.remaining} tone="primary" />
+          {summary.overdrawn > 0
+            ? <Stat label="Over by" value={summary.overdrawn} tone="warning" />
+            : <Stat label="Remaining" value={summary.remaining} tone="primary" />}
         </div>
         <p className="text-[11px] text-muted-foreground">
           Available to book: <strong className="text-foreground">{summary.available}</strong> (remaining minus scheduled).

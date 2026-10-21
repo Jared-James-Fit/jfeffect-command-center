@@ -160,7 +160,7 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
       ? p.amount_paid_cents
       : Math.round(toNum(p.amount_paid) * 100);
   const installmentPlan = resolveInstallmentPlan(p);
-  const contractCents =
+  const storedContractCents =
     p.contract_value_cents != null
       ? p.contract_value_cents
       : installmentPlan
@@ -168,6 +168,9 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
         // the single-installment amount stored in full_payable_amount.
         ? Math.round(installmentPlan.contractTotal * 100)
         : Math.round(toNum(p.full_payable_amount) * 100);
+  // A sale recorded without a price (older Stripe backfills) is worth what was
+  // paid. Without this it reads as a $0.00 "Free" product.
+  const contractCents = storedContractCents > 0 ? storedContractCents : Math.max(storedContractCents, paidCents);
   const refundedCents = p.amount_refunded_cents ?? 0;
 
   const amountPaid = centsToMajor(paidCents);
