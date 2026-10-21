@@ -225,7 +225,7 @@ export function PostActivitySheet({ postId, start = "all", onClose, onOpenAuthor
   );
 }
 
-/** One person: their photo with what they did on it (❤️ / their reaction, ✈️ shared, 🔁 reposted), the name, and a note when they shared it. */
+/** One person: their photo with what they did on it (❤️ / their reaction, ✈️ shared, 🔁 reposted), the name, and under it a note when they shared it, else their @username. */
 function PersonRow({ p, onOpen, follow = false }: { p: ActivityPerson; onOpen?: () => void; follow?: boolean }) {
   const note = activityNote(p);
   const badge = p.shared_at ? (
@@ -248,7 +248,8 @@ function PersonRow({ p, onOpen, follow = false }: { p: ActivityPerson; onOpen?: 
             <span className="truncate">{p.name}</span>
             {p.is_coach && <BadgeCheck className="h-4 w-4 shrink-0 fill-primary text-primary-foreground" aria-label="Coach" />}
           </span>
-          {note && <span className="block truncate text-[13px] text-muted-foreground">{note}</span>}
+          {/* Instagram's second line: what they did with it, else their @username */}
+          {(note || p.username) && <span className="block truncate text-[13px] text-muted-foreground">{note ?? `@${p.username}`}</span>}
         </span>
       </button>
       {follow && <FollowIfNot p={p} />}

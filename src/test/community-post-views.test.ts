@@ -38,7 +38,7 @@ describe("post views", () => {
     expect(everywhere).toContain("WHERE x.viewer IS NOT NULL AND x.viewer IS DISTINCT FROM p.author_user_id");
   });
   it("no viewing privately (Instagram's): every viewer is named, except views made while it was still a switch", () => {
-    const named = read("supabase/migrations/20261222090000_views_always_named.sql");
+    const named = read("supabase/migrations/20261224090000_views_always_named.sql");
     expect(named).toContain("ADD CONSTRAINT community_profiles_views_named CHECK (NOT private_views);");
     expect(named).toContain("WHERE v.post_id = _post_id AND NOT v.anonymous");
     expect(ui).toContain("<PostActivitySheet postId={open ? post.id : null}");

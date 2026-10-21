@@ -5,7 +5,7 @@ import { shareCardWords } from "@/lib/story-reply";
 
 const read = (f: string) => readFileSync(f, "utf8");
 const sql = read("supabase/migrations/20261212090000_story_shares_activity.sql");
-const named = read("supabase/migrations/20261222090000_views_always_named.sql");
+const named = read("supabase/migrations/20261224090000_views_always_named.sql");
 
 const who = (user_id: string, x: Partial<ActivityPerson> = {}): ActivityPerson => ({ user_id, name: user_id, avatar_url: null, is_coach: false, ...x });
 const post = (x: Partial<CommunityPost>) =>
@@ -136,8 +136,9 @@ describe("Activity: views, likes, shares and reposts, for the poster only", () =
     expect(read("src/components/community/post-views.tsx")).toContain("<PostActivitySheet postId={open ? post.id : null}");
   });
 
-  it("people you follow get no Follow button (no column of Following)", () => {
+  it("people you follow get no Follow button (no column of Following); under a name, what they did, else their @username", () => {
     const ui = read("src/components/community/post-activity.tsx");
+    expect(ui).toContain("{note ?? `@${p.username}`}");
     expect(ui).toContain('if (!state || label === "Following" || label === "Requested") return null;');
   });
 });
