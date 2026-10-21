@@ -15,7 +15,7 @@ describe("My tasks / Team boards", () => {
     { id: "t-none", owner_user_id: null, assigned_to: null },
   ];
 
-  it("My tasks = my private tasks + team tasks assigned to me", () => {
+  it("My tasks = my private tasks + team tasks I'm on", () => {
     expect(splitTasks(tasks, ME).mine.map((t) => t.id)).toEqual(["p-me", "t-me"]);
   });
 

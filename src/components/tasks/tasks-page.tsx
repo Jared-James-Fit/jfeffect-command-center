@@ -24,7 +24,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Label } from "@/components/ui/label";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem,
   DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -37,8 +37,10 @@ import { useAuth } from "@/lib/auth";
 import {
   QUADRANTS, fetchTasks, createTask, toggleTaskDone, fetchTeamMembers, splitTasks, firstName,
   updateTask, deleteTask, bulkSetTaskStatus, bulkMoveTasks, bulkAssignTasks, bulkDeleteTasksByIds,
+  taskPeople, othersOn, sendToTeamPeople, togglePerson, newlyOn, peopleLabel,
   type TaskRow, type TaskQuadrant, type TaskScope, type TeamMember,
 } from "@/lib/tasks";
+import { notifyTaskSharedFn } from "@/lib/tasks.functions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskSwipeRow } from "@/components/tasks/task-swipe-row";
 import { cn } from "@/lib/utils";
@@ -167,11 +169,20 @@ export function TasksPage({
   );
 
   const memberById = useMemo(() => new Map(teamMembers.map((m) => [m.user_id, m])), [teamMembers]);
-  const nameOf = useCallback(
-    (t: Pick<TaskRow, "assigned_to" | "assignee_name">) =>
-      (t.assigned_to && memberById.get(t.assigned_to)?.full_name) || t.assignee_name || null,
-    [memberById],
+  /** Who's on a task, by name ("Me" for you), in the order they were added. */
+  const namesOf = useCallback(
+    (t: TaskRow, opts?: { others?: boolean }): string[] =>
+      (opts?.others ? othersOn(t, me) : taskPeople(t)).map((u) =>
+        u === me ? "Me" : memberById.get(u)?.full_name || (u === t.assigned_to ? t.assignee_name : null) || "Teammate"),
+    [memberById, me],
   );
+  /** Tell whoever was just put on these tasks (never you). Best effort. */
+  const announce = useCallback((taskIds: string[], to: string[]) => {
+    const ids = taskIds.filter((id) => !id.startsWith("temp-"));
+    const people = [...new Set(to)].filter((u) => u && u !== me);
+    if (!ids.length || !people.length) return;
+    void notifyTaskSharedFn({ data: { taskIds: ids, to: people } }).catch(() => {});
+  }, [me]);
 
   /** Who a new team task is for: whoever the board is filtered to. */
   const filterAssignee = (): TeamMember | null => {
@@ -187,25 +198,25 @@ export function TasksPage({
     const target = opts?.board ?? board;
     const assignee = target === "team" ? (opts?.assignee ?? null) : null;
     const owner = target === "mine" ? me : null;
+    const people = assignee ? [assignee.user_id] : [];
     const temp: TaskRow = {
       id: `temp-${newId()}`, title: t, notes: null, quadrant, status: "open", priority: 0,
-      due_at: null, created_by: null, assigned_to: assignee?.user_id ?? null, assignee_name: assignee?.full_name || null,
+      due_at: null, created_by: null, assigned_to: people[0] ?? null, assignee_name: assignee?.full_name || null, assignees: people,
       completed_at: null, completed_by: null, position: 0, scope, owner_user_id: owner,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     patchLocal((rows) => [temp, ...rows]);
+    let id: string;
     try {
-      await createTask({
-        title: t, quadrant, scope, owner_user_id: owner,
-        assigned_to: assignee?.user_id ?? null, assignee_name: assignee?.full_name || null,
-      });
+      id = await createTask({ title: t, quadrant, scope, owner_user_id: owner, assignees: people });
     } catch (e: any) {
       patchLocal((rows) => rows.filter((r) => r.id !== temp.id));
       toast.error(e?.message ?? "Could not add task");
       return;
     }
+    announce([id], people);
     refresh();
-  }, [board, me, patchLocal, refresh, scope]);
+  }, [board, me, patchLocal, refresh, scope, announce]);
 
   const quickAdd = (raw: string, quadrant: TaskQuadrant) => {
     if (!raw.trim()) return;
@@ -241,14 +252,16 @@ export function TasksPage({
   const matchesSearch = useCallback((t: TaskRow) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return [t.title, t.notes ?? "", nameOf(t) ?? ""].join(" ").toLowerCase().includes(q);
-  }, [search, nameOf]);
+    return [t.title, t.notes ?? "", ...namesOf(t)].join(" ").toLowerCase().includes(q);
+  }, [search, namesOf]);
 
+  // A shared task counts for everyone on it.
   const matchesPerson = useCallback((t: TaskRow) => {
     if (board !== "team" || person === "all") return true;
-    if (person === "me") return !!me && t.assigned_to === me;
-    if (person === "none") return !t.assigned_to;
-    return t.assigned_to === person;
+    const people = taskPeople(t);
+    if (person === "me") return !!me && people.includes(me);
+    if (person === "none") return people.length === 0;
+    return people.includes(person);
   }, [board, person, me]);
 
   const visibleOpen = useMemo(
@@ -291,23 +304,33 @@ export function TasksPage({
     try { await deleteTask(t.id); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
     refresh();
   };
-  const patchOne = async (t: TaskRow, patch: Partial<TaskRow>) => {
-    patchLocal((rows) => rows.map((r) => (r.id === t.id ? { ...r, ...patch } : r)));
-    try { await updateTask(t.id, patch as any); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  /** Resolves true once it's saved (a failure is put back by the refresh and toasted). */
+  const patchOne = async (t: TaskRow, patch: Partial<TaskRow>): Promise<boolean> => {
+    // The first person on it shows straight away; the database keeps assigned_to in step.
+    const local = patch.assignees ? { ...patch, assigned_to: patch.assignees[0] ?? null } : patch;
+    patchLocal((rows) => rows.map((r) => (r.id === t.id ? { ...r, ...local } : r)));
+    let ok = true;
+    try { await updateTask(t.id, patch as any); } catch (e: any) { ok = false; toast.error(e?.message ?? "Failed"); }
     refresh();
+    return ok;
   };
-  const assignOne = (t: TaskRow, m: TeamMember | null) =>
-    patchOne(t, { assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null });
-  /** Personal → team board (optionally assigned). */
-  const shareOne = (t: TaskRow, m: TeamMember | null) => {
-    void patchOne(t, { owner_user_id: null, assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null });
-    toast.success(m ? `On the team board for ${firstName(m.full_name)}` : "On the team board");
+  /** Put someone on a team task or take them off; whoever's added hears about it. */
+  const togglePersonOne = async (t: TaskRow, userId: string) => {
+    const before = taskPeople(t);
+    const after = togglePerson(before, userId);
+    if (await patchOne(t, { assignees: after })) announce([t.id], newlyOn(before, after, me));
   };
-  /** Team board → my private tasks. */
-  const makePrivate = (t: TaskRow) => {
+  /** Private → shared: whoever it's sent to joins you on it (both of you have it in My tasks). */
+  const shareOne = async (t: TaskRow, m: TeamMember | null) => {
+    const people = sendToTeamPeople(me, m?.user_id ?? null);
+    if (!(await patchOne(t, { owner_user_id: null, assignees: people }))) return;
+    announce([t.id], people);
+    toast.success(m && m.user_id !== me ? `Shared with ${firstName(m.full_name)}` : "On the team board");
+  };
+  /** Team board → my private tasks (nobody else on it any more). */
+  const makePrivate = async (t: TaskRow) => {
     if (!me) return;
-    void patchOne(t, { owner_user_id: me, assigned_to: null, assignee_name: null });
-    toast.success("Moved to your private tasks");
+    if (await patchOne(t, { owner_user_id: me, assignees: [] })) toast.success("Moved to your private tasks");
   };
 
   // ---- bulk actions ----
@@ -345,9 +368,12 @@ export function TasksPage({
     const ids = effectiveSelected;
     if (!ids.length) return;
     const set = new Set(ids);
-    patchLocal((rows) => rows.map((r) => (set.has(r.id) ? { ...r, assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null } : r)));
+    patchLocal((rows) => rows.map((r) => (set.has(r.id) ? { ...r, assignees: m ? [m.user_id] : [], assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null } : r)));
     exitSelect();
-    try { await bulkAssignTasks(ids, m); } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+    try {
+      await bulkAssignTasks(ids, m);
+      if (m) announce(ids, [m.user_id]);
+    } catch (e: any) { toast.error(e?.message ?? "Failed"); }
     refresh();
   };
   const runDelete = async (ids: string[]) => {
@@ -361,13 +387,28 @@ export function TasksPage({
   };
 
   const rowProps: RowProps = {
-    selectMode, selected, toggleSelected, quadStyles, teamMembers, me, board, nameOf,
-    onComplete: completeOne, onDelete: deleteOne, onPatch: patchOne, onAssign: assignOne,
+    selectMode, selected, toggleSelected, quadStyles, teamMembers, me, board, namesOf,
+    onComplete: completeOne, onDelete: deleteOne, onPatch: patchOne, onTogglePerson: togglePersonOne,
     onShare: shareOne, onMakePrivate: makePrivate, onOpen: (t) => setDetailId(t.id), isMobile,
   };
 
   const detailTask = detailId ? tasks.find((t) => t.id === detailId) ?? null : null;
   useEffect(() => { if (detailId && !detailTask) setDetailId(null); }, [detailId, detailTask]);
+
+  // A push for a shared task opens it (#task=<id>), on the board that has it.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || typeof window === "undefined") return;
+    const id = window.location.hash.match(/(?:^#|&)task=([0-9a-f-]{36})/i)?.[1];
+    if (!id) { deepLinked.current = true; return; }
+    const t = tasks.find((x) => x.id === id);
+    if (!t) return; // still loading
+    deepLinked.current = true;
+    switchBoard(splitTasks([t], me).mine.length ? "mine" : "team");
+    setDetailId(id);
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, me]);
 
   const PERSONS: { key: PersonFilter; label: string }[] = [
     { key: "all", label: "Everyone" },
@@ -426,12 +467,13 @@ export function TasksPage({
           quadStyles={quadStyles}
           teamMembers={teamMembers}
           onCreateTask={async (input) => {
-            const assignee = input.team ? input.assignee ?? null : null;
+            // sent to someone: shared with them, like a task sent to the team
+            const people = input.team ? sendToTeamPeople(me, input.assignee?.user_id ?? null) : [];
             const id = await createTask({
               title: input.title, notes: input.notes, quadrant: input.quadrant, scope,
-              owner_user_id: input.team ? null : me,
-              assigned_to: assignee?.user_id ?? null, assignee_name: assignee?.full_name ?? null,
+              owner_user_id: input.team ? null : me, assignees: people,
             });
+            announce([id], people);
             refresh();
             return id;
           }}
@@ -593,7 +635,7 @@ export function TasksPage({
                     style={quadStyles[q.key]}
                     tasks={byQuadrant[q.key]}
                     isMobile={isMobile}
-                    nameOf={board === "team" ? nameOf : undefined}
+                    whoOf={(t) => peopleLabel(namesOf(t, { others: board === "mine" }))}
                     onOpen={() => setOpenQuadrant(q.key)}
                   />
                 ))}
@@ -709,9 +751,10 @@ export function TasksPage({
         quadStyles={quadStyles}
         teamMembers={teamMembers}
         me={me}
-        nameOf={nameOf}
+        namesOf={namesOf}
         onClose={() => setDetailId(null)}
         onPatch={patchOne}
+        onTogglePerson={togglePersonOne}
         onComplete={completeOne}
         onDelete={(t) => setConfirmDelete({ ids: [t.id], label: `“${t.title}”` })}
         onShare={shareOne}
@@ -753,31 +796,46 @@ type RowProps = {
   teamMembers: TeamMember[];
   me: string | null;
   board: Board;
-  nameOf: (t: Pick<TaskRow, "assigned_to" | "assignee_name">) => string | null;
+  namesOf: (t: TaskRow, opts?: { others?: boolean }) => string[];
   onComplete: (t: TaskRow, done: boolean) => void;
   onDelete: (t: TaskRow) => void;
   onPatch: (t: TaskRow, patch: Partial<TaskRow>) => void;
-  onAssign: (t: TaskRow, m: TeamMember | null) => void;
+  onTogglePerson: (t: TaskRow, userId: string) => void;
   onShare: (t: TaskRow, m: TeamMember | null) => void;
   onMakePrivate: (t: TaskRow) => void;
   onOpen: (t: TaskRow) => void;
   isMobile: boolean;
 };
 
-/** Who a team task is for, as a menu: Unassigned + every teammate. */
-function PeopleItems({ members, me, current, onPick }: { members: TeamMember[]; me: string | null; current?: string | null; onPick: (m: TeamMember | null) => void }) {
+/** A stack of round initials: who's on a shared task, at a glance. */
+function PeopleFaces({ names, size = 16 }: { names: string[]; size?: number }) {
+  const shown = names.slice(0, 3);
   return (
-    <>
-      <DropdownMenuItem onClick={() => onPick(null)}>
-        {current === null ? <Check className="mr-2 h-4 w-4" /> : <span className="mr-2 w-4" />}Unassigned
-      </DropdownMenuItem>
-      {members.map((m) => (
-        <DropdownMenuItem key={m.user_id} onClick={() => onPick(m)}>
-          {current === m.user_id ? <Check className="mr-2 h-4 w-4" /> : <span className="mr-2 w-4" />}
-          {m.user_id === me ? "Me" : m.full_name}
-        </DropdownMenuItem>
+    <span aria-hidden className="inline-flex -space-x-1">
+      {shown.map((n, i) => (
+        <span
+          key={`${n}-${i}`}
+          className="grid place-items-center rounded-full bg-primary/15 font-black uppercase text-primary ring-2 ring-card"
+          style={{ width: size, height: size, fontSize: size * 0.5 }}
+        >
+          {(n === "Me" ? "Me" : firstName(n)).slice(0, n === "Me" ? 2 : 1)}
+        </span>
       ))}
-    </>
+    </span>
+  );
+}
+
+/**
+ * Who a task is shared with, on its row: the others' faces and names ("with
+ * Fionna") on My tasks, everyone on it on the Team board.
+ */
+function SharedWith({ names, lead }: { names: string[]; lead?: string }) {
+  if (!names.length) return null;
+  return (
+    <span className="inline-flex items-center gap-1 font-semibold text-foreground/70" data-task-shared>
+      <PeopleFaces names={names} size={14} />
+      {lead ? `${lead} ${peopleLabel(names)}` : peopleLabel(names)}
+    </span>
   );
 }
 
@@ -786,7 +844,8 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
   const qs = p.quadStyles[task.quadrant];
   const isSelected = p.selected.has(task.id);
   const personal = !!task.owner_user_id;
-  const assignee = p.nameOf(task);
+  const people = taskPeople(task);
+  const others = p.namesOf(task, { others: true });
   const notesLine = (task.notes ?? "").split("\n").map((l) => l.trim()).find(Boolean) ?? "";
 
   const meta: React.ReactNode[] = [];
@@ -798,10 +857,13 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
       </span>,
     );
   }
-  if (!personal && p.board === "mine") meta.push(<span key="team" className="inline-flex items-center gap-0.5"><Users className="h-2.5 w-2.5" />Team</span>);
-  if (!personal && p.board === "team" && assignee) {
-    meta.push(<span key="who" className="font-semibold text-foreground/70">{task.assigned_to === p.me ? "Me" : firstName(assignee)}</span>);
+  // My tasks: a shared task says who else has it; one that's only mine says it's on the team board.
+  if (!personal && p.board === "mine") {
+    meta.push(others.length
+      ? <SharedWith key="with" names={others} lead="with" />
+      : <span key="team" className="inline-flex items-center gap-0.5"><Users className="h-2.5 w-2.5" />Team</span>);
   }
+  if (!personal && p.board === "team" && people.length) meta.push(<SharedWith key="who" names={p.namesOf(task)} />);
 
   const body = (
     <li
@@ -853,14 +915,34 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger><Users className="mr-2 h-4 w-4" />Send to team</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  <PeopleItems members={p.teamMembers} me={p.me} onPick={(m) => p.onShare(task, m)} />
+                  {/* sent to someone, it's shared: you both have it */}
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Share with</DropdownMenuLabel>
+                  {p.teamMembers.filter((m) => m.user_id !== p.me).map((m) => (
+                    <DropdownMenuItem key={m.user_id} onClick={() => p.onShare(task, m)}>
+                      <UserRound className="mr-2 h-4 w-4" />{m.full_name}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => p.onShare(task, null)}>
+                    <Users className="mr-2 h-4 w-4" />Team board, no one yet
+                  </DropdownMenuItem>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             ) : (
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger><UserRound className="mr-2 h-4 w-4" />Assign</DropdownMenuSubTrigger>
+                <DropdownMenuSubTrigger><UserRound className="mr-2 h-4 w-4" />People</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
-                  <PeopleItems members={p.teamMembers} me={p.me} current={task.assigned_to} onPick={(m) => p.onAssign(task, m)} />
+                  {/* tick as many as it's for; the menu stays open */}
+                  {p.teamMembers.map((m) => (
+                    <DropdownMenuCheckboxItem
+                      key={m.user_id}
+                      checked={people.includes(m.user_id)}
+                      onSelect={(e) => e.preventDefault()}
+                      onCheckedChange={() => p.onTogglePerson(task, m.user_id)}
+                    >
+                      {m.user_id === p.me ? "Me" : m.full_name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
@@ -892,13 +974,13 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
 
 /** One quadrant of the 2×2 overview: count, the first few tasks, and a way in. */
 function QuadrantPreview({
-  style, tasks, isMobile, nameOf, onOpen,
+  style, tasks, isMobile, whoOf, onOpen,
 }: {
   style: QuadStyle;
   tasks: TaskRow[];
   isMobile: boolean;
-  /** Team board: show who each task is for. */
-  nameOf?: (t: Pick<TaskRow, "assigned_to" | "assignee_name">) => string | null;
+  /** Who each task is shared with ("" when nobody else). */
+  whoOf: (t: TaskRow) => string;
   onOpen: () => void;
 }) {
   const rows = isMobile ? PREVIEW_ROWS : PREVIEW_ROWS + 2;
@@ -927,12 +1009,16 @@ function QuadrantPreview({
       ) : (
         <ul className="flex-1 space-y-1">
           {shown.map((t) => {
-            const who = nameOf?.(t);
+            const who = whoOf(t);
             return (
               <li key={t.id} className="flex min-w-0 items-start gap-1.5 text-xs leading-snug">
                 <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
                 <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                {who && <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">{firstName(who)}</span>}
+                {who && (
+                  <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground" title={`Shared with ${who}`}>
+                    <Users className="h-2.5 w-2.5" /><span className="hidden sm:inline">{who}</span>
+                  </span>
+                )}
               </li>
             );
           })}
@@ -1055,15 +1141,16 @@ function QuadrantCustomizer({ style, onChange, onReset }: { style: QuadStyle; on
 
 /** A task opened in full: edit title and notes, category, who it's for, who sees it. */
 function TaskDetailSheet({
-  task, quadStyles, teamMembers, me, nameOf, onClose, onPatch, onComplete, onDelete, onShare, onMakePrivate,
+  task, quadStyles, teamMembers, me, namesOf, onClose, onPatch, onTogglePerson, onComplete, onDelete, onShare, onMakePrivate,
 }: {
   task: TaskRow | null;
   quadStyles: Record<TaskQuadrant, QuadStyle>;
   teamMembers: TeamMember[];
   me: string | null;
-  nameOf: (t: Pick<TaskRow, "assigned_to" | "assignee_name">) => string | null;
+  namesOf: (t: TaskRow, opts?: { others?: boolean }) => string[];
   onClose: () => void;
   onPatch: (t: TaskRow, patch: Partial<TaskRow>) => void;
+  onTogglePerson: (t: TaskRow, userId: string) => void;
   onComplete: (t: TaskRow, done: boolean) => void;
   onDelete: (t: TaskRow) => void;
   onShare: (t: TaskRow, m: TeamMember | null) => void;
@@ -1092,7 +1179,10 @@ function TaskDetailSheet({
 
   const isDone = task?.status === "done";
   const personal = !!task?.owner_user_id;
-  const assignedName = task ? nameOf(task) : null;
+  const people = task ? taskPeople(task) : [];
+  const names = task ? namesOf(task) : [];
+  const others = task ? namesOf(task, { others: true }) : [];
+  const shared = people.length > 1 || (people.length === 1 && people[0] !== me);
 
   return (
     <Sheet open={!!task} onOpenChange={(o) => !o && close()}>
@@ -1106,7 +1196,9 @@ function TaskDetailSheet({
             <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 pb-2 pt-3">
               <SheetTitle className="flex-1 truncate text-sm font-bold text-muted-foreground">
                 {personal ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" />My task · only you</span>
-                  : <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />Team task{assignedName ? ` · ${task.assigned_to === me ? "Me" : firstName(assignedName)}` : ""}</span>}
+                  : shared
+                    ? <span className="inline-flex items-center gap-1.5" data-task-shared><PeopleFaces names={names} size={18} />Shared · {peopleLabel(names)}</span>
+                    : <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />Team task{names.length ? " · Me" : ""}</span>}
               </SheetTitle>
               <SheetDescription className="sr-only">Edit this task</SheetDescription>
               <Button variant="ghost" className="h-9 px-2.5 text-sm font-semibold text-primary hover:text-primary" onClick={close}>
@@ -1175,41 +1267,56 @@ function TaskDetailSheet({
                 <div className="space-y-1.5">
                   <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Send to team</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {[null, ...teamMembers].map((m) => (
+                    {teamMembers.filter((m) => m.user_id !== me).map((m) => (
                       <button
-                        key={m?.user_id ?? "none"}
+                        key={m.user_id}
                         type="button"
                         onClick={() => onShare(task, m)}
-                        className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
                       >
-                        {m ? (m.user_id === me ? "Me" : firstName(m.full_name)) : "Team (unassigned)"}
+                        <PeopleFaces names={[m.full_name]} size={18} />Share with {firstName(m.full_name)}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => onShare(task, null)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      <Users className="h-3.5 w-3.5" />Team board
+                    </button>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Only you can see this until you send it.</p>
+                  <p className="text-[11px] text-muted-foreground">Only you can see this until you send it. Share it and you both have it, each seeing who else is on it.</p>
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Assigned to</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Who&apos;s on it</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {[null, ...teamMembers].map((m) => {
-                      const on = (task.assigned_to ?? null) === (m?.user_id ?? null);
+                    {teamMembers.map((m) => {
+                      const on = people.includes(m.user_id);
                       return (
                         <button
-                          key={m?.user_id ?? "none"}
+                          key={m.user_id}
                           type="button"
                           aria-pressed={on}
-                          onClick={() => !on && onPatch(task, { assigned_to: m?.user_id ?? null, assignee_name: m?.full_name ?? null })}
+                          onClick={() => onTogglePerson(task, m.user_id)}
                           className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                            "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
                             on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
                           )}
                         >
-                          {m ? (m.user_id === me ? "Me" : firstName(m.full_name)) : "Unassigned"}
+                          {on && <Check className="h-3.5 w-3.5" />}
+                          {m.user_id === me ? "Me" : firstName(m.full_name)}
                         </button>
                       );
                     })}
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {people.length === 0
+                      ? "Nobody yet: it's on the Team board for anyone to pick up."
+                      : others.length
+                        ? `In My tasks for ${peopleLabel(names)}. Tap a name to add or take them off.`
+                        : "In your My tasks. Tap a name to share it."}
+                  </p>
                   <button
                     type="button"
                     onClick={() => onMakePrivate(task)}
