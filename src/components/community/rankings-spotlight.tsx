@@ -1,28 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Crown, Dumbbell, Landmark, Pause, Play, Trophy } from "lucide-react";
+import { Crown, Dumbbell, Pause, Play, Scale, Trophy } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { leagueToday } from "@/lib/league-boost";
 import { previousLeagueMonth } from "@/lib/league-recap";
 import { usePerformanceLeague } from "@/lib/use-performance-league";
-import { defaultDivision, useMeetBoard, useStrengthBoard } from "@/components/portal/strength-board";
+import { defaultDivision, useStrengthBoard } from "@/components/portal/strength-board";
+import { useWeightUnit } from "@/lib/use-weight-unit";
 import {
   SPOTLIGHT_HOLD_MS,
   SPOTLIGHT_MS,
   SPOTLIGHT_PAUSED_KEY,
   spotlightSlides,
-  type SpotlightKey,
+  strengthSlideKey,
   type SpotlightPerson,
   type SpotlightSlide,
+  type StrengthView,
 } from "@/lib/rankings-spotlight";
 
 /** Each board's look: an icon and a tint, so you know which podium you're on at a glance. */
-const LOOK: Record<SpotlightKey, { Icon: typeof Trophy; tint: string; text: string }> = {
-  monthly: { Icon: Trophy, tint: "from-primary/20", text: "text-primary" },
-  strength: { Icon: Dumbbell, tint: "from-amber-400/20", text: "text-amber-500" },
-  competition: { Icon: Landmark, tint: "from-sky-400/20", text: "text-sky-500" },
-  fame: { Icon: Crown, tint: "from-violet-500/20", text: "text-violet-500" },
-};
+function look(slide: SpotlightSlide): { Icon: typeof Trophy; tint: string; text: string } {
+  if (slide.board === "monthly") return { Icon: Trophy, tint: "from-primary/20", text: "text-primary" };
+  if (slide.board === "champions") return { Icon: Crown, tint: "from-violet-500/20", text: "text-violet-500" };
+  // a scale for pound for pound (it's per bodyweight), a dumbbell for the heaviest
+  return { Icon: slide.view?.mode === "p4p" ? Scale : Dumbbell, tint: "from-amber-400/20", text: "text-amber-500" };
+}
 
 const RING = ["ring-amber-400", "ring-zinc-300 dark:ring-zinc-400", "ring-orange-400/80"];
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -51,34 +53,38 @@ function useReducedMotion() {
 
 /**
  * Crew → Rankings: every board's podium in one card at the top, flipping
- * every few seconds: this month's League, the Hall of Strength, the
- * Competition record, the Hall of Fame (last month's champions). Tap a podium
- * to open that board. It only moves while you're looking (on screen, app in
+ * every few seconds: this month's League, the Hall of Strength's top men and
+ * women (pound for pound, then heaviest total), last month's champions. Tap a
+ * podium to open that board on exactly that view. It only moves while you're looking (on screen, app in
  * front, not touching it, motion not reduced); ⏸ stops it for good on this
  * device, swipe or tap the dots to move yourself. The progress line is the
  * clock: its fill finishing is what moves it on, so pausing pauses exactly.
  */
-export function RankingsSpotlight({ onOpen, skip }: {
-  onOpen: (key: SpotlightKey) => void;
-  /** The board already open right under it: its podium isn't repeated up here. */
-  skip?: SpotlightKey;
+export function RankingsSpotlight({ onOpen, under, underView }: {
+  onOpen: (slide: SpotlightSlide) => void;
+  /** The board open right under it: its podium isn't repeated up here. */
+  under: "monthly" | "strength";
+  /** The Strength board's view when a podium opened it (else it opens on your division, pound for pound). */
+  underView?: StrengthView | null;
 }) {
   const { data: monthly = [] } = usePerformanceLeague("current");
   const { data: previous = [] } = usePerformanceLeague("previous");
   const { data: strength = [] } = useStrengthBoard();
-  const { data: meets = [] } = useMeetBoard();
+  const { unit } = useWeightUnit();
+  const division = defaultDivision(strength);
+  const shownBelow = under === "monthly" ? "monthly" : underView ? strengthSlideKey(underView) : division !== "all" ? strengthSlideKey({ mode: "p4p", division }) : null;
   const slides = useMemo(
     () =>
       spotlightSlides({
         monthly,
         previous,
         strength,
-        meets,
-        division: defaultDivision(strength),
+        division,
+        unit,
         monthStart: monthly[0]?.month_start ?? `${leagueToday().slice(0, 7)}-01`,
         previousMonthStart: previous[0]?.month_start ?? previousLeagueMonth(),
-      }).filter((s) => s.key !== skip),
-    [monthly, previous, strength, meets, skip],
+      }).filter((s) => s.key !== shownBelow),
+    [monthly, previous, strength, division, unit, shownBelow],
   );
 
   const n = slides.length;
@@ -163,7 +169,7 @@ export function RankingsSpotlight({ onOpen, skip }: {
   };
 
   if (!slide) return null;
-  const look = LOOK[slide.key];
+  const { Icon, tint, text } = look(slide);
   // 2nd · 1st · 3rd, like a real podium
   const order: [SpotlightPerson | undefined, number][] = [[slide.people[1], 1], [slide.people[0], 0], [slide.people[2], 2]];
   return (
@@ -173,7 +179,7 @@ export function RankingsSpotlight({ onOpen, skip }: {
       data-playing={playing ? "" : undefined}
       aria-roledescription="carousel"
       aria-label="Podiums"
-      className={cn("relative overflow-hidden rounded-2xl border bg-card bg-gradient-to-b to-transparent to-70% transition-colors duration-500", look.tint)}
+      className={cn("relative overflow-hidden rounded-2xl border bg-card bg-gradient-to-b to-transparent to-70% transition-colors duration-500", tint)}
     >
       <div
         // its own sideways swipe: not the page's swipe-back
@@ -213,7 +219,7 @@ export function RankingsSpotlight({ onOpen, skip }: {
         <button
           key={`${slide.key}:${at}`}
           type="button"
-          onClick={() => onOpen(slide.key)}
+          onClick={() => onOpen(slide)}
           aria-label={`${slide.title}: ${slide.people.map((p, k) => `${k + 1}. ${p.me ? "You" : p.name}, ${p.value}`).join("; ")}. Open the board`}
           className={cn(
             "block w-full px-3.5 pb-2 pt-3 text-left animate-in fade-in duration-300",
@@ -222,7 +228,7 @@ export function RankingsSpotlight({ onOpen, skip }: {
         >
           <div className="min-w-0 pr-9">
             <div className="flex min-w-0 items-center gap-1.5">
-              <look.Icon className={cn("h-4 w-4 shrink-0", look.text)} aria-hidden />
+              <Icon className={cn("h-4 w-4 shrink-0", text)} aria-hidden />
               <span className="truncate text-[15px] font-black leading-5 tracking-tight">{slide.title}</span>
             </div>
             <div className="truncate pl-[22px] text-[11px] font-semibold leading-4 text-muted-foreground">{slide.sub}</div>
