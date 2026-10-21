@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MentionText } from "@/components/community/mentions";
-import { captionBreaks, type CommunityAuthor, type CommunityMention } from "@/lib/community";
+import { captionBreaks, withHandles, type CommunityAuthor, type CommunityMention } from "@/lib/community";
 
 /** Up to this many lines, a coach post's words show whole in the feed. */
 export const NOTE_SHOW_ALL_LINES = 12;
@@ -16,8 +16,8 @@ export const NOTE_CUT_LINES = 9;
  * phone. `clamp` off (the post's own page) shows everything.
  */
 export function NoteCaption({
-  text,
-  mentions,
+  text: typed,
+  mentions: typedMentions,
   onOpenPerson,
   clamp,
 }: {
@@ -26,6 +26,8 @@ export function NoteCaption({
   onOpenPerson?: (a: CommunityAuthor) => void;
   clamp: boolean;
 }) {
+  // measured and cut as it reads: tags as @usernames
+  const { text, mentions } = useMemo(() => withHandles(typed, typedMentions), [typed, typedMentions]);
   const box = useRef<HTMLDivElement | null>(null);
   const probe = useRef<HTMLParagraphElement | null>(null);
   const [width, setWidth] = useState(0);

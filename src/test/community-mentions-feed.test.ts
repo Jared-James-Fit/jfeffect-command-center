@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { FIRST_FEED_PAGE, mentionQuery, splitMentions, suggestMentions, type CommunityMention } from "@/lib/community";
+import { FIRST_FEED_PAGE, mentionQuery, splitMentions, suggestMentions, withHandles, type CommunityMention } from "@/lib/community";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const sql = read("supabase/migrations/20261022090000_community_mentions.sql");
@@ -26,6 +26,32 @@ describe("mentions in a caption", () => {
   });
 });
 
+describe("tags read as @usernames (Instagram's)", () => {
+  const at = (name: string, text: string | null, username: string | null): CommunityMention => ({ ...who(name, text), username });
+  it("whatever the caption typed, the crew reads @username, still tappable", () => {
+    const marc = at("Marc", "Marc", "marc.lifts");
+    const shaina = at("Shaina", "Shaina", "shaina_s");
+    const out = withHandles("Marc just hit 90lbs x 12. new all time PR for Shaina on comp bench. Marc's 6th PR", [marc, shaina]);
+    expect(out.text).toBe("@marc.lifts just hit 90lbs x 12. new all time PR for @shaina_s on comp bench. @marc.lifts's 6th PR");
+    const tapped = splitMentions(out.text, out.mentions).filter((p) => p.mention);
+    expect(tapped.map((p) => p.text)).toEqual(["@marc.lifts", "@shaina_s", "@marc.lifts"]);
+    expect(tapped.map((p) => p.mention!.name)).toEqual(["Marc", "Shaina", "Marc"]);
+  });
+  it("@Name typed before usernames existed becomes the @username too; running it twice changes nothing", () => {
+    const once = withHandles("legs with @Dwayne", [at("Dwayne", "@Dwayne", "dwayne")]);
+    expect(once.text).toBe("legs with @dwayne");
+    expect(withHandles(once.text, once.mentions)).toEqual(once);
+  });
+  it("no username: the words the caption used; no tags: the caption as is", () => {
+    expect(withHandles("great week Jen", [at("Jen", "Jen", null)]).text).toBe("great week Jen");
+    expect(withHandles("just text", null)).toEqual({ text: "just text", mentions: [] });
+  });
+  it("every caption shows them this way, and the feed's cut-off measures it as shown", () => {
+    expect(read("src/components/community/mentions.tsx")).toContain("const shown = withHandles(text, mentions);");
+    expect(read("src/components/community/note-caption.tsx")).toContain("useMemo(() => withHandles(typed, typedMentions), [typed, typedMentions])");
+  });
+});
+
 describe("typing @", () => {
   it("knows when the caret is in a mention (names can have a space)", () => {
     expect(mentionQuery("legs with @Dw", 13)).toEqual({ query: "Dw", start: 10 });
@@ -37,6 +63,24 @@ describe("typing @", () => {
     const people = [{ name: "Alyssa Amanda" }, { name: "Amanda K" }, { name: "Vicky" }];
     expect(suggestMentions(people, "am").map((p) => p.name)).toEqual(["Amanda K", "Alyssa Amanda"]);
     expect(suggestMentions(people, "").length).toBe(3);
+  });
+  it("finds people by username too, and a pick puts in their @username", () => {
+    const people = [{ name: "Marc", username: "marc.lifts" }, { name: "Jen", username: "iron_jen" }];
+    expect(suggestMentions(people, "iron").map((p) => p.name)).toEqual(["Jen"]);
+    expect(read("src/components/community/mentions.tsx")).toContain("const handle = a.username || a.name;");
+  });
+});
+
+describe("usernames on the server", () => {
+  const u = read("supabase/migrations/20261223090000_mention_usernames.sql");
+  it("every person card carries the username, from the profile row it already reads", () => {
+    expect(u).toContain("'username', cp.username)");
+    expect(u).toContain("LEFT JOIN public.community_profiles cp ON cp.user_id = me.uid");
+  });
+  it("a caption tags @username as well as @Name; a tie goes to the username", () => {
+    expect(u).toContain("regexp_instr(cap.c, '@' || replace(lower(h.name), '.', '[.]') || '(?![a-z0-9_]|[.][a-z0-9_])')");
+    expect(u).toContain("(h2.len > h.len OR (h2.len = h.len AND h2.rank > h.rank))");
+    expect(u).toContain("REVOKE ALL ON FUNCTION public.community_caption_mentions(text, uuid, boolean) FROM PUBLIC, anon, authenticated;");
   });
 });
 

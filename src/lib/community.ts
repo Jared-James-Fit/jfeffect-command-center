@@ -123,6 +123,8 @@ export type CommunityAuthor = {
   is_coach: boolean;
   /** Coaches: "Coach · JF Effect". */
   title?: string | null;
+  /** Their @username, without the @ (community_author). */
+  username?: string | null;
 };
 
 export type CommunitySeries =
@@ -470,6 +472,25 @@ export function splitMentions(text: string, mentions: CommunityMention[] | null 
 }
 
 /**
+ * A caption as the crew reads it: everyone it tags shows as their @username,
+ * Instagram's way, whatever the caption typed ("Marc", "@Marc"). Someone
+ * without a username keeps the words the caption used. Running it again
+ * changes nothing, so any screen can call it.
+ */
+export function withHandles(
+  text: string,
+  mentions: CommunityMention[] | null | undefined,
+): { text: string; mentions: CommunityMention[] } {
+  const list = mentions ?? [];
+  const parts = splitMentions(text, list);
+  if (!parts.some((p) => p.mention?.username)) return { text, mentions: list };
+  return {
+    text: parts.map((p) => (p.mention?.username ? `@${p.mention.username}` : p.text)).join(""),
+    mentions: list.map((m) => (m.username ? { ...m, text: `@${m.username}` } : m)),
+  };
+}
+
+/**
  * Where a long caption can be cut in the feed without stopping mid-thought:
  * the end of a line or paragraph, a sentence (. ! ? …) or an emoji, when
  * more words follow. Ascending character offsets; the full length is never
@@ -495,11 +516,11 @@ export function mentionQuery(value: string, caret: number): { query: string; sta
   return { query: m[2], start: before.length - m[2].length - 1 };
 }
 
-/** People whose name fits what's typed after "@", best first (name starts with it, then any word does). */
-export function suggestMentions<T extends { name: string }>(people: T[], query: string, max = 6): T[] {
+/** People who fit what's typed after "@", best first (name or @username starts with it, then any word of the name does). */
+export function suggestMentions<T extends { name: string; username?: string | null }>(people: T[], query: string, max = 6): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return people.slice(0, max);
-  const starts = people.filter((p) => p.name.toLowerCase().startsWith(q));
+  const starts = people.filter((p) => p.name.toLowerCase().startsWith(q) || !!p.username?.toLowerCase().startsWith(q));
   const words = people.filter((p) => !starts.includes(p) && p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)));
   return [...starts, ...words].slice(0, max);
 }
