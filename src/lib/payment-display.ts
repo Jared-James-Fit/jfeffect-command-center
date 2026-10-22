@@ -8,15 +8,16 @@
  *
  * Rules:
  *   - Money math uses *_cents fields when present, else *_amount fields.
- *   - Outstanding = contract_value_cents - amount_paid_cents (clamped ≥ 0)
- *     minus refunds/credits that are already netted in amount_paid_cents.
+ *   - Prices are stored before tax and payments include it, so
+ *     Outstanding = price - (amount_paid_cents - amount_tax_paid_cents),
+ *     clamped ≥ 0, and 0 once at least the price was paid.
  *   - "Paid in Full" wording is used whenever outstanding <= 0 AND amount paid > 0.
  *   - Next billing date is only surfaced when is_recurring is true.
  *   - Receipt / hosted invoice / invoice PDF URLs are surfaced only when present.
  *   - No Stripe IDs are exposed to clients (caller decides whether to render admin fields).
  */
 
-import { resolveInstallmentPlan, type InstallmentPlan } from "./installment-plan";
+import { outstandingBeforeTax, resolveInstallmentPlan, type InstallmentPlan } from "./installment-plan";
 
 export type PaymentDisplayStatus =
   | "paid"
@@ -37,8 +38,9 @@ export type PaymentDisplay = {
   statusTone: string; // Tailwind classes for a Badge
   currency: string;
   contractTotal: number;   // major units — the true amount owed after discounts
-  amountPaid: number;      // major units — verified paid
-  amountOutstanding: number; // major units — 0 when paid in full
+  amountPaid: number;      // major units — verified paid (tax included)
+  amountTaxPaid: number;   // major units — the GST/HST inside amountPaid
+  amountOutstanding: number; // major units, before tax — 0 when paid in full
   amountRefunded: number;  // major units
   isPaidInFull: boolean;
   isRecurring: boolean;
@@ -85,7 +87,7 @@ export type RenewalDisplay = {
   helper: string | null;    // small admin-only hint, e.g. missing sync message
 };
 
-type PurchaseInput = {
+export type PurchaseInput = {
   offer_name?: string | null;
   offer_type?: string | null;
   short_description?: string | null;
@@ -98,6 +100,7 @@ type PurchaseInput = {
   amount_paid_cents?: number | null;
   amount_refunded_cents?: number | null;
   contract_value_cents?: number | null;
+  amount_tax_paid_cents?: number | null;
   payment_status?: string | null;
   is_recurring?: boolean | null;
   paid_at?: string | null;
@@ -132,7 +135,7 @@ function centsToMajor(cents: number | null | undefined, fallback = 0): number {
   return Math.round(cents) / 100;
 }
 
-function methodLabel(method?: string | null): string | null {
+export function methodLabel(method?: string | null): string | null {
   if (!method) return null;
   const m = method.toLowerCase();
   if (m === "stripe") return "Credit card (Stripe)";
@@ -160,7 +163,7 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
       ? p.amount_paid_cents
       : Math.round(toNum(p.amount_paid) * 100);
   const installmentPlan = resolveInstallmentPlan(p);
-  const contractCents =
+  const storedContractCents =
     p.contract_value_cents != null
       ? p.contract_value_cents
       : installmentPlan
@@ -168,13 +171,18 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
         // the single-installment amount stored in full_payable_amount.
         ? Math.round(installmentPlan.contractTotal * 100)
         : Math.round(toNum(p.full_payable_amount) * 100);
+  // A sale recorded without a price (older Stripe backfills) is worth what was
+  // paid. Without this it reads as a $0.00 "Free" product.
+  const contractCents = storedContractCents > 0 ? storedContractCents : Math.max(storedContractCents, paidCents);
   const refundedCents = p.amount_refunded_cents ?? 0;
 
   const amountPaid = centsToMajor(paidCents);
   const contractTotal = centsToMajor(contractCents);
   const amountRefunded = centsToMajor(refundedCents);
-  const rawOutstanding = contractCents - paidCents;
-  const amountOutstanding = rawOutstanding > 0 ? centsToMajor(rawOutstanding) : 0;
+  const taxPaidCents = Math.min(Math.max(p.amount_tax_paid_cents ?? 0, 0), Math.max(paidCents, 0));
+  const amountOutstanding = centsToMajor(
+    Math.round(outstandingBeforeTax(contractCents, paidCents, paidCents - taxPaidCents)),
+  );
 
   const rawStatus = (p.payment_status ?? "").trim();
   const isPaidInFull = amountPaid > 0 && amountOutstanding === 0;
@@ -260,6 +268,7 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
     currency,
     contractTotal,
     amountPaid,
+    amountTaxPaid: centsToMajor(taxPaidCents),
     amountOutstanding,
     amountRefunded,
     isPaidInFull,
@@ -412,7 +421,9 @@ function resolveRenewal(
 
 export function formatMoney(amount: number, currency: string): string {
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
+    // en-CA: the business bills in CAD, so CAD reads "$" on every phone (an
+    // en-US browser would say "CA$") and anything else is marked ("US$").
+    return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(amount);
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
   }

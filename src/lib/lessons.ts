@@ -1,11 +1,13 @@
 /**
  * Coach lessons (20261129110000_community_lessons.sql): the educational posts
- * in the Crew. Five lesson days a week (Wednesday Wins and Sunday Recap keep
- * theirs), each from the coach's own library, planned two weeks ahead and
- * reviewed by the coach before they go out. Saturday is the Powerlifting
- * Technique & Troubleshooting series: problem → why → fix → when it applies,
- * by lift and by level, with a beginner, an advanced and an elite post every
- * month.
+ * in the Crew. A lesson every day, each from the coach's own library, planned
+ * two weeks ahead and reviewed by the coach before they go out. Wednesday's is
+ * an uncomfortable truth (a belief most lifters hold, struck out, and what's
+ * actually true) alongside Wednesday Wins, and Sunday's a short reset for the
+ * week ahead alongside Sunday Recap (20261225090000_lesson_truth_reset.sql).
+ * Saturday is the Powerlifting Technique & Troubleshooting series: problem →
+ * why → fix → when it applies, by lift and by level, with a beginner, an
+ * advanced and an elite post every month.
  *
  * Also the story stickers (poll, slider, question box) any post can carry:
  * lessons get theirs from the library, anyone can add one to their own story.
@@ -13,11 +15,11 @@
 import type { CSSProperties } from "react";
 import type { CommunityAuthor, CommunityPost } from "@/lib/community";
 
-export type LessonTrack = "strength" | "hypertrophy" | "methods" | "mind" | "fix";
+export type LessonTrack = "strength" | "hypertrophy" | "truth" | "methods" | "mind" | "fix" | "reset";
 export type LessonLevel = "beginner" | "advanced" | "elite";
 export type LessonLift = "squat" | "bench" | "deadlift";
 
-export const LESSON_TRACKS: LessonTrack[] = ["strength", "hypertrophy", "methods", "mind", "fix"];
+export const LESSON_TRACKS: LessonTrack[] = ["strength", "hypertrophy", "truth", "methods", "mind", "fix", "reset"];
 export const LESSON_LEVELS: LessonLevel[] = ["beginner", "advanced", "elite"];
 export const LESSON_LIFTS: LessonLift[] = ["squat", "bench", "deadlift"];
 
@@ -25,9 +27,11 @@ export const LESSON_LIFTS: LessonLift[] = ["squat", "bench", "deadlift"];
 export const LESSON_TRACK: Record<LessonTrack, { name: string; day: string; isoDay: number; blurb: string }> = {
   strength: { name: "Strength science", day: "Mon", isoDay: 1, blurb: "Technique, biomechanics, strength curves, programming" },
   hypertrophy: { name: "Hypertrophy", day: "Tue", isoDay: 2, blurb: "Bodybuilding technique and the science of growth" },
+  truth: { name: "Uncomfortable truth", day: "Wed", isoDay: 3, blurb: "Challenge an assumption, create tension, give them something worth thinking about" },
   methods: { name: "Methods & cues", day: "Thu", isoDay: 4, blurb: "Bodybuilding cues and advanced methods" },
   mind: { name: "Mind & recovery", day: "Fri", isoDay: 5, blurb: "Psychology, research, recovery, experiments" },
   fix: { name: "Technique fix", day: "Sat", isoDay: 6, blurb: "Powerlifting troubleshooting: problem, why, fix, when" },
+  reset: { name: "Sunday reset", day: "Sun", isoDay: 7, blurb: "A short mental and practical reset for the next seven days" },
 };
 
 export const LEVEL_LABEL: Record<LessonLevel, string> = { beginner: "Beginner", advanced: "Advanced", elite: "Elite" };
@@ -50,12 +54,14 @@ export type LessonVisualKind =
   | "rpe_rir"
   | "dose_response"
   | "velocity_loss"
-  | "set_structure";
+  | "set_structure"
+  | "truth"
+  | "reset";
 
 export const LESSON_VISUAL_KINDS: LessonVisualKind[] = [
   "bar_path", "squat_torso", "squat_balance", "squat_rise", "squat_depth", "deadlift_start", "bench_touch", "sticking_point",
   "strength_curve", "length_tension", "force_velocity", "fitness_fatigue", "sra", "rpe_rir", "dose_response", "velocity_loss",
-  "set_structure",
+  "set_structure", "truth", "reset",
 ];
 
 export type LessonVisual = {
@@ -70,6 +76,12 @@ export type LessonVisual = {
    * sra: stress · velocity_loss: cluster · set_structure: myo
    */
   variant?: string | null;
+  /** truth: the belief most lifters hold (it's struck out on the card) */
+  belief?: string | null;
+  /** truth: what's actually true (the card's big line) */
+  truth?: string | null;
+  /** reset: the week's checklist, 2 to 4 short lines */
+  items?: string[] | null;
 };
 
 export type LessonRef = { label: string; url?: string | null };

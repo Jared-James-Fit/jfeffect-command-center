@@ -101,6 +101,12 @@ function draw(v: LessonVisual): ReactNode {
       return v.variant === "cluster" ? <ClusterSets /> : <VelocityLoss />;
     case "set_structure":
       return <MyoReps />;
+    case "truth":
+      return v.belief?.trim() && v.truth?.trim() ? <TruthCard belief={v.belief.trim()} truth={v.truth.trim()} /> : null;
+    case "reset": {
+      const items = (v.items ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 4);
+      return items.length ? <ResetCard items={items} /> : null;
+    }
     default:
       return null;
   }
@@ -154,7 +160,68 @@ export function visualLabel(v: LessonVisual): string {
       return v.variant === "cluster" ? "Rep speed in a straight set versus singles with short rests" : "Rep speed falling across a set taken close to failure";
     case "set_structure":
       return "A myo-rep set: one activation set, then short mini sets on a few breaths until you can't match the first";
+    case "truth":
+      return `The belief, struck out: ${v.belief ?? ""}. The truth: ${v.truth ?? ""}`;
+    case "reset":
+      return `This week: ${(v.items ?? []).join(", ")}`;
   }
+}
+
+/* ======================================================================
+ * Word cards: Wednesday's uncomfortable truth and Sunday's reset. Type, not
+ * drawings, so they wrap like text (any phone, any length, emoji) and still
+ * take every colour from the theme.
+ * ==================================================================== */
+
+const KICKER = "block text-[10px] font-extrabold uppercase leading-none tracking-[0.16em]";
+
+/** The belief most lifters hold, struck out in red, and the truth under it, big. */
+function TruthCard({ belief, truth }: { belief: string; truth: string }) {
+  return (
+    <div role="img" aria-label={visualLabel({ kind: "truth", belief, truth })} className="px-1 py-1.5" data-truth-card>
+      <span className={KICKER} style={{ color: C.sub }}>The belief</span>
+      <p className="mt-2 text-balance text-[15px] font-semibold leading-snug line-through decoration-2" style={{ color: C.sub, textDecorationColor: C.accent }}>
+        {belief}
+      </p>
+      <span className="my-3.5 block h-px w-full" style={{ background: C.line }} aria-hidden />
+      <span className={KICKER} style={{ color: C.accent }}>The truth</span>
+      <p className="mt-2 text-balance text-[22px] font-black leading-[1.12] tracking-[-0.01em]" style={{ color: C.ink }}>
+        {truth}
+      </p>
+    </div>
+  );
+}
+
+const WEEK = ["M", "T", "W", "T", "F", "S", "S"];
+
+/** The next seven days, then the week's few things to do, each with an empty box to tick. */
+function ResetCard({ items }: { items: string[] }) {
+  return (
+    <div role="img" aria-label={visualLabel({ kind: "reset", items })} className="px-1 py-1.5" data-reset-card>
+      <div className="flex items-center justify-between gap-3">
+        <span className={KICKER} style={{ color: C.sub }}>This week</span>
+        <span className="flex gap-1" aria-hidden>
+          {WEEK.map((d, i) => (
+            <span
+              key={i}
+              className="grid h-[18px] w-[18px] place-items-center rounded-full text-[9px] font-extrabold leading-none"
+              style={i === 0 ? { background: C.accent, color: C.gap } : { background: C.faint, color: C.sub }}
+            >
+              {d}
+            </span>
+          ))}
+        </span>
+      </div>
+      <ul className="mt-3.5 space-y-2.5">
+        {items.map((t, i) => (
+          <li key={i} className="flex items-center gap-3">
+            <span className="h-[20px] w-[20px] shrink-0 rounded-[6px] border-2" style={{ borderColor: i === 0 ? C.accent : C.line }} aria-hidden />
+            <span className="text-balance text-[16px] font-bold leading-snug" style={{ color: C.ink }}>{t}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /* ======================================================================

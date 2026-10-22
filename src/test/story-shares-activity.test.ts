@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { activityDid, activityPeople, canShareToStory, storyTarget, type ActivityPerson, type CommunityPost } from "@/lib/community";
+import { activityNote, activityPeople, canShareToStory, storyTarget, type ActivityPerson, type CommunityPost } from "@/lib/community";
 import { shareCardWords } from "@/lib/story-reply";
 
 const read = (f: string) => readFileSync(f, "utf8");
 const sql = read("supabase/migrations/20261212090000_story_shares_activity.sql");
+const named = read("supabase/migrations/20261224090000_views_always_named.sql");
 
 const who = (user_id: string, x: Partial<ActivityPerson> = {}): ActivityPerson => ({ user_id, name: user_id, avatar_url: null, is_coach: false, ...x });
 const post = (x: Partial<CommunityPost>) =>
@@ -84,35 +85,60 @@ describe("Activity: views, likes, shares and reposts, for the poster only", () =
     who("reecey", { viewed_at: "t0" }),
   ];
 
-  it("filters: likes = reacted, shares = added to a story or reposted", () => {
+  it("tabs, Instagram's icons: likes = reacted, shares = added it to their story, reposts = reposted it", () => {
     expect(activityPeople(people, "all").map((p) => p.user_id)).toEqual(["nicole", "marc", "dwayne", "reecey"]);
     expect(activityPeople(people, "likes").map((p) => p.user_id)).toEqual(["nicole", "dwayne"]);
-    expect(activityPeople(people, "shares").map((p) => p.user_id)).toEqual(["nicole", "marc"]);
+    expect(activityPeople(people, "shares").map((p) => p.user_id)).toEqual(["nicole"]);
+    expect(activityPeople(people, "reposts").map((p) => p.user_id)).toEqual(["marc"]);
   });
 
-  it("each person says the most telling thing they did", () => {
-    expect(activityDid(people[0])).toEqual({ label: "Shared to their story", at: "t4" });
-    expect(activityDid(people[1])).toEqual({ label: "Reposted", at: "t2" });
-    expect(activityDid(people[2])).toEqual({ label: "Reacted", at: "t1" });
-    expect(activityDid(who("x", { reaction: "heart", reacted_at: "t9" }))).toEqual({ label: "Liked", at: "t9" });
-    expect(activityDid(people[3])).toEqual({ label: "Viewed", at: "t0" });
+  it("a like is the badge on their photo; the line under a name only says they shared or reposted it", () => {
+    expect(activityNote(people[0])).toBe("Shared to their story");
+    expect(activityNote(people[1])).toBe("Reposted");
+    expect(activityNote(people[2])).toBeNull();
+    expect(activityNote(people[3])).toBeNull();
   });
 
-  it("only the poster can open it; private viewers are counted, never named; you're never on your own list", () => {
-    expect(sql).toContain("IF NOT EXISTS (SELECT 1 FROM public.community_posts p WHERE p.id = _post_id AND p.author_user_id = v_me) THEN");
-    expect(sql).toContain("WHERE v.post_id = _post_id AND NOT coalesce(cp.private_views, false)");
-    expect(sql).toContain("WHERE public.community_main_account(u.user_id) IS DISTINCT FROM v_me");
+  it("only the poster can open it; everyone who viewed is named; you're never on your own list", () => {
+    expect(named).toContain("IF NOT EXISTS (SELECT 1 FROM public.community_posts p WHERE p.id = _post_id AND p.author_user_id = v_me) THEN");
+    expect(named).toContain("WHERE public.community_main_account(u.user_id) IS DISTINCT FROM v_me");
     // a share is named only when its story is one the poster may see
-    expect(sql).toContain("AND public.community_post_visible(sp.visibility, sp.author_user_id, sp.client_id)");
-    expect(sql).toContain("REVOKE ALL ON FUNCTION public.community_post_activity(uuid) FROM PUBLIC, anon;");
+    expect(named).toContain("AND public.community_post_visible(sp.visibility, sp.author_user_id, sp.client_id)");
+    expect(named).toContain("REVOKE ALL ON FUNCTION public.community_post_activity(uuid) FROM PUBLIC, anon;");
+    expect(named).not.toContain("'private_count', (SELECT count(*) FROM public.community_post_views x");
   });
 
-  it("opens from Seen by, the hearts and a swipe up on your story, and from the views row on your post", () => {
+  it("no viewing privately: the switch is gone for good, and only views made while it was on stay nameless", () => {
+    expect(named).toContain("ADD COLUMN IF NOT EXISTS anonymous boolean NOT NULL DEFAULT false;");
+    expect(named).toContain("WHERE cp.user_id = v.viewer_user_id AND cp.private_views AND NOT v.anonymous;");
+    expect(named).toContain("UPDATE public.community_profiles SET private_views = false WHERE private_views;");
+    expect(named).toContain("ADD CONSTRAINT community_profiles_views_named CHECK (NOT private_views);");
+    expect(named).toContain("DROP FUNCTION IF EXISTS public.community_set_private_views(boolean);");
+    expect(named).toContain("WHERE v.post_id = _post_id AND NOT v.anonymous");
+    const ui = read("src/components/community/post-activity.tsx");
+    expect(ui).not.toContain("View posts privately");
+    expect(ui).not.toContain("community_set_private_views");
+  });
+
+  it("your story: Seen by, the hearts or a swipe up shrink it to the top over its viewers (Instagram's)", () => {
     const stories = read("src/components/community/crew-stories.tsx");
     expect(stories).toContain("return post.is_mine ? setAskActivity((n) => n + 1) : onOpenPost(storyTarget(post));");
-    expect(stories).toContain('onClick={() => setActivity("likes")}');
+    expect(stories).toContain("<StoryViewersPanel");
+    expect(stories).toContain("renderPreview={(m) => <StoryFrame post={m} unit={unit} />}");
     // a swipe from before this bar was on screen never opens it
     expect(stories).toContain("if (ask === asked.current) return;");
+    const ui = read("src/components/community/post-activity.tsx");
+    // story gestures leave it alone; tap the story at the top to go back to it
+    expect(ui).toContain("data-story-interactive data-story-viewers");
+    expect(ui).toContain("onClick={() => (on ? onClose() : onPick(m.id))}");
+    // only a story made in the camera can be deleted from here
+    expect(ui).toContain("const canDelete = !!post.story && !post.auto && !!onDeleted;");
     expect(read("src/components/community/post-views.tsx")).toContain("<PostActivitySheet postId={open ? post.id : null}");
+  });
+
+  it("people you follow get no Follow button (no column of Following); under a name, what they did, else their @username", () => {
+    const ui = read("src/components/community/post-activity.tsx");
+    expect(ui).toContain("{note ?? `@${p.username}`}");
+    expect(ui).toContain('if (!state || label === "Following" || label === "Requested") return null;');
   });
 });

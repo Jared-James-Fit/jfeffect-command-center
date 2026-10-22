@@ -214,115 +214,6 @@ export const recordRefund = createServerFn({ method: "POST" })
     return { ok: true, ledger: row };
   });
 
-// -------- Issue a client account credit --------
-const IssueCredit = z.object({
-  client_id: z.string().uuid(),
-  amount_minor: z.number().int().positive().max(100_000_000),
-  currency: z.string().min(3).max(3).default("USD"),
-  reason: z.string().min(3).max(2000),
-  internal_note: z.string().max(2000).optional().nullable(),
-});
-
-export const issueClientCredit = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => IssueCredit.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
-
-    const { data: ledger, error: lErr } = await supabase.from("payment_ledger").insert({
-      client_id: data.client_id,
-      txn_type: "credit_created",
-      method: "credit_balance",
-      amount_minor: data.amount_minor,
-      currency: data.currency,
-      internal_note: data.reason,
-      source: "manual",
-      created_by: userId,
-    }).select("*").single();
-    if (lErr) throw new Error(lErr.message);
-
-    const { data: credit, error: cErr } = await supabase.from("client_account_credits").insert({
-      client_id: data.client_id,
-      amount_minor: data.amount_minor,
-      currency: data.currency,
-      kind: "issued",
-      source_ledger_id: ledger.id,
-      reason: data.reason,
-      internal_note: data.internal_note ?? null,
-      created_by: userId,
-    }).select("*").single();
-    if (cErr) throw new Error(cErr.message);
-
-    await logAudit(supabase, {
-      clientId: data.client_id,
-      actorUserId: userId,
-      action: "credit_issued",
-      recordType: "client_account_credits",
-      recordId: credit.id,
-      after: credit,
-      reason: data.reason,
-    });
-    return { ok: true, credit, ledger };
-  });
-
-// -------- Apply existing credit balance to a purchase --------
-const ApplyCredit = z.object({
-  purchase_id: z.string().uuid(),
-  amount_minor: z.number().int().positive().max(100_000_000),
-  reason: z.string().max(2000).optional().nullable(),
-});
-
-export const applyClientCredit = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => ApplyCredit.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
-    const { data: pr } = await supabase
-      .from("purchase_records")
-      .select("id, client_id, currency, amount_outstanding_cents")
-      .eq("id", data.purchase_id).single();
-    if (!pr) throw new Error("Purchase not found");
-
-    // Check available balance
-    const { data: bal } = await supabase
-      .from("client_account_credits")
-      .select("amount_minor, kind")
-      .eq("client_id", pr.client_id);
-    const issued = (bal ?? []).filter((r: any) => r.kind === "issued").reduce((s: number, r: any) => s + r.amount_minor, 0);
-    const applied = (bal ?? []).filter((r: any) => r.kind === "applied").reduce((s: number, r: any) => s + r.amount_minor, 0);
-    const available = issued - applied;
-    if (data.amount_minor > available) throw new Error(`Insufficient credit balance (have ${available}, need ${data.amount_minor})`);
-
-    const { data: ledger, error: lErr } = await supabase.from("payment_ledger").insert({
-      client_id: pr.client_id,
-      purchase_id: pr.id,
-      txn_type: "credit_applied",
-      method: "credit_balance",
-      amount_minor: data.amount_minor,
-      currency: pr.currency ?? "USD",
-      internal_note: data.reason ?? "Account credit applied",
-      source: "manual",
-      created_by: userId,
-    }).select("*").single();
-    if (lErr) throw new Error(lErr.message);
-
-    const { error: cErr } = await supabase.from("client_account_credits").insert({
-      client_id: pr.client_id,
-      amount_minor: data.amount_minor,
-      currency: pr.currency ?? "USD",
-      kind: "applied",
-      source_ledger_id: ledger.id,
-      applied_to_purchase_id: pr.id,
-      reason: data.reason ?? null,
-      created_by: userId,
-    });
-    if (cErr) throw new Error(cErr.message);
-
-    return { ok: true, ledger };
-  });
-
 // -------- Read: purchase ledger + summary --------
 const GetSummary = z.object({ purchase_id: z.string().uuid() });
 
@@ -352,75 +243,23 @@ export const getClientBillingOverview = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { userId } = context as any;
     const { db: supabase } = await assertAdminView(context as any);
-    const [purchasesRes, ledgerRes, creditsRes, sessionsRes, convRes, balanceRes] = await Promise.all([
+    const [purchasesRes, ledgerRes, sessionsRes, balanceRes] = await Promise.all([
       supabase.from("purchase_records").select("*").eq("client_id", data.client_id).order("purchased_at", { ascending: false }),
       supabase.from("payment_ledger").select("*").eq("client_id", data.client_id).order("transaction_date", { ascending: false }),
-      supabase.from("client_account_credits").select("*").eq("client_id", data.client_id).order("created_at", { ascending: false }),
       supabase.from("session_ledger_events").select("*").eq("client_id", data.client_id).order("effective_date", { ascending: false }),
-      supabase.from("service_conversions").select("*").eq("client_id", data.client_id).order("effective_date", { ascending: false }),
       supabase.rpc("session_balance", { _client_id: data.client_id }, { get: true }),
     ]);
-
-    const credits = creditsRes.data ?? [];
-    const issued = credits.filter((c: any) => c.kind === "issued").reduce((s: number, c: any) => s + c.amount_minor, 0);
-    const applied = credits.filter((c: any) => c.kind === "applied").reduce((s: number, c: any) => s + c.amount_minor, 0);
 
     return {
       ok: true,
       purchases: purchasesRes.data ?? [],
       ledger: ledgerRes.data ?? [],
-      credits,
-      credit_balance_minor: issued - applied,
       session_events: sessionsRes.data ?? [],
       session_balance: balanceRes.data ?? [],
-      conversions: convRes.data ?? [],
     };
   });
 
-// -------- Convert service (PT -> online coaching, etc.) --------
-const ConvertService = z.object({
-  original_purchase_id: z.string().uuid(),
-  new_offer_id: z.string().uuid().nullable().optional(),
-  new_offer_name: z.string().min(1),
-  effective_date: z.string(),
-  value_delivered_cents: z.number().int().nonnegative(),
-  new_price_cents: z.number().int().nonnegative(),
-  credit_applied_cents: z.number().int().nonnegative(),
-  original_disposition: z.enum(["ended","partially_replaced","continues"]).default("ended"),
-  reason: z.string().optional(),
-});
-
-export const convertClientService = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => ConvertService.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
-    const { data: conv, error } = await supabase.rpc("convert_client_service", {
-      _original_purchase_id: data.original_purchase_id,
-      _new_offer_id: data.new_offer_id ?? null,
-      _new_offer_name: data.new_offer_name,
-      _effective_date: data.effective_date,
-      _value_delivered_cents: data.value_delivered_cents,
-      _new_price_cents: data.new_price_cents,
-      _credit_applied_cents: data.credit_applied_cents,
-      _original_disposition: data.original_disposition,
-      _reason: data.reason ?? null,
-    });
-    if (error) throw new Error(error.message);
-    await logAudit(supabase, {
-      clientId: null,
-      actorUserId: userId,
-      action: "convert_service",
-      recordType: "service_conversion",
-      recordId: conv?.id ?? null,
-      after: data,
-      reason: data.reason,
-    });
-    return { ok: true, conversion: conv };
-  });
-
-// -------- Manual grant / expire helpers --------
+// -------- Add sessions to a package by hand --------
 const GrantSessions = z.object({
   purchase_id: z.string().uuid(),
   count: z.number().int().positive(),
@@ -444,14 +283,4 @@ export const grantSessionsManually = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
-  });
-
-export const runExpireSessions = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    await assertAdmin(supabase, userId);
-    const { data, error } = await supabase.rpc("expire_overdue_sessions");
-    if (error) throw new Error(error.message);
-    return { ok: true, expired: data ?? 0 };
   });

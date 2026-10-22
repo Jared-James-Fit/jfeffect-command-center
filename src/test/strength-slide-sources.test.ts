@@ -61,7 +61,7 @@ describe("Strength filters on both sources", () => {
 
 describe("Strength source switch", () => {
   const board = readFileSync("src/components/portal/strength-board.tsx", "utf8");
-  const slide = board.slice(board.indexOf("export function StrengthBoardSlide()"), board.indexOf("function KingTile("));
+  const slide = board.slice(board.indexOf("export function StrengthBoardSlide("), board.indexOf("function KingTile("));
   it("both boards load up front, so switching is instant; any filter change folds Show all back", () => {
     expect(slide).toContain("const allTime = useStrengthBoard();");
     expect(slide).toContain("const meets = useMeetBoard();");

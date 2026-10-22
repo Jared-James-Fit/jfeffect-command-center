@@ -12,7 +12,7 @@ import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 import {
-  ActionPill, AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading,
+  ActionPill, AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
 /** Rows in "next up" on Home; the rest is on the Schedule page. */
@@ -73,12 +73,11 @@ function RowLink({ item, links, className, children }: { item: CalendarItem; lin
 }
 
 /**
- * Client Home: today as a short agenda, then what's next, in the Home look
- * every account shares (schedule/agenda.tsx). Today's workout says its week
- * and offers Start / Continue / Done; the next few things follow one line
- * each; then "Request a session" (or Book) and "Full schedule". Weeks, months
- * and blocks stay on the Workouts calendar; everything at once is on the
- * Schedule page.
+ * Client Home: their calendar card, in the look every account shares
+ * (schedule/agenda.tsx). A date tile and "Calendar" and this week's days (each
+ * opens the Calendar page there), today as a short agenda (today's workout
+ * says its week and offers Start / Continue / Done), the next few things one
+ * line each, then "Request a session" (or Book) and "Open calendar".
  */
 export function UpcomingScheduleCard({ clientId, links = true }: {
   clientId: string | null | undefined;
@@ -97,17 +96,35 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   });
   const today = isoToday();
   const [requesting, setRequesting] = useState(false);
-  // A dashboard, not a calendar: today, then only the next few things.
+  // Today in full, then only the next few things; the week strip says what's on each day.
   const agenda = useMemo(() => buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS }), [items, today]);
   const nowMs = useNow();
   const nowIndex = useMemo(() => nowLineIndex(agenda.today, nowMs), [agenda.today, nowMs]);
   const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
+  // A dot per thing on each day of the week strip (cardio rides with its workout).
+  const dotsByDay = useMemo(() => {
+    const m = new Map<string, CalendarItem[]>();
+    for (const it of items ?? []) {
+      if (!it || it.kind === "cardio" || it.status === "Cancelled") continue;
+      m.set(it.date, [...(m.get(it.date) ?? []), it]);
+    }
+    const out = new Map<string, string[]>();
+    for (const [d, list] of m) {
+      out.set(d, list.sort((a, b) => (a.kind === "workout" ? 0 : 1) - (b.kind === "workout" ? 0 : 1)).map((it) => FAMILY_ACCENT[KIND_FAMILY[it.kind]]));
+    }
+    return out;
+  }, [items]);
 
   return (
     <AgendaCard>
-      <AgendaHeader today={today} />
+      <AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />
+      <AgendaWeek
+        today={today}
+        dots={(d) => dotsByDay.get(d) ?? []}
+        link={links ? (d) => ({ to: "/portal/calendar", search: { date: d } }) : null}
+      />
 
-      <div className="mt-1.5">
+      <AgendaToday>
         {isLoading && !items?.length ? (
           <AgendaLoading />
         ) : agenda.today.length === 0 ? (
@@ -127,9 +144,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
             )}
           </ol>
         )}
-      </div>
+      </AgendaToday>
 
-      {/* Next: the next few things only; the full schedule is one tap away. */}
+      {/* Next: the next few things only; the full calendar is one tap away. */}
       <AgendaNext show={agenda.upcoming.length > 0}>
         {agenda.upcoming.flatMap((day) =>
           day.items.map((item, i) => (
@@ -171,7 +188,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
             </button>
           )}
           <Link to="/portal/calendar" className={AGENDA_LINK}>
-            Full schedule
+            Open calendar
             <ChevronRight className="h-4 w-4" />
           </Link>
         </AgendaFooter>

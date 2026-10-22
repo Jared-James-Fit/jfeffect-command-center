@@ -4,12 +4,15 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { UserAvatar } from "@/components/user-avatar";
 import { CoachBadge } from "@/components/community/post-card";
 import { cn } from "@/lib/utils";
-import { mentionQuery, splitMentions, suggestMentions, type CommunityAuthor, type CommunityMention } from "@/lib/community";
+import { mentionQuery, splitMentions, suggestMentions, withHandles, type CommunityAuthor, type CommunityMention } from "@/lib/community";
 import { useCommunityMembers } from "@/lib/community.queries";
 
-/** A caption with the people it names tappable (bold, like Instagram). */
+/** A caption with the people it tags as their @username, tappable (bold, like Instagram). */
 export function MentionText({ text, mentions, onOpen }: { text: string; mentions?: CommunityMention[] | null; onOpen?: (a: CommunityAuthor) => void }) {
-  const parts = useMemo(() => splitMentions(text, mentions), [text, mentions]);
+  const parts = useMemo(() => {
+    const shown = withHandles(text, mentions);
+    return splitMentions(shown.text, shown.mentions);
+  }, [text, mentions]);
   return (
     <>
       {parts.map((p, i) =>
@@ -38,9 +41,10 @@ export function MentionText({ text, mentions, onOpen }: { text: string; mentions
 }
 
 /**
- * Type "@" and the crew shows up under the box: tap a name and it's in
- * ("@Dwayne "). Name 1-3 people and the post is a collab with them; name
- * more and it's a shout-out. Only fetches the crew once "@" is typed.
+ * Type "@" and the crew shows up under the box (find them by name or
+ * username): tap one and their @username is in ("@dwayne "), Instagram's
+ * way. Tag 1-3 people and the post is a collab with them; tag more and it's
+ * a shout-out. Only fetches the crew once "@" is typed.
  */
 export function MentionSuggestBar({
   value,
@@ -81,9 +85,10 @@ export function MentionSuggestBar({
 
   const pick = (a: CommunityAuthor) => {
     const end = q.start + 1 + q.query.length;
-    const next = `${value.slice(0, q.start)}@${a.name} ${value.slice(end).replace(/^ /, "")}`;
+    const handle = a.username || a.name;
+    const next = `${value.slice(0, q.start)}@${handle} ${value.slice(end).replace(/^ /, "")}`;
     onChange(next);
-    const at = q.start + a.name.length + 2;
+    const at = q.start + handle.length + 2;
     requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el) return;
@@ -112,6 +117,7 @@ export function MentionSuggestBar({
           <UserAvatar src={a.avatar_url} name={a.name} size={26} expandable={false} />
           {a.name}
           {a.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          {a.username && <span className={cn("font-semibold", dark ? "text-white/60" : "text-muted-foreground")}>@{a.username}</span>}
         </button>
       ))}
     </div>

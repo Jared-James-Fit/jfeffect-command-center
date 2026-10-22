@@ -123,6 +123,8 @@ export type CommunityAuthor = {
   is_coach: boolean;
   /** Coaches: "Coach · JF Effect". */
   title?: string | null;
+  /** Their @username, without the @ (community_author). */
+  username?: string | null;
 };
 
 export type CommunitySeries =
@@ -282,22 +284,22 @@ export type ActivityPerson = CommunityAuthor & {
   reposted_at?: string;
 };
 /** A post's (or story's) Activity, for the person who posted it (community_post_activity). */
-export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[]; private_count: number; me_private: boolean };
-export type ActivityFilter = "all" | "likes" | "shares";
+export type PostActivity = { views: number; likes: number; shares: number; reposts: number; people: ActivityPerson[] };
+export type ActivityFilter = "all" | "likes" | "shares" | "reposts";
 
-/** Who to show under a filter: likes = reacted, shares = added it to their story or reposted it. */
+/** Who to show under a tab: likes = reacted, shares = added it to their story, reposts = reposted it. */
 export function activityPeople(people: readonly ActivityPerson[], f: ActivityFilter): ActivityPerson[] {
   if (f === "likes") return people.filter((p) => !!p.reaction);
-  if (f === "shares") return people.filter((p) => !!p.shared_at || !!p.reposted_at);
+  if (f === "shares") return people.filter((p) => !!p.shared_at);
+  if (f === "reposts") return people.filter((p) => !!p.reposted_at);
   return [...people];
 }
 
-/** What someone did, the most telling first, with when: "Shared to their story", "Reposted", "Liked", "Viewed". */
-export function activityDid(p: ActivityPerson): { label: string; at: string | null } {
-  if (p.shared_at) return { label: "Shared to their story", at: p.shared_at };
-  if (p.reposted_at) return { label: "Reposted", at: p.reposted_at };
-  if (p.reaction) return { label: p.reaction === "heart" ? "Liked" : "Reacted", at: p.reacted_at ?? null };
-  return { label: "Viewed", at: p.viewed_at ?? null };
+/** The line under someone's name, only when it says more than their photo's badge: they shared it or reposted it. */
+export function activityNote(p: ActivityPerson): string | null {
+  if (p.shared_at) return "Shared to their story";
+  if (p.reposted_at) return "Reposted";
+  return null;
 }
 
 /** Someone who reposted a post, with the note they put on it. */
@@ -470,6 +472,25 @@ export function splitMentions(text: string, mentions: CommunityMention[] | null 
 }
 
 /**
+ * A caption as the crew reads it: everyone it tags shows as their @username,
+ * Instagram's way, whatever the caption typed ("Marc", "@Marc"). Someone
+ * without a username keeps the words the caption used. Running it again
+ * changes nothing, so any screen can call it.
+ */
+export function withHandles(
+  text: string,
+  mentions: CommunityMention[] | null | undefined,
+): { text: string; mentions: CommunityMention[] } {
+  const list = mentions ?? [];
+  const parts = splitMentions(text, list);
+  if (!parts.some((p) => p.mention?.username)) return { text, mentions: list };
+  return {
+    text: parts.map((p) => (p.mention?.username ? `@${p.mention.username}` : p.text)).join(""),
+    mentions: list.map((m) => (m.username ? { ...m, text: `@${m.username}` } : m)),
+  };
+}
+
+/**
  * Where a long caption can be cut in the feed without stopping mid-thought:
  * the end of a line or paragraph, a sentence (. ! ? …) or an emoji, when
  * more words follow. Ascending character offsets; the full length is never
@@ -495,11 +516,11 @@ export function mentionQuery(value: string, caret: number): { query: string; sta
   return { query: m[2], start: before.length - m[2].length - 1 };
 }
 
-/** People whose name fits what's typed after "@", best first (name starts with it, then any word does). */
-export function suggestMentions<T extends { name: string }>(people: T[], query: string, max = 6): T[] {
+/** People who fit what's typed after "@", best first (name or @username starts with it, then any word of the name does). */
+export function suggestMentions<T extends { name: string; username?: string | null }>(people: T[], query: string, max = 6): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return people.slice(0, max);
-  const starts = people.filter((p) => p.name.toLowerCase().startsWith(q));
+  const starts = people.filter((p) => p.name.toLowerCase().startsWith(q) || !!p.username?.toLowerCase().startsWith(q));
   const words = people.filter((p) => !starts.includes(p) && p.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)));
   return [...starts, ...words].slice(0, max);
 }

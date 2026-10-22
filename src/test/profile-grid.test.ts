@@ -39,4 +39,19 @@ describe("a profile's grid, Instagram's way", () => {
     expect(read("src/components/community/profile-view.tsx")).toContain("pager={showArchived || blocked ? undefined : feed}");
     expect(read("src/components/community/saved-view.tsx")).toContain('<PostGrid posts={posts} urls={urls} unit={unit} onTap={onOpenPost} mark="repost" pager={q} />');
   });
+
+  it("a card without a picture (a coach post, a workout, a lock in) sits centred in its tile, its mark (PR, Poll, Live) alone in the corner", () => {
+    const tile = read("src/components/community/post-tile.tsx");
+    // the same room above and below, both ways centred, so every tile lines up with the ones beside it
+    expect(tile).toContain('"relative flex h-full w-full flex-col items-center justify-center gap-1 px-2.5 py-6 text-center"');
+    expect(tile).toContain('{mark && <span className="absolute left-2 top-2 flex">{mark}</span>}');
+    // no "Note" / "Workout" label on the grid: only what the card is (PR, a poll, training now)
+    expect(tile).toContain("mark={post.poll ? <TileMark>Poll</TileMark> : null}");
+    expect(tile).toContain('mark={pr ? <TileMark tone="gold">PR</TileMark> : null}');
+    expect(tile).toContain("mark={isTrainingNow(post) ? <LiveDot");
+    // a lesson shows its own title, not the caption's first words
+    expect(tile).toContain("{lessonTitle(post) ? (");
+    // Home's Crew cards (large) keep their own layout
+    expect(tile).toContain(') : post.kind === "note" && !large ? (');
+  });
 });

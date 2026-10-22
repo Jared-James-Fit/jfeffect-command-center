@@ -1,5 +1,4 @@
 import { useRef, useState, type TouchEvent } from "react";
-import { LiveMark } from "@/components/live-indicator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
@@ -8,6 +7,9 @@ import { cn } from "@/lib/utils";
 import { AthleteLevelCard } from "@/components/portal/athlete-level-card";
 import { StrengthBoardSlide } from "@/components/portal/strength-board";
 import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { inRecapWindow } from "@/lib/league-recap";
+import { RankingsSpotlight } from "@/components/community/rankings-spotlight";
+import type { SpotlightSlide, StrengthView } from "@/lib/rankings-spotlight";
 
 export type RankingsBoard = "monthly" | "strength";
 
@@ -50,12 +52,17 @@ export function RankingsHub() {
     },
   });
   const [board, setBoardState] = useState<RankingsBoard>(() => rankingsFromHash() ?? "monthly");
+  // a podium tapped in the spotlight: which view of the board to open on (a new `n` remounts it there)
+  const [opened, setOpened] = useState<{ n: number; view: StrengthView | null; previous: boolean }>({ n: 0, view: null, previous: false });
+  const tabsRef = useRef<HTMLDivElement | null>(null);
   // which way the new board slides in (from a swipe or a tab tap)
   const [enterFrom, setEnterFrom] = useState<"left" | "right" | null>(null);
   const setBoard = (next: RankingsBoard) => {
     if (next === board) return;
     setEnterFrom(next === "strength" ? "right" : "left");
     setBoardState(next);
+    // a tab or a swipe opens a board as usual (not on whatever a podium tap asked for)
+    setOpened((o) => ({ ...o, view: null, previous: false }));
   };
 
   // Swipe sideways on the board to switch Monthly ⇄ Strength (the tabs follow).
@@ -81,12 +88,23 @@ export function RankingsHub() {
     if (next) setBoard(next);
   };
 
+  const openFromSpotlight = (slide: SpotlightSlide) => {
+    const next: RankingsBoard = slide.board === "strength" ? "strength" : "monthly";
+    setEnterFrom(next === board ? null : next === "strength" ? "right" : "left");
+    setBoardState(next);
+    // Women · Heaviest total opens the board on Women, Heaviest; Champions on last month's standings
+    setOpened((o) => ({ n: o.n + 1, view: slide.view ?? null, previous: slide.board === "champions" }));
+    // the board sits right under the spotlight: bring it up
+    requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   return (
     <div data-league-hub className="space-y-3">
-      {/* last month's recap: always here at the top, replaced by next month's on the 1st */}
-      <LeagueRecapButton />
-      <div className="flex items-center gap-2">
-      <div className="grid flex-1 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
+      {/* last month's recap: the banner up here in recap week (news); the rest of the month it's a row under the Monthly board */}
+      {inRecapWindow() && <LeagueRecapButton />}
+      {/* the other boards' podiums, flipping (pause-able); tap one to open that board */}
+      <RankingsSpotlight onOpen={openFromSpotlight} under={board} underView={opened.view} />
+      <div ref={tabsRef} className="grid scroll-mt-3 grid-cols-2 rounded-full bg-muted/60 p-1 text-[13px] font-bold" role="tablist" aria-label="Leaderboard">
         {([["monthly", "Monthly"], ["strength", "Strength"]] as const).map(([k, label]) => (
           <button
             key={k}
@@ -100,12 +118,9 @@ export function RankingsHub() {
           </button>
         ))}
       </div>
-        {/* both boards update as people train: one Live mark for the page */}
-        <LiveMark className="shrink-0 px-1 text-[11px] uppercase tracking-wide" />
-      </div>
       <div
         ref={boardRef}
-        key={board}
+        key={`${board}:${opened.n}`}
         data-rankings-board={board}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
@@ -119,10 +134,10 @@ export function RankingsHub() {
       >
       {board === "strength" ? (
         <section data-standing="strength" className="overflow-hidden rounded-2xl border bg-card">
-          <StrengthBoardSlide />
+          <StrengthBoardSlide initialMode={opened.view?.mode} initialDivision={opened.view?.division} />
         </section>
       ) : client?.id ? (
-        <AthleteLevelCard clientId={client.id} />
+        <AthleteLevelCard clientId={client.id} openPrevious={opened.previous} />
       ) : isPending && userId ? (
         <Skeleton className="h-64 w-full rounded-2xl" />
       ) : (

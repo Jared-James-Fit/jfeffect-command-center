@@ -1011,6 +1011,10 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   .story-emoji-rise { animation-duration: 0.01s; }
 }
 
+/* Rankings spotlight: the progress line fills while a podium is up. */
+@keyframes jf-spotlight-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.jf-spotlight-fill { animation-name: jf-spotlight-fill; animation-timing-function: linear; animation-fill-mode: forwards; }
+
 /* Reactions: the heart pops when you give one; hold it for the other four. */
 @keyframes community-pop {
   0% { transform: scale(1); }

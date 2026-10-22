@@ -18,23 +18,28 @@ import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useServerFn } from "@tanstack/react-start";
 
 /**
- * The client's one Schedule (this replaced separate Calendar, Appointments and
- * Events pages, which showed the same things three ways):
- *   1. Book: the booking types the coach opened to them (no form, signed in), and
- *      "Request a session" for anything else (the coach approves it in chat).
- *   2. Your sessions: what's booked, where, and "Need to change it?"
- *   3. The calendar: sessions, workouts, cardio, check-ins, events, key dates.
- *   4. One-time phone calendar setup (Google, Apple, Outlook, any app).
+ * The client's one Calendar (this replaced separate Calendar, Appointments,
+ * Events and Schedule pages, which showed the same things several ways). It
+ * opens on the calendar itself, so nobody has to scroll to find it:
+ *   1. The calendar: workouts, sessions, cardio, check-ins, events, key dates
+ *      (?date=yyyy-mm-dd opens on that day: a day tapped on Home).
+ *   2. Sessions: "Request a session" (the coach approves it in chat), the
+ *      booking types the coach opened to them, what's pending and booked, and
+ *      "Need to change it?".
+ *   3. One-time phone calendar setup (Google, Apple, Outlook, any app).
  */
 export const Route = createFileRoute("/_authenticated/portal/calendar")({
-  validateSearch: (s: Record<string, unknown>): { sync?: 1 } => (s.sync === 1 || s.sync === "1" ? { sync: 1 } : {}),
-  head: () => ({ meta: [{ title: "Schedule" }] }),
-  component: SchedulePage,
+  validateSearch: (s: Record<string, unknown>): { sync?: 1; date?: string } => ({
+    ...(s.sync === 1 || s.sync === "1" ? { sync: 1 as const } : {}),
+    ...(typeof s.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? { date: s.date } : {}),
+  }),
+  head: () => ({ meta: [{ title: "Calendar" }] }),
+  component: CalendarPage,
 });
 
-function SchedulePage() {
+function CalendarPage() {
   const portalUserId = usePortalUserId();
-  const { sync } = Route.useSearch();
+  const { sync, date } = Route.useSearch();
   const { isImpersonating, client: povClient } = useClientImpersonation();
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
@@ -57,7 +62,7 @@ function SchedulePage() {
 
   return (
     <>
-      <PageHeader title="Schedule" subtitle="Your sessions, training and key dates." />
+      <PageHeader title="Calendar" subtitle="Your workouts, sessions and key dates." />
       <div className="space-y-5 p-4 sm:p-6 md:p-8">
         {isImpersonating && (
           <Card className="border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
@@ -71,19 +76,13 @@ function SchedulePage() {
           </Card>
         )}
 
-        {/* Sessions: request (always), book (when the coach opened booking), what's pending and booked. */}
-        {client?.id && (
-          <MySessionRequests clientId={client.id} isPov={isImpersonating}>
-            <ClientBookCard />
-          </MySessionRequests>
-        )}
-        {client?.id && <ClientSessionList clientId={client.id} />}
-
-        <section className="space-y-2">
-          <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Calendar</h2>
+        {/* The calendar first: it's what people come here for. */}
+        <section aria-label="Calendar">
           <CalendarBoard
+            key={date ?? "today"}
             items={items}
             isLoading={isLoading}
+            initialDate={date ?? null}
             onRangeChange={(r) => setRange({ from: r.from, to: r.to })}
             views={["month", "week", "upcoming"]}
             emptyHint="Workouts, sessions, check-ins and coach events show up here as they're scheduled."
@@ -103,6 +102,14 @@ function SchedulePage() {
             }
           />
         </section>
+
+        {/* Sessions: request (always), book (when the coach opened booking), what's pending and booked. */}
+        {client?.id && (
+          <MySessionRequests clientId={client.id} isPov={isImpersonating}>
+            <ClientBookCard />
+          </MySessionRequests>
+        )}
+        {client?.id && <ClientSessionList clientId={client.id} />}
 
         {client?.id && <CalendarSyncCard autoOpen={sync === 1 && !isImpersonating} />}
         {client?.id && (

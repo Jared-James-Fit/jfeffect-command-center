@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isUseReversal } from "@/lib/sessions-inventory";
 
 /**
  * PT Calendar management actions: per-session credit events, safe delete,
@@ -69,7 +70,7 @@ export const deletePtSession = createServerFn({ method: "POST" })
       .filter((e: any) => e.event_type === "used")
       .reduce((sum: number, e: any) => sum + -Number(e.session_count ?? 0), 0);
     const reverted = (evs ?? [])
-      .filter((e: any) => e.event_type === "adjusted" && e.source === "revert_on_uncomplete")
+      .filter((e: any) => isUseReversal(e))
       .reduce((sum: number, e: any) => sum + Number(e.session_count ?? 0), 0);
     if (used - reverted > 0) {
       throw new Error(

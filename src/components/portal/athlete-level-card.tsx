@@ -16,7 +16,9 @@ import { isFinalWeek, leagueToday } from "@/lib/league-boost";
 import { BoostHero, MonthBreakdown, RowBoost, ThreatBanner } from "@/components/portal/league-boost";
 import { CoachTag } from "@/components/portal/coach-tag";
 import { CoachFocus, PointsBar, PointsLegend, VsCard } from "@/components/portal/league-insights";
-import { monthName, previousLeagueMonth } from "@/lib/league-recap";
+import { inRecapWindow, monthName, previousLeagueMonth } from "@/lib/league-recap";
+import { LeagueRecapButton } from "@/components/portal/league-recap";
+import { LiveMark } from "@/components/live-indicator";
 import { TIEBREAK_NOTE, boostProgress, monthClockLabel, rankedRows, standingOf, standingText } from "@/lib/league-standing";
 import { usePerformanceLeague, type PerformanceLeagueRow } from "@/lib/use-performance-league";
 
@@ -52,14 +54,18 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  * points still accrue (DB triggers) and feed Milestones; the level itself
  * isn't shown to clients. New-milestone reveals pop on Home (LevelCelebrations).
  */
-export function AthleteLevelCard({ clientId }: { clientId: string }) {
+export function AthleteLevelCard({ clientId, openPrevious = false }: {
+  clientId: string;
+  /** Open on last month's final standings (the Rankings spotlight's Champions podium). */
+  openPrevious?: boolean;
+}) {
   const { data: events = [] } = useXpEvents(clientId);
   const stats = statsFromEvents(events);
   const { data: catalog = [] } = useBadgeCatalog();
   const { data: earned = [] } = useMyAchievements(clientId);
   const { data: rows = [], isPending } = usePerformanceLeague("current");
   // The sheet holds only an athlete's details or last month's final standings.
-  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(null);
+  const [sheet, setSheet] = useState<null | { kind: "athlete"; id: string; fromPrevious?: boolean } | { kind: "previous" }>(() => (openPrevious ? { kind: "previous" } : null));
 
   const me = rows.find((r) => r.client_id === clientId) ?? rows.find((r) => r.is_me) ?? null;
   const ranked = rankedRows(rows);
@@ -79,8 +85,10 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
         <section data-standing="league" className="overflow-hidden rounded-2xl border bg-card">
           <div className="flex items-baseline justify-between gap-3 px-4 pt-3.5">
             <h3 className="text-lg font-black tracking-tight">{monthName(monthStart)} League</h3>
-            <span className={cn("shrink-0 text-[11px] font-bold", finalWeek ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
-              {monthClockLabel(finalWeek)}
+            {/* live, and how long is left: one quiet line instead of a pill by the tabs */}
+            <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold">
+              {!me?.month_closed && <><LiveMark size={6}>Live</LiveMark><span className="text-muted-foreground">·</span></>}
+              <span className={finalWeek ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}>{monthClockLabel(finalWeek)}</span>
             </span>
           </div>
 
@@ -124,6 +132,9 @@ export function AthleteLevelCard({ clientId }: { clientId: string }) {
             <MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />
           </div>
         </section>
+
+        {/* last month's recap: the banner above the tabs in recap week, this tile under the board the rest of the month */}
+        {!inRecapWindow() && <LeagueRecapButton variant="tile" />}
 
         <section className="divide-y divide-border/70 overflow-hidden rounded-2xl border bg-card">
           <button
@@ -176,23 +187,21 @@ function YouPanel({ me, rows }: { me: Row | null; rows: Row[] }) {
   }
   const standing = standingOf(rows, me);
   return (
-    <div data-league-you className="mx-3 mt-2.5 rounded-xl border border-primary/25 bg-primary/[0.06]">
+    <div data-league-you className="mx-3 mt-2.5 rounded-xl bg-muted/40">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
-        <span className="grid h-12 min-w-12 shrink-0 place-items-center rounded-xl bg-primary px-1.5 text-primary-foreground">
-          <span className="text-[19px] font-black leading-none tabular-nums">#{me.rank}</span>
-        </span>
+        <span className="w-10 shrink-0 text-center text-[22px] font-black leading-none tabular-nums text-primary">#{me.rank}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[20px] font-black leading-tight tabular-nums">
-            {formatLeaguePoints(me.total_points)} <span className="text-[12px] font-bold text-muted-foreground">pts</span>
+          <span className="block text-[15px] font-black leading-tight tabular-nums">
+            You · {formatLeaguePoints(me.total_points)} <span className="text-[12px] font-bold text-muted-foreground">pts</span>
           </span>
-          <span className="block text-[12px] font-semibold leading-snug text-muted-foreground">{standingText(standing)}</span>
+          <span className="block truncate text-[12px] font-semibold leading-snug text-muted-foreground">{standingText(standing)}</span>
         </span>
-        <span className="flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-primary">
+        <span className="flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-muted-foreground">
           <span className="max-[359px]:sr-only">Points</span> <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
         </span>
       </button>
       {open && (
-        <div className="space-y-3 border-t border-primary/15 px-3 pb-3 pt-1">
+        <div className="space-y-3 border-t border-border/60 px-3 pb-3 pt-1">
           <MonthBreakdown me={me} />
           {!me.month_closed && <CoachFocus me={me} title="Your next moves" />}
         </div>
@@ -206,14 +215,14 @@ function BoostProgressLine({ me }: { me: Row | null }) {
   const p = me?.qualified ? boostProgress(me) : null;
   if (!p) return null;
   return (
-    <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-xl bg-orange-500/[0.07] px-3 py-2">
+    <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2">
       <Flame className="h-4 w-4 shrink-0 text-orange-500" />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2 text-[11px] font-bold">
           <span className="truncate">Final Week Boost</span>
           <span className="shrink-0 tabular-nums text-muted-foreground">{p.done} / {p.target} workouts</span>
         </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-orange-500/15">
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted-foreground/15">
           <div className="h-full rounded-full bg-orange-500" style={{ width: `${p.pct}%` }} />
         </div>
       </div>

@@ -20,6 +20,8 @@ export type InstallmentPlanInput = {
   contract_value_cents?: number | null;
   amount_paid?: number | string | null;
   amount_paid_cents?: number | null;
+  /** GST/HST inside amount_paid_cents (prices are stored before tax). */
+  amount_tax_paid_cents?: number | null;
   is_recurring?: boolean | null;
 };
 
@@ -30,9 +32,9 @@ export type InstallmentPlan = {
   installmentAmount: number;
   /** Full contract value, major units (installment × count). */
   contractTotal: number;
-  /** Verified paid so far, major units. */
+  /** Verified paid so far, major units (what was charged, tax included). */
   amountPaid: number;
-  /** Contract total minus paid, clamped at 0. */
+  /** Contract total minus what was paid before tax, clamped at 0. */
   amountRemaining: number;
   /** How many installments have been collected (clamped to the plan length). */
   paymentsMade: number;
@@ -75,9 +77,10 @@ export function resolveInstallmentPlan(p: InstallmentPlanInput): InstallmentPlan
       ? p.amount_paid_cents / 100
       : num(p.amount_paid, 0);
 
-  const remaining = Math.max(0, round2(contractTotal - amountPaid));
+  const paidBeforeTax = Math.max(0, amountPaid - Math.max(0, num(p.amount_tax_paid_cents, 0)) / 100);
+  const remaining = round2(outstandingBeforeTax(contractTotal, amountPaid, paidBeforeTax));
   const paymentsMade =
-    perPayment > 0 ? Math.min(count, Math.floor(round2(amountPaid) / perPayment + 1e-6)) : 0;
+    perPayment > 0 ? Math.min(count, Math.floor(round2(paidBeforeTax) / perPayment + 1e-6)) : 0;
 
   return {
     numberOfPayments: count,
@@ -88,6 +91,17 @@ export function resolveInstallmentPlan(p: InstallmentPlanInput): InstallmentPlan
     paymentsMade,
     progressLabel: `${count} × ${round2(perPayment)}`,
   };
+}
+
+/**
+ * What's left on a sale. Prices are stored before tax and payments include it,
+ * so compare like for like: price minus what was paid before tax. A sale paid
+ * at least its price counts as settled (older sales stored a tax-included
+ * price).
+ */
+export function outstandingBeforeTax(price: number, paid: number, paidBeforeTax: number): number {
+  if (price <= 0 || paid >= price) return 0;
+  return Math.max(0, price - paidBeforeTax);
 }
 
 function round2(n: number): number {

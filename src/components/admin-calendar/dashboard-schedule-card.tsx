@@ -9,9 +9,10 @@ import { placeLabel, useGoogleCalendarStatus, type KindFamily } from "@/lib/cale
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
 import { addDaysISO, compactTimeRange, deviceTodayISO } from "@/lib/schedule-time";
 import {
-  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading,
+  AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
+import { weekDays } from "@/components/calendar/week-strip";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 
@@ -93,9 +94,10 @@ function byTime(a: Row, b: Row) {
 }
 
 /**
- * The coach's Home schedule, in the same look as every other Home: today on a
- * time column with a Now line, then the next few bookings, then "Book a
- * session" and "Full calendar". Tap a session to move / mark done / cancel
+ * The coach's Home calendar card, in the same look as every other Home: a
+ * date tile and "Calendar", this week's days (each opens the Calendar board
+ * there), today on a time column with a Now line, then the next few bookings,
+ * then "Book a session" and "Open calendar". Tap a session to move / mark done / cancel
  * it. Sits at the top of "Today" because it's the one thing on the dashboard
  * that's tied to the clock.
  */
@@ -112,8 +114,10 @@ export function DashboardScheduleCard() {
   const nowMs = useNow();
 
   // Today and the week ahead.
+  // From this Monday (the week strip shows the whole week) to a week ahead.
+  const weekStart = weekDays(today)[0];
   const lastDay = addDaysISO(today, AHEAD_DAYS);
-  const windowStart = new Date(`${today}T00:00:00`).toISOString();
+  const windowStart = new Date(`${weekStart}T00:00:00`).toISOString();
   const windowEnd = new Date(`${addDaysISO(lastDay, 1)}T00:00:00`).toISOString();
 
   const { data: sessions = [], isLoading } = useQuery<Session[]>({
@@ -124,7 +128,7 @@ export function DashboardScheduleCard() {
       const { data, error } = await supabase
         .from("pt_sessions")
         .select("id, client_id, title, session_type, session_date, start_time, end_time, timezone, location, status, uses_credit, google_event_id, client:clients(full_name)")
-        .gte("session_date", today)
+        .gte("session_date", weekStart)
         .lte("session_date", lastDay)
         .neq("status", "Rescheduled")
         .order("session_date")
@@ -157,7 +161,7 @@ export function DashboardScheduleCard() {
       const { data } = await (supabase.from("events") as any)
         .select("id, name, event_date, start_time, end_time, status")
         .in("status", ["Active", "Draft"])
-        .gte("event_date", today)
+        .gte("event_date", weekStart)
         .lte("event_date", lastDay);
       return (data ?? []) as any[];
     },
@@ -249,6 +253,18 @@ export function DashboardScheduleCard() {
     return out;
   }, [sessions, appts, events, googleEvents, googleOn]);
 
+  // A dot per booking on each day of the week strip.
+  const dotsByDay = useMemo(() => {
+    const m = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (r.status === "Cancelled") continue;
+      m.set(r.date, [...(m.get(r.date) ?? []), r]);
+    }
+    const out = new Map<string, string[]>();
+    for (const [d, list] of m) out.set(d, list.sort(byTime).map((r) => FAMILY_ACCENT[r.family]));
+    return out;
+  }, [rows]);
+
   const todayRows = useMemo(() => rows.filter((r) => r.date === today).sort(byTime), [rows, today]);
   const nowIndex = useMemo(() => nowLineIndex(todayRows, nowMs), [todayRows, nowMs]);
   // Coming up: the next few live bookings after today (the next one further out when the week is empty).
@@ -288,6 +304,7 @@ export function DashboardScheduleCard() {
     <AgendaCard>
       <AgendaHeader
         today={today}
+        link={{ to: "/admin/calendar", search: { tab: "board" } }}
         right={
           gcal?.connected ? (
             <button type="button" onClick={toggleGoogle} aria-pressed={withGoogle} className="shrink-0 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
@@ -296,8 +313,13 @@ export function DashboardScheduleCard() {
           ) : null
         }
       />
+      <AgendaWeek
+        today={today}
+        dots={(d) => dotsByDay.get(d) ?? []}
+        link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}
+      />
 
-      <div className="mt-1.5">
+      <AgendaToday>
         {isLoading && !sessions.length ? (
           <AgendaLoading />
         ) : todayRows.length === 0 ? (
@@ -333,7 +355,7 @@ export function DashboardScheduleCard() {
             )}
           </ol>
         )}
-      </div>
+      </AgendaToday>
 
       <AgendaNext show={upcoming.length > 0}>
         {upcoming.map((r, i) => (
@@ -356,7 +378,7 @@ export function DashboardScheduleCard() {
           <CalendarPlus className="h-4 w-4" /> Book a session
         </button>
         <Link to="/admin/calendar" className={AGENDA_LINK}>
-          Full calendar
+          Open calendar
           <ChevronRight className="h-4 w-4" />
         </Link>
       </AgendaFooter>

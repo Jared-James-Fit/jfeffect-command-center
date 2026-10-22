@@ -4,11 +4,11 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type ActivityFilter, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
+import { PREVIEW_ONLY_MESSAGE, canShareToStory, crewStories, isPulsePost, myStory, namesLine, pickWorkoutWin, postTimeLabel, reactionEmoji, storyEnd, storyFrameKind, storyTarget, storyWords, workoutHeadline, type CommunityAuthor, type CommunityPost, type StoryEnd, type StoryGroup } from "@/lib/community";
 import { useCommunityProfile, useFullMediaUrl, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { markPostViewed } from "@/components/community/post-views";
-import { PostActivitySheet } from "@/components/community/post-activity";
+import { StoryViewersPanel } from "@/components/community/post-activity";
 import { LessonStoryFrame } from "@/components/community/lesson-card";
 import { StorySticker } from "@/components/community/story-sticker";
 import { InlineFollow } from "@/components/community/follow-button";
@@ -643,9 +643,11 @@ function StoryViewer({
                 if (at >= 0) setIi(at);
               }}
               ask={askActivity}
+              unit={unit}
               onOpen={() => onOpenPost(storyTarget(post))}
               onHold={setComposing}
               onOpenPerson={openPerson}
+              onDeleted={close}
             />
           ) : (
             <StoryBar
@@ -820,51 +822,58 @@ function StoryPeek({ group, at, unit }: { group: StoryGroup<CommunityPost>; at: 
 }
 
 /**
- * Your own story: who's seen it and the hearts (nothing to reply to). Seen by
- * (or a swipe up) opens its Activity, the hearts open it on Likes; the strip
- * in it moves the story to another of your moments.
+ * Your own story: who's seen it and the hearts (nothing to reply to). Seen by,
+ * the hearts or a swipe up open its viewers (Instagram's: the story shrinks
+ * to the top, StoryViewersPanel), whose strip moves the story to another of
+ * your moments.
  */
 function MyStoryBar({
   post,
   moments,
   onPick,
   ask,
+  unit,
   onOpen,
   onHold,
   onOpenPerson,
+  onDeleted,
 }: {
   post: CommunityPost;
   moments: CommunityPost[];
   onPick: (id: string) => void;
   ask: number;
+  unit: "kg" | "lb";
   onOpen: () => void;
   onHold: (on: boolean) => void;
   onOpenPerson?: (a: CommunityAuthor) => void;
+  onDeleted: () => void;
 }) {
   const { isImpersonating } = useClientImpersonation();
-  const [activity, setActivity] = useState<ActivityFilter | null>(null);
+  const [viewers, setViewers] = useState(false);
   const [sticker, setSticker] = useState(false);
   // only a swipe made while this is on screen (never one from before it was)
   const asked = useRef(ask);
   useEffect(() => {
     if (ask === asked.current) return;
     asked.current = ask;
-    setActivity("all");
+    setViewers(true);
   }, [ask]);
-  // the story waits while Activity (or the sticker editor) is open
+  // the story waits while its viewers (or the sticker editor) are open
   useEffect(() => {
-    onHold(activity != null || sticker);
-  }, [activity, sticker, onHold]);
+    onHold(viewers || sticker);
+  }, [viewers, sticker, onHold]);
   useEffect(() => () => onHold(false), [onHold]);
   const v = post.views;
   const hearts = post.reaction_count ?? 0;
+  const closeViewers = useCallback(() => setViewers(false), []);
   return (
+    <>
     <div className="absolute inset-x-0 bottom-0 z-30 flex items-center gap-2 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-10" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.85rem)" }} data-story-mine-bar>
       <button
         type="button"
-        onClick={() => setActivity("all")}
+        onClick={() => setViewers(true)}
         className="flex h-11 min-w-0 items-center gap-2 rounded-full bg-white/15 pl-2 pr-4 text-[14px] font-bold backdrop-blur-sm active:scale-95"
-        aria-label={v?.count ? `Seen by ${v.count}. See activity` : "No views yet. See activity"}
+        aria-label={v?.count ? `Seen by ${v.count}. See who` : "No views yet"}
         data-story-activity
       >
         {v?.faces.length ? (
@@ -878,10 +887,10 @@ function MyStoryBar({
         ) : (
           <Eye className="ml-1.5 h-5 w-5 shrink-0" />
         )}
-        <span className="truncate">{v?.count ? `Seen by ${v.count}` : "Activity"}</span>
+        <span className="truncate">{v?.count ? `Seen by ${v.count}` : "No views yet"}</span>
       </button>
       {hearts > 0 && (
-        <button type="button" onClick={() => setActivity("likes")} className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-white/15 px-3.5 text-[14px] font-bold backdrop-blur-sm active:scale-95" aria-label={`${hearts} ${hearts === 1 ? "like" : "likes"}. See who`} data-story-likes>
+        <button type="button" onClick={() => setViewers(true)} className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-white/15 px-3.5 text-[14px] font-bold backdrop-blur-sm active:scale-95" aria-label={`${hearts} ${hearts === 1 ? "like" : "likes"}. See who`} data-story-likes>
           ❤️ {hearts}
         </button>
       )}
@@ -899,9 +908,20 @@ function MyStoryBar({
       <button type="button" onClick={onOpen} className={cn("inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full bg-white/15 pl-4 pr-3 text-[14px] font-bold backdrop-blur-sm active:scale-95", post.visibility !== "community" && "ml-auto")}>
         {storyFrameKind(post) === "win" ? "Workout" : "Post"} <ChevronRight className="h-4 w-4" />
       </button>
-      <PostActivitySheet postId={activity ? post.id : null} start={activity ?? "all"} story moments={moments} onPick={onPick} onClose={() => setActivity(null)} onOpenAuthor={onOpenPerson} />
       <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />
     </div>
+    {viewers && (
+      <StoryViewersPanel
+        post={post}
+        moments={moments}
+        onPick={onPick}
+        onClose={closeViewers}
+        onOpenAuthor={onOpenPerson}
+        renderPreview={(m) => <StoryFrame post={m} unit={unit} />}
+        onDeleted={onDeleted}
+      />
+    )}
+    </>
   );
 }
 

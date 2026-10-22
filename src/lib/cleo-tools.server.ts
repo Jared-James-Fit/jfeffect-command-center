@@ -15,6 +15,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
+import { clientOwed } from "@/lib/client-owed";
+import { clientTaxRate } from "@/lib/client-billing-summary";
 import {
   bodyweightSummary, dayIn, formatSessions, groupSessions, matchesExercise, mergeBodyweight,
   type BodyweightEntry, type LoggedSet,
@@ -381,19 +383,29 @@ export function cleoReadTools(ctx: ToolCtx) {
     }),
 
     purchases: tool({
-      description: "A client's purchases: what they bought, payment status, paid, outstanding, next billing date, with each purchase's id (needed to record a payment or send a payment link).",
+      description: "A client's purchases: what they bought, payment status, paid, outstanding (before tax), next billing date, with each purchase's id (needed to record a payment or send a payment link), and what they owe in total including sessions trained beyond what they bought.",
       inputSchema: z.object({ client_id: clientId }),
       execute: safe("purchases", async ({ client_id }) => {
         const c = await clientRow(db, client_id);
         const res = await db.from("purchase_records").select("*").eq("client_id", client_id).is("archived_at", null).order("purchased_at", { ascending: false, nullsFirst: false }).limit(20);
         const list = rows<any>(res as any, "purchases");
         if (!list.length) return `${clientName(c)} has no purchases.`;
+        // Sessions trained beyond what was bought (held bookings count as spoken for).
+        const ev = rows<any>(await db.from("session_ledger_events").select("event_type, session_count").eq("client_id", client_id) as any, "session events");
+        const net = ev.reduce((sum, e) => sum + Number(e.session_count ?? 0), 0);
+        const holds = ev.filter((e) => e.event_type === "reserved" || e.event_type === "released").reduce((sum, e) => sum + Number(e.session_count ?? 0), 0);
+        const owed = clientOwed(list, Math.max(0, -(net + Math.max(0, -holds))));
+        const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+        // The Purchases tab leads with the total tax included; say the same number.
+        const rate = clientTaxRate(list);
+        const withTax = rate != null && owed.totalCents > 0 ? `${dollars(Math.round(owed.totalCents * (1 + rate)))} with tax, ` : "";
         return [
-          `${clientName(c)} purchases:`,
+          `${clientName(c)} purchases (prices and "outstanding" are before tax; "paid" includes tax):`,
           ...list.map((p) => {
-            const owed = p.amount_outstanding_cents != null ? `$${(Number(p.amount_outstanding_cents) / 100).toFixed(2)}` : "?";
-            return `- ${p.offer_name ?? "Purchase"} (purchase id ${p.id}) | ${p.payment_status ?? "?"} | total ${money(p.full_payable_amount)} | paid ${money(p.amount_paid)} | outstanding ${owed} | bought ${String(p.purchased_at ?? "?").slice(0, 10)}${p.next_billing_date ? ` | next billing ${p.next_billing_date}` : ""}`;
+            const left = p.amount_outstanding_cents != null ? dollars(Number(p.amount_outstanding_cents)) : "?";
+            return `- ${p.offer_name ?? "Purchase"} (purchase id ${p.id}) | ${p.payment_status ?? "?"} | total ${money(p.full_payable_amount)} | paid ${money(p.amount_paid)} | outstanding ${left} | bought ${String(p.purchased_at ?? "?").slice(0, 10)}${p.next_billing_date ? ` | next billing ${p.next_billing_date}` : ""}`;
           }),
+          `Owes in total: ${withTax}${dollars(owed.totalCents)} before tax (${dollars(owed.salesCents)} left on purchases${owed.unbilledSessions > 0 ? `, ${owed.unbilledSessions} sessions trained beyond what was bought${owed.unbilledCents > 0 ? ` = ${dollars(owed.unbilledCents)} at ${dollars(owed.sessionPriceCents ?? 0)} each` : ""}` : ""}).`,
         ].join("\n");
       }),
     }),

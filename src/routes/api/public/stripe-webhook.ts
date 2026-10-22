@@ -15,6 +15,7 @@ import {
   invoiceTaxMinor,
 } from "@/lib/stripe-invoice-refs";
 import { matchPurchase, type MatchResult } from "@/lib/stripe-purchase-match";
+import { resolveInstallmentPlan } from "@/lib/installment-plan";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -847,9 +848,19 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 await flagUnlinked(supabase, event, obj, "Cancelled subscription could not be matched to a JF Effect sale.");
               }
               if (purchase) {
+                // A set number of payments that has been paid in full ends because
+                // it's done, not because it was cancelled.
+                const { data: plan } = await supabase
+                  .from("purchase_records")
+                  .select("contract_value_cents, full_payable_amount, installment_amount, number_of_payments, amount_paid, amount_paid_cents, amount_tax_paid_cents")
+                  .eq("id", purchase.id)
+                  .maybeSingle();
+                const paidPlan = plan ? resolveInstallmentPlan(plan) : null;
+                const completed = !!paidPlan && paidPlan.amountPaid > 0 && paidPlan.amountRemaining <= 0;
                 await supabase.from("purchase_records").update({
-                  payment_status: "Cancelled",
-                  service_status: "Cancelled",
+                  ...(completed
+                    ? { payment_status: "Paid", is_recurring: false }
+                    : { payment_status: "Cancelled", service_status: "Cancelled" }),
                   stripe_subscription_status: "canceled",
                   cancel_at_period_end: false,
                   next_billing_date: null,

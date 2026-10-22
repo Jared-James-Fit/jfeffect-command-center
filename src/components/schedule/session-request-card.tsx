@@ -158,7 +158,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
         </button>
       )}
       {!staff && req.status === "approved" && (
-        <Link to="/portal/calendar" className="inline-flex text-xs font-bold text-primary">Open my schedule →</Link>
+        <Link to="/portal/calendar" className="inline-flex text-xs font-bold text-primary">Open my calendar →</Link>
       )}
 
       {staff && booking && clientRow && (
