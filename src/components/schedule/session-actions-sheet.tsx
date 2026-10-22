@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Ban, CalendarClock, CheckCircle2, CircleOff, Clock, Dumbbell, MapPin, MessageSquare, Pencil, ChevronLeft, Loader2,
+  Ban, CalendarClock, CheckCircle2, ChevronRight, Clock, Dumbbell, MapPin, MessageSquare, Pencil, PiggyBank, ChevronLeft, Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { NoShowPtDialog } from "@/components/pt-session-manage-dialogs";
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { invalidatePtSessionCaches } from "@/lib/pt-session-manage";
 import { statusTone } from "@/lib/pt-sessions";
@@ -24,6 +23,8 @@ import { isLastMinute } from "@/lib/pt-session-reminders";
 import { addMinutesHM, fmtWallClock, minutesBetweenHM, wallTimeToUtc, DEFAULT_TZ } from "@/lib/schedule-time";
 import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
 import { useEnterClientPov } from "@/components/clients/use-enter-client-pov";
+import { creditChipClasses, moveOutcome, sessionCredit, sessionStatusLabel, shortDay, statusForDate } from "@/lib/session-credit";
+import { todayLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
 
 export type ActionSession = {
@@ -52,12 +53,15 @@ export type ChangeRequest = {
   created_at: string;
 };
 
-type Mode = "menu" | "move" | "cancel" | "decline";
+type Mode = "menu" | "move" | "confirm" | "decline";
+
+/** What the coach picked for the session's credit (Reschedule is the move form). */
+type Outcome = "done" | "bank" | "use";
 
 const DURATIONS = [30, 45, 60, 90];
 
 export function dayLabel(dateISO: string): string {
-  return new Date(`${dateISO}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+  return shortDay(dateISO);
 }
 
 export function whenLabel(dateISO: string, startHM: string): string {
@@ -69,10 +73,16 @@ export function kickGoogleSync() {
   void kickScheduleSync().catch(() => {});
 }
 
+const OUTCOME_STATUS: Record<Outcome, "Completed" | "Cancelled" | "Missed"> = { done: "Completed", bank: "Cancelled", use: "Missed" };
+
 /**
- * The coach's one place to act on a session: move it, mark it done, no-show,
- * cancel, answer the client's change request, or open the full editor. Every
- * change can tell the client in the app (and by text when it's within 48 hours).
+ * The coach's one place to act on a session. Booked sessions count as used by
+ * themselves once their day is over (pt_sessions_auto_complete), so what's
+ * left here is the exceptions, each saying what it does to the credit:
+ * Reschedule (the credit moves with it), Cancel · bank the credit, Late cancel
+ * or no-show · use the credit, and for a done one "Didn't happen". Every
+ * change can be undone from its toast, and an upcoming one can tell the client
+ * (by text too when it's within 48 hours).
  */
 export function SessionActionsSheet({
   session,
@@ -86,14 +96,14 @@ export function SessionActionsSheet({
   clientName?: string | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  initialMode?: Mode;
+  initialMode?: "menu" | "move";
   onEdit?: (s: ActionSession) => void;
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [outcome, setOutcome] = useState<Outcome>("bank");
   const [busy, setBusy] = useState(false);
-  const [noShowOpen, setNoShowOpen] = useState(false);
 
   // Move form
   const [date, setDate] = useState("");
@@ -139,13 +149,14 @@ export function SessionActionsSheet({
   });
 
   const tz = session?.timezone || DEFAULT_TZ;
+  const today = todayLocalISO();
   const end = start ? addMinutesHM(start, duration) : "";
   const changedTime = !!session && (date !== session.session_date || start !== session.start_time.slice(0, 5) || end !== session.end_time.slice(0, 5));
   const conflictCheck = useConflictCheck({
     slots: date && start ? [{ key: "move", date, start, end }] : [],
     timezone: tz,
     excludeSessionIds: session ? [session.id] : [],
-    enabled: open && mode === "move" && changedTime,
+    enabled: open && mode === "move" && (changedTime || session?.status !== "Scheduled") && !!date && date >= today,
   });
   const blocked = conflictCheck.conflicts.length > 0 && !override;
 
@@ -161,17 +172,48 @@ export function SessionActionsSheet({
   }, [newStart?.getTime(), oldStart?.getTime()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!session) return null;
-  const isScheduled = session.status === "Scheduled";
   const when = whenLabel(session.session_date, session.start_time);
+  const usesCredit = session.uses_credit !== false;
+  const credit = sessionCredit(session, today);
+  const upcoming = session.session_date >= today;
+  const dayOver = !upcoming;
+  const isBooked = session.status === "Scheduled";
+  const isUsed = session.status === "Completed" || session.status === "Missed";
+  // Rebooking a cancelled / missed one may keep its old time; moving a booked or done one needs a new one.
+  const rebooking = !isBooked && session.status !== "Completed";
+  const canMove = !!date && !!start && (changedTime || rebooking);
+  const target = date ? statusForDate(date, today) : "Scheduled";
 
-  const done = (msg: string) => {
+  const refresh = () => {
     invalidatePtSessionCaches(qc, session.client_id);
     qc.invalidateQueries({ queryKey: ["schedule-change-requests"] });
     qc.invalidateQueries({ queryKey: ["session-change-request", session.id] });
     qc.invalidateQueries({ queryKey: ["cal-admin-pt"] });
     qc.invalidateQueries({ queryKey: ["cal-client-pt"] });
     kickGoogleSync();
-    toast.success(msg);
+  };
+
+  /** Toast with Undo that puts the session back exactly as it was (the credit follows). */
+  const doneWithUndo = (msg: string, description?: string) => {
+    const before = {
+      status: session.status,
+      session_date: session.session_date,
+      start_time: session.start_time.slice(0, 5),
+      end_time: session.end_time.slice(0, 5),
+    };
+    refresh();
+    toast.success(msg, {
+      description,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          const { error } = await supabase.from("pt_sessions").update(before).eq("id", session.id);
+          if (error) return toast.error(error.message || "Undo failed");
+          refresh();
+          toast.success("Undone · back as it was");
+        },
+      },
+    });
     onOpenChange(false);
   };
 
@@ -203,21 +245,29 @@ export function SessionActionsSheet({
   };
 
   const doMove = async () => {
-    if (!date || !start || !changedTime) return;
+    if (!canMove) return;
     if (end <= start) return toast.error("Pick an earlier start so the session ends the same day.");
     setBusy(true);
     try {
       const { error } = await supabase
         .from("pt_sessions")
-        .update({ session_date: date, start_time: start, end_time: end })
+        .update({ session_date: date, start_time: start, end_time: end, status: target })
         .eq("id", session.id);
       if (error) throw error;
       let texted = false;
-      if (notify) {
-        await tellClient(`Your ${title} on ${when} moved to ${whenLabel(date, start)}.`);
+      // Only an upcoming time is news to the client.
+      if (notify && target === "Scheduled") {
+        await tellClient(
+          rebooking
+            ? `You're booked: ${title} on ${whenLabel(date, start)}.`
+            : `Your ${title} on ${when} moved to ${whenLabel(date, start)}.`,
+        );
         texted = await textIfUrgent("moved", oldStart?.toISOString());
       }
-      done(`Moved to ${whenLabel(date, start)}${texted ? ` · ${first} was texted` : ""}`);
+      doneWithUndo(
+        `${rebooking ? "Booked" : "Moved to"} ${whenLabel(date, start)}${texted ? ` · ${first} was texted` : ""}`,
+        moveOutcome(date, today, usesCredit),
+      );
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't move the session");
     } finally {
@@ -225,40 +275,42 @@ export function SessionActionsSheet({
     }
   };
 
-  const doStatus = async (status: "Completed" | "Cancelled" | "Missed", opts: { deduct?: boolean; message?: string } = {}) => {
+  const OUTCOME_COPY: Record<Outcome, { toast: string; message: string }> = {
+    done: { toast: usesCredit ? "Done · 1 credit used" : "Marked done", message: "" },
+    bank: {
+      toast: usesCredit ? "Cancelled · credit banked" : "Cancelled",
+      message: `Your ${title} on ${when} is cancelled.${usesCredit ? " The session stays on your account to book another time." : ""}`,
+    },
+    use: {
+      toast: usesCredit ? "Counted · 1 credit used" : "Marked missed",
+      message: `Your ${title} on ${when} is cancelled.${usesCredit ? " It counts as a used session." : ""}`,
+    },
+  };
+
+  const apply = async (o: Outcome) => {
     setBusy(true);
     try {
-      await setPtSessionStatus({ data: { sessionId: session.id, status, deductOnMissed: opts.deduct } });
+      await setPtSessionStatus({ data: { sessionId: session.id, status: OUTCOME_STATUS[o] } });
       let texted = false;
-      if (opts.message && notify) {
-        await tellClient(opts.message);
-        if (status !== "Completed") texted = await textIfUrgent("cancelled");
+      if (o !== "done" && upcoming && notify) {
+        await tellClient(OUTCOME_COPY[o].message);
+        texted = await textIfUrgent("cancelled");
       }
-      if (status === "Completed") {
-        invalidatePtSessionCaches(qc, session.client_id);
-        kickGoogleSync();
-        toast.success(session.uses_credit === false ? "Marked done" : "Marked done · 1 session used", {
-          action: {
-            label: "Undo",
-            onClick: async () => {
-              try {
-                await setPtSessionStatus({ data: { sessionId: session.id, status: "Scheduled" } });
-                invalidatePtSessionCaches(qc, session.client_id);
-                toast.success("Undone · session is scheduled again");
-              } catch (e: any) {
-                toast.error(e?.message ?? "Undo failed");
-              }
-            },
-          },
-        });
-        onOpenChange(false);
-        return;
-      }
-      done(status === "Cancelled" ? `Cancelled${texted ? ` · ${first} was texted` : ""}` : "Late cancel recorded · 1 session used");
+      doneWithUndo(`${OUTCOME_COPY[o].toast}${texted ? ` · ${first} was texted` : ""}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Update failed");
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Upcoming: confirm (and tell the client). Its day is over: just do it, with Undo. */
+  const pick = (o: Outcome) => {
+    if (upcoming && o !== "done") {
+      setOutcome(o);
+      setMode("confirm");
+    } else {
+      void apply(o);
     }
   };
 
@@ -275,7 +327,9 @@ export function SessionActionsSheet({
       await tellClient(
         `Your ${title} on ${when} stays as booked.${reason.trim() ? ` ${reason.trim()}` : ""}`,
       );
-      done("Request declined · client told");
+      refresh();
+      toast.success("Request declined · client told");
+      onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't decline");
     } finally {
@@ -295,216 +349,255 @@ export function SessionActionsSheet({
     </div>
   );
 
-  return (
-    <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto w-full max-w-lg space-y-4">
-            <SheetHeader className="space-y-1 text-left">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className={statusTone(session.status)}>
-                  {session.status === "Missed" ? "No-show" : session.status}
-                </Badge>
-                {session.google_event_id && (
-                  <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-300">In Google</Badge>
-                )}
-              </div>
-              <SheetTitle className="text-left">
-                <Link to="/admin/clients/$id" params={{ id: session.client_id }} className="hover:underline" onClick={() => onOpenChange(false)}>
-                  {name}
-                </Link>
-                <span className="text-muted-foreground"> · {title}</span>
-              </SheetTitle>
-              <SheetDescription className="flex flex-wrap gap-x-3 gap-y-1 text-left">
-                <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{when}</span>
-                {session.location && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{session.location.split(",")[0]}</span></span>}
-              </SheetDescription>
-            </SheetHeader>
+  // The choices, in the order the coach needs them for this session.
+  const credits = (text: string, fallback: string) => (usesCredit ? text : fallback);
+  const choices: ChoiceProps[] = [];
+  if (isBooked && dayOver) {
+    choices.push({
+      icon: <CheckCircle2 className="h-5 w-5 text-success" />, title: "It happened",
+      hint: credits("Done · uses 1 credit.", "Marks it done."), onClick: () => pick("done"),
+    });
+  }
+  choices.push({
+    icon: <CalendarClock className="h-5 w-5 text-primary" />,
+    title: rebooking ? "Book it again" : "Reschedule",
+    hint: rebooking
+      ? credits("Pick a day and time. It holds a credit again.", "Pick a day and time.")
+      : isUsed
+        ? credits("Didn't happen that day? Move it: the credit moves with it.", "Move it to the right day.")
+        : credits("New day or time. The credit stays with it.", "New day or time."),
+    onClick: () => setMode("move"),
+  });
+  if (session.status !== "Cancelled" && session.status !== "Rescheduled") {
+    choices.push({
+      icon: <PiggyBank className="h-5 w-5 text-sky-300" />,
+      title: session.status === "Completed"
+        ? "Didn't happen · bank the credit"
+        : session.status === "Missed" ? "Don't count it · bank the credit" : "Cancel · bank the credit",
+      hint: credits(`The credit goes back to ${first} to book another time.`, "Cancels it."),
+      onClick: () => pick("bank"),
+    });
+  }
+  if (session.status !== "Missed") {
+    choices.push({
+      icon: <Ban className="h-5 w-5 text-warning" />,
+      title: session.status === "Completed"
+        ? "Mark as a no-show"
+        : isBooked ? credits("Late cancel or no-show · use the credit", "Late cancel or no-show") : credits("Count it after all · use the credit", "Mark it missed"),
+      hint: session.status === "Completed"
+        ? credits("Keeps the credit used, and shows it was missed.", "Shows it was missed.")
+        : credits(`Counts as one of ${first}'s sessions.`, "Shows it was missed."),
+      onClick: () => pick("use"),
+    });
+  }
 
-            {request && mode === "menu" && (
-              <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-                <div className="text-sm font-semibold text-amber-200">
-                  {first} {request.kind === "move" ? "asked to move this session" : "can't make this session"}
-                </div>
-                {request.preferred_times && (
-                  <p className="text-sm"><span className="text-muted-foreground">Better times:</span> {request.preferred_times}</p>
-                )}
-                {request.note && <p className="text-sm"><span className="text-muted-foreground">Note:</span> {request.note}</p>}
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-lg space-y-4">
+          <SheetHeader className="space-y-1 text-left">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={statusTone(session.status)}>{sessionStatusLabel(session.status)}</Badge>
+              {usesCredit && <Badge variant="outline" className={creditChipClasses(credit.state)}>{credit.label}</Badge>}
+              {session.google_event_id && (
+                <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-300">In Google</Badge>
+              )}
+            </div>
+            <SheetTitle className="text-left">
+              <Link to="/admin/clients/$id" params={{ id: session.client_id }} className="hover:underline" onClick={() => onOpenChange(false)}>
+                {name}
+              </Link>
+              <span className="text-muted-foreground"> · {title}</span>
+            </SheetTitle>
+            <SheetDescription className="flex flex-wrap gap-x-3 gap-y-1 text-left">
+              <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{when}</span>
+              {session.location && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{session.location.split(",")[0]}</span></span>}
+            </SheetDescription>
+            {usesCredit && mode === "menu" && <p className="text-xs text-muted-foreground">{credit.detail}</p>}
+          </SheetHeader>
+
+          {request && mode === "menu" && (
+            <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="text-sm font-semibold text-amber-200">
+                {first} {request.kind === "move" ? "asked to move this session" : "can't make this session"}
+              </div>
+              {request.preferred_times && (
+                <p className="text-sm"><span className="text-muted-foreground">Better times:</span> {request.preferred_times}</p>
+              )}
+              {request.note && <p className="text-sm"><span className="text-muted-foreground">Note:</span> {request.note}</p>}
+              <p className="text-[11px] text-muted-foreground">It stays booked (and isn't counted by itself) until you answer.</p>
+              {request.kind === "move" ? (
                 <div className="grid grid-cols-2 gap-2">
-                  {request.kind === "move" ? (
-                    <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("move")}>
-                      <CalendarClock className="mr-2 h-4 w-4" /> Pick new time
-                    </Button>
-                  ) : (
-                    <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("cancel")}>
-                      <CircleOff className="mr-2 h-4 w-4" /> Cancel it
-                    </Button>
-                  )}
+                  <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("move")}>
+                    <CalendarClock className="mr-2 h-4 w-4" /> Pick new time
+                  </Button>
                   <Button variant="outline" className="h-11" onClick={() => setMode("decline")}>Decline</Button>
                 </div>
-              </div>
-            )}
-
-            {mode === "menu" && (
-              <div className="space-y-2">
-                {/* Mid-session: straight into the client's workout for that day, as they see it. */}
-                {pov.canPov && (
-                  <Button
-                    className="h-12 w-full bg-gradient-primary font-bold"
-                    disabled={pov.busy}
-                    onClick={() => pov.enter(session.client_id, { to: `/portal/workouts?open=${session.session_date}`, fallbackName: name })}
-                  >
-                    {pov.busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Dumbbell className="mr-2 h-4 w-4" />}
-                    Open {first}'s workout
-                  </Button>
-                )}
-                {isScheduled ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" className="h-14 flex-col gap-0.5 text-sm" onClick={() => setMode("move")}>
-                        <CalendarClock className="h-5 w-5 text-primary" /> Move
-                      </Button>
-                      <Button variant="outline" className="h-14 flex-col gap-0.5 text-sm" disabled={busy} onClick={() => doStatus("Completed")}>
-                        <CheckCircle2 className="h-5 w-5 text-success" /> Mark done
-                      </Button>
-                      <Button variant="outline" className="h-14 flex-col gap-0.5 text-sm" onClick={() => setNoShowOpen(true)}>
-                        <Ban className="h-5 w-5 text-warning" /> No-show
-                      </Button>
-                      <Button variant="outline" className="h-14 flex-col gap-0.5 text-sm" onClick={() => setMode("cancel")}>
-                        <CircleOff className="h-5 w-5 text-muted-foreground" /> Cancel
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="rounded-md border border-border bg-secondary/20 p-3 text-xs text-muted-foreground">
-                    This session is {session.status === "Missed" ? "a no-show" : session.status.toLowerCase()}. Open the full editor to undo or restore it.
-                  </p>
-                )}
+              ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {onEdit && (
-                    <Button variant="ghost" className="h-11" onClick={() => { onOpenChange(false); onEdit(session); }}>
-                      <Pencil className="mr-2 h-4 w-4" /> Full editor
-                    </Button>
-                  )}
-                  <Button variant="ghost" className="h-11" asChild>
-                    <Link to="/admin/messages" search={{ client: session.client_id } as any} onClick={() => onOpenChange(false)}>
-                      <MessageSquare className="mr-2 h-4 w-4" /> Message {first}
-                    </Link>
+                  <Button className="h-11 bg-gradient-primary font-bold" onClick={() => pick("bank")}>
+                    <PiggyBank className="mr-2 h-4 w-4" /> Bank it
                   </Button>
+                  <Button variant="outline" className="h-11" onClick={() => pick("use")}>
+                    <Ban className="mr-2 h-4 w-4" /> Count it
+                  </Button>
+                  <Button variant="ghost" className="col-span-2 h-10" onClick={() => setMode("decline")}>Decline · keep it booked</Button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
-            {mode === "move" && (
-              <div className="space-y-3">
-                <BackButton onClick={() => setMode("menu")} />
-                {request?.kind === "move" && request.preferred_times && (
-                  <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                    {first} suggested: {request.preferred_times}
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="col-span-2 sm:col-span-1">
-                    <Label>New date</Label>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11" />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <Label>Start time</Label>
-                    <Input type="time" step={300} value={start} onChange={(e) => setStart(e.target.value)} className="h-11" />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Length</Label>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {Array.from(new Set([...DURATIONS, duration])).sort((a, b) => a - b).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setDuration(m)}
-                        className={cn(
-                          "h-9 rounded-full border px-3 text-xs font-semibold",
-                          duration === m ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground",
-                        )}
-                      >
-                        {m} min
-                      </button>
-                    ))}
-                  </div>
-                  {end && <p className="mt-1 text-[11px] text-muted-foreground">Ends {fmtWallClock(end)}</p>}
-                </div>
-                {changedTime && (
-                  <ConflictNotice check={conflictCheck} override={override} onOverride={setOverride} overrideLabel="Move anyway" />
-                )}
-                {notifyRow}
+          {mode === "menu" && (
+            <div className="space-y-2">
+              {/* Mid-session: straight into the client's workout for that day, as they see it. */}
+              {pov.canPov && (
                 <Button
                   className="h-12 w-full bg-gradient-primary font-bold"
-                  disabled={busy || !changedTime || blocked || conflictCheck.checking}
-                  onClick={doMove}
+                  disabled={pov.busy}
+                  onClick={() => pov.enter(session.client_id, { to: `/portal/workouts?open=${session.session_date}`, fallbackName: name })}
                 >
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {changedTime ? `Move to ${whenLabel(date, start)}` : "Pick a new date or time"}
+                  {pov.busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Dumbbell className="mr-2 h-4 w-4" />}
+                  Open {first}'s workout
                 </Button>
+              )}
+              <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                {choices.map((c) => <Choice key={c.title} {...c} disabled={busy} />)}
               </div>
-            )}
-
-            {mode === "cancel" && (
-              <div className="space-y-3">
-                <BackButton onClick={() => setMode("menu")} />
-                <p className="text-sm">Cancel {first}'s session on {when}?</p>
-                {notifyRow}
-                <Button
-                  className="h-12 w-full"
-                  variant="destructive"
-                  disabled={busy}
-                  onClick={() => doStatus("Cancelled", { message: `Your ${title} on ${when} is cancelled.` })}
-                >
-                  Cancel · session goes back to {first}
-                </Button>
-                {session.uses_credit !== false && (
-                  <Button
-                    className="h-12 w-full"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => doStatus("Missed", { deduct: true, message: `Your ${title} on ${when} is cancelled. It counts as a used session.` })}
-                  >
-                    Late cancel · counts as used
+              <div className="grid grid-cols-2 gap-2">
+                {onEdit && (
+                  <Button variant="ghost" className="h-11" onClick={() => { onOpenChange(false); onEdit(session); }}>
+                    <Pencil className="mr-2 h-4 w-4" /> Full editor
                   </Button>
                 )}
-              </div>
-            )}
-
-            {mode === "decline" && request && (
-              <div className="space-y-3">
-                <BackButton onClick={() => setMode("menu")} />
-                <p className="text-sm">The session stays on {when}. {first} gets a message.</p>
-                <div>
-                  <Label>Reason or other options (optional)</Label>
-                  <Textarea
-                    rows={3}
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="e.g. I'm booked Wednesday. Thursday at 4 works if you want it."
-                  />
-                </div>
-                <Button className="h-12 w-full" variant="outline" disabled={busy} onClick={doDecline}>
-                  Decline request
+                <Button variant="ghost" className="h-11" asChild>
+                  <Link to="/admin/messages" search={{ client: session.client_id } as any} onClick={() => onOpenChange(false)}>
+                    <MessageSquare className="mr-2 h-4 w-4" /> Message {first}
+                  </Link>
                 </Button>
               </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-      <NoShowPtDialog
-        open={noShowOpen}
-        onOpenChange={setNoShowOpen}
-        session={session as any}
-        onDone={() => {
-          invalidatePtSessionCaches(qc, session.client_id);
-          kickGoogleSync();
-          onOpenChange(false);
-        }}
-      />
-    </>
+            </div>
+          )}
+
+          {mode === "move" && (
+            <div className="space-y-3">
+              <BackButton onClick={() => setMode("menu")} />
+              {request?.kind === "move" && request.preferred_times && (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  {first} suggested: {request.preferred_times}
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2 sm:col-span-1">
+                  <Label>{rebooking ? "Date" : "New date"}</Label>
+                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Label>Start time</Label>
+                  <Input type="time" step={300} value={start} onChange={(e) => setStart(e.target.value)} className="h-11" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Length</Label>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {Array.from(new Set([...DURATIONS, duration])).sort((a, b) => a - b).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setDuration(m)}
+                      className={cn(
+                        "h-9 rounded-full border px-3 text-xs font-semibold",
+                        duration === m ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground",
+                      )}
+                    >
+                      {m} min
+                    </button>
+                  ))}
+                </div>
+                {end && <p className="mt-1 text-[11px] text-muted-foreground">Ends {fmtWallClock(end)}</p>}
+              </div>
+              {canMove && target === "Scheduled" && (
+                <ConflictNotice check={conflictCheck} override={override} onOverride={setOverride} overrideLabel="Book anyway" />
+              )}
+              {canMove && target === "Scheduled" && notifyRow}
+              {canMove && <p className="text-xs text-muted-foreground">{moveOutcome(date, today, usesCredit)}</p>}
+              <Button
+                className="h-12 w-full bg-gradient-primary font-bold"
+                disabled={busy || !canMove || (target === "Scheduled" && (blocked || conflictCheck.checking))}
+                onClick={doMove}
+              >
+                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {canMove ? `${rebooking ? "Book" : "Move to"} ${whenLabel(date, start)}` : "Pick a new date or time"}
+              </Button>
+            </div>
+          )}
+
+          {mode === "confirm" && (
+            <div className="space-y-3">
+              <BackButton onClick={() => setMode("menu")} />
+              <div className="rounded-lg border border-border bg-secondary/20 p-3">
+                <p className="text-sm font-semibold">
+                  {outcome === "bank" ? `Cancel ${first}'s session on ${when}?` : `Count ${first}'s session on ${when} as a late cancel?`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {outcome === "bank"
+                    ? credits(`The credit goes back to ${first}, ready to book another time.`, "It comes off the calendar.")
+                    : credits(`It counts as one of ${first}'s sessions (1 credit used).`, "It's marked missed.")}
+                </p>
+              </div>
+              {notifyRow}
+              <Button
+                className="h-12 w-full"
+                variant={outcome === "bank" ? "default" : "destructive"}
+                disabled={busy}
+                onClick={() => apply(outcome)}
+              >
+                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {outcome === "bank" ? credits("Cancel · bank the credit", "Cancel it") : credits("Late cancel · use the credit", "Mark it missed")}
+              </Button>
+            </div>
+          )}
+
+          {mode === "decline" && request && (
+            <div className="space-y-3">
+              <BackButton onClick={() => setMode("menu")} />
+              <p className="text-sm">The session stays on {when}. {first} gets a message.</p>
+              <div>
+                <Label>Reason or other options (optional)</Label>
+                <Textarea
+                  rows={3}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="e.g. I'm booked Wednesday. Thursday at 4 works if you want it."
+                />
+              </div>
+              <Button className="h-12 w-full" variant="outline" disabled={busy} onClick={doDecline}>
+                Decline request
+              </Button>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+type ChoiceProps = { icon: ReactNode; title: string; hint: string; onClick: () => void; disabled?: boolean };
+
+function Choice({ icon, title, hint, onClick, disabled }: ChoiceProps) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex min-h-[60px] w-full items-center gap-3 bg-card px-3 py-2.5 text-left transition-colors hover:bg-secondary/40 disabled:opacity-50"
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 

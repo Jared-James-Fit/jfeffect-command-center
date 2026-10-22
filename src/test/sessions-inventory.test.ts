@@ -84,7 +84,7 @@ describe("sessions inventory", () => {
       { event_type: "adjusted", session_count: 1, source: "reattribute" },
       { event_type: "used", session_count: -1, source: "reattribute" },
     ] as any);
-    expect(impact.label).toBe("Used 1");
+    expect(impact.label).toBe("1 credit used");
     expect(sessionEventLabel("adjusted", "reattribute")).toBe("Session moved to another package");
   });
 

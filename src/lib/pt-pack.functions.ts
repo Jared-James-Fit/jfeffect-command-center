@@ -105,37 +105,26 @@ const StatusInput = z.object({
 
 /**
  * Change a PT session's status. RLS on pt_sessions enforces admin / assigned
- * coach writes, so an unauthorized update simply affects zero rows.
- * Completed → triggers a one-credit deduction (reverted automatically if
- * later un-completed). Missed deducts only when explicitly requested.
+ * coach writes, so an unauthorized update simply affects zero rows. The credit
+ * follows the status in the database (pt_session_settle_credit): Scheduled
+ * holds one, Completed and Missed (late cancel / no-show) use one, Cancelled
+ * banks it. A no-show that shouldn't count is a cancel (`deductOnMissed: false`).
  */
 export const setPtSessionStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => StatusInput.parse(i))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    // No-show with deduction: consume FIRST so the held reservation is
-    // converted (released + used) before the status change tries to release it.
-    if (data.status === "Missed" && data.deductOnMissed) {
-      // Sessions booked from a "No credit" booking card never touch the wallet.
-      const { data: s } = await (supabase as any)
-        .from("pt_sessions")
-        .select("uses_credit")
-        .eq("id", data.sessionId)
-        .maybeSingle();
-      if (!s || s.uses_credit !== false) {
-        await supabase.rpc("consume_session_for_pt", { _pt_session_id: data.sessionId });
-      }
-    }
+    const status = data.status === "Missed" && data.deductOnMissed === false ? "Cancelled" : data.status;
     const { data: updated, error } = await supabase
       .from("pt_sessions")
-      .update({ status: data.status })
+      .update({ status })
       .eq("id", data.sessionId)
       .select("id, status")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!updated) throw new Error("Session not found or not permitted.");
-    return { ok: true };
+    return { ok: true, status };
   });
 
 // ---------------------------------------------------------------------------
