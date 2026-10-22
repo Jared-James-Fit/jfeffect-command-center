@@ -92,7 +92,7 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
 }
 
 /** One quiet line under a calendar saying what the marks mean. */
-export function WorkoutMarkLegend({ className }: { className?: string }) {
+export function WorkoutMarkLegend({ className, sessions }: { className?: string; /** Also explain the violet session dot. */ sessions?: boolean }) {
   const items: Array<[WorkoutMark, string]> = [
     [{ kind: "scheduled" }, "Planned"],
     [{ kind: "progress", pct: 50 }, "In progress"],
@@ -105,6 +105,11 @@ export function WorkoutMarkLegend({ className }: { className?: string }) {
           <WorkoutStatusMark mark={mark} /> {label}
         </span>
       ))}
+      {sessions && (
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-violet-500" /> Session
+        </span>
+      )}
     </div>
   );
 }

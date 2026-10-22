@@ -146,6 +146,81 @@ function timeFromTimeStr(t?: string | null): string | null {
 /* ============================================================
  * CLIENT
  * ============================================================ */
+/**
+ * A client's sessions with the coach (PT sessions the client can see) and
+ * appointments, as calendar items. The Calendar page and the Workouts
+ * calendar both show them (same queries, so one fetch serves both): people
+ * look for their 1:1 on whichever calendar they open.
+ */
+export function useClientSessionItems(clientId: string | null | undefined) {
+  const enabled = !!clientId;
+  const apptsQ = useQuery({
+    queryKey: ["cal-client-appts", clientId],
+    enabled,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("appointments")
+        .select("id,title,appointment_type,starts_at,ends_at,timezone,status,location,meet_link")
+        .eq("client_id", clientId!);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const ptQ = useQuery({
+    queryKey: ["cal-client-pt", clientId],
+    enabled,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("pt_sessions")
+        .select("id,client_id,title,session_type,session_date,start_time,end_time,starts_at,ends_at,timezone,status,location,notes,client_visible_notes")
+        .eq("client_id", clientId!)
+        // Explicit, not RLS-dependent: a coach in Client POV must see what the client sees.
+        .eq("visible_to_client", true);
+      return (data ?? []) as any[];
+    },
+  });
+
+  const items = useMemo<CalendarItem[]>(() => {
+    const out: CalendarItem[] = [];
+    for (const a of (apptsQ.data ?? [])) {
+      if (!a.starts_at) continue;
+      out.push({
+        id: `appt:${a.id}`,
+        kind: "appointment",
+        date: toLocalDate(a.starts_at),
+        startsAt: a.starts_at,
+        endsAt: a.ends_at,
+        title: a.title || a.appointment_type || "Appointment",
+        subtitle: [a.appointment_type, a.location].filter(Boolean).join(" · "),
+        location: a.location || (a.meet_link ? "Google Meet" : null),
+        status: a.status,
+        href: null,
+        raw: a,
+      });
+    }
+    for (const s of (ptQ.data ?? [])) {
+      if (!s.session_date) continue;
+      out.push({
+        id: `pt:${s.id}`,
+        kind: "pt_session",
+        date: s.session_date,
+        startsAt: s.starts_at ?? null,
+        endsAt: s.ends_at ?? null,
+        title: s.title || "PT Session",
+        subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
+        location: s.location ?? null,
+        status: s.status,
+        // The Calendar page adds "Need to change it?" to the sheet; no self-link.
+        href: null,
+        raw: s,
+      });
+    }
+    return out;
+  }, [apptsQ.data, ptQ.data]);
+
+  return { items, isLoading: apptsQ.isLoading || ptQ.isLoading };
+}
+
 export function useClientCalendarSources(
   clientId: string | null | undefined,
   opts: {
@@ -207,31 +282,8 @@ export function useClientCalendarSources(
     },
   });
 
-  const apptsQ = useQuery({
-    queryKey: ["cal-client-appts", clientId],
-    enabled,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("appointments")
-        .select("id,title,appointment_type,starts_at,ends_at,timezone,status,location,meet_link")
-        .eq("client_id", clientId!);
-      return (data ?? []) as any[];
-    },
-  });
-
-  const ptQ = useQuery({
-    queryKey: ["cal-client-pt", clientId],
-    enabled,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pt_sessions")
-        .select("id,client_id,title,session_type,session_date,start_time,end_time,starts_at,ends_at,timezone,status,location,notes,client_visible_notes")
-        .eq("client_id", clientId!)
-        // Explicit, not RLS-dependent: a coach in Client POV must see what the client sees.
-        .eq("visible_to_client", true);
-      return (data ?? []) as any[];
-    },
-  });
+  // Sessions and appointments: shared with the Workouts calendar (same queries, same cache).
+  const sessions = useClientSessionItems(clientId);
 
   const workoutsQ = useQuery({
     queryKey: ["cal-client-workouts", clientId],
@@ -357,39 +409,7 @@ export function useClientCalendarSources(
         raw: d,
       });
     }
-    for (const a of (apptsQ.data ?? [])) {
-      if (!a.starts_at) continue;
-      out.push({
-        id: `appt:${a.id}`,
-        kind: "appointment",
-        date: toLocalDate(a.starts_at),
-        startsAt: a.starts_at,
-        endsAt: a.ends_at,
-        title: a.title || a.appointment_type || "Appointment",
-        subtitle: [a.appointment_type, a.location].filter(Boolean).join(" · "),
-        location: a.location || (a.meet_link ? "Google Meet" : null),
-        status: a.status,
-        href: null,
-        raw: a,
-      });
-    }
-    for (const s of (ptQ.data ?? [])) {
-      if (!s.session_date) continue;
-      out.push({
-        id: `pt:${s.id}`,
-        kind: "pt_session",
-        date: s.session_date,
-        startsAt: s.starts_at ?? null,
-        endsAt: s.ends_at ?? null,
-        title: s.title || "PT Session",
-        subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
-        location: s.location ?? null,
-        status: s.status,
-        // The Schedule page adds "Need to change it?" to the sheet; no self-link.
-        href: null,
-        raw: s,
-      });
-    }
+    out.push(...sessions.items);
     // Group workout items by week so we can resolve every day's date in a
     // single collision-aware pass. This guarantees every day in the client's
     // program shows up on the calendar exactly once, even when a coach has
@@ -577,13 +597,13 @@ export function useClientCalendarSources(
     }
 
     return out.sort((a, b) => (a.date + (a.startsAt ?? "")).localeCompare(b.date + (b.startsAt ?? "")));
-  }, [eventsQ.data, importantQ.data, apptsQ.data, ptQ.data, workoutsQ.data, checkinsQ.data, cardioQ.data, googleQ.data]);
+  }, [eventsQ.data, importantQ.data, sessions.items, workoutsQ.data, checkinsQ.data, cardioQ.data, googleQ.data]);
 
   return {
     items,
     isLoading:
-      eventsQ.isLoading || importantQ.isLoading || apptsQ.isLoading ||
-      ptQ.isLoading || workoutsQ.isLoading || checkinsQ.isLoading,
+      eventsQ.isLoading || importantQ.isLoading || sessions.isLoading ||
+      workoutsQ.isLoading || checkinsQ.isLoading,
   };
 }
 

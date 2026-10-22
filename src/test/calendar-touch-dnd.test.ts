@@ -46,7 +46,7 @@ describe("calendar reschedule surfaces", () => {
     const weekStrip = readFileSync("src/components/workouts/week-strip.tsx", "utf8");
     expect(experience.match(/<CalendarDayCell /g)?.length).toBe(1);
     expect(weekStrip.match(/<CalendarDayCell /g)?.length).toBe(1);
-    expect(experience).toContain('import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";');
+    expect(experience).toMatch(/import \{[^}]*\bWeekStrip\b[^}]*\} from "@\/components\/workouts\/week-strip";/);
   });
 
   it("C+D: the same component serves the client self portal calendar", () => {
