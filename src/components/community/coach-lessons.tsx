@@ -25,8 +25,9 @@ import { LessonEditors, LessonStoryPlayer, StoryThumb, previewPost } from "@/com
 import { openCommunityPost } from "@/components/community/shared-comment";
 
 /**
- * The coach's lessons: the next two weeks planned from his library, one a day
- * on Mon, Tue, Thu, Fri and Sat (Wednesday Wins and Sunday Recap keep theirs).
+ * The coach's lessons: the next two weeks planned from his library, one every
+ * day (Wednesday's uncomfortable truth goes out beside Wins, Sunday's reset
+ * beside the Recap).
  * While "Review each one" is on (the default), nothing goes out until he's
  * approved it; "Post on their own" lets the plan run. Every lesson can be
  * previewed as the crew will see it (the post and the story), reworded, given
