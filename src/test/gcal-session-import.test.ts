@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventNamesClient, planImport, type ImportClient, type ImportEvent } from "@/lib/gcal-session-import";
+import { eventNamesClient, looksLikeTraining, planImport, type ImportClient, type ImportEvent } from "@/lib/gcal-session-import";
 
 const marc: ImportClient = { id: "m", full_name: "Marc Asugui", first_name: "Marc", last_name: "Asugui", preferred_name: "Marc", email: "masgafr2@gmail.com" };
 const colten: ImportClient = { id: "c", full_name: "Colten Murray", first_name: "Colten", last_name: "Murray", email: "coltenamurray@gmail.com" };
@@ -24,6 +24,16 @@ describe("which appointments are a client's sessions", () => {
   });
 });
 
+describe("titles that read like a session", () => {
+  it("ticks PT sessions and leaves social plans unticked", () => {
+    expect(looksLikeTraining("PT Session - Nicolas (early session)")).toBe(true);
+    expect(looksLikeTraining("Marc 1:1")).toBe(true);
+    expect(looksLikeTraining("Colten training")).toBe(true);
+    expect(looksLikeTraining("Mall date with Nicolas")).toBe(false);
+    expect(looksLikeTraining("Dinner w/ Marc")).toBe(false);
+  });
+});
+
 describe("what each appointment becomes", () => {
   const now = new Date("2026-10-22T18:00:00Z");
   const events = [
@@ -40,8 +50,8 @@ describe("what each appointment becomes", () => {
   it("imports past ones as done and upcoming ones as booked, in the coach's time zone", () => {
     const { candidates } = planImport(events, [marc, colten, nico], { now, linkedEventIds: new Set(["h"]) });
     expect(candidates).toEqual([
-      { eventId: "a", calendarId: "cal", clientId: "c", summary: "Colten PT", date: "2026-10-20", start: "17:30", end: "18:30", timezone: "America/Winnipeg", location: "Iron Image", past: true },
-      { eventId: "b", calendarId: "cal", clientId: "c", summary: "Colten PT", date: "2026-10-24", start: "09:00", end: "10:00", timezone: "America/Winnipeg", location: null, past: false },
+      { eventId: "a", calendarId: "cal", clientId: "c", summary: "Colten PT", date: "2026-10-20", start: "17:30", end: "18:30", timezone: "America/Winnipeg", location: "Iron Image", past: true, training: true },
+      { eventId: "b", calendarId: "cal", clientId: "c", summary: "Colten PT", date: "2026-10-24", start: "09:00", end: "10:00", timezone: "America/Winnipeg", location: null, past: false, training: true },
     ]);
   });
 
