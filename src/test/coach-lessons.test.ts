@@ -223,14 +223,17 @@ describe("a lesson in the feed and the story", () => {
       { kind: "bench_touch" }, { kind: "bench_touch", variant: "consistency" }, { kind: "sticking_point", lift: "squat" }, { kind: "strength_curve" },
       { kind: "length_tension" }, { kind: "force_velocity" }, { kind: "fitness_fatigue" }, { kind: "sra" }, { kind: "sra", variant: "stress" },
       { kind: "rpe_rir" }, { kind: "dose_response" }, { kind: "velocity_loss" }, { kind: "velocity_loss", variant: "cluster" }, { kind: "set_structure", variant: "myo" },
+      { kind: "truth", belief: "If I'm not sore, it didn't work", truth: "Soreness tracks how new the work was." }, { kind: "reset", items: ["Plan the week", "Pack your bag"] },
     ];
     expect(new Set(all.map((v) => v.kind))).toEqual(new Set(LESSON_VISUAL_KINDS));
     for (const v of all) {
       const html = renderToStaticMarkup(createElement(LessonVisualArt, { visual: v }));
-      expect(html, JSON.stringify(v)).toContain("<svg");
+      // the word cards are type (they wrap like text), the rest are drawings
+      const words = v.kind === "truth" || v.kind === "reset";
+      expect(html, JSON.stringify(v)).toContain(words ? 'role="img"' : "<svg");
       expect(html).not.toMatch(/NaN|undefined/);
       // colours come from the theme (they follow light and dark mode), never a hard-coded hex in the drawing
-      expect(html.slice(html.indexOf("<svg"))).not.toMatch(/#[0-9a-f]{6}/i);
+      expect(words ? html : html.slice(html.indexOf("<svg"))).not.toMatch(/#[0-9a-f]{6}/i);
       expect(renderToStaticMarkup(createElement(LessonVisualArt, { visual: v, tone: "dark" }))).toContain('data-tone="dark"');
       expect(visualLabel(v).length).toBeGreaterThan(10);
     }
