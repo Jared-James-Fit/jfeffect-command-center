@@ -924,9 +924,8 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
-            <ClientBillingPanel clientId={id} part="summary" />
+            <ClientBillingPanel clientId={id} />
             <ClientSalesTable clientId={id} />
-            <ClientBillingPanel clientId={id} part="records" />
           </Suspense>
         </TabsContent>
 

@@ -5,13 +5,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download,
-  CheckCircle2, AlertTriangle, RefreshCw, Share2, Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock,
+  ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download, RefreshCw, Share2,
+  Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock, Banknote, Undo2, PlusCircle,
 } from "lucide-react";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
@@ -22,34 +20,46 @@ import { share as nativeShare, canShare } from "@/platform/share";
 import { toast } from "sonner";
 import { AddSaleDialog } from "@/components/clients/add-sale-dialog";
 import { TermDateEditor, downloadPurchasePdf } from "@/components/purchase-records-panel";
-import { updatePurchasePayment, sendPaymentLinkEmail } from "@/lib/payments.functions";
+import { sendPaymentLinkEmail } from "@/lib/payments.functions";
+import { getClientBillingOverview } from "@/lib/billing.functions";
 import {
   archivePurchaseRecord,
   restorePurchaseRecord,
   removeUnpaidPurchaseRecord,
 } from "@/lib/purchase-archive.functions";
-import { resolvePaymentDisplay, type PaymentDisplay } from "@/lib/payment-display";
+import { resolvePaymentDisplay } from "@/lib/payment-display";
 import { clientTaxRate } from "@/lib/client-billing-summary";
-import {
-  AccessBadge, SaleDates, SaleMoney, hasPaymentDestination, nextPaymentCell, nextText, resolveSaleStatus,
-} from "@/components/admin/sale-row-parts";
+import { saleMoney, salePayments, type PaymentRow, type SaleMoney } from "@/lib/sale-money";
+import { AccessBadge, hasPaymentDestination, nextPaymentCell, saleStatus } from "@/components/admin/sale-row-parts";
+import { SaleCard } from "@/components/admin/sale-card";
+import { AddSessionsDialog, RecordPaymentDialog, RefundDialog, VoidPaymentDialog } from "@/components/admin/sale-payment-dialogs";
 import { paymentReminderStatus, paymentLinkExpiryText } from "@/lib/payment-reminder-status";
 import { PaymentLinkExpiryDialog } from "@/components/admin/payment-link-expiry-dialog";
 
-type SortKey = "recent" | "name" | "status" | "next";
 type ArchiveFilter = "current" | "archived" | "all";
 
-type Row = { raw: any; display: PaymentDisplay; status: { label: string; tone: string }; next: ReturnType<typeof nextPaymentCell> };
+type Row = { raw: any; money: SaleMoney; status: { label: string; tone: string }; payments: PaymentRow[] };
 
+/** Which money dialog is open, and for which sale. */
+type Open =
+  | { kind: "pay" | "refund" | "sessions"; row: Row }
+  | { kind: "void"; row: Row; payment: PaymentRow }
+  | null;
+
+/**
+ * A client's sales, one card each: price, paid and what's left in the dollars
+ * the client pays, the sessions on it, its payments, and every action on it in
+ * one menu. Newest first.
+ */
 export function ClientSalesTable({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
-  const [sort, setSort] = useState<SortKey>("recent");
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("current");
   const [picker, setPicker] = useState(false);
   const [editingDates, setEditingDates] = useState<any | null>(null);
   const [editingExpiry, setEditingExpiry] = useState<any | null>(null);
-  const updateFn = useServerFn(updatePurchasePayment);
+  const [dialog, setDialog] = useState<Open>(null);
   const sendFn = useServerFn(sendPaymentLinkEmail);
+  const overviewFn = useServerFn(getClientBillingOverview);
 
   const { data: clientLite } = useQuery({
     queryKey: ["client-lite", clientId],
@@ -71,7 +81,13 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     },
   });
 
-  // Sessions per package (shared with the Sessions panel) and the client's tax rate.
+  // Payments per sale: the same billing read as the balance card above.
+  const { data: billing } = useQuery({
+    queryKey: ["client-billing", clientId],
+    queryFn: () => overviewFn({ data: { client_id: clientId } }),
+  });
+
+  // Sessions per package (shared with the Sessions panel).
   const { data: sessionBalance = [] } = useQuery<any[]>({
     queryKey: ["pt-balance", clientId],
     queryFn: async () => {
@@ -80,34 +96,26 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     },
   });
   const sessionsBySale = useMemo(() => new Map(sessionBalance.map((b: any) => [b.purchase_id, b])), [sessionBalance]);
-  const taxRate = useMemo(() => clientTaxRate((records ?? []) as any[]), [records]);
 
   const rows: Row[] = useMemo(() => {
-    const visible = (records ?? []).filter((raw: any) => {
+    const all = (records ?? []) as any[];
+    const rate = clientTaxRate(all);
+    const ledger = ((billing as any)?.ledger ?? []) as any[];
+    const visible = all.filter((raw) => {
       if (archiveFilter === "all") return true;
       return archiveFilter === "archived" ? Boolean(raw.archived_at) : !raw.archived_at;
     });
-    const built = visible.map((raw: any) => {
-      const display = resolvePaymentDisplay(raw);
-      return { raw, display, status: resolveSaleStatus(raw, display), next: nextPaymentCell(display, raw) };
+    return visible.map((raw) => {
+      const own = ledger.filter((l) => l.purchase_id === raw.id);
+      const money = saleMoney(raw, own, rate);
+      return { raw, money, status: saleStatus(raw, money), payments: salePayments(own) };
     });
-    const byDate = (v: string | null | undefined) => (v ? new Date(v).getTime() : Number.POSITIVE_INFINITY);
-    return [...built].sort((a, b) => {
-      if (sort === "name") return String(a.raw.offer_name ?? "").localeCompare(String(b.raw.offer_name ?? ""));
-      if (sort === "status") return a.status.label.localeCompare(b.status.label);
-      if (sort === "next") return byDate(a.display.renewal.date) - byDate(b.display.renewal.date);
-      return byDate(b.raw.purchased_at) - byDate(a.raw.purchased_at);
-    });
-  }, [records, sort, archiveFilter]);
+  }, [records, billing, archiveFilter]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
-  const markPaid = async (r: any) => {
-    try { await updateFn({ data: { id: r.id, payment_status: "Paid", amount_paid: Number(r.full_payable_amount ?? 0) } }); toast.success("Marked paid"); invalidate(); }
-    catch (e: any) { toast.error(e?.message ?? "Failed"); }
-  };
-  const markOverdue = async (r: any) => {
-    try { await updateFn({ data: { id: r.id, payment_status: "Overdue" } }); toast.success("Marked overdue"); invalidate(); }
-    catch (e: any) { toast.error(e?.message ?? "Failed"); }
+  const invalidate = () => {
+    for (const key of [["client-purchases", clientId], ["client-billing", clientId], ["pt-balance", clientId]]) {
+      qc.invalidateQueries({ queryKey: key });
+    }
   };
   const emailLink = async (id: string) => {
     try { const res: any = await sendFn({ data: { id } }); if (res?.sent) toast.success("Payment setup request emailed"); else toast.message(res?.reason ?? "Email skipped"); }
@@ -115,6 +123,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   };
 
   const addSale = <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setPicker(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add sale</Button>;
+  const close = (o: boolean) => { if (!o) setDialog(null); };
 
   return (
     <Card className="border-border bg-card p-4 md:col-span-3 md:p-6 space-y-4">
@@ -129,14 +138,6 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
-          {(records?.length ?? 0) > 1 && (
-            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-              <SelectTrigger className="h-9 w-[145px] text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">Newest first</SelectItem><SelectItem value="name">Product name</SelectItem><SelectItem value="status">Status</SelectItem><SelectItem value="next">Next payment</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
           {(records?.length ?? 0) > 0 && addSale}
         </div>
       </div>
@@ -151,31 +152,46 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
         </div>
       )}
 
-      {!isLoading && !isError && rows.length > 0 && <>
-        <div className="hidden overflow-x-auto md:block">
-          <Table><TableHeader><TableRow><TableHead>Package</TableHead><TableHead>Dates</TableHead><TableHead>Next payment</TableHead><TableHead>Status</TableHead><TableHead className="w-10" /></TableRow></TableHeader>
-            <TableBody>{rows.map(({ raw, display, status, next }) => (
-              <TableRow key={raw.id} className={raw.archived_at ? "opacity-70" : undefined}>
-                <TableCell className="max-w-[300px] space-y-1"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="font-medium hover:underline">{raw.offer_name ?? "Product"}</Link><SaleMoney display={display} rate={taxRate} sessions={sessionsBySale.get(raw.id)} /></TableCell>
-                <TableCell className="text-sm"><SaleDates raw={raw} /></TableCell>
-                <TableCell className="text-sm"><span className={next.tone}>{nextText(display, next, taxRate)}</span>{next.helper && <div className="text-[11px] text-muted-foreground">{next.helper}</div>}<ReminderLines raw={raw} /></TableCell>
-                <TableCell><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}</TableCell>
-                <TableCell><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></TableCell>
-              </TableRow>
-            ))}</TableBody></Table>
+      {!isLoading && !isError && rows.length > 0 && (
+        <div className="space-y-3">
+          {rows.map((row) => {
+            const { raw, money, status, payments } = row;
+            return (
+              <SaleCard
+                key={raw.id}
+                raw={raw}
+                money={money}
+                status={status}
+                badges={!raw.archived_at && <AccessBadge raw={raw} />}
+                sessions={sessionsBySale.get(raw.id)}
+                payments={payments}
+                notes={<SaleNotes raw={raw} waiting={money.state === "waiting"} />}
+                onRecordPayment={() => setDialog({ kind: "pay", row })}
+                onVoidPayment={(payment) => setDialog({ kind: "void", row, payment })}
+                menu={
+                  <RowMenu
+                    raw={raw}
+                    money={money}
+                    clientName={clientLite?.full_name}
+                    onRecordPayment={() => setDialog({ kind: "pay", row })}
+                    onRefund={() => setDialog({ kind: "refund", row })}
+                    onAddSessions={() => setDialog({ kind: "sessions", row })}
+                    onEditDates={() => setEditingDates(raw)}
+                    onSetExpiry={() => setEditingExpiry(raw)}
+                    onEmailLink={() => emailLink(raw.id)}
+                    onChanged={invalidate}
+                  />
+                }
+              />
+            );
+          })}
         </div>
+      )}
 
-        <ul className="space-y-3 md:hidden">{rows.map(({ raw, display, status, next }) => (
-          <li key={raw.id} className={`rounded-lg border border-border bg-secondary/20 p-3 space-y-2 ${raw.archived_at ? "opacity-70" : ""}`}>
-            <div className="flex items-start justify-between gap-2"><Link to="/admin/purchases/$id" params={{ id: raw.id }} className="min-w-0"><div className="font-semibold">{raw.offer_name ?? "Product"}</div></Link><RowMenu raw={raw} clientName={clientLite?.full_name} onEditDates={() => setEditingDates(raw)} onSetExpiry={() => setEditingExpiry(raw)} onMarkPaid={() => markPaid(raw)} onMarkOverdue={() => markOverdue(raw)} onEmailLink={() => emailLink(raw.id)} onChanged={invalidate} /></div>
-            <div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline" className={status.tone}>{status.label}</Badge>{!raw.archived_at && <AccessBadge raw={raw} />}</div>
-            <SaleMoney display={display} rate={taxRate} sessions={sessionsBySale.get(raw.id)} />
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs"><div><dt className="text-muted-foreground">Dates</dt><dd className="font-medium"><SaleDates raw={raw} /></dd></div><div><dt className="text-muted-foreground">Next payment</dt><dd className={next.tone}>{nextText(display, next, taxRate)}</dd></div></dl>
-            {next.helper && <p className="text-[11px] text-muted-foreground">{next.helper}</p>}
-            <ReminderLines raw={raw} />
-          </li>
-        ))}</ul>
-      </>}
+      {dialog && dialog.kind === "pay" && <RecordPaymentDialog sale={dialog.row.raw} money={dialog.row.money} open onOpenChange={close} onDone={invalidate} />}
+      {dialog && dialog.kind === "refund" && <RefundDialog sale={dialog.row.raw} money={dialog.row.money} open onOpenChange={close} onDone={invalidate} />}
+      {dialog && dialog.kind === "sessions" && <AddSessionsDialog sale={dialog.row.raw} open onOpenChange={close} onDone={invalidate} />}
+      {dialog && dialog.kind === "void" && <VoidPaymentDialog payment={dialog.payment} currency={dialog.row.money.currency} open onOpenChange={close} onDone={invalidate} />}
 
       <AddSaleDialog open={picker} onOpenChange={setPicker} clientId={clientId} clientName={clientLite?.full_name ?? null} />
       {editingDates && <TermDateEditor purchase={editingDates} clientId={clientId} onClose={() => setEditingDates(null)} />}
@@ -184,21 +200,27 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   );
 }
 
-/** Reminder progress and any explicit link expiry, under the sale's next-payment text. */
-function ReminderLines({ raw }: { raw: any }) {
+/** Payment link state and reminders, while nothing has been paid. */
+function SaleNotes({ raw, waiting }: { raw: any; waiting: boolean }) {
+  const display = resolvePaymentDisplay(raw);
+  const next = nextPaymentCell(display, raw);
   const reminder = paymentReminderStatus(raw);
   const expiry = paymentLinkExpiryText(raw);
-  if (!reminder && !expiry) return null;
-  return <div className="space-y-0.5">
-    {reminder && <div className={`text-[11px] ${reminder.tone === "warn" ? "text-amber-500" : "text-muted-foreground"}`}>{reminder.text}</div>}
-    {expiry && <div className="text-[11px] text-muted-foreground">{expiry}</div>}
+  const helper = waiting ? next.helper : null;
+  if (!helper && !reminder && !expiry) return null;
+  return <div className="space-y-0.5 text-xs">
+    {helper && <p className="text-warning">{helper}</p>}
+    {reminder && <p className={reminder.tone === "warn" ? "text-amber-500" : "text-muted-foreground"}>{reminder.text}</p>}
+    {expiry && <p className="text-muted-foreground">{expiry}</p>}
   </div>;
 }
 
-function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMarkOverdue, onEmailLink, onChanged }: {
-  raw: any; clientName?: string | null; onEditDates: () => void; onSetExpiry: () => void; onMarkPaid: () => void; onMarkOverdue: () => void; onEmailLink: () => void; onChanged: () => void;
+function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessions, onEditDates, onSetExpiry, onEmailLink, onChanged }: {
+  raw: any; money: SaleMoney; clientName?: string | null;
+  onRecordPayment: () => void; onRefund: () => void; onAddSessions: () => void;
+  onEditDates: () => void; onSetExpiry: () => void; onEmailLink: () => void; onChanged: () => void;
 }) {
-  const paid = raw.payment_status === "Paid" || raw.payment_status === "Active Subscription";
+  const unpaid = !["Paid", "Active Subscription"].includes(String(raw.payment_status ?? "")) && money.state !== "ended" && money.kind !== "free";
   const linkReady = hasPaymentDestination(raw);
   const shareFn = useServerFn(createPaymentShareLink);
   const checkoutFn = useServerFn(createCheckoutSessionForAssignment);
@@ -207,10 +229,11 @@ function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMark
   const restoreFn = useServerFn(restorePurchaseRecord);
   const removeFn = useServerFn(removeUnpaidPurchaseRecord);
   const qc = useQueryClient();
+  const live = !raw.archived_at;
 
   const syncWithStripe = async () => {
     const t = toast.loading("Reading this sale from Stripe…");
-    try { const res: any = await reconcileFn({ data: { purchaseId: raw.id } }); if (!res?.ok) return void toast.error(res?.error ?? "Could not reconcile", { id: t }); qc.invalidateQueries({ queryKey: ["client-purchases"] }); toast.success(`Synced — ${res.status}`, { id: t, description: res.ledgerAdded ? `${res.ledgerAdded} missing payment(s) recorded.` : "Already up to date." }); }
+    try { const res: any = await reconcileFn({ data: { purchaseId: raw.id } }); if (!res?.ok) return void toast.error(res?.error ?? "Could not reconcile", { id: t }); qc.invalidateQueries({ queryKey: ["client-purchases"] }); onChanged(); toast.success(`Synced — ${res.status}`, { id: t, description: res.ledgerAdded ? `${res.ledgerAdded} missing payment(s) recorded.` : "Already up to date." }); }
     catch (e: any) { toast.error(e?.message ?? "Could not reconcile", { id: t }); }
   };
 
@@ -262,18 +285,21 @@ function RowMenu({ raw, clientName, onEditDates, onSetExpiry, onMarkPaid, onMark
 
   return <DropdownMenu>
     <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-9 w-9" aria-label="Sale actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-60">
-      <DropdownMenuItem asChild><Link to="/admin/purchases/$id" params={{ id: raw.id }}><ExternalLink className="mr-2 h-3.5 w-3.5" />View sale details</Link></DropdownMenuItem>
-      {!raw.archived_at && <DropdownMenuItem onSelect={onEditDates}><Pencil className="mr-2 h-3.5 w-3.5" />{raw.term_start_date || raw.term_end_date ? "Edit dates" : "Set dates"}</DropdownMenuItem>}
-      {!raw.archived_at && !paid && <DropdownMenuItem onSelect={onMarkPaid}><CheckCircle2 className="mr-2 h-3.5 w-3.5" />Mark paid</DropdownMenuItem>}
-      {!raw.archived_at && !paid && raw.payment_status !== "Overdue" && <DropdownMenuItem onSelect={onMarkOverdue}><AlertTriangle className="mr-2 h-3.5 w-3.5" />Mark overdue</DropdownMenuItem>}
-      {!raw.archived_at && !paid && <>
+    <DropdownMenuContent align="end" className="w-64">
+      {live && money.kind !== "free" && money.state !== "ended" && <DropdownMenuItem onSelect={onRecordPayment}><Banknote className="mr-2 h-3.5 w-3.5" />Record a payment</DropdownMenuItem>}
+      {live && money.paidCents > 0 && <DropdownMenuItem onSelect={onRefund}><Undo2 className="mr-2 h-3.5 w-3.5" />Record a refund</DropdownMenuItem>}
+      {live && Number(raw.sessions_purchased ?? 0) > 0 && <DropdownMenuItem onSelect={onAddSessions}><PlusCircle className="mr-2 h-3.5 w-3.5" />Add sessions</DropdownMenuItem>}
+      {live && <DropdownMenuItem onSelect={onEditDates}><Pencil className="mr-2 h-3.5 w-3.5" />{raw.term_start_date || raw.term_end_date ? "Edit dates" : "Set dates"}</DropdownMenuItem>}
+      {live && unpaid && <>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void copyLink("copy")}><Copy className="mr-2 h-3.5 w-3.5" />{linkReady ? "Copy payment link" : "Create payment link"}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copyLink("share")}><Share2 className="mr-2 h-3.5 w-3.5" />{linkReady ? "Share payment link" : "Create & share payment link"}</DropdownMenuItem>
         {raw.stripe_payment_link && <DropdownMenuItem onSelect={onEmailLink}><Send className="mr-2 h-3.5 w-3.5" />Email payment setup request</DropdownMenuItem>}
         {linkReady && <DropdownMenuItem onSelect={() => void toggleReminders()}>{raw.payment_reminders_paused ? <Bell className="mr-2 h-3.5 w-3.5" /> : <BellOff className="mr-2 h-3.5 w-3.5" />}{raw.payment_reminders_paused ? "Resume payment reminders" : "Pause payment reminders"}</DropdownMenuItem>}
         {linkReady && <DropdownMenuItem onSelect={onSetExpiry}><CalendarClock className="mr-2 h-3.5 w-3.5" />{raw.payment_link_expires_at ? "Change link expiry" : "Set link expiry"}</DropdownMenuItem>}
       </>}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem asChild><Link to="/admin/purchases/$id" params={{ id: raw.id }}><ExternalLink className="mr-2 h-3.5 w-3.5" />Sale details & notes</Link></DropdownMenuItem>
       {(raw.stripe_subscription_id || raw.stripe_checkout_session_id) && <DropdownMenuItem onSelect={() => void syncWithStripe()}><RefreshCw className="mr-2 h-3.5 w-3.5" />Sync with Stripe</DropdownMenuItem>}
       <DropdownMenuItem onSelect={() => void downloadPurchasePdf(raw, clientName)}><Download className="mr-2 h-3.5 w-3.5" />Download PDF</DropdownMenuItem>
       <DropdownMenuSeparator />

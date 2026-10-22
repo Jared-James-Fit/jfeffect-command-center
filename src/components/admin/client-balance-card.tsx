@@ -3,7 +3,7 @@
  * dollars they actually pay, and each thing that makes it up in plain words.
  */
 import { Card } from "@/components/ui/card";
-import { CheckCircle2, CalendarClock, AlertTriangle } from "lucide-react";
+import { CheckCircle2, CalendarClock, AlertTriangle, Send } from "lucide-react";
 import type { BillingSummary } from "@/lib/client-billing-summary";
 import { formatMoney } from "@/lib/payment-display";
 
@@ -30,6 +30,7 @@ export function ClientBalanceCard({ summary, currency = "CAD" }: { summary: Bill
   const owes = summary.owedCents > 0;
   const tax = summary.taxIncluded ? "Tax included" : "Before tax";
   const { bought, used, booked } = summary.sessions;
+  const next = summary.next;
 
   return (
     <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6">
@@ -38,6 +39,8 @@ export function ClientBalanceCard({ summary, currency = "CAD" }: { summary: Bill
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Balance</div>
           {owes ? (
             <div className="text-3xl font-black tabular-nums text-destructive">Owes {money(summary.owedCents, currency)}</div>
+          ) : summary.waiting.length > 0 ? (
+            <div className="text-3xl font-black text-foreground">Nothing owed yet</div>
           ) : (
             <div className="flex items-center gap-2 text-3xl font-black text-success">
               <CheckCircle2 className="h-7 w-7" /> All paid up
@@ -45,11 +48,20 @@ export function ClientBalanceCard({ summary, currency = "CAD" }: { summary: Bill
           )}
           {owes && <div className="text-xs text-muted-foreground">{tax}</div>}
         </div>
-        <dl className="flex gap-6 text-sm">
+        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <div>
             <dt className="text-[11px] uppercase tracking-widest text-muted-foreground">Paid so far</dt>
             <dd className="font-semibold tabular-nums">{money(summary.paidCents, currency)}</dd>
           </div>
+          {next && (
+            <div>
+              <dt className="text-[11px] uppercase tracking-widest text-muted-foreground">Next payment</dt>
+              <dd className="font-semibold tabular-nums">
+                {next.cents != null ? money(next.cents, currency) : "—"}
+                <span className="block text-xs font-normal text-muted-foreground">{day(next.date)}</span>
+              </dd>
+            </div>
+          )}
           {bought + used > 0 && (
             <div>
               <dt className="text-[11px] uppercase tracking-widest text-muted-foreground">Sessions</dt>
@@ -62,7 +74,7 @@ export function ClientBalanceCard({ summary, currency = "CAD" }: { summary: Bill
         </dl>
       </div>
 
-      {summary.lines.length > 0 && (
+      {summary.lines.length + summary.waiting.length > 0 && (
         <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
           {summary.lines.map((line) =>
             line.kind === "sale" ? (
@@ -72,6 +84,7 @@ export function ClientBalanceCard({ summary, currency = "CAD" }: { summary: Bill
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{line.name}</div>
                     <div className="text-xs text-muted-foreground">
+                      {line.pastDue && <span className="font-medium text-destructive">Payment failed · </span>}
                       {line.paymentsTotal != null && line.paymentsMade != null && line.nextPaymentCents != null
                         ? <>
                             {line.paymentsMade} of {line.paymentsTotal} payments made
@@ -108,6 +121,20 @@ export function ClientBalanceCard({ summary, currency = "CAD" }: { summary: Bill
               </li>
             ),
           )}
+          {summary.waiting.map((w) => (
+            <li key={w.id} className="flex items-start justify-between gap-3 p-3">
+              <div className="flex min-w-0 gap-2.5">
+                <Send className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">{w.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Payment requested{day(w.since) ? ` ${day(w.since)}` : ""}, nothing paid yet. Not counted as owed.
+                  </div>
+                </div>
+              </div>
+              <div className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">{w.cents > 0 ? money(w.cents, currency) : "—"}</div>
+            </li>
+          ))}
         </ul>
       )}
     </Card>
