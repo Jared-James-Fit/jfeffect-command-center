@@ -102,12 +102,17 @@ export function eventNamesClient(e: ImportEvent, c: ImportClient): boolean {
   return false;
 }
 
-const CANCELLED = /\b(cancel+ed|cancel|cx|no show|noshow|rescheduled)\b/;
+const CANCELLED = /\b(cancel+ed|cancel|cx|no show|noshow|rescheduled|missed)\b/;
 const TRAINING = /\b(pt|sessions?|training|train|workouts?|lift|lifting|coaching|1 1|gym)\b/;
+const NOT_A_SESSION = /\b(call|consult|consultation|payment|paid|dinner|lunch|breakfast|coffee|date|meeting|birthday)\b/;
 
-/** Does the title read like a training session? ("Mall date with Nicolas" doesn't.) */
+/**
+ * Does the title read like a training session? "Mall date with Nicolas",
+ * "Call with Marc", "Marc Payment" and "Private Coaching Call" don't.
+ */
 export function looksLikeTraining(summary: string | null | undefined): boolean {
-  return TRAINING.test(normalizeText(summary));
+  const t = normalizeText(summary);
+  return TRAINING.test(t) && !NOT_A_SESSION.test(t);
 }
 
 /** The coach's Google appointments for these clients, as sessions to import. */
