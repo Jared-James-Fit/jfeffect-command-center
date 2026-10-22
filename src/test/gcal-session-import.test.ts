@@ -31,6 +31,9 @@ describe("titles that read like a session", () => {
     expect(looksLikeTraining("Colten training")).toBe(true);
     expect(looksLikeTraining("Mall date with Nicolas")).toBe(false);
     expect(looksLikeTraining("Dinner w/ Marc")).toBe(false);
+    expect(looksLikeTraining("Private Coaching Call — Colten Murray")).toBe(false);
+    expect(looksLikeTraining("Marc Payment")).toBe(false);
+    expect(looksLikeTraining("Nico workout")).toBe(true);
   });
 });
 
@@ -60,5 +63,10 @@ describe("what each appointment becomes", () => {
     expect(skipped.map((s) => [s.eventId, s.reason]).sort()).toEqual([
       ["c", "already_in_app"], ["d", "cancelled"], ["e", "two_clients"], ["f", "all_day"], ["h", "already_in_app"],
     ]);
+  });
+
+  it("leaves out a session the title says was missed", () => {
+    const missed = [ev("m", "PT Session - Nicolas (❌missed - Jared was asleep)", "2026-07-03T07:00:00-05:00", "2026-07-03T08:00:00-05:00")];
+    expect(planImport(missed, [nico], { now }).skipped.map((s) => s.reason)).toEqual(["cancelled"]);
   });
 });
