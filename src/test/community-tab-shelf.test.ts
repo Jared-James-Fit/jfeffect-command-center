@@ -17,7 +17,7 @@ const item = (to: string): NavItem => ({ to, label: to, icon: Home });
 describe("client tab bar: Crew in the centre", () => {
   it("five destinations, Crew (feed + rankings) raised in the middle", () => {
     const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
-    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "Crew", "Nutrition", "Messages"]);
+    expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "Crew", "Messages", "Nutrition"]);
     expect(visible[2].featured).toBe(true);
     expect(visible.some((i) => i.to === MORE_BAR_TO)).toBe(false);
   });

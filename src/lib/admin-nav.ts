@@ -163,6 +163,10 @@ export const clientNav: NavItem[] = [
   { to: "/portal/goals-setup", label: "Goals & Setup", icon: ClipboardCheck },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  // One Calendar: workouts, sessions, calls, events and key dates (old
+  // Appointments / Events / Schedule pages redirect here). Right after
+  // Workouts, so it's easy to find in the menu.
+  { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","appointments","sessions","events","booking","reschedule","cancel"] },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
@@ -172,24 +176,22 @@ export const clientNav: NavItem[] = [
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
-  // One Schedule: sessions, calls, events, workouts and key dates (old
-  // Calendar / Appointments / Events pages redirect here).
-  { to: "/portal/calendar", label: "Schedule", icon: Calendar, keywords: ["schedule","calendar","appointments","sessions","events","booking","reschedule","cancel"] },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
 // Mobile bottom-tab nav for the client portal: five destinations, Crew as the
 // raised centre (trophy) button: Feed · Rankings inside, with a ring and a
-// count when there are new posts. "More" opens from the top bar instead (AppShell `moreInHeader`), so
-// Home, Workouts and Nutrition keep their places and Messages takes More's.
+// count when there are new posts. "More" opens from the top bar instead (AppShell `moreInHeader`).
+// Messages sits right after Crew (the coach is one thumb-reach away) and
+// Nutrition takes the far right.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,
     // the satellite on Crew's button: straight to Rankings (the League)
     shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];
 
 // JF Membership (self-serve) in the portal: the same app as coaching clients,
@@ -198,6 +200,7 @@ export const clientBottomNav: NavItem[] = [
 export const selfServeNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","workouts","events"] },
   { to: "/portal/plans", label: "Plan Library", icon: BookOpen, keywords: ["plans","programs","library","start","training"] },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","compare"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
@@ -207,7 +210,6 @@ export const selfServeNav: NavItem[] = [
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/tools", label: "Tools", icon: Wrench, keywords: ["calculator","1rm","macro","plate","water","sleep"] },
-  { to: "/portal/calendar", label: "Schedule", icon: Calendar, keywords: ["schedule","calendar","workouts","events"] },
   { to: "/portal/membership", label: "Membership", icon: CreditCard, keywords: ["billing","subscription","payment","cancel","hold","plan","upgrade"] },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];

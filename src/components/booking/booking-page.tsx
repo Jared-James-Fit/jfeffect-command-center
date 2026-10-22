@@ -372,7 +372,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
                 className="h-12 w-full max-w-sm font-bold"
                 variant={result.meetLink ? "outline" : "default"}
               >
-                <Link to="/portal/calendar">See it in your schedule</Link>
+                <Link to="/portal/calendar">See it in your calendar</Link>
               </Button>
             )}
             <div className="mx-auto max-w-sm space-y-2 pt-2">

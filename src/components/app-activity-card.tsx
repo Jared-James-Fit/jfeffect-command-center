@@ -166,7 +166,7 @@ function prettyRoute(path: string): string {
     "/portal/check-in": "Check-In",
     "/portal/progress-metrics": "Progress Metrics",
     "/portal/media": "Media",
-    "/portal/calendar": "Schedule",
+    "/portal/calendar": "Calendar",
     "/portal/agreements": "Agreements",
     "/portal/purchases": "Purchases",
     "/portal/account": "Account",

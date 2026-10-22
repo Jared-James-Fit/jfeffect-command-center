@@ -370,12 +370,12 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   const recent = read("supabase/migrations/20261006170000_community_recent_sessions.sql");
   const screen = read("src/components/community/community-screen.tsx");
 
-  it("bottom bar is Home, Workouts, Crew (centre), Nutrition, Messages; More opens from the top bar", () => {
+  it("bottom bar is Home, Workouts, Crew (centre), Messages, Nutrition; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
     // the tabs (one per line); Crew's satellite shortcut isn't a tab
     expect(bottom.match(/^\s*\{ to: "[^"]+"/gm)?.map((m) => m.trim())).toEqual([
-      '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/nutrition-targets"', '{ to: "/portal/messages"',
+      '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/messages"', '{ to: "/portal/nutrition-targets"',
     ]);
     expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,');
     expect(bottom).toContain('shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },');
