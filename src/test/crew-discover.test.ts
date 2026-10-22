@@ -113,12 +113,13 @@ describe("privacy in the database", () => {
 });
 
 describe("follow from anywhere", () => {
-  it("finds people from the Crew's top bar (and Activity, and the coach's Crew page)", () => {
+  it("finds people from the Crew's top bar (and Activity)", () => {
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain('<BarButton label="Find athletes" onClick={() => openDiscover("feed", true)} data-discover-open>');
     expect(screen).toContain('onFindPeople={() => openDiscover("activity", true)}');
     expect(screen).toContain("window.addEventListener(OPEN_DISCOVER_EVENT, open);");
-    expect(read("src/components/community/admin-community-hub.tsx")).toContain("openCommunityDiscover");
+    // the coach's Crew page keeps one row (+, tabs, heart, photo): Find athletes is in the feed's suggestions and caught-up card
+    expect(read("src/components/community/admin-community-hub.tsx")).not.toContain("openCommunityDiscover");
     const page = read("src/components/community/discover.tsx");
     expect(page).toContain('placeholder="Search name or @username"');
     expect(page).toContain("<SuggestedList onOpen={onOpen} />");

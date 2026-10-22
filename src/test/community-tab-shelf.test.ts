@@ -109,7 +109,8 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("const lit = active && !shortcutOn;");
     // its own link beside Crew's (never nested), told apart by the hash, tap area growing away from the disc
     expect(shell).toContain("if (!shortcut) return link;");
-    expect(shell).toMatch(/<Link\s+to=\{shortcut\.to\}\s+hash=\{shortcut\.hash\}\s+activeOptions=\{\{ includeHash: true \}\}/);
+    // a page of its own (the coach's League) has no hash to add
+    expect(shell).toMatch(/<Link\s+to=\{shortcut\.to\}\s+hash=\{shortcut\.hash \|\| undefined\}\s+activeOptions=\{\{ includeHash: true \}\}/);
     expect(shell).toContain("activeOptions={shortcut ? { includeHash: true } : undefined}");
     // A 44px tap area that grows up and left only, away from the disc.
     expect(shell).toContain('"after:absolute after:-left-4 after:-top-4 after:bottom-1/2 after:right-1/2 after:content-[\'\']"');

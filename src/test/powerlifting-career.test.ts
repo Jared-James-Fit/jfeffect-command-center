@@ -143,8 +143,8 @@ describe("Athlete Records opened from the League tab", () => {
   const page = readFileSync("src/routes/_authenticated/admin/athlete-records.tsx", "utf8");
   const league = readFileSync("src/components/community/staff-league-board.tsx", "utf8");
 
-  it("has a Back to the League tab on a phone", () => {
-    expect(page).toContain('backTo="/admin/community" backLabel="League"');
+  it("has a Back to the League on a phone", () => {
+    expect(page).toContain('backTo="/admin/league" backLabel="League"');
     expect(league).toContain('<Link to="/admin/athlete-records"');
   });
 

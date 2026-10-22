@@ -40,12 +40,6 @@ function itemName(series: LibrarySeries, item: Pick<SeriesItem, "mentor" | "data
   return item.mentor;
 }
 
-/** Today in Winnipeg, Monday = 0. */
-function todayIndex(): number {
-  const day = new Intl.DateTimeFormat("en-US", { timeZone: "America/Winnipeg", weekday: "short" }).format(new Date());
-  return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day);
-}
-
 /** "Sat, Oct 31" for a yyyy-mm-dd day. */
 function holidayDay(day: string): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${day}T12:00:00Z`));
@@ -68,7 +62,8 @@ export function CoachWeeklyPosts() {
   const { data: unit = "lb" } = useViewerUnit(user?.id);
   const act = useSeriesAction();
   const [editing, setEditing] = useState<{ series: LibrarySeries; item: SeriesItem } | null>(null);
-  const [open, setOpen] = useState<DailySeries | null | undefined>(undefined);
+  // every day starts closed (Crew → Posts has "Next: …" at the top); tap one to see or edit it
+  const [open, setOpen] = useState<DailySeries | null>(null);
 
   const isOn = (s: DailySeries) => !isLibrary(s) || (data?.series_on ?? []).includes(s);
   const tuesday = useSeriesPreview("tuesday_tips", open === "tuesday_tips" && isOn("tuesday_tips"));
@@ -77,12 +72,6 @@ export function CoachWeeklyPosts() {
 
   if (isLoading) return <Skeleton className="h-40 w-full rounded-2xl" />;
   if (isError || !data) return null;
-
-  // The next day that's on and hasn't gone out yet starts open.
-  if (open === undefined) {
-    const t = Math.max(0, todayIndex());
-    setOpen([...ORDER.slice(t), ...ORDER.slice(0, t)].find((s) => isOn(s) && !data.this_week?.[s]) ?? null);
-  }
 
   const post = (series: DailySeries) =>
     act.mutate(

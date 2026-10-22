@@ -310,28 +310,6 @@ export function MyTabPhoto({ active = false, size = 22 }: { active?: boolean; si
   );
 }
 
-/**
- * Your own profile from the coach's Crew page (no tab row there): your photo
- * and "You" in a pill beside Post, so it reads as a button, not a picture.
- */
-export function MyProfileButton({ onOpen, className }: { onOpen: () => void; className?: string }) {
-  const { user } = useAuth();
-  if (!user?.id) return null;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn("inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card pl-1.5 pr-3.5 text-[13px] font-bold shadow-sm transition-transform active:scale-95 max-[359px]:pr-1.5", className)}
-      aria-label="Your profile"
-      data-my-profile
-    >
-      <MyTabPhoto />
-      {/* small phones: just your photo, so Post, search and the heart keep their room */}
-      <span className="max-[359px]:sr-only">You</span>
-    </button>
-  );
-}
-
 /** What they train and where, under the bio: "Powerlifting · Strength" and their gym. Nothing when they haven't said. */
 function ProfileFacts({ disciplines, gym }: { disciplines?: string[]; gym?: string | null }) {
   const trains = (disciplines ?? []).map(disciplineLabel);

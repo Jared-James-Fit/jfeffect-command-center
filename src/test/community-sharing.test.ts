@@ -412,7 +412,8 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   });
   it("puts the community behind the coach's Crew button (named like the clients'), with one-tap props on that page", () => {
     expect(read("src/lib/internal-nav.ts")).toContain('{ to: "/admin/community", label: "Crew", icon: UsersRound, featured: true,');
-    expect(read("src/lib/internal-nav.ts")).toContain('shortcut: { to: "/admin/community", hash: "tab=league", label: "League", icon: Trophy } },');
+    // the League is its own page, on the trophy beside Crew's button
+    expect(read("src/lib/internal-nav.ts")).toContain('shortcut: { to: "/admin/league", hash: "", label: "League", icon: Trophy } },');
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachPostRow key={x.id} post={x} unit={unit} />");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
     // a ❤️ from the feed counts as props given

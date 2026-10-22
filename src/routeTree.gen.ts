@@ -85,6 +85,7 @@ import { Route as AuthenticatedAdminFinanceRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_authenticated/admin/floating-bar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
+import { Route as AuthenticatedAdminLeagueRouteImport } from './routes/_authenticated/admin/league'
 import { Route as AuthenticatedAdminLegacyMigrationRouteImport } from './routes/_authenticated/admin/legacy-migration'
 import { Route as AuthenticatedAdminLegalRouteImport } from './routes/_authenticated/admin/legal'
 import { Route as AuthenticatedAdminLiftVideosRouteImport } from './routes/_authenticated/admin/lift-videos'
@@ -675,6 +676,12 @@ const AuthenticatedAdminGoogleCalendarRoute =
   AuthenticatedAdminGoogleCalendarRouteImport.update({
     id: '/google-calendar',
     path: '/google-calendar',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminLeagueRoute =
+  AuthenticatedAdminLeagueRouteImport.update({
+    id: '/league',
+    path: '/league',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminLegacyMigrationRoute =
@@ -1808,6 +1815,7 @@ export interface FileRoutesByFullPath {
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
   '/admin/legal': typeof AuthenticatedAdminLegalRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
@@ -2060,6 +2068,7 @@ export interface FileRoutesByTo {
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
   '/admin/legal': typeof AuthenticatedAdminLegalRoute
   '/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
@@ -2316,6 +2325,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/_authenticated/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/_authenticated/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
   '/_authenticated/admin/legal': typeof AuthenticatedAdminLegalRoute
   '/_authenticated/admin/lift-videos': typeof AuthenticatedAdminLiftVideosRoute
@@ -2573,6 +2583,7 @@ export interface FileRouteTypes {
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
+    | '/admin/league'
     | '/admin/legacy-migration'
     | '/admin/legal'
     | '/admin/lift-videos'
@@ -2825,6 +2836,7 @@ export interface FileRouteTypes {
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
+    | '/admin/league'
     | '/admin/legacy-migration'
     | '/admin/legal'
     | '/admin/lift-videos'
@@ -3080,6 +3092,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/floating-bar'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
+    | '/_authenticated/admin/league'
     | '/_authenticated/admin/legacy-migration'
     | '/_authenticated/admin/legal'
     | '/_authenticated/admin/lift-videos'
@@ -3862,6 +3875,13 @@ declare module '@tanstack/react-router' {
       path: '/google-calendar'
       fullPath: '/admin/google-calendar'
       preLoaderRoute: typeof AuthenticatedAdminGoogleCalendarRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/league': {
+      id: '/_authenticated/admin/league'
+      path: '/league'
+      fullPath: '/admin/league'
+      preLoaderRoute: typeof AuthenticatedAdminLeagueRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/legacy-migration': {
@@ -5306,6 +5326,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminFloatingBarRoute: typeof AuthenticatedAdminFloatingBarRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
+  AuthenticatedAdminLeagueRoute: typeof AuthenticatedAdminLeagueRoute
   AuthenticatedAdminLegacyMigrationRoute: typeof AuthenticatedAdminLegacyMigrationRoute
   AuthenticatedAdminLegalRoute: typeof AuthenticatedAdminLegalRoute
   AuthenticatedAdminLiftVideosRoute: typeof AuthenticatedAdminLiftVideosRoute
@@ -5429,6 +5450,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminGoogleCalendarRoute:
       AuthenticatedAdminGoogleCalendarRoute,
+    AuthenticatedAdminLeagueRoute: AuthenticatedAdminLeagueRoute,
     AuthenticatedAdminLegacyMigrationRoute:
       AuthenticatedAdminLegacyMigrationRoute,
     AuthenticatedAdminLegalRoute: AuthenticatedAdminLegalRoute,

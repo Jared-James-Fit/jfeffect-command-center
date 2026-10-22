@@ -9,7 +9,7 @@ import { useWeightUnit } from "@/lib/use-weight-unit";
 import { cn } from "@/lib/utils";
 
 /**
- * The coach's board (Crew → Daily): every feed post of the last 120 days,
+ * The coach's board (Crew → Insights): every feed post of the last 120 days,
  * scored. Which kinds of post keep the crew interested (average by kind), the
  * best and the ones that didn't land; tap one to open it.
  */

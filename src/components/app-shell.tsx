@@ -1725,8 +1725,9 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
         (search?.tab === tabAlias.tab ||
           // No tab in URL → workspace falls back to "messages" by default.
           (typeof search?.tab === "undefined" && tabAlias.tab === "messages")));
-    // The centre button's satellite (Crew's League). While its view is open it
-    // is the one lit, and the centre button goes quiet: one "you're here".
+    // The centre button's satellite (the coach's League page, the clients'
+    // Rankings). While its view is open it is the one lit, and the centre
+    // button goes quiet: one "you're here".
     const shortcut = item.featured ? item.shortcut : undefined;
     const shortcutOn = !!shortcut && pathname === shortcut.to && hash.startsWith(shortcut.hash);
     const lit = active && !shortcutOn;
@@ -1828,7 +1829,7 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
             each button has its own "you're here". */}
         <Link
           to={shortcut.to}
-          hash={shortcut.hash}
+          hash={shortcut.hash || undefined}
           activeOptions={{ includeHash: true }}
           onClick={(e) => {
             // already there: back to the top and refresh, like any tab
