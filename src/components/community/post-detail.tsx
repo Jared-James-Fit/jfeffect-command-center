@@ -26,6 +26,7 @@ import {
   workoutSubtitle,
 } from "@/lib/community";
 import { PostViewsRow, useViewOnOpen } from "@/components/community/post-views";
+import { PostScoreRow } from "@/components/community/post-score";
 import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { formatTonnage } from "@/lib/training-records";
@@ -236,6 +237,7 @@ function Detail({
       <div className="px-2 pt-2">
         <ReactionBar post={post} onReact={onReact} onOpenAuthor={onOpenAuthor} />
         <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
+        {viewerIsStaff && <PostScoreRow post={post} />}
       </div>
 
       <section className="border-t border-border/60">

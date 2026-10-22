@@ -52,6 +52,7 @@ import { PollCard } from "@/components/community/poll";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { PostShareSheet } from "@/components/community/post-share-sheet";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { PostScoreRow } from "@/components/community/post-score";
 import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -543,6 +544,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
       <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} />
       <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
+      {viewerIsStaff && <PostScoreRow post={post} />}
       <CommentPreviewList post={post} onOpenComments={() => onOpenComments(post)} />
     </article>
   );

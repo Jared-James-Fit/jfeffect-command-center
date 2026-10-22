@@ -16,6 +16,7 @@ import { openCrewActivity } from "@/lib/crew-activity";
 import { ActivityHeart } from "@/components/community/activity-heart";
 import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
 import { CoachLessons } from "@/components/community/coach-lessons";
+import { PostScoreBoard } from "@/components/community/post-score-board";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { CoachPostRow } from "@/components/community/community-entry";
 import { NoteEditor } from "@/components/community/note-editor";
@@ -197,6 +198,7 @@ export function AdminCommunityHub() {
         </>
       ) : tab === "daily" ? (
         <div className="space-y-3">
+          <PostScoreBoard />
           <CoachLessons />
           <CoachWeeklyPosts />
         </div>

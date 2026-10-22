@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Dumbbell, Menu, Search, SquarePlus } from "lucide-react";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { attentionExit } from "@/lib/post-attention";
 import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
@@ -104,6 +105,9 @@ export function CommunityScreen({
   const qc = useQueryClient();
   // viewing as a client: the client's screen, without the coach's extras (remove anyone's post, …)
   const viewerIsStaff = (role === "admin" || role === "coach") && !previewOnly;
+  // leaving Crew ends the visit on whatever post is on screen (an exit); a layout
+  // cleanup, so it runs before the cards' own cleanups take them off screen
+  useLayoutEffect(() => () => attentionExit(), []);
   const [scope, setScope] = useState<Scope>(() => {
     const person = personFromHash();
     if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "feed" };

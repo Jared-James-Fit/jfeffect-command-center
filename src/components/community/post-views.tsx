@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { UserAvatar } from "@/components/user-avatar";
 import { PostActivitySheet } from "@/components/community/post-activity";
 import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useAuth } from "@/lib/auth";
+import { attentionHide, attentionShow, onScreenEnough } from "@/lib/post-attention";
 import { type CommunityAuthor, type CommunityPost } from "@/lib/community";
 
 const db = supabase as any;
@@ -39,12 +41,29 @@ export function markPostViewed(postId: string) {
 
 /**
  * Counts a view of `post` once `ref` has been at least half on screen for
- * two seconds. Never your own post, and never while a coach views as a
- * client (that isn't the client looking).
+ * two seconds, and its attention (post-attention.ts: time on screen, coming
+ * on screen, leaving Crew with it there). Never your own post, and never
+ * while a coach views as a client (that isn't the client looking); a coach's
+ * own attention isn't the crew's, so it isn't kept either.
  */
 export function usePostViewTracker(ref: RefObject<HTMLElement | null>, post: Pick<CommunityPost, "id" | "is_mine">) {
   const { isImpersonating } = useClientImpersonation();
+  const { role } = useAuth();
   const skip = post.is_mine || isImpersonating;
+  const skipAttention = skip || role === "admin" || role === "coach";
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || skipAttention || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([e]) => (onScreenEnough(e, window.innerHeight) ? attentionShow(post.id) : attentionHide(post.id)),
+      { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      attentionHide(post.id);
+    };
+  }, [ref, post.id, skipAttention]);
   useEffect(() => {
     const el = ref.current;
     if (!el || skip || sent.has(post.id) || typeof IntersectionObserver === "undefined") return;
