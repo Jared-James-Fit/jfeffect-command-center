@@ -36,7 +36,7 @@ function sessionSummary(s: Session): string {
 }
 
 // ---------------------------------------------------------------------------
-// No-show — asks whether to deduct a credit.
+// No-show / late cancel: count it (1 credit used) or bank the credit (a cancel).
 // ---------------------------------------------------------------------------
 export function NoShowPtDialog({
   open, onOpenChange, session, onDone,
@@ -44,7 +44,8 @@ export function NoShowPtDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   session: Session | null;
-  onDone?: () => void;
+  /** The status it ended up with: "Missed" (counted) or "Cancelled" (banked). */
+  onDone?: (status: "Missed" | "Cancelled") => void;
 }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<"deduct" | "keep" | null>(null);
@@ -56,14 +57,10 @@ export function NoShowPtDialog({
       await setPtSessionStatus({ data: { sessionId: session.id, status: "Missed", deductOnMissed: deduct } });
       const usesCredit = session.uses_credit !== false;
       toast.success(
-        deduct && usesCredit
-          ? "No-show recorded — 1 credit deducted"
-          : usesCredit
-            ? "No-show recorded — credit released back to available"
-            : "No-show recorded — no credit impact",
+        !usesCredit ? (deduct ? "Marked missed" : "Cancelled") : deduct ? "Counted · 1 credit used" : "Cancelled · credit banked",
       );
       invalidatePtSessionCaches(qc, session.client_id);
-      onDone?.();
+      onDone?.(deduct ? "Missed" : "Cancelled");
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Update failed");
@@ -76,25 +73,25 @@ export function NoShowPtDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-warning" /> Mark No-show</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Ban className="h-4 w-4 text-warning" /> Late cancel or no-show</DialogTitle>
         </DialogHeader>
         {session && <p className="text-sm text-muted-foreground">{sessionSummary(session)}</p>}
         {session?.uses_credit === false ? (
           <>
-            <p className="text-sm text-muted-foreground">This session doesn't use PT credits — marking it no-show won't affect the credit balance.</p>
-            <Button variant="destructive" disabled={busy !== null} onClick={() => mark(false)}>
-              {busy !== null ? "Saving…" : "Mark no-show"}
+            <p className="text-sm text-muted-foreground">This session doesn't use a credit.</p>
+            <Button variant="destructive" disabled={busy !== null} onClick={() => mark(true)}>
+              {busy !== null ? "Saving…" : "Mark it missed"}
             </Button>
           </>
         ) : (
           <>
-            <p className="text-sm font-semibold">Deduct a session credit for this no-show?</p>
+            <p className="text-sm font-semibold">Does it count as one of their sessions?</p>
             <div className="grid gap-2">
               <Button variant="destructive" disabled={busy !== null} onClick={() => mark(true)}>
-                {busy === "deduct" ? "Saving…" : "Deduct 1 credit"}
+                {busy === "deduct" ? "Saving…" : "Count it · use the credit"}
               </Button>
               <Button variant="outline" disabled={busy !== null} onClick={() => mark(false)}>
-                {busy === "keep" ? "Saving…" : "Do not deduct — release credit"}
+                {busy === "keep" ? "Saving…" : "Don't count it · bank the credit"}
               </Button>
             </div>
           </>
@@ -194,7 +191,7 @@ export function CancelPtSessionDialog({
     setBusy(true);
     try {
       await setPtSessionStatus({ data: { sessionId: session.id, status: "Cancelled" } });
-      toast.success(hasReservation ? "Session cancelled — reserved credit released" : "Session cancelled");
+      toast.success(session.uses_credit === false ? "Cancelled" : "Cancelled · credit banked");
       invalidatePtSessionCaches(qc, session.client_id);
       onDone?.();
       onOpenChange(false);
@@ -212,9 +209,9 @@ export function CancelPtSessionDialog({
           <AlertDialogTitle>Cancel this session?</AlertDialogTitle>
           <AlertDialogDescription>
             {session ? sessionSummary(session) : ""}
-            {hasReservation
-              ? " The reserved credit is released back to the client’s available balance."
-              : " No credit was reserved, so the balance does not change."}
+            {session?.uses_credit === false
+              ? ""
+              : " Its credit goes back to the client to book another time (a session already counted gets its credit back too)."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

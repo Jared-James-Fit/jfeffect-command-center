@@ -47,7 +47,10 @@ export function todayISOLocal(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Past scheduled sessions the coach still needs to pick an outcome for. */
+/**
+ * Booked sessions whose day is over and still open: the auto-complete leaves
+ * these for the coach (a change request nobody answered, an archived client).
+ */
 export function isNeedsReview(s: { status: string; session_date: string }, today: string): boolean {
   return s.status === "Scheduled" && s.session_date < today;
 }
@@ -85,27 +88,29 @@ export function creditImpact(
   const outstanding = Math.max(reservedCount - releasedCount, 0);
   const netUsed = Math.max(usedCount - revertedCount, 0);
 
+  const used = (n: number) => `${n} credit${n === 1 ? "" : "s"} used`;
   switch (status) {
     case "Scheduled":
       return outstanding > 0
-        ? { label: `Reserved ${outstanding}`, tone: "primary" }
-        : { label: "No session used", tone: "muted" };
+        ? { label: `Holds ${outstanding} credit${outstanding === 1 ? "" : "s"}`, tone: "primary" }
+        : { label: "No credit held", tone: "muted" };
     case "Completed":
       return netUsed > 0
-        ? { label: `Used ${netUsed}`, tone: "success" }
-        : { label: "No session used", tone: "muted" };
-    case "Cancelled":
-      return releasedCount > 0
-        ? { label: "Cancelled · session returned", tone: "muted" }
-        : { label: "Cancelled · no session used", tone: "muted" };
+        ? { label: used(netUsed), tone: "success" }
+        : { label: "No credit used", tone: "muted" };
     case "Missed":
-      if (netUsed > 0) return { label: `No-show deducted ${netUsed}`, tone: "destructive" };
-      if (releasedCount > 0) return { label: "No-show · session returned", tone: "muted" };
-      return { label: "No session used", tone: "muted" };
+      return netUsed > 0
+        ? { label: used(netUsed), tone: "warning" }
+        : { label: "No credit used", tone: "muted" };
+    case "Cancelled":
+    case "Rescheduled":
+      return netUsed > 0
+        ? { label: used(netUsed), tone: "warning" }
+        : { label: "Credit banked", tone: "muted" };
     default:
       return outstanding > 0
-        ? { label: `Reserved ${outstanding}`, tone: "primary" }
-        : { label: "No session used", tone: "muted" };
+        ? { label: `Holds ${outstanding} credit${outstanding === 1 ? "" : "s"}`, tone: "primary" }
+        : { label: "No credit used", tone: "muted" };
   }
 }
 
@@ -128,15 +133,15 @@ export function creditToneClasses(tone: CreditTone): string {
 export function friendlyEventLabel(e: PtLedgerEvent): string {
   switch (e.event_type) {
     case "reserved":
-      return "Session reserved";
+      return "Credit held";
     case "released":
-      return e.source === "convert_on_complete" ? "Reserved session used" : "Session returned";
+      return e.source === "convert_on_complete" ? "Held credit used" : "Held credit freed";
     case "used":
-      return "Session used";
+      return "Credit used";
     case "granted":
       return e.source === "admin_adjust" ? "Sessions added by admin" : "Sessions added";
     case "adjusted":
-      if (e.source === "revert_on_uncomplete") return "Deduction reversed · session returned";
+      if (e.source === "revert_on_uncomplete") return "Credit given back";
       return Number(e.session_count) > 0 ? "Sessions added (adjustment)" : "Sessions deducted (adjustment)";
     case "transferred_out":
       return "Sessions applied to new package";

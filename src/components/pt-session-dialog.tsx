@@ -18,7 +18,8 @@ import {
   ChevronLeft, LayoutTemplate, Plus,
 } from "lucide-react";
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
-import { getPtSessionCreditEvents, revertPtSessionDeduction } from "@/lib/pt-session-manage.functions";
+import { getPtSessionCreditEvents } from "@/lib/pt-session-manage.functions";
+import { sessionStatusLabel, statusForDate } from "@/lib/session-credit";
 import {
   creditImpact, creditToneClasses, invalidatePtSessionCaches, type PtLedgerEvent,
 } from "@/lib/pt-session-manage";
@@ -378,20 +379,6 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     }
   };
 
-  const undoNoShow = async () => {
-    try {
-      if (impact?.tone === "destructive") {
-        await revertPtSessionDeduction({ data: { sessionId: form.id } });
-      }
-      await setPtSessionStatus({ data: { sessionId: form.id, status: "Scheduled" } });
-      toast.success("No-show undone — session is scheduled again");
-      set("status", "Scheduled");
-      invalidatePtSessionCaches(qc, form.client_id);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Undo failed");
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
@@ -426,12 +413,12 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <div className="space-y-1.5 rounded-md border border-border bg-secondary/20 p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={statusTone(form.status)}>
-                {form.status === "Missed" ? "No-show" : form.status}
+                {sessionStatusLabel(form.status)}
               </Badge>
               <span className="text-sm font-bold break-words">{form.title}</span>
               {impact && (
                 <Badge variant="outline" className={creditToneClasses(impact.tone)}>
-                  Sessions: {impact.label}
+                  {impact.label}
                 </Badge>
               )}
             </div>
@@ -645,7 +632,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               <Label>Status {form.id ? "(manual override)" : ""}</Label>
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{SESSION_STATUSES.map((s) => <SelectItem key={s} value={s}>{s === "Missed" ? "No-show" : s}</SelectItem>)}</SelectContent>
+                <SelectContent>{SESSION_STATUSES.map((s) => <SelectItem key={s} value={s}>{sessionStatusLabel(s)}</SelectItem>)}</SelectContent>
               </Select>
               {form.id && (
                 <p className="mt-1 text-[11px] text-muted-foreground">
@@ -671,36 +658,40 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <>
             <Separator />
             <div className="flex flex-wrap gap-2">
+              {/* Booked sessions count as used by themselves once their day is over. */}
               {form.status === "Scheduled" && (
                 <>
-                  <Button
-                    size="sm" variant="outline"
-                    className="border-success/40 text-success hover:bg-success/10"
-                    onClick={() => applyStatus("Completed", "Marked completed — reserved session converted to used")}
-                  >
-                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Complete
+                  {form.session_date <= deviceTodayISO() && (
+                    <Button
+                      size="sm" variant="outline"
+                      className="border-success/40 text-success hover:bg-success/10"
+                      onClick={() => applyStatus("Completed", "Done · 1 credit used")}
+                    >
+                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> It happened
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => setCancelOpen(true)}>
+                    <CircleOff className="mr-1.5 h-3.5 w-3.5" /> Cancel · bank the credit
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setNoShowOpen(true)}>
-                    <Ban className="mr-1.5 h-3.5 w-3.5" /> No-show
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setCancelOpen(true)}>
-                    <CircleOff className="mr-1.5 h-3.5 w-3.5" /> Cancel
+                    <Ban className="mr-1.5 h-3.5 w-3.5" /> Late cancel / no-show
                   </Button>
                 </>
               )}
-              {form.status === "Completed" && (
-                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Completion undone — session restored and reserved again")}>
-                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo Completion
+              {(form.status === "Completed" || form.status === "Missed") && (
+                <Button size="sm" variant="outline" onClick={() => applyStatus("Cancelled", "Credit banked · it goes back to the client")}>
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> {form.status === "Completed" ? "Didn't happen · bank the credit" : "Don't count it · bank the credit"}
                 </Button>
               )}
-              {form.status === "Missed" && (
-                <Button size="sm" variant="outline" onClick={undoNoShow}>
-                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo No-show
-                </Button>
-              )}
-              {form.status === "Cancelled" && (
-                <Button size="sm" variant="outline" onClick={() => applyStatus("Scheduled", "Session restored — 1 session reserved")}>
-                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Restore Session
+              {(form.status === "Cancelled" || form.status === "Rescheduled") && (
+                <Button
+                  size="sm" variant="outline"
+                  onClick={() => {
+                    const next = statusForDate(form.session_date, deviceTodayISO());
+                    void applyStatus(next, next === "Completed" ? "Back on · it counts as done (1 credit used)" : "Booked again · holds 1 credit");
+                  }}
+                >
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Book it again
                 </Button>
               )}
               {isAdmin && (
@@ -764,7 +755,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
       {form.id && (
         <>
-          <NoShowPtDialog open={noShowOpen} onOpenChange={setNoShowOpen} session={form} onDone={() => set("status", "Missed")} />
+          <NoShowPtDialog open={noShowOpen} onOpenChange={setNoShowOpen} session={form} onDone={(st) => set("status", st)} />
           <CancelPtSessionDialog
             open={cancelOpen}
             onOpenChange={setCancelOpen}

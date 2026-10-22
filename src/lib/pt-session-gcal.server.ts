@@ -153,6 +153,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
       try {
         const client = clientById.get(row.client_id);
         const stale = new Date(row.ends_at).getTime() < Date.now() - HISTORY_CUTOFF_MS;
+        const ended = new Date(row.ends_at).getTime() <= Date.now();
         if (row.status === "Scheduled" && !stale) {
           const target: string = calendarId || resolveCalendar(client?.assigned_coach_id);
           calendarId = target;
@@ -182,7 +183,10 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
             meetLink = meetLink || meetLinkOf(r.data);
             result.created++;
           }
-        } else if ((row.status === "Cancelled" || row.status === "Rescheduled") && eventId) {
+        } else if (
+          (row.status === "Cancelled" || row.status === "Rescheduled" || (row.status === "Missed" && !ended)) && eventId
+        ) {
+          // Off the calendar: a cancel, or a late cancel before it starts (the slot is free again).
           const r = await gapi("DELETE", eventPath(calendarId || resolveCalendar(client?.assigned_coach_id), eventId));
           if (!r.ok && r.status !== 404 && r.status !== 410) {
             throw new Error(r.data?.error?.message || `Google delete failed (${r.status})`);
@@ -191,7 +195,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
           meetLink = null; // the Meet went with the event; a restored session gets a new one
           result.removed++;
         }
-        // Completed / no-show / old sessions keep whatever is in Google as history.
+        // Completed / no-shows / old sessions keep whatever is in Google as history.
 
         const now = new Date().toISOString();
         const { data: done } = await admin

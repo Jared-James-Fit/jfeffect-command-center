@@ -23,7 +23,8 @@ import {
   AdjustPtCreditDialog, CancelPtSessionDialog, DeletePtSessionDialog, NoShowPtDialog,
 } from "@/components/pt-session-manage-dialogs";
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
-import { getPtSessionCreditEvents, revertPtSessionDeduction } from "@/lib/pt-session-manage.functions";
+import { getPtSessionCreditEvents } from "@/lib/pt-session-manage.functions";
+import { sessionStatusLabel, statusForDate } from "@/lib/session-credit";
 import {
   creditImpact, creditToneClasses, duplicateKey, invalidatePtSessionCaches, isNeedsReview,
   todayISOLocal, type PtLedgerEvent,
@@ -54,7 +55,7 @@ export function PtCalendarPanel() {
   const [deleteFor, setDeleteFor] = useState<any>(null);
   const [cancelFor, setCancelFor] = useState<any>(null);
   const [adjustFor, setAdjustFor] = useState<any>(null);
-  const [moveFor, setMoveFor] = useState<any>(null);
+  const [actFor, setActFor] = useState<any>(null);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"],
@@ -160,21 +161,6 @@ export function PtCalendarPanel() {
     }
   };
 
-  const undoNoShow = async (s: any) => {
-    try {
-      const events = eventsBySession[s.id] ?? [];
-      const impact = creditImpact("Missed", events);
-      if (impact.tone === "destructive") {
-        await revertPtSessionDeduction({ data: { sessionId: s.id } });
-      }
-      await setPtSessionStatus({ data: { sessionId: s.id, status: "Scheduled" } });
-      toast.success("No-show undone — session is scheduled again");
-      invalidatePtSessionCaches(qc, s.client_id);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Undo failed");
-    }
-  };
-
   const openEdit = (s: any) => {
     setEditing(s);
     setOpen(true);
@@ -189,10 +175,10 @@ export function PtCalendarPanel() {
       <li key={s.id} className="py-3 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={`${statusTone(s.status)} shrink-0`}>
-            {s.status === "Missed" ? "No-show" : s.status}
+            {sessionStatusLabel(s.status)}
           </Badge>
           {isNeedsReview(s, today) && (
-            <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Needs Review</Badge>
+            <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">Waiting on you</Badge>
           )}
           {isDup && (
             <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">
@@ -201,7 +187,7 @@ export function PtCalendarPanel() {
           )}
           <span className="text-sm font-semibold break-words">{s.title}</span>
           <Badge variant="outline" className={`${creditToneClasses(impact.tone)} shrink-0`}>
-            Sessions: {impact.label}
+            {impact.label}
           </Badge>
         </div>
         <div className="text-xs text-muted-foreground break-words">
@@ -218,23 +204,16 @@ export function PtCalendarPanel() {
           <Button size="sm" variant="outline" onClick={() => openEdit(s)}>
             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
           </Button>
-          {scheduled && (
-            <Button size="sm" variant="outline" onClick={() => setMoveFor(s)}>
-              <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Move
-            </Button>
-          )}
-          {scheduled && (
+          <Button size="sm" variant="outline" onClick={() => setActFor(s)}>
+            <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> {scheduled ? "Reschedule · cancel" : "Change"}
+          </Button>
+          {scheduled && s.session_date < today && (
             <Button
               size="sm" variant="outline"
               className="border-success/40 text-success hover:bg-success/10"
-              onClick={() => changeStatus(s, "Completed", "Marked completed — reserved session converted to used")}
+              onClick={() => changeStatus(s, "Completed", "Done · 1 credit used")}
             >
-              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Complete
-            </Button>
-          )}
-          {s.status === "Completed" && (
-            <Button size="sm" variant="outline" onClick={() => changeStatus(s, "Scheduled", "Completion undone — session restored and reserved again")}>
-              <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo Completion
+              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> It happened
             </Button>
           )}
           <DropdownMenu>
@@ -249,22 +228,27 @@ export function PtCalendarPanel() {
               </DropdownMenuItem>
               {scheduled && (
                 <>
-                  <DropdownMenuItem onClick={() => setNoShowFor(s)}>
-                    <Ban className="mr-2 h-4 w-4" /> Mark No-show
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setCancelFor(s)}>
-                    <CircleOff className="mr-2 h-4 w-4" /> Cancel Session
+                    <CircleOff className="mr-2 h-4 w-4" /> Cancel · bank the credit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setNoShowFor(s)}>
+                    <Ban className="mr-2 h-4 w-4" /> Late cancel / no-show
                   </DropdownMenuItem>
                 </>
               )}
-              {s.status === "Cancelled" && (
-                <DropdownMenuItem onClick={() => changeStatus(s, "Scheduled", "Session restored — 1 session reserved")}>
-                  <Undo2 className="mr-2 h-4 w-4" /> Restore Session
+              {(s.status === "Completed" || s.status === "Missed") && (
+                <DropdownMenuItem onClick={() => changeStatus(s, "Cancelled", "Credit banked · it goes back to the client")}>
+                  <Undo2 className="mr-2 h-4 w-4" /> {s.status === "Completed" ? "Didn't happen · bank the credit" : "Don't count it · bank the credit"}
                 </DropdownMenuItem>
               )}
-              {s.status === "Missed" && (
-                <DropdownMenuItem onClick={() => undoNoShow(s)}>
-                  <Undo2 className="mr-2 h-4 w-4" /> Undo No-show
+              {s.status === "Cancelled" && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    const next = statusForDate(s.session_date, today);
+                    void changeStatus(s, next, next === "Completed" ? "Back on · it counts as done (1 credit used)" : "Booked again · holds 1 credit");
+                  }}
+                >
+                  <Undo2 className="mr-2 h-4 w-4" /> Book it again
                 </DropdownMenuItem>
               )}
               {isAdmin && (
@@ -296,11 +280,11 @@ export function PtCalendarPanel() {
               <TabsList className="flex w-full flex-wrap h-auto gap-1 sm:w-max">
                 <TabsTrigger value="upcoming">Upcoming ({groups.upcoming.length})</TabsTrigger>
                 <TabsTrigger value="review" className={groups.review.length > 0 ? "text-warning" : ""}>
-                  Needs Review ({groups.review.length})
+                  Waiting on you ({groups.review.length})
                 </TabsTrigger>
-                <TabsTrigger value="completed">Completed ({groups.completed.length})</TabsTrigger>
+                <TabsTrigger value="completed">Done ({groups.completed.length})</TabsTrigger>
                 <TabsTrigger value="cancelled">Cancelled ({groups.cancelled.length})</TabsTrigger>
-                <TabsTrigger value="noshow">No-show ({groups.noshow.length})</TabsTrigger>
+                <TabsTrigger value="noshow">Missed ({groups.noshow.length})</TabsTrigger>
                 <TabsTrigger value="all">All ({groups.all.length})</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -354,11 +338,10 @@ export function PtCalendarPanel() {
 
       <PtSessionDialog open={open} onOpenChange={setOpen} clients={clients} initial={editing ?? undefined} />
       <SessionActionsSheet
-        session={moveFor}
-        clientName={moveFor?.clients?.full_name}
-        open={!!moveFor}
-        initialMode="move"
-        onOpenChange={(o) => { if (!o) setMoveFor(null); }}
+        session={actFor}
+        clientName={actFor?.clients?.full_name}
+        open={!!actFor}
+        onOpenChange={(o) => { if (!o) setActFor(null); }}
         onEdit={(x) => openEdit(sessions.find((r: any) => r.id === x.id) ?? x)}
       />
       <NoShowPtDialog open={!!noShowFor} onOpenChange={(o) => { if (!o) setNoShowFor(null); }} session={noShowFor} />

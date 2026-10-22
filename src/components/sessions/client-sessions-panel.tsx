@@ -27,6 +27,7 @@ import {
 
 import { WORKSPACE_FULL_SPAN_CLASS } from "@/components/workspace/workspace-container";
 import { SessionActionsSheet, whenLabel } from "@/components/schedule/session-actions-sheet";
+import { sessionCredit, sessionStatusLabel, type CreditState } from "@/lib/session-credit";
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { deviceTodayISO } from "@/lib/schedule-time";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +36,12 @@ import { packageRenewal } from "@/lib/client-owed";
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import { withTax } from "@/lib/sale-money";
 
+const CREDIT_TEXT: Record<CreditState, string> = {
+  held: "text-primary",
+  used: "text-success",
+  banked: "text-sky-300",
+  free: "text-muted-foreground",
+};
 const ADJUST_REASONS = ["Bonus session", "Complimentary", "Correction", "Refund / manual adjustment", "No-show deduction", "Other"];
 
 // Local date, not UTC: after 7 PM in Winnipeg the UTC date is already tomorrow.
@@ -227,14 +234,20 @@ export function ClientSessionsPanel({
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Purchased" value={summary.purchased} />
           <Stat label="Used" value={summary.used} />
-          <Stat label="Scheduled" value={summary.scheduled} tone={needsReview.length > 0 ? "warning" : undefined} />
+          <Stat label="Booked" value={summary.scheduled} tone={needsReview.length > 0 ? "warning" : undefined} />
           {summary.overdrawn > 0
             ? <Stat label="Over by" value={summary.overdrawn} tone="warning" />
             : <Stat label="Remaining" value={summary.remaining} tone="primary" />}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Available to book: <strong className="text-foreground">{summary.available}</strong> (remaining minus scheduled).
+          Available to book: <strong className="text-foreground">{summary.available}</strong> (remaining minus booked).
+          {" "}Booked sessions count as used by themselves once their day is over. Tap one to reschedule it, bank its credit or count a late cancel.
         </p>
+        {needsReview.length > 0 && (
+          <p className="text-[11px] text-warning">
+            {needsReview.length === 1 ? "1 past session is" : `${needsReview.length} past sessions are`} waiting on you (a change request is open, so it wasn't counted by itself): tap to pick what happened.
+          </p>
+        )}
         <RenewalNote purchases={purchases} trained={summary.overdrawn} booked={looseHolds} />
 
         {isAdmin && (
@@ -304,16 +317,17 @@ export function ClientSessionsPanel({
               {ordered.map((s) => (
                 <li key={s.id}>
                   {/* Whole row is the button: on a phone the date and time stay readable, and
-                      one tap opens labelled actions (Move, Mark done, No-show, Cancel). */}
+                      one tap opens labelled actions (Reschedule, bank the credit, use it). */}
                   <button
                     type="button"
                     onClick={() => setActing(s)}
                     className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-secondary/30"
                   >
-                    <Badge variant="outline" className={`${statusTone(s.status)} w-[84px] shrink-0 justify-center`}>{s.status === "Missed" ? "No-show" : s.status}</Badge>
+                    <Badge variant="outline" className={`${statusTone(s.status)} w-[84px] shrink-0 justify-center`}>{sessionStatusLabel(s.status)}</Badge>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold">{whenLabel(s.session_date, s.start_time)}</div>
                       <div className="truncate text-xs text-muted-foreground">
+                        {s.uses_credit !== false && <span className={CREDIT_TEXT[sessionCredit(s, today).state]}>{sessionCredit(s, today).label} · </span>}
                         {fmtTimeRange(s.start_time, s.end_time)} · {s.title}{s.location ? ` · ${s.location.split(",")[0]}` : ""}
                       </div>
                     </div>
