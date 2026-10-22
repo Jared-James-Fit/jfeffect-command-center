@@ -234,6 +234,7 @@ import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './route
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
+import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
@@ -1557,6 +1558,12 @@ const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
   path: '/api/public/hooks/fillout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksGcalSessionImportRoute =
+  ApiPublicHooksGcalSessionImportRouteImport.update({
+    id: '/api/public/hooks/gcal-session-import',
+    path: '/api/public/hooks/gcal-session-import',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksLiftArchiveTickRoute =
   ApiPublicHooksLiftArchiveTickRouteImport.update({
     id: '/api/public/hooks/lift-archive-tick',
@@ -1934,6 +1941,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
+  '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
@@ -2184,6 +2192,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
+  '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
@@ -2440,6 +2449,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
+  '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
@@ -2696,6 +2706,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
+    | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
@@ -2946,6 +2957,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
+    | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
@@ -3201,6 +3213,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
+    | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
@@ -3295,6 +3308,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
+  ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
@@ -4893,6 +4907,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksFilloutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/gcal-session-import': {
+      id: '/api/public/hooks/gcal-session-import'
+      path: '/api/public/hooks/gcal-session-import'
+      fullPath: '/api/public/hooks/gcal-session-import'
+      preLoaderRoute: typeof ApiPublicHooksGcalSessionImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/lift-archive-tick': {
       id: '/api/public/hooks/lift-archive-tick'
       path: '/api/public/hooks/lift-archive-tick'
@@ -5769,6 +5790,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
+  ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,

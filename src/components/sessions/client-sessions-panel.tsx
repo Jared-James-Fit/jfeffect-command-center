@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CalendarDays, Plus, Ticket, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { CalendarDays, CalendarPlus, Plus, Ticket, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { GoogleImportDialog } from "@/components/sessions/google-import-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SellSessionsDialog } from "@/components/sell-sessions-dialog";
 import { adjustSessionCredits } from "@/lib/session-credit-packages.functions";
@@ -108,6 +109,7 @@ export function ClientSessionsPanel({
   const [bookOpen, setBookOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [acting, setActing] = useState<any>(null);
 
@@ -243,6 +245,9 @@ export function ClientSessionsPanel({
             <Button size="sm" variant="outline" className="min-w-0" onClick={() => setAdjustOpen(true)}>
               <SlidersHorizontal className="mr-2 h-4 w-4" /> Adjust Sessions
             </Button>
+            <Button size="sm" variant="outline" className="min-w-0" onClick={() => setImportOpen(true)}>
+              <CalendarPlus className="mr-2 h-4 w-4" /> From Google Calendar
+            </Button>
           </div>
         )}
 
@@ -370,6 +375,7 @@ export function ClientSessionsPanel({
       />
       <SellSessionsDialog open={addOpen} onOpenChange={setAddOpen} clientId={clientId} />
       <AdjustSessionsDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={clientId} onDone={invalidateAll} />
+      {isAdmin && <GoogleImportDialog open={importOpen} onOpenChange={setImportOpen} clientId={clientId} clientName={client?.full_name} onDone={invalidateAll} />}
     </>
   );
 }
