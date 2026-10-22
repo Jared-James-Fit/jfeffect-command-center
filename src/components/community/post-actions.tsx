@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
+import { Archive, ArchiveRestore, Download, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -13,16 +13,22 @@ import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
+import { peekPostArt, postArtKey } from "@/lib/post-art";
+import { useWeightUnit } from "@/lib/use-weight-unit";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
  * see it, in Archived on your profile, until you restore it) or Delete.
  * Coaches can also remove anyone's post and edit coach notes.
  * Named on someone else's post: Remove me (off the post and your profile).
- * Coaches, on any post: Share to Instagram (never in View as client).
+ * Coaches, on any post: Share to Instagram, and on an automated post Save
+ * image (its picture, the same file the feed shows: the share sheet's Save
+ * Image on a phone, a download on a computer). Never in View as client.
  * `onGone` runs after an archive or delete (e.g. to close the detail view).
+ * `unit`: the one the feed painted its picture in.
  */
-export function PostActions({ post, viewerIsStaff, onGone, className }: { post: CommunityPost; viewerIsStaff: boolean; onGone?: () => void; className?: string }) {
+export function PostActions({ post, viewerIsStaff, onGone, className, unit: shownUnit }: { post: CommunityPost; viewerIsStaff: boolean; onGone?: () => void; className?: string; unit?: "kg" | "lb" }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [sticker, setSticker] = useState(false);
@@ -41,6 +47,8 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   // a coach viewing as a client sees the client's menu, but nothing in it acts as them
   const { isImpersonating } = useClientImpersonation();
   const act = (fn: () => void) => () => (isImpersonating ? void toast.message(PREVIEW_ONLY_MESSAGE) : fn());
+  const { unit: myUnit } = useWeightUnit();
+  const unit = shownUnit ?? myUnit;
 
   const mine = post.is_mine;
   const isNote = post.kind === "note";
@@ -49,7 +57,20 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const canDelete = mine || viewerIsStaff;
   const onIt = !mine && !!me && (post.mentions ?? []).some((m) => m.user_id === me);
   const canInstagram = viewerIsStaff && !isImpersonating && !post.story;
+  // an automated post's painted picture (a post with its own photo saves those from Share to Instagram)
+  const artCard = canInstagram ? postArtCard(post) : null;
   if (!canEdit && !canDelete && !onIt && !canInstagram) return null;
+
+  // the file is already made (it's the picture on screen), so the share sheet opens from this tap
+  const saveImage = () => {
+    const art = artCard ? peekPostArt(postArtKey(post, artCard, unit)) : null;
+    if (!art) return void toast.message("The picture is still being made. Try again in a second.");
+    void sendToInstagram([art.file], null).then(({ outcome }) => {
+      if (outcome === "again") toast.message("Tap Save image once more.");
+      else if (outcome === "saved") toast.success("Picture saved");
+      else if (outcome === "failed") toast.error("Couldn't save the picture");
+    });
+  };
 
   const setArchived = (on: boolean) =>
     archive.mutate(
@@ -91,6 +112,11 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
               <DropdownMenuItem onSelect={act(() => setIg(true))} data-share-instagram>
                 <Instagram className="mr-2 h-4 w-4" /> Share to Instagram
               </DropdownMenuItem>
+              {artCard && (
+                <DropdownMenuItem onSelect={act(saveImage)} data-save-image>
+                  <Download className="mr-2 h-4 w-4" /> Save image
+                </DropdownMenuItem>
+              )}
               {(onIt || canEdit || canDelete) && <DropdownMenuSeparator />}
             </>
           )}
@@ -185,7 +211,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
         <EditPostSheet post={editing ? post : null} onClose={() => setEditing(false)} />
       )}
       {mine && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} />}
+      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
     </>
   );
 }

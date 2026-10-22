@@ -127,7 +127,9 @@ describe("carousel composer", () => {
 describe("carousel viewer", () => {
   it("snaps one at a time, shows where you are, loads only nearby slides", () => {
     expect(card).toMatch(/snap-x snap-mandatory overflow-x-auto/);
-    expect(card).toMatch(/\{index \+ 1\}\/\{slides\.length\}/);
+    // an automated post's painted card can lead the post's own slides
+    expect(card).toMatch(/\{index \+ 1\}\/\{count\}/);
+    expect(card).toContain("const count = slides.length + off;");
     expect(card).toMatch(/const near = Math\.abs\(i - index\) <= 1 \|\| i < seen;/);
     // no rubber-band at the ends, so a back swipe on slide 1 is clean
     expect(card).toMatch(/overscrollBehaviorX: "none"/);

@@ -198,11 +198,10 @@ describe("a lesson in the feed and the story", () => {
   it("reads like the coach's own post: the diagram and his words, no label, sources or disclaimer", () => {
     const card = read("src/components/community/lesson-card.tsx");
     for (const bit of ["lessonKicker", "GraduationCap", "BookOpen", "data-lesson-sources", "safeRefUrl", "Good to know", "ask {first} first"]) expect(card, bit).not.toContain(bit);
-    // the diagram is the picture: over the words, or under them when he put a photo on it
+    // the lesson's card (title + diagram) is the picture, edge to edge, his words under it; a photo he put on it comes after the card
     const postCard = read("src/components/community/post-card.tsx");
-    expect(postCard).toContain('{lesson && !cover && <LessonDiagram post={post} className="mb-3" />}');
-    expect(postCard).toContain('{lesson && cover && <LessonDiagram post={post} className="mt-3" />}');
-    expect(postCard).toContain('if (post.series === "lesson") return null;');
+    expect(postCard).toContain("if (card && post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;");
+    expect(postCard).toContain("{auto && <AutoPostCaption post={post} clamp onOpenPerson={onOpenAuthor} />}");
     // the sources stay with the coach, in his planner
     expect(read("src/components/community/coach-lessons.tsx")).toContain("Sources · only you see these");
   });

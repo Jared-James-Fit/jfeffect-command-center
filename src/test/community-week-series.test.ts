@@ -131,9 +131,10 @@ describe("Sunday Recap: the week's report card", () => {
     expect(isWinsStats(s)).toBe(true);
     expect(isRecapStats({ scene: "keep_digging" })).toBe(false);
     expect(isWinsStats({ feature: "bodyweight" })).toBe(false);
-    const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain('if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard');
-    expect(card).toContain("if (isWinsStats(post.series_data)) return <WinsStatsCard");
+    // each is painted as its own picture (the one the feed, Save image and Instagram share)
+    const plan = read("src/lib/instagram-export.ts");
+    expect(plan).toContain('if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return { card: "recap", slides: [] };');
+    expect(plan).toContain('if (isWinsStats(post.series_data)) return { card: "wins", slides: [] };');
   });
 });
 
@@ -142,7 +143,9 @@ describe("Tuesday, Thursday, Saturday on the post", () => {
     const scenes = libraryBodies("saturday_spirit");
     expect(scenes.map((x) => x.key).sort()).toEqual([...SPIRIT_SCENE_KEYS].sort());
     expect(extraScene({ scene: "year_dots" })).toBe("year_dots");
-    expect(read("src/components/community/post-card.tsx")).toContain('{scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}');
+    // the scene is the picture, edge to edge, the line under it
+    expect(read("src/lib/instagram-export.ts")).toContain('if (post.series === "saturday_spirit" && extraScene(post.series_extra)) return { card: "scene", slides: [] };');
+    expect(read("src/components/community/post-art.tsx")).toContain("return scene && isSpiritScene(scene) ? <SpiritScene scene={scene} /> : null;");
     for (const { body } of scenes) expect(body.split(/\s+/).length).toBeLessThanOrEqual(14);
   });
   it("Tuesday: library tips say what kind they are; data posts get two bars", () => {

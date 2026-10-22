@@ -1,9 +1,12 @@
 /**
  * Instagram cards: a post that has no photo of its own (a lesson, Wednesday
- * Wins, the Sunday Recap, a holiday, Saturday's scene, a workout, words),
- * painted as the picture that goes to Instagram. 1080×1350 for the feed
- * (4:5, the tallest it shows), 1080×1920 for a story (words kept clear of
- * Instagram's name row and reply bar).
+ * Wins, the Sunday Recap, Tuesday's numbers, Thursday's feature, a birthday,
+ * a holiday, Saturday's scene, a workout, words), painted as the picture
+ * that goes to Instagram. 1080×1350 for the feed (4:5, the tallest it
+ * shows), 1080×1920 for a story (words kept clear of Instagram's name row
+ * and reply bar). The 4:5 one is also the automated post's own picture in
+ * the app's feed (post-art.ts), shown about a third of its size on a phone,
+ * so nothing on it is smaller than it can be read there (FEED_MIN_SCALE).
  *
  * Canvas only, in the share cards' look (workout-share-card.ts): always dark,
  * the brand a small mark, never a banner. A lesson's diagram and Saturday's
@@ -17,6 +20,7 @@ import {
   RED,
   brandRow,
   cardLogo,
+  darkGlow,
   display,
   drawCover,
   ensureDisplayFont,
@@ -29,7 +33,12 @@ import {
 import {
   MEDALS,
   buildShareCardFields,
+  compareBars,
+  extraBirthday,
+  extraFeature,
   extraHoliday,
+  extraObservation,
+  extraTipKind,
   isRecapStats,
   isWinsStats,
   recapSummary,
@@ -40,6 +49,7 @@ import {
   winsTiles,
   winsWeekLabel,
   type CommunityPost,
+  type CrewCompare,
   type RecapStats,
   type WinsStats,
 } from "@/lib/community";
@@ -84,11 +94,26 @@ export async function paintInstagramCard(canvas: HTMLCanvasElement, input: IgCar
     case "lesson":
       return paintLesson(ctx, L, post, logo, input.art ?? null);
     case "wins":
-      if (isWinsStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w) => winsBlock(c, w, post.series_data as WinsStats, unit));
+      if (isWinsStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w, maxH) => winsBlock(c, w, maxH, post.series_data as WinsStats, unit));
       break;
     case "recap":
-      if (isRecapStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w) => recapBlock(c, w, post.series_data as RecapStats, unit));
+      if (isRecapStats(post.series_data)) return paintStats(ctx, L, logo, winsWeekLabel(post.series_data.week_of), (c, w, maxH) => recapBlock(c, w, maxH, post.series_data as RecapStats, unit));
       break;
+    case "compare": {
+      const obs = extraObservation(post.series_extra);
+      if (obs) return paintCompare(ctx, L, logo, post, obs);
+      break;
+    }
+    case "feature": {
+      const f = extraFeature(post.series_extra);
+      if (f) return paintFeature(ctx, L, logo, post, f);
+      break;
+    }
+    case "birthday": {
+      const b = extraBirthday(post);
+      if (b?.name) return paintBirthday(ctx, L, logo, post, b.name);
+      break;
+    }
     case "holiday": {
       const h = extraHoliday(post.series_extra);
       const photo = h ? await loadImage(h.image) : null;
@@ -306,7 +331,7 @@ function resetBlock(c: Ctx, w: number, items: string[]): number {
 /*  Wednesday Wins / Sunday Recap: the card from the feed, bigger      */
 /* ------------------------------------------------------------------ */
 
-function paintStats(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, label: string, draw: (c: Ctx, w: number) => number) {
+function paintStats(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, label: string, draw: (c: Ctx, w: number, maxH: number) => number) {
   const { W, H } = L;
   ctx.fillStyle = "#0a0a0d";
   ctx.fillRect(0, 0, W, H);
@@ -318,7 +343,54 @@ function paintStats(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, label: s
   ctx.fillRect(0, 0, W, H);
   brandRow(ctx, logo, PAD, L.top + 30, W, label);
   const top = L.top + 84;
-  placeBlock(ctx, draw, PAD, top, W - PAD * 2, L.bottom - top, L.format === "story" ? "middle" : "top");
+  const maxH = L.bottom - top;
+  placeBlock(ctx, (c, w) => draw(c, w, maxH), PAD, top, W - PAD * 2, maxH, L.format === "story" ? "middle" : "top");
+}
+
+/**
+ * Parts of a card, in the order they're drawn. When they don't all fit, the
+ * ones with the lowest `keep` go first (a part without one always stays), so
+ * what's left is drawn full size instead of everything shrunk to a size the
+ * feed can't read. Kept parts are split by a hairline (`joined`: just a gap).
+ */
+type Part = { draw: (c: Ctx, w: number, y: number) => number; keep?: number; joined?: boolean };
+
+const PART_GAP = 36;
+const PART_RULE = 40;
+
+function fitParts(c: Ctx, w: number, maxH: number, parts: Part[]): number {
+  const off = document.createElement("canvas");
+  off.width = w;
+  off.height = 3200;
+  const m = off.getContext("2d");
+  const heights = parts.map((p) => (m ? Math.ceil(p.draw(m, w, 0)) : 0));
+  const kept = parts.map(() => true);
+  // what goes between two kept parts: a gap and the hairline (divider), or just half a gap
+  const space = (i: number) => (parts[i].joined ? PART_GAP / 2 : PART_GAP + PART_RULE);
+  const total = () => {
+    let t = 0;
+    let first = true;
+    kept.forEach((k, i) => {
+      if (!k) return;
+      t += heights[i] + (first ? 0 : space(i));
+      first = false;
+    });
+    return t;
+  };
+  const droppable = parts.map((p, i) => ({ i, keep: p.keep })).filter((x) => x.keep != null).sort((a, b) => a.keep! - b.keep!);
+  for (const { i } of droppable) {
+    if (total() <= maxH) break;
+    kept[i] = false;
+  }
+  let y = 0;
+  let first = true;
+  parts.forEach((p, i) => {
+    if (!kept[i]) return;
+    if (!first) y = parts[i].joined ? y + PART_GAP / 2 : divider(c, w, y + PART_GAP);
+    first = false;
+    y = p.draw(c, w, y);
+  });
+  return y;
 }
 
 /** Up to four numbers, two across, each with what it means. */
@@ -433,106 +505,344 @@ function heroAmount(c: Ctx, top: number, amount: string, unit: string): number {
   return top + 170;
 }
 
-function winsBlock(c: Ctx, w: number, s: WinsStats, unit: "kg" | "lb"): number {
-  let y = 0;
+function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats, unit: "kg" | "lb"): number {
+  const parts: Part[] = [];
   if (s.volume_kg > 0) {
-    const hero = winsHero(s, unit);
-    y = kicker(c, "Together the crew lifted", 0, y, "rgba(255,255,255,0.60)", 28) + 20;
-    y = heroAmount(c, y, hero.amount, hero.unit) + 22;
-    if (hero.compare) {
-      c.font = font(600, 40);
-      y = textLines(c, wrapLines(c, hero.compare, w, 2), 0, y, 40, 1.25, BODY) + 10;
-    }
-    const tags = [hero.badge ? { text: `🏆 ${hero.badge}`, gold: true } : null, hero.change ? { text: hero.change } : null].filter(Boolean) as { text: string; gold?: boolean }[];
-    if (tags.length) y = pills(c, tags, y + 8, w) + 8;
-    y = divider(c, w, y + 36);
+    parts.push({
+      draw: (c, w, top) => {
+        const hero = winsHero(s, unit);
+        let y = kicker(c, "Together the crew lifted", 0, top, "rgba(255,255,255,0.60)", 28) + 20;
+        y = heroAmount(c, y, hero.amount, hero.unit) + 22;
+        if (hero.compare) {
+          c.font = font(600, 40);
+          y = textLines(c, wrapLines(c, hero.compare, w, 2), 0, y, 40, 1.25, BODY) + 10;
+        }
+        const tags = [hero.badge ? { text: `🏆 ${hero.badge}`, gold: true } : null, hero.change ? { text: hero.change } : null].filter(Boolean) as { text: string; gold?: boolean }[];
+        if (tags.length) y = pills(c, tags, y + 8, w);
+        return y;
+      },
+    });
   }
-  y = tilesBlock(c, w, y, winsTiles(s));
+  parts.push({ draw: (c, w, y) => tilesBlock(c, w, y, winsTiles(s)) });
   const chart = winsChart(s);
   if (chart.length > 1) {
-    y = divider(c, w, y + 40);
-    kicker(c, "Workouts each week", 0, y, "rgba(255,255,255,0.60)", 26);
-    y += 50;
-    y = bars(c, w, y, chart.map((b) => ({ n: b.sessions, share: b.share, hot: b.current, label: b.current ? String(b.sessions) : undefined })), 210);
-    c.font = font(600, 24);
-    c.fillStyle = "rgba(255,255,255,0.40)";
-    c.fillText(chart[0].label, 0, y + 36);
-    c.textAlign = "right";
-    c.fillText(chart[chart.length - 1].label, w, y + 36);
-    c.textAlign = "left";
-    y += 48;
+    parts.push({
+      keep: 1,
+      draw: (c, w, top) => {
+        kicker(c, "Workouts each week", 0, top, "rgba(255,255,255,0.60)", 26);
+        let y = bars(c, w, top + 50, chart.map((b) => ({ n: b.sessions, share: b.share, hot: b.current, label: b.current ? String(b.sessions) : undefined })), 210);
+        c.font = font(600, 26);
+        c.fillStyle = "rgba(255,255,255,0.45)";
+        c.fillText(chart[0].label, 0, y + 36);
+        c.textAlign = "right";
+        c.fillText(chart[chart.length - 1].label, w, y + 36);
+        c.textAlign = "left";
+        y += 48;
+        return y;
+      },
+    });
   }
-  return noteBox(c, w, y + 36, null, winsChallenge(s));
+  parts.push({ keep: 2, joined: true, draw: (c, w, y) => noteBox(c, w, y + PART_GAP / 2, null, winsChallenge(s)) });
+  return fitParts(c, w, maxH, parts);
 }
 
 /**
  * The Recap for Instagram: the plan as a ring, PRs and the crew's total, the
- * days, and the week's biggest moments. What's only for the crew (how fully
- * workouts were logged, what to work on) stays in the app.
+ * week's biggest moments, then the days when there's room. What's only for
+ * the crew (how fully workouts were logged, what to work on) stays in the app.
  */
-function recapBlock(c: Ctx, w: number, s: RecapStats, unit: "kg" | "lb"): number {
+function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" | "lb"): number {
   const sum = recapSummary(s);
   const hero = winsHero(s, unit);
-  let y = kicker(c, "Week recap", 0, 0, ACCENT, 30) + 36;
-  // the plan, as one ring
-  const r = 104;
-  const cx = r + 14;
-  const cy = y + r + 14;
-  c.lineCap = "round";
-  c.lineWidth = 26;
-  c.strokeStyle = "rgba(255,255,255,0.12)";
-  c.beginPath();
-  c.arc(cx, cy, r, 0, Math.PI * 2);
-  c.stroke();
-  if (sum.planPct != null) {
-    c.strokeStyle = RED;
-    c.beginPath();
-    c.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (Math.max(0, Math.min(100, sum.planPct)) / 100) * Math.PI * 2);
-    c.stroke();
+  const parts: Part[] = [
+    {
+      draw: (c, w, top) => {
+        let y = kicker(c, "Week recap", 0, top, ACCENT, 30) + 36;
+        // the plan, as one ring
+        const r = 104;
+        const cx = r + 14;
+        const cy = y + r + 14;
+        c.lineCap = "round";
+        c.lineWidth = 26;
+        c.strokeStyle = "rgba(255,255,255,0.12)";
+        c.beginPath();
+        c.arc(cx, cy, r, 0, Math.PI * 2);
+        c.stroke();
+        if (sum.planPct != null) {
+          c.strokeStyle = RED;
+          c.beginPath();
+          c.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (Math.max(0, Math.min(100, sum.planPct)) / 100) * Math.PI * 2);
+          c.stroke();
+        }
+        c.fillStyle = INK;
+        c.font = display(72);
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.fillText(sum.planPct != null ? `${sum.planPct}%` : "–", cx, cy + 4);
+        c.textAlign = "left";
+        c.textBaseline = "alphabetic";
+        const tx = cx + r + 54;
+        const tw = w - tx;
+        c.font = font(900, 42);
+        let ty = textLines(c, wrapLines(c, sum.planPct != null ? "of planned sessions done" : `${s.sessions} workouts finished`, tw, 2), tx, y + 14, 42, 1.15, INK);
+        if (s.active > 0) {
+          c.font = font(600, 34);
+          ty = textLines(c, wrapLines(c, `${s.hit} of ${s.active} hit their weekly target`, tw, 2), tx, ty + 8, 34, 1.2, BODY);
+        }
+        ty = pills(c, [{ text: `${s.sessions} workouts` }, ...(sum.vsLast ? [{ text: sum.vsLast }] : [])], ty + 16, tw, tx);
+        return Math.max(cy + r + 14, ty);
+      },
+    },
+    {
+      draw: (c, w, y) =>
+        tilesBlock(c, w, y, [
+          { value: s.prs.toLocaleString("en-US"), label: s.prs === 1 ? "personal record" : "personal records", sub: s.pr_people > 1 ? `set by ${s.pr_people} people` : undefined },
+          { value: hero.amount, label: `${hero.unit} lifted together`, sub: hero.change ?? undefined },
+        ]),
+    },
+    {
+      keep: 0,
+      draw: (c, w, top) => {
+        kicker(c, "Workouts by day", 0, top, "rgba(255,255,255,0.60)", 26);
+        const y = bars(c, w, top + 50, sum.days.map((d) => ({ n: d.n, share: d.share, hot: d.best, label: String(d.n) })), 170);
+        const bw = (w - 18 * 6) / 7;
+        c.font = font(800, 26);
+        c.fillStyle = "rgba(255,255,255,0.45)";
+        c.textAlign = "center";
+        sum.days.forEach((d, i) => c.fillText(d.letter, i * (bw + 18) + bw / 2, y + 40));
+        c.textAlign = "left";
+        return y + 52;
+      },
+    },
+  ];
+  // the week's biggest moments, one at a time (the first with its heading)
+  s.top.slice(0, 3).forEach((t, i) =>
+    parts.push({
+      keep: 3 - i,
+      joined: i > 0,
+      draw: (c, w, top) => {
+        let y = i === 0 ? kicker(c, "Biggest moments", 0, top, "rgba(255,255,255,0.60)", 26) + 26 : top;
+        c.font = font(400, 44);
+        c.fillStyle = INK;
+        c.fillText(MEDALS[i] ?? "•", 0, y + 40);
+        c.font = font(600, 36);
+        y = textLines(c, wrapLines(c, t.text, w - 74, 3), 74, y, 36, 1.25, "rgba(255,255,255,0.90)");
+        return y;
+      },
+    }),
+  );
+  return fitParts(c, w, maxH, parts);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tuesday's numbers / Thursday's feature: two bars, plainly          */
+/* ------------------------------------------------------------------ */
+
+/** The two compare bars, big: what each group is, how many, the number, the bar. */
+function compareBlock(c: Ctx, w: number, top: number, compare: CrewCompare): number {
+  let y = top;
+  for (const r of compareBars(compare)) {
+    c.fillStyle = INK;
+    c.textAlign = "left";
+    c.textBaseline = "alphabetic";
+    const valueSize = 56;
+    c.font = display(valueSize);
+    const vw = c.measureText(r.value.toUpperCase()).width;
+    c.font = font(800, 38);
+    const label = ellipsize(c, r.label, w - vw - 30);
+    c.fillText(label, 0, y + 40);
+    c.font = display(valueSize);
+    c.fillStyle = r.lead ? INK : "rgba(255,255,255,0.75)";
+    c.textAlign = "right";
+    c.fillText(r.value.toUpperCase(), w, y + 48);
+    c.textAlign = "left";
+    c.font = font(600, 30);
+    c.fillStyle = SUB;
+    c.fillText(r.count, 0, y + 86);
+    y += 108;
+    c.fillStyle = "rgba(255,255,255,0.10)";
+    roundRect(c, 0, y, w, 34, 17);
+    c.fill();
+    c.fillStyle = r.lead ? RED : "rgba(255,255,255,0.32)";
+    roundRect(c, 0, y, Math.max(34, Math.round(w * Math.min(1, r.share))), 34, 17);
+    c.fill();
+    y += 34 + 48;
   }
-  c.fillStyle = INK;
-  c.font = display(72);
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.fillText(sum.planPct != null ? `${sum.planPct}%` : "–", cx, cy + 4);
-  c.textAlign = "left";
+  return y - 48;
+}
+
+/** Tuesday from the crew's own data: the point (the caption's first line), then the two groups side by side. */
+function paintCompare(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: CommunityPost, obs: CrewCompare & { observation: string }) {
+  const { W } = L;
+  backdrop(ctx, W, L.H);
+  const sleep = obs.habit === "sleep";
+  const head = hookLine(post.caption) || (sleep ? "How you slept vs how you trained" : "What the crew's training says");
+  placeBlock(
+    ctx,
+    (c, w) => {
+      let y = kicker(c, sleep ? "From your workout reviews" : "From the app · last 8 weeks", 0, 0, ACCENT, 28) + 34;
+      const h = fitWrap(c, head, w, 900, 80, 52, 4);
+      c.font = font(900, h.size);
+      y = textLines(c, h.lines, 0, y, h.size, 1.1, INK) + 64;
+      y = compareBlock(c, w, y, obs);
+      c.font = font(500, 28);
+      y = textLines(c, wrapLines(c, sleep ? "How sessions were rated, by sleep the night before." : "People who joined in the last 8 weeks aren't counted.", w, 2), 0, y + 44, 28, 1.25, "rgba(255,255,255,0.45)");
+      return y;
+    },
+    PAD,
+    L.top,
+    W - PAD * 2,
+    L.bottom - L.top - FOOTER,
+    "middle",
+  );
+  brandRow(ctx, logo, PAD, L.bottom, W, null);
+}
+
+/** Thursday: try this feature, where it is, and (when it says something) how the people who use it train. */
+function paintFeature(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: CommunityPost, f: { title: string; where: string[]; stat?: CrewCompare | null }) {
+  const { W } = L;
+  backdrop(ctx, W, L.H);
+  placeBlock(
+    ctx,
+    (c, w) => {
+      let y = kicker(c, "Try it", 0, 0, ACCENT, 30) + 30;
+      const t = fitWrap(c, f.title, w, 900, 92, 60, 3);
+      c.font = font(900, t.size);
+      y = textLines(c, t.lines, 0, y, t.size, 1.08, INK) + 40;
+      if (f.where.length) y = path(c, f.where, y, w) + 12;
+      if (f.stat) {
+        y = divider(c, w, y + 44);
+        y = kicker(c, "How the crew trains · last 8 weeks", 0, y, "rgba(255,255,255,0.60)", 26) + 40;
+        y = compareBlock(c, w, y, f.stat);
+      } else {
+        const hook = hookLine(post.caption);
+        if (hook && hook !== f.title) {
+          c.font = font(600, 44);
+          y = textLines(c, wrapLines(c, hook, w, 4), 0, y + 36, 44, 1.25, BODY);
+        }
+      }
+      return y;
+    },
+    PAD,
+    L.top,
+    W - PAD * 2,
+    L.bottom - L.top - FOOTER,
+    "middle",
+  );
+  brandRow(ctx, logo, PAD, L.bottom, W, null);
+}
+
+/** Where a feature lives, as the app's own steps: "Workouts › ⋯ › Tools". */
+function path(c: Ctx, steps: string[], top: number, w: number): number {
+  let x = 0;
+  let y = top;
+  c.font = font(800, 32);
+  steps.forEach((step, i) => {
+    const pw = c.measureText(step).width + 48;
+    const arrow = i > 0 ? 44 : 0;
+    if (x > 0 && x + arrow + pw > w) {
+      x = 0;
+      y += 76;
+    }
+    if (i > 0 && x > 0) {
+      c.fillStyle = "rgba(255,255,255,0.45)";
+      c.font = font(700, 34);
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("›", x + arrow / 2, y + 30);
+      x += arrow;
+    }
+    c.fillStyle = "rgba(255,255,255,0.10)";
+    roundRect(c, x, y, pw, 60, 30);
+    c.fill();
+    c.fillStyle = "rgba(255,255,255,0.92)";
+    c.font = font(800, 32);
+    c.textAlign = "left";
+    c.textBaseline = "middle";
+    c.fillText(step, x + 24, y + 31);
+    x += pw;
+  });
   c.textBaseline = "alphabetic";
-  const tx = cx + r + 54;
-  const tw = w - tx;
-  c.font = font(900, 42);
-  let ty = textLines(c, wrapLines(c, sum.planPct != null ? "of planned sessions done" : `${s.sessions} workouts finished`, tw, 2), tx, y + 14, 42, 1.15, INK);
-  if (s.active > 0) {
-    c.font = font(600, 34);
-    ty = textLines(c, wrapLines(c, `${s.hit} of ${s.active} hit their weekly target`, tw, 2), tx, ty + 8, 34, 1.2, BODY);
+  return y + 60;
+}
+
+/* ------------------------------------------------------------------ */
+/*  A birthday                                                         */
+/* ------------------------------------------------------------------ */
+
+/** A fixed scatter of confetti from the post's id: the same card every time it's painted. */
+function confetti(ctx: Ctx, W: number, H: number, seed: string) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  const rnd = () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+  const colors = ["rgba(253,230,138,0.85)", "rgba(245,158,11,0.75)", "rgba(239,51,64,0.80)", "rgba(255,255,255,0.55)"];
+  for (let i = 0; i < 34; i++) {
+    // along the top and bottom edges, clear of the words in the middle
+    const top = i % 2 === 0;
+    const x = rnd() * W;
+    const y = top ? rnd() * H * 0.2 : H * 0.84 + rnd() * H * 0.16;
+    const w = 10 + rnd() * 14;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rnd() * Math.PI);
+    ctx.fillStyle = colors[Math.floor(rnd() * colors.length)];
+    if (rnd() < 0.35) {
+      ctx.beginPath();
+      ctx.arc(0, 0, w / 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      roundRect(ctx, -w / 2, -w / 5, w, w / 2.5, 3);
+      ctx.fill();
+    }
+    ctx.restore();
   }
-  ty = pills(c, [{ text: `${s.sessions} workouts` }, ...(sum.vsLast ? [{ text: sum.vsLast }] : [])], ty + 16, tw, tx);
-  y = divider(c, w, Math.max(cy + r + 14, ty) + 40);
-  y = tilesBlock(c, w, y, [
-    { value: s.prs.toLocaleString("en-US"), label: s.prs === 1 ? "personal record" : "personal records", sub: s.pr_people > 1 ? `set by ${s.pr_people} people` : undefined },
-    { value: hero.amount, label: `${hero.unit} lifted together`, sub: hero.change ?? undefined },
-  ]);
-  y = divider(c, w, y + 40);
-  kicker(c, "Workouts by day", 0, y, "rgba(255,255,255,0.60)", 26);
-  y = bars(c, w, y + 50, sum.days.map((d) => ({ n: d.n, share: d.share, hot: d.best, label: String(d.n) })), 170);
-  const bw = (w - 18 * 6) / 7;
-  c.font = font(800, 26);
-  c.fillStyle = "rgba(255,255,255,0.45)";
-  c.textAlign = "center";
-  sum.days.forEach((d, i) => c.fillText(d.letter, i * (bw + 18) + bw / 2, y + 40));
-  c.textAlign = "left";
-  y += 52;
-  if (s.top.length) {
-    y = divider(c, w, y + 30);
-    y = kicker(c, "Biggest moments", 0, y, "rgba(255,255,255,0.60)", 26) + 26;
-    s.top.slice(0, 3).forEach((t, i) => {
-      c.font = font(400, 44);
+}
+
+/** Happy birthday, their name big, then what they've done (the caption's next lines). */
+function paintBirthday(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: CommunityPost, name: string) {
+  const { W, H } = L;
+  darkGlow(ctx, W, H, "gold");
+  confetti(ctx, W, H, post.id);
+  const caption = post.caption?.trim() ? plainMentions(post.caption.trim(), post.mentions) : "";
+  const lines = caption.split("\n").map((l) => l.trim());
+  const first = lines.findIndex(Boolean);
+  const body = lines.slice(first + 1).join("\n").trim();
+  placeBlock(
+    ctx,
+    (c, w) => {
+      let y = kicker(c, "Happy birthday", 0, 0, "#fbbf24", 34) + 26;
+      const big = name.toUpperCase();
+      const size = fitDisplay(c, big, w, 250, 110);
+      c.font = display(size);
       c.fillStyle = INK;
-      c.fillText(MEDALS[i] ?? "•", 0, y + 40);
-      c.font = font(600, 36);
-      y = textLines(c, wrapLines(c, t.text, w - 74, 3), 74, y, 36, 1.25, "rgba(255,255,255,0.90)") + 18;
-    });
-  }
-  return y;
+      c.textAlign = "left";
+      c.textBaseline = "alphabetic";
+      c.fillText(big, 0, y + size * 0.9);
+      y += size + 44;
+      if (body) {
+        c.font = font(600, 42);
+        let left = 6;
+        for (const para of body.split(/\n+/).map((t) => t.trim()).filter(Boolean)) {
+          if (left <= 0) break;
+          const lines = wrapLines(c, para, w, left);
+          y = textLines(c, lines, 0, y, 42, 1.3, BODY) + 22;
+          left -= lines.length;
+        }
+        y -= 22;
+      }
+      return y;
+    },
+    PAD,
+    L.top,
+    W - PAD * 2,
+    L.bottom - L.top - FOOTER,
+    "middle",
+  );
+  brandRow(ctx, logo, PAD, L.bottom, W, null);
 }
 
 /* ------------------------------------------------------------------ */
@@ -564,47 +874,77 @@ function paintPicture(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, pic: P
 /*  Words (a coach's note, a quote, anything without a picture)        */
 /* ------------------------------------------------------------------ */
 
-/** The headline and what's under it: a quote and who said it, else the caption's first line and the next few. */
-export function wordsCardText(post: CommunityPost): { head: string; body: string | null; by: string | null } {
+/** A whole tip on one line is too much for a headline: its first sentence is, and the rest goes under it. */
+export function splitHeadline(line: string, max = 110): { head: string; rest: string } {
+  const t = line.trim();
+  if (t.length <= max) return { head: t, rest: "" };
+  const m = /^(.{12,}?[.!?])\s+([\s\S]+)$/.exec(t);
+  return m && m[1].length <= max + 30 ? { head: m[1], rest: m[2].trim() } : { head: t, rest: "" };
+}
+
+/**
+ * A words card: a small label (a Tuesday tip's kind), the headline (a quote
+ * and who said it, else the caption's first sentence), and what's under it
+ * (the next sentence or two; the caption under the picture has the rest).
+ */
+export function wordsCardText(post: CommunityPost): { kicker: string | null; head: string; body: string | null; by: string | null } {
+  const kicker = post.series === "tuesday_tips" ? extraTipKind(post.series_extra) : null;
   const quote = post.quote?.trim();
-  if (quote) return { head: `“${quote}”`, body: null, by: post.quote_author?.trim() || null };
+  if (quote) return { kicker, head: `“${quote}”`, body: null, by: post.quote_author?.trim() || null };
   const caption = post.caption?.trim() ? plainMentions(post.caption.trim(), post.mentions) : "";
   if (!caption) {
     const w = storyWords(post);
-    return { head: w.text, body: null, by: w.by };
+    return { kicker, head: w.text, body: null, by: w.by };
   }
   const lines = caption.split("\n").map((l) => l.trim());
   const at = lines.findIndex(Boolean);
-  const head = lines[at] ?? caption;
-  const body = lines.slice(at + 1).join("\n").trim() || null;
-  return { head, body, by: null };
+  const { head, rest } = splitHeadline(lines[at] ?? caption);
+  const body = [rest, ...lines.slice(at + 1)].join("\n").trim() || null;
+  // "Cue to test" over "cue to test on squats…" says it twice
+  return { kicker: kicker && !head.toLowerCase().startsWith(kicker.toLowerCase()) ? kicker : null, head, body, by: null };
+}
+
+/**
+ * The words under a headline: whole sentences of the first paragraph, as
+ * many as fit in `maxLines` (one sentence too long is cut with "…").
+ */
+function bodyLines(c: Ctx, text: string, w: number, maxLines: number): string[] {
+  const para = text.split(/\n+/).map((t) => t.trim()).find(Boolean) ?? "";
+  const sentences = para.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g) ?? [para];
+  let kept = "";
+  for (const sentence of sentences) {
+    const next = `${kept}${sentence}`.trim();
+    if (wrapLines(c, next, w, 99).length > maxLines) break;
+    kept = `${next} `;
+  }
+  if (kept.trim()) return wrapLines(c, kept.trim(), w, maxLines);
+  const cut = wrapLines(c, para, w, maxLines);
+  if (cut.length === maxLines) cut[maxLines - 1] = ellipsize(c, `${cut[maxLines - 1]}…`, w);
+  return cut;
 }
 
 function paintWords(ctx: Ctx, L: Layout, post: CommunityPost, logo: HTMLImageElement | null) {
   const { W } = L;
   backdrop(ctx, W, L.H);
-  const { head, body, by } = wordsCardText(post);
+  const { kicker: label, head, body, by } = wordsCardText(post);
   placeBlock(
     ctx,
     (c, w) => {
-      c.fillStyle = RED;
-      roundRect(c, 0, 0, 96, 10, 5);
-      c.fill();
-      let y = 52;
-      const h = fitWrap(c, head, w, 900, 88, 54, 7);
+      let y: number;
+      if (label) y = kicker(c, label, 0, 0, ACCENT, 30) + 34;
+      else {
+        c.fillStyle = RED;
+        roundRect(c, 0, 0, 96, 10, 5);
+        c.fill();
+        y = 52;
+      }
+      const h = fitWrap(c, head, w, 900, 88, 54, 6);
       c.font = font(900, h.size);
       y = textLines(c, h.lines, 0, y, h.size, 1.1, INK);
       if (by) y = kicker(c, by, 0, y + 30, ACCENT, 28) + 8;
       if (body) {
         c.font = font(600, 42);
-        const paragraphs = body.split(/\n+/).filter(Boolean);
-        const lines: string[] = [];
-        for (const p of paragraphs) {
-          if (lines.length >= 8) break;
-          lines.push(...wrapLines(c, p, w, 8 - lines.length));
-        }
-        if (paragraphs.join(" ").length > lines.join(" ").length + 4 && lines.length) lines[lines.length - 1] = ellipsize(c, `${lines[lines.length - 1]}…`, w);
-        y = textLines(c, lines, 0, y + 40, 42, 1.3, BODY);
+        y = textLines(c, bodyLines(c, body, w, 5), 0, y + 40, 42, 1.3, BODY);
       }
       return y + 10;
     },

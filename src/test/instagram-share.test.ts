@@ -94,8 +94,8 @@ describe("Share to Instagram: the caption", () => {
   });
 
   it("a words card leads with the first line (the hook), or the quote and who said it", () => {
-    expect(wordsCardText(post({ caption: "\nDeload week isn't a week off\n\nSame lifts, lighter." }))).toEqual({ head: "Deload week isn't a week off", body: "Same lifts, lighter.", by: null });
-    expect(wordsCardText(post({ quote: "Do the work.", quote_author: "Someone", caption: "x" }))).toEqual({ head: "“Do the work.”", body: null, by: "Someone" });
+    expect(wordsCardText(post({ caption: "\nDeload week isn't a week off\n\nSame lifts, lighter." }))).toEqual({ kicker: null, head: "Deload week isn't a week off", body: "Same lifts, lighter.", by: null });
+    expect(wordsCardText(post({ quote: "Do the work.", quote_author: "Someone", caption: "x" }))).toEqual({ kicker: null, head: "“Do the work.”", body: null, by: "Someone" });
   });
 });
 
@@ -146,7 +146,7 @@ describe("Share to Instagram: where it is", () => {
   it("coaches only, on any post's ⋯ and its ✈️, never in View as client and never on a story", () => {
     const actions = read("src/components/community/post-actions.tsx");
     expect(actions).toContain("const canInstagram = viewerIsStaff && !isImpersonating && !post.story;");
-    expect(actions).toContain("{canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} />}");
+    expect(actions).toContain("{canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}");
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain('const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;');
     expect(card).toContain("onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}");

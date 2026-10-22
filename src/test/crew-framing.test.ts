@@ -207,8 +207,8 @@ describe("the feed: taps like Instagram's", () => {
     expect(card).toContain('if ((e.target as Element | null)?.closest?.("[data-inline-video]")) {');
     expect(card).toContain("toggleFeedSound();");
   });
-  it("a member's photo post is edge to edge with the words under it; coach posts keep their note layout", () => {
+  it("a member's photo post is edge to edge with the words under it; so is every automated post; a coach's own note keeps its layout", () => {
     expect(card).toContain("return post.kind === \"note\" && !!post.media_type && !post.series && !post.quote && !post.author.is_coach;");
-    expect(card).toContain("{isNote && !photo ? (");
+    expect(card).toContain("{auto ? (\n          <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />\n        ) : isNote && !photo ? (");
   });
 });
