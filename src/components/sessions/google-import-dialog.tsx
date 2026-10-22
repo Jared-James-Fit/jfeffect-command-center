@@ -51,7 +51,10 @@ export function GoogleImportDialog({ open, onOpenChange, clientId, clientName, o
     staleTime: 0,
     queryFn: () => previewFn({ data: { client_id: clientId, from, to } }),
   });
-  useEffect(() => { if (open) setOff(new Set()); }, [open, from, to]);
+  // Matches whose title doesn't read like a session ("Mall date with Nicolas") start unticked.
+  useEffect(() => {
+    if (open) setOff(new Set((data?.candidates ?? []).filter((r) => !r.training).map((r) => r.eventId)));
+  }, [open, data]);
 
   const rows = data?.candidates ?? [];
   const chosen = useMemo(() => rows.filter((r) => !off.has(r.eventId)), [rows, off]);
@@ -113,6 +116,7 @@ export function GoogleImportDialog({ open, onOpenChange, clientId, clientName, o
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium">{dayLabel(r.date)} · {fmtWallClock(r.start)}</span>
                       <span className="block truncate text-xs text-muted-foreground">{r.summary}</span>
+                      {!r.training && <span className="block text-[11px] text-warning">Doesn't read like a session: tick it if it was one</span>}
                     </span>
                     <span className={`shrink-0 text-right text-[11px] ${r.past ? "text-muted-foreground" : "text-primary"}`}>
                       {r.past ? (r.countedByHand ? "Done · counted by hand" : "Done · uses a credit") : "Booked · holds a credit"}

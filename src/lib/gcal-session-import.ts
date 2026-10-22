@@ -53,6 +53,8 @@ export type ImportCandidate = {
   location: string | null;
   /** Ended before now: imported as done (uses a credit). */
   past: boolean;
+  /** Its title reads like a session ("PT", "session", "training"...); others start unticked. */
+  training: boolean;
 };
 
 export type SkippedEvent = {
@@ -101,6 +103,12 @@ export function eventNamesClient(e: ImportEvent, c: ImportClient): boolean {
 }
 
 const CANCELLED = /\b(cancel+ed|cancel|cx|no show|noshow|rescheduled)\b/;
+const TRAINING = /\b(pt|sessions?|training|train|workouts?|lift|lifting|coaching|1 1|gym)\b/;
+
+/** Does the title read like a training session? ("Mall date with Nicolas" doesn't.) */
+export function looksLikeTraining(summary: string | null | undefined): boolean {
+  return TRAINING.test(normalizeText(summary));
+}
 
 /** The coach's Google appointments for these clients, as sessions to import. */
 export function planImport(
@@ -139,6 +147,7 @@ export function planImport(
       timezone: tz,
       location: e.location?.trim() || null,
       past: endAt.getTime() <= now.getTime(),
+      training: looksLikeTraining(summary),
     });
   }
   candidates.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));

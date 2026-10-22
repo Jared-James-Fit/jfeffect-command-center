@@ -2,9 +2,10 @@
 // appointments as app sessions (see gcal-session-import.ts for the rules and
 // import_calendar_pt_session for the credits). Never import from client code.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { GATEWAY_BASE, gatewayHeaders, gcalListEvents, workspaceCalendarConfigured } from "@/lib/google-cal.server";
+import { GATEWAY_BASE, gatewayHeaders, gcalListCalendars, gcalListEvents, workspaceCalendarConfigured } from "@/lib/google-cal.server";
 import { GCAL_PT_SESSION_KEY } from "@/lib/session-conflicts";
-import { planImport, type ImportCandidate, type ImportClient, type ImportEvent, type SkippedEvent } from "@/lib/gcal-session-import";
+import { eventNamesClient, looksLikeTraining, planImport, type ImportCandidate, type ImportClient, type ImportEvent, type SkippedEvent } from "@/lib/gcal-session-import";
+import { DEFAULT_TZ, localDateISO, localTimeHM } from "@/lib/schedule-time";
 
 type Admin = SupabaseClient<any, any, any>;
 
@@ -13,6 +14,8 @@ export type ImportPreview = {
   skipped: SkippedEvent[];
   /** Days counted by hand (a used credit with no session) that no Google appointment matches. */
   handCountedOnly: Record<string, string[]>;
+  /** Training-looking appointments that name none of these clients (back-office review only). */
+  unnamedTraining: Array<{ eventId: string; date: string; start: string; summary: string }>;
 };
 
 export type ImportResult = {
@@ -58,7 +61,16 @@ export async function previewGoogleImport(
 ): Promise<ImportPreview> {
   if (!workspaceCalendarConfigured()) throw new Error("Google Calendar isn't connected.");
   const clients = await loadClients(admin, opts.clientIds, opts.terms);
-  const listed = await gcalListEvents(null, new Date(`${opts.from}T00:00:00Z`).toISOString(), new Date(`${opts.to}T23:59:59Z`).toISOString(), undefined, { strict: true });
+  // Every calendar the coach keeps (owner / writer): appointments live in more than the app's one.
+  const calendars = await gcalListCalendars();
+  const own = calendars.filter((c) => c.accessRole === "owner" || c.accessRole === "writer").map((c) => c.id);
+  const listed = await gcalListEvents(
+    null,
+    new Date(`${opts.from}T00:00:00Z`).toISOString(),
+    new Date(`${opts.to}T23:59:59Z`).toISOString(),
+    own.length ? own : undefined,
+    { strict: true },
+  );
   const events: ImportEvent[] = listed.map((e) => ({
     id: e.id,
     calendarId: e.calendarId,
@@ -106,7 +118,16 @@ export async function previewGoogleImport(
     if (only.length) handCountedOnly[id] = only;
   }
   const countedSet = new Map(Object.entries(counted).map(([k, v]) => [k, new Set(v)]));
+  const unnamedTraining = events
+    .filter((e) => !e.appSessionId && !linked.has(e.id) && !e.allDay && e.status !== "cancelled" && looksLikeTraining(e.summary))
+    .filter((e) => !clients.some((c) => eventNamesClient(e, c)))
+    .map((e) => {
+      const at = new Date(e.start);
+      const tz = e.timeZone || DEFAULT_TZ;
+      return { eventId: e.id, date: localDateISO(at, tz), start: localTimeHM(at, tz), summary: e.summary ?? "" };
+    });
   return {
+    unnamedTraining,
     candidates: plan.candidates.map((c) => ({ ...c, countedByHand: c.past && !!countedSet.get(c.clientId)?.has(c.date) })),
     skipped: plan.skipped,
     handCountedOnly,
