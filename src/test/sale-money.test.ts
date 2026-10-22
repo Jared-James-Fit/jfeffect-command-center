@@ -76,6 +76,15 @@ describe("one sale's money, in the dollars the client pays", () => {
     expect(saleMoney(sent, [], 0.05)).toMatchObject({ state: "waiting", priceCents: 105000, leftCents: 105000, paidCents: 0 });
   });
 
+  it("a renewal being trained on is owed before its first payment, never waiting", () => {
+    const renewal = { id: "p3", offer_name: "Personal Training — 16 Sessions / 4 Weeks", currency: "CAD", payment_status: "Unpaid", is_recurring: false,
+      payment_structure: "Bi-weekly subscription (every 2 weeks) — 4 payments", contract_value_cents: 64000, installment_amount: 160, number_of_payments: 4, amount_paid_cents: 0 };
+    expect(saleMoney(renewal, [], 0.05).state).toBe("waiting");
+    expect(saleMoney(renewal, [], 0.05, { sessionsUsed: 10 })).toMatchObject({
+      state: "left", priceCents: 67200, leftCents: 67200, plan: { made: 0, total: 4 }, next: { cents: 16800, date: null },
+    });
+  });
+
   it("a free session credit is free", () => {
     const credit = { id: "f", offer_name: "PT Session Credit", currency: "CAD", payment_status: "Paid", contract_value_cents: 0, full_payable_amount: 0, amount_paid_cents: 0 };
     expect(saleMoney(credit)).toMatchObject({ kind: "free", state: "free", priceCents: 0 });

@@ -248,15 +248,15 @@ export function AddSessionsDialog({ sale, open, onOpenChange, onDone }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Add sessions</DialogTitle>
-          <DialogDescription>Extra sessions on {sale.offer_name ?? "this package"}, like a free make-up session. This doesn't change what they pay.</DialogDescription>
+          <DialogTitle>Add free sessions</DialogTitle>
+          <DialogDescription>Extra sessions on {sale.offer_name ?? "this package"} at no charge, like a make-up session. This doesn't change what they pay. To sell another package, use Renew.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5"><Label htmlFor="add-count">How many</Label><Input id="add-count" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className="h-11" /></div>
           <div className="space-y-1.5"><Label htmlFor="add-note">Why (optional)</Label><Input id="add-note" value={note} onChange={(e) => setNote(e.target.value)} className="h-11" /></div>
         </div>
         <DialogFooter>
-          <Button className="h-11 w-full sm:w-auto" onClick={() => m.mutate()} disabled={!(n > 0) || m.isPending}>{m.isPending ? "Adding…" : "Add sessions"}</Button>
+          <Button className="h-11 w-full sm:w-auto" onClick={() => m.mutate()} disabled={!(n > 0) || m.isPending}>{m.isPending ? "Adding…" : "Add free sessions"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
