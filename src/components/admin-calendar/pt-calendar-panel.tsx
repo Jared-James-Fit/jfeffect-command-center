@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus, Pencil, CheckCircle2, Ban, CircleOff, MoreHorizontal, Undo2, Wallet, Trash2,
-  AlertTriangle, SlidersHorizontal, CalendarClock,
+  AlertTriangle, SlidersHorizontal, CalendarClock, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
@@ -25,6 +25,7 @@ import {
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { getPtSessionCreditEvents } from "@/lib/pt-session-manage.functions";
 import { sessionStatusLabel, statusForDate } from "@/lib/session-credit";
+import { useCoachNotes } from "@/lib/session-coach-notes";
 import {
   creditImpact, creditToneClasses, duplicateKey, invalidatePtSessionCaches, isNeedsReview,
   todayISOLocal, type PtLedgerEvent,
@@ -90,6 +91,9 @@ export function PtCalendarPanel() {
       supabase.removeChannel(ch);
     };
   }, [qc]);
+
+  // The coach's own notes (why a session was cancelled, moved or missed).
+  const { data: coachNotes } = useCoachNotes(null);
 
   // Credit events for visible sessions → credit impact chips + history.
   const sessionIds = useMemo(() => sessions.map((s: any) => s.id).slice(0, 300), [sessions]);
@@ -200,6 +204,12 @@ export function PtCalendarPanel() {
           {s.location ? ` · ${s.location}` : ""}
           {s.session_type ? ` · ${s.session_type === "Custom Session" ? s.custom_type || s.session_type : s.session_type}` : ""}
         </div>
+        {coachNotes?.get(s.id) && (
+          <div className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-200">
+            <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
+            <span className="break-words">{coachNotes.get(s.id)}</span>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
           <Button size="sm" variant="outline" onClick={() => openEdit(s)}>
             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit

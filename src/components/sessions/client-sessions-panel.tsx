@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CalendarDays, CalendarPlus, Plus, Ticket, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { CalendarDays, CalendarPlus, Plus, Ticket, SlidersHorizontal, ChevronRight, StickyNote } from "lucide-react";
 import { GoogleImportDialog } from "@/components/sessions/google-import-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SellSessionsDialog } from "@/components/sell-sessions-dialog";
@@ -28,6 +28,7 @@ import {
 import { WORKSPACE_FULL_SPAN_CLASS } from "@/components/workspace/workspace-container";
 import { SessionActionsSheet, whenLabel } from "@/components/schedule/session-actions-sheet";
 import { sessionCredit, sessionStatusLabel, type CreditState } from "@/lib/session-credit";
+import { useCoachNotes } from "@/lib/session-coach-notes";
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { deviceTodayISO } from "@/lib/schedule-time";
 import { useAuth } from "@/lib/auth";
@@ -153,6 +154,9 @@ export function ClientSessionsPanel({
       return data ?? [];
     },
   });
+
+  // Why a session was cancelled, moved or missed: the coach's own notes, never shown to the client.
+  const { data: coachNotes } = useCoachNotes(clientId);
 
   const { data: balance = [] } = useQuery<SessionBalanceRow[]>({
     queryKey: ["pt-balance", clientId],
@@ -330,6 +334,12 @@ export function ClientSessionsPanel({
                         {s.uses_credit !== false && <span className={CREDIT_TEXT[sessionCredit(s, today).state]}>{sessionCredit(s, today).label} · </span>}
                         {fmtTimeRange(s.start_time, s.end_time)} · {s.title}{s.location ? ` · ${s.location.split(",")[0]}` : ""}
                       </div>
+                      {coachNotes?.get(s.id) && (
+                        <div className="mt-0.5 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-200">
+                          <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span className="line-clamp-2">{coachNotes.get(s.id)}</span>
+                        </div>
+                      )}
                     </div>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>

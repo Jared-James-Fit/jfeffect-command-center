@@ -87,3 +87,12 @@ export function creditChipClasses(state: CreditState): string {
     default: return "border-border bg-secondary/40 text-muted-foreground";
   }
 }
+
+/** Most a coach note on a session can hold (the table's check). */
+export const COACH_NOTE_MAX = 2000;
+
+/** A coach note as it's saved: trimmed, capped, and null when there's nothing left (which deletes it). */
+export function normalizeCoachNote(text: string | null | undefined): string | null {
+  const t = (text ?? "").trim();
+  return t ? t.slice(0, COACH_NOTE_MAX) : null;
+}
