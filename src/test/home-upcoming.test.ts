@@ -109,6 +109,14 @@ describe("Home schedule card: today in full, then what's coming", () => {
   it("says what each action does in words: no bare + or Schedule button", () => {
     expect(src).not.toContain('aria-label="Book or request a session"');
     expect(src).toContain("Request a session");
-    expect(src).toContain("Full schedule");
+    expect(src).toContain("Open calendar");
+  });
+  it("reads as a calendar: date tile + Calendar header and this week's days, each opening the Calendar page", () => {
+    expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');
+    expect(src).toContain('link={links ? (d) => ({ to: "/portal/calendar", search: { date: d } }) : null}');
+    const agenda = readFileSync("src/components/schedule/agenda.tsx", "utf8");
+    expect(agenda).toContain("export function DateTile(");
+    expect(agenda).toContain("Calendar {link && <ChevronRight");
+    expect(agenda).toContain("export function AgendaWeek(");
   });
 });

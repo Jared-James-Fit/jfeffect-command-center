@@ -37,6 +37,8 @@ const searchSchema = z.object({
   status: z.string().optional(),
   type: z.string().optional(),
   link: z.string().optional(),
+  // yyyy-mm-dd: open the board on that day (a day tapped on the dashboard's week).
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/admin/calendar")({
@@ -90,7 +92,7 @@ function AdminCalendarShell() {
           </Tabs>
         </div>
       </div>
-      {active === "board" && <AdminCalendarBoardPanel />}
+      {active === "board" && <AdminCalendarBoardPanel key={search.date ?? "today"} initialDate={search.date ?? null} />}
       {active === "booking" && <AdminBookingPanel />}
       {active === "sessions" && <PtCalendarPanel />}
       {active === "upcoming" && <UpcomingPanel />}

@@ -26,7 +26,7 @@ function readGooglePref(): boolean {
   }
 }
 
-export function AdminCalendarBoardPanel() {
+export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string | null } = {}) {
   const [clientId, setClientId] = useState<string>("all");
   const [kinds, setKinds] = useState<Set<CalendarKind>>(() => new Set(ALL_KINDS));
   // Default: coaching app only. Google is one tap away and the choice sticks.
@@ -180,6 +180,7 @@ export function AdminCalendarBoardPanel() {
           <CalendarBoard
             items={items}
             isLoading={isLoading}
+            initialDate={initialDate}
             showClientName
             toolbar={toolbar}
             onCreate={(date) => setBooking({ date })}

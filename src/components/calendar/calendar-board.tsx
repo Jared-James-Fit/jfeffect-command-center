@@ -21,6 +21,13 @@ function addDays(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDat
 /** Monday-start, like the Workouts calendar and every Home. */
 function startOfWeek(d: Date) { const x = startOfDay(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
 /** Days before the 1st in a Monday-first grid. */
+/** yyyy-mm-dd → local midnight, or null when it isn't a real date. */
+function parseDay(day: string | null | undefined): Date | null {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const [y, m, d] = day.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getMonth() === m - 1 && date.getDate() === d ? date : null;
+}
 function leadDays(monthStart: Date) { return (monthStart.getDay() + 6) % 7; }
 function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
@@ -66,9 +73,12 @@ export function CalendarBoard({
   renderItemActions,
   onRangeChange,
   views = ["month", "week", "day", "upcoming"],
+  initialDate,
 }: {
   /** Which views to offer (first one is the default). */
   views?: ViewMode[];
+  /** yyyy-mm-dd to open on (a day tapped on Home); default today. */
+  initialDate?: string | null;
   items: CalendarItem[];
   isLoading?: boolean;
   showClientName?: boolean;
@@ -84,9 +94,9 @@ export function CalendarBoard({
   onRangeChange?: (range: VisibleRange) => void;
 }) {
   const [view, setView] = useState<ViewMode>(views[0] ?? "month");
-  const [cursor, setCursor] = useState<Date>(() => startOfDay(new Date()));
-  // Month view: the tapped day, listed under the grid (today until they tap).
-  const [picked, setPicked] = useState<Date>(() => startOfDay(new Date()));
+  const [cursor, setCursor] = useState<Date>(() => parseDay(initialDate) ?? startOfDay(new Date()));
+  // Month view: the tapped day, listed under the grid (today, or the day they came for, until they tap).
+  const [picked, setPicked] = useState<Date>(() => parseDay(initialDate) ?? startOfDay(new Date()));
 
   const range = useMemo(() => visibleRange(view, cursor), [view, cursor]);
   useEffect(() => {

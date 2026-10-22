@@ -1,16 +1,24 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { Check, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { weekDays } from "@/components/calendar/week-strip";
 import type { KindFamily } from "@/lib/calendar-sources";
 import { cn } from "@/lib/utils";
 
 /**
- * The Home schedule look, shared by every account's Home (client, coach,
- * member, staff): "Today" and the date, today's items on a time column with
- * one hairline of colour each and a Now line, then the next few things one
- * line each, then worded actions. Callers map their own data onto these rows
- * and wrap each row in whatever it opens (a link, a button, Google).
+ * The Home calendar card, shared by every account's Home (client, coach,
+ * staff). It has to read as a calendar at a glance, so it leads with a
+ * calendar's own shapes: a date tile and "Calendar" (tap to open it), then
+ * this Monday–Sunday week with a dot per thing (tap a day to open the calendar
+ * there). Below that, today's items on a time column with one hairline of
+ * colour each and a Now line, the next few things one line each, then worded
+ * actions. Callers map their own data onto these rows and wrap each row in
+ * whatever it opens (a link, a button, Google).
  */
+
+/** Where a tap goes: a route plus its search params. */
+export type AgendaLink = { to: string; search?: Record<string, unknown> };
 
 /** A hairline in the item's colour family: the only colour on a row. */
 export const FAMILY_ACCENT: Record<KindFamily, string> = {
@@ -70,16 +78,101 @@ export function AgendaCard({ children, className }: { children: ReactNode; class
   return <Card className={cn("border-border bg-card px-3.5 pb-2 pt-3", className)}>{children}</Card>;
 }
 
-/** "Today  Monday, Oct 12", with room on the right for one small control. */
-export function AgendaHeader({ today, right }: { today: string; right?: ReactNode }) {
-  const date = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+/** A tear-off calendar page for today: weekday on a red band, the day's number below. */
+export function DateTile({ day }: { day: string }) {
+  const d = new Date(`${day}T00:00:00`);
   return (
-    <div className="flex items-baseline gap-2 px-0.5">
-      <h3 className="text-sm font-black">Today</h3>
-      <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{date}</span>
+    <span aria-hidden className="flex h-10 w-10 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-center shadow-sm">
+      <span className="bg-primary py-px text-[9px] font-black uppercase leading-tight tracking-wider text-primary-foreground">
+        {d.toLocaleDateString(undefined, { weekday: "short" })}
+      </span>
+      <span className="flex flex-1 items-center justify-center text-base font-black leading-none tabular-nums">{d.getDate()}</span>
+    </span>
+  );
+}
+
+/**
+ * "[21] Calendar ›  /  Today · Wednesday, Oct 21". The tile and title open the
+ * full calendar; `right` has room for one small control of its own.
+ */
+export function AgendaHeader({ today, link, right }: { today: string; link?: AgendaLink | null; right?: ReactNode }) {
+  const date = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const body = (
+    <>
+      <DateTile day={today} />
+      <span className="min-w-0">
+        <span className="flex items-center gap-0.5 text-[15px] font-black leading-tight">
+          Calendar {link && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">Today · {date}</span>
+      </span>
+    </>
+  );
+  const cls = "-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1";
+  return (
+    <div className="flex items-center gap-2">
+      {link ? (
+        <Link to={link.to as any} search={link.search as any} aria-label="Open your calendar" className={cn(cls, "transition active:bg-secondary/40")}>
+          {body}
+        </Link>
+      ) : (
+        <div className={cls}>{body}</div>
+      )}
       {right}
     </div>
   );
+}
+
+/**
+ * This Monday–Sunday week, like the top of a calendar: day names, dates, today
+ * in a red circle and a dot per thing on the day (colour = kind, up to 3).
+ * Each day opens the full calendar on that day.
+ */
+export function AgendaWeek({ today, dots, link }: { today: string; dots: (day: string) => string[]; link?: ((day: string) => AgendaLink) | null }) {
+  return (
+    <div className="mt-2.5 grid grid-cols-7 gap-0.5" role="list" aria-label="This week">
+      {weekDays(today).map((d) => {
+        const date = new Date(`${d}T00:00:00`);
+        const isToday = d === today;
+        const past = d < today;
+        const marks = dots(d);
+        const to = link?.(d);
+        const Cell: any = to ? Link : "div";
+        return (
+          <Cell
+            key={d}
+            role="listitem"
+            {...(to ? { to: to.to, search: to.search } : {})}
+            aria-label={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}${isToday ? " (today)" : ""}${marks.length ? `, ${marks.length} scheduled` : ""}`}
+            aria-current={isToday ? "date" : undefined}
+            className={cn("flex min-h-[54px] min-w-0 flex-col items-center justify-start gap-0.5 rounded-lg pt-1", to && "transition active:bg-secondary/50")}
+          >
+            <span className={cn("text-[10px] font-bold uppercase tracking-wide", isToday ? "text-primary" : "text-muted-foreground")}>
+              {date.toLocaleDateString(undefined, { weekday: "short" })}
+            </span>
+            <span
+              className={cn(
+                "grid h-7 w-7 place-items-center rounded-full text-sm font-black tabular-nums",
+                isToday ? "bg-primary text-primary-foreground" : past ? "text-muted-foreground" : "text-foreground",
+              )}
+            >
+              {date.getDate()}
+            </span>
+            <span className="flex h-1.5 items-center gap-0.5" aria-hidden>
+              {marks.slice(0, 3).map((cls, i) => (
+                <span key={i} className={cn("h-1.5 w-1.5 rounded-full", cls, past && "opacity-50")} />
+              ))}
+            </span>
+          </Cell>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Today's list, under the week: a hairline above it. */
+export function AgendaToday({ children }: { children: ReactNode }) {
+  return <div className="mt-1 border-t border-border/60 pt-1.5">{children}</div>;
 }
 
 export function AgendaLoading() {
