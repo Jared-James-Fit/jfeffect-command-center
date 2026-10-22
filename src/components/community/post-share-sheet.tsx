@@ -1,18 +1,20 @@
-import { Plus, Send, X } from "lucide-react";
+import { Instagram, Plus, Send, X } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { CommunityPost } from "@/lib/community";
 
 /**
  * Instagram's share sheet (a post's ✈️): Add to story first, then Message
- * the person who posted it. Each one closes the sheet and opens its own
- * screen (the story camera with the post on it, or the message sheet).
+ * the person who posted it, and for a coach, Instagram (the post out to his
+ * own Instagram). Each one closes the sheet and opens its own screen (the
+ * story camera with the post on it, the message sheet, Share to Instagram).
  */
-export function PostShareSheet({ post, open, onOpenChange, onStory, onMessage }: {
+export function PostShareSheet({ post, open, onOpenChange, onStory, onMessage, onInstagram }: {
   post: CommunityPost;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStory?: () => void;
   onMessage?: () => void;
+  onInstagram?: () => void;
 }) {
   const first = post.author.name.split(" ")[0] || post.author.name;
   const options = [
@@ -38,6 +40,16 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onMessage }:
         </span>
       ),
     },
+    onInstagram && {
+      key: "instagram",
+      label: "Instagram",
+      run: onInstagram,
+      icon: (
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-[radial-gradient(circle_at_30%_107%,#fdf497_0%,#fdf497_5%,#fd5949_45%,#d6249f_60%,#285AEB_90%)] text-white">
+          <Instagram className="h-6 w-6" strokeWidth={2.2} />
+        </span>
+      ),
+    },
   ].filter(Boolean) as { key: string; label: string; run: () => void; icon: React.ReactNode }[];
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -45,7 +57,7 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onMessage }:
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-1 pt-4 text-left">
           <div className="min-w-0">
             <SheetTitle className="text-[16px] font-black">Share</SheetTitle>
-            <SheetDescription className="sr-only">Add this post to your story, or message {first}</SheetDescription>
+            <SheetDescription className="sr-only">Add this post to your story, message {first}{onInstagram ? ", or share it to Instagram" : ""}</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
             <X className="h-4 w-4" />
