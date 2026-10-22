@@ -154,6 +154,9 @@ export function WorkoutsExperience({
     return m;
   }, [sessionItems]);
   const sessionDays = useMemo(() => new Set(sessionsByDate.keys()), [sessionsByDate]);
+  // Coaching clients book sessions: say where appointments live even on a week with none.
+  const { isCoaching } = useServiceTier();
+  const showAppointmentsLink = mode === "self" && isCoaching;
 
 
   // --- Selected date drives the calendar tab and header context. ----------
@@ -545,7 +548,18 @@ export function WorkoutsExperience({
                     />
                   )}
                 </CalendarDndProvider>
-                <WorkoutMarkLegend className="-mt-2 px-1" sessions={sessionDays.size > 0} />
+                <div className="-mt-2 flex items-start justify-between gap-2 px-1">
+                  <WorkoutMarkLegend className="min-w-0 flex-1" sessions={sessionDays.size > 0} />
+                  {showAppointmentsLink && (
+                    <Link
+                      to="/portal/calendar"
+                      search={{ date: toLocalISO(selectedDate) } as any}
+                      className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-violet-400 hover:text-violet-300"
+                    >
+                      <CalendarIcon className="h-3.5 w-3.5" /> Appointments <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
+                </div>
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}
