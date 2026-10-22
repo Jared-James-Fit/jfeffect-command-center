@@ -4,10 +4,11 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunitySeries, type CrewCompare } from "@/lib/community";
+import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunityPost, type CommunitySeries, type CrewCompare } from "@/lib/community";
 import { useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem } from "@/lib/community.queries";
 import { useAuth } from "@/lib/auth";
-import { CompareBars, SundayRecapCard } from "@/components/community/series-cards";
+import { CompareBars } from "@/components/community/series-cards";
+import { PostArtImage } from "@/components/community/post-art";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { NoteEditor } from "@/components/community/note-editor";
 
@@ -222,7 +223,16 @@ export function CoachWeeklyPosts() {
                           {sunday.isLoading ? "Adding up the week…" : recapNow ? "This week so far" : "Nobody has trained this week yet"}
                         </div>
                         {recapNow?.caption && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{recapNow.caption}</div>}
-                        {isRecapStats(recapNow?.stats) && <SundayRecapCard stats={recapNow!.stats} unit={unit} className="mt-2.5" />}
+                        {/* the picture it goes out with, as it'd be right now (the one the feed and Instagram get) */}
+                        {isRecapStats(recapNow?.stats) && (
+                          <PostArtImage
+                            post={{ id: `recap-preview-${recapNow!.stats.week_of}`, created_at: new Date().toISOString(), kind: "note", series: "sunday_recap", series_data: recapNow!.stats, caption: recapNow!.caption ?? null, mentions: [] } as unknown as CommunityPost}
+                            card="recap"
+                            unit={unit}
+                            eager
+                            className="mt-2.5 max-w-[260px] rounded-xl"
+                          />
+                        )}
                       </div>
                     )}
                     {library && !done && next && (

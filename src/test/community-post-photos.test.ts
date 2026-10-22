@@ -57,15 +57,17 @@ describe("photos on every post, same rules as sharing a workout", () => {
   });
 
   it("coach posts show their photos in the feed, the post, the grid and Home", () => {
-    // the photo is the note's cover: above its words, where Saturday's drawn scene goes (and in its place)
+    // a coach note's photo is its cover, above its words
     expect(read("src/components/community/post-card.tsx")).toContain("cover={post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} /> : undefined}");
     expect(read("src/components/community/post-detail.tsx")).toContain("cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined}");
-    expect(read("src/components/community/post-card.tsx")).toContain('post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null');
+    // on an automated post (Saturday, a holiday) a photo he put on it is the picture, in the drawn one's place
+    expect(read("src/components/community/post-card.tsx")).toContain("return post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} full={full} /> : null;");
+    expect(read("src/lib/instagram-export.ts")).toContain("if (slides.length) return { card: null, slides };");
     // a picture shipped with the app needs no signing and is never deleted from the bucket
     expect(read("src/lib/community-media.ts")).toContain("if (p.startsWith(APP_MEDIA)) {");
     expect(read("src/lib/community-media.ts")).toContain("!p.startsWith(APP_MEDIA)");
     expect(read("src/components/community/post-tile.tsx")).toContain('post.kind === "note" && post.media_type && thumb ?');
-    expect(read("src/components/community/community-entry.tsx")).toContain("const photo = !!(post.media_type && thumb);");
+    expect(read("src/components/community/community-entry.tsx")).toContain("const photo = !art && !!(post.media_type && thumb);");
   });
 
   it("the coach's + Post takes photos", () => {

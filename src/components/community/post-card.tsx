@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Trophy } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -9,11 +9,9 @@ import {
   REACTION,
   SCOPE_WORD,
   canShareToStory,
-  extraHoliday,
-  extraScene,
   featuredLift,
+  isAutoPost,
   isRecapStats,
-  isWinsStats,
   formatTopSet,
   formatWorkoutDuration,
   isTrainingNow,
@@ -37,21 +35,19 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { feedAspect, focusPosition } from "@/lib/photo-frame";
-import { WinsStatsCard } from "@/components/community/wins-stats";
-import { SeriesExtraCard, SundayRecapCard } from "@/components/community/series-cards";
-import { LessonDiagram } from "@/components/community/lesson-card";
-import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
 import { PostActions } from "@/components/community/post-actions";
 import { FeedCaption } from "@/components/community/feed-caption";
 import { PostExtras } from "@/components/community/post-attach";
-import { NoteCaption } from "@/components/community/note-caption";
+import { NoteCaption, PICTURE_CAPTION_LIMITS } from "@/components/community/note-caption";
 import { PollCard } from "@/components/community/poll";
 import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { PostShareSheet } from "@/components/community/post-share-sheet";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { PostArtImage } from "@/components/community/post-art";
+import { postArtCard } from "@/lib/instagram-export";
 import { PostScoreRow } from "@/components/community/post-score";
 import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
@@ -112,35 +108,64 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
   return post.kind === "note" && !!post.media_type && !post.series && !post.quote && !post.author.is_coach;
 }
 
+/**
+ * An automated post (the daily series, a lesson, a holiday, a birthday) is
+ * an Instagram post: its picture edge to edge (its painted card, the one
+ * Save image and Share to Instagram send; or the coach's own photo / clip
+ * when he put one on it, a lesson's card in front of them), then the words.
+ */
+export function AutoPostHero({ post, thumbUrl, unit, full = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean }) {
+  const card = postArtCard(post);
+  if (card && post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;
+  if (card) return <PostArtImage post={post} card={card} unit={unit} eager={full} />;
+  return post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} full={full} /> : null;
+}
+
+/**
+ * An automated post's words under its picture, Instagram's way: the coach's
+ * name, then his words in the post font, a short preview that ends at a
+ * clean stop with "… more" (NoteCaption, PICTURE_CAPTION_LIMITS), then
+ * anything else on it. The Recap's "work on this week" stays in the app (it's never
+ * on the picture that can go public).
+ */
+export function AutoPostCaption({ post, clamp, onOpenPerson, className }: { post: CommunityPost; clamp: boolean; onOpenPerson?: (a: CommunityAuthor) => void; className?: string }) {
+  const improve = isRecapStats(post.series_data) ? post.series_data.improve : null;
+  return (
+    <div className={cn("px-3.5 pt-3", className)} data-auto-caption>
+      {post.caption?.trim() && <NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} lead={post.author.name} limits={PICTURE_CAPTION_LIMITS} />}
+      {improve && (
+        <div className="mt-2.5 flex items-start gap-2.5 rounded-2xl bg-muted/60 px-3 py-2.5" data-recap-improve>
+          <Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <div className="min-w-0">
+            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Work on this week</div>
+            <div className="text-[13px] font-semibold leading-snug">{improve.text}</div>
+          </div>
+        </div>
+      )}
+      {post.poll && <PollCard post={post} onOpenPerson={onOpenPerson} className="mt-3" />}
+      <PostExtras post={post} className="mt-2.5" />
+    </div>
+  );
+}
+
 /** The coach mark next to a name: small, verified-style, never a banner. */
 export function CoachBadge({ className }: { className?: string }) {
   return <BadgeCheck className={cn("h-4 w-4 shrink-0 fill-primary text-primary-foreground", className)} aria-label="Coach" role="img" />;
 }
 
 /**
- * A coach's note (Monday Motivation, Finish Strong Friday, or a one-off):
- * a quiet series label, the featured quote with its speaker, then the words.
+ * A coach's own note ("+ Post", a shared comment): the featured quote with
+ * its speaker, then the words, a photo of his own set in above them.
  * `clamp` (the feed): the words show whole unless they're long, and then stop
  * at the end of a sentence with "… more" (NoteCaption); the detail shows
- * everything. Every coach post reads in the regular post font, with or
- * without a picture.
+ * everything. Every coach post reads in the regular post font. Automated
+ * posts (the series, lessons, holidays, birthdays) aren't notes: they're a
+ * picture with the words under it (AutoPostHero, AutoPostCaption).
  */
 export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: CommunityPost; clamp?: boolean; onOpenPerson?: (a: CommunityAuthor) => void; cover?: ReactNode }) {
-  // Saturday: the picture says it, the words just sit under it. A photo of
-  // the coach's own (the note's cover) takes the drawn scene's place.
-  const scene = post.series === "saturday_spirit" && !cover ? extraScene(post.series_extra) : null;
-  // A holiday: its photo, unless the coach put their own on the post.
-  const holiday = post.series === "holiday" && !cover ? extraHoliday(post.series_extra) : null;
-  // A lesson: its diagram is the picture (over the words), or sits under them
-  // when the coach put a photo on it. Nothing else: no label, no sources.
-  const lesson = post.series === "lesson";
   return (
     <div className="px-4 pb-1 pt-1">
-      {/* no "Saturday Spirit" style day label: the post speaks for itself */}
       {cover && <div className="-mx-1 mb-3 overflow-hidden rounded-2xl">{cover}</div>}
-      {scene && isSpiritScene(scene) && <SpiritScene scene={scene} className="mb-3 rounded-2xl" />}
-      {holiday && <HolidayPhoto src={holiday.image} alt={holiday.name} />}
-      {lesson && !cover && <LessonDiagram post={post} className="mb-3" />}
       {post.quote && (
         <figure className="mb-3 border-l-[3px] border-primary pl-3.5">
           <blockquote className="whitespace-pre-line text-[18px] font-semibold leading-[1.32] tracking-[-0.01em]">“{post.quote}”</blockquote>
@@ -149,20 +174,16 @@ export function NoteBody({ post, clamp = false, onOpenPerson, cover }: { post: C
         </figure>
       )}
       {post.caption && <NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} />}
-      {lesson && cover && <LessonDiagram post={post} className="mt-3" />}
       <PostExtras post={post} className="mt-3" />
       {post.poll && <PollCard post={post} onOpenPerson={onOpenPerson} className="mb-2" />}
     </div>
   );
 }
 
-/** Whatever a series post carries under its words: Sunday's report card, Wednesday's numbers, Tuesday's / Thursday's card (a lesson's diagram is in NoteBody). */
-export function NoteExtras({ post, unit, className }: { post: CommunityPost; unit: "kg" | "lb"; className?: string }) {
+/** What a coach's note carries under its words: a comment he shared. */
+export function NoteExtras({ post, className }: { post: CommunityPost; unit?: "kg" | "lb"; className?: string }) {
   if (post.shared_comment) return <SharedCommentCard shared={post.shared_comment} className={className} onOpenPost={openCommunityPost} />;
-  if (post.series === "lesson") return null;
-  if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return <SundayRecapCard stats={post.series_data} unit={unit} className={className} />;
-  if (isWinsStats(post.series_data)) return <WinsStatsCard stats={post.series_data} unit={unit} className={className} />;
-  return <SeriesExtraCard post={post} className={className} />;
+  return null;
 }
 
 export function AuthorLine({
@@ -393,11 +414,13 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
   const isNote = post.kind === "note";
+  // the daily series, lessons, holidays, birthdays: a picture, then the words (Instagram's layout)
+  const auto = isAutoPost(post);
   const lockedAt = !post.live ? lockInTimeLabel(post.locked_in_at) : null;
   const sub = [post.auto && s ? "Finished a session" : null, postTimeLabel(post.created_at), post.edited_at ? "Edited" : null, lockedAt ? `Locked in ${lockedAt}` : null, audienceNote(post)].filter(Boolean).join(" · ");
   // a repost's note floats on the post (yours: tap to change it; "Add a note…" right after reposting)
   // a picture shows it in its bottom-left corner (Instagram's spot); words and coach posts above them
-  const overPicture = !!post.media_type && !(isNote && !isPhotoPost(post));
+  const overPicture = auto || (!!post.media_type && !(isNote && !isPhotoPost(post)));
   const note = useRepostNote(post, { preview: thumbUrl, onOpenAuthor, inline: !overPicture });
   const reposted = !!post.reposted_by?.length;
 
@@ -451,7 +474,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             // a private account's post looks like any other to its followers (as on Instagram); the author sees the lock
             <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : post.visibility === "followers" ? "Only your followers see this" : "Only visible to you"} />
           )}
-          <PostActions post={post} viewerIsStaff={viewerIsStaff} />
+          <PostActions post={post} viewerIsStaff={viewerIsStaff} unit={unit} />
         </div>
       </header>
 
@@ -459,7 +482,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {note.bubble && !overPicture && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
       {/* Hero: the photo, or the workout itself when there isn't one. Taps never open the post (see onHeroTap). */}
       <div onClick={onHeroTap} className="relative select-none" data-post-hero>
-        {isNote && !photo ? (
+        {auto ? (
+          <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
+        ) : isNote && !photo ? (
           <>
             <NoteBody post={post} clamp onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} /> : undefined} />
             {/* a coach post's photos / videos, under its words */}
@@ -527,6 +552,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* Every workout has more than the card shows: say so, plainly. */}
       {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
 
+      {auto && <AutoPostCaption post={post} clamp onOpenPerson={onOpenAuthor} />}
       {post.caption && (!isNote || photo) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} />}
       {(!isNote || photo) && <PostExtras post={post} className="px-3.5 pt-2.5" />}
 
@@ -542,7 +568,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         </div>
       )}
 
-      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} />
+      <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} />
       <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
       {viewerIsStaff && <PostScoreRow post={post} />}
       <CommentPreviewList post={post} onOpenComments={() => onOpenComments(post)} />
@@ -625,6 +651,7 @@ export function ReactionBar({
   onOpenComments,
   onOpenAuthor,
   onReposted,
+  unit,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
@@ -632,6 +659,8 @@ export function ReactionBar({
   onOpenAuthor?: (a: CommunityAuthor) => void;
   /** Just reposted: the card floats "Add a note…" on the post. */
   onReposted?: () => void;
+  /** The unit the feed painted an automated post's picture in (Share to Instagram sends that one). */
+  unit?: "kg" | "lb";
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
   const [messaging, setMessaging] = useState(false);
@@ -730,21 +759,22 @@ export function ReactionBar({
           onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}
         />
       )}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} />}
+      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
     </div>
   );
 }
 
 /** Feed media: the thumbnail only. Full-size image / video loads on demand. */
-export function PostMedia({ post, thumbUrl, full = false }: { post: CommunityPost; thumbUrl: string | null; full?: boolean }) {
+export function PostMedia({ post, thumbUrl, full = false, lead }: { post: CommunityPost; thumbUrl: string | null; full?: boolean; lead?: ReactNode }) {
   const slides = postSlides(post);
   const cover = slides[0] ?? null;
   // Never taller than 4:5, never wider than 16:9 — keeps the feed rhythm steady.
   // A carousel takes its cover's shape for every slide (Instagram does too).
   // A picture framed in the studio is already exactly its shape; a clip (or an
   // older photo) is cropped to it, showing the part its focus says.
-  const ratio = feedAspect(post.media_width, post.media_height);
-  if (slides.length > 1) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} />;
+  // `lead`: a slide before the post's own (an automated post's 4:5 card), whose shape it takes.
+  const ratio = lead ? 0.8 : feedAspect(post.media_width, post.media_height);
+  if (slides.length > 1 || lead) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} lead={lead} />;
   return (
     <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }}>
       {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} /> : <div className="h-full w-full animate-pulse bg-muted" />}
@@ -766,17 +796,6 @@ function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide
   ) : (
     <div data-pinch-zoom className="absolute inset-0">
       {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
-    </div>
-  );
-}
-
-/** A holiday post's photo, 4:5 like a feed photo. If the file is missing the words stand alone. */
-function HolidayPhoto({ src, alt }: { src: string; alt: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
-  return (
-    <div className="relative -mx-1 mb-3 overflow-hidden rounded-2xl bg-muted" style={{ aspectRatio: "4 / 5" }}>
-      <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} className="h-full w-full object-cover" />
     </div>
   );
 }
@@ -812,15 +831,18 @@ function FadeImg({ src, position }: { src: string; position?: string }) {
  * and the dots say where you are. Only the slide you're on and its
  * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
  */
-function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean }) {
+function PostCarousel({ slides, coverUrl, ratio, full, lead }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean; lead?: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
   const track = useRef<HTMLDivElement | null>(null);
   const urls = useSlideThumbUrls(slides.slice(1));
+  // with a lead slide, the post's own slides start one along
+  const off = lead ? 1 : 0;
+  const count = slides.length + off;
   const onScroll = () => {
     const el = track.current;
     if (!el || !el.clientWidth) return;
-    const i = Math.max(0, Math.min(slides.length - 1, Math.round(el.scrollLeft / el.clientWidth)));
+    const i = Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / el.clientWidth)));
     if (i !== index) setIndex(i);
     if (i + 1 > seen) setSeen(i + 1);
   };
@@ -829,7 +851,7 @@ function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; 
     if (el) el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
   };
   return (
-    <div className="group/carousel relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }} aria-roledescription="carousel" aria-label={`${slides.length} photos and videos`}>
+    <div className="group/carousel relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }} aria-roledescription="carousel" aria-label={`${count} photos and videos`}>
       <div
         ref={track}
         onScroll={onScroll}
@@ -837,21 +859,27 @@ function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; 
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ overscrollBehaviorX: "none", WebkitOverflowScrolling: "touch" }}
       >
-        {slides.map((sl, i) => {
+        {lead && (
+          <div className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`1 of ${count}`}>
+            {lead}
+          </div>
+        )}
+        {slides.map((sl, j) => {
+          const i = j + off;
           const near = Math.abs(i - index) <= 1 || i < seen;
-          const url = i === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
+          const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
-            <div key={`${sl.path}-${i}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${slides.length}`}>
+            <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
               {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} /> : <div className="h-full w-full bg-muted" />}
             </div>
           );
         })}
       </div>
       <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur">
-        {index + 1}/{slides.length}
+        {index + 1}/{count}
       </span>
       <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1" aria-hidden>
-        {slides.map((_, i) => (
+        {Array.from({ length: count }, (_, i) => (
           <span key={i} className={cn("h-1.5 rounded-full transition-all", i === index ? "w-4 bg-white" : "w-1.5 bg-white/55")} />
         ))}
       </div>
@@ -861,7 +889,7 @@ function PostCarousel({ slides, coverUrl, ratio, full }: { slides: PostSlide[]; 
           <ChevronLeft className="h-5 w-5" />
         </button>
       )}
-      {index < slides.length - 1 && (
+      {index < count - 1 && (
         <button type="button" onClick={(e) => { e.stopPropagation(); go(1); }} className="absolute right-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow [@media(hover:hover)]:group-hover/carousel:grid" aria-label="Next">
           <ChevronRight className="h-5 w-5" />
         </button>

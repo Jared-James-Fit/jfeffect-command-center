@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
+import { autoPostHasArt, featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
 import { focusPosition } from "@/lib/photo-frame";
+import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 // Small on purpose: Home's shelf loads this with the app, the feed card stays in its own chunk.
+
+const ArtBlank = () => <div className="h-full w-full bg-[#09090b]" aria-hidden />;
+/** An automated post's painted picture: its painter loads only when such a tile shows. */
+const AutoPostTile = lazyWithRetry(() => import("@/components/community/post-art").then((m) => ({ default: m.AutoPostTile })), { fallback: ArtBlank });
 
 /** The small picture a post gets (a video's still, else the photo); null for a card-only post. */
 export function postThumbPath(p: Pick<CommunityPost, "media_thumb_path" | "media_type" | "media_path">): string | null {
@@ -29,6 +34,8 @@ function lessonTitle(post: Pick<CommunityPost, "series" | "series_extra">): stri
  * like count). `large`: Home's Crew feed cards, with the author along the top.
  * A picture that won't load falls back to the card (never a broken-image box);
  * `onBroken` tells the parent so its overlays stop dressing it as a photo.
+ * An automated post (the series, a lesson, a holiday, a birthday) is its
+ * painted card, the picture the feed shows (autoPostHasArt).
  */
 export function PostTileFace({ post, thumb: signed, unit, footer = false, large = false, onBroken }: { post: CommunityPost; thumb: string | null; unit: "kg" | "lb"; footer?: boolean; large?: boolean; onBroken?: (url: string) => void }) {
   const [broken, setBroken] = useState<string | null>(null);
@@ -45,7 +52,11 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
   const bottom = footer && (large ? "pb-11" : "pb-8");
   return (
     <>
-      {post.kind === "note" && post.media_type && thumb ? (
+      {autoPostHasArt(post) ? (
+        <Suspense fallback={<ArtBlank />}>
+          <AutoPostTile post={post} unit={unit} />
+        </Suspense>
+      ) : post.kind === "note" && post.media_type && thumb ? (
         // a coach post with a photo shows the photo, like any other post
         <TileImg src={thumb} onError={fail} position={objectPosition} />
       ) : post.kind === "note" && !large ? (
@@ -86,7 +97,7 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
           </span>
         </div>
       )}
-      {(post.extra_media?.length ?? 0) > 0 ? (
+      {(post.extra_media?.length ?? 0) > 0 || (autoPostHasArt(post) && !!post.media_type) ? (
         <Layers className={cn("absolute text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} aria-label="Carousel" />
       ) : (
         post.media_type === "video" && <Play className={cn("absolute fill-white text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} />

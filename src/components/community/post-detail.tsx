@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AuthorLine, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote, isPhotoPost } from "@/components/community/post-card";
+import { AuthorLine, AutoPostCaption, AutoPostHero, LockInHero, NoteBody, NoteExtras, PostMedia, ReactionBar, TrainingNowPill, WorkoutHero, audienceNote, isPhotoPost } from "@/components/community/post-card";
+import { isAutoPost } from "@/lib/community";
 import { InlineFollow } from "@/components/community/follow-button";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { MentionText } from "@/components/community/mentions";
@@ -76,7 +77,7 @@ function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: 
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="text-[15px] font-black">{post?.kind === "note" ? "Post" : "Workout"}</div>
-        {post && <PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose} className="ml-auto grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-muted" />}
+        {post && <PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose} unit={unit} className="ml-auto grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-muted" />}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(env(safe-area-inset-bottom),1rem)]">
@@ -117,6 +118,8 @@ function Detail({
   const markHint = useMarkHintSeen();
   // a member's photo / clip post: the picture edge to edge, words under it (as in the feed)
   const photo = isPhotoPost(post);
+  // an automated post: its picture, then its words (as in the feed)
+  const auto = isAutoPost(post);
   const onHeroTap = useDoubleTap(() => {
     setBurst((b) => b + 1);
     if (!post.my_reaction) onReact(post, REACTION.key);
@@ -152,7 +155,15 @@ function Detail({
         />
       </div>
 
-      {post.kind === "note" && !photo ? (
+      {auto ? (
+        <>
+          <div className="relative select-none" onClick={onHeroTap}>
+            <AutoPostHero post={post} thumbUrl={thumb} unit={unit} full />
+            <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+          </div>
+          <AutoPostCaption post={post} clamp={false} onOpenPerson={onOpenAuthor} className="px-4" />
+        </>
+      ) : post.kind === "note" && !photo ? (
         <>
           <NoteBody post={post} onOpenPerson={onOpenAuthor} cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined} />
           <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
@@ -235,7 +246,7 @@ function Detail({
       )}
 
       <div className="px-2 pt-2">
-        <ReactionBar post={post} onReact={onReact} onOpenAuthor={onOpenAuthor} />
+        <ReactionBar post={post} onReact={onReact} onOpenAuthor={onOpenAuthor} unit={unit} />
         <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
         {viewerIsStaff && <PostScoreRow post={post} />}
       </div>

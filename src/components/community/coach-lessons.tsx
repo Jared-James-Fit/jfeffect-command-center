@@ -19,7 +19,7 @@ import {
   type LessonItem, type LessonLevel, type LessonLift, type LessonPlanRow, type LessonsOverview, type LessonTrack, type StickerSpec,
 } from "@/lib/lessons";
 import { lessonKeys, useLessonAct, useLessonLibrary, useLessonsOverview, useLessonsSettings, useSaveLessonItem, type LessonAction } from "@/lib/lessons.queries";
-import { LessonDiagram } from "@/components/community/lesson-card";
+import { PostArtImage } from "@/components/community/post-art";
 import { StickerEditorSheet } from "@/components/community/sticker-editor";
 import { LessonEditors, LessonStoryPlayer, StoryThumb, previewPost } from "@/components/community/lesson-story-player";
 import { openCommunityPost } from "@/components/community/shared-comment";
@@ -525,20 +525,32 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
                 ))}
               </div>
               {tab === "post" ? (
-                <div className="rounded-2xl border border-border/70 bg-background" data-lesson-preview="post">
-                  <div className="flex items-center gap-2 px-3.5 pt-3">
+                <div className="overflow-hidden rounded-2xl border border-border/70 bg-background" data-lesson-preview="post">
+                  <div className="flex items-center gap-2 px-3.5 py-3">
                     <div className="h-8 w-8 shrink-0 rounded-full bg-muted" aria-hidden />
                     <div className="min-w-0 text-[13px] font-bold">{data.author?.name ?? "Coach"}</div>
                   </div>
-                  {/* as the crew sees it (NoteBody): the picture, then his words. The diagram is the picture unless he put a photo on it */}
-                  {cover ? (
-                    coverUrl && <img src={coverUrl} alt="" className="mx-4 mt-3 aspect-square w-[calc(100%-2rem)] rounded-2xl object-cover" />
-                  ) : (
-                    <LessonDiagram post={preview} className="mx-4 mt-3" />
-                  )}
-                  <p className="whitespace-pre-wrap px-4 pb-3 pt-2 text-[15px] leading-[1.45]">{preview.caption}</p>
-                  {row.media.length > 1 && <p className="-mt-2 px-4 pb-3 text-[11px] font-bold text-primary">+ {row.media.length - 1} more photo{row.media.length === 2 ? "" : "s"}</p>}
-                  {cover && <LessonDiagram post={preview} className="mx-4 mb-3" />}
+                  {/* as the crew sees it: the lesson's card edge to edge (the picture Save image and Instagram get), his photos after it, then his words */}
+                  <div className="relative">
+                    <div className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="w-full shrink-0 snap-center">
+                        <PostArtImage post={preview} card="lesson" unit="lb" eager />
+                      </div>
+                      {coverUrl && (
+                        <div className="w-full shrink-0 snap-center">
+                          <img src={coverUrl} alt="" className="aspect-[4/5] w-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                    {row.media.length > 0 && (
+                      <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white">
+                        1/{row.media.length + 1}
+                      </span>
+                    )}
+                  </div>
+                  <p className="whitespace-pre-wrap px-3.5 pb-3 pt-3 text-[15px] leading-[1.45]">
+                    <span className="font-bold">{data.author?.name ?? "Coach"}</span> {preview.caption}
+                  </p>
                 </div>
               ) : (
                 <StoryThumb row={row} data={data} onOpen={onPlay} />

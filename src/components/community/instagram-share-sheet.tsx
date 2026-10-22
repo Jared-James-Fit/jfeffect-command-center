@@ -2,14 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, Hash, Instagram, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { LESSON_DARK_COLORS, LessonVisualArt } from "@/components/community/lesson-visuals";
-import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
-import { extraScene, type CommunityPost, type PostSlide } from "@/lib/community";
+import { cardArtElement, paintCardFile } from "@/components/community/post-art";
+import { type CommunityPost, type PostSlide } from "@/lib/community";
 import { signCommunityPaths } from "@/lib/community-media";
-import { extraLesson } from "@/lib/lessons";
+import { loadPostArt, postArtKey } from "@/lib/post-art";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import { cn } from "@/lib/utils";
-import { canvasFile, paintInstagramCard, standaloneSvg, svgPicture } from "@/lib/instagram-cards";
 import {
   IG_SIZES,
   copyText,
@@ -73,10 +71,13 @@ async function slideFiles(post: CommunityPost, slides: PostSlide[], first: numbe
  * feed or 9:16 for a story), the caption (his words, tags as plain names,
  * hashtags he can switch off), and one tap that copies the caption and opens
  * the share sheet, where Instagram is. The files are ready before the tap,
- * because iOS only opens the sheet from the tap itself.
+ * because iOS only opens the sheet from the tap itself. The 4:5 card is the
+ * very picture the feed shows (post-art.ts, painted once); `unit` is the one
+ * the feed painted it in.
  */
-export function InstagramShareSheet({ post, open, onOpenChange }: { post: CommunityPost; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { unit } = useWeightUnit();
+export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit }: { post: CommunityPost; open: boolean; onOpenChange: (open: boolean) => void; unit?: "kg" | "lb" }) {
+  const { unit: myUnit } = useWeightUnit();
+  const unit = shownUnit ?? myUnit;
   const plan = useMemo(() => instagramPlan(post), [post]);
   const [format, setFormat] = useState<IgFormat>("feed");
   const [tagsOn, setTagsOn] = useState(true);
@@ -106,40 +107,33 @@ export function InstagramShareSheet({ post, open, onOpenChange }: { post: Commun
   }, [open, post.id]);
 
   // A lesson's diagram / Saturday's scene: drawn here off screen, then copied as a picture for the card.
-  const lesson = plan.card === "lesson" ? extraLesson(post) : null;
-  const diagram = lesson?.visual && lesson.visual.kind !== "truth" && lesson.visual.kind !== "reset" ? lesson.visual : null;
-  const scene = plan.card === "scene" ? extraScene(post.series_extra) : null;
-  const needsArt = !!diagram || (!!scene && isSpiritScene(scene));
+  const drawing = useMemo(() => (plan.card ? cardArtElement(post, plan.card) : null), [plan, post]);
   // the sheet's content mounts a frame after it opens (its portal), so the drawing is read once its host is there
   const [artHost, setArtHost] = useState<HTMLDivElement | null>(null);
-  const [art, setArt] = useState<{ markup: string | null } | null>(null);
-  useEffect(() => {
-    if (!needsArt || !artHost) return;
-    const svg = artHost.querySelector("svg");
-    setArt({ markup: svg ? standaloneSvg(svg, LESSON_DARK_COLORS, 1080) : null });
-  }, [artHost, needsArt, post.id]);
-  const artMarkup = art?.markup ?? null;
+  const hostReady = !drawing || !!artHost;
 
   // What's being made right now: only files made for exactly this can go out
   // (switch Post / Story and the old card is never shared by a quick tap).
-  const prepKey = `${post.id}:${format}:${unit}:${attempt}:${artMarkup ? 1 : 0}`;
+  const prepKey = `${post.id}:${format}:${unit}:${attempt}:${hostReady ? 1 : 0}`;
   // The post's own files load once per opening (a clip isn't fetched again when the card's shape changes).
   const slidesRef = useRef<{ key: string; files: Promise<File[]> } | null>(null);
   useEffect(() => {
     if (!open) return;
-    if (needsArt && !art) return; // the drawing is a frame away
+    if (!hostReady) return; // the drawing is a frame away
     let alive = true;
     const made: string[] = [];
     setFailed(false);
     (async () => {
       const out: Prepared[] = [];
       if (plan.card) {
-        const canvas = document.createElement("canvas");
-        const art = artMarkup ? await svgPicture(artMarkup) : null;
-        await paintInstagramCard(canvas, { card: plan.card, format, post, unit, art });
-        const file = await canvasFile(canvas, instagramFileName(post, 0, "image/jpeg"));
+        const card = plan.card;
+        // 4:5: the feed's own picture (kept, or painted once for both); 9:16: painted for the story
+        const file =
+          format === "feed"
+            ? (await loadPostArt(postArtKey(post, card, unit), instagramFileName(post, 0, "image/jpeg"), () => paintCardFile(post, card, "feed", unit, artHost)))?.file
+            : await paintCardFile(post, card, format, unit, artHost);
         if (!file) throw new Error("card");
-        out.push({ file, url: "", video: false, aspect: `${canvas.width} / ${canvas.height}` });
+        out.push({ file, url: "", video: false, aspect: `${IG_SIZES[format].w} / ${IG_SIZES[format].h}` });
       }
       if (plan.slides.length) {
         const key = `${post.id}:${attempt}`;
@@ -167,7 +161,7 @@ export function InstagramShareSheet({ post, open, onOpenChange }: { post: Commun
       // a beat later, so the previews on screen don't blank before the next ones land
       window.setTimeout(() => made.forEach((u) => URL.revokeObjectURL(u)), 1500);
     };
-  }, [open, plan, format, post, unit, art, artMarkup, needsArt, attempt, prepKey]);
+  }, [open, plan, format, post, unit, hostReady, artHost, attempt, prepKey]);
 
   const items = prepared?.items ?? null;
   const files = items?.map((i) => i.file) ?? [];
@@ -355,9 +349,9 @@ export function InstagramShareSheet({ post, open, onOpenChange }: { post: Commun
         </div>
 
         {/* a lesson's diagram / Saturday's scene, drawn (never shown) to be copied onto the card */}
-        {open && needsArt && (
+        {open && drawing && (
           <div ref={setArtHost} hidden aria-hidden>
-            {diagram ? <LessonVisualArt visual={diagram} tone="dark" /> : scene && isSpiritScene(scene) ? <SpiritScene scene={scene} /> : null}
+            {drawing}
           </div>
         )}
       </SheetContent>

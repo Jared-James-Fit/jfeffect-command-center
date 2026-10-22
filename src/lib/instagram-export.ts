@@ -14,19 +14,34 @@
  *    feed takes);
  *  - a lesson: its card (title + diagram, the belief struck out, the week's
  *    three things), then any photo the coach put on it;
- *  - Wins, the Recap, a holiday, Saturday's scene, a workout, words: a card
- *    painted from the post (instagram-cards.ts), 4:5 for the feed or 9:16
- *    for a story.
+ *  - Wins, the Recap, Tuesday's numbers, Thursday's feature, a birthday, a
+ *    holiday, Saturday's scene, a workout, words: a card painted from the
+ *    post (instagram-cards.ts), 4:5 for the feed or 9:16 for a story.
+ * The 4:5 card is also the automated post's own picture in the app
+ * (postArtCard, post-art.ts): what the crew sees is what goes to Instagram.
  * The caption is the post's words, with anyone it tags as their plain first
  * name (an in-app @username would tag a stranger on Instagram).
  */
-import { extraHoliday, extraScene, isRecapStats, isWinsStats, postSlides, splitMentions, type CommunityPost, type PostSlide } from "@/lib/community";
+import {
+  extraBirthday,
+  extraFeature,
+  extraHoliday,
+  extraObservation,
+  extraScene,
+  isAutoPost,
+  isRecapStats,
+  isWinsStats,
+  postSlides,
+  splitMentions,
+  type CommunityPost,
+  type PostSlide,
+} from "@/lib/community";
 import { extraLesson, type LessonTrack } from "@/lib/lessons";
 
 export type IgFormat = "feed" | "story";
 
 /** A card painted from the post (instagram-cards.ts). */
-export type IgCard = "lesson" | "wins" | "recap" | "workout" | "holiday" | "scene" | "words";
+export type IgCard = "lesson" | "wins" | "recap" | "compare" | "feature" | "birthday" | "workout" | "holiday" | "scene" | "words";
 
 /** What goes to Instagram: a painted card (first), then the post's own photos / clips. */
 export type IgPlan = { card: IgCard | null; slides: PostSlide[] };
@@ -45,10 +60,22 @@ export function instagramPlan(post: CommunityPost): IgPlan {
   if (slides.length) return { card: null, slides };
   if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return { card: "recap", slides: [] };
   if (isWinsStats(post.series_data)) return { card: "wins", slides: [] };
+  if (post.series === "tuesday_tips" && extraObservation(post.series_extra)) return { card: "compare", slides: [] };
+  if (post.series === "try_it_thursday" && extraFeature(post.series_extra)) return { card: "feature", slides: [] };
+  if (extraBirthday(post)) return { card: "birthday", slides: [] };
   if (post.series === "holiday" && extraHoliday(post.series_extra)) return { card: "holiday", slides: [] };
   if (post.series === "saturday_spirit" && extraScene(post.series_extra)) return { card: "scene", slides: [] };
   if (post.kind !== "note" && post.stats) return { card: "workout", slides: [] };
   return { card: "words", slides: [] };
+}
+
+/**
+ * The painted card an automated post shows as its picture: the same 4:5
+ * card that goes to Instagram. null when it isn't automated, or when its
+ * own photo / clip is the picture (a lesson keeps its card in front of them).
+ */
+export function postArtCard(post: CommunityPost): IgCard | null {
+  return isAutoPost(post) ? instagramPlan(post).card : null;
 }
 
 /** Only a painted card comes in two shapes; a photo or clip goes as posted (Instagram's composer picks feed or story). */
@@ -84,9 +111,11 @@ export function instagramTags(post: CommunityPost): string[] {
   const lesson = extraLesson(post);
   const base = lesson
     ? TRACK_TAGS[lesson.track]
-    : isWinsStats(post.series_data)
+    : isWinsStats(post.series_data) || isRecapStats(post.series_data)
       ? ["strengthcommunity", "powerlifting", "strengthtraining"]
-      : post.stats
+      : extraBirthday(post)
+        ? ["birthday", "strengthcommunity", "powerlifting"]
+        : post.stats
         ? ["powerlifting", "strengthtraining", "personalrecord"]
         : ["strengthtraining", "fitnessmotivation"];
   return [...base, "jfeffect"].map((t) => `#${t}`);

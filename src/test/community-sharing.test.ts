@@ -631,9 +631,9 @@ describe("Wednesday Wins reads like the coach wrote it, with the crew's numbers"
     expect(sql).toContain("v_comp->'stats', coalesce(_at, now()))");
     expect(sql).toContain("'series_data', n.series_data,");
     expect(sql).toContain("WHERE a.action = 'signed_in'");
-    expect(card).toContain("<WinsStatsCard stats={post.series_data} unit={unit}");
-    // the detail shows the same card through NoteExtras (Wins, Sunday Recap, Tuesday/Thursday cards)
-    expect(detail).toContain("<NoteExtras post={post} unit={unit}");
+    // the numbers are the post's picture (painted from series_data), in the feed and on the post's own page
+    expect(card).toContain("<AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />");
+    expect(detail).toContain("<AutoPostHero post={post} thumbUrl={thumb} unit={unit} full />");
   });
   const s: WinsStats = {
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
@@ -709,7 +709,7 @@ describe("weight units: a setting for clients, a tap on the community card", () 
   const account = read("src/routes/_authenticated/portal/account.tsx");
   const unitCard = read("src/components/portal/weight-unit-card.tsx");
   const unitPref = read("src/lib/weight-unit-pref.ts");
-  const wins = read("src/components/community/wins-stats.tsx");
+  const postArt = read("src/lib/post-art.ts");
   it("clients can set their default unit in Account Settings", () => {
     expect(account).toContain("<WeightUnitCard");
     expect(account).toContain("confirmed={!!client?.weight_unit_confirmed_at}");
@@ -722,13 +722,14 @@ describe("weight units: a setting for clients, a tap on the community card", () 
     week_of: "2026-09-28", roster: 16, opened: 15, trained: 12, sessions: 36, sessions_prev: 32, prs: 41, pr_people: 9,
     volume_kg: 204215, reps: 6015, streaks: 10, bodyweight: 9, checkins: 4, busiest_day: "Friday",
   };
-  it("the weight tile on Wednesday Wins flips lb/kg on tap, only for that viewer, without opening the post", () => {
+  it("Wednesday Wins' picture is painted in each viewer's own unit", () => {
     expect(winsHero(s, "lb").unit).toBe("lbs");
     expect(winsHero(s, "kg").unit).toBe("kg");
-    expect(wins).toContain('setShown(shown === "lb" ? "kg" : "lb")');
-    expect(wins).toContain("e.stopPropagation();");
-    // a tap never writes the viewer's saved preference
-    expect(wins).not.toContain("preferred_weight_unit");
+    // the unit is part of which picture it is (Wins, the Recap, a workout), so a kg viewer never gets a lb one
+    expect(postArt).toContain('const UNIT_CARDS: ReadonlySet<IgCard> = new Set<IgCard>(["wins", "recap", "workout"]);');
+    expect(postArt).toContain('${UNIT_CARDS.has(card) ? `.${unit}` : ""}');
+    // and painting it never writes the viewer's saved preference
+    expect(postArt).not.toContain("preferred_weight_unit");
   });
 });
 
@@ -872,7 +873,7 @@ describe("Instagram-style post controls: edit, archive, delete", () => {
     expect(sql).toContain("    archived_at = NULL,\n    archived_from = NULL,\n    updated_at = now()");
   });
   it("the same menu lives on the feed card and the post detail, with Archived on your profile", () => {
-    expect(card).toContain("<PostActions post={post} viewerIsStaff={viewerIsStaff} />");
+    expect(card).toContain("<PostActions post={post} viewerIsStaff={viewerIsStaff} unit={unit} />");
     expect(detail).toContain("<PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose}");
     expect(actions).toContain('{archived ? "Show on profile" : "Archive"}');
     expect(actions).toContain("Archive instead");

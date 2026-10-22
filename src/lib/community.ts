@@ -184,8 +184,8 @@ export type CommunityPost = {
   quote?: string | null;
   quote_author?: string | null;
   quote_source?: string | null;
-  /** Wednesday Wins / Sunday Recap: the crew's numbers for the week, shown as a card. */
-  series_data?: WinsStats | RecapStats | null;
+  /** Wednesday Wins / Sunday Recap: the crew's numbers for the week, shown as a card. A birthday post: whose birthday (extraBirthday). */
+  series_data?: WinsStats | RecapStats | BirthdayMark | null;
   /** Tuesday / Thursday / Saturday: what the post shows besides its words. */
   series_extra?: SeriesExtra | null;
   /** A note that is someone's comment, shared to the feed. */
@@ -1109,6 +1109,31 @@ export type SeriesExtra =
   | { feature: string; title: string; where: string[]; stat?: CrewCompare | null }
   /** A coach lesson: its track, level, lift, diagram and sources (extraLesson). */
   | LessonExtra;
+
+/** A birthday post (no series): whose birthday it is, stamped by the server when the draft is posted. */
+export type BirthdayMark = { birthday: { name: string | null; user_id?: string | null } };
+
+/** Whose birthday a post is for; null for anything else. */
+export function extraBirthday(post: Pick<CommunityPost, "series" | "series_data">): { name: string | null; user_id: string | null } | null {
+  if (post.series) return null;
+  const b = (post.series_data as Partial<BirthdayMark> | null | undefined)?.birthday;
+  if (!b || typeof b !== "object") return null;
+  return { name: typeof b.name === "string" && b.name.trim() ? b.name.trim() : null, user_id: typeof b.user_id === "string" ? b.user_id : null };
+}
+
+/**
+ * A post the app made (the daily series, a lesson, a holiday, a birthday):
+ * it reads like an Instagram post, a picture with the words under it. A
+ * coach's own "+ Post" and anyone's workout or photo keep their own layout.
+ */
+export function isAutoPost(post: Pick<CommunityPost, "kind" | "series" | "series_data" | "story">): boolean {
+  return post.kind === "note" && !post.story && (!!post.series || !!extraBirthday(post));
+}
+
+/** An automated post whose picture is its painted card (a lesson's comes before any photo on it); else its own photo is. */
+export function autoPostHasArt(post: Pick<CommunityPost, "kind" | "series" | "series_data" | "story" | "media_type">): boolean {
+  return isAutoPost(post) && (!post.media_type || post.series === "lesson");
+}
 
 export function extraScene(e: SeriesExtra | null | undefined): string | null {
   return e && "scene" in e && typeof e.scene === "string" ? e.scene : null;

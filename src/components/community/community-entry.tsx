@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { featuredLift, formatTopSet, homeCrewDeck, homeDeckNeedsMore, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
+import { autoPostHasArt, featuredLift, formatTopSet, homeCrewDeck, homeDeckNeedsMore, workoutHeadline, isTrainingNow, postTimeLabel, reactionEmoji, SCOPE_WORD, type CommunityPost } from "@/lib/community";
 import { useCommunityActivity, useCommunityFeed, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { PostTileFace, postThumbPath } from "@/components/community/post-tile";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -142,7 +142,9 @@ function CrewCard({ post, unit, thumb: signed, fresh, onOpen }: { post: Communit
   const name = post.is_mine ? "You" : post.author.name.split(" ")[0];
   const likes = post.reaction_count ?? 0;
   const counts = likes > 0 || post.comment_count > 0;
-  const photo = !!(post.media_type && thumb);
+  // an automated post's painted card: a dark picture, dressed like a photo (its words are on it)
+  const art = autoPostHasArt(post);
+  const photo = !art && !!(post.media_type && thumb);
   const lift = photo && post.stats ? featuredLift(post.stats) : null;
   // a photo says what the session was underneath it
   const title = photo ? ((post.stats ? workoutHeadline(post.stats) : null) ?? (post.locked_in_at ? "Locked in" : null)) : null;
@@ -159,10 +161,10 @@ function CrewCard({ post, unit, thumb: signed, fresh, onOpen }: { post: Communit
     >
       <PostTileFace post={post} thumb={thumb} unit={unit} footer={counts} large onBroken={setBroken} />
       {/* who and when: over a soft shade on a photo; a note card is light or dark with the theme */}
-      <span className={cn("absolute inset-x-0 top-0 flex items-center gap-1.5 px-3 pb-5 pt-2.5", photo ? "bg-gradient-to-b from-black/55 to-transparent text-white" : post.kind === "note" ? "text-foreground" : "text-white")}>
+      <span className={cn("absolute inset-x-0 top-0 flex items-center gap-1.5 px-3 pb-5 pt-2.5", photo || art ? "bg-gradient-to-b from-black/55 to-transparent text-white" : post.kind === "note" ? "text-foreground" : "text-white")}>
         <UserAvatar src={post.author.avatar_url} name={post.author.name} size={24} expandable={false} />
-        <span className={cn("min-w-0 truncate text-[12px] font-bold", photo && "drop-shadow")}>{name}</span>
-        <span className={cn("shrink-0 text-[11px]", post.kind === "note" && !photo ? "text-muted-foreground" : "text-white/75")}>{postTimeLabel(post.created_at)}</span>
+        <span className={cn("min-w-0 truncate text-[12px] font-bold", (photo || art) && "drop-shadow")}>{name}</span>
+        <span className={cn("shrink-0 text-[11px]", post.kind === "note" && !photo && !art ? "text-muted-foreground" : "text-white/75")}>{postTimeLabel(post.created_at)}</span>
         {live ? (
           <LivePill className="shrink-0" />
         ) : fresh ? (
