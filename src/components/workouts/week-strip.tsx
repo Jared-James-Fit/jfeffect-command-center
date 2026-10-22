@@ -31,13 +31,25 @@ export function statusDotClass(status: WorkoutStatus | "none"): string {
   }
 }
 
+/** A session or appointment with the coach that day: violet, like everywhere else sessions show. */
+export function SessionDot({ onPrimary, className }: { onPrimary?: boolean; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-violet-500", onPrimary && "ring-2 ring-primary-foreground", className)}
+    />
+  );
+}
+
 export function WeekStrip({
-  selectedDate, onSelectDate, byDate, dnd,
+  selectedDate, onSelectDate, byDate, dnd, sessionDays,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem[]>;
   dnd?: CalendarDnd;
+  /** yyyy-mm-dd days with a session or appointment (client view): a violet dot by the workout mark. */
+  sessionDays?: Set<string>;
 }) {
   // Week the selected date belongs to. Mon-first to match existing schedule UI.
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -78,6 +90,7 @@ export function WeekStrip({
             : "none";
           const isToday = isSameDay(d, today);
           const isSelected = isSameDay(d, selectedDate);
+          const hasSession = !!sessionDays?.has(iso);
           return (
             <CalendarDayCell key={iso} iso={iso} item={item} label={format(d, "MMM d")}>
               {(cellDnd) => (
@@ -97,7 +110,7 @@ export function WeekStrip({
                     : "hover:bg-secondary",
               )}
               aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}`}
+              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}${hasSession ? ", session with your coach" : ""}`}
             >
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-wider",
@@ -111,7 +124,10 @@ export function WeekStrip({
               )}>
                 {format(d, "d")}
               </span>
-              <WorkoutStatusMark mark={dayMark(list)} onPrimary={isSelected} className="mt-0.5" />
+              <span className="mt-0.5 flex items-center gap-1">
+                <WorkoutStatusMark mark={dayMark(list)} onPrimary={isSelected} />
+                {hasSession && <SessionDot onPrimary={isSelected} />}
+              </span>
               {extra > 0 && (
                 <span className={cn(
                   "text-[9px] font-bold leading-none",

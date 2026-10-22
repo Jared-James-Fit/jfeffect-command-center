@@ -81,7 +81,10 @@ import {
   type CalendarDnd,
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
-import { WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
+import { SessionDot, WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
+import { KIND_META, placeLabel, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
+import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
+import { compactTimeRange } from "@/lib/schedule-time";
 import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
@@ -136,6 +139,21 @@ export function WorkoutsExperience({
 
   // Date → workouts (shared with the coach's messenger workout peek).
   const byDate = useMemo(() => buildWorkoutDateMap(dayItems, committedDays), [dayItems, committedDays]);
+
+  // Sessions and appointments with the coach, on the same calendar as the
+  // workouts: clients look for their 1:1 here, so it has to be here (the
+  // client's own view only; the same queries as the Calendar page and Home).
+  const { items: sessionItems } = useClientSessionItems(mode === "self" ? clientId : null);
+  const sessionsByDate = useMemo(() => {
+    const m = new Map<string, CalendarItem[]>();
+    for (const it of sessionItems) {
+      if (/cancel|reschedul/i.test(it.status ?? "")) continue;
+      m.set(it.date, [...(m.get(it.date) ?? []), it]);
+    }
+    for (const list of m.values()) list.sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
+    return m;
+  }, [sessionItems]);
+  const sessionDays = useMemo(() => new Set(sessionsByDate.keys()), [sessionsByDate]);
 
 
   // --- Selected date drives the calendar tab and header context. ----------
@@ -515,6 +533,7 @@ export function WorkoutsExperience({
                       onSelectDate={setSelectedDate}
                       byDate={byDate}
                       dnd={dnd}
+                      sessionDays={sessionDays}
                     />
                   ) : (
                     <MonthGrid
@@ -522,12 +541,14 @@ export function WorkoutsExperience({
                       onSelectDate={setSelectedDate}
                       byDate={byDate}
                       dnd={dnd}
+                      sessionDays={sessionDays}
                     />
                   )}
                 </CalendarDndProvider>
-                <WorkoutMarkLegend className="-mt-2 px-1" />
+                <WorkoutMarkLegend className="-mt-2 px-1" sessions={sessionDays.size > 0} />
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
+                  sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
                   readonly={mode === "coach"}
                   clientId={clientId}
@@ -638,12 +659,13 @@ export type { CalendarDnd } from "@/components/workouts/calendar-day-dnd";
 /* ---------------------------------------------------------------------- */
 
 function MonthGrid({
-  selectedDate, onSelectDate, byDate, dnd,
+  selectedDate, onSelectDate, byDate, dnd, sessionDays,
 }: {
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
   byDate: Map<string, WorkoutItem[]>;
   dnd?: CalendarDnd;
+  sessionDays?: Set<string>;
 }) {
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
@@ -717,7 +739,7 @@ function MonthGrid({
                 !inMonth && "opacity-40",
               )}
               aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}`}
+              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}${sessionDays?.has(iso) ? ", session with your coach" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <span className={cn(
@@ -726,7 +748,10 @@ function MonthGrid({
                 )}>
                   {format(d, "d")}
                 </span>
-                <WorkoutStatusMark mark={dayMark(list)} />
+                <span className="flex items-center gap-0.5">
+                  {sessionDays?.has(iso) && <SessionDot />}
+                  <WorkoutStatusMark mark={dayMark(list)} />
+                </span>
               </div>
               {title && (
                 <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted-foreground">
@@ -749,9 +774,11 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 
 function SelectedDayList({
-  items, date, readonly, clientId, mode, backupEnabled,
+  items, sessions = [], date, readonly, clientId, mode, backupEnabled,
 }: {
   items: WorkoutItem[];
+  /** That day's sessions / appointments with the coach (client view). */
+  sessions?: CalendarItem[];
   date: Date;
   readonly: boolean;
   clientId: string;
@@ -788,7 +815,50 @@ function SelectedDayList({
         />
       )}
       {backupItems.map((item, index) => card(item, primaryItems.length + index))}
+      {sessions.length > 0 && <DaySessionsCard sessions={sessions} date={date} />}
     </div>
+  );
+}
+
+/**
+ * That day's sessions with the coach, under the workout: the same row as on
+ * Home (violet line, time, what and where). Each opens the Calendar on that
+ * day, where they can see the details or ask to change it.
+ */
+function DaySessionsCard({ sessions, date }: { sessions: CalendarItem[]; date: Date }) {
+  const day = toLocalISO(date);
+  return (
+    <Card className="border-violet-500/30 px-3.5 pb-1.5 pt-3">
+      <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
+        <h3 className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-violet-400">
+          <CalendarIcon className="h-3.5 w-3.5" />
+          {sessions.length === 1 ? "Session with your coach" : "Sessions with your coach"}
+        </h3>
+        <Link to="/portal/calendar" search={{ date: day } as any} className="inline-flex shrink-0 items-center text-xs font-semibold text-muted-foreground hover:text-foreground">
+          Calendar <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+      <ol>
+        {sessions.map((it) => {
+          const range = it.startsAt ? compactTimeRange(it.startsAt, it.endsAt) : null;
+          return (
+            <li key={it.id}>
+              <Link to="/portal/calendar" search={{ date: day } as any} className={AGENDA_ROW}>
+                <AgendaRow
+                  time={it.startsAt ? startLabel(it.startsAt) : "All day"}
+                  timed={!!it.startsAt}
+                  accent={FAMILY_ACCENT.people}
+                  title={it.title}
+                  sub={[range, KIND_META[it.kind]?.label, placeLabel(it.location)].filter(Boolean).join(" · ")}
+                  trailing={it.status === "Completed" ? <span className="shrink-0 text-xs font-semibold text-emerald-500">Done</span> : null}
+                  chevron
+                />
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 }
 
