@@ -82,7 +82,7 @@ import {
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { SessionDot, WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
-import { KIND_META, placeLabel, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
+import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
@@ -486,8 +486,9 @@ export function WorkoutsExperience({
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as "calendar" | "block")} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
+            {/* "Schedule": the training schedule. The Calendar page is for appointments. */}
             <TabsTrigger value="calendar" className="gap-1">
-              <CalendarIcon className="h-3.5 w-3.5" /> Calendar
+              <CalendarIcon className="h-3.5 w-3.5" /> Schedule
             </TabsTrigger>
             <TabsTrigger value="block" className="gap-1">
               <ClipboardList className="h-3.5 w-3.5" /> Block View
@@ -876,6 +877,20 @@ function DaySessionsCard({ sessions, date }: { sessions: CalendarItem[]; date: D
   );
 }
 
+/**
+ * The day card's status without its weekday ("Scheduled Mon" → "Upcoming"):
+ * the card is already that day's. A workout done on another day keeps its
+ * label ("Completed Tue instead of Mon"), since that's news.
+ */
+function dayCardStatusLabel(status: string, label: string): string {
+  switch (status) {
+    case "upcoming": return "Upcoming";
+    case "missed": return "Missed";
+    case "completed_on_scheduled": return "Completed";
+    default: return label;
+  }
+}
+
 function SelectedDayCard({
   item, date, readonly, clientId, mode,
 }: {
@@ -1049,7 +1064,10 @@ function SelectedDayCard({
         tone: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
       }
     : status;
-  const title = cleanDayTitle(item.day?.title, item.day?.day_index);
+  // The day is already picked on the strip above and in the line under the
+  // title, so the title drops its "Monday — " and the badge its weekday.
+  const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });
+  const badgeLabel = dayCardStatusLabel(visibleStatus.status, visibleStatus.label);
   const cta: {
     label: string;
     tone: string;
@@ -1070,9 +1088,9 @@ function SelectedDayCard({
       <Card className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="truncate text-lg font-black">{title}</div>
-              <Badge variant="outline" className={cn("text-[10px]", visibleStatus.tone)}>{visibleStatus.label}</Badge>
+            <div className="line-clamp-2 text-lg font-black leading-snug">{title}</div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={cn("text-[10px]", visibleStatus.tone)}>{badgeLabel}</Badge>
               {isAtHomeBackupSessionBlock(item.block) && (
                 <Badge variant="secondary" className="text-[10px]">{AT_HOME_BACKUP_BADGE}</Badge>
               )}

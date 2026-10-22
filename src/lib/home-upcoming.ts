@@ -83,8 +83,8 @@ export function selectHomeUpcoming(
 // ---------------------------------------------------------------------------
 // Home agenda: today in full, then the next few days in brief.
 //
-// Home answers "what's on today and what's next"; the Workouts calendar owns
-// navigating weeks and months, the Schedule page owns everything at once.
+// Home answers "what's on today and what's next"; the Workouts schedule owns
+// the training plan day by day, the Calendar page appointments and dates.
 // Cardio rides on training days (shown with the workout), so it's left out.
 
 export type HomeAgenda = {
@@ -112,7 +112,13 @@ function agendaOrder(a: CalendarItem, b: CalendarItem): number {
 
 export function buildHomeAgenda(
   items: CalendarItem[] | null | undefined,
-  options: { today: string; days?: number; maxUpcoming?: number },
+  options: {
+    today: string;
+    days?: number;
+    maxUpcoming?: number;
+    /** Which items belong in the coming-up list (today always shows everything). */
+    upcoming?: (item: CalendarItem) => boolean;
+  },
 ): HomeAgenda {
   const { today } = options;
   const horizon = addDaysIso(today, options.days ?? HOME_AGENDA_DAYS);
@@ -129,6 +135,7 @@ export function buildHomeAgenda(
   const byDay = new Map<string, CalendarItem[]>();
   for (const i of live) {
     if (i.date <= today || i.date > horizon) continue;
+    if (options.upcoming && !options.upcoming(i)) continue;
     byDay.set(i.date, [...(byDay.get(i.date) ?? []), i]);
   }
   const upcoming: HomeAgenda["upcoming"] = [];

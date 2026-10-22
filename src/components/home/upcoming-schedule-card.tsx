@@ -15,8 +15,19 @@ import {
   ActionPill, AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
-/** Rows in "next up" on Home; the rest is on the Schedule page. */
+/** Rows in "coming up" on Home; the rest is on the Calendar page. */
 const HOME_UPCOMING_ROWS = 3;
+/** How far ahead "coming up" looks: appointments are sparse, so a month. */
+const HOME_CALENDAR_DAYS = 30;
+
+/**
+ * What the calendar is for: appointments, sessions, check-ins, coach events,
+ * key dates and Google. Workouts (and the cardio that rides with them) are
+ * the Workouts schedule's; the calendar only offers today's as a way in.
+ */
+function isCalendarItem(item: CalendarItem): boolean {
+  return item.kind !== "workout" && item.kind !== "cardio";
+}
 
 function isoToday() {
   const d = new Date();
@@ -74,10 +85,13 @@ function RowLink({ item, links, className, children }: { item: CalendarItem; lin
 
 /**
  * Client Home: their calendar card, in the look every account shares
- * (schedule/agenda.tsx). A date tile and "Calendar" and this week's days (each
- * opens the Calendar page there), today as a short agenda (today's workout
- * says its week and offers Start / Continue / Done), the next few things one
- * line each, then "Request a session" (or Book) and "Open calendar".
+ * (schedule/agenda.tsx). The calendar is for appointments and organizing the
+ * week, plus the way in to today's workout: a date tile and "Calendar", this
+ * week's days with a dot per appointment (each opens the Calendar page
+ * there), today as a short agenda (today's workout says its week and offers
+ * Start / Continue / Done), the next few appointments one line each, then
+ * "Request a session" (or Book) and "Open calendar". The workout schedule
+ * day by day is on Workouts.
  */
 export function UpcomingScheduleCard({ clientId, links = true }: {
   clientId: string | null | undefined;
@@ -96,22 +110,24 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   });
   const today = isoToday();
   const [requesting, setRequesting] = useState(false);
-  // Today in full, then only the next few things; the week strip says what's on each day.
-  const agenda = useMemo(() => buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS }), [items, today]);
+  // Today in full (today's workout is the way in to it), then the next few
+  // appointments and dates: the workout schedule itself lives on Workouts.
+  const agenda = useMemo(
+    () => buildHomeAgenda(items, { today, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem }),
+    [items, today],
+  );
   const nowMs = useNow();
   const nowIndex = useMemo(() => nowLineIndex(agenda.today, nowMs), [agenda.today, nowMs]);
   const singleBook = bookable.length === 1 && !pov.viewAsClientId ? bookable[0] : null;
-  // A dot per thing on each day of the week strip (cardio rides with its workout).
+  // A dot per appointment / date on each day of the week strip (not workouts).
   const dotsByDay = useMemo(() => {
     const m = new Map<string, CalendarItem[]>();
     for (const it of items ?? []) {
-      if (!it || it.kind === "cardio" || it.status === "Cancelled") continue;
+      if (!it || !isCalendarItem(it) || it.status === "Cancelled") continue;
       m.set(it.date, [...(m.get(it.date) ?? []), it]);
     }
     const out = new Map<string, string[]>();
-    for (const [d, list] of m) {
-      out.set(d, list.sort((a, b) => (a.kind === "workout" ? 0 : 1) - (b.kind === "workout" ? 0 : 1)).map((it) => FAMILY_ACCENT[KIND_FAMILY[it.kind]]));
-    }
+    for (const [d, list] of m) out.set(d, list.map((it) => FAMILY_ACCENT[KIND_FAMILY[it.kind]]));
     return out;
   }, [items]);
 
@@ -165,6 +181,11 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
           )),
         )}
       </AgendaNext>
+      {!isLoading && agenda.upcoming.length === 0 && (
+        <div className="mt-1.5 border-t border-border/60 pt-1">
+          <AgendaEmpty>No appointments coming up.</AgendaEmpty>
+        </div>
+      )}
 
       {/* Actions, in words: ask for a session, or see everything. */}
       {links && (
