@@ -114,6 +114,16 @@ if (typeof window !== "undefined") {
   installMediaPlaybackSession();
 }
 
+/**
+ * Let the UI sound engine go quiet before something switches the page's audio
+ * to "playback" (a demo video starting): changing the category under a
+ * running AudioContext is the riskiest thing an iPhone web view does with
+ * audio. The next tap wakes it again (`wake`), so nothing is lost.
+ */
+export async function quietAppSounds(): Promise<void> {
+  if (ctx && ctx.state === "running") await ctx.suspend().catch(() => {});
+}
+
 /** How late a sound may still play once a suspended context comes back. */
 const LATE_MS = 400;
 

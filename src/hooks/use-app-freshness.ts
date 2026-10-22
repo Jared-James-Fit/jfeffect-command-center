@@ -4,6 +4,7 @@ import {
 } from "@/lib/app-freshness";
 import { flagUpdateAvailable } from "@/lib/pwa/register-sw";
 import { hasUnsavedWork } from "@/components/pwa/pwa-update-toast";
+import { noteReloadReason } from "@/lib/demo-crumb";
 
 const PERIODIC_MS = 5 * 60_000;
 const MIN_GAP_MS = 60_000;
@@ -35,6 +36,7 @@ export function useAppFreshness() {
         });
         if (decision === "reload") {
           markReloadingFor(build);
+          noteReloadReason("new build on reopen");
           window.location.reload();
         } else if (decision === "prompt") {
           flagUpdateAvailable();

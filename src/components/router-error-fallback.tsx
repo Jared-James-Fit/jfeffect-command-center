@@ -4,6 +4,7 @@ import { isChunkLoadError, attemptChunkReload } from "@/lib/chunk-recovery";
 import { reportLovableError } from "@/lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { clearPersistedQueryCache } from "@/lib/query-persister";
+import { noteReloadReason } from "@/lib/demo-crumb";
 
 type Props = {
   error: Error;
@@ -91,6 +92,7 @@ export function RouterErrorFallback({ error, reset }: Props) {
     setResetting(true);
     clearPersistedQueryCache();
     try { window.sessionStorage.removeItem(retryKey); } catch {}
+    noteReloadReason(`page error: ${(error?.message ?? String(error)).slice(0, 120)}`);
     window.location.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showing]);

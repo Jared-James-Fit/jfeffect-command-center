@@ -16,6 +16,8 @@
 //
 // This module is client-only and safe to import at the root.
 
+import { noteReloadReason } from "@/lib/demo-crumb";
+
 const RELOAD_GUARD_KEY = "jfe_chunk_reload_v1";
 
 const CHUNK_ERROR_PATTERNS = [
@@ -69,6 +71,7 @@ export function attemptChunkReload(reason: string): boolean {
   }
   // eslint-disable-next-line no-console
   console.warn("[chunk-recovery] reloading once to recover stale chunk", { reason });
+  noteReloadReason(`chunk recovery (${reason})`);
   window.location.reload();
   return true;
 }

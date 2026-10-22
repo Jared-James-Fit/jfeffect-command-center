@@ -1,13 +1,14 @@
 /**
- * The player URL for an exercise demo. Never autoplays: iOS only lets an
- * embedded player autoplay *muted*, which is exactly the "no sound" people
- * hit, so the demo waits for a tap on its own play button and then plays
- * with sound. Plays inline (no forced fullscreen); YouTube without cookies.
+ * The player URL for an exercise demo. It only loads once someone taps Play
+ * (`autoplay`: that tap starts it, with sound; the iPhone app needs no second
+ * tap, a browser may show the player's own play button). Never muted, never
+ * autoplaying on its own; plays inline (no forced fullscreen); YouTube without cookies.
  */
-export function demoEmbedUrl(url: string): string {
+export function demoEmbedUrl(url: string, opts: { autoplay?: boolean } = {}): string {
   const raw = url.trim();
+  const play = opts.autoplay ? "&autoplay=1" : "";
   const yt = raw.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
-  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}?playsinline=1&rel=0&modestbranding=1`;
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}?playsinline=1&rel=0&modestbranding=1${play}`;
   let u: URL;
   try {
     u = new URL(raw);
@@ -21,6 +22,7 @@ export function demoEmbedUrl(url: string): string {
   if (/^player\.vimeo\.com$/i.test(u.hostname)) {
     for (const k of ["autoplay", "muted", "background", "loop", "autopause"]) u.searchParams.delete(k);
     u.searchParams.set("playsinline", "1");
+    if (opts.autoplay) u.searchParams.set("autoplay", "1");
     return u.toString();
   }
   return raw;
