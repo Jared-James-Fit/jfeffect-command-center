@@ -41,11 +41,13 @@ export function startLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(":00", "");
 }
 
-/** "Tmrw", "Wed 14": the day for the first of its rows in the next-up list. */
+/** "Tmrw", "Wed 14" this week, "Nov 5" further out: the day for the first of its rows in the next-up list. */
 export function shortDay(date: string, today: string): string {
   const d = new Date(`${date}T00:00:00`);
   const t = new Date(`${today}T00:00:00`);
-  if (Math.round((d.getTime() - t.getTime()) / 86_400_000) === 1) return "Tmrw";
+  const diff = Math.round((d.getTime() - t.getTime()) / 86_400_000);
+  if (diff === 1) return "Tmrw";
+  if (diff > 6) return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${d.getDate()}`;
 }
 

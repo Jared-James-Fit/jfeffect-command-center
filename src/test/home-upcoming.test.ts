@@ -91,7 +91,7 @@ describe("client home upcoming summary", () => {
 describe("Home schedule card: today in full, then what's coming", () => {
   const src = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
   it("is an agenda (today, then the next days), not a week strip", () => {
-    expect(src).toContain("buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS })");
+    expect(src).toContain("buildHomeAgenda(items, { today, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
     expect(src).toContain("agenda.today.map(");
     expect(src).toContain("agenda.upcoming.flatMap(");
     expect(src).not.toContain("<WeekStrip");

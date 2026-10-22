@@ -69,7 +69,7 @@ describe("every Home leads with its schedule", () => {
       expect(readFileSync(f, "utf8")).toContain("<NowLine />");
     }
     const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
-    expect(client).toContain("buildHomeAgenda(items, { today, maxUpcoming: HOME_UPCOMING_ROWS })");
+    expect(client).toContain("buildHomeAgenda(items, { today, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
   });
   it("the coach Home keeps its tools: session sheet, booking, Google toggle, live updates", () => {
     const src = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");

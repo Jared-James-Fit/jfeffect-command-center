@@ -55,6 +55,14 @@ export function WeekStrip({
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = localStartOfToday();
+  // A workout schedule, not a plain calendar: lead with the program's week.
+  const trainingWeek = (() => {
+    for (const d of days) {
+      const n = (byDate.get(toLocalISO(d)) ?? []).find((it) => it.week?.week_index)?.week?.week_index;
+      if (n) return `Week ${n}`;
+    }
+    return null;
+  })();
   return (
     <Card className="p-2">
       <div className="mb-1 flex items-center justify-between px-1">
@@ -67,6 +75,7 @@ export function WeekStrip({
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-xs font-semibold text-muted-foreground">
+          {trainingWeek && <span className="font-black text-foreground">{trainingWeek} · </span>}
           {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
           {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
         </div>
