@@ -52,7 +52,7 @@ export async function runLessonReminders(admin: any, deps: Deps, nowMs: number =
     const r = await deps.sendWebPushToUser(
       admin,
       uid,
-      { title: push.title, body: push.body, url: "/admin/community#tab=daily", tag: "lesson-review", data: { kind: "lesson_review", ids: fresh.map((r) => r.id) } },
+      { title: push.title, body: push.body, url: "/admin/community#tab=posts", tag: "lesson-review", data: { kind: "lesson_review", ids: fresh.map((r) => r.id) } },
       { category: "community", eventKey: `lesson_review:${key}:${uid}` },
     );
     sent += r.sent;

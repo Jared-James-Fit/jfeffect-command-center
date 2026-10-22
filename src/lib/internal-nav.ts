@@ -89,7 +89,10 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin", "coach", "assistant_coach"] },
   { to: "/admin/community", label: "Crew", icon: UsersRound, group: "Messages",
     visibleTo: ["admin", "coach"],
-    keywords: ["crew", "community", "league", "leaderboard", "shared workouts", "feed", "photos", "reactions", "coach recognition"] },
+    keywords: ["crew", "community", "shared workouts", "feed", "photos", "reactions", "coach recognition", "post scores", "insights", "lessons", "birthday posts"] },
+  { to: "/admin/league", label: "League", icon: Trophy, group: "Messages",
+    visibleTo: ["admin", "coach"],
+    keywords: ["league", "leaderboard", "standings", "crew goal", "hall of strength", "final-week boost"] },
   { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Messages",
     visibleTo: ["admin"], section: "Chat Assets" },
   { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Messages",
@@ -289,15 +292,15 @@ const REGISTRY: Entry[] = [
 /**
  * Every staff account's phone bar (admin, coach), laid out like the client
  * app: plain tabs with Crew as the raised centre button, named the same as the
- * clients' (the league, the feed, daily and birthday posts, and the tools to
- * run them). More opens from the header.
+ * clients' (the feed, the posts that go out on their own, insights), and the
+ * League on its trophy. More opens from the header.
  */
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Contact },
   { to: "/admin/community", label: "Crew", icon: UsersRound, featured: true,
-    // the satellite on Crew's button: straight to the League tab
-    shortcut: { to: "/admin/community", hash: "tab=league", label: "League", icon: Trophy } },
+    // the satellite on Crew's button: the League, its own page
+    shortcut: { to: "/admin/league", hash: "", label: "League", icon: Trophy } },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];

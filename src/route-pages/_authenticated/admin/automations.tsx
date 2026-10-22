@@ -185,19 +185,19 @@ export function AutomationsHub() {
             note={data?.nutritionOn === false ? "Off — the form is switched off" : "Turn off by switching the form off in Forms"} />
           <Row icon={CreditCard} tone="bg-violet-500/15 text-violet-500" title="Payment setup reminders" to="/admin/clients"
             when="Chat reminders on day 1, 6 and 12 after a payment link until they pay." note="Pause per sale from the client's Sales tab" />
-          <Row icon={Cake} tone="bg-violet-500/15 text-violet-500" title="Birthday message" to="/admin/community" hash="tab=birthdays"
+          <Row icon={Cake} tone="bg-violet-500/15 text-violet-500" title="Birthday message" to="/admin/community" hash="tab=posts"
             when="Drafted the night before. Nothing sends until you approve it." note="You approve each one" />
         </Section>
 
         <Section title="Community posts" hint="Posted to the community feed as you.">
-          <Row icon={Megaphone} tone="bg-amber-500/15 text-amber-500" title="Coach posts" to="/admin/community" hash="tab=daily"
+          <Row icon={Megaphone} tone="bg-amber-500/15 text-amber-500" title="Coach posts" to="/admin/community" hash="tab=posts"
             when="Lessons Mon · Tue · Thu · Fri · Sat (Sat: technique fixes) · Wed Wins · Sun Recap. Lessons wait for your OK unless you let them run."
             on={series.data ? !series.data.paused : undefined}
             onToggle={(v) => seriesAction.mutate({ kind: "pause", paused: !v }, {
               onSuccess: () => toast.success(v ? "Coach posts back on" : "Coach posts paused"),
               onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
             })} />
-          <Row icon={Cake} tone="bg-amber-500/15 text-amber-500" title="Birthday post" to="/admin/community" hash="tab=birthdays"
+          <Row icon={Cake} tone="bg-amber-500/15 text-amber-500" title="Birthday post" to="/admin/community" hash="tab=posts"
             when="A birthday shout-out at 8am their time, after you approve the draft." note="You approve each one" />
         </Section>
 

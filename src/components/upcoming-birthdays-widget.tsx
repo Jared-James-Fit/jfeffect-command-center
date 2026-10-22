@@ -59,7 +59,8 @@ function computeBirthdayInfo(dob: string, ref: Date = new Date()) {
 
 const UPCOMING_DAYS_DEFAULT = 30;
 
-export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT }: { windowDays?: number } = {}) {
+/** `hideWhenEmpty`: nothing at all (not an empty card) when nobody's birthday is near. */
+export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT, hideWhenEmpty = false }: { windowDays?: number; hideWhenEmpty?: boolean } = {}) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [editorClientId, setEditorClientId] = useState<string | null>(null);
@@ -243,6 +244,7 @@ export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT }: 
   const editorRow = rows.find((r) => r.id === editorClientId) ?? null;
   const previewRow = rows.find((r) => r.id === previewClientId) ?? null;
 
+  if (hideWhenEmpty && rows.length === 0) return null;
   return (
     <Card className="border-border bg-card p-6">
       <div className="mb-4 flex items-center justify-between">

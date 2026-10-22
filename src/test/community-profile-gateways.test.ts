@@ -38,12 +38,11 @@ describe("ways into a profile (Instagram, TikTok, Strava)", () => {
     // a page with ‹ back to the feed, and the app's ☰ (Instagram's profile menu)
     expect(screen).toContain('const youAsPage = scope.kind === "you";');
     expect(screen).toContain('<BarButton label="More" onClick={openAppMore} data-crew-more>');
-    const pv = read("src/components/community/profile-view.tsx");
-    expect(pv).toContain('aria-label="Your profile"');
-    expect(pv).toContain('<span className="max-[359px]:sr-only">You</span>');
+    // the coach's Crew page: the same photo button, on the feed (where profiles live)
     const hub = read("src/components/community/admin-community-hub.tsx");
-    expect(hub).toContain("<MyProfileButton");
-    expect(hub).toContain("window.setTimeout(() => openCommunityPerson(id), 0);");
+    expect(hub).toContain('label="Your profile"');
+    expect(hub).toContain("<MyTabPhoto size={27} />");
+    expect(hub).toContain("if (id) onFeed(() => openCommunityPerson(id));");
   });
 
   it("sends your own id to your own profile (edit photo and bio), anyone else's to theirs", () => {

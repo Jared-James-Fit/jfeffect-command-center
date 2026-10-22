@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { groupReplies, lastLookedLabel, whenLabel } from "@/components/community/admin-community-hub";
+import { groupReplies, hubTabCounts, hubTabFromHash, lastLookedLabel, whenLabel } from "@/components/community/admin-community-hub";
+import type { CommunityPulse } from "@/lib/community.queries";
 
 const read = (f: string) => readFileSync(f, "utf8");
 const sql = read("supabase/migrations/20261018090000_community_admin_pulse.sql");
@@ -8,28 +9,68 @@ const hub = read("src/components/community/admin-community-hub.tsx");
 const dash = read("src/routes/_authenticated/admin/index.tsx");
 
 describe("the coach's community, in one place", () => {
-  it("the Crew page is the hub: Feed / Posts / League / Birthdays, opening on the Feed like the clients', what needs you, and + Post", () => {
+  it("the Crew page is one row (+, Feed · Posts · Insights, the heart, your photo), opening on the Feed like the clients'", () => {
     expect(read("src/routes/_authenticated/admin/community.tsx")).toContain("component: AdminCommunityHub,");
-    // the coach's order: Feed, Posts, League, Birthdays
-    expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "daily", label: "Posts" },\n  { key: "league", label: "League" },\n  { key: "birthdays", label: "Birthdays" },');
-    expect(hub).toContain('<h1 className="text-[22px] font-black tracking-tight">Crew</h1>');
-    expect(hub).toContain('{ key: "daily", label: "Posts" }');
-    expect(hub).toContain('{ key: "birthdays", label: "Birthdays" }');
-    expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
-    // the week at a glance heads the feed; anything waiting shows on every other tab
-    expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");
-    expect(hub).toContain('{tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}');
-    // the Feed is the default (links to a post land there); #tab=league opens the League,
-    // and the tab is kept in the hash so Back (e.g. from Athlete Records) returns to it
-    expect(hub).toContain('if (/tab=league/.test(h) || /rankings/.test(h)) return "league";\n  return "feed";');
-    expect(hub).toContain('void navigate({ to: ".", hash: t === "feed" ? "" : `tab=${t}`, replace: true, resetScroll: false });');
-    // the hash drives the tab while you're here (the bar's League shortcut, Crew's own button)
-    expect(hub).toContain("setPicked(tabFromHash(`#${routeHash}`));");
+    // the coach's order: Feed, Posts, Insights (the League is its own page now)
+    expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "posts", label: "Posts" },\n  { key: "insights", label: "Insights" },');
+    expect(hub).not.toContain("StaffLeagueTab");
+    expect(hub).not.toContain("<h1");
+    expect(hub).toContain('<BarButton label="Write a post" onClick={() => setWriting(true)} data-crew-write>');
+    expect(hub).toContain('<ActivityHeart onOpen={() => onFeed(openCrewActivity)} />');
+    // the Feed: only what's waiting on you, then the feed
+    expect(hub).toContain("{!viewOnly && <NeedsYou onGo={setTab} />}");
     expect(hub).toContain("<CommunityScreen hideTabs />");
-    expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} />");
+    expect(hub).toContain("if (!any) return null;");
+    // Posts: what's next, lessons, the daily series, birthdays (a draft to review first)
+    expect(hub).toContain("<PostsTab birthdayFirst={(pulse?.birthday_review ?? 0) > 0} />");
+    expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} hideWhenEmpty />");
+    // Insights: the week in numbers, then each post's score
+    expect(hub).toContain("<WeekCard />\n            <PostScoreBoard />");
+    // the tab is kept in the hash so Back returns to it; Crew's own button (no hash) is the Feed
+    expect(hub).toContain('void navigate({ to: ".", hash: t === "feed" ? "" : `tab=${t}`, replace: true, resetScroll: false });');
+    expect(hub).toContain("const t = hubTabFromHash(`#${routeHash}`);");
+    // old League links go to the League page
+    expect(hub).toContain('if (t === "league") void navigate({ to: "/admin/league", replace: true });');
+    expect(read("src/routes/_authenticated/admin/league.tsx")).toContain("component: AdminLeaguePage,");
+    expect(read("src/routes/_authenticated/admin/athlete-records.tsx")).toContain('backTo="/admin/league" backLabel="League"');
     expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
+    // every daily series starts closed (a full Recap preview opening on its own tripled the page)
+    expect(read("src/components/community/coach-weekly-posts.tsx")).toContain("const [open, setOpen] = useState<DailySeries | null>(null);");
+  });
+  it("reads a link's tab: old Daily / Birthdays links open Posts, old League links the League page", () => {
+    expect(hubTabFromHash("")).toBe("feed");
+    expect(hubTabFromHash("#post=abc")).toBe("feed");
+    expect(hubTabFromHash("#you")).toBe("feed");
+    expect(hubTabFromHash("#tab=posts")).toBe("posts");
+    expect(hubTabFromHash("#tab=daily")).toBe("posts");
+    expect(hubTabFromHash("#tab=birthdays")).toBe("posts");
+    expect(hubTabFromHash("#birthday=6f9619ff-8b86-d011-b42d-00cf4fc964ff")).toBe("posts");
+    expect(hubTabFromHash("#tab=insights")).toBe("insights");
+    expect(hubTabFromHash("#tab=league")).toBe("league");
+    expect(hubTabFromHash("#rankings")).toBe("league");
+  });
+  it("a tab shows a dot only for what's waiting there", () => {
+    const base = { to_reply: [], waiting_props: 0, lessons_review: 0, birthday_review: 0 } as unknown as CommunityPulse;
+    expect(hubTabCounts(undefined)).toEqual({ feed: 0, posts: 0, insights: 0 });
+    expect(hubTabCounts(base)).toEqual({ feed: 0, posts: 0, insights: 0 });
+    const replies = [
+      { post_id: "a", comment_id: "1", created_at: "", body: "x", name: "Fionna", avatar_url: null },
+      { post_id: "a", comment_id: "2", created_at: "", body: "y", name: "Alyssa", avatar_url: null },
+    ];
+    // two comments on one post is one reply to make
+    expect(hubTabCounts({ ...base, to_reply: replies, waiting_props: 2 }).feed).toBe(3);
+    expect(hubTabCounts({ ...base, lessons_review: 2, birthday_review: 1 }).posts).toBe(3);
+  });
+  it("the League is its own page behind the trophy on Crew's button", () => {
+    const nav = read("src/lib/internal-nav.ts");
+    expect(nav).toContain('shortcut: { to: "/admin/league", hash: "", label: "League", icon: Trophy } },');
+    expect(read("src/components/app-shell.tsx")).toContain("hash={shortcut.hash || undefined}");
+    expect(read("src/components/community/admin-league-page.tsx")).toContain("<StaffLeagueTab tools={!viewOnly} />");
+    // findable in the sidebar and the search
+    expect(nav).toContain('{ to: "/admin/league", label: "League", icon: Trophy, group: "Messages",');
+    expect(read("src/lib/admin-route-registry.ts")).toContain('{ id: "league", label: "League", to: "/admin/league",');
   });
   it("the dashboard has no community card: it's one tap away on the Crew button (a birthday draft to approve still shows)", () => {
     expect(dash).not.toContain("CommunityPulseCard");

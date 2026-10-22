@@ -253,13 +253,13 @@ describe("the finance phone bar: Home, Money, Crew (raised), Clients, Tasks", ()
 
   it("the League is the crew's boards and feed, without the coach's queues and tools", () => {
     const hub = read("src/components/community/admin-community-hub.tsx");
-    expect(hub).toContain('const VIEW_TABS: HubTab[] = ["feed", "league"];');
-    expect(hub).toContain("{tabs.length > 1 && <div");
-    expect(hub).toContain('const tab = tabs.some((t) => t.key === picked) ? picked : "feed";');
-    expect(hub).toContain('{!viewOnly && <div className="flex items-center gap-1.5">');
-    expect(hub).toContain("<StaffLeagueTab tools={!viewOnly} />");
-    expect(hub).toContain("{!viewOnly && <PulsePanel onGo={setTab} />}");
-    expect(hub).toContain('{tab !== "feed" && !viewOnly && <NeedsYouStrip onGo={setTab} />}');
+    // the feed alone: no tabs, no + or queues
+    expect(hub).toContain('const tab: HubTab = viewOnly ? "feed" : picked;');
+    expect(hub).toContain("{!viewOnly && (\n        <div className=\"sticky top-0");
+    expect(hub).toContain("{!viewOnly && <NeedsYou onGo={setTab} />}");
+    expect(hub).toContain("useCommunityPulse(!viewOnly)");
+    // the League page (the trophy on the Crew button): the boards, without the tools
+    expect(read("src/components/community/admin-league-page.tsx")).toContain("<StaffLeagueTab tools={!viewOnly} />");
     expect(read("src/components/community/staff-league-board.tsx")).toContain("{tools && <LeagueTools />}");
     // A count it can never clear would sit on the button for good.
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('if (!viewOnly && community?.enabled && community.unseen > 0) map["/admin/community"]');
