@@ -36,6 +36,7 @@ export function invalidatePtSessionCaches(qc: QueryClient, clientId?: string | n
   qc.invalidateQueries({ queryKey: ["portal-appointments"] });
   qc.invalidateQueries({ queryKey: ["portal-appt-pt-sessions"] });
   qc.invalidateQueries({ queryKey: ["my-sessions"] });
+  qc.invalidateQueries({ queryKey: ["pt-session-coach-notes"] });
   if (clientId) {
     qc.invalidateQueries({ queryKey: ["client", clientId] });
     qc.invalidateQueries({ queryKey: ["client-purchases", clientId] });
