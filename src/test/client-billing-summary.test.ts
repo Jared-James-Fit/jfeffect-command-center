@@ -37,18 +37,40 @@ describe("a client's balance in real dollars", () => {
     expect(clientTaxRate([pkg1, pkg2])).toBeCloseTo(0.05, 6);
   });
 
-  it("shows Marc owing $756: $336 left on package 2 and 10 sessions not billed", () => {
+  it("shows Marc owing $1,008: $336 left on package 2 and his next 16 ($672), which his training started", () => {
     const s = buildBillingSummary({ sales: [pkg1, pkg2], ledger, balance, events });
     expect(s.taxIncluded).toBe(true);
-    expect(s.owedCents).toBe(75600);
+    expect(s.owedCents).toBe(100800);
     expect(s.paidCents).toBe(117600);
     expect(s.sessions).toEqual({ bought: 32, used: 42, booked: 10 });
     expect(s.lines).toEqual([
-      { kind: "sale", id: "p2", name: "Personal Training — 16 Sessions / 4 Weeks", leftCents: 33600, paymentsMade: 2, paymentsTotal: 4, nextPaymentCents: 16800, nextDate: "2026-10-30", pastDue: false },
-      { kind: "unbilled", sessions: 10, from: "2026-10-05", to: "2026-10-20", eachCents: 4200, totalCents: 42000, booked: 10, bookedFrom: "2026-10-21", bookedTo: "2026-11-06" },
+      { kind: "sale", id: "p2", name: "Personal Training — 16 Sessions / 4 Weeks", leftCents: 33600, paymentsMade: 2, paymentsTotal: 4, nextPaymentCents: 16800, nextDate: "2026-10-30", pastDue: false, from: null, to: null },
+      {
+        kind: "renewal", fromSaleId: "p2", name: "Personal Training — 16 Sessions / 4 Weeks", size: 16, count: 1,
+        eachCents: 67200, priceCents: 64000, totalCents: 67200, trained: 10, trainedFrom: "2026-10-05", trainedTo: "2026-10-20",
+        bookedIn: 6, bookedAfter: 4, bookedAfterFrom: "2026-11-02", bookedAfterTo: "2026-11-06",
+      },
     ]);
     expect(s.waiting).toEqual([]);
     expect(s.next).toEqual({ cents: 16800, date: "2026-10-30", name: "Personal Training — 16 Sessions / 4 Weeks" });
+  });
+
+  it("once the renewal is added it's a sale like any other, owed while it's trained on", () => {
+    const pkg3 = { id: "p3", offer_name: "Personal Training — 16 Sessions / 4 Weeks", payment_status: "Unpaid", is_recurring: false,
+      contract_value_cents: 64000, installment_amount: 160, number_of_payments: 4, currency: "CAD", amount_paid_cents: 0, sessions_purchased: 16, purchased_at: "2026-10-22" };
+    const after = [
+      ...events.filter((e) => !(e.event_type === "used") && !["2026-10-21", "2026-10-23", "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-30"].includes(e.effective_date)),
+    ];
+    const s = buildBillingSummary({
+      sales: [pkg1, pkg2, pkg3], ledger,
+      balance: [...balance, { purchase_id: "p3", granted: 16, used: 10, reserved: 6, remaining: 0 }],
+      events: after,
+    });
+    expect(s.owedCents).toBe(33600 + 67200);
+    expect(s.waiting).toEqual([]);
+    expect(s.lines.map((l) => l.kind)).toEqual(["sale", "sale", "renewal"]);
+    // Only bookings run past it now: a heads-up, not owed.
+    expect(s.lines[2]).toMatchObject({ kind: "renewal", count: 0, totalCents: 0, bookedAfter: 4 });
   });
 
   it("is all paid up when nothing is left and no session is past what was bought", () => {

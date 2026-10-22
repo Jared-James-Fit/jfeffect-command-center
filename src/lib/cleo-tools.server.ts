@@ -391,10 +391,12 @@ export function cleoReadTools(ctx: ToolCtx) {
         const list = rows<any>(res as any, "purchases");
         if (!list.length) return `${clientName(c)} has no purchases.`;
         // Sessions trained beyond what was bought (held bookings count as spoken for).
-        const ev = rows<any>(await db.from("session_ledger_events").select("event_type, session_count").eq("client_id", client_id) as any, "session events");
+        const ev = rows<any>(await db.from("session_ledger_events").select("event_type, session_count, purchase_id").eq("client_id", client_id) as any, "session events");
         const net = ev.reduce((sum, e) => sum + Number(e.session_count ?? 0), 0);
         const holds = ev.filter((e) => e.event_type === "reserved" || e.event_type === "released").reduce((sum, e) => sum + Number(e.session_count ?? 0), 0);
-        const owed = clientOwed(list, Math.max(0, -(net + Math.max(0, -holds))));
+        // Bookings no package had room for.
+        const looseHolds = Math.max(0, -ev.filter((e) => !e.purchase_id && (e.event_type === "reserved" || e.event_type === "released")).reduce((sum, e) => sum + Number(e.session_count ?? 0), 0));
+        const owed = clientOwed(list, Math.max(0, -(net + Math.max(0, -holds))), looseHolds);
         const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
         // The Purchases tab leads with the total tax included; say the same number.
         const rate = clientTaxRate(list);
@@ -405,7 +407,9 @@ export function cleoReadTools(ctx: ToolCtx) {
             const left = p.amount_outstanding_cents != null ? dollars(Number(p.amount_outstanding_cents)) : "?";
             return `- ${p.offer_name ?? "Purchase"} (purchase id ${p.id}) | ${p.payment_status ?? "?"} | total ${money(p.full_payable_amount)} | paid ${money(p.amount_paid)} | outstanding ${left} | bought ${String(p.purchased_at ?? "?").slice(0, 10)}${p.next_billing_date ? ` | next billing ${p.next_billing_date}` : ""}`;
           }),
-          `Owes in total: ${withTax}${dollars(owed.totalCents)} before tax (${dollars(owed.salesCents)} left on purchases${owed.unbilledSessions > 0 ? `, ${owed.unbilledSessions} sessions trained beyond what was bought${owed.unbilledCents > 0 ? ` = ${dollars(owed.unbilledCents)} at ${dollars(owed.sessionPriceCents ?? 0)} each` : ""}` : ""}).`,
+          `Owes in total: ${withTax}${dollars(owed.totalCents)} before tax (${dollars(owed.salesCents)} left on purchases${owed.renewal && owed.renewal.count > 0
+            ? `, plus a renewal: ${owed.unbilledSessions} sessions trained past their last package started their next ${owed.renewal.count > 1 ? `${owed.renewal.count} packages` : owed.renewal.size} ("${owed.renewal.name}", ${dollars(owed.renewal.priceCents)} each). Packages renew in their own size; never bill sessions one by one`
+            : owed.unbilledSessions > 0 ? `, ${owed.unbilledSessions} sessions trained past what was bought, with no priced package to renew` : ""}).`,
         ].join("\n");
       }),
     }),

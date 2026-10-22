@@ -104,7 +104,18 @@ function money(cents: number, currency: string): string {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(cents / 100);
 }
 
-export function saleMoney(sale: MoneySale, ledger: MoneyLedgerRow[] = [], clientRate: number | null = null): SaleMoney {
+/**
+ * `sessionsUsed`: sessions already trained on this sale. A package the client
+ * is training on is owed even before its first payment (a renewal they're
+ * financing), so it's never "waiting".
+ */
+export function saleMoney(
+  sale: MoneySale,
+  ledger: MoneyLedgerRow[] = [],
+  clientRate: number | null = null,
+  opts: { sessionsUsed?: number | null } = {},
+): SaleMoney {
+  const inUse = Number(opts.sessionsUsed ?? 0) > 0;
   const d = resolvePaymentDisplay(sale);
   const currency = d.currency;
   const status = String(sale.payment_status ?? "").trim().toLowerCase();
@@ -161,7 +172,7 @@ export function saleMoney(sale: MoneySale, ledger: MoneyLedgerRow[] = [], client
   // A set price, paid at once or over a plan.
   const owedBeforeTax = saleOwedCents(sale);
   const ended = status === "voided" || status === "refunded" || status === "cancelled" || status === "expired";
-  const nothingPaid = paidGross <= 0;
+  const nothingPaid = paidGross <= 0 && !inUse;
   const state: SaleState =
     ended ? "ended"
     : nothingPaid && WAITING.has(status) ? "waiting"

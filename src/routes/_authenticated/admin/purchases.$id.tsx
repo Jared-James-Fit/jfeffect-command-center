@@ -74,7 +74,11 @@ function PurchaseDetail() {
       .order("created_at", { ascending: false })).data ?? [],
   });
 
-  const money = useMemo(() => (sale ? saleMoney(sale, ledger, clientTaxRate(clientSales)) : null), [sale, ledger, clientSales]);
+  const sessions = sessionBalance.find((b: any) => b.purchase_id === id);
+  const money = useMemo(
+    () => (sale ? saleMoney(sale, ledger, clientTaxRate(clientSales), { sessionsUsed: sessions?.used }) : null),
+    [sale, ledger, clientSales, sessions?.used],
+  );
   const payments = useMemo(() => salePayments(ledger), [ledger]);
 
   if (!sale || !money) return <div className="p-10 text-muted-foreground">Loading…</div>;
@@ -110,7 +114,7 @@ function PurchaseDetail() {
             money={money}
             status={saleStatus(sale, money)}
             badges={live && <AccessBadge raw={sale} />}
-            sessions={sessionBalance.find((b: any) => b.purchase_id === id)}
+            sessions={sessions}
             payments={payments}
             linkName={false}
             paymentsOpen
@@ -120,7 +124,7 @@ function PurchaseDetail() {
           <div className="flex flex-wrap gap-2">
             {live && money.kind !== "free" && money.state !== "ended" && <Button variant="outline" size="sm" className="h-10" onClick={() => setDialog("pay")}><Banknote className="mr-2 h-4 w-4" />Record a payment</Button>}
             {live && money.paidCents > 0 && <Button variant="outline" size="sm" className="h-10" onClick={() => setDialog("refund")}><Undo2 className="mr-2 h-4 w-4" />Record a refund</Button>}
-            {live && Number(sale.sessions_purchased ?? 0) > 0 && <Button variant="outline" size="sm" className="h-10" onClick={() => setDialog("sessions")}><PlusCircle className="mr-2 h-4 w-4" />Add sessions</Button>}
+            {live && Number(sale.sessions_purchased ?? 0) > 0 && <Button variant="outline" size="sm" className="h-10" onClick={() => setDialog("sessions")}><PlusCircle className="mr-2 h-4 w-4" />Add free sessions</Button>}
             <Button variant="outline" size="sm" className="h-10" onClick={() => void downloadPurchasePdf(sale, clientName)}><Download className="mr-2 h-4 w-4" />PDF</Button>
             <Button variant="ghost" size="sm" className="h-10 text-muted-foreground" onClick={() => void archive()}>
               {live ? <><Archive className="mr-2 h-4 w-4" />Archive sale</> : <><ArchiveRestore className="mr-2 h-4 w-4" />Restore sale</>}

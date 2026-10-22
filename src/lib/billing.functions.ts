@@ -259,6 +259,32 @@ export const getClientBillingOverview = createServerFn({ method: "POST" })
     };
   });
 
+// -------- Renew a session package --------
+// Training past a package means the client is on their next one: a copy of
+// it (same sessions, price and plan) holding its sessions from the start, so
+// what they've trained and booked moves onto it (renew_session_package).
+const Renew = z.object({ purchase_id: z.string().uuid() });
+
+export const renewSessionPackage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => Renew.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: id, error } = await supabase.rpc("renew_session_package", { _purchase_id: data.purchase_id });
+    if (error) throw new Error(error.message);
+    const { data: pr } = await supabase.from("purchase_records").select("client_id").eq("id", id).maybeSingle();
+    await logAudit(supabase, {
+      clientId: pr?.client_id ?? null,
+      actorUserId: userId,
+      action: "package_renewed",
+      recordType: "purchase_records",
+      recordId: id,
+      before: { renewed_from: data.purchase_id },
+    });
+    return { ok: true, id: id as string };
+  });
+
 // -------- Add sessions to a package by hand --------
 const GrantSessions = z.object({
   purchase_id: z.string().uuid(),

@@ -30,7 +30,9 @@ import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { deviceTodayISO } from "@/lib/schedule-time";
 import { useAuth } from "@/lib/auth";
 import { listenChannel } from "@/lib/realtime-channel";
-import { sessionPriceCents } from "@/lib/client-owed";
+import { packageRenewal } from "@/lib/client-owed";
+import { clientTaxRate } from "@/lib/client-billing-summary";
+import { withTax } from "@/lib/sale-money";
 
 const ADJUST_REASONS = ["Bonus session", "Complimentary", "Correction", "Refund / manual adjustment", "No-show deduction", "Other"];
 
@@ -40,14 +42,35 @@ function todayISO() {
 }
 
 /** Sessions trained beyond what was bought: what they're worth at the latest package's price. */
-function UnbilledNote({ sessions, priceCents }: { sessions: number; priceCents: number | null }) {
+/**
+ * Sessions past what's paid for. A package renews in its own size, so they
+ * start the client's next package (Marc: the next 16), not a per-session tab.
+ */
+function RenewalNote({ purchases, trained, booked }: { purchases: any[]; trained: number; booked: number }) {
   const money = (cents: number) => new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD" }).format(cents / 100);
+  const r = packageRenewal(purchases, trained, booked);
+  const plural = (n: number) => `${n} session${n === 1 ? "" : "s"}`;
+  if (!r) {
+    if (trained <= 0) return null;
+    return (
+      <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
+        <strong>{plural(trained)} not paid for yet</strong>. Add a sale with sessions so they come off.
+      </p>
+    );
+  }
+  if (r.count === 0 && r.bookedAfter === 0) return null;
+  const price = withTax(r.priceCents, clientTaxRate(purchases));
   return (
-    <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground">
-      <strong>{sessions} session{sessions === 1 ? "" : "s"} not paid for yet</strong>
-      {priceCents
-        ? <> · {money(sessions * priceCents)} before tax at {money(priceCents)} each (latest package price). Bill them on the next package so they come off.</>
-        : <>. Add a sale with sessions so they come off.</>}
+    <p className={`rounded-md border px-3 py-2 text-xs text-foreground ${r.count > 0 ? "border-warning/40 bg-warning/10" : "border-border bg-secondary/20"}`}>
+      {r.count > 0 ? (
+        <>
+          <strong>Renewal due: {r.name}</strong> · {plural(r.trained)} trained past the last package started the next {r.count > 1 ? `${r.count} packages` : r.size} ({money(price)} each). Add it from Billing and they move onto it.
+        </>
+      ) : (
+        <>
+          <strong>{plural(r.bookedAfter)} booked past what's paid for</strong> · the next {r.size} ({money(price)}) is due once the first is trained.
+        </>
+      )}
     </p>
   );
 }
@@ -177,6 +200,10 @@ export function ClientSessionsPanel({
     .sort((a, b) => (a.session_date + a.start_time).localeCompare(b.session_date + b.start_time));
   const needsReview = sessions.filter((s) => s.status === "Scheduled" && s.session_date < today);
   const summary = summarizeSessions(balance, adhoc, upcoming.length + needsReview.length);
+  // Bookings no package had room for (holds less their releases).
+  const looseHolds = Math.max(0, -adhoc
+    .filter((e) => e.event_type === "reserved" || e.event_type === "released")
+    .reduce((sum, e) => sum + Number(e.session_count ?? 0), 0));
   // Soonest upcoming first (what the coach acts on), then history newest first.
   const upcomingIds = new Set(upcoming.map((s) => s.id));
   const ordered = [...upcoming, ...sessions.filter((s) => !upcomingIds.has(s.id))];
@@ -206,7 +233,7 @@ export function ClientSessionsPanel({
         <p className="text-[11px] text-muted-foreground">
           Available to book: <strong className="text-foreground">{summary.available}</strong> (remaining minus scheduled).
         </p>
-        {summary.overdrawn > 0 && <UnbilledNote sessions={summary.overdrawn} priceCents={sessionPriceCents(purchases)} />}
+        <RenewalNote purchases={purchases} trained={summary.overdrawn} booked={looseHolds} />
 
         {isAdmin && (
           <div className="flex flex-wrap gap-2">

@@ -1,7 +1,8 @@
 /**
  * A client's balance the way a coach reads it: what they owe in real
  * dollars (GST included), broken into the payments still scheduled on each
- * sale and the sessions they've trained beyond what they've bought.
+ * sale and the renewal their training has started (a package renews in its
+ * own size: 16 past Marc's 16 is his next 16, at that package's price).
  *
  * Prices are stored before tax and payments include it. The rate comes from
  * what the client has actually paid (tax / paid before tax), per sale, else
@@ -10,7 +11,7 @@
  * Pure: callers pass the rows they already loaded.
  */
 import type { PurchaseInput } from "@/lib/payment-display";
-import { sessionPriceCents } from "@/lib/client-owed";
+import { packageRenewal } from "@/lib/client-owed";
 import { saleMoney, withTax } from "@/lib/sale-money";
 import { isUseReversal, summarizeSessions, type SessionBalanceRow } from "@/lib/sessions-inventory";
 
@@ -51,6 +52,9 @@ export type SaleOwedLine = {
   nextDate: string | null;
   /** A payment failed. */
   pastDue: boolean;
+  /** Its term, to tell two of the same package apart. */
+  from: string | null;
+  to: string | null;
 };
 
 /** A sale with nothing paid yet: a payment link or request is out. Not owed. */
@@ -62,6 +66,35 @@ export type WaitingLine = {
   since: string | null;
 };
 
+/**
+ * The renewal a client's training has started: their latest package again
+ * (same sessions, same price). `count` renewals are owed (sessions already
+ * trained need them); with count 0 only bookings run past the package, a
+ * heads-up that's not owed until the first of them is trained.
+ */
+export type RenewalLine = {
+  kind: "renewal";
+  /** The package to renew (Add renewal copies it). */
+  fromSaleId: string | null;
+  name: string;
+  size: number;
+  count: number;
+  /** One package, tax included when the rate is known. */
+  eachCents: number;
+  /** One package before tax. */
+  priceCents: number;
+  totalCents: number;
+  trained: number;
+  trainedFrom: string | null;
+  trainedTo: string | null;
+  /** Booked into the renewal(s) owed, and past even those. */
+  bookedIn: number;
+  bookedAfter: number;
+  bookedAfterFrom: string | null;
+  bookedAfterTo: string | null;
+};
+
+/** Sessions past what was bought when there's no priced package to renew. */
 export type UnbilledLine = {
   kind: "unbilled";
   sessions: number;
@@ -78,7 +111,7 @@ export type UnbilledLine = {
 
 export type BillingSummary = {
   owedCents: number;
-  lines: Array<SaleOwedLine | UnbilledLine>;
+  lines: Array<SaleOwedLine | RenewalLine | UnbilledLine>;
   /** Payment requests nothing has been paid on yet (not in owedCents). */
   waiting: WaitingLine[];
   /** The next scheduled charge across every sale. */
@@ -124,8 +157,9 @@ export function buildBillingSummary(input: {
   const waiting: WaitingLine[] = [];
   let next: BillingSummary["next"] = null;
 
+  const usedOn = new Map(input.balance.map((b) => [b.purchase_id, Number(b.used ?? 0)]));
   for (const s of sales) {
-    const m = saleMoney(s, input.ledger.filter((l) => l.purchase_id === s.id), rate);
+    const m = saleMoney(s, input.ledger.filter((l) => l.purchase_id === s.id), rate, { sessionsUsed: usedOn.get(s.id) });
     const name = s.offer_name ?? "Sale";
     if (m.next?.date && (m.state === "renews" || m.state === "left" || m.state === "past_due")) {
       if (!next || m.next.date < next.date) next = { cents: m.next.cents, date: m.next.date, name };
@@ -145,6 +179,8 @@ export function buildBillingSummary(input: {
       nextPaymentCents: m.next?.cents ?? null,
       nextDate: m.next?.date ?? null,
       pastDue: m.state === "past_due",
+      from: (s as { term_start_date?: string | null }).term_start_date ?? null,
+      to: (s as { term_end_date?: string | null }).term_end_date ?? null,
     });
   }
 
@@ -154,12 +190,32 @@ export function buildBillingSummary(input: {
   const loose = input.events.filter((e) => !e.purchase_id);
   const byDate = (a: BillingSessionEvent, b: BillingSessionEvent) => String(a.effective_date ?? "").localeCompare(String(b.effective_date ?? ""));
   const looseUsed = loose.filter((e) => e.event_type === "used" && !reversed.has(e.id) && n(e.session_count) < 0).sort(byDate);
-  const looseHolds = loose.filter((e) => e.event_type === "reserved" && !released.has(e.id));
+  const looseHolds = loose.filter((e) => e.event_type === "reserved" && !released.has(e.id)).sort(byDate);
   const summary = summarizeSessions(input.balance, loose as any);
   const over = summary.overdrawn;
-  if (over > 0) {
-    const price = sessionPriceCents(sales);
-    const each = price ? withTax(price, rate) : null;
+  const renewal = packageRenewal(sales, over, looseHolds.length);
+  if (renewal) {
+    const each = withTax(renewal.priceCents, rate);
+    const trainedSpan = span(looseUsed.slice(-over).map((e) => e.effective_date));
+    const afterSpan = span(looseHolds.slice(renewal.bookedIn).map((e) => e.effective_date));
+    lines.push({
+      kind: "renewal",
+      fromSaleId: renewal.fromSaleId,
+      name: renewal.name,
+      size: renewal.size,
+      count: renewal.count,
+      eachCents: each,
+      priceCents: renewal.priceCents,
+      totalCents: each * renewal.count,
+      trained: renewal.trained,
+      trainedFrom: trainedSpan.from,
+      trainedTo: trainedSpan.to,
+      bookedIn: renewal.bookedIn,
+      bookedAfter: renewal.bookedAfter,
+      bookedAfterFrom: afterSpan.from,
+      bookedAfterTo: afterSpan.to,
+    });
+  } else if (over > 0) {
     const usedSpan = span(looseUsed.slice(-over).map((e) => e.effective_date));
     const bookedSpan = span(looseHolds.map((e) => e.effective_date));
     lines.push({
@@ -167,8 +223,8 @@ export function buildBillingSummary(input: {
       sessions: over,
       from: usedSpan.from,
       to: usedSpan.to,
-      eachCents: each,
-      totalCents: each ? each * over : 0,
+      eachCents: null,
+      totalCents: 0,
       booked: looseHolds.length,
       bookedFrom: bookedSpan.from,
       bookedTo: bookedSpan.to,

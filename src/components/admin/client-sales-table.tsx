@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download, RefreshCw, Share2,
-  Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock, Banknote, Undo2, PlusCircle,
+  Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock, Banknote, Undo2, PlusCircle, Repeat,
 } from "lucide-react";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
@@ -21,15 +21,15 @@ import { toast } from "sonner";
 import { AddSaleDialog } from "@/components/clients/add-sale-dialog";
 import { TermDateEditor, downloadPurchasePdf } from "@/components/purchase-records-panel";
 import { sendPaymentLinkEmail } from "@/lib/payments.functions";
-import { getClientBillingOverview } from "@/lib/billing.functions";
+import { getClientBillingOverview, renewSessionPackage } from "@/lib/billing.functions";
 import {
   archivePurchaseRecord,
   restorePurchaseRecord,
   removeUnpaidPurchaseRecord,
 } from "@/lib/purchase-archive.functions";
-import { resolvePaymentDisplay } from "@/lib/payment-display";
+import { formatMoney, resolvePaymentDisplay } from "@/lib/payment-display";
 import { clientTaxRate } from "@/lib/client-billing-summary";
-import { saleMoney, salePayments, type PaymentRow, type SaleMoney } from "@/lib/sale-money";
+import { saleMoney, salePayments, withTax, type PaymentRow, type SaleMoney } from "@/lib/sale-money";
 import { AccessBadge, hasPaymentDestination, nextPaymentCell, saleStatus } from "@/components/admin/sale-row-parts";
 import { SaleCard } from "@/components/admin/sale-card";
 import { AddSessionsDialog, RecordPaymentDialog, RefundDialog, VoidPaymentDialog } from "@/components/admin/sale-payment-dialogs";
@@ -59,6 +59,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const [editingExpiry, setEditingExpiry] = useState<any | null>(null);
   const [dialog, setDialog] = useState<Open>(null);
   const sendFn = useServerFn(sendPaymentLinkEmail);
+  const renewFn = useServerFn(renewSessionPackage);
   const overviewFn = useServerFn(getClientBillingOverview);
 
   const { data: clientLite } = useQuery({
@@ -107,15 +108,23 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     });
     return visible.map((raw) => {
       const own = ledger.filter((l) => l.purchase_id === raw.id);
-      const money = saleMoney(raw, own, rate);
+      const money = saleMoney(raw, own, rate, { sessionsUsed: (sessionsBySale.get(raw.id) as any)?.used });
       return { raw, money, status: saleStatus(raw, money), payments: salePayments(own) };
     });
-  }, [records, billing, archiveFilter]);
+  }, [records, billing, archiveFilter, sessionsBySale]);
 
   const invalidate = () => {
     for (const key of [["client-purchases", clientId], ["client-billing", clientId], ["pt-balance", clientId]]) {
       qc.invalidateQueries({ queryKey: key });
     }
+  };
+  // Another of the same package: same sessions, price and plan, dates following on.
+  const renew = async (row: Row) => {
+    const { raw, money } = row;
+    const total = formatMoney(withTax(Math.round(resolvePaymentDisplay(raw).contractTotal * 100), money.rate) / 100, money.currency);
+    if (!window.confirm(`Add another ${raw.sessions_purchased} sessions of "${raw.offer_name ?? "this package"}" for ${total}? Sessions trained or booked past what's paid for move onto it.`)) return;
+    try { await renewFn({ data: { purchase_id: raw.id } }); toast.success("Renewal added"); invalidate(); qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] }); }
+    catch (e: any) { toast.error(e?.message ?? "Could not add the renewal"); }
   };
   const emailLink = async (id: string) => {
     try { const res: any = await sendFn({ data: { id } }); if (res?.sent) toast.success("Payment setup request emailed"); else toast.message(res?.reason ?? "Email skipped"); }
@@ -176,6 +185,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                     onRecordPayment={() => setDialog({ kind: "pay", row })}
                     onRefund={() => setDialog({ kind: "refund", row })}
                     onAddSessions={() => setDialog({ kind: "sessions", row })}
+                    onRenew={() => void renew(row)}
                     onEditDates={() => setEditingDates(raw)}
                     onSetExpiry={() => setEditingExpiry(raw)}
                     onEmailLink={() => emailLink(raw.id)}
@@ -215,9 +225,9 @@ function SaleNotes({ raw, waiting }: { raw: any; waiting: boolean }) {
   </div>;
 }
 
-function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessions, onEditDates, onSetExpiry, onEmailLink, onChanged }: {
+function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessions, onRenew, onEditDates, onSetExpiry, onEmailLink, onChanged }: {
   raw: any; money: SaleMoney; clientName?: string | null;
-  onRecordPayment: () => void; onRefund: () => void; onAddSessions: () => void;
+  onRecordPayment: () => void; onRefund: () => void; onAddSessions: () => void; onRenew: () => void;
   onEditDates: () => void; onSetExpiry: () => void; onEmailLink: () => void; onChanged: () => void;
 }) {
   const unpaid = !["Paid", "Active Subscription"].includes(String(raw.payment_status ?? "")) && money.state !== "ended" && money.kind !== "free";
@@ -288,7 +298,8 @@ function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessi
     <DropdownMenuContent align="end" className="w-64">
       {live && money.kind !== "free" && money.state !== "ended" && <DropdownMenuItem onSelect={onRecordPayment}><Banknote className="mr-2 h-3.5 w-3.5" />Record a payment</DropdownMenuItem>}
       {live && money.paidCents > 0 && <DropdownMenuItem onSelect={onRefund}><Undo2 className="mr-2 h-3.5 w-3.5" />Record a refund</DropdownMenuItem>}
-      {live && Number(raw.sessions_purchased ?? 0) > 0 && <DropdownMenuItem onSelect={onAddSessions}><PlusCircle className="mr-2 h-3.5 w-3.5" />Add sessions</DropdownMenuItem>}
+      {live && Number(raw.sessions_purchased ?? 0) > 0 && money.kind !== "free" && <DropdownMenuItem onSelect={onRenew}><Repeat className="mr-2 h-3.5 w-3.5" />Renew: another {raw.sessions_purchased} sessions</DropdownMenuItem>}
+      {live && Number(raw.sessions_purchased ?? 0) > 0 && <DropdownMenuItem onSelect={onAddSessions}><PlusCircle className="mr-2 h-3.5 w-3.5" />Add free sessions</DropdownMenuItem>}
       {live && <DropdownMenuItem onSelect={onEditDates}><Pencil className="mr-2 h-3.5 w-3.5" />{raw.term_start_date || raw.term_end_date ? "Edit dates" : "Set dates"}</DropdownMenuItem>}
       {live && unpaid && <>
         <DropdownMenuSeparator />
