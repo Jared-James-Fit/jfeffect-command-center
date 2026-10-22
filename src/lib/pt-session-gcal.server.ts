@@ -183,10 +183,9 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
             meetLink = meetLink || meetLinkOf(r.data);
             result.created++;
           }
-        } else if (
-          (row.status === "Cancelled" || row.status === "Rescheduled" || (row.status === "Missed" && !ended)) && eventId
-        ) {
-          // Off the calendar: a cancel, or a late cancel before it starts (the slot is free again).
+        } else if ((row.status === "Cancelled" || row.status === "Rescheduled" || row.status === "Missed") && !ended && eventId) {
+          // Off the calendar before it's over: a cancel or late cancel frees the slot. A session
+          // banked or changed after it ended stays in Google as history (it's the coach's own record).
           const r = await gapi("DELETE", eventPath(calendarId || resolveCalendar(client?.assigned_coach_id), eventId));
           if (!r.ok && r.status !== 404 && r.status !== 410) {
             throw new Error(r.data?.error?.message || `Google delete failed (${r.status})`);
@@ -195,7 +194,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
           meetLink = null; // the Meet went with the event; a restored session gets a new one
           result.removed++;
         }
-        // Completed / no-shows / old sessions keep whatever is in Google as history.
+        // Completed and past sessions keep whatever is in Google as history.
 
         const now = new Date().toISOString();
         const { data: done } = await admin
