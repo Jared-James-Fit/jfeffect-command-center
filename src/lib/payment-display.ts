@@ -135,7 +135,7 @@ function centsToMajor(cents: number | null | undefined, fallback = 0): number {
   return Math.round(cents) / 100;
 }
 
-function methodLabel(method?: string | null): string | null {
+export function methodLabel(method?: string | null): string | null {
   if (!method) return null;
   const m = method.toLowerCase();
   if (m === "stripe") return "Credit card (Stripe)";

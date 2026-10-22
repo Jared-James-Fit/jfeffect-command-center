@@ -9,8 +9,9 @@
  *
  * Pure: callers pass the rows they already loaded.
  */
-import { resolvePaymentDisplay, type PurchaseInput } from "@/lib/payment-display";
-import { saleOwedCents, sessionPriceCents } from "@/lib/client-owed";
+import type { PurchaseInput } from "@/lib/payment-display";
+import { sessionPriceCents } from "@/lib/client-owed";
+import { saleMoney, withTax } from "@/lib/sale-money";
 import { isUseReversal, summarizeSessions, type SessionBalanceRow } from "@/lib/sessions-inventory";
 
 export type BillingSale = PurchaseInput & {
@@ -48,6 +49,17 @@ export type SaleOwedLine = {
   paymentsTotal: number | null;
   nextPaymentCents: number | null;
   nextDate: string | null;
+  /** A payment failed. */
+  pastDue: boolean;
+};
+
+/** A sale with nothing paid yet: a payment link or request is out. Not owed. */
+export type WaitingLine = {
+  kind: "waiting";
+  id: string;
+  name: string;
+  cents: number;
+  since: string | null;
 };
 
 export type UnbilledLine = {
@@ -67,6 +79,10 @@ export type UnbilledLine = {
 export type BillingSummary = {
   owedCents: number;
   lines: Array<SaleOwedLine | UnbilledLine>;
+  /** Payment requests nothing has been paid on yet (not in owedCents). */
+  waiting: WaitingLine[];
+  /** The next scheduled charge across every sale. */
+  next: { cents: number | null; date: string; name: string } | null;
   /** True when every amount includes tax; false = before tax (rate unknown). */
   taxIncluded: boolean;
   /** Paid so far: what was charged (tax included), less refunds. */
@@ -76,13 +92,6 @@ export type BillingSummary = {
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 const PAID_TYPES = new Set(["payment", "deposit", "legacy_backfill"]);
-
-/** Tax as a share of the price, from what was paid on this sale. */
-function saleRate(s: BillingSale): number | null {
-  const tax = n(s.amount_tax_paid_cents);
-  const beforeTax = n(s.amount_paid_cents) - tax;
-  return tax > 0 && beforeTax > 0 ? tax / beforeTax : null;
-}
 
 /** The client's own rate across every taxed sale (GST 5%, HST 13–15%...). */
 export function clientTaxRate(sales: BillingSale[]): number | null {
@@ -98,8 +107,6 @@ export function clientTaxRate(sales: BillingSale[]): number | null {
   return tax > 0 && beforeTax > 0 ? tax / beforeTax : null;
 }
 
-const withTax = (cents: number, rate: number | null) => Math.round(cents * (1 + (rate ?? 0)));
-
 function span(dates: Array<string | null | undefined>): { from: string | null; to: string | null } {
   const ds = dates.filter((d): d is string => !!d).map((d) => d.slice(0, 10)).sort();
   return { from: ds[0] ?? null, to: ds[ds.length - 1] ?? null };
@@ -114,21 +121,30 @@ export function buildBillingSummary(input: {
   const sales = input.sales.filter((s) => !s.archived_at);
   const rate = clientTaxRate(sales);
   const lines: BillingSummary["lines"] = [];
+  const waiting: WaitingLine[] = [];
+  let next: BillingSummary["next"] = null;
 
   for (const s of sales) {
-    const left = saleOwedCents(s);
-    if (left <= 0) continue;
-    const r = saleRate(s) ?? rate;
-    const plan = resolvePaymentDisplay(s).installmentPlan;
+    const m = saleMoney(s, input.ledger.filter((l) => l.purchase_id === s.id), rate);
+    const name = s.offer_name ?? "Sale";
+    if (m.next?.date && (m.state === "renews" || m.state === "left" || m.state === "past_due")) {
+      if (!next || m.next.date < next.date) next = { cents: m.next.cents, date: m.next.date, name };
+    }
+    if (m.state === "waiting") {
+      waiting.push({ kind: "waiting", id: s.id, name, cents: m.leftCents, since: (s.purchased_at ?? s.created_at ?? null)?.slice(0, 10) ?? null });
+      continue;
+    }
+    if (m.leftCents <= 0) continue;
     lines.push({
       kind: "sale",
       id: s.id,
-      name: s.offer_name ?? "Sale",
-      leftCents: withTax(left, r),
-      paymentsMade: plan ? plan.paymentsMade : null,
-      paymentsTotal: plan ? plan.numberOfPayments : null,
-      nextPaymentCents: plan ? withTax(Math.round(plan.installmentAmount * 100), r) : null,
-      nextDate: s.next_billing_date ?? null,
+      name,
+      leftCents: m.leftCents,
+      paymentsMade: m.plan ? m.plan.made : null,
+      paymentsTotal: m.plan ? m.plan.total : null,
+      nextPaymentCents: m.next?.cents ?? null,
+      nextDate: m.next?.date ?? null,
+      pastDue: m.state === "past_due",
     });
   }
 
@@ -169,6 +185,8 @@ export function buildBillingSummary(input: {
   return {
     owedCents: lines.reduce((sum, l) => sum + (l.kind === "sale" ? l.leftCents : l.totalCents), 0),
     lines,
+    waiting,
+    next,
     taxIncluded: rate != null,
     paidCents,
     sessions: { bought: summary.purchased, used: summary.used, booked: summary.scheduled },
