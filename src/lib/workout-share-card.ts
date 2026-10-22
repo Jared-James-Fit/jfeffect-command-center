@@ -115,9 +115,9 @@ export function cameraLooks(d: Pick<ShareCardData, "isPr" | "exercises" | "volum
   return [...availableTemplates({ ...d, media: {} as ShareCardMedia }).filter((t) => t !== "sticker"), "plain"];
 }
 
-const INK = "#ffffff";
-const MUTED = "rgba(255,255,255,0.62)";
-const RED = "#ef3340";
+export const INK = "#ffffff";
+export const MUTED = "rgba(255,255,255,0.62)";
+export const RED = "#ef3340";
 const GOLD_FROM = "#fde68a";
 const GOLD_TO = "#f59e0b";
 const DISPLAY_FAMILY = `"Anton", "Impact", "Haettenschweiler", "Arial Narrow Bold", sans-serif`;
@@ -151,12 +151,12 @@ export function ensureDisplayFont(): Promise<void> {
   return fontPromise;
 }
 
-function display(size: number) {
+export function display(size: number) {
   return `400 ${size}px ${DISPLAY_FAMILY}`;
 }
 
 /** Shrink display text until it fits. Returns the size used. */
-function fitDisplay(ctx: Ctx, text: string, maxWidth: number, start: number, min = 40) {
+export function fitDisplay(ctx: Ctx, text: string, maxWidth: number, start: number, min = 40) {
   let size = start;
   ctx.font = display(size);
   while (size > min && ctx.measureText(text).width > maxWidth) {
@@ -166,7 +166,7 @@ function fitDisplay(ctx: Ctx, text: string, maxWidth: number, start: number, min
   return size;
 }
 
-function setSpacing(ctx: Ctx, px: number) {
+export function setSpacing(ctx: Ctx, px: number) {
   try {
     (ctx as unknown as { letterSpacing: string }).letterSpacing = `${px}px`;
   } catch {
@@ -210,7 +210,7 @@ function intrinsic(src: ShareCardMedia): { w: number; h: number } {
   };
 }
 
-function drawCover(ctx: Ctx, src: ShareCardMedia, W: number, H: number) {
+export function drawCover(ctx: Ctx, src: ShareCardMedia, W: number, H: number) {
   const { w, h } = intrinsic(src);
   const s = Math.max(W / w, H / h);
   ctx.drawImage(src, (W - w * s) / 2, (H - h * s) / 2, w * s, h * s);
@@ -223,7 +223,7 @@ function gold(ctx: Ctx, x: number, w: number) {
   return g;
 }
 
-function darkGlow(ctx: Ctx, W: number, H: number, tint: "red" | "gold") {
+export function darkGlow(ctx: Ctx, W: number, H: number, tint: "red" | "gold") {
   ctx.fillStyle = "#08080b";
   ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(W * 0.85, -60, 20, W * 0.85, -60, H * 0.95);
@@ -240,7 +240,7 @@ function darkGlow(ctx: Ctx, W: number, H: number, tint: "red" | "gold") {
 }
 
 /** Small brand mark + date. `y` is the baseline. */
-function brandRow(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: number, W: number, dateLabel: string | null, alpha = 0.72) {
+export function brandRow(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: number, W: number, dateLabel: string | null, alpha = 0.72) {
   const size = 36;
   ctx.save();
   ctx.textBaseline = "alphabetic";

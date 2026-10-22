@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
+import { Archive, ArchiveRestore, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -12,18 +12,22 @@ import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemov
 import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
+import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
 
 /**
  * The "…" on a post, Instagram-style. Your own post: Edit, Archive (only you
  * see it, in Archived on your profile, until you restore it) or Delete.
  * Coaches can also remove anyone's post and edit coach notes.
  * Named on someone else's post: Remove me (off the post and your profile).
+ * Coaches, on any post: Share to Instagram (never in View as client).
  * `onGone` runs after an archive or delete (e.g. to close the detail view).
  */
 export function PostActions({ post, viewerIsStaff, onGone, className }: { post: CommunityPost; viewerIsStaff: boolean; onGone?: () => void; className?: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [sticker, setSticker] = useState(false);
+  // mounted on first open (a feed of posts never runs it for nothing), kept for its closing slide
+  const [ig, setIg] = useState<boolean | null>(null);
   const del = useDeletePost();
   const archive = useArchivePost();
   const updateNote = useUpdateNote();
@@ -44,7 +48,8 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
   const canEdit = mine || (isNote && viewerIsStaff);
   const canDelete = mine || viewerIsStaff;
   const onIt = !mine && !!me && (post.mentions ?? []).some((m) => m.user_id === me);
-  if (!canEdit && !canDelete && !onIt) return null;
+  const canInstagram = viewerIsStaff && !isImpersonating && !post.story;
+  if (!canEdit && !canDelete && !onIt && !canInstagram) return null;
 
   const setArchived = (on: boolean) =>
     archive.mutate(
@@ -81,6 +86,14 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[180px]">
+          {canInstagram && (
+            <>
+              <DropdownMenuItem onSelect={act(() => setIg(true))} data-share-instagram>
+                <Instagram className="mr-2 h-4 w-4" /> Share to Instagram
+              </DropdownMenuItem>
+              {(onIt || canEdit || canDelete) && <DropdownMenuSeparator />}
+            </>
+          )}
           {onIt && (
             <DropdownMenuItem
               disabled={leave.isPending}
@@ -172,6 +185,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className }: { post: 
         <EditPostSheet post={editing ? post : null} onClose={() => setEditing(false)} />
       )}
       {mine && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
+      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} />}
     </>
   );
 }

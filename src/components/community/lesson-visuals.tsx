@@ -42,6 +42,9 @@ const TONES: Record<VisualTone, CSSProperties> = {
   } as CSSProperties,
 };
 
+/** The dark tone's colours by variable, to write into a diagram drawn off the page (an Instagram card). */
+export const LESSON_DARK_COLORS = TONES.dark as unknown as Record<string, string>;
+
 const C = {
   ink: "var(--lv-ink)",
   body: "var(--lv-body)",
