@@ -16,6 +16,7 @@ import { listTemplates } from "@/lib/pl-programs";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { demoCrumbMessage, takeDemoCrumb } from "@/lib/demo-crumb";
 import { ClientPovQuickPicker } from "@/components/client-pov-quick-picker";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
@@ -250,6 +251,26 @@ function useCollapsedSections() {
   return [collapsed, toggle, setAll] as const;
 }
 
+/**
+ * The last page died with a demo video up (demo-crumb.ts): say what it was,
+ * once, as a support alert (iOS ending the page, or the app's own reload and why).
+ */
+function useReportDemoReload() {
+  useEffect(() => {
+    const c = takeDemoCrumb();
+    if (!c) return;
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    void (supabase as any)
+      .rpc("report_page_error", {
+        _route: c.path,
+        _message: demoCrumbMessage(c),
+        _stack: JSON.stringify({ demo: c.url, exit: c.exit, at: new Date(c.at).toISOString() }),
+        _device: { ua: nav.userAgent, standalone: !!nav.standalone, w: window.innerWidth, h: window.innerHeight },
+      })
+      .then(() => {}, () => {});
+  }, []);
+}
+
 export function AppShell({
   items,
   bottomItems: customBottomItems,
@@ -283,6 +304,7 @@ export function AppShell({
   ownTopBarOn?: readonly string[];
 }) {
   useKeyboardOpen();
+  useReportDemoReload();
   useExerciseLibraryRealtime();
   useExerciseAliasIndex();
   useSalesRealtime();

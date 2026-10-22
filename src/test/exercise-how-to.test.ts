@@ -36,11 +36,11 @@ describe("How To opens in place, in the same frame", () => {
     expect(exerciseVideoSetGlobalQuery.queryKey).toEqual(["app_settings", "exercise_video_set"]);
   });
 
-  it("the video player starts only once the sheet has slid in and both queries have settled", () => {
-    expect(howTo).toContain("} else if (loading || (videoUrl && !settled)) {");
+  it("the demo shows as a cover once both queries have settled; the player only loads on Play", () => {
+    expect(howTo).toContain("} else if (loading) {");
     expect(howTo).toContain("loading={guide.isPending || videoSet.isPending}");
-    expect(howTo).toContain('sheet?.addEventListener("animationend", done);');
-    expect(howTo).toContain("const t = window.setTimeout(done, HOW_TO_SETTLE_MS);");
+    expect(howTo).toContain("<ExerciseDemoVideo url={videoUrl}");
+    expect(howTo).not.toContain("HOW_TO_SETTLE_MS");
     // no blur over the player
     expect(howTo).not.toContain("backdrop-blur");
   });

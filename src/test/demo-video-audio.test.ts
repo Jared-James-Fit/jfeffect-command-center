@@ -76,12 +76,17 @@ describe("demo videos keep their sound (iOS audio session)", () => {
 });
 
 describe("demo player URLs", () => {
-  it("never autoplays (iOS autoplays embeds muted) and plays inline", () => {
-    const u = new URL(demoEmbedUrl("https://player.vimeo.com/video/1198574587?badge=0&autopause=0&player_id=0&app_id=532813&autoplay=1&muted=1"));
+  it("never autoplays on its own or muted; the Play tap starts it with sound; plays inline", () => {
+    const raw = "https://player.vimeo.com/video/1198574587?badge=0&autopause=0&player_id=0&app_id=532813&autoplay=1&muted=1";
+    const u = new URL(demoEmbedUrl(raw));
     expect(u.searchParams.get("autoplay")).toBeNull();
     expect(u.searchParams.get("muted")).toBeNull();
     expect(u.searchParams.get("playsinline")).toBe("1");
     expect(u.searchParams.get("app_id")).toBe("532813");
+    const tapped = new URL(demoEmbedUrl(raw, { autoplay: true }));
+    expect(tapped.searchParams.get("autoplay")).toBe("1");
+    expect(tapped.searchParams.get("muted")).toBeNull();
+    expect(demoEmbedUrl("https://youtu.be/_6R8rnTBJNU", { autoplay: true })).toBe("https://www.youtube-nocookie.com/embed/_6R8rnTBJNU?playsinline=1&rel=0&modestbranding=1&autoplay=1");
   });
   it("plain Vimeo and YouTube links become players", () => {
     expect(demoEmbedUrl("https://vimeo.com/1198574587")).toMatch(/^https:\/\/player\.vimeo\.com\/video\/1198574587\?/);
@@ -119,10 +124,14 @@ describe("the How To guide", () => {
     expect(read("src/components/exercises/library/exercise-library-control-center.tsx")).toContain("<ExerciseDemoVideo");
   });
 
-  it("the player holds playback audio, offers a retry when slow and says when offline", () => {
+  it("the player is a cover until Play: only that tap loads it and takes the audio (UI sounds quieted first)", () => {
     const player = read("src/components/exercise-demo-video.tsx");
-    expect(player).toContain("usePlaybackSession(true);");
+    expect(player).not.toContain("usePlaybackSession(true);");
+    expect(player).toContain("data-demo-cover");
+    expect(player).toContain("void quietAppSounds().finally(() => {\n      if (active.current && !release.current) release.current = holdPlaybackSession();");
+    expect(player).toContain("src={demoEmbedUrl(url, { autoplay: true })}");
     expect(player).toContain("Try again");
     expect(player).toContain("You're offline");
+    expect(read("src/lib/app-sounds.ts")).toContain("export async function quietAppSounds(): Promise<void> {");
   });
 });

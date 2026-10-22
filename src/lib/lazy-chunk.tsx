@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { importWithRetry } from "@/lib/chunk-import";
 import { isChunkLoadError } from "@/lib/chunk-recovery";
 import { flagUpdateAvailable } from "@/lib/pwa/register-sw";
+import { noteReloadReason } from "@/lib/demo-crumb";
 
 /**
  * Drop-in replacement for `React.lazy` that survives a failed chunk fetch.
@@ -42,6 +43,7 @@ export function reloadForUpdate() {
   } catch {
     // ignore
   }
+  noteReloadReason("Update app");
   window.location.reload();
 }
 

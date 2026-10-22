@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Play, RotateCcw } from "lucide-react";
 import { exerciseVideoSetGlobalQuery } from "@/hooks/use-exercise-video-set";
@@ -14,9 +14,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
  * workout. It's part of the logger itself (no code to fetch on the tap, so it
  * opens in the same frame and a stale build after a publish can't break it),
  * the button stays where it is while the sheet is up (the row never shifts),
- * and the video player only starts once the sheet has finished sliding in:
- * Vimeo's player is heavy, and starting it mid-slide is what made the sheet
- * stutter on iPhones.
+ * and the demo opens as a cover with Play: the Vimeo / YouTube player and the
+ * phone's audio switch only start on that tap (ExerciseDemoVideo).
  */
 export function ExerciseHowToButton({
   exerciseId,
@@ -63,9 +62,6 @@ export function ExerciseHowToButton({
     </>
   );
 }
-
-/** Just past the sheet's 500ms slide-in, in case its animationend never fires. */
-export const HOW_TO_SETTLE_MS = 550;
 
 function ExerciseHowToSheet({
   open,
@@ -128,11 +124,7 @@ function ExerciseHowToSheet({
   );
 }
 
-/**
- * The sheet's contents. Mounted each time the sheet opens (Radix drops them
- * once it has slid away), so "has it finished sliding in" starts over on
- * every open and the player stays put while the sheet slides out.
- */
+/** The sheet's contents: the demo (a cover until Play is tapped), cues, mistakes. */
 function GuideBody({
   exercise,
   globalSet,
@@ -148,23 +140,8 @@ function GuideBody({
   onRetry: () => void;
   name: string;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    const sheet = ref.current?.closest<HTMLElement>('[role="dialog"]');
-    const done = (e?: Event) => {
-      if (!e || e.target === sheet) setSettled(true);
-    };
-    sheet?.addEventListener("animationend", done);
-    const t = window.setTimeout(done, HOW_TO_SETTLE_MS);
-    return () => {
-      sheet?.removeEventListener("animationend", done);
-      window.clearTimeout(t);
-    };
-  }, []);
-
   // Not uploaded yet: the closest exercise's demo, labelled as such. Both
-  // queries settle first so the player never starts on one video and switches.
+  // queries settle first so the cover never shows one video and switches.
   const ownUrl = guideVideoUrl(exercise, globalSet);
   const borrowed = !ownUrl ? exercise?.borrowed ?? null : null;
   const borrowedUrl = borrowed ? guideVideoUrl(borrowed, globalSet) : null;
@@ -182,8 +159,8 @@ function GuideBody({
         </div>
       </div>
     );
-  } else if (loading || (videoUrl && !settled)) {
-    // The player's own loading look, so the swap to it is seamless.
+  } else if (loading) {
+    // The player's own look, so the swap to the cover is seamless.
     video = (
       <div className="grid aspect-video w-full place-items-center rounded-xl border bg-black" aria-label="Loading exercise guide">
         <Loader2 className="h-6 w-6 animate-spin text-white/70" />
@@ -209,7 +186,7 @@ function GuideBody({
   }
 
   return (
-    <div ref={ref} className="space-y-4 px-5 py-4">
+    <div className="space-y-4 px-5 py-4">
       {video}
       {exercise?.cues && <GuideText title="Coaching cues" value={exercise.cues} />}
       {exercise?.common_mistakes && <GuideText title="Common mistakes" value={exercise.common_mistakes} />}

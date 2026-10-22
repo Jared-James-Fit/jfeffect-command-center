@@ -2,6 +2,8 @@
 // Lovable preview hosts, or when ?sw=off. Exposes a small subscribe API so the
 // UI can show the "Update available" toast.
 
+import { noteReloadReason } from "@/lib/demo-crumb";
+
 type Status = "idle" | "ready" | "update-available" | "offline-ready" | "blocked";
 
 let status: Status = "idle";
@@ -32,6 +34,7 @@ export function flagUpdateAvailable() {
 }
 
 export async function applyUpdate() {
+  noteReloadReason("update prompt");
   if (triggerUpdate) await triggerUpdate();
   else if (typeof window !== "undefined") window.location.reload();
 }
