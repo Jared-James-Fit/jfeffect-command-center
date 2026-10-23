@@ -16,4 +16,15 @@ describe("Workouts page: program roadmap under the calendar", () => {
     expect(card).toContain("Open workouts in Block View");
     expect(card).toContain("<WeekPills");
   });
+  it("reads in one pass: the program's name, the week, one bar, then this block and this week", () => {
+    const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
+    // no box inside the card, no repeated counts under the bar, no "Block 1 — …" under the block's own name
+    expect(card).not.toContain("rounded-xl border border-primary/30 bg-primary/5");
+    expect(card).not.toContain("% through");
+    expect(card).toContain("blockNameParts(b.name)");
+    // the program picker is the name itself; Active only says something when you're looking at another one
+    expect(card).toContain('aria-label="Choose a program"');
+    expect(card).not.toContain("programs.length} programs");
+    expect(card).toContain('text-[14px] leading-relaxed');
+  });
 });
