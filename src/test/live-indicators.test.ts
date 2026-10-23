@@ -20,7 +20,8 @@ describe("live indicators: one animated look across the app", () => {
   it("a pinned chat shows one signal at a time: live (ring + LIVE) or the unread dot, never both", () => {
     const tile = read("src/components/messages/inbox-parts.tsx");
     expect(tile).toContain("<LiveAvatar live={live} size={60}>{avatar}</LiveAvatar>");
-    expect(tile).toContain("{unread && !live && <span");
+    expect(tile).toContain("{unread && !live && (");
+    expect(tile).toContain("data-pin-unread");
     expect(tile).not.toContain("<LiveDot");
   });
 

@@ -27,6 +27,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { markRead, markUnread } from "@/lib/messages";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { messagePreviewText } from "@/lib/message-preview";
 
 export const Route = createFileRoute("/_authenticated/portal/messages")({
   component: ClientMessages,
@@ -98,7 +99,7 @@ function ClientMessages() {
       return {
         ...(last as CoachLast),
         coachUnread: !!coach && !coach.read_by_client_at,
-        coachText: coach ? coach.body?.trim() || (coach.attachments?.length ? "Attachment" : "") : "",
+        coachText: coach ? messagePreviewText(coach.body, coach.attachments) : "",
       };
     },
   });
