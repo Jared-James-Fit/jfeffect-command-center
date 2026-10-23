@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_HIGH_WEEKDAY,
+  carryPlanDayRules,
   configuredHighWeekday,
   normalizeDayLabel,
+  pickPlanDayForDate,
   pickPlanDayIndex,
+  planDayRule,
   resolveClientNutritionDay,
   resolvePlanDaySelection,
   weekdayForISO,
+  weekdaysFromLabel,
 } from "@/lib/client-nutrition-day";
+import { buildGroceryList } from "@/lib/grocery-list";
 import { buildCookbookQuerySpec, COOKBOOK_PAGE_SIZE, recipeMethodBadge } from "@/lib/recipes";
 
 // 2026-08-15 = Saturday, 2026-08-17 = Monday, 2026-08-19 = Wednesday
@@ -83,7 +88,11 @@ describe("Saturday fallback", () => {
   });
 
   it("never overrides a coach selection", () => {
-    const r = resolveClientNutritionDay({ dateISO: SATURDAY, preferredHighDays: ["Sunday"], workoutDates: [] });
+    const r = resolveClientNutritionDay({
+      dateISO: SATURDAY,
+      preferredHighDays: ["Sunday"],
+      workoutDates: [],
+    });
     expect(r.dayType).toBe("non_training");
     expect(r.highWeekday).toBe("Sunday");
   });
@@ -135,7 +144,9 @@ describe("plan day matching (one selected state for targets + meals)", () => {
       const idx = pickPlanDayIndex(days, t);
       expect(idx).toBeGreaterThanOrEqual(0);
       // Same index is used for the macro targets and the meal notes.
-      expect(days[idx].day_label.toLowerCase()).toContain(t === "non_training" ? "non-training" : t);
+      expect(days[idx].day_label.toLowerCase()).toContain(
+        t === "non_training" ? "non-training" : t,
+      );
     }
   });
 
@@ -150,16 +161,31 @@ describe("plan day matching (one selected state for targets + meals)", () => {
       { id: "friday", day_label: "Training Day (Friday Only)" },
       { id: "off", day_label: "OFF-DAY" },
     ];
+    const monday = { dayType: "training", weekday: "Monday" } as const;
 
-    const automatic = resolvePlanDaySelection(uploaded, "training", null);
-    expect(automatic).toMatchObject({ automaticPlanDayId: "training", selectedPlanDayId: "training", isManual: false });
+    const automatic = resolvePlanDaySelection(uploaded, monday, null);
+    expect(automatic).toMatchObject({
+      automaticPlanDayId: "training",
+      selectedPlanDayId: "training",
+      isManual: false,
+    });
 
-    const friday = resolvePlanDaySelection(uploaded, "training", "friday");
-    expect(friday).toMatchObject({ automaticPlanDayId: "training", selectedPlanDayId: "friday", isManual: true });
-    expect(uploaded.find((day) => day.id === friday.selectedPlanDayId)?.day_label).toBe("Training Day (Friday Only)");
+    const friday = resolvePlanDaySelection(uploaded, monday, "friday");
+    expect(friday).toMatchObject({
+      automaticPlanDayId: "training",
+      selectedPlanDayId: "friday",
+      isManual: true,
+    });
+    expect(uploaded.find((day) => day.id === friday.selectedPlanDayId)?.day_label).toBe(
+      "Training Day (Friday Only)",
+    );
 
-    const offDay = resolvePlanDaySelection(uploaded, "high", "off");
-    expect(offDay).toMatchObject({ automaticPlanDayId: null, selectedPlanDayId: "off", isManual: true });
+    const offDay = resolvePlanDaySelection(
+      uploaded,
+      { dayType: "high", weekday: "Saturday" },
+      "off",
+    );
+    expect(offDay).toMatchObject({ selectedPlanDayId: "off", isManual: true });
     expect(uploaded.find((day) => day.id === offDay.selectedPlanDayId)?.day_label).toBe("OFF-DAY");
   });
 
@@ -170,6 +196,133 @@ describe("plan day matching (one selected state for targets + meals)", () => {
     resolveClientNutritionDay({ dateISO: MONDAY, overrides, preferredHighDays: preferred });
     pickPlanDayIndex(days, "high");
     expect(JSON.stringify({ overrides, preferred, days })).toBe(snapshot);
+  });
+});
+
+describe("which saved plan day a date gets (Jared's Friday)", () => {
+  // Jared's plan as saved: the Friday day sits second, after the general one.
+  const jared = [
+    { id: "train", day_label: "Training Day" },
+    { id: "fri", day_label: "Training Day (Friday Only)" },
+    { id: "rest", day_label: "Rest Day" },
+  ];
+  const FRIDAY = "2026-10-23";
+  const SAT = "2026-10-24";
+  const pickOn = (
+    days: any[],
+    dateISO: string,
+    workoutDates: string[],
+    preferredHighDays: string[] = [],
+  ) => {
+    const r = resolveClientNutritionDay({ dateISO, workoutDates, preferredHighDays });
+    const pick = pickPlanDayForDate(days, {
+      dayType: r.dayType,
+      baseType: r.baseType,
+      weekday: weekdayForISO(dateISO),
+    });
+    return { id: pick.index >= 0 ? days[pick.index].id : null, dayType: pick.dayType };
+  };
+
+  it("a training Friday gets the Friday-only day, every other training day the general one", () => {
+    expect(weekdayForISO(FRIDAY)).toBe("Friday");
+    expect(pickOn(jared, FRIDAY, [FRIDAY])).toEqual({ id: "fri", dayType: "training" });
+    expect(pickOn(jared, "2026-10-19", ["2026-10-19"])).toEqual({
+      id: "train",
+      dayType: "training",
+    });
+    // a Friday with no workout is a rest day: the Friday day is for training Fridays
+    expect(pickOn(jared, FRIDAY, [])).toEqual({ id: "rest", dayType: "non_training" });
+  });
+
+  it("a plan with no High Day doesn't leave the fallback Saturday empty", () => {
+    // no High Day picked by the coach: Saturday is the suggested High Day, but this plan has none
+    expect(pickOn(jared, SAT, [SAT])).toEqual({ id: "train", dayType: "training" });
+    expect(pickOn(jared, SAT, [])).toEqual({ id: "rest", dayType: "non_training" });
+    // a plan that has one still gets it
+    const withHigh = [...jared, { id: "high", day_label: "High Day" }];
+    expect(pickOn(withHigh, SAT, [SAT])).toEqual({ id: "high", dayType: "high" });
+  });
+
+  it("the coach's own setting beats the name, and Only when picked is never automatic", () => {
+    const days = [
+      { id: "a", day_label: "Training Day" },
+      { id: "b", day_label: "Big day", use_on: "training", weekdays: ["Wednesday"] },
+      { id: "c", day_label: "Rest Day", use_on: "manual" },
+    ];
+    expect(pickOn(days, "2026-10-21", ["2026-10-21"]).id).toBe("b");
+    expect(pickOn(days, "2026-10-22", ["2026-10-22"]).id).toBe("a");
+    expect(pickOn(days, "2026-10-22", []).id).toBeNull();
+    // an explicit [] is "any day", whatever the name says
+    expect(planDayRule({ day_label: "Training Day (Friday Only)", weekdays: [] }).weekdays).toEqual(
+      [],
+    );
+  });
+
+  it("an every-day day fills in, and a day for the weekday beats it", () => {
+    const days = [
+      { id: "all", day_label: "Daily" },
+      { id: "fri", day_label: "Friday plan" },
+      { id: "train", day_label: "Training Day" },
+    ];
+    expect(pickOn(days, "2026-10-20", []).id).toBe("all");
+    expect(pickOn(days, "2026-10-20", ["2026-10-20"]).id).toBe("train");
+    expect(pickOn(days, FRIDAY, [FRIDAY]).id).toBe("fri");
+    expect(planDayRule({ day_label: "Low Day" }, 1).use).toBe("every_day");
+    expect(planDayRule({ day_label: "Low Day" }, 2).use).toBeNull();
+  });
+
+  it("reads weekdays from a day's name", () => {
+    expect(weekdaysFromLabel("Training Day (Friday Only)")).toEqual(["Friday"]);
+    expect(weekdaysFromLabel("Training Day")).toEqual([]);
+    expect(weekdaysFromLabel("Non-Training Day")).toEqual([]);
+    expect(weekdaysFromLabel("Mon / Wed")).toEqual(["Monday", "Wednesday"]);
+    expect(weekdaysFromLabel("Mon-Fri")).toEqual([
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+    ]);
+    expect(weekdaysFromLabel("Fri - Mon")).toEqual(["Monday", "Friday", "Saturday", "Sunday"]);
+    expect(weekdaysFromLabel("Weekends")).toEqual(["Saturday", "Sunday"]);
+    expect(weekdaysFromLabel("Every day but Sunday")).toHaveLength(6);
+    expect(weekdaysFromLabel("Training Day (Friday Only, not Sat)")).toEqual(["Friday"]);
+    expect(weekdaysFromLabel("Thurs & Sat")).toEqual(["Thursday", "Saturday"]);
+    // words that only start like a day aren't one
+    expect(weekdaysFromLabel("Saturated fat · Wedding · Monster")).toEqual([]);
+  });
+
+  it("a rewrite keeps the coach's setting for every day it keeps by name", () => {
+    const before = [
+      { day_label: "Training Day", use_on: "training", weekdays: ["Friday"] },
+      { day_label: "Rest Day", use_on: "manual", weekdays: null },
+    ];
+    const after = carryPlanDayRules(before, [
+      { day_label: "training day", calories: 2000 },
+      { day_label: "High Day", calories: 2600 },
+    ]);
+    expect(after[0]).toMatchObject({ calories: 2000, use_on: "training", weekdays: ["Friday"] });
+    expect(after[1]).toEqual({ day_label: "High Day", calories: 2600 });
+  });
+
+  it("the grocery list shops each date for the day it gets", () => {
+    const days = [
+      { id: "train", day_label: "Training Day", notes: "100g rice" },
+      { id: "fri", day_label: "Training Day (Friday Only)", notes: "200g oats" },
+      { id: "rest", day_label: "Rest Day", notes: "50g rice" },
+    ];
+    const list = buildGroceryList({
+      planDays: days,
+      dayCounts: { training: 2, non_training: 1, high: 0 },
+      dates: [
+        { dayType: "training", weekday: "Monday" },
+        { dayType: "training", weekday: "Friday" },
+        { dayType: "non_training", weekday: "Sunday" },
+      ],
+    });
+    const qty = Object.fromEntries(list.items.map((i) => [i.name.toLowerCase(), i.quantityLabel]));
+    expect(qty).toMatchObject({ rice: "150 g", oats: "200 g" });
+    expect(list.totalDaysCovered).toBe(3);
   });
 });
 
@@ -197,7 +350,10 @@ describe("cookbook batching / search / filters", () => {
 
   it("combines filters as AND across groups, OR within aliases", () => {
     const spec = buildCookbookQuerySpec({ filters: ["high-protein", "lower-calorie", "quick"] });
-    expect(spec.tagGroups).toEqual([["high-protein"], ["low-calorie", "fat-loss", "lower-calorie"]]);
+    expect(spec.tagGroups).toEqual([
+      ["high-protein"],
+      ["low-calorie", "fat-loss", "lower-calorie"],
+    ]);
     expect(spec.maxPrepMinutes).toBe(20);
   });
 

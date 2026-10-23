@@ -36,7 +36,7 @@ export const getClientMealPlanForCoach = createServerFn({ method: "GET" })
     const { data: target } = await supabase
       .from("nutrition_targets")
       .select(
-        "id, phase, custom_phase, goal, custom_goal, structure, status, start_date, end_date, water, client_notes, food_weighing_rules, pdf_url, pdf_name, visible_to_client, updated_at, last_updated_at, assigned_coach_id, nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order)",
+        "id, phase, custom_phase, goal, custom_goal, structure, status, start_date, end_date, water, client_notes, food_weighing_rules, pdf_url, pdf_name, visible_to_client, updated_at, last_updated_at, assigned_coach_id, nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order, use_on, weekdays)",
       )
       .eq("client_id", client.id)
       .eq("visible_to_client", true)
@@ -101,6 +101,8 @@ export const getClientMealPlanForCoach = createServerFn({ method: "GET" })
         fats: d.fats ?? null,
         fibre: d.fibre ?? null,
         notes: d.notes ?? null,
+        use_on: d.use_on ?? null,
+        weekdays: d.weekdays ?? null,
       })),
     };
   });

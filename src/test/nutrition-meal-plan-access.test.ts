@@ -18,7 +18,7 @@ const hero = readFileSync(
 describe("client nutrition meal-plan access", () => {
   it("loads every saved day record from the visible active nutrition target", () => {
     expect(resolver).toContain(
-      "nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order)",
+      "nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order, use_on, weekdays)",
     );
     expect(resolver).toContain('.eq("visible_to_client", true)');
     expect(resolver).toContain('.neq("status", "Archived")');
@@ -26,9 +26,8 @@ describe("client nutrition meal-plan access", () => {
   });
 
   it("selects exact plan-day records by ID instead of remapping saved titles", () => {
-    expect(portalNutrition).toContain(
-      "resolvePlanDaySelection(days, automaticDayType, manualPlanId)",
-    );
+    expect(portalNutrition).toContain("resolvePlanDaySelection(");
+    expect(portalNutrition).toContain("weekday: weekdayForISO(todayISO)");
     expect(portalNutrition).toContain("planChoices");
     expect(portalNutrition).toContain("onSelectPlan");
     expect(portalNutrition).toContain("day?.day_label || DAY_TYPE_LABEL[automaticDayType]");
@@ -55,5 +54,23 @@ describe("client nutrition meal-plan access", () => {
   it("does not claim a generic day is missing before exposing the uploaded plan choices", () => {
     expect(portalNutrition).toContain("You can still review any uploaded plan above.");
     expect(portalNutrition).toContain("planChoices={planChoices}");
+  });
+});
+
+describe("plan day rules reach every writer and the coach's editor", () => {
+  const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
+  it("the coach sets when each day is used and sees the week as the client will", () => {
+    const dialog = read("src/components/nutrition-target-dialog.tsx");
+    expect(dialog).toContain("<PlanDayWeekPreview");
+    expect(dialog).toContain("<PlanDayUseEditor");
+  });
+
+  it("rewrites by delete + insert keep the coach's setting by name", () => {
+    expect(read("src/lib/nutrition-updates.functions.ts")).toContain("carryPlanDayRules(oldDays");
+    expect(read("src/lib/cleo-program.server.ts")).toContain("carryPlanDayRules(old,");
+  });
+
+  it("the grocery list shops each date for the day it gets", () => {
+    expect(read("src/components/nutrition/GroceryListSheet.tsx")).toContain("buildGroceryList({ planDays, dayCounts, dates })");
   });
 });

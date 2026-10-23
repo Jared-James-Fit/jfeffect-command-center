@@ -20,6 +20,7 @@ import { z } from "zod";
 import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { rxText, rxToRow, trainingDayDates, weekdayLabel, type Rx, type Weekday } from "@/lib/cleo-program";
+import { carryPlanDayRules } from "@/lib/client-nutrition-day";
 
 type Db = any;
 
@@ -683,7 +684,8 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
       // Same as the targets dialog: replace the day list.
       const old = ((current?.nutrition_target_days ?? []) as any[]).map(({ id, created_at, updated_at, ...d }) => d);
       await sb.from("nutrition_target_days").delete().eq("target_id", targetId);
-      const { error: dErr } = await sb.from("nutrition_target_days").insert(p.days.map((d: any, i: number) => ({ target_id: targetId, sort_order: i, ...d })));
+      // a day kept by name keeps when the coach set it to be used
+      const { error: dErr } = await sb.from("nutrition_target_days").insert(carryPlanDayRules(old, p.days.map((d: any, i: number) => ({ target_id: targetId, sort_order: i, ...d }))));
       if (dErr) {
         if (old.length) await sb.from("nutrition_target_days").insert(old);
         throw new Error(dErr.message);

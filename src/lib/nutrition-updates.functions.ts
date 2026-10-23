@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { PovInput, resolvePovClientId } from "@/lib/client-pov.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { carryPlanDayRules } from "@/lib/client-nutrition-day";
 
 async function isAdminOrAssignedCoach(supabase: any, userId: string, clientId: string) {
   const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -374,9 +375,11 @@ export const publishNutritionReviewFn = createServerFn({ method: "POST" })
       targetId = newT.id;
     }
 
-    // replace day rows
+    // replace day rows (a day kept by name keeps when the coach set it to be used)
+    const { data: oldDays } = await supabase
+      .from("nutrition_target_days").select("day_label, use_on, weekdays").eq("target_id", targetId);
     await supabase.from("nutrition_target_days").delete().eq("target_id", targetId);
-    const dayRows = data.days.map((d, i) => ({ target_id: targetId, sort_order: i, ...d }));
+    const dayRows = carryPlanDayRules(oldDays ?? [], data.days.map((d, i) => ({ target_id: targetId, sort_order: i, ...d })));
     const { error: dErr } = await supabase.from("nutrition_target_days").insert(dayRows);
     if (dErr) throw new Error(dErr.message);
 

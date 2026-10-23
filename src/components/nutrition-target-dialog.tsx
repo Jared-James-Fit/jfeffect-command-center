@@ -21,6 +21,7 @@ import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
 import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMeals";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
+import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -44,6 +45,9 @@ type Day = {
   fibre?: number | null;
   notes?: string | null;
   sort_order: number;
+  /** When it's used (null = read from the name; see PlanDayRules). */
+  use_on?: string | null;
+  weekdays?: string[] | null;
 };
 
 type Props = {
@@ -141,6 +145,9 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     (next[i] as any)[k] = v === "" ? null : k === "day_label" || k === "notes" ? v : Number(v);
     setDays(next);
   };
+
+  const setDayRule = (i: number, patch: { use_on?: string; weekdays?: string[] }) =>
+    setDays(days.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
 
   const addDay = (label?: string) =>
     setDays([...days, { day_label: label ?? `Day ${days.length + 1}`, sort_order: days.length }]);
@@ -314,12 +321,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
             </DropdownMenu>
             </div>
           </div>
+          <PlanDayWeekPreview clientId={form.client_id || clientId} days={days} />
           {days.map((d, i) => (
             <div key={i} className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <Input value={d.day_label} onChange={(e) => updateDay(i, "day_label", e.target.value)} className="max-w-xs font-semibold" />
                 {days.length > 1 && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDay(i)}>Remove</Button>}
               </div>
+              <PlanDayUseEditor day={d} planSize={days.length} onChange={(patch) => setDayRule(i, patch)} />
               <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
                 {(["calories","protein","carbs","fats","fibre"] as const).map((k) => (
                   <div key={k}><Label className="text-[10px] uppercase">{k}</Label><Input type="number" value={d[k] ?? ""} onChange={(e) => updateDay(i, k, e.target.value)} /></div>
