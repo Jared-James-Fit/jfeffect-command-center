@@ -754,6 +754,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                   avatar={<UserAvatar src={pinned.avatarUrl} name={pinned.name} size={60} ring expandable={false} />}
                   unread={!!pinned.unread}
                   preview={pinned.unreadPreview}
+                  alone={pinnedRows.length === 0}
                   live={pinned.live}
                   selected={pinnedSelected}
                   onOpen={() => openChat(pinned.id)}
@@ -767,6 +768,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                   avatar={rowAvatar(r, 60)}
                   unread={r.unread}
                   preview={r.preview}
+                  alone={!pinned && pinnedRows.length === 1}
                   muted={r.muted}
                   selected={selectedId === r.key}
                   onOpen={() => openChat(r.key)}
