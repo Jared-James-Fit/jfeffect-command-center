@@ -88,7 +88,7 @@ import { compactTimeRange } from "@/lib/schedule-time";
 import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
-import type { ProgramRoadmap } from "@/lib/training-roadmap";
+import { blockNameParts, type ProgramRoadmap } from "@/lib/training-roadmap";
 
 type Mode = "self" | "coach";
 
@@ -182,13 +182,32 @@ export function WorkoutsExperience({
       return d && d >= today;
     }) ??
     primaryDayItems[primaryDayItems.length - 1] ?? null;
-  const headerItem = selectedHeaderItem ?? fallbackHeaderItem;
+  // The block is said once, here: the block of the week on screen (the day
+  // picked, else any workout that week, so a rest day never shows today's
+  // block over another week). The strip under it says which week; the day's
+  // card doesn't repeat either.
+  const weekItem = (() => {
+    if (selectedHeaderItem) return selectedHeaderItem;
+    const start = startOfWeek(selectedDate, { weekStartsOn: 1 });
+    for (let i = 0; i < 7; i++) {
+      const it = (byDate.get(toLocalISO(addDays(start, i))) ?? []).find((x) => x.block?.id && !isAtHomeBackupSessionBlock(x.block));
+      if (it) return it;
+    }
+    return null;
+  })();
+  const headerItem = weekItem ?? fallbackHeaderItem;
   const headerBlock = headerItem?.block ?? pickCurrentBlock(allBlocks, today) ?? null;
-  const headerWeek = headerItem?.week ?? null;
-  const subtitle = [
-    headerBlock?.name ? headerBlock.name : null,
-    headerWeek?.week_index ? `Week ${headerWeek.week_index}` : null,
-  ].filter(Boolean).join(" · ");
+  const headerBlockName = blockNameParts(headerBlock?.name);
+  const subtitle = headerBlockName ? (
+    <span className="inline-flex max-w-full items-center gap-1.5" data-testid="workouts-block">
+      {headerBlockName.tag && (
+        <span className="shrink-0 rounded bg-secondary px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+          {headerBlockName.tag}
+        </span>
+      )}
+      <span className="truncate text-[13px] font-semibold text-foreground/85">{headerBlockName.name}</span>
+    </span>
+  ) : null;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calView, setCalView] = useState<"week" | "month">("week");
 
@@ -562,6 +581,7 @@ export function WorkoutsExperience({
                 </div>
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
+                  pageBlockId={headerBlock?.id ?? null}
                   sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
                   readonly={mode === "coach"}
@@ -788,9 +808,11 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 
 function SelectedDayList({
-  items, sessions = [], date, readonly, clientId, mode, backupEnabled,
+  items, sessions = [], date, readonly, clientId, mode, backupEnabled, pageBlockId = null,
 }: {
   items: WorkoutItem[];
+  /** The block the page's header names: a card in it doesn't say it again. */
+  pageBlockId?: string | null;
   /** That day's sessions / appointments with the coach (client view). */
   sessions?: CalendarItem[];
   date: Date;
@@ -811,6 +833,7 @@ function SelectedDayList({
       readonly={readonly}
       clientId={clientId}
       mode={mode}
+      pageBlockId={pageBlockId}
     />
   );
 
@@ -891,13 +914,15 @@ function dayCardStatusLabel(status: string, label: string): string {
 }
 
 function SelectedDayCard({
-  item, date, readonly, clientId, mode,
+  item, date, readonly, clientId, mode, pageBlockId = null,
 }: {
   item: WorkoutItem | null;
   date: Date;
   readonly: boolean;
   clientId: string;
   mode: Mode;
+  /** The block the page's header names (the card names only another block). */
+  pageBlockId?: string | null;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   // Preview open state is keyed by stable workout identity and lives outside
@@ -1105,24 +1130,25 @@ function SelectedDayCard({
                 />
               )}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {[
-                item.block?.name,
-                item.week?.week_index ? `Week ${item.week.week_index}` : null,
-                format(date, "EEE MMM d"),
-              ].filter(Boolean).join(" · ")}
+            {/* The day and how long; the block and week are said once, at the top of the page
+                (a workout from another block than the page's still names its own). */}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground" data-testid="workout-day-meta">
+              {item.block?.id && item.block.id !== pageBlockId && item.block.name && !isAtHomeBackupSessionBlock(item.block) && (
+                <span className="font-medium text-foreground/80">{item.block.name} ·</span>
+              )}
+              <span>{format(date, "EEE MMM d")}</span>
+              {!isCompleted && (() => {
+                const est = ((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }));
+                return est != null ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="inline-flex items-center gap-1" data-testid="workout-est-duration">
+                      <Clock className="h-3 w-3" /> Est. {est} min
+                    </span>
+                  </>
+                ) : null;
+              })()}
             </div>
-            {!isCompleted && (() => {
-              const est = ((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }));
-              return est != null ? (
-                <div
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
-                  data-testid="workout-est-duration"
-                >
-                  <Clock className="h-3 w-3" /> Est. {est} min
-                </div>
-              ) : null;
-            })()}
           </div>
           {!readonly && hasMenuActions && (
             <DropdownMenu>

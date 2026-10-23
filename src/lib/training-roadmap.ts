@@ -528,6 +528,20 @@ export function programTitle(title: string | null | undefined, ownerName?: strin
 }
 
 /**
+ * "Block 1 — Volume 5s/7s" → { tag: "Block 1", name: "Volume 5s/7s" }: coaches
+ * number their blocks in the name, which reads better as a small tag beside
+ * the block's own name than as one long line. A name without that prefix is
+ * all name ({ tag: null }).
+ */
+export function blockNameParts(blockName: string | null | undefined): { tag: string | null; name: string } | null {
+  const t = clean(blockName);
+  if (!t) return null;
+  const m = /^(block\s*\d+)\s*[—–:-]\s*(.+)$/i.exec(t);
+  if (!m) return { tag: null, name: t };
+  return { tag: m[1].replace(/\s+/g, " ").replace(/^block/i, "Block"), name: m[2].trim() };
+}
+
+/**
  * One program's roadmap. A program is a pl_preps record: its blocks, and only
  * its blocks, are numbered, counted and dated together, so a finished meet
  * prep never pads the next program's "Week 3 of 28". Blocks without a program
