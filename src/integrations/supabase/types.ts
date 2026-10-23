@@ -15843,6 +15843,8 @@ export type Database = {
           protein: number | null
           sort_order: number
           target_id: string
+          use_on: string | null
+          weekdays: string[] | null
         }
         Insert: {
           calories?: number | null
@@ -15856,6 +15858,8 @@ export type Database = {
           protein?: number | null
           sort_order?: number
           target_id: string
+          use_on?: string | null
+          weekdays?: string[] | null
         }
         Update: {
           calories?: number | null
@@ -15869,6 +15873,8 @@ export type Database = {
           protein?: number | null
           sort_order?: number
           target_id?: string
+          use_on?: string | null
+          weekdays?: string[] | null
         }
         Relationships: [
           {

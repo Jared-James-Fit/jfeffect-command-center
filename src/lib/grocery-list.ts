@@ -9,6 +9,8 @@
  * ingredient reader with conservative rules.
  */
 
+import { pickPlanDayForDate, type PlanDayDate, type PlanDayLike } from "@/lib/client-nutrition-day";
+
 export type GroceryDayType = "training" | "non_training" | "high";
 
 export type GroceryMeasure =
@@ -247,12 +249,18 @@ export function categorizeIngredient(name: string): GroceryCategory {
 /* Build                                                               */
 /* ------------------------------------------------------------------ */
 
-export type GroceryPlanDay = { id?: string; day_label?: string | null; notes?: string | null };
+export type GroceryPlanDay = PlanDayLike & { id?: string; notes?: string | null };
 
 export type BuildGroceryListInput = {
   planDays: GroceryPlanDay[];
   /** Number of resolved calendar dates for each day type in the selected week. */
   dayCounts: Record<GroceryDayType, number>;
+  /**
+   * Each resolved date (its kind of day and weekday): when given, every date
+   * shops for the plan day it gets on the Nutrition page (pickPlanDayForDate),
+   * so a Friday-only day is bought for Fridays.
+   */
+  dates?: PlanDayDate[];
 };
 
 export type GroceryListResult = {
@@ -263,7 +271,7 @@ export type GroceryListResult = {
   totalDaysCovered: number;
 };
 
-export function buildGroceryList({ planDays, dayCounts }: BuildGroceryListInput): GroceryListResult {
+export function buildGroceryList({ planDays, dayCounts, dates }: BuildGroceryListInput): GroceryListResult {
   const days = (planDays ?? []).filter((d) => String(d?.notes ?? "").trim());
   const totalWeekDays = dayCounts.training + dayCounts.non_training + dayCounts.high;
 
@@ -273,6 +281,20 @@ export function buildGroceryList({ planDays, dayCounts }: BuildGroceryListInput)
   if (days.length === 1) {
     // Single plan day → it is the plan for every resolved date this week.
     contributions.push({ day: days[0], multiplier: totalWeekDays });
+  } else if (dates) {
+    const all = planDays ?? [];
+    const perDay = new Map<number, number>();
+    for (const date of dates) {
+      const { index, dayType } = pickPlanDayForDate(all, date);
+      if (index < 0) {
+        if (!unmatched.includes(dayType)) unmatched.push(dayType);
+        continue;
+      }
+      perDay.set(index, (perDay.get(index) ?? 0) + 1);
+    }
+    for (const [index, multiplier] of perDay) {
+      if (String(all[index]?.notes ?? "").trim()) contributions.push({ day: all[index], multiplier });
+    }
   } else {
     const byType = new Map<GroceryDayType, GroceryPlanDay>();
     for (const d of days) {

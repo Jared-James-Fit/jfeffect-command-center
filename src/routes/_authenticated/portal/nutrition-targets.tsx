@@ -32,6 +32,8 @@ import {
   DAY_TYPE_LABEL,
   resolveClientNutritionDay,
   resolvePlanDaySelection,
+  weekdayForISO,
+  type DayResolution,
 } from "@/lib/client-nutrition-day";
 import { TodaysPlanHero } from "@/components/nutrition/TodaysPlanHero";
 import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
@@ -146,12 +148,21 @@ function PortalNutrition() {
     [todayISO, scheduleQ.data, ctxQ.data?.preferredHighDays],
   );
 
-  // Automatic day categories are guidance only. The client selects an exact
-  // uploaded plan-day record by stable ID, so coach-created titles never need
-  // to be normalized or remapped to become reviewable.
-  const automaticDayType = resolution.dayType;
+  // Today's plan day is the one the coach set for today's kind of day and
+  // weekday (pickPlanDayForDate: "Training Day (Friday Only)" on a training
+  // Friday). The client can still pick any saved day by its stable ID.
   const [manualPlanId, setManualPlanId] = useState<string | null>(null);
-  const selection = resolvePlanDaySelection(days, automaticDayType, manualPlanId);
+  const selection = resolvePlanDaySelection(
+    days,
+    { dayType: resolution.dayType, baseType: resolution.baseType, weekday: weekdayForISO(todayISO) },
+    manualPlanId,
+  );
+  const automaticDayType = selection.dayType;
+  // a High Day on a plan with no High Day is just the training / rest day it is
+  const shownResolution: DayResolution =
+    automaticDayType === resolution.dayType
+      ? resolution
+      : { ...resolution, dayType: automaticDayType, source: automaticDayType === "training" ? "workout" : "default", suggested: !scheduleQ.data };
   const day = selection.selectedPlanDayId
     ? days.find((candidate) => candidate.id === selection.selectedPlanDayId) ?? null
     : null;
@@ -209,7 +220,7 @@ function PortalNutrition() {
             todayPlanId={selection.automaticPlanDayId}
             automaticDayType={automaticDayType}
             onSelectPlan={(planDayId) => setManualPlanId(planDayId === selection.automaticPlanDayId ? null : planDayId)}
-            resolution={resolution}
+            resolution={shownResolution}
             isManual={selection.isManual}
             dateLabel={format(new Date(), "EEE, MMM d")}
           />

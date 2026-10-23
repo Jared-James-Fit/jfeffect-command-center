@@ -35,6 +35,7 @@ import {
 } from "@/lib/grocery-shopping-state";
 import { cn } from "@/lib/utils";
 import { groceryListKey } from "@/lib/grocery-query-keys";
+import { weekdayForISO } from "@/lib/client-nutrition-day";
 
 function mondayOf(dateISO: string): string {
   const d = parseLocalDate(dateISO) ?? new Date();
@@ -119,9 +120,20 @@ export function GroceryListSheet({
   const targetId = (q.data?.plan?.id as string | undefined) ?? null;
   const planDays = (q.data?.plan?.days ?? []) as any[];
 
+  // every date shops for the plan day it gets on the Nutrition page
+  const dates = useMemo(
+    () =>
+      (q.data?.days ?? []).map((d) => ({
+        dayType: d.nutritionDayType,
+        baseType: d.hasCommittedWorkout ? ("training" as const) : ("non_training" as const),
+        weekday: weekdayForISO(d.date),
+      })),
+    [q.data],
+  );
+
   const result = useMemo(
-    () => buildGroceryList({ planDays, dayCounts }),
-    [planDays, dayCounts],
+    () => buildGroceryList({ planDays, dayCounts, dates }),
+    [planDays, dayCounts, dates],
   );
 
   // Local-only shopping ticks, keyed by target + week start (+ span).
