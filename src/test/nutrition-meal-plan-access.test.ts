@@ -42,6 +42,16 @@ describe("client nutrition meal-plan access", () => {
     expect(hero).toContain("display data only");
   });
 
+  it("is a slim switch, not a hero: a date line, one row of chips, today's marked, Back to today only when another is on", () => {
+    expect(hero).not.toContain("<Card");
+    expect(hero).not.toContain("text-2xl");
+    expect(hero).toContain("const picking = planChoices.length > 1;");
+    expect(hero).toContain("overflow-x-auto");
+    expect(hero).toContain("{today && !on && <span");
+    expect(hero).toContain("{isManual && todayPlanId && (");
+    expect(portalNutrition).toContain("todayPlanId={selection.automaticPlanDayId}");
+  });
+
   it("does not claim a generic day is missing before exposing the uploaded plan choices", () => {
     expect(portalNutrition).toContain("You can still review any uploaded plan above.");
     expect(portalNutrition).toContain("planChoices={planChoices}");

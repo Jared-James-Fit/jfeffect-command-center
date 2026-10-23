@@ -201,11 +201,12 @@ function PortalNutrition() {
       <PageHeader title="Nutrition" subtitle="Your plan, targets, and recipes — set by your coach." />
 
       <div className="space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-6">
-        {/* 1. TODAY'S PLAN hero — owns nothing, reflects the container state. */}
+        {/* 1. Which day's plan: a slim switch (date + chips), not a hero; the targets card names the day. */}
         <SectionErrorBoundary label="Today's plan">
           <TodaysPlanHero
             planChoices={planChoices}
             selectedPlanId={selection.selectedPlanDayId}
+            todayPlanId={selection.automaticPlanDayId}
             automaticDayType={automaticDayType}
             onSelectPlan={(planDayId) => setManualPlanId(planDayId === selection.automaticPlanDayId ? null : planDayId)}
             resolution={resolution}

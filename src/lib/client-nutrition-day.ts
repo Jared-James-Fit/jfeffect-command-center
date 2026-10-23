@@ -190,11 +190,5 @@ export const DAY_TYPE_LABEL: Record<ClientNutritionDayType, string> = {
   high: "High Day",
 };
 
-export const DAY_TYPE_COPY: Record<ClientNutritionDayType, string> = {
-  training: "Training today? Follow this plan for performance and recovery.",
-  non_training: "No lifting today? Follow this plan.",
-  high: "This is your coach-planned higher-calorie day.",
-};
-
 export const DAY_TYPE_INFO =
   "Your coach may set different nutrition targets for training days, rest days, and one weekly High Day. Follow the category that matches today.";
