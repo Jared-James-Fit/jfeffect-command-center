@@ -125,8 +125,9 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
  * card, exactly what Save image and Share to Instagram send. Dark, with the
  * cards' glow, until it's ready (painted once, then kept on the phone).
  * `fill`: fill the box it's in (a grid tile) instead of keeping 4:5.
+ * `zoom`: a pinch lifts it like a photo (useMediaPinchZoom); off for grid tiles.
  */
-export function PostArtImage({ post, card, unit, eager = false, fill = false, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; className?: string }) {
+export function PostArtImage({ post, card, unit, eager = false, fill = false, zoom = true, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; zoom?: boolean; className?: string }) {
   const box = useRef<HTMLDivElement | null>(null);
   const near = useNearScreen(box, eager);
   const { art, failed, host } = usePostArt(post, card, unit, near);
@@ -140,7 +141,10 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, cl
       data-ready={art ? "" : undefined}
     >
       {art ? (
-        <ArtImg src={art.url} alt={alt} />
+        // data-pinch-zoom: pinch lifts just the picture, the same as a photo post's (SlideMedia)
+        <div data-pinch-zoom={zoom ? "" : undefined} className="absolute inset-0">
+          <ArtImg src={art.url} alt={alt} />
+        </div>
       ) : failed ? (
         // couldn't paint it on this phone: its words, on the same dark card
         <div className="absolute inset-0 flex items-center px-[9%] text-white">
@@ -180,5 +184,5 @@ function ArtImg({ src, alt }: { src: string; alt: string }) {
  */
 export function AutoPostTile({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const card = postArtCard(post);
-  return card ? <PostArtImage post={post} card={card} unit={unit} fill /> : <div className="h-full w-full bg-[#09090b]" />;
+  return card ? <PostArtImage post={post} card={card} unit={unit} fill zoom={false} /> : <div className="h-full w-full bg-[#09090b]" />;
 }
