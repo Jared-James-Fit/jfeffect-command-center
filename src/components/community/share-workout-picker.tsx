@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, formatWorkoutDuration, groupSessions, lockInCameraCard, mealCameraCard, mealFuelMoment, sessionDisplayTitle, sessionWhen } from "@/lib/community";
 import { createCommunityPost, shareToCommunity, useCreateCommunityPost, useDayPlan, useMyPostForCompletion, usePublicSessionTitle, useRecentCompletions, useTodaySession, type RecentCompletion } from "@/lib/community.queries";
 import { TEMPLATE_LABEL, type ShareTemplate } from "@/lib/workout-share-card";
-import type { CameraCard, StudioPost } from "@/components/community/share-studio";
+import type { CameraCard, ShareKind, StudioPost } from "@/components/community/share-studio";
 import type { LookItem } from "@/components/community/look-carousel";
 import { startWorkout as startWorkoutFn } from "@/lib/workout-completion.functions";
 import { audienceDoneLabel } from "@/components/community/audience-picker";
@@ -91,11 +91,13 @@ export function ShareWorkoutButton({
   const [videoFor, setVideoFor] = useState<{ session: RecentCompletion; file: File } | null>(null);
   // Fetched up front so the camera opens on the right mode.
   const { data: today } = useTodaySession(!previewOnly);
-  // null = not picked yet: Lock in leads when there's a session to train today.
+  // null = not picked yet: on a post Lock in leads when there's a session to train today; a story starts on Normal.
   const [mode, setMode] = useState<Mode | null>(null);
-  // what it opens on: a session to start, else a workout from the last day, else a plain post
+  // Post or Story in the camera (a filter picked by hand stays when it's switched)
+  const [kind, setKind] = useState<ShareKind>(story ? "story" : "post");
+  // what a post opens on: a session to start, else a workout from the last day, else a plain post
   const freshWorkout = !!target && Date.now() - new Date(target.completed_at).getTime() < 86_400_000;
-  const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";
+  const fallbackMode: Mode = kind === "story" ? "post" : today ? "lockin" : freshWorkout ? "workout" : "post";
   const activeMode: Mode = mode === "lockin" && !today ? fallbackMode : mode === "workout" && !target && !isLoading ? fallbackMode : mode ?? fallbackMode;
   const [writing, setWriting] = useState(false);
   const createPost = useCreateCommunityPost();
@@ -128,6 +130,7 @@ export function ShareWorkoutButton({
     if (previewOnly) return void toast.message(PREVIEW_ONLY_MESSAGE);
     preloadStudio();
     setMode(null);
+    setKind(story ? "story" : "post");
     setChosen(null);
     workout.resetLook();
     setCapturing(true);
@@ -362,6 +365,7 @@ export function ShareWorkoutButton({
             onFilter={onFilter}
             // opened from Your story: straight onto Story (its clips are trimmed to a story's 60 s)
             startAs={story ? "story" : "post"}
+            onKind={setKind}
             videoContext={activeMode === "workout" ? "workout" : "post"}
             // shoot straight away: the card's numbers land on the photo when they arrive
             canShoot={activeMode === "post" || activeMode === "meal" ? true : activeMode === "lockin" ? !!today : !!target}

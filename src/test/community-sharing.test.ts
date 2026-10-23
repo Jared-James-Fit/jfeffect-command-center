@@ -907,7 +907,7 @@ describe("share studio: lock in cards, camera first, text + stickers", () => {
     expect(picker).toContain("<ShareStudio");
     expect(bar).toContain("<ShareStudio");
     // opens on a session to start, else a workout from the last day, else a plain post
-    expect(picker).toContain('const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";');
+    expect(picker).toContain('const fallbackMode: Mode = kind === "story" ? "post" : today ? "lockin" : freshWorkout ? "workout" : "post";');
     // the shutter freezes the frame in place: same dialog, no second screen
     // (framed the way the camera's 4:5 guide showed it)
     expect(studio).toContain("freeze({ src: c, file: null, live: true, at: new Date() }, card ? CENTRED : framingFromGuide(");

@@ -52,9 +52,20 @@ describe("members post anything, not only workouts", () => {
     const btn = read("src/components/community/share-workout-picker.tsx");
     expect(btn).toContain('{ key: "post:normal", look: "plain", label: "Normal" }');
     expect(btn).toContain("createCommunityPost(qc,");
-    expect(btn).toContain('const fallbackMode: Mode = today ? "lockin" : freshWorkout ? "workout" : "post";');
+    expect(btn).toContain('const fallbackMode: Mode = kind === "story" ? "post" : today ? "lockin" : freshWorkout ? "workout" : "post";');
     expect(btn).toContain('saveLabel="Post"');
     expect(read("src/lib/community.queries.ts")).toContain('db.rpc("community_create_post"');
+  });
+  it("a story starts on Normal (no filter), from Your story or switched to from Post; a filter picked by hand stays", () => {
+    const btn = read("src/components/community/share-workout-picker.tsx");
+    const studio = read("src/components/community/share-studio.tsx");
+    // the picker hears Post / Story from the camera and only changes the default (mode null), never a pick
+    expect(btn).toContain('const [kind, setKind] = useState<ShareKind>(story ? "story" : "post");');
+    expect(btn).toContain("onKind={setKind}");
+    expect(btn).toMatch(/setMode\(null\);\s*setKind\(story \? "story" : "post"\);/);
+    // the camera says which it's on as it opens and on every switch
+    expect(studio).toContain("const [kind, setKind] = useState<ShareKind>(startAs);");
+    expect(studio).toMatch(/useEffect\(\(\) => \{\s*if \(open\) onKindRef\.current\?\.\(kind\);\s*\}, \[open, kind\]\);/);
   });
   it("the database function: own media only, no points, a daily cap", () => {
     const sql = read("supabase/migrations/20261101100000_community_member_posts.sql");
