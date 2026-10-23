@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import {
   LESSON_VISUAL_KINDS, answerSticker, canHaveArt, cleanSticker, coachClock, coachInstant, extraLesson, hookLine, lessonArtPrompt, lessonKicker,
-  lessonStatusLabel, missingLevels, needsReview, safeRefUrl, stickerCountLabel, stickerPercents, type LessonPlanRow, type PostSticker,
+  lessonStatusLabel, missingLevels, needsReview, safeRefUrl, stickerPercents, type LessonPlanRow, type PostSticker,
 } from "@/lib/lessons";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -324,8 +324,15 @@ describe("story stickers", () => {
     let sl: PostSticker = { type: "slider", q: "q", emoji: "🔥", average: 50, total: 2, is_mine: false, mine: null };
     sl = answerSticker(sl, { value: 80 });
     expect([sl.total, (sl as any).average]).toEqual([3, 60]);
-    expect([0, 1, 2].map((total) => stickerCountLabel({ type: "question", total }))).toEqual(["0 replies", "1 reply", "2 replies"]);
-    expect(stickerCountLabel({ type: "poll", total: 1 })).toBe("1 vote");
+  });
+
+  it("a story poll is Instagram's: no results until you've voted (the poster too), never a count on the story", () => {
+    const sticker = read("src/components/community/story-sticker.tsx");
+    expect(sticker).toMatch(/const shown = s\.mine\?\.choice != null;/);
+    expect(sticker).not.toMatch(/stickerCountLabel|\$\{s\.total\}/);
+    // the poster's own way in says no number; the tally is in their private sheet
+    expect(sticker).toMatch(/\{s\.type === "question" \? "See responses" : "See results"\}/);
+    expect(sticker).toMatch(/function PollTally\(/);
   });
 
   it("sit a story sticker above the bottom bar, however tall the bar is", () => {

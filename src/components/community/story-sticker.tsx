@@ -1,21 +1,23 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Check, ChevronRight, Reply, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { PREVIEW_ONLY_MESSAGE, postTimeLabel, type CommunityAuthor, type CommunityPost } from "@/lib/community";
-import { STICKER_ANSWER_MAX, questionResponses, stickerCountLabel, stickerPercents, type PostSticker, type StickerAnswer, type StickerSpec } from "@/lib/lessons";
+import { STICKER_ANSWER_MAX, questionResponses, stickerPercents, type PostSticker, type StickerAnswer, type StickerSpec } from "@/lib/lessons";
 import { useAnswerSticker } from "@/lib/lessons.queries";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 
 /**
  * A story's sticker, Instagram's way: one tap and you're in.
- *   poll      tap an answer, the bars show (tap another to switch)
+ *   poll      tap an answer, then the bars and percentages show (tap another to switch)
  *   slider    drag the emoji, let go to answer; the crew's average shows after
  *   question  tap, type, send: only the poster sees it (the poster can fill it in too)
- * The poster sees the tally and who answered what (and so does nobody else:
- * the card says so). Answers never push anyone. A coach previewing a client
+ * Everyone sees the same box, the poster too: no results until you've
+ * answered, and never a count on the story. The poster's See results opens
+ * the tally and who answered what (nobody else sees it: the card says so).
+ * Answers never push anyone. A coach previewing a client
  * can look but not answer. A question's poster answers a response on their
  * story (Instagram's Share response): the card goes on the story with the
  * question and what was sent, never who sent it, and it shows as answered.
@@ -50,7 +52,7 @@ export function StorySticker({ post, onComposing, onOpenPerson, onReply, classNa
       )}
       {s.is_mine ? (
         <button type="button" onClick={() => setSheet(true)} className="mt-2.5 flex w-full items-center justify-center gap-1 text-[12px] font-bold text-black/60 active:text-black" data-sticker-results>
-          {stickerCountLabel(s)} <ChevronRight className="h-3.5 w-3.5" />
+          {s.type === "question" ? "See responses" : "See results"} <ChevronRight className="h-3.5 w-3.5" />
         </button>
       ) : (
         s.mine && <p className="mt-2 text-center text-[11px] font-semibold text-black/45">{s.type === "question" ? `Only ${first} sees who sent it` : `Only ${first} sees your answer`}</p>
@@ -88,7 +90,8 @@ function usePreviewGuard() {
 function PollSticker({ post, s }: { post: CommunityPost; s: Extract<PostSticker, { type: "poll" }> }) {
   const answer = useAnswerSticker(post);
   const blocked = usePreviewGuard();
-  const shown = s.mine?.choice != null || s.is_mine;
+  // results only once you've voted (the poster too, like everyone)
+  const shown = s.mine?.choice != null;
   const pct = stickerPercents(s.options.map((o) => o.votes));
   return (
     <div className="mt-3 space-y-2">
@@ -326,7 +329,11 @@ export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson, onRe
           <div className="min-w-0">
             <SheetTitle className="truncate text-[16px] font-black">{question ? "Responses" : sticker.q}</SheetTitle>
             <SheetDescription className="truncate text-[12px]">
-              {question ? `${sticker.q} · only you see who sent them` : `${stickerCountLabel(sticker)} · only you can see who answered`}
+              {question
+                ? `${sticker.q} · only you see who sent them`
+                : sticker.type === "slider" && typeof sticker.average === "number"
+                  ? `Crew average ${sticker.average} · only you can see who answered`
+                  : `Only you can see who ${sticker.type === "poll" ? "voted" : "answered"}`}
             </SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -366,29 +373,60 @@ export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson, onRe
                   </div>
                 );
               })
-            : answers.map((a) => (
-                <div key={a.user_id} className="flex items-start gap-3 rounded-xl px-3 py-2">
-                  <button
-                    type="button"
-                    disabled={!onOpenPerson}
-                    onClick={() => onOpenPerson?.(a)}
-                    className="shrink-0 rounded-full active:scale-95 disabled:active:scale-100"
-                    aria-label={`Open ${a.name}'s profile`}
-                    data-sticker-answer-person
-                  >
-                    <UserAvatar src={a.avatar_url} name={a.name} size={36} expandable={false} />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <button type="button" disabled={!onOpenPerson} onClick={() => onOpenPerson?.(a)} className="block max-w-full truncate text-left text-[14px] font-bold">
-                      {a.name}
-                    </button>
-                    <div className="text-[14px] font-semibold text-muted-foreground">{what(a)}</div>
-                  </div>
-                </div>
-              ))}
+            : sticker.type === "poll"
+              ? answers.length > 0 && <PollTally sticker={sticker} answers={answers} row={(a) => <AnswerRow key={a.user_id} a={a} onOpenPerson={onOpenPerson} />} />
+              : answers.map((a) => <AnswerRow key={a.user_id} a={a} detail={what(a)} onOpenPerson={onOpenPerson} />)}
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Someone who answered: photo and name (their profile), and what they sent. */
+function AnswerRow({ a, detail, onOpenPerson }: { a: StickerAnswer; detail?: string; onOpenPerson?: (a: CommunityAuthor) => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl px-3 py-2">
+      <button
+        type="button"
+        disabled={!onOpenPerson}
+        onClick={() => onOpenPerson?.(a)}
+        className="shrink-0 rounded-full active:scale-95 disabled:active:scale-100"
+        aria-label={`Open ${a.name}'s profile`}
+        data-sticker-answer-person
+      >
+        <UserAvatar src={a.avatar_url} name={a.name} size={36} expandable={false} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <button type="button" disabled={!onOpenPerson} onClick={() => onOpenPerson?.(a)} className="block max-w-full truncate text-left text-[14px] font-bold">
+          {a.name}
+        </button>
+        {detail && <div className="text-[14px] font-semibold text-muted-foreground">{detail}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** The poster's poll results, Instagram's: each answer with its share and votes, and who picked it under it. */
+function PollTally({ sticker, answers, row }: { sticker: Extract<PostSticker, { type: "poll" }>; answers: StickerAnswer[]; row: (a: StickerAnswer) => ReactNode }) {
+  const pct = stickerPercents(sticker.options.map((o) => o.votes));
+  return (
+    <>
+      {sticker.options.map((o, i) => {
+        const voters = answers.filter((a) => a.choice === i);
+        return (
+          <section key={i} className="px-1 py-1.5" data-sticker-tally={i}>
+            <div className="relative mx-2 flex h-10 items-center overflow-hidden rounded-xl bg-muted">
+              <span className="absolute inset-y-0 left-0 bg-primary/15" style={{ width: `${pct[i]}%` }} aria-hidden />
+              <span className="relative min-w-0 flex-1 truncate pl-3 text-[14px] font-bold">{o.label}</span>
+              <span className="relative shrink-0 pr-3 text-[13px] font-black tabular-nums">
+                {pct[i]}% · {o.votes}
+              </span>
+            </div>
+            {voters.map(row)}
+          </section>
+        );
+      })}
+    </>
   );
 }
 
