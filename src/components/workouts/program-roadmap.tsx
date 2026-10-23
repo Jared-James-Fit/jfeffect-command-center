@@ -9,13 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { parseLocalDate, todayLocalISO } from "@/lib/today";
 import { isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
 import {
+  blockNameParts,
   buildProgramRoadmap,
   type ProgramRoadmap,
-  type ProgramStatus,
   type ProgramSummary,
   type RoadmapBlockView,
   type RoadmapNoteRow,
-  type RoadmapStatus,
   type RoadmapWeekView,
 } from "@/lib/training-roadmap";
 
@@ -115,9 +114,8 @@ function meetText(daysOut: number): string {
   return `Meet in ${Math.round(daysOut / 7)} weeks`;
 }
 
-const STATUS_TEXT: Record<RoadmapStatus, string> = { completed: "Done", current: "Now", upcoming: "Up next" };
 
-const weeksLabel = (n: number) => `${n} wk${n === 1 ? "" : "s"}`;
+const weeksLabel = (n: number) => `${n} week${n === 1 ? "" : "s"}`;
 const rangeLabel = (start: string | null, end: string | null) => [fmt(start), fmt(end)].filter(Boolean).join(" – ");
 
 /** One sentence the athlete can act on: the week's own note, else the block's purpose. */
@@ -143,23 +141,20 @@ export function ProgramRoadmapCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [openBlock, setOpenBlock] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   if (!roadmap || !roadmap.blocks.length) return null;
   const { blocks, programWeek, totalWeeks, meet } = roadmap;
   // Another program than today's: a read-only look back (or ahead).
   const browsing = roadmap.program.id !== roadmap.defaultProgramId;
-  // A finished program has no "this week" card, so its roadmap is the content.
+  const canPick = roadmap.programs.length > 1 && !!onSelectProgram;
+  // A finished program has no "this week" part, so its roadmap is the content.
   const showAll = expanded || roadmap.program.status === "completed";
-  const setShowAll = (fn: (v: boolean) => boolean) => setExpanded(fn);
   const current = blocks.find((b) => b.id === roadmap.currentBlockId) ?? null;
   const currentIdx = current ? blocks.indexOf(current) : -1;
   const thisWeek = current?.weeks.find((w) => w.status === "current") ?? null;
   const thisWeekIdx = thisWeek && current ? current.weeks.indexOf(thisWeek) : -1;
   const allDone = blocks.every((b) => b.status === "completed");
   const notStarted = !allDone && blocks.every((b) => b.status === "upcoming");
-  const doneWeeks = allDone
-    ? totalWeeks
-    : blocks.reduce((n, b) => n + (b.status === "completed" ? b.weekCount : b.weeks.filter((w) => w.status === "completed").length), 0);
-  const pct = totalWeeks ? Math.round(((programWeek ?? doneWeeks) / totalWeeks) * 100) : 0;
 
   const headline = allDone
     ? "Program complete"
@@ -169,115 +164,110 @@ export function ProgramRoadmapCard({
         ? `Week ${programWeek} of ${totalWeeks}`
         : "Between blocks";
   const line = !allDone ? weekLine(thisWeek, current) : null;
+  const pick = (id: string) => {
+    setPicking(false);
+    setExpanded(false);
+    setOpenBlock(null);
+    onSelectProgram?.(id === roadmap.defaultProgramId ? null : id);
+  };
 
   return (
     <Card className="overflow-hidden p-0" aria-label="Your training program">
-      {roadmap.programs.length > 1 && onSelectProgram && (
-        <ProgramSelector
-          programs={roadmap.programs}
-          selectedId={roadmap.program.id}
-          defaultId={roadmap.defaultProgramId}
-          onSelect={(id) => {
-            setExpanded(false);
-            setOpenBlock(null);
-            onSelectProgram(id === roadmap.defaultProgramId ? null : id);
-          }}
-        />
-      )}
-
-      {/* Header: where you are in the whole program. */}
-      <div className="space-y-2.5 p-3.5 sm:p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-              {browsing ? (roadmap.program.status === "completed" ? "Past program" : "Program") : "Program"}
+      {/* Where you are in the whole program: its name, the week, one bar. */}
+      <div className="px-4 pb-4 pt-3.5">
+        <div className="flex items-center justify-between gap-3">
+          {canPick ? (
+            <button
+              type="button"
+              onClick={() => setPicking((v) => !v)}
+              aria-expanded={picking}
+              aria-label="Choose a program"
+              className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left transition hover:bg-secondary/50"
+            >
+              <ProgramTitle program={roadmap.program} browsing={browsing} />
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", picking && "rotate-180")} />
+            </button>
+          ) : (
+            <div className="flex min-w-0 items-center gap-1">
+              <ProgramTitle program={roadmap.program} browsing={browsing} />
             </div>
-            <div className="mt-0.5 text-lg font-black leading-tight tabular-nums">{headline}</div>
-            {roadmap.program.title && (roadmap.programs.length <= 1 || !onSelectProgram) && (
-              <div className="truncate text-[11px] text-muted-foreground">{roadmap.program.title}</div>
-            )}
-          </div>
+          )}
           {meet ? (
-            <div className="shrink-0 text-right">
-              <div className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
-                <Flag className="h-3 w-3" /> {meetText(meet.daysOut)}
-              </div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">{[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}</div>
-            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-bold text-primary" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
+              <Flag className="h-3 w-3" /> {meetText(meet.daysOut)}
+            </span>
           ) : roadmap.end && !allDone ? (
-            <div className="shrink-0 pt-1 text-[11px] text-muted-foreground">Ends {fmt(roadmap.end)}</div>
+            <span className="shrink-0 text-[12px] text-muted-foreground">Ends {fmt(roadmap.end)}</span>
           ) : allDone && roadmap.start ? (
-            <div className="shrink-0 pt-1 text-right text-[11px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</div>
+            <span className="shrink-0 text-[12px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</span>
           ) : null}
         </div>
+        <div className="mt-1 text-[22px] font-black leading-tight tracking-tight tabular-nums">{headline}</div>
 
-        {/* Overall progress, one segment per block so the shape of the program reads at a glance. */}
-        <div>
-          <div className="flex gap-1" aria-hidden>
-            {blocks.map((b) => (
-              <div key={b.id} className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/20" style={{ flexGrow: Math.max(1, b.weekCount), flexBasis: 0 }}>
-                <div
-                  className={cn("h-full rounded-full", b.status === "completed" ? "bg-emerald-500/80" : "bg-primary")}
-                  style={{
-                    width: b.status === "completed" ? "100%" : b.status === "upcoming" ? "0%"
-                      : `${Math.round(((b.weeks.filter((w) => w.status !== "upcoming").length || 1) / Math.max(1, b.weekCount)) * 100)}%`,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-1 flex justify-between text-[10px] font-semibold text-muted-foreground tabular-nums">
-            <span>{blocks.length} block{blocks.length === 1 ? "" : "s"} · {totalWeeks} weeks</span>
-            <span>{pct}% through</span>
-          </div>
-        </div>
-
-        {/* The current block and this week: the one thing worth reading every day. */}
-        {current && !allDone && (
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-widest text-primary">
-                  {blocks.length > 1 ? `Block ${currentIdx + 1} of ${blocks.length}` : "Current block"}
-                  {current.status === "upcoming" ? " · starts soon" : ""}
-                </div>
-                <div className="truncate text-[15px] font-black leading-tight">{current.label ?? current.name}</div>
-                {current.label && current.label !== current.name && (
-                  <div className="truncate text-[11px] text-muted-foreground">{current.name}</div>
-                )}
-              </div>
-              <div className="shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
-                <div className="font-bold text-foreground">
-                  {thisWeekIdx >= 0 ? `Week ${thisWeekIdx + 1} of ${current.weekCount}` : weeksLabel(current.weekCount)}
-                </div>
-                <div>{rangeLabel(current.start, current.end)}</div>
-              </div>
+        {/* One segment per block, so the shape of the program reads at a glance. */}
+        <div className="mt-3 flex gap-1" aria-hidden>
+          {blocks.map((b) => (
+            <div key={b.id} className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/20" style={{ flexGrow: Math.max(1, b.weekCount), flexBasis: 0 }}>
+              <div
+                className={cn("h-full rounded-full", b.status === "completed" ? "bg-emerald-500/80" : "bg-primary")}
+                style={{
+                  width: b.status === "completed" ? "100%" : b.status === "upcoming" ? "0%"
+                    : `${Math.round(((b.weeks.filter((w) => w.status !== "upcoming").length || 1) / Math.max(1, b.weekCount)) * 100)}%`,
+                }}
+              />
             </div>
-            {current.weeks.length > 0 && <WeekPills weeks={current.weeks} />}
-            {line && (
-              <p className="mt-2 text-[13px] leading-snug text-foreground/85">
-                {thisWeek?.label && <span className="font-bold text-foreground">{thisWeek.label}. </span>}
-                {line}
-              </p>
-            )}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
+
+      {picking && canPick && (
+        <ProgramList programs={roadmap.programs} selectedId={roadmap.program.id} defaultId={roadmap.defaultProgramId} onSelect={pick} />
+      )}
+
+      {/* This block and this week: the one thing worth reading every day. */}
+      {current && !allDone && (
+        <div className="border-t border-border/60 px-4 py-3.5" data-roadmap-now>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                {blocks.length > 1 ? `Block ${currentIdx + 1} of ${blocks.length}` : "This block"}
+                {current.status === "upcoming" ? " · starts soon" : ""}
+              </div>
+              <div className="truncate text-base font-bold leading-snug">{blockTitle(current)}</div>
+            </div>
+            <div className="shrink-0 pt-0.5 text-right">
+              <div className="text-[13px] font-semibold tabular-nums">
+                {thisWeekIdx >= 0 ? `Week ${thisWeekIdx + 1} of ${current.weekCount}` : weeksLabel(current.weekCount)}
+              </div>
+              {current.weeks.length > 1 && <WeekPills weeks={current.weeks} />}
+            </div>
+          </div>
+          {line && (
+            <div className="mt-3">
+              {thisWeek?.label && <div className="text-[15px] font-bold leading-snug">{thisWeek.label}</div>}
+              <p className="mt-0.5 text-[14px] leading-relaxed text-foreground/75">{line}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Roadmap: every block in order. Collapsed by default; always open for a finished program. */}
       {blocks.length > 1 && roadmap.program.status !== "completed" && (
         <button
           type="button"
-          onClick={() => setShowAll((v) => !v)}
+          onClick={() => setExpanded((v) => !v)}
           aria-expanded={showAll}
-          className="flex w-full items-center justify-between border-t border-border/60 px-3.5 py-2.5 text-xs font-bold text-muted-foreground transition hover:bg-secondary/40 sm:px-4"
+          className="flex w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[13px] font-semibold transition hover:bg-secondary/40"
         >
-          <span>{showAll ? "Hide roadmap" : `See the full roadmap · ${blocks.length} blocks`}</span>
-          <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
+          <span>{showAll ? "Hide the roadmap" : "See the full roadmap"}</span>
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            {blocks.length} blocks
+            <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
+          </span>
         </button>
       )}
       {(showAll || blocks.length === 1) && (
-        <ol className="space-y-0 px-3.5 pb-3 sm:px-4" aria-label="Blocks in this program">
+        <ol className="space-y-0 px-4 pb-3" aria-label="Blocks in this program">
           {blocks.map((b, i) => (
             <RoadmapStep
               key={b.id}
@@ -294,26 +284,18 @@ export function ProgramRoadmapCard({
       )}
 
       {browsing && onSelectProgram && (
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground sm:px-4">
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Eye className="h-3 w-3" /> Viewing only. Your current program and schedule are unchanged.
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              setExpanded(false);
-              setOpenBlock(null);
-              onSelectProgram(null);
-            }}
-            className="shrink-0 font-bold text-primary"
-          >
+          <button type="button" onClick={() => pick(roadmap.defaultProgramId)} className="shrink-0 font-bold text-primary">
             Back to current
           </button>
         </div>
       )}
 
       {coach && (
-        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground sm:px-4">
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
           <span className="inline-flex min-w-0 items-center gap-1">
             <Sparkles className="h-3 w-3 shrink-0" /> <span className="truncate">Notes are written by Cleo from the program. Yours override hers.</span>
           </span>
@@ -333,22 +315,42 @@ export function ProgramRoadmapCard({
   );
 }
 
-function WeekPills({ weeks }: { weeks: RoadmapWeekView[] }) {
+/** A block by its own name: the roadmap's label, else the coach's name without its "Block N —". */
+function blockTitle(b: RoadmapBlockView): string {
+  return b.label ?? blockNameParts(b.name)?.name ?? b.name;
+}
+
+/** The program's name, with Past / Upcoming only when it isn't today's. */
+function ProgramTitle({ program, browsing }: { program: ProgramSummary; browsing: boolean }) {
   return (
-    <div className="mt-2 flex gap-1" aria-label="Weeks in this block">
+    <>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-muted-foreground">{programName(program)}</span>
+      {browsing && program.status !== "active" && (
+        <span className="shrink-0 rounded px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider bg-secondary text-muted-foreground">
+          {program.status === "completed" ? "Past" : "Upcoming"}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** This block's weeks as short bars: done green, this week red, the rest to come. */
+function WeekPills({ weeks }: { weeks: RoadmapWeekView[] }) {
+  const narrow = weeks.length > 6;
+  return (
+    <div className="mt-1.5 flex justify-end gap-1" aria-label="Weeks in this block">
       {weeks.map((w) => (
         <span
           key={w.id}
-          title={[`Week ${w.index}`, w.label].filter(Boolean).join(" · ")}
+          title={[`Week ${w.index}`, w.label, w.status === "completed" ? "done" : w.status === "current" ? "this week" : null].filter(Boolean).join(" · ")}
           className={cn(
-            "grid h-6 min-w-0 flex-1 place-items-center rounded-md text-[10px] font-black tabular-nums",
-            w.status === "completed" && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400",
-            w.status === "current" && "bg-primary text-primary-foreground",
-            w.status === "upcoming" && "bg-secondary/60 text-muted-foreground",
+            "h-1.5 rounded-full",
+            narrow ? "w-2" : "w-4",
+            w.status === "completed" && "bg-emerald-500/80",
+            w.status === "current" && "bg-primary",
+            w.status === "upcoming" && "bg-muted-foreground/25",
           )}
-        >
-          {w.status === "completed" ? <Check className="h-3 w-3" /> : `W${w.index}`}
-        </span>
+        />
       ))}
     </div>
   );
@@ -392,18 +394,14 @@ function RoadmapStep({
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className={cn("truncate text-sm font-bold", block.status === "upcoming" && "text-foreground/80")}>{block.label ?? block.name}</span>
-              <span
-                className={cn(
-                  "shrink-0 rounded px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider",
-                  block.status === "current" ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
-                )}
-              >
-                {STATUS_TEXT[block.status]}
-              </span>
+              <span className={cn("truncate text-sm font-bold", block.status === "upcoming" && "text-foreground/80")}>{blockTitle(block)}</span>
+              {block.status === "current" && (
+                <span className="shrink-0 rounded bg-primary/15 px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider text-primary">
+                  Now
+                </span>
+              )}
             </div>
-            <div className="truncate text-[11px] text-muted-foreground">
-              {block.label && block.label !== block.name ? `${block.name} · ` : ""}
+            <div className="truncate text-[12px] text-muted-foreground tabular-nums">
               {weeksLabel(block.weekCount)}{range ? ` · ${range}` : ""}
             </div>
             {block.purpose && !open && <p className="mt-0.5 line-clamp-1 text-[12px] text-foreground/70">{block.purpose}</p>}
@@ -443,21 +441,12 @@ function RoadmapStep({
   );
 }
 
-const PROGRAM_STATUS: Record<ProgramStatus, { text: string; tone: string }> = {
-  active: { text: "Active", tone: "bg-primary/15 text-primary" },
-  upcoming: { text: "Upcoming", tone: "bg-secondary text-muted-foreground" },
-  completed: { text: "Completed", tone: "bg-secondary text-muted-foreground" },
-};
-
 function programName(p: ProgramSummary): string {
   return p.title ?? (p.start ? `Program from ${fmt(p.start, "MMM yyyy")}` : "Program");
 }
 
-/**
- * Which program the card shows. A compact row that opens a list; picking one
- * only changes what this card shows.
- */
-function ProgramSelector({
+/** The programs to look at, under the card's header. Picking one only changes what this card shows. */
+function ProgramList({
   programs, selectedId, defaultId, onSelect,
 }: {
   programs: ProgramSummary[];
@@ -465,65 +454,42 @@ function ProgramSelector({
   defaultId: string;
   onSelect: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const selected = programs.find((p) => p.id === selectedId) ?? programs[0];
   return (
-    <div className="border-b border-border/60">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-label="Choose a program"
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition hover:bg-secondary/40 sm:px-4"
-      >
-        <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{programName(selected)}</span>
-        <span className={cn("shrink-0 rounded px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider", PROGRAM_STATUS[selected.status].tone)}>
-          {PROGRAM_STATUS[selected.status].text}
-        </span>
-        <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">{programs.length} programs</span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <ul className="space-y-0.5 px-2 pb-2" role="listbox" aria-label="Programs">
-          {programs.map((p) => {
-            const isSel = p.id === selectedId;
-            return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={isSel}
-                  onClick={() => {
-                    setOpen(false);
-                    onSelect(p.id);
-                  }}
-                  className={cn(
-                    "flex min-h-[44px] w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-secondary/50",
-                    isSel && "bg-secondary/70",
-                  )}
-                >
-                  {p.status === "completed" ? (
-                    <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <span className={cn("h-2 w-2 shrink-0 rounded-full", p.status === "active" ? "bg-primary" : "bg-muted-foreground/40")} />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className={cn("block truncate text-[13px] font-semibold", p.status === "completed" && "text-foreground/75")}>
-                      {programName(p)}
-                    </span>
-                    <span className="block truncate text-[11px] text-muted-foreground tabular-nums">
-                      {p.blockCount} block{p.blockCount === 1 ? "" : "s"} · {p.totalWeeks} weeks
-                      {p.start ? ` · ${rangeLabel(p.start, p.end)}` : ""}
-                      {p.id === defaultId ? " · current" : ""}
-                    </span>
-                  </span>
-                  {isSel && <Check className="h-4 w-4 shrink-0 text-primary" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <ul className="space-y-0.5 border-t border-border/60 px-2 py-2" role="listbox" aria-label="Programs">
+      {programs.map((p) => {
+        const isSel = p.id === selectedId;
+        return (
+          <li key={p.id}>
+            <button
+              type="button"
+              role="option"
+              aria-selected={isSel}
+              onClick={() => onSelect(p.id)}
+              className={cn(
+                "flex min-h-[44px] w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-secondary/50",
+                isSel && "bg-secondary/70",
+              )}
+            >
+              {p.status === "completed" ? (
+                <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", p.status === "active" ? "bg-primary" : "bg-muted-foreground/40")} />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className={cn("block truncate text-[13px] font-semibold", p.status === "completed" && "text-foreground/75")}>
+                  {programName(p)}
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground tabular-nums">
+                  {p.blockCount} block{p.blockCount === 1 ? "" : "s"} · {weeksLabel(p.totalWeeks)}
+                  {p.start ? ` · ${rangeLabel(p.start, p.end)}` : ""}
+                  {p.id === defaultId ? " · current" : ""}
+                </span>
+              </span>
+              {isSel && <Check className="h-4 w-4 shrink-0 text-primary" />}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
