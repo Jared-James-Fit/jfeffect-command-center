@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Pencil, Save, X, AlertCircle } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
 import { WEEK_DAYS, SHORT_DAY, formatDays, type WeekDay } from "@/lib/training-schedule";
@@ -36,9 +38,13 @@ type Props = {
   editable?: boolean;
   compact?: boolean;
   defaultEditing?: boolean;
+  /** Inside a sheet: just the editor (the sheet has the title), no card around it. */
+  embedded?: boolean;
+  /** Called once a save lands or Cancel is tapped (the sheet closes). */
+  onDone?: () => void;
 };
 
-export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false }: Props) {
+export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false, embedded = false, onDone }: Props) {
   const qc = useQueryClient();
   const reschedule = useServerFn(rescheduleFromCommittedDays);
   const saveSchedule = useServerFn(saveCommittedSchedule);
@@ -99,6 +105,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     setSaving(false);
     refresh();
     setEditing(false);
+    onDone?.();
 
     if (res?.realignError) {
       // The days are saved; only the calendar update failed. Offer a retry —
@@ -141,9 +148,10 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
   const targetCount = committedFreq ? Number(committedFreq) : 0;
   const dayCountValid = targetCount > 0 && committedDays.length === targetCount;
 
+  const Wrapper = embedded ? "div" : Card;
   return (
-    <Card className={`border-border bg-card ${compact ? "p-4" : "p-4 sm:p-6"} space-y-3 ${incomplete && editable ? "border-amber-500/50" : ""}`}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <Wrapper className={embedded ? "space-y-3" : `border-border bg-card ${compact ? "p-4" : "p-4 sm:p-6"} space-y-3 ${incomplete && editable ? "border-amber-500/50" : ""}`}>
+      {!embedded && <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <Calendar className="h-4 w-4 shrink-0" /> Committed Training Schedule
@@ -159,7 +167,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
             {incomplete ? "Set Schedule" : <Pencil className="h-3.5 w-3.5" />}
           </Button>
         )}
-      </div>
+      </div>}
 
       {!editing ? (
         <div className="space-y-1.5 text-sm">
@@ -207,7 +215,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
             )}
           </div>
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={() => { reset(); setEditing(false); }}>
+            <Button size="sm" variant="ghost" onClick={() => { reset(); setEditing(false); onDone?.(); }}>
               <X className="mr-1 h-3.5 w-3.5" /> Cancel
             </Button>
             <Button size="sm" onClick={save} disabled={saving || !dayCountValid} className="bg-gradient-primary font-bold uppercase">
@@ -216,7 +224,61 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
           </div>
         </div>
       )}
-    </Card>
+    </Wrapper>
+  );
+}
+
+/** The committed days, Mon-first, as short names. */
+function committedShortDays(client: Client): string[] {
+  return (client.committed_training_days ?? [])
+    .filter((d): d is WeekDay => (WEEK_DAYS as readonly string[]).includes(d))
+    .slice()
+    .sort((a, b) => WEEK_DAYS.indexOf(a) - WEEK_DAYS.indexOf(b))
+    .map((d) => SHORT_DAY[d]);
+}
+
+/**
+ * The committed training days as one chip ("Mon Tue Wed Sat"), for a
+ * page whose calendar already shows the week (Workouts): tap it to change
+ * them in a sheet, the same editor and the same save (every upcoming workout
+ * moves onto the new days). Not set yet: an amber "Set your training days".
+ */
+export function TrainingScheduleChip({ client, editable = true, className }: { client: Client; editable?: boolean; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const days = committedShortDays(client);
+  const set = !!client.committed_training_frequency && days.length > 0;
+  const needed = editable && (!set || !client.training_schedule_completed);
+  const label = !set ? "Set your training days" : days.length >= 6 ? `${days.length} days a week` : days.join(" ");
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!editable}
+        onClick={() => setOpen(true)}
+        aria-label={set ? `Training days: ${label}${editable ? ". Change" : ""}` : label}
+        className={cn(
+          "inline-flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-full border px-3 text-[12px] font-bold transition active:scale-[0.97] disabled:opacity-100",
+          needed ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400" : "border-border bg-card text-foreground",
+          className,
+        )}
+        data-training-days-chip
+      >
+        <Calendar className={cn("h-3.5 w-3.5 shrink-0", needed ? "" : "text-muted-foreground")} />
+        <span className="min-w-0 truncate">{label}</span>
+        {editable && set && <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" />}
+      </button>
+      {editable && (
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="bottom" hideCloseButton className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
+            <SheetHeader className="mb-3 min-h-0 space-y-1 pl-0 text-left">
+              <SheetTitle>Your training days</SheetTitle>
+              <SheetDescription>Your upcoming workouts move onto the days you pick.</SheetDescription>
+            </SheetHeader>
+            {open && <TrainingScheduleCard client={client} editable defaultEditing embedded onDone={() => setOpen(false)} />}
+          </SheetContent>
+        </Sheet>
+      )}
+    </>
   );
 }
 

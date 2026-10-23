@@ -45,7 +45,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useServiceTier } from "@/lib/service-tier";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
-import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { TrainingScheduleChip } from "@/components/training-schedule-card";
 import { toast } from "sonner";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import {
@@ -423,6 +423,9 @@ export function WorkoutsExperience({
       <PageHeader
         title={mode === "coach" ? `${clientName ?? "Client"} — Workouts` : "Workouts"}
         subtitle={subtitle || undefined}
+        // the title, Today, Analytics and ⋮ on one row, the block under them
+        // (the coach's "Name — Workouts" keeps its own row so the name isn't cut)
+        actionsInline={mode === "self"}
         actions={
           // Two everyday actions; the occasional ones (report, history,
           // rescheduling several workouts) live in ⋮.
@@ -476,14 +479,6 @@ export function WorkoutsExperience({
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
 
-        {client && (
-          <TrainingScheduleCard
-            client={client as any}
-            editable={mode === "self"}
-            compact
-          />
-        )}
-
         <Tabs value={tab} onValueChange={(v) => setTab(v as "calendar" | "block")} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
             {/* "Schedule": the training schedule. The Calendar page is for appointments. */}
@@ -496,6 +491,36 @@ export function WorkoutsExperience({
           </TabsList>
 
           <TabsContent value="calendar" className="space-y-4">
+            {/* the committed training days (tap to change them) beside Week / Month: one row, not a card */}
+            <div className="flex items-center justify-between gap-2">
+              {client ? <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" /> : <span />}
+              {!isLoading && dayItems.length > 0 && (
+                <div className="inline-flex shrink-0 rounded-full border bg-card p-0.5 text-[12px]">
+                  <button
+                    type="button"
+                    onClick={() => setCalView("week")}
+                    className={cn(
+                      "h-7 rounded-full px-3 font-bold",
+                      calView === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                    )}
+                    aria-pressed={calView === "week"}
+                  >
+                    Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalView("month")}
+                    className={cn(
+                      "h-7 rounded-full px-3 font-bold",
+                      calView === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
+                    )}
+                    aria-pressed={calView === "month"}
+                  >
+                    Month
+                  </button>
+                </div>
+              )}
+            </div>
             {isLoading ? (
               <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading your schedule…
@@ -504,32 +529,6 @@ export function WorkoutsExperience({
               <EmptyState mode={mode} />
             ) : (
               <>
-                <div className="flex items-center justify-end">
-                  <div className="inline-flex rounded-md border bg-card p-0.5 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setCalView("week")}
-                      className={cn(
-                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider",
-                        calView === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
-                      )}
-                      aria-pressed={calView === "week"}
-                    >
-                      Week
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalView("month")}
-                      className={cn(
-                        "rounded px-2.5 py-1 font-bold uppercase tracking-wider",
-                        calView === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
-                      )}
-                      aria-pressed={calView === "month"}
-                    >
-                      Month
-                    </button>
-                  </div>
-                </div>
                 <CalendarDndProvider dnd={dnd}>
                   {calView === "week" ? (
                     <WeekStrip

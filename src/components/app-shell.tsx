@@ -2067,10 +2067,17 @@ export function PageHeader({
   backTo,
   backLabel,
   breadcrumbs,
+  actionsInline = false,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  /**
+   * Phones: the actions sit on the title's own row (right side) instead of a
+   * row of their own above it, the subtitle full width under both. For a page
+   * with no back button and a few small actions (Workouts).
+   */
+  actionsInline?: boolean;
   /** Parent route fallback if no in-app history is available. */
   backTo?: string;
   /** Label shown on the back button. Defaults to "Back". */
@@ -2080,6 +2087,20 @@ export function PageHeader({
 }) {
   const handleBack = usePageBack(backTo);
   const showBack = !!backTo;
+  if (actionsInline && !showBack) {
+    return (
+      <div className="border-b border-border/60 bg-background px-4 py-2 md:px-5 xl:px-6 xl:py-3" data-page-header-inline>
+        <div className="flex min-h-10 items-center justify-between gap-2">
+          <h1 className="min-w-0 truncate text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {actions}
+            <CommunityNavButton />
+          </div>
+        </div>
+        {subtitle ? <p className="text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-1.5 border-b border-border/60 bg-background px-4 py-2 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-3 md:px-5 md:py-2 xl:px-6 xl:py-3">
       <div className="order-2 min-w-0 w-full md:order-1 md:flex-1">
