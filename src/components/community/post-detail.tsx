@@ -31,6 +31,7 @@ import { PostScoreRow } from "@/components/community/post-score";
 import { PostExtras } from "@/components/community/post-attach";
 import { useMarkHintSeen, usePostDetail, usePostMediaUrls, useReact } from "@/lib/community.queries";
 import { formatTonnage } from "@/lib/training-records";
+import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
  * The activity page: one shared workout in full — photo, the numbers, every
@@ -49,6 +50,8 @@ export function PostDetailDialog({
   onClose: () => void;
   onOpenAuthor?: (a: CommunityAuthor) => void;
 }) {
+  // its pictures pinch-zoom wherever it opens (the coach's Insights and Needs you too, not only over Crew)
+  useMediaPinchZoom(!!postId);
   return (
     <Dialog open={!!postId} onOpenChange={(o) => !o && onClose()}>
       <DialogContent

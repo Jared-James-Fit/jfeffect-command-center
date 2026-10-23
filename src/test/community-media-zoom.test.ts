@@ -7,6 +7,8 @@ const screen = read("src/components/community/community-screen.tsx");
 const card = read("src/components/community/post-card.tsx");
 const comments = read("src/components/community/comments-sheet.tsx");
 const shared = read("src/components/community/shared-comment.tsx");
+const art = read("src/components/community/post-art.tsx");
+const detail = read("src/components/community/post-detail.tsx");
 
 describe("community zoom: the page stays put, media zooms", () => {
   it("the page never pinch- or double-tap-zooms", () => {
@@ -31,6 +33,18 @@ describe("community zoom: the page stays put, media zooms", () => {
     expect(card).toMatch(/<div data-pinch-zoom className="absolute inset-0">/);
     expect(comments).toMatch(/data-pinch-zoom\s/);
     expect(shared).toMatch(/<div data-pinch-zoom /);
+  });
+
+  it("an automated post's painted picture zooms like a photo; its grid tile doesn't", () => {
+    expect(art).toMatch(/<div data-pinch-zoom=\{zoom \? "" : undefined\} className="absolute inset-0">\s*<ArtImg/);
+    expect(art).toMatch(/zoom = true,/);
+    expect(art).toMatch(/<PostArtImage post=\{post\} card=\{card\} unit=\{unit\} fill zoom=\{false\} \/>/);
+  });
+
+  it("a post opened anywhere zooms, and nested managers share one set of listeners", () => {
+    expect(detail).toMatch(/useMediaPinchZoom\(!!postId\);/);
+    expect(hook).toMatch(/if \(holders\+\+ === 0\) uninstall = install\(\);/);
+    expect(hook).toMatch(/if \(--holders > 0\) return;/);
   });
 
   it("scrolling never waits on it", () => {
