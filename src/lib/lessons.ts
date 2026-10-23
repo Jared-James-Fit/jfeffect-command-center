@@ -312,12 +312,6 @@ export function answerSticker(s: PostSticker, a: { choice?: number | null; value
   return s;
 }
 
-/** "3 answers" / "1 vote". */
-export function stickerCountLabel(s: Pick<PostSticker, "type" | "total">): string {
-  const [one, many] = s.type === "poll" ? ["vote", "votes"] : s.type === "slider" ? ["answer", "answers"] : ["reply", "replies"];
-  return `${s.total} ${s.total === 1 ? one : many}`;
-}
-
 /* ---- the coach's plan ------------------------------------------------ */
 
 export type LessonItem = {
