@@ -8,11 +8,11 @@ const source = readFileSync(
 );
 
 describe("Jared workout display boundary", () => {
-  it("derives the page header from the selected calendar workout before falling back", () => {
+  it("derives the page header from the selected calendar workout, then the week on screen, before falling back", () => {
     expect(source).toContain("const selectedItems = byDate.get(toLocalISO(selectedDate)) ?? [];");
     expect(source).toContain("const selectedHeaderItem = selectedPrimaryItems[0] ?? null;");
-    expect(source).toContain("const headerItem = selectedHeaderItem ?? fallbackHeaderItem;");
-    expect(source).toContain("const headerWeek = headerItem?.week ?? null;");
+    expect(source).toContain("if (selectedHeaderItem) return selectedHeaderItem;");
+    expect(source).toContain("const headerItem = weekItem ?? fallbackHeaderItem;");
   });
 
   it("does not infer Continue Workout from an empty completion row", () => {

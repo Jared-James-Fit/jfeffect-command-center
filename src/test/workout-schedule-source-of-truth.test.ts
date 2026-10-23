@@ -61,7 +61,8 @@ describe("workout schedule source of truth", () => {
     const source = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
     expect(source).toContain("const selectedItems = byDate.get(toLocalISO(selectedDate)) ?? [];");
     expect(source).toContain("const selectedHeaderItem = selectedPrimaryItems[0] ?? null;");
-    expect(source).toContain("const headerItem = selectedHeaderItem ?? fallbackHeaderItem;");
+    expect(source).toContain("if (selectedHeaderItem) return selectedHeaderItem;");
+    expect(source).toContain("const headerItem = weekItem ?? fallbackHeaderItem;");
   });
 
   it("5. an untouched instance never shows Continue Workout", () => {
