@@ -164,6 +164,7 @@ export function ShareStudio({
   onWrite,
   videoContext = "post",
   startAs = "post",
+  onKind,
   reply = null,
   share = null,
 }: {
@@ -193,6 +194,8 @@ export function ShareStudio({
   videoContext?: VideoContext;
   /** What it opens on: a post, or (from Your story) a story. */
   startAs?: ShareKind;
+  /** Post or Story, as it opens and whenever it's switched (the caller's default filter follows it). */
+  onKind?: (kind: ShareKind) => void;
   /**
    * Replying to a question response with a story (Instagram's Share
    * response): opens on Story, on a backdrop with the response card on it
@@ -209,8 +212,13 @@ export function ShareStudio({
   useNoAutoZoom(open);
   const [phase, setPhase] = useState<"shoot" | "edit">("shoot");
   // POST or STORY (the row under the camera)
-  const [kind, setKind] = useState<ShareKind>("post");
+  const [kind, setKind] = useState<ShareKind>(startAs);
   const story = kind === "story";
+  const onKindRef = useRef(onKind);
+  onKindRef.current = onKind;
+  useEffect(() => {
+    if (open) onKindRef.current?.(kind);
+  }, [open, kind]);
   // a post's photo: its shape and how it sits in it (baked in when it's posted)
   const [aspect, setAspect] = useState<PostAspect>("portrait");
   const [framing, setFraming] = useState<Framing>(CENTRED);
