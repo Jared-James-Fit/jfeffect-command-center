@@ -79,6 +79,49 @@ export function moveOutcome(dateISO: string, today: string, usesCredit = true): 
   return dateISO === today ? "Holds 1 credit, used tonight once the day is over." : `Holds 1 credit, used after ${shortDay(dateISO)}.`;
 }
 
+export type CreditOutlook = {
+  tone: "ok" | "low" | "renewal" | "none";
+  /** One line: "Uses 1 of 3 sessions left", "No sessions left · it goes on Marc's next 16". */
+  text: string;
+  /** Only when there's no package at all: booking it is a deliberate "book anyway". */
+  needsConfirm: boolean;
+};
+
+/**
+ * What booking `count` new sessions does to a client's credits. A package renews in
+ * its own size (client-owed.ts packageRenewal), so booking past the last credit isn't
+ * an error: those sessions go on the client's next package, the way pre-booked weeks
+ * already do. Only a client with no package to renew needs a "book anyway".
+ */
+export function creditOutlook(o: { remaining: number; count?: number; packageSize: number | null; first: string }): CreditOutlook {
+  const count = Math.max(1, o.count ?? 1);
+  const remaining = Math.max(0, Math.floor(o.remaining || 0));
+  const plural = (n: number) => `${n} session${n === 1 ? "" : "s"}`;
+  if (remaining >= count) {
+    return {
+      tone: remaining - count <= 1 ? "low" : "ok",
+      text: `Uses ${count} of ${plural(remaining)} left`,
+      needsConfirm: false,
+    };
+  }
+  const past = count - remaining;
+  if (o.packageSize && o.packageSize > 0) {
+    const where = `${o.first ? `${o.first}'s` : "their"} next ${o.packageSize}`;
+    return {
+      tone: "renewal",
+      text: remaining > 0
+        ? `Uses their last ${remaining}; ${past === 1 ? "1 goes" : `${past} go`} on ${where}`
+        : `No sessions left · ${count === 1 ? "it goes" : "they go"} on ${where}`,
+      needsConfirm: false,
+    };
+  }
+  return {
+    tone: "none",
+    text: `No session package · ${count === 1 ? "it shows" : "they show"} as owed until you add one`,
+    needsConfirm: true,
+  };
+}
+
 export function creditChipClasses(state: CreditState): string {
   switch (state) {
     case "held": return "border-primary/40 bg-primary/10 text-primary";

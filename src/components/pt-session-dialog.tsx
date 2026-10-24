@@ -33,6 +33,7 @@ import { creditDefaultFor } from "@/lib/booking-types";
 import { addMinutesToTime, cardAccent, fmtDuration, type BookingCard } from "@/lib/booking-cards";
 import { addDaysISO, deviceTodayISO } from "@/lib/schedule-time";
 import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
+import { useCreditOutlook } from "@/components/schedule/use-credit-outlook";
 import { kickGoogleSync, dayLabel } from "@/components/schedule/session-actions-sheet";
 
 type Props = {
@@ -221,6 +222,13 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     enabled: open && conflictSlots.length > 0,
   });
   const conflictBlocked = conflictCheck.conflicts.length > 0 && !conflictOverride;
+  // Past the last credit is normal (the client's package renews: packageRenewal), so only
+  // a client with no package at all needs a deliberate "book anyway".
+  const outlook = useCreditOutlook(form?.client_id, {
+    count: Math.max(previewDates.length, 1),
+    first: (clients.find((c) => c.id === form?.client_id)?.full_name ?? "").split(" ")[0],
+    enabled: open && !!form && !form.id,
+  });
 
   if (!form) {
     // Card picker step (booking mode only).
@@ -291,6 +299,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const bookingCount = isNewBooking ? previewDates.length : 0;
   const willReserve = (tracking || hasCredits) && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
   const overbook = willReserve > remaining;
+  const mustConfirmOverbook = overbook && (outlook?.needsConfirm ?? true);
 
   const impact = form.id ? creditImpact(form.status, events) : null;
   const clientName = selectedClient?.full_name ?? form.clients?.full_name ?? "";
@@ -305,8 +314,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.client_id) return toast.error("Pick a client first");
     if (!form.title) return toast.error("Title is required");
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
-    if (overbook && form.uses_credit !== false && !confirmOverbook) {
-      toast.error(`Only ${remaining} session${remaining === 1 ? "" : "s"} available — add sessions or confirm overbooking`);
+    if (mustConfirmOverbook && form.uses_credit !== false && !confirmOverbook) {
+      toast.error("No session package yet. Add one from the Sessions tab, or switch on Book anyway.");
       return;
     }
     if (conflictBlocked) {
@@ -446,25 +455,29 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
         )}
 
         {form.uses_credit !== false && (tracking || hasCredits) && isNewBooking && (
-          <div className={`rounded-md border px-3 py-2 text-sm ${overbook ? "border-destructive/60 bg-destructive/10" : remaining <= 2 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
+          <div className={`rounded-md border px-3 py-2 text-sm ${mustConfirmOverbook ? "border-destructive/60 bg-destructive/10" : overbook ? "border-border bg-secondary/30" : remaining - willReserve <= 1 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                {overbook ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CalendarDays className="h-4 w-4" />}
-                <span>
-                  <strong>{remaining}</strong> session{remaining === 1 ? "" : "s"} available
-                  {willReserve > 0 && <> · booking reserves <strong>{willReserve}</strong></>}
+              <div className="flex min-w-0 items-center gap-2">
+                {mustConfirmOverbook ? <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" /> : <CalendarDays className="h-4 w-4 shrink-0" />}
+                <span className="min-w-0">
+                  {outlook ? outlook.text : (
+                    <>
+                      <strong>{remaining}</strong> session{remaining === 1 ? "" : "s"} available
+                      {willReserve > 0 && <> · booking reserves <strong>{willReserve}</strong></>}
+                    </>
+                  )}
                 </span>
               </div>
-              {overbook && (
-                <div className="flex items-center gap-2">
+              {mustConfirmOverbook && (
+                <div className="flex shrink-0 items-center gap-2">
                   <Switch checked={confirmOverbook} onCheckedChange={setConfirmOverbook} />
-                  <Label className="text-xs">Overbook</Label>
+                  <Label className="text-xs">Book anyway</Label>
                 </div>
               )}
             </div>
-            {overbook && (
+            {mustConfirmOverbook && (
               <p className="mt-1 text-xs text-muted-foreground">
-                No sessions available. Add sessions from the Sessions tab, or toggle Overbook to book anyway (tracked as a negative balance).
+                Add a package from the Sessions tab, or book anyway and it shows as owed.
               </p>
             )}
           </div>
@@ -739,7 +752,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button
             onClick={save}
-            disabled={saving || (form.uses_credit !== false && overbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking}
+            disabled={saving || (form.uses_credit !== false && mustConfirmOverbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking}
             className="bg-gradient-primary font-bold uppercase"
           >
             {saving

@@ -11,9 +11,10 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { listenChannel } from "@/lib/realtime-channel";
 import { requestSession, withdrawSessionRequest } from "@/lib/session-requests.functions";
 import {
-  REQUEST_TYPES, requestStatusLabel, requestTypeLabel, requestWhen,
+  REQUEST_TYPES, replaceCandidates, sessionChipLabel, requestStatusLabel, requestTypeLabel, requestUsesCredit, requestWhen,
   type SessionRequest, type SessionRequestType,
 } from "@/lib/session-requests";
+import { minutesBetweenHM } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { DayChips, localISO, summaryDate, summaryTime } from "@/components/schedule/day-chips";
 
@@ -22,17 +23,24 @@ const LENGTHS = [30, 45, 60, 90];
 /** Short enough for four across a 360px phone. */
 const SHORT_TYPE: Record<SessionRequestType, string> = { training: "Training", call: "Call", assessment: "Assessment", other: "Other" };
 
+type BookedLite = { id: string; session_date: string; start_time: string; end_time: string; status: string; uses_credit: boolean | null };
+
 /**
  * "Request a session": what, which day, what time, how long. One screen,
  * top to bottom, with the send button always in reach; the note and other
  * times stay folded away unless wanted. It goes to the coach's chat as a
- * request card; nothing is booked until the coach approves.
+ * request card; nothing is booked until the coach approves. When the client
+ * already has a session of that kind booked that week, it asks whether this is
+ * instead of one of them, so the coach's Approve moves that session (and its
+ * credit) rather than booking a second.
  */
-export function RequestSessionSheet({ open, onOpenChange, isPov = false, initialDate }: {
+export function RequestSessionSheet({ open, onOpenChange, isPov = false, initialDate, clientId }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   isPov?: boolean;
   initialDate?: string | null;
+  /** The client's own id: offers "instead of" their booked sessions near the day picked. */
+  clientId?: string | null;
 }) {
   const qc = useQueryClient();
   const send = useServerFn(requestSession);
@@ -45,10 +53,28 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
   const [note, setNote] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [replaces, setReplaces] = useState<string | null>(null);
+
+  const { data: booked = [] } = useQuery<BookedLite[]>({
+    queryKey: ["request-sheet-booked", clientId],
+    enabled: open && !!clientId,
+    queryFn: async () =>
+      ((await (supabase as any).from("pt_sessions")
+        .select("id, session_date, start_time, end_time, status, uses_credit")
+        .eq("client_id", clientId).eq("status", "Scheduled").gte("session_date", localISO(0))
+        .order("session_date").order("start_time").limit(60)).data ?? []) as BookedLite[],
+  });
+  // Booked sessions of this kind near the day picked: what this could be instead of.
+  const swappable = type === "other" ? [] : replaceCandidates(
+    { preferred_date: date, preferred_time: anyTime ? null : time },
+    booked.filter((s) => (s.uses_credit !== false) === requestUsesCredit(type)),
+    localISO(0),
+  );
+  const instead = swappable.find((s) => s.id === replaces) ?? null;
 
   useEffect(() => {
     if (!open) return;
-    setType("training"); setMinutes(60); setTime("09:00"); setAnyTime(false); setAlt(""); setNote(""); setMoreOpen(false);
+    setType("training"); setMinutes(60); setTime("09:00"); setAnyTime(false); setAlt(""); setNote(""); setMoreOpen(false); setReplaces(null);
     const today = localISO(0);
     setDate(initialDate && initialDate > today ? initialDate : localISO(1));
   }, [open, initialDate]);
@@ -67,7 +93,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
       await send({
         data: {
           requestType: type, date, time: anyTime ? null : time, durationMinutes: minutes,
-          altTimes: alt.trim() || undefined, note: note.trim() || undefined,
+          altTimes: alt.trim() || undefined, note: note.trim() || undefined, replacesSessionId: instead?.id ?? null,
         },
       });
       qc.invalidateQueries({ queryKey: ["my-session-requests"] });
@@ -89,7 +115,16 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
     summaryDate(date),
     anyTime ? "any time" : summaryTime(time),
     `${minutes} min`,
+    ...(instead ? [`instead of ${shortSession(instead)}`] : []),
   ].join(" · ");
+  const pickInstead = (s: BookedLite | null) => {
+    setReplaces(s?.id ?? null);
+    // Moving a session keeps its length.
+    if (s) {
+      const len = minutesBetweenHM(s.start_time.slice(0, 5), s.end_time.slice(0, 5));
+      if (len > 0) setMinutes(len);
+    }
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -151,6 +186,28 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
               </div>
             </div>
 
+            {swappable.length > 0 && (
+              <div className="space-y-2" data-request-instead>
+                <Label>Is this instead of a booked session?</Label>
+                <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="radiogroup" aria-label="Instead of">
+                  <button type="button" role="radio" aria-checked={!instead} onClick={() => pickInstead(null)} className={cn(seg(!instead), "shrink-0 px-3")}>
+                    No, an extra one
+                  </button>
+                  {swappable.map((s) => (
+                    <button key={s.id} type="button" role="radio" aria-checked={instead?.id === s.id} onClick={() => pickInstead(s)}
+                      className={cn(seg(instead?.id === s.id), "shrink-0 px-3")}>
+                      {shortSession(s)}
+                    </button>
+                  ))}
+                </div>
+                {instead && (
+                  <p className="text-xs text-muted-foreground">
+                    Your coach moves your {shortSession(instead)} session to the new time. Same session, nothing extra.
+                  </p>
+                )}
+              </div>
+            )}
+
             {moreOpen ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -185,6 +242,10 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
       </SheetContent>
     </Sheet>
   );
+}
+
+function shortSession(s: { session_date: string; start_time: string }): string {
+  return sessionChipLabel(s.session_date, s.start_time);
 }
 
 /**
@@ -251,7 +312,7 @@ export function MySessionRequests({ clientId, isPov = false, children }: { clien
           ))}
         </ul>
       )}
-      <RequestSessionSheet open={open} onOpenChange={setOpen} isPov={isPov} />
+      <RequestSessionSheet open={open} onOpenChange={setOpen} isPov={isPov} clientId={clientId} />
     </section>
   );
 }
