@@ -243,8 +243,8 @@ function ArtLine() {
     <p data-lesson-art={art.enabled ? "on" : "off"}>
       <span className="font-bold text-foreground">Illustrations:</span>{" "}
       {art.enabled
-        ? "technique and diagram lessons use the app's own drawings. Others can get an OpenAI cover when you tap Illustration, and you see it before it posts."
-        : "the diagrams are drawn in the app. An OpenAI key (OPENAI_API_KEY) in the app's settings adds optional covers for lessons without one."}
+        ? "technique and diagram lessons use the app's own drawings. Others can get a made cover when you tap Illustration, and you see it before it posts."
+        : "the diagrams are drawn in the app. An image model key (OPENAI_API_KEY) in the app's settings adds optional covers for lessons without one."}
     </p>
   );
 }

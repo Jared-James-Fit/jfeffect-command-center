@@ -298,6 +298,7 @@ describe("a lesson in the feed and the story", () => {
     expect(lessonArtPrompt({ title: "Heels up", lift: "squat", track: "fix" })).toContain("Absolutely no text, letters, numbers, logos or watermarks");
     const fn = read("src/lib/lesson-art.functions.ts");
     expect(fn).toContain("if (!key) return { ok: false as const");
+    expect(fn).toContain("generatePicture(lessonArtPrompt(lesson))");
     expect(fn).toContain('if (!(roles ?? []).some((r: any) => r.role === "admin" || r.role === "coach")) throw new Error("Not allowed");');
   });
 });
