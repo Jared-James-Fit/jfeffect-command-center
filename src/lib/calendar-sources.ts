@@ -172,7 +172,7 @@ export function useClientSessionItems(clientId: string | null | undefined) {
     queryFn: async () => {
       const { data } = await supabase
         .from("pt_sessions")
-        .select("id,client_id,title,session_type,session_date,start_time,end_time,starts_at,ends_at,timezone,status,location,notes,client_visible_notes")
+        .select("id,client_id,title,session_type,session_date,start_time,end_time,starts_at,ends_at,timezone,status,location,notes,client_visible_notes,meet_link")
         .eq("client_id", clientId!)
         // Explicit, not RLS-dependent: a coach in Client POV must see what the client sees.
         .eq("visible_to_client", true);
@@ -210,7 +210,7 @@ export function useClientSessionItems(clientId: string | null | undefined) {
         subtitle: [s.session_type, s.location?.split(",")[0]].filter(Boolean).join(" · "),
         location: s.location ?? null,
         status: s.status,
-        // The Calendar page adds "Need to change it?" to the sheet; no self-link.
+        // Tapping one opens its quick view (ClientSessionSheet); no self-link.
         href: null,
         raw: s,
       });

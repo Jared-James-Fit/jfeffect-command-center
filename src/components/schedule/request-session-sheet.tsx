@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CalendarPlus, Clock, Dumbbell, HelpCircle, Loader2, Phone, Ruler } from "lucide-react";
@@ -15,40 +15,12 @@ import {
   type SessionRequest, type SessionRequestType,
 } from "@/lib/session-requests";
 import { cn } from "@/lib/utils";
+import { DayChips, localISO, summaryDate, summaryTime } from "@/components/schedule/day-chips";
 
 const TYPE_ICON: Record<SessionRequestType, React.ElementType> = { training: Dumbbell, call: Phone, assessment: Ruler, other: HelpCircle };
 const LENGTHS = [30, 45, 60, 90];
 /** Short enough for four across a 360px phone. */
 const SHORT_TYPE: Record<SessionRequestType, string> = { training: "Training", call: "Call", assessment: "Assessment", other: "Other" };
-
-function localISO(offsetDays = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** "Tmrw", "Wed 14": the next two weeks as one-tap day chips. */
-function nextDays(count = 14): Array<{ iso: string; top: string; day: string }> {
-  return Array.from({ length: count }, (_, i) => {
-    const iso = localISO(i);
-    const d = new Date(`${iso}T00:00:00`);
-    return {
-      iso,
-      top: i === 0 ? "Today" : i === 1 ? "Tmrw" : d.toLocaleDateString(undefined, { weekday: "short" }),
-      day: String(d.getDate()),
-    };
-  });
-}
-
-function summaryDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-}
-function summaryTime(t: string): string {
-  const [h, m] = t.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }).replace(":00", "");
-}
 
 /**
  * "Request a session": what, which day, what time, how long. One screen,
@@ -73,8 +45,6 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
   const [note, setNote] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const days = useMemo(() => nextDays(14), [open]);
-  const otherDateRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -89,7 +59,6 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
     if (t === "other") setMoreOpen(true);
   };
   const needsNote = type === "other" && !note.trim();
-  const dateInChips = days.some((d) => d.iso === date);
 
   const submit = async () => {
     if (isPov) return;
@@ -157,25 +126,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
 
             <div className="space-y-2">
               <Label>Day</Label>
-              <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="radiogroup" aria-label="Day">
-                {days.map((d) => {
-                  const on = date === d.iso;
-                  return (
-                    <button key={d.iso} type="button" role="radio" aria-checked={on} onClick={() => setDate(d.iso)}
-                      className={cn("flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-lg border transition active:scale-[0.97]",
-                        on ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
-                      <span className={cn("text-[10px] font-bold uppercase", on ? "text-primary-foreground/85" : "text-muted-foreground")}>{d.top}</span>
-                      <span className="text-base font-black tabular-nums">{d.day}</span>
-                    </button>
-                  );
-                })}
-                <label className={cn("relative flex h-14 shrink-0 cursor-pointer items-center justify-center rounded-lg border px-3 text-xs font-semibold",
-                  !dateInChips ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>
-                  {dateInChips ? "Other date" : summaryDate(date)}
-                  <input ref={otherDateRef} type="date" value={date} min={localISO(0)} onChange={(e) => e.target.value && setDate(e.target.value)}
-                    aria-label="Pick another date" className="absolute inset-0 cursor-pointer opacity-0" />
-                </label>
-              </div>
+              <DayChips value={date} onChange={setDate} />
             </div>
 
             <div className="space-y-2">

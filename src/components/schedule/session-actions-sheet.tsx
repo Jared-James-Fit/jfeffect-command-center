@@ -48,6 +48,9 @@ export type ChangeRequest = {
   pt_session_id: string;
   client_id: string;
   kind: "move" | "cancel";
+  /** Move: the exact day and start the client asked for (same length), for Approve. */
+  proposed_date?: string | null;
+  proposed_start?: string | null;
   preferred_times: string | null;
   note: string | null;
   status: string;
@@ -113,6 +116,8 @@ export function SessionActionsSheet({
   const [override, setOverride] = useState(false);
   const [notify, setNotify] = useState(true);
   const [reason, setReason] = useState("");
+  // Approving the client's own proposed time (the move form, pre-filled, with "Approve" wording).
+  const [approving, setApproving] = useState(false);
   // The coach's own note on the session (only staff see it): the "why" behind a cancel, move or miss.
   const [noteDraft, setNoteDraft] = useState("");
   const [editingNote, setEditingNote] = useState(false);
@@ -128,6 +133,7 @@ export function SessionActionsSheet({
     setOverride(false);
     setNotify(true);
     setReason("");
+    setApproving(false);
     setEditingNote(false);
   }, [open, session?.id, initialMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -216,6 +222,18 @@ export function SessionActionsSheet({
   const rebooking = !isBooked && session.status !== "Completed";
   const canMove = !!date && !!start && (changedTime || rebooking);
   const target = date ? statusForDate(date, today) : "Scheduled";
+  // The time the client asked for, when they picked one ("Change time" in their session sheet).
+  const proposed = request?.kind === "move" && request.proposed_date && request.proposed_start
+    ? { date: request.proposed_date, start: request.proposed_start.slice(0, 5) }
+    : null;
+  /** Approve: the move form at the client's time (same length), conflicts checked, the client told. */
+  const approveProposed = () => {
+    if (!proposed) return;
+    setDate(proposed.date);
+    setStart(proposed.start);
+    setApproving(true);
+    setMode("move");
+  };
 
   const refresh = () => {
     invalidatePtSessionCaches(qc, session.client_id);
@@ -294,7 +312,9 @@ export function SessionActionsSheet({
         await tellClient(
           rebooking
             ? `You're booked: ${title} on ${whenLabel(date, start)}.`
-            : `Your ${title} on ${when} moved to ${whenLabel(date, start)}.`,
+            : proposed && date === proposed.date && start === proposed.start
+              ? `Approved: your ${title} moves from ${when} to ${whenLabel(date, start)}.`
+              : `Your ${title} on ${when} moved to ${whenLabel(date, start)}.`,
         );
         texted = await textIfUrgent("moved", oldStart?.toISOString());
       }
@@ -486,20 +506,34 @@ export function SessionActionsSheet({
           {request && mode === "menu" && (
             <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
               <div className="text-sm font-semibold text-amber-200">
-                {first} {request.kind === "move" ? "asked to move this session" : "can't make this session"}
+                {request.kind === "move"
+                  ? proposed ? `${first} asked to move it to ${whenLabel(proposed.date, proposed.start)}` : `${first} asked to move this session`
+                  : `${first} can't make this session`}
               </div>
+              {request.note && <p className="text-sm"><span className="text-muted-foreground">Why:</span> {request.note}</p>}
               {request.preferred_times && (
-                <p className="text-sm"><span className="text-muted-foreground">Better times:</span> {request.preferred_times}</p>
+                <p className="text-sm"><span className="text-muted-foreground">{proposed ? "Other times that work:" : "Better times:"}</span> {request.preferred_times}</p>
               )}
-              {request.note && <p className="text-sm"><span className="text-muted-foreground">Note:</span> {request.note}</p>}
               <p className="text-[11px] text-muted-foreground">It stays booked (and isn't counted by itself) until you answer.</p>
               {request.kind === "move" ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("move")}>
-                    <CalendarClock className="mr-2 h-4 w-4" /> Pick new time
-                  </Button>
-                  <Button variant="outline" className="h-11" onClick={() => setMode("decline")}>Decline</Button>
-                </div>
+                proposed ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button className="col-span-2 h-12 bg-gradient-primary font-bold" onClick={approveProposed}>
+                      <CheckCircle2 className="mr-2 h-4 w-4" /> Approve {whenLabel(proposed.date, proposed.start)}
+                    </Button>
+                    <Button variant="outline" className="h-11" onClick={() => { setApproving(false); setMode("move"); }}>
+                      <CalendarClock className="mr-2 h-4 w-4" /> Other time
+                    </Button>
+                    <Button variant="outline" className="h-11" onClick={() => setMode("decline")}>Decline</Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("move")}>
+                      <CalendarClock className="mr-2 h-4 w-4" /> Pick new time
+                    </Button>
+                    <Button variant="outline" className="h-11" onClick={() => setMode("decline")}>Decline</Button>
+                  </div>
+                )
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   <Button className="h-11 bg-gradient-primary font-bold" onClick={() => pick("bank")}>
@@ -548,9 +582,10 @@ export function SessionActionsSheet({
           {mode === "move" && (
             <div className="space-y-3">
               <BackButton onClick={() => setMode("menu")} />
-              {request?.kind === "move" && request.preferred_times && (
+              {request?.kind === "move" && (proposed || request.preferred_times) && (
                 <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                  {first} suggested: {request.preferred_times}
+                  {proposed && <>{first} asked for {whenLabel(proposed.date, proposed.start)}.{request.preferred_times ? " " : ""}</>}
+                  {request.preferred_times && <>Other times that work: {request.preferred_times}</>}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-2">
@@ -594,7 +629,9 @@ export function SessionActionsSheet({
                 onClick={doMove}
               >
                 {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {canMove ? `${rebooking ? "Book" : "Move to"} ${whenLabel(date, start)}` : "Pick a new date or time"}
+                {canMove
+                  ? `${approving && proposed && date === proposed.date && start === proposed.start ? "Approve · move to" : rebooking ? "Book" : "Move to"} ${whenLabel(date, start)}`
+                  : "Pick a new date or time"}
               </Button>
             </div>
           )}

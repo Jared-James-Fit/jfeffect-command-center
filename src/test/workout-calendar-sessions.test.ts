@@ -19,10 +19,11 @@ describe("sessions show on the Workouts calendar too", () => {
   it("marks session days on the week and month, explains the dot, and lists that day's sessions under the workout", () => {
     expect(exp.match(/sessionDays=\{sessionDays\}/g)?.length).toBe(2);
     expect(exp).toContain("<WorkoutMarkLegend className=\"min-w-0 flex-1\" sessions={sessionDays.size > 0} />");
-    expect(exp).toContain("{sessions.length > 0 && <DaySessionsCard sessions={sessions} date={date} />}");
+    expect(exp).toContain("{sessions.length > 0 && <DaySessionsCard sessions={sessions} date={date} clientId={clientId} />}");
     expect(exp).toContain('"Session with your coach"');
-    // Each opens the Calendar on that day.
-    expect(exp).toContain('<Link to="/portal/calendar" search={{ date: day } as any} className={AGENDA_ROW}>');
+    // A session opens its quick view right there; an appointment opens the Calendar on that day.
+    expect(exp).toContain("<button type=\"button\" onClick={() => setOpenSession(it.raw as ClientSession)} className={AGENDA_ROW}>{row}</button>");
+    expect(exp).toContain('<Link to="/portal/calendar" search={{ date: day } as any} className={AGENDA_ROW}>{row}</Link>');
     // Cancelled / moved sessions don't show.
     expect(exp).toContain("if (/cancel|reschedul/i.test(it.status ?? \"\")) continue;");
     // Coaching clients always get a way to their appointments, even on a week with none.

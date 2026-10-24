@@ -84,6 +84,7 @@ import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
 import { SessionDot, WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
 import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
+import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
@@ -852,7 +853,7 @@ function SelectedDayList({
         />
       )}
       {backupItems.map((item, index) => card(item, primaryItems.length + index))}
-      {sessions.length > 0 && <DaySessionsCard sessions={sessions} date={date} />}
+      {sessions.length > 0 && <DaySessionsCard sessions={sessions} date={date} clientId={clientId} />}
     </div>
   );
 }
@@ -862,8 +863,10 @@ function SelectedDayList({
  * Home (violet line, time, what and where). Each opens the Calendar on that
  * day, where they can see the details or ask to change it.
  */
-function DaySessionsCard({ sessions, date }: { sessions: CalendarItem[]; date: Date }) {
+function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[]; date: Date; clientId: string }) {
   const day = toLocalISO(date);
+  // A session opens its quick view here (details, Change time, Can't make it); an appointment opens the Calendar.
+  const [openSession, setOpenSession] = useState<ClientSession | null>(null);
   return (
     <Card className="border-violet-500/30 px-3.5 pb-1.5 pt-3">
       <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
@@ -878,23 +881,29 @@ function DaySessionsCard({ sessions, date }: { sessions: CalendarItem[]; date: D
       <ol>
         {sessions.map((it) => {
           const range = it.startsAt ? compactTimeRange(it.startsAt, it.endsAt) : null;
+          const row = (
+            <AgendaRow
+              time={it.startsAt ? startLabel(it.startsAt) : "All day"}
+              timed={!!it.startsAt}
+              accent={FAMILY_ACCENT.people}
+              title={it.title}
+              sub={[range, KIND_META[it.kind]?.label, placeLabel(it.location)].filter(Boolean).join(" · ")}
+              trailing={it.status === "Completed" ? <span className="shrink-0 text-xs font-semibold text-emerald-500">Done</span> : null}
+              chevron
+            />
+          );
           return (
             <li key={it.id}>
-              <Link to="/portal/calendar" search={{ date: day } as any} className={AGENDA_ROW}>
-                <AgendaRow
-                  time={it.startsAt ? startLabel(it.startsAt) : "All day"}
-                  timed={!!it.startsAt}
-                  accent={FAMILY_ACCENT.people}
-                  title={it.title}
-                  sub={[range, KIND_META[it.kind]?.label, placeLabel(it.location)].filter(Boolean).join(" · ")}
-                  trailing={it.status === "Completed" ? <span className="shrink-0 text-xs font-semibold text-emerald-500">Done</span> : null}
-                  chevron
-                />
-              </Link>
+              {it.kind === "pt_session" && it.raw ? (
+                <button type="button" onClick={() => setOpenSession(it.raw as ClientSession)} className={AGENDA_ROW}>{row}</button>
+              ) : (
+                <Link to="/portal/calendar" search={{ date: day } as any} className={AGENDA_ROW}>{row}</Link>
+              )}
             </li>
           );
         })}
       </ol>
+      <ClientSessionSheet clientId={clientId} session={openSession} onClose={() => setOpenSession(null)} />
     </Card>
   );
 }

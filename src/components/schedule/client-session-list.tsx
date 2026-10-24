@@ -2,19 +2,15 @@ import { useEffect, useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CalendarClock, CircleOff, Clock, MapPin, Phone, Video, ChevronDown, Loader2 } from "lucide-react";
+import { CalendarClock, CircleOff, Clock, MapPin, Phone, Video, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
 import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
-import { requestSessionChange, withdrawSessionChange } from "@/lib/schedule.functions";
-import { sendMessage } from "@/lib/messages";
-import { useAuth } from "@/lib/auth";
+import { withdrawSessionChange } from "@/lib/schedule.functions";
+import { ClientSessionSheet, proposedLabel, useMySessionRequests, type MyChangeRequest } from "@/components/schedule/client-session-sheet";
 import { fmtWallClock } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
@@ -38,7 +34,6 @@ function isPlace(location: string): boolean {
   return !/^(video call|phone call)/i.test(location.trim());
 }
 
-type Pending = { id: string; pt_session_id: string; kind: "move" | "cancel" };
 
 function dayLabel(dateISO: string) {
   return new Date(`${dateISO}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
@@ -52,10 +47,6 @@ function relativeDay(dateISO: string): string | null {
   if (dateISO === tomorrow) return "Tomorrow";
   return null;
 }
-export function sessionWhen(s: Pick<Session, "session_date" | "start_time">) {
-  return `${dayLabel(s.session_date)} at ${fmtWallClock(s.start_time)}`;
-}
-
 const SHOW = 4;
 
 /**
@@ -64,7 +55,7 @@ const SHOW = 4;
  */
 export function ClientSessionList({ clientId }: { clientId: string }) {
   const [showAll, setShowAll] = useState(false);
-  const [changing, setChanging] = useState<Session | null>(null);
+  const [changing, setChanging] = useState<{ session: Session; mode: "move" | "cancel" } | null>(null);
   const [reFor, setReFor] = useState<any>(null);
   const qc = useQueryClient();
   const povKey = usePovArgs().viewAsClientId ?? null;
@@ -89,17 +80,8 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
       return (data ?? []) as unknown as Session[];
     },
   });
-  const { data: pending = [] } = useQuery<Pending[]>({
-    queryKey: ["my-session-requests", clientId],
-    queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("pt_session_change_requests")
-        .select("id, pt_session_id, kind")
-        .eq("client_id", clientId)
-        .eq("status", "pending");
-      return (data ?? []) as Pending[];
-    },
-  });
+  // Same query (and cache) as the session sheet, so a request sent there shows here at once.
+  const { data: pending = [] } = useMySessionRequests(clientId);
   const { data: appts } = useQuery({
     queryKey: ["portal-appointments", povKey],
     queryFn: () => apptFn(),
@@ -125,7 +107,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
   const calls = ((appts as any)?.upcoming ?? []) as any[];
   const visible = showAll ? sessions : sessions.slice(0, SHOW);
 
-  const onWithdraw = async (p: Pending) => {
+  const onWithdraw = async (p: MyChangeRequest) => {
     try {
       await withdraw({ data: { requestId: p.id } });
       qc.invalidateQueries({ queryKey: ["my-session-requests", clientId] });
@@ -194,7 +176,9 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                   {p ? (
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                       <span className="text-xs font-semibold text-amber-200">
-                        {p.kind === "move" ? "Move requested" : "Cancel requested"} · waiting on your coach
+                        {p.kind === "move"
+                          ? proposedLabel(p) ? `Move to ${proposedLabel(p)} requested` : "Move requested"
+                          : "Cancel requested"} · waiting on your coach
                       </span>
                       {!isPov && (
                         <button type="button" className="text-xs font-semibold text-muted-foreground underline" onClick={() => onWithdraw(p)}>
@@ -203,9 +187,14 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                       )}
                     </div>
                   ) : (
-                    <Button variant="outline" className="h-11 w-full" onClick={() => setChanging(s)}>
-                      <CalendarClock className="mr-2 h-4 w-4" /> Need to change it?
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="outline" className="h-11" onClick={() => setChanging({ session: s, mode: "move" })}>
+                        <CalendarClock className="mr-2 h-4 w-4 text-primary" /> Change time
+                      </Button>
+                      <Button variant="outline" className="h-11" onClick={() => setChanging({ session: s, mode: "cancel" })}>
+                        <CircleOff className="mr-2 h-4 w-4 text-muted-foreground" /> Can't make it
+                      </Button>
+                    </div>
                   )}
                 </Card>
               </li>
@@ -247,7 +236,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
         </Button>
       )}
 
-      <RequestChangeSheet clientId={clientId} session={changing} onClose={() => setChanging(null)} isPov={isPov} />
+      <ClientSessionSheet clientId={clientId} session={changing?.session ?? null} initialMode={changing?.mode} onClose={() => setChanging(null)} />
       <RescheduleDialog
         open={!!reFor}
         onOpenChange={(b) => { if (!b) setReFor(null); }}
@@ -255,137 +244,5 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
         onChanged={() => qc.invalidateQueries({ queryKey: ["portal-appointments"] })}
       />
     </section>
-  );
-}
-
-export function RequestChangeSheet({
-  clientId,
-  session,
-  onClose,
-  isPov,
-}: {
-  clientId: string;
-  session: Session | null;
-  onClose: () => void;
-  isPov: boolean;
-}) {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const request = useServerFn(requestSessionChange);
-  const [kind, setKind] = useState<"move" | "cancel" | null>(null);
-  const [times, setTimes] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const close = () => {
-    setKind(null);
-    setTimes("");
-    setNote("");
-    onClose();
-  };
-
-  const submit = async () => {
-    if (!session || !kind || !user) return;
-    setBusy(true);
-    try {
-      const res = await request({
-        data: { sessionId: session.id, kind, preferredTimes: times.trim() || undefined, note: note.trim() || undefined },
-      });
-      if (!res.alreadyPending) {
-        const what = `my ${session.title || "session"} on ${sessionWhen(session)}`;
-        const body =
-          kind === "move"
-            ? `Can we move ${what}?${times.trim() ? ` Better times for me: ${times.trim()}.` : ""}${note.trim() ? ` ${note.trim()}` : ""}`
-            : `I can't make ${what}. Can we cancel it?${note.trim() ? ` ${note.trim()}` : ""}`;
-        try {
-          await sendMessage({ clientId, senderId: user.id, senderRole: "client", body, messageType: "Scheduling" });
-        } catch {
-          /* the request itself is saved and shows on the coach's calendar */
-        }
-      }
-      qc.invalidateQueries({ queryKey: ["my-session-requests", clientId] });
-      toast.success(res.alreadyPending ? "You already asked about this one. Your coach has it." : "Sent to your coach. You'll get a message when it's sorted.");
-      close();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Couldn't send. Try again or message your coach.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Sheet open={!!session} onOpenChange={(o) => { if (!o) close(); }}>
-      <SheetContent side="bottom" className="max-h-[92dvh] overflow-y-auto rounded-t-2xl pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        {session && (
-          <div className="mx-auto w-full max-w-lg space-y-4">
-            <SheetHeader className="text-left">
-              <SheetTitle className="text-left">Change this session?</SheetTitle>
-              <SheetDescription className="text-left">
-                {session.title || "Session"} · {sessionWhen(session)}
-              </SheetDescription>
-            </SheetHeader>
-
-            {isPov && (
-              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-                Preview only. Clients send requests from here; you'll see them at the top of your calendar.
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setKind("move")}
-                className={cn(
-                  "flex h-20 flex-col items-center justify-center gap-1 rounded-xl border text-sm font-semibold",
-                  kind === "move" ? "border-primary bg-primary/15 text-primary" : "border-border",
-                )}
-              >
-                <CalendarClock className="h-5 w-5" /> Move it
-              </button>
-              <button
-                type="button"
-                onClick={() => setKind("cancel")}
-                className={cn(
-                  "flex h-20 flex-col items-center justify-center gap-1 rounded-xl border text-sm font-semibold",
-                  kind === "cancel" ? "border-primary bg-primary/15 text-primary" : "border-border",
-                )}
-              >
-                <CircleOff className="h-5 w-5" /> Can't make it
-              </button>
-            </div>
-
-            {kind === "move" && (
-              <div className="space-y-1.5">
-                <Label>When works better?</Label>
-                <Textarea
-                  rows={2}
-                  value={times}
-                  maxLength={300}
-                  onChange={(e) => setTimes(e.target.value)}
-                  placeholder="e.g. Wednesday after 4, or any morning next week"
-                />
-              </div>
-            )}
-            {kind && (
-              <div className="space-y-1.5">
-                <Label>Anything else? (optional)</Label>
-                <Textarea rows={2} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
-              </div>
-            )}
-            {kind && (
-              <>
-                <Button className="h-12 w-full bg-gradient-primary font-bold" disabled={busy || isPov || (kind === "move" && !times.trim())} onClick={submit}>
-                  {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {kind === "move" ? "Send to my coach" : "Ask to cancel"}
-                </Button>
-                <p className="text-center text-[11px] text-muted-foreground">
-                  Your session stays booked until your coach confirms the change.
-                </p>
-              </>
-            )}
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
   );
 }

@@ -10,7 +10,8 @@ import { AlertTriangle, ChevronRight, Dumbbell, ExternalLink } from "lucide-reac
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { scheduleTitle, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { toLocalISO } from "@/lib/today";
-import { ClientSessionList, RequestChangeSheet } from "@/components/schedule/client-session-list";
+import { ClientSessionList } from "@/components/schedule/client-session-list";
+import { ClientSessionSheet } from "@/components/schedule/client-session-sheet";
 import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { ClientBookCard } from "@/components/schedule/client-book-card";
 import { MySessionRequests } from "@/components/schedule/request-session-sheet";
@@ -27,9 +28,11 @@ import { useServerFn } from "@tanstack/react-start";
  *   0. Today's workout (or Workouts on a rest day): the way in to training.
  *   1. The calendar: sessions, appointments, check-ins, coach events, key
  *      dates, Google (?date=yyyy-mm-dd opens on that day: a day tapped on Home).
+ *      Tapping a session opens its quick view (ClientSessionSheet): details,
+ *      Change time (a new time + why, for the coach to approve), Can't make it.
  *   2. Sessions: "Request a session" (the coach approves it in chat), the
- *      booking types the coach opened to them, what's pending and booked, and
- *      "Need to change it?".
+ *      booking types the coach opened to them, what's pending and booked
+ *      (Change time / Can't make it on each).
  *   3. One-time phone calendar setup (Google, Apple, Outlook, any app).
  */
 export const Route = createFileRoute("/_authenticated/portal/calendar")({
@@ -57,7 +60,8 @@ function CalendarPage() {
   const calendarItems = useMemo(() => items.filter((i) => i.kind !== "workout" && i.kind !== "cardio"), [items]);
   const today = toLocalISO(new Date());
   const todaysWorkout = useMemo(() => items.find((i) => i.kind === "workout" && i.date === today) ?? null, [items, today]);
-  const [changing, setChanging] = useState<any>(null);
+  // Tapping a session opens its quick view (details, Change time, Can't make it).
+  const [openSession, setOpenSession] = useState<any>(null);
   // In-app booking replaces the old per-client external booking link when it's set up.
   const pov = usePovArgs();
   const typesFn = usePovFn(useServerFn(listMyBookingTypes));
@@ -97,20 +101,11 @@ function CalendarPage() {
             onRangeChange={(r) => setRange({ from: r.from, to: r.to })}
             views={["month", "week", "upcoming"]}
             emptyHint="Sessions, appointments, check-ins and coach events show up here as they're booked."
-            renderItemActions={(item, close) =>
-              item.kind === "pt_session" && item.status === "Scheduled" ? (
-                <Button
-                  variant="outline"
-                  className="h-11 w-full"
-                  onClick={() => {
-                    close();
-                    setChanging(item.raw);
-                  }}
-                >
-                  Need to change it?
-                </Button>
-              ) : null
-            }
+            onItemSelect={(item) => {
+              if (item.kind !== "pt_session" || !item.raw) return false;
+              setOpenSession(item.raw);
+              return true;
+            }}
           />
         </section>
 
@@ -124,7 +119,7 @@ function CalendarPage() {
 
         {client?.id && <CalendarSyncCard autoOpen={sync === 1 && !isImpersonating} />}
         {client?.id && (
-          <RequestChangeSheet clientId={client.id} session={changing} onClose={() => setChanging(null)} isPov={isImpersonating} />
+          <ClientSessionSheet clientId={client.id} session={openSession} onClose={() => setOpenSession(null)} />
         )}
 
         {client?.calendar_link && bookable.length === 0 && (

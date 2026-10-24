@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -11,6 +11,7 @@ import { getWorkoutStatus } from "@/lib/workout-status";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
+import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import {
   ActionPill, AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
@@ -58,12 +59,23 @@ function workoutAction(raw: any): { label: string; done: boolean } {
 
 function itemLink(item: CalendarItem, links: boolean): { to: string; params?: any; search?: any } | null {
   if (!links) return null;
-  // Sessions open the Schedule, where "Need to change it?" lives.
+  // Sessions open their quick view (OpenSession); appointments the Calendar.
   return item.href ?? (item.kind === "pt_session" || item.kind === "appointment" ? { to: "/portal/calendar" } : null);
 }
 
-/** A row that links in-app, opens Google in a new tab, or is plain text. */
+/** Opens a session's quick view (details, Change time, Can't make it) right here. */
+const OpenSession = createContext<((session: ClientSession) => void) | null>(null);
+
+/** A row that opens a session's quick view, links in-app, opens Google in a new tab, or is plain text. */
 function RowLink({ item, links, className, children }: { item: CalendarItem; links: boolean; className?: string; children: ReactNode }) {
+  const openSession = useContext(OpenSession);
+  if (links && openSession && item.kind === "pt_session" && item.raw) {
+    return (
+      <button type="button" onClick={() => openSession(item.raw as ClientSession)} className={cn("block", className)}>
+        {children}
+      </button>
+    );
+  }
   const href = itemLink(item, links);
   if (href) {
     return (
@@ -110,6 +122,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   });
   const today = isoToday();
   const [requesting, setRequesting] = useState(false);
+  const [openSession, setOpenSession] = useState<ClientSession | null>(null);
   // Today in full (today's workout is the way in to it), then the next few
   // appointments and dates: the workout schedule itself lives on Workouts.
   const agenda = useMemo(
@@ -132,93 +145,98 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
   }, [items]);
 
   return (
-    <AgendaCard>
-      <AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />
-      <AgendaWeek
-        today={today}
-        dots={(d) => dotsByDay.get(d) ?? []}
-        link={links ? (d) => ({ to: "/portal/calendar", search: { date: d } }) : null}
-      />
+    <OpenSession.Provider value={setOpenSession}>
+      <AgendaCard>
+        <AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />
+        <AgendaWeek
+          today={today}
+          dots={(d) => dotsByDay.get(d) ?? []}
+          link={links ? (d) => ({ to: "/portal/calendar", search: { date: d } }) : null}
+        />
 
-      <AgendaToday>
-        {isLoading && !items?.length ? (
-          <AgendaLoading />
-        ) : agenda.today.length === 0 ? (
-          <AgendaEmpty>Nothing scheduled today. A good day to recover.</AgendaEmpty>
-        ) : (
-          <ol aria-label="Today">
-            {agenda.today.map((item, i) => (
-              <li key={item.id} className="min-w-0">
-                {i === nowIndex && <NowLine />}
-                <TodayRow item={item} links={links} past={hasEnded(item.startsAt, item.endsAt, nowMs)} />
-              </li>
-            ))}
-            {nowIndex === agenda.today.length && (
-              <li aria-hidden>
-                <NowLine />
-              </li>
-            )}
-          </ol>
-        )}
-      </AgendaToday>
-
-      {/* Next: the next few things only; the full calendar is one tap away. */}
-      <AgendaNext show={agenda.upcoming.length > 0}>
-        {agenda.upcoming.flatMap((day) =>
-          day.items.map((item, i) => (
-            <li key={item.id} className="min-w-0">
-              <RowLink item={item} links={links} className={AGENDA_ROW}>
-                <AgendaNextRow
-                  dayText={i === 0 ? shortDay(day.date, today) : ""}
-                  accent={FAMILY_ACCENT[KIND_FAMILY[item.kind]]}
-                  time={item.startsAt ? startLabel(item.startsAt) : null}
-                  title={scheduleTitle(item)}
-                  quiet={item.kind === "google_event"}
-                  suffix={item.kind === "workout" && item.status === "Completed" ? <span className="font-normal text-emerald-500"> · Done</span> : null}
-                />
-              </RowLink>
-            </li>
-          )),
-        )}
-      </AgendaNext>
-      {!isLoading && agenda.upcoming.length === 0 && (
-        <div className="mt-1.5 border-t border-border/60 pt-1">
-          <AgendaEmpty>No appointments coming up.</AgendaEmpty>
-        </div>
-      )}
-
-      {/* Actions, in words: ask for a session, or see everything. */}
-      {links && (
-        <AgendaFooter>
-          {singleBook ? (
-            <Link
-              to="/book/$slug"
-              params={{ slug: singleBook.slug }}
-              search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
-              className={AGENDA_ACTION}
-            >
-              <CalendarPlus className="h-4 w-4" /> Book a session
-            </Link>
-          ) : bookable.length > 1 && !pov.viewAsClientId ? (
-            <Link to="/portal/calendar" className={AGENDA_ACTION}>
-              <CalendarPlus className="h-4 w-4" /> Book a session
-            </Link>
+        <AgendaToday>
+          {isLoading && !items?.length ? (
+            <AgendaLoading />
+          ) : agenda.today.length === 0 ? (
+            <AgendaEmpty>Nothing scheduled today. A good day to recover.</AgendaEmpty>
           ) : (
-            <button type="button" onClick={() => setRequesting(true)} className={AGENDA_ACTION}>
-              <CalendarPlus className="h-4 w-4" /> Request a session
-            </button>
+            <ol aria-label="Today">
+              {agenda.today.map((item, i) => (
+                <li key={item.id} className="min-w-0">
+                  {i === nowIndex && <NowLine />}
+                  <TodayRow item={item} links={links} past={hasEnded(item.startsAt, item.endsAt, nowMs)} />
+                </li>
+              ))}
+              {nowIndex === agenda.today.length && (
+                <li aria-hidden>
+                  <NowLine />
+                </li>
+              )}
+            </ol>
           )}
-          <Link to="/portal/calendar" className={AGENDA_LINK}>
-            Open calendar
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </AgendaFooter>
-      )}
+        </AgendaToday>
 
-      {links && (
-        <RequestSessionSheet open={requesting} onOpenChange={setRequesting} isPov={!!pov.viewAsClientId} initialDate={today} />
-      )}
-    </AgendaCard>
+        {/* Next: the next few things only; the full calendar is one tap away. */}
+        <AgendaNext show={agenda.upcoming.length > 0}>
+          {agenda.upcoming.flatMap((day) =>
+            day.items.map((item, i) => (
+              <li key={item.id} className="min-w-0">
+                <RowLink item={item} links={links} className={AGENDA_ROW}>
+                  <AgendaNextRow
+                    dayText={i === 0 ? shortDay(day.date, today) : ""}
+                    accent={FAMILY_ACCENT[KIND_FAMILY[item.kind]]}
+                    time={item.startsAt ? startLabel(item.startsAt) : null}
+                    title={scheduleTitle(item)}
+                    quiet={item.kind === "google_event"}
+                    suffix={item.kind === "workout" && item.status === "Completed" ? <span className="font-normal text-emerald-500"> · Done</span> : null}
+                  />
+                </RowLink>
+              </li>
+            )),
+          )}
+        </AgendaNext>
+        {!isLoading && agenda.upcoming.length === 0 && (
+          <div className="mt-1.5 border-t border-border/60 pt-1">
+            <AgendaEmpty>No appointments coming up.</AgendaEmpty>
+          </div>
+        )}
+
+        {/* Actions, in words: ask for a session, or see everything. */}
+        {links && (
+          <AgendaFooter>
+            {singleBook ? (
+              <Link
+                to="/book/$slug"
+                params={{ slug: singleBook.slug }}
+                search={{ name: "", email: "", phone: "", application_id: "", i: "" }}
+                className={AGENDA_ACTION}
+              >
+                <CalendarPlus className="h-4 w-4" /> Book a session
+              </Link>
+            ) : bookable.length > 1 && !pov.viewAsClientId ? (
+              <Link to="/portal/calendar" className={AGENDA_ACTION}>
+                <CalendarPlus className="h-4 w-4" /> Book a session
+              </Link>
+            ) : (
+              <button type="button" onClick={() => setRequesting(true)} className={AGENDA_ACTION}>
+                <CalendarPlus className="h-4 w-4" /> Request a session
+              </button>
+            )}
+            <Link to="/portal/calendar" className={AGENDA_LINK}>
+              Open calendar
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </AgendaFooter>
+        )}
+
+        {links && (
+          <RequestSessionSheet open={requesting} onOpenChange={setRequesting} isPov={!!pov.viewAsClientId} initialDate={today} />
+        )}
+        {links && clientId && (
+          <ClientSessionSheet clientId={clientId} session={openSession} onClose={() => setOpenSession(null)} />
+        )}
+      </AgendaCard>
+    </OpenSession.Provider>
   );
 }
 
