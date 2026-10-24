@@ -19892,6 +19892,8 @@ export type Database = {
           kind: string
           note: string | null
           preferred_times: string | null
+          proposed_date: string | null
+          proposed_start: string | null
           pt_session_id: string
           requested_by: string | null
           resolution: string | null
@@ -19906,6 +19908,8 @@ export type Database = {
           kind: string
           note?: string | null
           preferred_times?: string | null
+          proposed_date?: string | null
+          proposed_start?: string | null
           pt_session_id: string
           requested_by?: string | null
           resolution?: string | null
@@ -19920,6 +19924,8 @@ export type Database = {
           kind?: string
           note?: string | null
           preferred_times?: string | null
+          proposed_date?: string | null
+          proposed_start?: string | null
           pt_session_id?: string
           requested_by?: string | null
           resolution?: string | null

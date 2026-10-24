@@ -112,12 +112,15 @@ export function ChangeRequestsCard({ clientId, onEdit }: { clientId?: string; on
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">
                     {clientId ? "" : `${r.client?.full_name ?? "Client"} · `}
-                    {r.kind === "move" ? "wants to move" : "can't make it"}
+                    {r.kind === "move" ? (r.proposed_date ? "asks for a new time" : "wants to move") : "can't make it"}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {r.session ? whenLabel(r.session.session_date, r.session.start_time) : ""}
-                    {r.preferred_times ? ` → ${r.preferred_times}` : ""}
+                    {r.proposed_date && r.proposed_start
+                      ? ` → ${whenLabel(r.proposed_date, r.proposed_start)}`
+                      : r.preferred_times ? ` → ${r.preferred_times}` : ""}
                   </div>
+                  {r.note && <div className="truncate text-xs text-muted-foreground/80">“{r.note}”</div>}
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </button>

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { wallTimeToUtc } from "@/lib/schedule-time";
+import { DEFAULT_TZ, wallTimeToUtc } from "@/lib/schedule-time";
 import { findConflicts, type BusyItem, type SlotConflict } from "@/lib/session-conflicts";
 import { PovInput, canViewClient, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
 import { ownOrLinkedClient } from "@/lib/linked-client.server";
@@ -200,9 +200,14 @@ export const requestSessionChange = createServerFn({ method: "POST" })
       .object({
         sessionId: z.string().uuid(),
         kind: z.enum(["move", "cancel"]),
+        /** Move: the exact day and start the client wants (same length), for one-tap approval. */
+        proposedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        proposedStart: z.string().regex(/^\d{2}:\d{2}$/).optional(),
         preferredTimes: z.string().trim().max(300).optional(),
         note: z.string().trim().max(1000).optional(),
       })
+      .refine((v) => !!v.proposedDate === !!v.proposedStart, "Pick both a day and a time.")
+      .refine((v) => v.kind !== "move" || !!v.proposedDate || !!v.preferredTimes, "Say when works better.")
       .parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -211,12 +216,23 @@ export const requestSessionChange = createServerFn({ method: "POST" })
     // RLS returns only this client's own, visible sessions.
     const { data: s } = await supabase
       .from("pt_sessions")
-      .select("id, client_id, status, starts_at")
+      .select("id, client_id, status, starts_at, session_date, start_time, timezone")
       .eq("id", data.sessionId)
       .maybeSingle();
     if (!s || s.client_id !== clientId) throw new Error("Session not found.");
     if (s.status !== "Scheduled") throw new Error("This session can't be changed anymore.");
     if (new Date(s.starts_at).getTime() <= Date.now()) throw new Error("This session has already started.");
+    const proposed = data.kind === "move" && data.proposedDate && data.proposedStart
+      ? { date: data.proposedDate, start: data.proposedStart }
+      : null;
+    if (proposed) {
+      // In the session's own time zone, like every session time.
+      const at = wallTimeToUtc(proposed.date, proposed.start, s.timezone || DEFAULT_TZ);
+      if (at.getTime() <= Date.now()) throw new Error("Pick a time that hasn't passed yet.");
+      if (proposed.date === s.session_date && proposed.start === String(s.start_time).slice(0, 5)) {
+        throw new Error("That's the time it's already booked for.");
+      }
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: existing } = await supabaseAdmin
@@ -233,6 +249,8 @@ export const requestSessionChange = createServerFn({ method: "POST" })
         pt_session_id: s.id,
         client_id: clientId,
         kind: data.kind,
+        proposed_date: proposed?.date ?? null,
+        proposed_start: proposed?.start ?? null,
         preferred_times: data.preferredTimes || null,
         note: data.note || null,
         requested_by: userId,
