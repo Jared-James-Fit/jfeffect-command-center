@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { CalendarClock, Check, ChevronDown, PartyPopper, PenLine, Send } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { CalendarClock, Check, ChevronDown, ImagePlus, Loader2, PartyPopper, PenLine, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunityPost, type CommunitySeries, type CrewCompare } from "@/lib/community";
-import { useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem } from "@/lib/community.queries";
+import { useFullMediaUrl, useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem } from "@/lib/community.queries";
+import { makePostPicture } from "@/lib/post-pictures.functions";
 import { useAuth } from "@/lib/auth";
 import { CompareBars } from "@/components/community/series-cards";
 import { PostArtImage } from "@/components/community/post-art";
@@ -190,16 +193,16 @@ export function CoachWeeklyPosts() {
                             <PenLine className="h-3 w-3" /> Edit
                           </span>
                         </div>
-                        {series === "saturday_spirit" && isSpiritScene(next.data?.scene) && <SpiritScene scene={next.data!.scene} className="mt-2 w-[120px] rounded-lg" />}
                         {next.quote && <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold">“{next.quote}”</div>}
                         <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">{next.body}</div>
-                        {!!next.media?.length && (
+                        {!!next.media?.length && series !== "saturday_spirit" && (
                           <div className="mt-1.5 text-[11px] font-bold text-primary">
                             + {next.media.length} {next.media.length === 1 ? "photo" : "photos / videos"}
                           </div>
                         )}
                       </button>
                     )}
+                    {library && next && series === "saturday_spirit" && isSpiritScene(next.data?.scene) && <SaturdayPicture item={next} on={on} />}
                     {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
                     {series === "try_it_thursday" && next?.data?.habit && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
@@ -315,5 +318,69 @@ export function CoachWeeklyPosts() {
         }}
       />
     </section>
+  );
+}
+
+/**
+ * Saturday's next post goes out with a picture made for its scene
+ * (post-pictures.server.ts, made as soon as it's up next): the coach sees it
+ * here a week ahead and can ask for another. A photo of their own wins.
+ */
+function SaturdayPicture({ item, on }: { item: SeriesItem; on: boolean }) {
+  const qc = useQueryClient();
+  const make = useServerFn(makePostPicture);
+  const [busy, setBusy] = useState(false);
+  const slide = item.media?.find((m) => m.type === "image") ?? null;
+  const made = !!slide?.path.includes("/post-pictures/");
+  const own = !!item.media?.length && !made;
+  const url = useFullMediaUrl(slide ? slide.thumb ?? slide.path : null, !!slide).data ?? null;
+
+  const again = async () => {
+    setBusy(true);
+    try {
+      const r = await make({ data: { itemId: item.id } });
+      if (!r.ok) return void toast.error("Couldn't make a picture", { description: r.reason });
+      await qc.invalidateQueries({ queryKey: ["community-series"] });
+      toast.success("New picture ready", { description: "It goes out with Saturday's post." });
+    } catch (e: any) {
+      toast.error("Couldn't make a picture", { description: e?.message ?? undefined });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-end gap-3 rounded-xl bg-muted/60 px-3 py-2.5" data-saturday-picture>
+      {slide && url ? (
+        <img src={url} alt="" className="aspect-[4/5] w-[120px] rounded-lg object-cover" />
+      ) : (
+        <SpiritScene scene={item.data!.scene} className={cn("w-[120px] rounded-lg", busy && "animate-pulse")} />
+      )}
+      <div className="min-w-0 flex-1 space-y-1.5 pb-0.5">
+        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+          {own ? "Your photo" : made ? "Its picture" : on ? "Picture coming" : "Its picture"}
+        </div>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          {own
+            ? "Goes out with your photo."
+            : made
+              ? "Made for this one. Not it? Make another."
+              : on
+                ? "Made for this scene before Saturday. Or make it now."
+                : "Made for it once Saturday Spirit is on. Or make it now."}
+        </p>
+        {!own && (
+          <button
+            type="button"
+            onClick={() => void again()}
+            disabled={busy}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-bold disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
+            {busy ? "Making it…" : made ? "New picture" : "Make it now"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -240,6 +240,7 @@ import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
+import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
@@ -1595,6 +1596,12 @@ const ApiPublicHooksPaymentReminderSmsRoute =
     path: '/api/public/hooks/payment-reminder-sms',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksPostPicturesTickRoute =
+  ApiPublicHooksPostPicturesTickRouteImport.update({
+    id: '/api/public/hooks/post-pictures-tick',
+    path: '/api/public/hooks/post-pictures-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProgressArchiveTickRoute =
   ApiPublicHooksProgressArchiveTickRouteImport.update({
     id: '/api/public/hooks/progress-archive-tick',
@@ -1954,6 +1961,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -2206,6 +2214,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -2464,6 +2473,7 @@ export interface FileRoutesById {
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
+  '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -2722,6 +2732,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
@@ -2974,6 +2985,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
@@ -3231,6 +3243,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
+    | '/api/public/hooks/post-pictures-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
@@ -3326,6 +3339,7 @@ export interface RootRouteChildren {
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
+  ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -4962,6 +4976,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPaymentReminderSmsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/post-pictures-tick': {
+      id: '/api/public/hooks/post-pictures-tick'
+      path: '/api/public/hooks/post-pictures-tick'
+      fullPath: '/api/public/hooks/post-pictures-tick'
+      preLoaderRoute: typeof ApiPublicHooksPostPicturesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/progress-archive-tick': {
       id: '/api/public/hooks/progress-archive-tick'
       path: '/api/public/hooks/progress-archive-tick'
@@ -5817,6 +5838,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
+  ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,
   ApiPublicHooksScheduledMessagesWorkerRoute:

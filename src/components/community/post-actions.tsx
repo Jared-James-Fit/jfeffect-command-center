@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, Download, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Archive, ArchiveRestore, Download, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -8,7 +10,8 @@ import { attachOfPost } from "@/components/community/post-attach";
 import { EditPostSheet } from "@/components/community/edit-post-sheet";
 import { PREVIEW_ONLY_MESSAGE, type CommunityPost } from "@/lib/community";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemoveNoteScene, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
+import { POST_LIST_KEYS, useArchivePost, useDeletePost, useLeavePost, useMyCommunityId, useRemoveNoteScene, useSetPostMedia, useUpdateNote } from "@/lib/community.queries";
+import { makePostPicture } from "@/lib/post-pictures.functions";
 import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
@@ -24,7 +27,9 @@ import { useWeightUnit } from "@/lib/use-weight-unit";
  * Named on someone else's post: Remove me (off the post and your profile).
  * Coaches, on any post: Share to Instagram, and on an automated post Save
  * image (its picture, the same file the feed shows: the share sheet's Save
- * Image on a phone, a download on a computer). Never in View as client.
+ * Image on a phone, a download on a computer), and on Saturday's scene post
+ * New picture (made by an image model, post-pictures.server.ts). Never in
+ * View as client.
  * `onGone` runs after an archive or delete (e.g. to close the detail view).
  * `unit`: the one the feed painted its picture in.
  */
@@ -59,7 +64,28 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const canInstagram = viewerIsStaff && !isImpersonating && !post.story;
   // an automated post's painted picture (a post with its own photo saves those from Share to Instagram)
   const artCard = canInstagram ? postArtCard(post) : null;
+  // Saturday's scene: a picture made for it (or another one), unless the coach put their own photo on
+  const canPicture = canInstagram && post.series === "saturday_spirit" && isSpiritScene(extraScene(post.series_extra)) && (!post.media_path || post.media_path.includes("/post-pictures/"));
+  const qc = useQueryClient();
+  const makePicture = useServerFn(makePostPicture);
+  const [making, setMaking] = useState(false);
   if (!canEdit && !canDelete && !onIt && !canInstagram) return null;
+
+  const newPicture = async () => {
+    setMaking(true);
+    const id = toast.loading("Making a new picture…", { description: "About half a minute." });
+    try {
+      const r = await makePicture({ data: { postId: post.id } });
+      if (!r.ok) return void toast.error("Couldn't make a picture", { id, description: r.reason });
+      for (const queryKey of POST_LIST_KEYS) await qc.invalidateQueries({ queryKey: [...queryKey] });
+      void qc.invalidateQueries({ queryKey: ["community-post"] });
+      toast.success("New picture is up", { id, description: "Not it? Tap New picture again." });
+    } catch (e: any) {
+      toast.error("Couldn't make a picture", { id, description: e?.message ?? undefined });
+    } finally {
+      setMaking(false);
+    }
+  };
 
   // the file is already made (it's the picture on screen), so the share sheet opens from this tap
   const saveImage = () => {
@@ -115,6 +141,11 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
               {artCard && (
                 <DropdownMenuItem onSelect={act(saveImage)} data-save-image>
                   <Download className="mr-2 h-4 w-4" /> Save image
+                </DropdownMenuItem>
+              )}
+              {canPicture && (
+                <DropdownMenuItem onSelect={act(() => void newPicture())} disabled={making} data-new-picture>
+                  <ImagePlus className="mr-2 h-4 w-4" /> New picture
                 </DropdownMenuItem>
               )}
               {(onIt || canEdit || canDelete) && <DropdownMenuSeparator />}
