@@ -21482,6 +21482,7 @@ export type Database = {
           preferred_date: string
           preferred_time: string | null
           pt_session_id: string | null
+          replaces_session_id: string | null
           request_type: string
           requested_by: string | null
           resolved_at: string | null
@@ -21501,6 +21502,7 @@ export type Database = {
           preferred_date: string
           preferred_time?: string | null
           pt_session_id?: string | null
+          replaces_session_id?: string | null
           request_type: string
           requested_by?: string | null
           resolved_at?: string | null
@@ -21520,6 +21522,7 @@ export type Database = {
           preferred_date?: string
           preferred_time?: string | null
           pt_session_id?: string | null
+          replaces_session_id?: string | null
           request_type?: string
           requested_by?: string | null
           resolved_at?: string | null

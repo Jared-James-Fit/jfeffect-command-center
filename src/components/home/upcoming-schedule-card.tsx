@@ -230,7 +230,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         )}
 
         {links && (
-          <RequestSessionSheet open={requesting} onOpenChange={setRequesting} isPov={!!pov.viewAsClientId} initialDate={today} />
+          <RequestSessionSheet open={requesting} onOpenChange={setRequesting} isPov={!!pov.viewAsClientId} initialDate={today} clientId={clientId} />
         )}
         {links && clientId && (
           <ClientSessionSheet clientId={clientId} session={openSession} onClose={() => setOpenSession(null)} />
