@@ -85,7 +85,7 @@ function draw(v: LessonVisual): ReactNode {
     case "bench_touch":
       return v.variant === "consistency" ? <BenchConsistency /> : <BenchTuckFlare />;
     case "sticking_point":
-      return <StickingPoint lift={v.lift ?? "bench"} />;
+      return v.variant === "window" ? <StickingWindow lift={v.lift ?? "bench"} /> : <StickingPoint lift={v.lift ?? "bench"} />;
     case "strength_curve":
       return <StrengthCurve shape={v.shape ?? "ascending"} />;
     case "length_tension":
@@ -144,7 +144,9 @@ export function visualLabel(v: LessonVisual): string {
         ? "Bench from the side: the bar landing on the same spot every rep, versus a different spot each rep"
         : "Bench from the side: forearm stacked under the bar with a lower touch and more tuck, or a higher touch and more flare";
     case "sticking_point":
-      return `Bar speed through the ${lift}rep, with the sticking region marked`;
+      return v.variant === "window"
+        ? `Bar speed through the ${lift}rep: it slows from its fastest point, where your push drops below the bar's weight, to its slowest, where your push has caught back up`
+        : `Bar speed through the ${lift}rep, with the sticking region marked`;
     case "strength_curve":
       return "How much force you can produce across the range of motion";
     case "length_tension":
@@ -1077,20 +1079,58 @@ const yAt = (pts: Pt[], x: number) => {
   return pts[pts.length - 1].y;
 };
 
-function StickingPoint({ lift }: { lift: LessonLift }) {
-  const ends: Record<LessonLift, [string, string]> = { squat: ["Bottom", "Lockout"], bench: ["Chest", "Lockout"], deadlift: ["Floor", "Lockout"] };
+const STICKING_ENDS: Record<LessonLift, [string, string]> = { squat: ["Bottom", "Lockout"], bench: ["Chest", "Lockout"], deadlift: ["Floor", "Lockout"] };
+
+/**
+ * Bar speed through a max rep: it builds off the bottom, sags, then slows to a
+ * stop at lockout. The sticking region is where it sags, from its first
+ * fastest moment to its first slowest one after it (the research's own
+ * definition), found on the curve itself.
+ */
+function stickingCurve(lift: LessonLift) {
   const dip = lift === "deadlift" ? 0.42 : lift === "squat" ? 0.3 : 0.32;
-  // speed builds off the bottom, sags through the sticking region, then slows to a stop at lockout
   const f = (t: number) => Math.sin(Math.PI * t) ** 0.7 * (1 - 0.62 * Math.exp(-((t - dip) ** 2) / 0.0095)) * 0.93;
-  const pts = plot(f, 64);
-  const a = BOX.x0 + (dip - 0.1) * (BOX.x1 - BOX.x0);
-  const b = BOX.x0 + (dip + 0.1) * (BOX.x1 - BOX.x0);
+  const n = 400;
+  let peak = 1;
+  while (peak < n - 1 && !(f(peak / n) >= f((peak - 1) / n) && f(peak / n) >= f((peak + 1) / n))) peak++;
+  let low = peak + 1;
+  while (low < n - 1 && !(f(low / n) <= f((low - 1) / n) && f(low / n) <= f((low + 1) / n))) low++;
+  const X = (t: number) => BOX.x0 + t * (BOX.x1 - BOX.x0);
+  const Y = (t: number) => BOX.y0 - f(t) * (BOX.y0 - BOX.y1);
+  return { pts: plot(f, 64), fast: pt(X(peak / n), Y(peak / n)), slow: pt(X(low / n), Y(low / n)) };
+}
+
+function StickingPoint({ lift }: { lift: LessonLift }) {
+  const { pts, fast, slow } = stickingCurve(lift);
   return (
-    <Chart label={visualLabel({ kind: "sticking_point", lift })} y="Bar speed" ends={ends[lift]}>
-      <rect x={f1(a)} y={BOX.y1 - 6} width={f1(b - a)} height={BOX.y0 - BOX.y1 + 6} rx={6} style={{ fill: C.soft }} />
-      <T x={(a + b) / 2} y={BOX.y1 + 6} anchor="middle" c={C.accent} size={10} weight={700}>{lift === "deadlift" ? "around the knees" : "sticking region"}</T>
+    <Chart label={visualLabel({ kind: "sticking_point", lift })} y="Bar speed" ends={STICKING_ENDS[lift]}>
+      <rect x={f1(fast.x)} y={BOX.y1 - 6} width={f1(slow.x - fast.x)} height={BOX.y0 - BOX.y1 + 6} rx={4} style={{ fill: C.soft }} />
+      <T x={fast.x} y={BOX.y1 - 10} c={C.accent} size={10} weight={700}>{lift === "deadlift" ? "around the knees" : "sticking region"}</T>
       <Area pts={pts} c={C.ink} />
       <Curve pts={pts} />
+    </Chart>
+  );
+}
+
+/**
+ * The same rep read the way the bar's physics does: it slows from its fastest
+ * point (the push drops below the bar's weight) to its slowest (the push has
+ * caught back up), so the trouble is the shaded stretch, not the slowest spot.
+ */
+function StickingWindow({ lift }: { lift: LessonLift }) {
+  const { pts, fast, slow } = stickingCurve(lift);
+  return (
+    <Chart label={visualLabel({ kind: "sticking_point", lift, variant: "window" })} y="Bar speed" ends={STICKING_ENDS[lift]}>
+      <rect x={f1(fast.x)} y={BOX.y1 - 6} width={f1(slow.x - fast.x)} height={BOX.y0 - BOX.y1 + 6} rx={4} style={{ fill: C.soft }} />
+      <T x={fast.x} y={BOX.y1 - 10} c={C.accent} size={10} weight={700}>push &lt; bar weight</T>
+      <Area pts={pts} c={C.ink} />
+      <Curve pts={pts} />
+      <JointDot at={fast} c={C.accent} />
+      <JointDot at={slow} c={C.ink} />
+      <T x={fast.x - 7} y={fast.y - 19} anchor="end" c={C.accent} size={10} weight={700}>fastest</T>
+      <T x={fast.x - 7} y={fast.y - 7} anchor="end" size={9.5}>it starts</T>
+      <T x={slow.x + 8} y={slow.y + 4} c={C.ink} size={10} weight={700}>slowest</T>
+      <T x={slow.x + 8} y={slow.y + 16} size={9.5}>you're winning again</T>
     </Chart>
   );
 }

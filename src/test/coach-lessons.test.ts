@@ -15,6 +15,8 @@ const read = (f: string) => readFileSync(f, "utf8");
 const sql = read("supabase/migrations/20261129110000_community_lessons.sql");
 const seed = read("supabase/migrations/20261129111000_community_lessons_library.sql");
 const rewrite = read("supabase/migrations/20261204090000_lesson_library_rewrite.sql");
+// the third pass: docs/EDUCATIONAL_POSTS.md (evidence questioned, interpretation and hypothesis labelled)
+const deeper = read("supabase/migrations/20261231110000_lessons_think_deeper.sql");
 
 /** Body ($l$…$l$) and data ($j$…$j$) of each lesson row in a migration. */
 function lessonRows(src: string) {
@@ -25,13 +27,15 @@ function lessonRows(src: string) {
   return rows;
 }
 
-/** The library as it posts: the seed, with the second pass's wording and refs on top. */
+/** The library as it posts: the seed, with each later pass's wording and refs on top. */
 function library() {
-  const second = new Map(lessonRows(rewrite).map((r) => [r.data.key, r]));
-  return lessonRows(seed).map((l) => {
-    const r = second.get(l.data.key);
-    return r ? { body: r.body, data: { ...l.data, ...r.data } } : l;
-  });
+  const passes = [rewrite, deeper].map((src) => new Map(lessonRows(src).map((r) => [r.data.key, r])));
+  return lessonRows(seed).map((l) =>
+    passes.reduce((acc, pass) => {
+      const r = pass.get(acc.data.key);
+      return r ? { body: r.body, data: { ...acc.data, ...r.data } } : acc;
+    }, l),
+  );
 }
 
 describe("the lesson library", () => {
@@ -58,7 +62,8 @@ describe("the lesson library", () => {
     for (const { body, data } of lib) {
       expect(body, data.key).not.toMatch(/[—–;]|\*\*|^#/m);
       for (const w of banned) expect(` ${body.toLowerCase()} `, `${data.key}: ${w}`).not.toContain(w);
-      expect(body.length, data.key).toBeLessThanOrEqual(900);
+      // the database's limit for a lesson and a post (docs/EDUCATIONAL_POSTS.md: cut words, never the reasoning)
+      expect(body.length, data.key).toBeLessThanOrEqual(1200);
       // the first line is the hook (it leads the story)
       expect(hookLine(body).length, data.key).toBeLessThanOrEqual(90);
     }
