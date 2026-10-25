@@ -73,6 +73,7 @@ export type LessonVisual = {
   shape?: string | null;
   /**
    * squat_torso: build (default) | lean · bench_touch: tuck/flare (default) | consistency ·
+   * sticking_point: window (shades fastest → slowest: where the push is under the bar's weight) ·
    * sra: stress · velocity_loss: cluster · set_structure: myo
    */
   variant?: string | null;
