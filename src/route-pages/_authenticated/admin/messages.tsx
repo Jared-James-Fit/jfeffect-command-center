@@ -7,7 +7,6 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -20,7 +19,7 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead, setConversationWorkflow, type WorkflowStatus,
 } from "@/lib/messages";
-import { ClipboardCheck, ClipboardList, Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, Video, NotebookPen } from "lucide-react";
+import { AlertTriangle, CalendarClock, Clock, Hourglass, Image as ImageIcon, ClipboardCheck, Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, NotebookPen } from "lucide-react";
 import { ClientNotesSheet } from "@/components/messages/client-notes-log";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
@@ -38,13 +37,19 @@ import { deriveInboxWorkflow, previewPrefix, WORKFLOW_LABEL, type InboxWorkflowS
 import { formatReadReceipt } from "@/lib/read-receipt";
 import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
-import { deriveRequests, latestToReview, oldestPending, requestChip, type RequestChip } from "@/lib/inbox-requests";
+import { deriveRequests, latestToReview, oldestPending, requestChip } from "@/lib/inbox-requests";
 import { Check, Mic, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
 import { listenChannel } from "@/lib/realtime-channel";
 import { latestOf, newestFirst } from "@/lib/recency";
+import {
+  formTitles, matchesSignal, mediaWaitingByClient, painWaitingByClient, reviewItemsByClient, signalTags, splitRequests, waitingCount,
+  type ClientSignals, type SignalFilter, type SignalTag,
+} from "@/lib/inbox-brief";
+import { ClientBriefSheet } from "@/components/messages/client-brief-sheet";
+import { messagePreviewText } from "@/lib/message-preview";
 
 type StaffInboxRow = {
   client_id: string;
@@ -90,44 +95,48 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
   );
 }
 
-/**
- * Status pill for a chat where my message was the last one. "Waiting" = I asked
- * something and it's recent; "Follow up" = it has sat 48h+ unanswered. Closers
- * ("Perf thanks!") get no pill at all (see lib/inbox-waiting).
- */
-function WaitingPill({ state }: { state: Exclude<WaitingState, "fyi"> }) {
-  const overdue = state === "overdue";
-  return (
-    <span
-      className={cn(
-        "inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide",
-        overdue ? WORKFLOW_STYLE.needs_response : WORKFLOW_STYLE.waiting_on_client,
-      )}
-    >
-      {overdue ? "Follow up" : "Waiting"}
-    </span>
-  );
-}
-
-const REQUEST_CHIP_STYLE: Record<RequestChip["tone"], string> = {
-  overdue: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
-  pending: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  filled: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+const TAG_STYLE: Record<SignalTag["tone"], string> = {
+  urgent: "bg-red-500/12 text-red-600 dark:text-red-400",
+  warn: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  info: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
+  muted: "bg-muted text-muted-foreground",
+};
+const TAG_ICON: Partial<Record<SignalTag["key"], typeof Check>> = {
+  pain: AlertTriangle,
+  overdue: Clock,
+  review: ClipboardCheck,
+  media: ImageIcon,
+  session: CalendarClock,
+  followup: Hourglass,
 };
 
-/** Forms / check-ins at a glance: not filled (amber once 48h+ old), or filled and waiting for my review. */
-function RequestStatusChip({ chip }: { chip: RequestChip }) {
-  const Icon = chip.tone === "filled" ? ClipboardCheck : ClipboardList;
+/** One small tag on an inbox row ("Reply", "Pain", "Form overdue", "2 videos"). */
+function RowTag({ tag }: { tag: SignalTag }) {
+  const Icon = TAG_ICON[tag.key];
   return (
-    <span className={cn("inline-flex h-5 min-w-0 shrink items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[10px] font-bold", REQUEST_CHIP_STYLE[chip.tone])}>
-      <Icon className="h-3 w-3 shrink-0" />
-      <span className="truncate">{chip.text}</span>
+    <span data-tag={tag.key} className={cn("inline-flex h-5 min-w-0 shrink items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[10px] font-bold", TAG_STYLE[tag.tone])}>
+      {Icon && <Icon className="h-3 w-3 shrink-0" />}
+      <span className="truncate">{tag.label}</span>
     </span>
   );
 }
 
-const FILTERS = ["Inbox", "Needs Response", "Waiting on Client", "Follow Up", "Forms & Check-ins", "Unread", "Priority", "Done", "Archived"] as const;
+const FILTERS = [
+  "Inbox", "Needs Response", "To Review", "Overdue", "Media", "Pain", "Sessions",
+  "Unread", "Waiting on Client", "Follow Up", "Priority", "Done", "Archived",
+] as const;
 type Filter = typeof FILTERS[number];
+const FILTER_LABEL: Partial<Record<Filter, string>> = {
+  "Needs Response": "Needs reply",
+  "To Review": "Forms to review",
+  Overdue: "Overdue forms",
+  Media: "Photos & videos",
+  Pain: "Pain flagged",
+  Sessions: "Session requests",
+};
+/** Shown only while something's in them (or picked): the row of filters stays short. */
+const ONLY_WHEN_ANY = new Set<Filter>(["To Review", "Overdue", "Media", "Pain", "Sessions", "Priority"]);
+const SIGNAL_FILTERS = new Set<Filter>(["To Review", "Overdue", "Media", "Pain", "Sessions"]);
 
 export function MessagesInbox({
   initialClient,
@@ -140,6 +149,7 @@ export function MessagesInbox({
   const clientPov = useClientImpersonation();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("Inbox");
+  const [briefFor, setBriefFor] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
   // the selected client's workout notes log (pain, review and exercise notes)
@@ -286,6 +296,42 @@ export function MessagesInbox({
     },
   });
 
+  // Reactions on the client's recent photos / videos / files: one with a staff
+  // reaction (or a reply after it) isn't waiting any more.
+  const mediaIds = useMemo(() => {
+    const cutoff = Date.now() - 14 * 86_400_000;
+    return lastMessages
+      .filter((m) => m.sender_role === "client" && Date.parse(m.created_at) >= cutoff
+        && (m.attachments ?? []).some((a: any) => a && !a.kind && ["image", "video", "pdf", "file"].includes(a.type)))
+      .map((m) => m.id)
+      .sort();
+  }, [lastMessages]);
+  const { data: mediaReactions = [] } = useQuery({
+    queryKey: ["inbox-media-reactions", mediaIds.join(",")],
+    enabled: mediaIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const out: { message_id: string; user_id: string }[] = [];
+      for (let i = 0; i < mediaIds.length; i += 200) {
+        const { data, error } = await (supabase.from("message_reactions") as any)
+          .select("message_id, user_id")
+          .in("message_id", mediaIds.slice(i, i + 200));
+        if (error) throw error;
+        out.push(...(data ?? []));
+      }
+      return out;
+    },
+  });
+  const { data: sessionRequestRows = [] } = useQuery({
+    queryKey: ["inbox-session-requests"],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("session_requests") as any).select("client_id").eq("status", "pending").limit(500);
+      if (error) throw error;
+      return (data ?? []) as { client_id: string }[];
+    },
+  });
+
   // Realtime. If the channel errors or closes (iPhone network switches,
   // expired auth), rebuild it instead of silently going deaf.
   const [channelGen, setChannelGen] = useState(0);
@@ -317,6 +363,8 @@ export function MessagesInbox({
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, () => {
         scheduleInvalidate(["conversation-states", "staff-inbox-state", "admin-nav-badges"]);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => scheduleInvalidate(["inbox-media-reactions"]))
+      .on("postgres_changes", { event: "*", schema: "public", table: "session_requests" }, () => scheduleInvalidate(["inbox-session-requests"]))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_staff_reads" }, () => {
         scheduleInvalidate(["staff-inbox-state", "admin-nav-badges"]);
       })
@@ -386,23 +434,28 @@ export function MessagesInbox({
     return m;
   }, [lastMessages]);
 
+  // Filled in, not reviewed yet (only the latest per form / check-in type).
+  const toReviewRows = useMemo(
+    () => latestToReview(
+      pendingSubmissions.map((p: any) => ({
+        client_id: p.client_id,
+        kind: p.kind,
+        submitted_at: p.submitted_at,
+        type: p.kind === "form" ? p.form_id : p.task_type,
+      })),
+      lastStaffReplyByClient,
+    ),
+    [pendingSubmissions, lastStaffReplyByClient],
+  );
   const requestsByClient = useMemo(
     () =>
       deriveRequests({
         checkins: requestStatus?.checkins ?? [],
         submissions: requestStatus?.submissions ?? [],
         messages: lastMessages.filter((m) => (m.attachments ?? []).some((a) => a?.kind === "form_request")),
-        toReview: latestToReview(
-          pendingSubmissions.map((p: any) => ({
-            client_id: p.client_id,
-            kind: p.kind,
-            submitted_at: p.submitted_at,
-            type: p.kind === "form" ? p.form_id : p.task_type,
-          })),
-          lastStaffReplyByClient,
-        ),
+        toReview: toReviewRows,
       }),
-    [requestStatus, lastMessages, pendingSubmissions, lastStaffReplyByClient],
+    [requestStatus, lastMessages, toReviewRows],
   );
 
   /** Waiting state + forms chip for one client's row. */
@@ -441,25 +494,62 @@ export function MessagesInbox({
     return m;
   }, [liftReviewItems]);
 
+  // What's waiting on me per client, one reading for the filters, the row
+  // tags and the Brief: forms to review / overdue, photos & videos nobody
+  // reacted to, pain notes, session requests.
+  const mediaByClient = useMemo(() => {
+    const reactedBy = new Map<string, string[]>();
+    for (const r of mediaReactions) reactedBy.set(r.message_id, [...(reactedBy.get(r.message_id) ?? []), r.user_id]);
+    const userOf = new Map(clients.map((c) => [c.id, (c as any).user_id as string | null]));
+    return mediaWaitingByClient(lastMessages as any, reactedBy, userOf);
+  }, [lastMessages, mediaReactions, clients]);
+  const painByClient = useMemo(() => painWaitingByClient(lastMessages as any), [lastMessages]);
+  const reviewByClient = useMemo(() => reviewItemsByClient(toReviewRows, formTitles(lastMessages as any)), [toReviewRows, lastMessages]);
+  const sessionRequestsByClient = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of sessionRequestRows) m.set(r.client_id, (m.get(r.client_id) ?? 0) + 1);
+    return m;
+  }, [sessionRequestRows]);
+
+  const allRows = useMemo(() => clients.map((c) => {
+    const state = stateMap.get(c.id);
+    const last = lastByClient.get(c.id);
+    const unread = unreadByClient.get(c.id) ?? 0;
+    const liftReview = liftReviewsByClient.get(c.id) ?? null;
+    const server = inboxByClient.get(c.id);
+    const workflow = deriveInboxWorkflow({
+      workflowStatus: server?.workflow_status ?? (state as any)?.workflow_status,
+      workflowReason: server?.workflow_reason,
+      lastInboundKind: server?.last_inbound_kind,
+      lastMessage: last,
+      storedStatus: state?.status,
+      pendingLiftReview: !!liftReview,
+    });
+    const status = statusFor(c.id, last, workflow.state);
+    const req = requestsByClient.get(c.id);
+    const { overdue, pending } = splitRequests(req);
+    const signals: ClientSignals = {
+      needsReply: workflow.state === "needs_response"
+        ? { since: server?.last_inbound_at ?? (last?.sender_role === "client" ? last.created_at : null), detail: workflow.detail }
+        : null,
+      toReview: reviewByClient.get(c.id) ?? [],
+      overdue,
+      pending,
+      missed: req?.missed ?? 0,
+      media: mediaByClient.get(c.id) ?? [],
+      pain: painByClient.get(c.id) ?? [],
+      sessionRequests: sessionRequestsByClient.get(c.id) ?? 0,
+    };
+    const tags = signalTags(signals, {
+      followUp: workflow.state === "waiting_on_client" && status.waiting === "overdue",
+      priority: state?.priority,
+    });
+    return { client: c, state, last, unread, liftReview, workflow, signals, tags, ...status };
+  }), [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, requestsByClient,
+    reviewByClient, mediaByClient, painByClient, sessionRequestsByClient]);
+
   const conversations = useMemo(() => {
-    const items = clients
-      .map((c) => {
-        const state = stateMap.get(c.id);
-        const last = lastByClient.get(c.id);
-        const unread = unreadByClient.get(c.id) ?? 0;
-        const liftReview = liftReviewsByClient.get(c.id) ?? null;
-        const server = inboxByClient.get(c.id);
-        const workflow = deriveInboxWorkflow({
-          workflowStatus: server?.workflow_status ?? (state as any)?.workflow_status,
-          workflowReason: server?.workflow_reason,
-          lastInboundKind: server?.last_inbound_kind,
-          lastMessage: last,
-          storedStatus: state?.status,
-          pendingLiftReview: !!liftReview,
-        });
-        const status = statusFor(c.id, last, workflow.state);
-        return { client: c, state, last, unread, liftReview, workflow, ...status };
-      })
+    const items = allRows
       .filter((it) => {
         if (search) {
           const s = search.toLowerCase();
@@ -472,7 +562,8 @@ export function MessagesInbox({
           // Only chats where I'm actually waiting on an answer; closers like "Perf thanks!" aren't.
           case "Waiting on Client": return it.workflow.state === "waiting_on_client" && it.waiting !== "fyi";
           case "Follow Up": return it.workflow.state === "waiting_on_client" && it.waiting === "overdue";
-          case "Forms & Check-ins": return (it.workflow.isFormOrCheckin || it.hasRequests) && status !== "archived";
+          case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
+            return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
           case "Unread": return it.unread > 0 && status !== "archived";
           case "Priority": return (priority === "High Priority" || priority === "Important") && status !== "archived";
           case "Done": return it.workflow.state === "done";
@@ -488,32 +579,27 @@ export function MessagesInbox({
         latestOf(b.last?.created_at, b.liftReview?.latestAt),
       ));
     return items;
-  }, [clients, stateMap, lastByClient, unreadByClient, liftReviewsByClient, inboxByClient, requestsByClient, search, filter]);
+  }, [allRows, search, filter]);
 
-  // Live filter counts from the same derivation the rows use.
+  // Live filter counts from the same rows the list shows.
   const filterCounts = useMemo(() => {
     const counts: Partial<Record<Filter, number>> = {};
-    for (const c of clients) {
-      const state = stateMap.get(c.id);
-      if (state?.status === "archived") continue;
-      const server = inboxByClient.get(c.id);
-      const w = deriveInboxWorkflow({
-        workflowStatus: server?.workflow_status ?? (state as any)?.workflow_status,
-        workflowReason: server?.workflow_reason,
-        lastInboundKind: server?.last_inbound_kind,
-        lastMessage: lastByClient.get(c.id),
-        storedStatus: state?.status,
-        pendingLiftReview: liftReviewsByClient.has(c.id),
-      });
-      if (w.state === "needs_response") counts["Needs Response"] = (counts["Needs Response"] ?? 0) + 1;
-      const st = statusFor(c.id, lastByClient.get(c.id), w.state);
-      if (w.state === "waiting_on_client" && st.waiting !== "fyi") counts["Waiting on Client"] = (counts["Waiting on Client"] ?? 0) + 1;
-      if (w.state === "waiting_on_client" && st.waiting === "overdue") counts["Follow Up"] = (counts["Follow Up"] ?? 0) + 1;
-      if (w.isFormOrCheckin || st.hasRequests) counts["Forms & Check-ins"] = (counts["Forms & Check-ins"] ?? 0) + 1;
-      if ((unreadByClient.get(c.id) ?? 0) > 0) counts.Unread = (counts.Unread ?? 0) + 1;
+    const bump = (f: Filter) => { counts[f] = (counts[f] ?? 0) + 1; };
+    for (const it of allRows) {
+      if (it.state?.status === "archived") continue;
+      const w = it.workflow;
+      if (w.state === "needs_response") bump("Needs Response");
+      if (w.state === "waiting_on_client" && it.waiting !== "fyi") bump("Waiting on Client");
+      if (w.state === "waiting_on_client" && it.waiting === "overdue") bump("Follow Up");
+      for (const f of SIGNAL_FILTERS) if (matchesSignal(it.signals, f as SignalFilter)) bump(f);
+      if (it.unread > 0) bump("Unread");
+      const pr = it.state?.priority ?? "Normal";
+      if (pr === "High Priority" || pr === "Important") bump("Priority");
     }
     return counts;
-  }, [clients, stateMap, inboxByClient, lastByClient, liftReviewsByClient, unreadByClient, requestsByClient]);
+  }, [allRows]);
+
+  const briefRow = briefFor ? allRows.find((r) => r.client.id === briefFor) ?? null : null;
 
   const refreshInbox = () => {
     qc.invalidateQueries({ queryKey: ["staff-inbox-state"] });
@@ -690,23 +776,26 @@ export function MessagesInbox({
             />
           </div>
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {FILTERS.map((f) => (
+            {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
+                data-inbox-filter={f}
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition",
                   filter === f
                     ? "bg-primary text-primary-foreground"
-                    : "bg-secondary/60 text-muted-foreground hover:bg-secondary",
+                    : f === "Pain" || f === "Needs Response"
+                      ? "bg-secondary/60 text-foreground hover:bg-secondary"
+                      : "bg-secondary/60 text-muted-foreground hover:bg-secondary",
                 )}
               >
-                {f}
+                {FILTER_LABEL[f] ?? f}
                 {filterCounts[f] ? <span className="ml-1 tabular-nums opacity-75">{filterCounts[f]}</span> : null}
               </button>
             ))}
           </div>
-          {filter === "Forms & Check-ins" && (
+          {filter === "Overdue" && (
             <Link
               to="/admin/forms"
               search={{ tab: "requests" } as any}
@@ -753,7 +842,7 @@ export function MessagesInbox({
           )}
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
-          ) : conversations.map(({ client, state, last, unread, liftReview, workflow, waiting, chip }) => (
+          ) : conversations.map(({ client, state, last, unread, liftReview, workflow, signals, tags }) => (
             <SwipeableRow
               key={client.id}
               className="border-b border-border/60"
@@ -794,26 +883,45 @@ export function MessagesInbox({
                 },
               ]}
             >
-            <button
+            <div
+              role="button"
+              tabIndex={0}
               onPointerDown={() => prefetchThread(client.id)}
               onClick={() => selectClient(client.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectClient(client.id); } }}
               className={cn(
-                "flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-secondary/40",
+                "flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition hover:bg-secondary/40",
                 selectedId === client.id && "bg-secondary/60",
               )}
             >
-              {/* the same live look as the client's inbox: the turning ring and LIVE tag */}
-              <LiveAvatar
-                live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}
-                size={44}
+              {/* Their photo opens the Brief: everything waiting + an AI read. */}
+              <button
+                type="button"
+                data-open-brief
+                aria-label={`Brief: ${client.full_name ?? "client"}${waitingCount(signals) ? `, ${waitingCount(signals)} waiting` : ""}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
+                className="relative shrink-0 rounded-full transition active:scale-95"
               >
-                <UserAvatar
-                  src={client.profile_picture_url}
-                  name={client.full_name}
+                {/* the same live look as the client's inbox: the turning ring and LIVE tag */}
+                <LiveAvatar
+                  live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}
                   size={44}
-                  ring
-                />
-              </LiveAvatar>
+                >
+                  <UserAvatar
+                    src={client.profile_picture_url}
+                    name={client.full_name}
+                    size={44}
+                    ring
+                    expandable={false}
+                  />
+                </LiveAvatar>
+                {waitingCount(signals) > 0 && (
+                  <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-foreground px-1 text-[10px] font-bold tabular-nums text-background ring-2 ring-card" aria-hidden>
+                    {waitingCount(signals)}
+                  </span>
+                )}
+              </button>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
@@ -837,7 +945,7 @@ export function MessagesInbox({
                     {liftReview && liftReview.latestAt >= (last?.created_at ?? "")
                       ? `Lift review · ${liftReview.count} waiting`
                       : last
-                        ? previewPrefix(last as any) + (last.body || "(attachment)")
+                        ? previewPrefix(last as any) + (messagePreviewText(last.body, last.attachments) || "(attachment)")
                         : "No messages yet"}
                   </span>
                   {unread > 0 && (
@@ -848,49 +956,28 @@ export function MessagesInbox({
                     />
                   )}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-1">
-                  {workflow.state === "waiting_on_client"
-                    ? waiting && waiting !== "fyi" && <WaitingPill state={waiting} />
-                    : workflow.state !== "done" && <WorkflowPill state={workflow.state} />}
-                  {chip && <RequestStatusChip chip={chip} />}
-                  {workflow.detail && workflow.detail !== "Lift review" && (
-                    <span className="text-[10px] font-semibold text-muted-foreground">{workflow.detail}</span>
-                  )}
-                  {workflow.state === "waiting_on_client" && last?.sender_role === "admin" && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {(last as any).read_by_client_at ? formatReadReceipt((last as any).read_by_client_at) : "Not read yet"}
-                    </span>
-                  )}
-                  {liftReview && (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "gap-1 text-[10px]",
-                        liftReview.urgent
-                          ? "border-destructive/40 bg-destructive/10 text-destructive"
-                          : "border-primary/40 bg-primary/10 text-primary",
-                      )}
-                    >
-                      <Video className="h-3 w-3" />
-                      {liftReview.count} Lift {liftReview.count === 1 ? "Review" : "Reviews"}
-                    </Badge>
-                  )}
-                  <PriorityChip priority={state?.priority} />
-                  {workflow.state === "needs_response" && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Mark ${client.full_name ?? "conversation"} done`}
-                      onClick={(e) => { e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); }}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); } }}
-                      className="ml-auto inline-flex h-7 items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[11px] font-semibold text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600"
-                    >
-                      <Check className="h-3.5 w-3.5" /> Done
-                    </span>
-                  )}
-                </div>
+                {tags.length > 0 && (
+                  // One quiet line of what's waiting; the Brief (their photo) has the detail.
+                  <div className="mt-1 flex items-center gap-1 overflow-hidden" data-row-tags>
+                    {tags.slice(0, 3).map((t) => <RowTag key={t.key} tag={t} />)}
+                    {tags.length > 3 && <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">+{tags.length - 3}</span>}
+                    {workflow.state === "needs_response" && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Mark ${client.full_name ?? "conversation"} done`}
+                        title="No reply needed: mark done"
+                        onClick={(e) => { e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); } }}
+                        className="ml-auto hidden h-6 w-6 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600 [@media(hover:hover)]:grid"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            </button>
+            </div>
             </SwipeableRow>
           ))}
         </div>
@@ -940,7 +1027,17 @@ export function MessagesInbox({
               </ClientNameLink>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 truncate text-sm font-bold">
-                  <span className="truncate">{selected.full_name}</span>
+                  {/* Their name opens the Brief: everything waiting + an AI read */}
+                  <button
+                    type="button"
+                    data-open-brief
+                    onClick={() => setBriefFor(selected.id)}
+                    className="inline-flex min-w-0 items-center gap-1 rounded-md hover:opacity-80"
+                    aria-label={`Brief: ${selected.full_name ?? "client"}`}
+                  >
+                    <span className="truncate">{selected.full_name}</span>
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+                  </button>
                   {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
                     <LiveMark className="shrink-0 text-[11px] font-semibold" size={6}>
                       {selectedClientLive ? "Live in chat" : "Active now"}
@@ -1082,6 +1179,26 @@ export function MessagesInbox({
       </section>
         </div>
         <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
+        <ClientBriefSheet
+          open={!!briefRow}
+          onOpenChange={(o) => { if (!o) setBriefFor(null); }}
+          client={briefRow ? {
+            id: briefRow.client.id,
+            full_name: briefRow.client.full_name,
+            profile_picture_url: briefRow.client.profile_picture_url,
+            last_active_at: (briefRow.client as any).last_active_at ?? null,
+          } : null}
+          signals={briefRow?.signals}
+          needsReply={briefRow?.workflow.state === "needs_response"}
+          waitingOnClient={briefRow && briefRow.workflow.state === "waiting_on_client" && briefRow.waiting && briefRow.waiting !== "fyi"
+            ? { since: lastStaffReplyByClient.get(briefRow.client.id) ?? briefRow.last?.created_at ?? new Date().toISOString(), overdue: briefRow.waiting === "overdue" }
+            : null}
+          readReceipt={briefRow?.last?.sender_role === "admin"
+            ? ((briefRow.last as any).read_by_client_at ? formatReadReceipt((briefRow.last as any).read_by_client_at) : "Not read yet")
+            : null}
+          onOpenChat={() => { if (briefRow) selectClient(briefRow.client.id); }}
+          onMarkDone={() => { if (briefRow) void changeWorkflow(briefRow.client.id, "done", { undoFrom: "needs_response" }); }}
+        />
       </div>
       )}
     </div>
