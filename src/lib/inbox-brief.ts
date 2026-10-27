@@ -179,7 +179,8 @@ export function matchesSignal(s: ClientSignals | undefined, f: SignalFilter): bo
 
 /* ------------------------------ row tags ------------------------------ */
 
-export type SignalTone = "urgent" | "warn" | "info" | "muted";
+/** strong = bold, uncoloured (Needs reply: on most rows, so red stays for pain). */
+export type SignalTone = "urgent" | "strong" | "warn" | "info" | "muted";
 export type SignalTag = { key: "reply" | "pain" | "overdue" | "review" | "media" | "session" | "followup" | "priority"; label: string; tone: SignalTone };
 
 function mediaLabel(items: MediaWaiting[]): string {
@@ -195,20 +196,25 @@ function mediaLabel(items: MediaWaiting[]): string {
 }
 
 /**
- * The few small tags a row shows, most pressing first: one line, never a
- * wall of pills. The full story is in the Brief.
+ * What a row's one quiet line says, most pressing first (pain before a
+ * reply: it's someone's body). The row colours only the first; the Brief
+ * has the detail.
  */
 export function signalTags(
   s: ClientSignals | undefined,
   extra: { followUp?: boolean; priority?: string | null } = {},
 ): SignalTag[] {
   const tags: SignalTag[] = [];
-  if (s?.needsReply) tags.push({ key: "reply", label: "Reply", tone: "urgent" });
-  if (s?.pain.length) tags.push({ key: "pain", label: "Pain", tone: "urgent" });
-  if (s?.overdue.length) tags.push({ key: "overdue", label: s.overdue.length === 1 ? "Form overdue" : `${s.overdue.length} overdue`, tone: "warn" });
-  if (s?.toReview.length) tags.push({ key: "review", label: s.toReview.length === 1 ? "Review" : `${s.toReview.length} to review`, tone: "info" });
+  const n = (k: number, one: string, many: string) => (k === 1 ? one : `${k} ${many}`);
+  if (s?.pain.length) tags.push({ key: "pain", label: "Pain flagged", tone: "urgent" });
+  if (s?.needsReply) tags.push({ key: "reply", label: "Needs reply", tone: "strong" });
+  if (s?.overdue.length) tags.push({ key: "overdue", label: n(s.overdue.length, "Form overdue", "forms overdue"), tone: "warn" });
+  if (s?.toReview.length) {
+    const one = s.toReview[0].kind === "checkin" ? "Check-in to review" : "Form to review";
+    tags.push({ key: "review", label: n(s.toReview.length, one, "to review"), tone: "info" });
+  }
   if (s?.media.length) tags.push({ key: "media", label: mediaLabel(s.media), tone: "info" });
-  if (s?.sessionRequests) tags.push({ key: "session", label: "Session request", tone: "info" });
+  if (s?.sessionRequests) tags.push({ key: "session", label: n(s.sessionRequests, "Session request", "session requests"), tone: "info" });
   if (extra.followUp) tags.push({ key: "followup", label: "Follow up", tone: "warn" });
   if (extra.priority && extra.priority !== "Normal") tags.push({ key: "priority", label: extra.priority, tone: "warn" });
   return tags;

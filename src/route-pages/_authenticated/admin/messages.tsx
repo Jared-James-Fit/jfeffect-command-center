@@ -38,7 +38,7 @@ import { formatReadReceipt } from "@/lib/read-receipt";
 import { applyMessageChange, INBOX_MESSAGE_COLUMNS } from "@/lib/inbox-cache";
 import { waitingState, type WaitingState } from "@/lib/inbox-waiting";
 import { deriveRequests, latestToReview, oldestPending, requestChip } from "@/lib/inbox-requests";
-import { Check, Mic, Sparkles } from "lucide-react";
+import { Check, ChevronRight, MessageCircle, Mic, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { openSummer } from "@/components/summer/summer-assistant";
 import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resume";
@@ -95,13 +95,15 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
   );
 }
 
-const TAG_STYLE: Record<SignalTag["tone"], string> = {
-  urgent: "bg-red-500/12 text-red-600 dark:text-red-400",
-  warn: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  info: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
-  muted: "bg-muted text-muted-foreground",
+const TAG_TEXT: Record<SignalTag["tone"], string> = {
+  urgent: "text-red-600 dark:text-red-400",
+  strong: "text-foreground",
+  warn: "text-amber-700 dark:text-amber-400",
+  info: "text-sky-700 dark:text-sky-400",
+  muted: "text-muted-foreground",
 };
 const TAG_ICON: Partial<Record<SignalTag["key"], typeof Check>> = {
+  reply: MessageCircle,
   pain: AlertTriangle,
   overdue: Clock,
   review: ClipboardCheck,
@@ -110,13 +112,23 @@ const TAG_ICON: Partial<Record<SignalTag["key"], typeof Check>> = {
   followup: Hourglass,
 };
 
-/** One small tag on an inbox row ("Reply", "Pain", "Form overdue", "2 videos"). */
-function RowTag({ tag }: { tag: SignalTag }) {
-  const Icon = TAG_ICON[tag.key];
+/**
+ * A row's one quiet line: the most pressing thing in its colour, then up to
+ * two more in grey ("Pain flagged · Needs reply · Form overdue · +1"). No
+ * pills: the filters sort, the Brief explains.
+ */
+function SignalLine({ tags }: { tags: SignalTag[] }) {
+  const [first, ...rest] = tags;
+  const Icon = TAG_ICON[first.key];
+  const more = rest.slice(0, 2);
   return (
-    <span data-tag={tag.key} className={cn("inline-flex h-5 min-w-0 shrink items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[10px] font-bold", TAG_STYLE[tag.tone])}>
-      {Icon && <Icon className="h-3 w-3 shrink-0" />}
-      <span className="truncate">{tag.label}</span>
+    <span className="min-w-0 truncate">
+      <span data-tag={first.key} className={cn("font-semibold", TAG_TEXT[first.tone])}>
+        {Icon && <Icon className="mr-1 inline h-3 w-3 -translate-y-px" aria-hidden />}
+        {first.label}
+      </span>
+      {more.map((t) => <span key={t.key} data-tag={t.key} className="text-muted-foreground"> · {t.label}</span>)}
+      {rest.length > 2 && <span className="text-muted-foreground"> · +{rest.length - 2}</span>}
     </span>
   );
 }
@@ -962,11 +974,6 @@ export function MessagesInbox({
                     expandable={false}
                   />
                 </LiveAvatar>
-                {waitingCount(signals) > 0 && (
-                  <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-foreground px-1 text-[10px] font-bold tabular-nums text-background ring-2 ring-card" aria-hidden>
-                    {waitingCount(signals)}
-                  </span>
-                )}
               </button>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
@@ -1003,10 +1010,19 @@ export function MessagesInbox({
                   )}
                 </div>
                 {tags.length > 0 && (
-                  // One quiet line of what's waiting; the Brief (their photo) has the detail.
-                  <div className="mt-1 flex items-center gap-1 overflow-hidden" data-row-tags>
-                    {tags.slice(0, 3).map((t) => <RowTag key={t.key} tag={t} />)}
-                    {tags.length > 3 && <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">+{tags.length - 3}</span>}
+                  // One quiet line of what's waiting. Tapping it (or their photo) opens the Brief.
+                  <div className="mt-0.5 flex min-h-5 items-center gap-1.5" data-row-tags>
+                    <button
+                      type="button"
+                      data-open-brief-line
+                      aria-label={`Brief: ${client.full_name ?? "client"}. ${tags.map((t) => t.label).join(", ")}`}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
+                      className="-mx-1 inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-md px-1 py-0.5 text-left text-[11px] leading-4 transition hover:bg-secondary/60 active:bg-secondary"
+                    >
+                      <SignalLine tags={tags} />
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+                    </button>
                     {workflow.state === "needs_response" && (
                       <span
                         role="button"
