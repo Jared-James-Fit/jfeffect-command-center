@@ -78,8 +78,7 @@ describe("client tab bar: Crew in the centre", () => {
     // ~22pt off the bottom on Face ID iPhones (not the full 34pt safe area), 10px elsewhere
     expect(shell).toContain('const BAR_BOTTOM = "var(--mobile-bar-bottom)";');
     expect(read("src/styles.css")).toContain("--mobile-bar-bottom: max(calc(env(safe-area-inset-bottom) - 12px), 10px);");
-    // floating buttons (Cleo, page "+", Back to Today) stack from the bar's real top edge
-    expect(read("src/styles.css")).toContain(".summer-fab { bottom: calc(var(--mobile-bar-top) + 14px); }");
+    // floating buttons (page "+", Back to Today) stack from the bar's real top edge
     expect(read("src/components/tasks/quick-notes.tsx")).toContain('"calc(var(--mobile-bar-top) + 14px)"');
     expect(read("src/components/return-to-dashboard.tsx")).toContain("bottom-[calc(var(--mobile-bar-top)+14px)]");
     // same 16px gutter as the page's px-4

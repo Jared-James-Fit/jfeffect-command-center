@@ -43,23 +43,26 @@ describe("Cleo dictation", () => {
   });
 });
 
-describe("Cleo's floating button", () => {
-  const fab = read("components/summer/summer-assistant.tsx");
+describe("Cleo in admin has no floating button", () => {
+  const assistant = read("components/summer/summer-assistant.tsx");
+  const layout = read("routes/_authenticated/admin/route.tsx");
+  const styles = read("styles.css");
 
-  it("has two visible targets: the bubble opens chat, the mic badge opens her listening", () => {
-    expect(fab).toContain('aria-label="Chat with Cleo"');
-    expect(fab).toContain('aria-label="Talk to Cleo"');
-    expect(fab).toMatch(/const talk = \(\) => \{[\s\S]*?show\(\{ dictate: true \}\)/);
-    // The bubble's tap toggles the chat; it never starts the mic on its own.
-    expect(fab).toMatch(/const click = \(\) => \{[\s\S]*?setOpen\(\(o\) => !o\);/);
+  it("draws no button of her own, only her chat sheet", () => {
+    expect(assistant).not.toContain("data-summer-fab");
+    expect(assistant).not.toContain('aria-label="Chat with Cleo"');
+    expect(assistant).not.toMatch(/fixed right-4/);
+    expect(styles).not.toContain(".summer-fab");
+    expect(assistant).toContain("<SummerChat");
   });
 
-  it("shows the how-to hint only on the first few visits", () => {
-    expect(fab).toContain("const HINT_SHOWS = 3;");
-    expect(fab).toContain("Tap to chat");
+  it("still opens from Messages, the shortcut and her pushes", () => {
+    expect(layout).toContain('{role === "admin" && <SummerAssistant />}');
+    expect(assistant).toContain('window.addEventListener("summer:open", onOpen);');
+    expect(assistant).toMatch(/e\.shiftKey && \(e\.key === "S" \|\| e\.key === "s"\)/);
+    expect(assistant).toContain('if (hash !== "cleo" && hash !== "#cleo") return;');
   });
 });
-
 
 describe("Cleo's speaker never sticks on Speaking", () => {
   const speaker = read("lib/summer-speaker.ts");

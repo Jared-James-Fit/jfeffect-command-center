@@ -726,9 +726,8 @@ export function MessagesInbox({
           )}
         >
           {role === "admin" && !search && (
-            // Cleo is pinned here so she's one tap away in the inbox too
-            // (the floating button stays off chat screens so it never covers
-            // the composer). Not a client thread: nothing is ever sent.
+            // Cleo's way in on admin: pinned at the top of the inbox (there is
+            // no floating button). Not a client thread: nothing is ever sent.
             <div className="flex items-stretch border-b border-border/60 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-pink-500/5">
               <button type="button" onClick={() => openSummer()} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition hover:bg-secondary/40">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
