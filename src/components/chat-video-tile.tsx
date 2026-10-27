@@ -84,7 +84,12 @@ export function ChatVideoTile({
     if (!playSrc) return;
     // Streaming: give it the whole connection (background clip downloads wait).
     if (!localSrc) pauseChatVideoPrefetch();
-    const view = (url: string) => viewer.open(url, { kind: "video", alt: name ?? "Video", previewSrc: poster });
+    const view = (url: string) => viewer.open(url, {
+      kind: "video",
+      alt: name ?? "Video",
+      previewSrc: poster,
+      save: { kind: "video", path: path ?? null, url: src ?? null, name: name ?? null },
+    });
     // If the local copy won't play, stream it instead.
     const fallback = () => view(src ?? playSrc);
     // Must run inside the tap: iOS only allows sound + fullscreen from a user gesture.
