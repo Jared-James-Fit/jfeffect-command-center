@@ -98,15 +98,19 @@ describe("one reading for filters, row tags and the Brief", () => {
     for (const f of ["To Review", "Overdue", "Media", "Pain", "Sessions"] as const) expect(matchesSignal(s, f), f).toBe(true);
     expect(matchesSignal(undefined, "Pain")).toBe(false);
   });
-  it("row tags: most pressing first, short words, one line", () => {
+  it("a row's line: most pressing first (pain before a reply), plain words", () => {
     expect(signalTags(s, { followUp: false, priority: "Normal" }).map((t) => [t.key, t.label, t.tone])).toEqual([
-      ["reply", "Reply", "urgent"],
-      ["pain", "Pain", "urgent"],
+      ["pain", "Pain flagged", "urgent"],
+      ["reply", "Needs reply", "strong"],
       ["overdue", "Form overdue", "warn"],
-      ["review", "Review", "info"],
+      ["review", "Check-in to review", "info"],
       ["media", "2 videos · 1 photo", "info"],
       ["session", "Session request", "info"],
     ]);
+    const many = { ...s, overdue: [s.overdue[0], s.overdue[0]], toReview: [s.toReview[0], s.toReview[0], s.toReview[0]], sessionRequests: 2 };
+    expect(signalTags(many).map((t) => t.label)).toEqual(
+      ["Pain flagged", "Needs reply", "2 forms overdue", "3 to review", "2 videos · 1 photo", "2 session requests"],
+    );
     expect(waitingCount(s)).toBe(6);
   });
   it("what the AI reads is plain lines with dates (so its cache doesn't change by the minute)", () => {
@@ -124,10 +128,16 @@ describe("the coach inbox", () => {
     expect(route).toContain('FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f)');
     expect(route).toContain("return status !== \"archived\" && matchesSignal(it.signals, filter as SignalFilter);");
   });
-  it("rows show a few small tags instead of a wall of pills, and the photo opens the Brief", () => {
-    expect(route).toContain("{tags.slice(0, 3).map((t) => <RowTag key={t.key} tag={t} />)}");
-    for (const gone of ["<RequestStatusChip", "<WaitingPill", "Lift Reviews\"}"]) expect(route).not.toContain(gone);
-    expect(route).toContain("onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}");
+  it("rows show one quiet line (no pills, no number on the photo), and the line or the photo opens the Brief", () => {
+    expect(route).toContain("<SignalLine tags={tags} />");
+    expect(route).toContain("data-open-brief-line");
+    for (const gone of ["<RequestStatusChip", "<WaitingPill", "Lift Reviews\"}", "<RowTag", "TAG_STYLE", "bg-foreground px-1 text-[10px] font-bold tabular-nums text-background"]) {
+      expect(route).not.toContain(gone);
+    }
+    // only the first thing is coloured; the rest are grey, at most two more then "+n"
+    expect(route).toContain('className={cn("font-semibold", TAG_TEXT[first.tone])}');
+    expect(route).toContain('className="text-muted-foreground"> · {t.label}</span>');
+    expect(route.match(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); setBriefFor\(client\.id\); \}\}/g)?.length).toBe(2);
     expect(route).toContain("onClick={() => setBriefFor(selected.id)}");
     expect(route).toContain("<ClientBriefSheet");
   });

@@ -23,7 +23,10 @@ export type BriefClient = {
 
 const ago = (iso: string | null | undefined) => {
   if (!iso) return "";
-  try { return `${formatDistanceToNowStrict(parseISO(iso))} ago`; } catch { return ""; }
+  try {
+    const t = parseISO(iso);
+    return Date.now() - t.getTime() < 60_000 ? "just now" : `${formatDistanceToNowStrict(t)} ago`;
+  } catch { return ""; }
 };
 
 /**
@@ -134,6 +137,10 @@ export function ClientBriefSheet({
           </section>
 
           <div className="mt-3 space-y-2">
+            {/* the same order as the row's line: pain first, it's someone's body */}
+            {s?.pain.map((p) => (
+              <BriefRow key={p.messageId} tone="urgent" icon={<AlertTriangle className="h-4 w-4" />} title="Pain flagged" detail={`${p.line} · ${ago(p.at)}`} onClick={go} />
+            ))}
             {needsReply && s?.needsReply && (
               <BriefRow
                 tone="urgent"
@@ -143,12 +150,6 @@ export function ClientBriefSheet({
                 onClick={go}
               />
             )}
-            {s?.pain.map((p) => (
-              <BriefRow key={p.messageId} tone="urgent" icon={<AlertTriangle className="h-4 w-4" />} title="Pain flagged" detail={`${p.line} · ${ago(p.at)}`} onClick={go} />
-            ))}
-            {s?.toReview.map((r, i) => (
-              <BriefRow key={`r${i}`} tone="info" icon={<ClipboardCheck className="h-4 w-4" />} title={`${r.title} to review`} detail={`Filled in ${ago(r.at)}`} onClick={go} />
-            ))}
             {s?.overdue.map((o, i) => (
               <BriefRow
                 key={`o${i}`}
@@ -158,6 +159,9 @@ export function ClientBriefSheet({
                 detail={`Sent ${ago(o.since)}, not filled in${s.missed ? ` · ${s.missed} missed before` : ""}`}
                 to="/admin/forms"
               />
+            ))}
+            {s?.toReview.map((r, i) => (
+              <BriefRow key={`r${i}`} tone="info" icon={<ClipboardCheck className="h-4 w-4" />} title={`${r.title} to review`} detail={`Filled in ${ago(r.at)}`} onClick={go} />
             ))}
             {s?.media.length ? (
               <BriefRow
