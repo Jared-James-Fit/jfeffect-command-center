@@ -1,10 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Copy, ClipboardPaste, Sparkles, Check, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { phaseFromPlanText } from "@/lib/nutrition-cardio";
+import { quickPastePrompt, type ClientBasics, type QA, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { currentRequest } from "@/lib/form-request-state";
+import { listNutritionRequestsFn } from "@/lib/nutrition-ai-plans.functions";
+import type { TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 
 export type ParsedDay = {
   day_label: string;
@@ -167,35 +173,6 @@ Use the same weighing method every day. Do not weigh rice raw one day and cooked
 Every cooking oil, sauce, dressing, spread and beverage containing calories must be tracked.
 Seasonings, mustard, hot sauce, zero-calorie drinks and low-calorie flavourings are permitted, provided they do not cause digestion problems or encourage uncontrolled snacking.`;
 
-const CHATGPT_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
-
-CLIENT DETAILS (fill in):
-- Phase / goal:
-- Bodyweight:
-- Training days per week:
-- Daily calorie target:
-- Daily protein / carbs / fat / fibre targets:
-- Allergies / dislikes:
-- Preferred foods:
-
-FORMAT RULES (strict — do not change headings, do not add extra commentary):
-0. Start with ONE line: PHASE: <Fat Loss | Muscle Gain | Recomp | Maintenance | Performance | Reverse Diet | Lifestyle Reset> — the client's phase / goal. Then a blank line.
-1. Create one menu per day-type the client needs (e.g. TRAINING-DAY MENU, NON-TRAINING-DAY MENU, HIGH-DAY MENU). Each menu header ends with the word MENU in ALL CAPS.
-2. Inside each menu, list "Meal 1", "Meal 2", "Meal 3"… on their own line.
-3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
-4. After each meal add a blank line, then:
-   Approximate macros:
-   <P> g protein
-   <C> g carbohydrates
-   <F> g fat
-   <Fb> g fibre
-5. End every menu with:
-   Daily Total
-   Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
-6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, weigh consistently, track all calorie beverages, seasonings/zero-cal drinks allowed).
-
-Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
-
 function parseMacroLine(line: string): { protein?: number; carbs?: number; fats?: number; fibre?: number } {
   const out: any = {};
   const p = line.match(/(\d+(?:\.\d+)?)\s*g?\s*protein/i);
@@ -287,15 +264,77 @@ export function parseMealPlan(text: string): ParsedDay[] {
 
 type Props = {
   onApply: (days: ParsedDay[], foodWeighingRules: string | null, phase: string | null) => void;
+  /** The client the plan is for: their latest Nutrition Update fills the ChatGPT prompt. */
+  clientId?: string | null;
+  /** A phase the coach picked in the dialog (wins over the request's). */
+  phase?: string | null;
 };
 
-export function MealPlanBulkPaste({ onApply }: Props) {
+type RequestsData = {
+  requests: Array<{
+    id: string;
+    status: string;
+    submitted_at: string | null;
+    answers: QA[];
+    plan: null | { status: string; targets_text: string | null; phase: string | null; workout_meals?: WorkoutMealsMode | null };
+  }>;
+  requestedAt: string | null;
+  requestedPhase: string | null;
+  requestedWorkoutMeals: WorkoutMealsMode | null;
+  client: ClientBasics;
+  trainingPattern: TrainingPattern | null;
+};
+
+function shortDate(iso: string | null | undefined) {
+  return iso ? new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+}
+
+export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Props) {
   const [text, setText] = useState("");
   const [copied, setCopied] = useState<"template" | "prompt" | null>(null);
+  const listFn = useServerFn(listNutritionRequestsFn);
+  // Same query (and cache) as the client's Nutrition Update panel.
+  const reqQ = useQuery({
+    queryKey: ["nutrition-requests", clientId],
+    enabled: !!clientId,
+    queryFn: () => listFn({ data: { clientId: clientId! } }) as Promise<RequestsData>,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  // Built ahead of the tap, so copying never waits on the network (iOS only
+  // lets a tap copy synchronously).
+  const { prompt, source } = useMemo(() => {
+    const data = reqQ.data;
+    const latest = data ? currentRequest(data.requests ?? [], data.requestedAt ?? null) : null;
+    const answered = latest && latest.status !== "in_progress" && latest.answers?.length ? latest : null;
+    const targets = answered?.plan?.status === "ready" ? answered.plan.targets_text?.trim() || null : null;
+    const phase = coachPhase || answered?.plan?.phase || data?.requestedPhase || null;
+    const name = data?.client?.name?.trim().split(/\s+/)[0] || null;
+    return {
+      prompt: quickPastePrompt({
+        client: data?.client ?? null,
+        qas: answered?.answers ?? null,
+        targetsText: targets,
+        phase,
+        workoutMeals: answered?.plan?.workout_meals ?? data?.requestedWorkoutMeals ?? null,
+        history: data?.trainingPattern ?? null,
+      }),
+      source: !clientId
+        ? null
+        : reqQ.isLoading
+          ? "Loading the client's Nutrition Update…"
+          : !answered
+            ? `No Nutrition Update from ${name ?? "this client"} yet, so the prompt's client details are blank to fill in.`
+            : targets
+              ? `Filled in from ${name ? `${name}'s` : "their"} Nutrition Update (${shortDate(answered.submitted_at)}) and the AI targets.`
+              : `Filled in from ${name ? `${name}'s` : "their"} Nutrition Update (${shortDate(answered.submitted_at)}). Add your calorie and macro targets where it says (fill in).`,
+    };
+  }, [reqQ.data, reqQ.isLoading, clientId, coachPhase]);
 
   const copy = async (kind: "template" | "prompt") => {
     try {
-      await navigator.clipboard.writeText(kind === "template" ? EXAMPLE_TEMPLATE : CHATGPT_PROMPT);
+      await navigator.clipboard.writeText(kind === "template" ? EXAMPLE_TEMPLATE : prompt);
       setCopied(kind);
       toast.success(kind === "template" ? "Template copied" : "ChatGPT prompt copied");
       setTimeout(() => setCopied(null), 1500);
@@ -334,6 +373,7 @@ export function MealPlanBulkPaste({ onApply }: Props) {
           <div>
             <div className="text-sm font-bold uppercase tracking-wide">Quick paste meal plan</div>
             <div className="text-[11px] text-muted-foreground">Paste a full plan and we'll auto-split it into days with macros.</div>
+            {source && <div className="mt-1 text-[11px] text-foreground/80">{source}</div>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

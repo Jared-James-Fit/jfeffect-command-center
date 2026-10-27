@@ -335,13 +335,20 @@ export function mealPlanUserPrompt(
   const meals = answerFor(qas, "meals per day") || answerFor(qas, "meals");
   const avoid = answerFor(qas, "allerg") || answerFor(qas, "dislike");
   const love = answerFor(qas, "foods you love") || answerFor(qas, "prefer") || answerFor(qas, "favourite") || answerFor(qas, "favorite");
+  // No targets yet (the coach copying the prompt before pass 1 ran): leave the numbers for them to fill in.
+  const hasTargets = !!targetsText.trim();
+  const goal = answerFor(qas, "goal");
   return [
     "CLIENT DETAILS:",
-    `- Phase / goal: ${phase || "use the Goal from the TARGETS below"}`,
-    `- Bodyweight: ${bw || "see targets"}`,
-    `- Training days per week: ${days || "see targets"}`,
-    `- Daily calorie target: use the CALORIE TARGETS below for each day-type menu (Training Day, Non Training Day, High Day)`,
-    `- Daily protein / carbs / fat / fibre targets: use the MACRO TARGETS below for each day-type; fibre 14 g per 1000 kcal`,
+    `- Phase / goal: ${phase || (hasTargets ? "use the Goal from the TARGETS below" : goal || "(fill in)")}`,
+    `- Bodyweight: ${bw || (hasTargets ? "see targets" : "(fill in)")}`,
+    `- Training days per week: ${days || (hasTargets ? "see targets" : "(fill in)")}`,
+    hasTargets
+      ? `- Daily calorie target: use the CALORIE TARGETS below for each day-type menu (Training Day, Non Training Day, High Day)`
+      : `- Daily calorie target: (fill in for each day-type menu)`,
+    hasTargets
+      ? `- Daily protein / carbs / fat / fibre targets: use the MACRO TARGETS below for each day-type; fibre 14 g per 1000 kcal`
+      : `- Daily protein / carbs / fat / fibre targets: (fill in for each day-type); fibre 14 g per 1000 kcal`,
     `- Allergies / dislikes: ${avoid || "none"}`,
     `- Preferred foods: ${love || "no preference"}`,
     meals ? `- Meals per day: ${meals}` : "",
@@ -353,9 +360,50 @@ export function mealPlanUserPrompt(
     }${disagrees ? ` (Logged workouts point to ${history!.label}; the form answer is newer, so follow the form.)` : ""}`,
     workoutMeals && workoutMeals !== "auto" ? `- COACH WORKOUT MEALS: ${WORKOUT_MEALS_RULE[workoutMeals]}` : "",
     "",
-    "TARGETS (match each menu's Daily Total to these within ±3%):",
+    hasTargets ? "TARGETS (match each menu's Daily Total to these within ±3%):" : "",
     targetsText.trim(),
   ].filter((l) => l !== "").join("\n");
+}
+
+/**
+ * The coach's "Copy ChatGPT prompt" when building a client's plan by hand
+ * (Create Nutrition Targets → Quick Paste): the same format and workout-meal
+ * rules the AI uses (MEAL_PLAN_PROMPT), with the client details filled in
+ * from their latest Nutrition Update when there is one, and the AI's targets
+ * when it wrote them. Details sit right under the opening line, so anything
+ * left to fill in is at the top.
+ */
+export function quickPastePrompt(opts: {
+  client?: string | ClientBasics | null;
+  qas?: QA[] | null;
+  targetsText?: string | null;
+  phase?: string | null;
+  workoutMeals?: WorkoutMealsMode | null;
+  history?: TrainingPattern | null;
+}): string {
+  const split = MEAL_PLAN_PROMPT.indexOf("\n\n");
+  const intro = MEAL_PLAN_PROMPT.slice(0, split);
+  const rules = MEAL_PLAN_PROMPT.slice(split + 2);
+  const qas = opts.qas ?? [];
+  const basics = opts.client ? clientBasicsLines(opts.client, qas) : [];
+  const details = qas.length
+    ? mealPlanUserPrompt(qas, opts.targetsText ?? "", opts.phase, opts.workoutMeals, opts.history)
+    : [
+        "CLIENT DETAILS (fill in):",
+        opts.phase ? `- Phase / goal: ${opts.phase}` : "- Phase / goal:",
+        "- Bodyweight:",
+        "- Training days per week:",
+        "- Daily calorie target:",
+        "- Daily protein / carbs / fat / fibre targets:",
+        "- Allergies / dislikes:",
+        "- Preferred foods:",
+        "- Meals per day:",
+        "- Usual training time:",
+        "- Eating before training:",
+        "- TRAINING TIME RULE: the Pre-Workout meal is eaten 60–120 min before training and the Post-Workout meal within 2 hours after.",
+        opts.workoutMeals && opts.workoutMeals !== "auto" ? `- COACH WORKOUT MEALS: ${WORKOUT_MEALS_RULE[opts.workoutMeals]}` : "",
+      ].filter(Boolean).join("\n");
+  return [intro, basics.length ? `CLIENT\n${basics.join("\n")}` : "", details, rules].filter(Boolean).join("\n\n");
 }
 
 /** Strip code fences / markdown emphasis the model sometimes adds. */

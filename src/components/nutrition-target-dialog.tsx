@@ -69,11 +69,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const [saving, setSaving] = useState(false);
   /** True while Phase / Goal holds a value detected from a paste (cleared on manual change). */
   const [phaseAuto, setPhaseAuto] = useState(false);
+  /** The coach picked Phase / Goal themselves (the default "Maintenance" isn't a choice). */
+  const [phasePicked, setPhasePicked] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const today = todayLocalISO();
     setPhaseAuto(false);
+    setPhasePicked(false);
     if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {
@@ -232,7 +235,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">Auto-filled · change anytime</span>
               )}
             </Label>
-            <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); set("phase", v); }}>
+            <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); setPhasePicked(true); set("phase", v); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {NUTRITION_PHASES.map((s) => (
@@ -291,6 +294,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <div className="space-y-3">
           <MealPlanBulkPaste
+            clientId={form.client_id || clientId || null}
+            phase={initial || phasePicked ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
             onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
               setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
               setForm((f: any) => ({
