@@ -1,8 +1,10 @@
 import * as React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { ArrowDownToLine, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSaveMedia } from "@/components/messages/save-media";
+import { saveLabel, warmSave, type SaveItem } from "@/lib/save-media";
 
 /**
  * Global full-screen media viewer.
@@ -23,12 +25,15 @@ type OpenOptions = {
   previewSrc?: string | null;
   /** "video" plays the file full screen (autoplay with controls) instead of showing an image. */
   kind?: "image" | "video";
+  /** Offer Save (top left), iMessage style: chat photos and videos. */
+  save?: SaveItem | null;
 };
 type ViewerState = {
   src: string;
   alt?: string | null;
   previewSrc?: string | null;
   kind: "image" | "video";
+  save?: SaveItem | null;
 } | null;
 
 type Ctx = {
@@ -55,7 +60,7 @@ export function MediaViewerProvider({ children }: { children: React.ReactNode })
   const api = useMemo<Ctx>(
     () => ({
       open: (src, opts) =>
-        setState({ src, alt: opts?.alt ?? null, previewSrc: opts?.previewSrc ?? null, kind: opts?.kind ?? "image" }),
+        setState({ src, alt: opts?.alt ?? null, previewSrc: opts?.previewSrc ?? null, kind: opts?.kind ?? "image", save: opts?.save ?? null }),
       close: () => setState(null),
     }),
     [],
@@ -80,6 +85,30 @@ export function MediaViewerRoot() {
 function Viewer({ state, onClose }: { state: NonNullable<ViewerState>; onClose: () => void }) {
   if (state.kind === "video") return <VideoViewer state={state} onClose={onClose} />;
   return <ImageViewer state={state} onClose={onClose} />;
+}
+
+/**
+ * Save, top left across from the close button: the photo or video on screen
+ * goes to the share sheet (Save Image / Save Video) or downloads. The photo is
+ * the one already loading here, so it's usually in hand before the tap.
+ */
+function ViewerSaveButton({ item }: { item: SaveItem }) {
+  const save = useSaveMedia();
+  useEffect(() => { warmSave([item], { cheap: true }); }, [item]);
+  const label = saveLabel([item]);
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      data-viewer-save
+      onPointerDown={(e) => { e.stopPropagation(); warmSave([item]); }}
+      onClick={(e) => { e.stopPropagation(); void save([item]); }}
+      className="absolute left-3 top-3 z-10 inline-flex h-11 min-h-[44px] items-center gap-1.5 rounded-full bg-black/70 px-4 text-sm font-semibold text-white shadow-lg ring-1 ring-white/20 hover:bg-black/90"
+      style={{ top: "calc(env(safe-area-inset-top) + 12px)", left: "calc(env(safe-area-inset-left) + 12px)" }}
+    >
+      <ArrowDownToLine className="h-4 w-4" /> Save
+    </button>
+  );
 }
 
 /**
@@ -153,6 +182,7 @@ function VideoViewer({ state, onClose }: { state: NonNullable<ViewerState>; onCl
       >
         <X className="h-5 w-5" />
       </button>
+      {state.save && <ViewerSaveButton item={state.save} />}
       <div className="relative flex h-full w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
         {errored ? (
           <div className="flex flex-col items-center gap-3 text-white/85">
@@ -256,6 +286,7 @@ function ImageViewer({ state, onClose }: { state: NonNullable<ViewerState>; onCl
       >
         <X className="h-5 w-5" />
       </button>
+      {state.save && <ViewerSaveButton item={state.save} />}
 
       <div
         className="relative flex h-full w-full items-center justify-center overflow-hidden"

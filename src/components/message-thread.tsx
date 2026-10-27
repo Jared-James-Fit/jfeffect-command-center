@@ -62,7 +62,7 @@ import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
   Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare, Copy, Reply,
+  CheckCircle2, Circle, CheckSquare, Copy, Reply, ArrowDownToLine,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
@@ -93,6 +93,8 @@ import { playAppSound, registerOpenThread } from "@/lib/app-sounds";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
 import { StaffInviteChatCard } from "@/components/staff-invite-chat-card";
 import { listenChannel } from "@/lib/realtime-channel";
+import { SaveMediaButton, useSaveMedia } from "@/components/messages/save-media";
+import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
 
 function attachIcon(t: MessageAttachment["type"]) {
   if (t === "image") return ImageIcon;
@@ -1396,6 +1398,18 @@ export function MessageThread({
     return null;
   }, [visibleMessages, role]);
 
+  // Holding a message with photos / videos puts Save on offer: get the cheap
+  // ones (photos, clips already on the phone) in hand so its tap opens the
+  // share sheet at once.
+  const saveMedia = useSaveMedia();
+  useEffect(() => {
+    if (!sheetForId) return;
+    const m = visibleMessages.find((x) => x.id === sheetForId);
+    if (!m || m.deleted_at) return;
+    warmSave(saveItemsOf(m.attachments, { at: m.created_at, signed: signedUrlMap }), { cheap: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetForId]);
+
   // Both sides: the latest message of mine the other side has actually read,
   // so "Read 6:01 PM" stays visible even after newer unread messages go out.
   // Clients see the coach's read time exactly the way the coach sees theirs.
@@ -2492,6 +2506,10 @@ export function MessageThread({
                   </div>
                 )}
               </div>
+              {/* iOS Messages' save button beside a photo / video someone sent you */}
+              {!mine && !isDeleted && !isEditing && !selectionMode && !m.id.startsWith("optimistic-") && (
+                <SaveMediaButton items={saveItemsOf(m.attachments, { at: m.created_at, signed: signedUrlMap })} />
+              )}
             </div>
               )}
             </Fragment>
@@ -3051,6 +3069,29 @@ export function MessageThread({
                       <Reply className="mr-3 h-5 w-5" /> {clipPick ? "Reply to whole message" : "Reply"}
                     </Button>
                   )}
+                  {(() => {
+                    // The one photo / video held, else everything in the message.
+                    if (m.deleted_at || m.id.startsWith("optimistic-")) return null;
+                    const heldAtt = sheetClip != null ? m.attachments?.[sheetClip] : undefined;
+                    const items = saveItemsOf(heldAtt ? [heldAtt] : m.attachments, { at: m.created_at, signed: signedUrlMap });
+                    if (!items.length) return null;
+                    return (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        data-testid="save-media"
+                        className="h-12 justify-start text-base"
+                        onPointerDown={() => warmSave(items)}
+                        onClick={() => {
+                          void saveMedia(items);
+                          setSheetForId(null);
+                          setSheetClip(null);
+                        }}
+                      >
+                        <ArrowDownToLine className="mr-3 h-5 w-5" /> {saveLabel(items)}
+                      </Button>
+                    );
+                  })()}
                   {canEdit && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"

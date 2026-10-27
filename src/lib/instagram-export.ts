@@ -37,6 +37,9 @@ import {
   type PostSlide,
 } from "@/lib/community";
 import { extraLesson, type LessonTrack } from "@/lib/lessons";
+import { canShareFiles, downloadFiles, isTouchDevice } from "@/lib/file-share";
+
+export { canShareFiles, downloadFiles, isTouchDevice };
 
 export type IgFormat = "feed" | "story";
 
@@ -198,23 +201,6 @@ export function mediaType(blobType: string, path: string, kind: "image" | "video
 /*  The tap                                                            */
 /* ------------------------------------------------------------------ */
 
-/** A phone or tablet: its share sheet is where Instagram lives. */
-export function isTouchDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return true;
-  // iPadOS reports itself as a Mac
-  return /Macintosh/.test(navigator.userAgent) && (navigator.maxTouchPoints ?? 0) > 1;
-}
-
-export function canShareFiles(files: File[]): boolean {
-  if (typeof navigator === "undefined" || typeof navigator.share !== "function" || !files.length) return false;
-  try {
-    return !navigator.canShare || navigator.canShare({ files });
-  } catch {
-    return false;
-  }
-}
-
 /** Copy with a hidden box: works where the async clipboard doesn't (older WebViews), as long as it runs in the tap. */
 function legacyCopy(text: string): boolean {
   if (typeof document === "undefined") return false;
@@ -250,28 +236,6 @@ export function copyText(text: string): Promise<boolean> {
     /* fall through */
   }
   return Promise.resolve(legacyCopy(text));
-}
-
-export function downloadFiles(files: File[]): boolean {
-  if (typeof document === "undefined") return false;
-  try {
-    files.forEach((f, i) => {
-      const url = URL.createObjectURL(f);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = f.name;
-      document.body.appendChild(a);
-      // a beat apart, or browsers keep only the first
-      window.setTimeout(() => {
-        a.click();
-        a.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 4000);
-      }, i * 250);
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**

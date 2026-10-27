@@ -55,8 +55,10 @@ import { ComposerPlusMenu } from "@/components/composer-plus-menu";
 import {
   Paperclip, Send, X, Image as ImageIcon, Camera, File as FileIcon,
   Mic, Trash2, Play, Pause, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare, Copy, Eye,
+  CheckCircle2, Circle, CheckSquare, Copy, Eye, ArrowDownToLine,
 } from "lucide-react";
+import { SaveMediaButton, useSaveMedia } from "@/components/messages/save-media";
+import { saveItemsOf, saveLabel, warmSave } from "@/lib/save-media";
 import { toast } from "sonner";
 import { haptic } from "@/platform/haptics";
 import { doubleTapAdds, useLikePops } from "@/lib/message-like";
@@ -357,6 +359,7 @@ export function GroupMessageThread({
     return null;
   }, [messages]);
   const [seenForId, setSeenForId] = useState<string | null>(null);
+  const saveMedia = useSaveMedia();
   const seenForMessage = seenForId ? messages.find((x) => x.id === seenForId) ?? null : null;
 
   /* ---------------- Reactions (optimistic) ---------------- */
@@ -971,6 +974,10 @@ export function GroupMessageThread({
                     </div>
                   )}
                 </div>
+                {/* iOS Messages' save button beside a photo / video someone sent */}
+                {!mine && !isDeleted && !isEditing && !selectionMode && (
+                  <SaveMediaButton items={saveItemsOf(m.attachments, { at: m.created_at })} />
+                )}
               </div>
               {!selectionMode && !isDeleted && (m.id === latestMessageId || m.id === lastOwnMessageId) && (
                 <GroupSeenByRow
@@ -1312,6 +1319,19 @@ export function GroupMessageThread({
                       <Pencil className="mr-3 h-5 w-5" /> Edit
                     </Button>
                   )}
+                  {(() => {
+                    const items = m.deleted_at ? [] : saveItemsOf(m.attachments, { at: m.created_at });
+                    if (!items.length) return null;
+                    return (
+                      <Button
+                        type="button" variant="ghost" data-testid="save-media" className="h-12 justify-start text-base"
+                        onPointerDown={() => warmSave(items)}
+                        onClick={() => { void saveMedia(items); setSheetForId(null); }}
+                      >
+                        <ArrowDownToLine className="mr-3 h-5 w-5" /> {saveLabel(items)}
+                      </Button>
+                    );
+                  })()}
                   {!m.deleted_at && (m.body?.length ?? 0) > 0 && (
                     <Button
                       type="button" variant="ghost" className="h-12 justify-start text-base"

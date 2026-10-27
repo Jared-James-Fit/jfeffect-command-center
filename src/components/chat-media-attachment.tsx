@@ -289,7 +289,12 @@ export function ChatImageAttachment({
           });
         }
       }
-      viewer.open(fullSrc, { alt: att.name ?? "Image", previewSrc: rawSrc });
+      viewer.open(fullSrc, {
+        alt: att.name ?? "Image",
+        previewSrc: rawSrc,
+        // Save in the viewer: the very file it's showing
+        save: { kind: "image", path: att.storage_path ?? null, url: fullSrc, name: att.name ?? null, mime: att.mime ?? null },
+      });
     } finally {
       setOpeningViewer(false);
     }
