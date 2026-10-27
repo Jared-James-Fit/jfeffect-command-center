@@ -127,12 +127,13 @@ describe("inbox wiring", () => {
   it("splits Waiting on Client into waiting / follow up, and keeps closers out of it", () => {
     expect(route).toContain('"Follow Up"');
     expect(route).toContain('it.workflow.state === "waiting_on_client" && it.waiting !== "fyi"');
-    expect(route).toContain("<WaitingPill state={waiting} />");
+    // waiting / follow up show as a "Follow up" tag on the row and in the Brief
+    expect(route).toContain('followUp: workflow.state === "waiting_on_client" && status.waiting === "overdue"');
     expect(route).toContain('"Not read yet"');
   });
-  it("shows a forms / check-ins status chip and counts it in Forms & Check-ins", () => {
-    expect(route).toContain("<RequestStatusChip chip={chip} />");
-    expect(route).toContain("it.workflow.isFormOrCheckin || it.hasRequests");
+  it("splits forms & check-ins into Forms to review and Overdue forms (one reading with the Brief)", () => {
+    expect(route).toContain('case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":');
+    expect(route).toContain("const { overdue, pending } = splitRequests(req);");
     expect(route).toContain('queryKey: ["message-form-checkin-inbox", "status"]');
   });
   it("orders the Inbox newest first like iMessage (needs-response is a chip, not the order) and lets me clear waiting chats with a swipe", () => {

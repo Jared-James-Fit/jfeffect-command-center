@@ -82,7 +82,7 @@ describe("getting the files in hand", () => {
 
   it("a clip already on the phone for playback is used as is (no download, no signing)", async () => {
     local.set("c1/b.mp4", "blob:local-b");
-    const fetchMock = vi.fn(async () => okResponse("mp4bytes", "video/mp4"));
+    const fetchMock = vi.fn(async (_url: unknown) => okResponse("mp4bytes", "video/mp4"));
     vi.stubGlobal("fetch", fetchMock);
     await prepareSave([{ kind: "video", path: "c1/b.mp4" }]);
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(["blob:local-b"]);
