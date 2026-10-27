@@ -123,8 +123,10 @@ describe("one reading for filters, row tags and the Brief", () => {
 
 describe("the coach inbox", () => {
   const route = read("src/route-pages/_authenticated/admin/messages.tsx");
-  it("has the quick filters, hiding the empty optional ones", () => {
-    expect(route).toContain('"Inbox", "Needs Response", "Pain", "Overdue", "To Review", "Media", "Sessions",');
+  it("filters only what the rows can't already show: forms first, every chip but Inbox only while something's in it", () => {
+    expect(route).toContain('const FILTERS = ["Inbox", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;');
+    for (const gone of ['"Needs Response"', 'case "Unread"', '"Follow Up"', 'case "Priority"', '"Waiting on Client"', 'case "Done"']) expect(route).not.toContain(gone);
+    expect(route).toContain('const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));');
     expect(route).toContain('FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f)');
     expect(route).toContain("return status !== \"archived\" && matchesSignal(it.signals, filter as SignalFilter);");
   });
@@ -147,13 +149,10 @@ describe("the coach inbox", () => {
     expect(route).toContain("return inFilter(it, filter);");
     expect(route).toContain("}, [allRows, search, filter]);");
   });
-  it("only the filters that are work for me carry a count badge, in their row tag's colour", () => {
-    expect(route).toContain('"Needs Response": "urgent", Pain: "urgent",');
-    expect(route).toContain('Overdue: "warn", "Follow Up": "warn", Priority: "warn",');
-    expect(route).toContain('"To Review": "info", Media: "info", Sessions: "info",');
-    expect(route).toContain('Unread: "unread",');
+  it("work for me carries a count badge in its line's colour; Archived doesn't", () => {
+    expect(route).toContain('"To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info",');
     const badges = route.slice(route.indexOf("const FILTER_BADGE"), route.indexOf("const BADGE_STYLE"));
-    for (const quiet of ["Inbox", "Waiting on Client", "Done", "Archived"]) expect(badges).not.toContain(quiet);
+    expect(badges).not.toContain("Archived");
     expect(route).toContain('const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));');
     expect(route).toContain("aria-label={n ? `${label}, ${n}` : label}");
   });
