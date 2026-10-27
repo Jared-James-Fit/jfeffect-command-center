@@ -22,15 +22,7 @@ import { sexLabel } from "@/lib/athlete-sex";
 import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { resolveTiming } from "@/lib/analytics/training-time";
 import { programContextText } from "@/lib/program-context";
-
-function answerValue(a: any): string {
-  if (a.value_text != null && String(a.value_text).trim()) return String(a.value_text);
-  if (a.value_number != null) return String(a.value_number);
-  const j = a.value_json;
-  if (Array.isArray(j)) return j.map((x) => (typeof x === "string" ? x : x?.name ?? x?.label ?? "")).filter(Boolean).join(", ");
-  if (j && typeof j === "object") return JSON.stringify(j);
-  return j != null ? String(j) : "";
-}
+import { formAnswerText as answerValue } from "@/lib/form-answer-text";
 
 export async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any; qas: QA[] }> {
   const { data: sub, error } = await sb

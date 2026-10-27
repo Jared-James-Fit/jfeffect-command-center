@@ -34,6 +34,9 @@ import {
   submitMessengerCheckin,
   type MessengerCheckinTaskType,
 } from "@/lib/messenger-checkins.functions";
+import { generateNutritionPlanFn } from "@/lib/nutrition-ai-plans.functions";
+import { planMissing } from "@/lib/form-request-state";
+import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
 
 type Role = "admin" | "client";
 
@@ -1094,7 +1097,7 @@ export function FormRequestChatCard({
   const heading = title || (isNutrition ? "Nutrition Update" : "Form");
   return (
     <>
-      <div className={FORM_CARD}>
+      <div className={cn(FORM_CARD, done && role === "admin" && "w-[min(82vw,400px)]")}>
         <div className="flex items-start gap-3">
           <span className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-full",
@@ -1105,7 +1108,11 @@ export function FormRequestChatCard({
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold">{heading}</div>
             <div className={cn("mt-0.5 text-xs", FORM_MUTED)}>
-              {isLoading ? "Loading…" : done ? "Submitted" : started ? "In progress" : isNutrition ? "About 3–4 minutes" : "A few minutes"}
+              {isLoading
+                ? "Loading…"
+                : done
+                  ? sub?.submitted_at ? `Submitted ${fmtDateTime(sub.submitted_at)}` : "Submitted"
+                  : started ? "In progress" : isNutrition ? "About 3–4 minutes" : "A few minutes"}
             </div>
           </div>
         </div>
@@ -1123,14 +1130,13 @@ export function FormRequestChatCard({
             {started ? "Client is filling it out" : "Waiting for client"}
           </div>
         )}
-        {done && role === "admin" && (
-          <a
-            href={`/admin/clients/${clientId}?tab=${isNutrition ? "nutrition" : "documents"}`}
-            className="mt-3 flex h-10 w-full items-center justify-center rounded-md border border-emerald-500/25 bg-emerald-500/10 text-sm font-semibold text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            {isNutrition ? "View AI plan" : "View submission"}
-          </a>
+        {done && role === "admin" && sub && (
+          <SubmittedFormAnswers
+            submissionId={sub.id}
+            formId={formId}
+            clientId={clientId}
+            isNutrition={isNutrition}
+          />
         )}
         {done && role === "client" && (
           <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
@@ -1154,3 +1160,144 @@ export function FormRequestChatCard({
 }
 
 const NUTRITION_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
+
+/** How many answers show before "Show all". */
+const ANSWERS_PREVIEW = 6;
+
+type ChatPlan = { status: string; error: string | null; updated_at: string | null; applied_at: string | null } | null;
+
+/**
+ * The coach's side of a submitted form in the chat: every answer, in the form's
+ * order, and for the Nutrition Update the AI plan's state. Opening the chat
+ * writes a plan that never got written (like the client's Nutrition panel).
+ */
+function SubmittedFormAnswers({
+  submissionId,
+  formId,
+  clientId,
+  isNutrition,
+}: {
+  submissionId: string;
+  formId: string;
+  clientId: string;
+  isNutrition: boolean;
+}) {
+  const qc = useQueryClient();
+  const genFn = useServerFn(generateNutritionPlanFn);
+  const [showAll, setShowAll] = useState(false);
+  const key = ["chat-form-answers", submissionId];
+  const { data, isLoading, isError } = useQuery({
+    queryKey: key,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const db = supabase as any;
+      const [q, a, p] = await Promise.all([
+        db.from("nf_questions").select("id, label, order_index, question_type").eq("form_id", formId),
+        db.from("nf_answers").select("question_id, value_text, value_number, value_json").eq("submission_id", submissionId),
+        isNutrition
+          ? db.from("nutrition_ai_plans").select("status, error, updated_at, applied_at").eq("submission_id", submissionId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (q.error) throw q.error;
+      if (a.error) throw a.error;
+      return {
+        rows: answeredQuestions((q.data ?? []) as FormQuestionRow[], (a.data ?? []) as FormAnswerRow[]),
+        plan: (p.data ?? null) as ChatPlan,
+      };
+    },
+    refetchInterval: (query) => {
+      const plan = (query.state.data as { plan: ChatPlan } | undefined)?.plan;
+      return isNutrition && (!plan || plan.status === "pending" || plan.status === "generating") ? 5000 : false;
+    },
+  });
+
+  const plan = data?.plan ?? null;
+  // Sent, but no plan being written (or one that stalled): write it now, once.
+  const kicked = useRef(false);
+  useEffect(() => {
+    if (!isNutrition || !data || kicked.current || !planMissing(plan)) return;
+    kicked.current = true;
+    void genFn({ data: { submissionId } })
+      .catch(() => {})
+      .finally(() => qc.invalidateQueries({ queryKey: key }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNutrition, data, plan?.status, plan?.updated_at, submissionId]);
+
+  const rows = data?.rows ?? [];
+  const shown = showAll ? rows : rows.slice(0, ANSWERS_PREVIEW);
+  const href = `/admin/clients/${clientId}?tab=${isNutrition ? "nutrition" : "documents"}`;
+
+  const planLine = !isNutrition
+    ? null
+    : !plan || plan.status === "pending" || plan.status === "generating"
+      ? { text: "AI is writing the targets and meal plan…", tone: "busy" as const }
+      : plan.status === "error"
+        ? { text: "The AI plan didn't finish. Open it to try again.", tone: "error" as const }
+        : plan.applied_at
+          ? { text: "AI plan applied to their targets", tone: "done" as const }
+          : { text: "AI targets and meal plan are ready to review", tone: "done" as const };
+
+  return (
+    <div className="mt-3 space-y-3">
+      {isLoading ? (
+        <div className={cn("flex items-center gap-2 text-xs", FORM_MUTED)}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading answers…
+        </div>
+      ) : isError ? (
+        <div className={cn("text-xs", FORM_MUTED)}>Couldn't load the answers here. Open them in the profile.</div>
+      ) : rows.length === 0 ? (
+        <div className={cn("text-xs", FORM_MUTED)}>No answers were filled in.</div>
+      ) : (
+        <dl className="divide-y divide-blue-200/70 overflow-hidden rounded-xl bg-white/70 dark:divide-blue-400/15 dark:bg-blue-900/40">
+          {shown.map((r) => (
+            <div key={r.id} className="px-3 py-2">
+              <dt className={cn("text-[11px] leading-snug", FORM_MUTED)}>{r.label}</dt>
+              <dd className="mt-0.5 whitespace-pre-wrap break-words text-sm font-medium leading-snug">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {rows.length > ANSWERS_PREVIEW && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          aria-expanded={showAll}
+          className="flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-600/10 dark:text-blue-200 dark:hover:bg-blue-400/10"
+        >
+          {showAll ? "Show less" : `Show all ${rows.length} answers`}
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
+        </button>
+      )}
+
+      {planLine && (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-xl px-3 py-2 text-xs font-medium",
+            planLine.tone === "busy" && "bg-amber-500/10 text-amber-800 dark:text-amber-200",
+            planLine.tone === "error" && "bg-rose-500/10 text-rose-700 dark:text-rose-200",
+            planLine.tone === "done" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+          )}
+        >
+          {planLine.tone === "busy" ? (
+            <Loader2 className="mt-px h-3.5 w-3.5 shrink-0 animate-spin" />
+          ) : planLine.tone === "error" ? (
+            <Flag className="mt-px h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
+          )}
+          <span>{planLine.text}</span>
+        </div>
+      )}
+
+      <a
+        href={href}
+        className="flex h-10 w-full items-center justify-center rounded-md border border-blue-600/25 bg-white/70 text-sm font-semibold text-blue-700 hover:bg-white dark:border-blue-300/25 dark:bg-blue-900/40 dark:text-blue-100 dark:hover:bg-blue-900/60"
+      >
+        {isNutrition ? "Open AI plan" : "Open in their profile"}
+        <ChevronRight className="ml-1 h-4 w-4" />
+      </a>
+    </div>
+  );
+}
