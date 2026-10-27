@@ -121,9 +121,10 @@ function RowTag({ tag }: { tag: SignalTag }) {
   );
 }
 
+// Most pressing first, the same order as the tags on a row.
 const FILTERS = [
-  "Inbox", "Needs Response", "To Review", "Overdue", "Media", "Pain", "Sessions",
-  "Unread", "Waiting on Client", "Follow Up", "Priority", "Done", "Archived",
+  "Inbox", "Needs Response", "Pain", "Overdue", "To Review", "Media", "Sessions",
+  "Unread", "Follow Up", "Priority", "Waiting on Client", "Done", "Archived",
 ] as const;
 type Filter = typeof FILTERS[number];
 const FILTER_LABEL: Partial<Record<Filter, string>> = {
@@ -133,10 +134,60 @@ const FILTER_LABEL: Partial<Record<Filter, string>> = {
   Media: "Photos & videos",
   Pain: "Pain flagged",
   Sessions: "Session requests",
+  "Follow Up": "Follow up",
+  "Waiting on Client": "Waiting on client",
 };
 /** Shown only while something's in them (or picked): the row of filters stays short. */
 const ONLY_WHEN_ANY = new Set<Filter>(["To Review", "Overdue", "Media", "Pain", "Sessions", "Priority"]);
-const SIGNAL_FILTERS = new Set<Filter>(["To Review", "Overdue", "Media", "Pain", "Sessions"]);
+
+/**
+ * Filters that are work for me carry a count badge in the colour of their tag
+ * on a row (unread in iMessage blue); the rest (Inbox, Waiting on client, Done,
+ * Archived) don't, so the numbers only ever mean "this is waiting on you".
+ */
+const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info" | "unread">> = {
+  "Needs Response": "urgent", Pain: "urgent",
+  Overdue: "warn", "Follow Up": "warn", Priority: "warn",
+  "To Review": "info", Media: "info", Sessions: "info",
+  Unread: "unread",
+};
+const BADGE_STYLE = {
+  urgent: "bg-red-500 text-white",
+  warn: "bg-amber-500/25 text-amber-700 dark:text-amber-300",
+  info: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
+  unread: "bg-[#007AFF] text-white",
+} as const;
+const COUNTED = FILTERS.filter((f) => FILTER_BADGE[f] || ONLY_WHEN_ANY.has(f));
+const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));
+
+type FilterRow = {
+  state?: { status?: string | null; priority?: string | null } | null;
+  workflow: { state: string };
+  waiting?: string | null;
+  signals: ClientSignals;
+  unread: number;
+  last?: unknown;
+  liftReview?: unknown;
+};
+
+/** Which chats a filter shows. The list and its count badge both use it, so they always agree. */
+function inFilter(it: FilterRow, filter: Filter): boolean {
+  const status = it.state?.status ?? "open";
+  const priority = it.state?.priority ?? "Normal";
+  switch (filter) {
+    case "Needs Response": return it.workflow.state === "needs_response" && status !== "archived";
+    // Only chats where I'm actually waiting on an answer; closers like "Perf thanks!" aren't.
+    case "Waiting on Client": return it.workflow.state === "waiting_on_client" && it.waiting !== "fyi" && status !== "archived";
+    case "Follow Up": return it.workflow.state === "waiting_on_client" && it.waiting === "overdue" && status !== "archived";
+    case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
+      return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
+    case "Unread": return it.unread > 0 && status !== "archived";
+    case "Priority": return (priority === "High Priority" || priority === "Important") && status !== "archived";
+    case "Done": return it.workflow.state === "done";
+    case "Archived": return status === "archived";
+    default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
+  }
+}
 
 export function MessagesInbox({
   initialClient,
@@ -555,21 +606,7 @@ export function MessagesInbox({
           const s = search.toLowerCase();
           if (!it.client.full_name?.toLowerCase().includes(s) && !it.client.email?.toLowerCase().includes(s)) return false;
         }
-        const status = it.state?.status ?? "open";
-        const priority = it.state?.priority ?? "Normal";
-        switch (filter) {
-          case "Needs Response": return it.workflow.state === "needs_response";
-          // Only chats where I'm actually waiting on an answer; closers like "Perf thanks!" aren't.
-          case "Waiting on Client": return it.workflow.state === "waiting_on_client" && it.waiting !== "fyi";
-          case "Follow Up": return it.workflow.state === "waiting_on_client" && it.waiting === "overdue";
-          case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
-            return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
-          case "Unread": return it.unread > 0 && status !== "archived";
-          case "Priority": return (priority === "High Priority" || priority === "Important") && status !== "archived";
-          case "Done": return it.workflow.state === "done";
-          case "Archived": return status === "archived";
-          default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
-        }
+        return inFilter(it, filter);
       })
       // Like iMessage / Instagram DMs: the newest activity on top, in every
       // filter. What needs me is the NEEDS RESPONSE chip and its filter, not a
@@ -581,20 +618,11 @@ export function MessagesInbox({
     return items;
   }, [allRows, search, filter]);
 
-  // Live filter counts from the same rows the list shows.
+  // Live badge counts: the very rule the list filters by, over the same rows.
   const filterCounts = useMemo(() => {
     const counts: Partial<Record<Filter, number>> = {};
-    const bump = (f: Filter) => { counts[f] = (counts[f] ?? 0) + 1; };
     for (const it of allRows) {
-      if (it.state?.status === "archived") continue;
-      const w = it.workflow;
-      if (w.state === "needs_response") bump("Needs Response");
-      if (w.state === "waiting_on_client" && it.waiting !== "fyi") bump("Waiting on Client");
-      if (w.state === "waiting_on_client" && it.waiting === "overdue") bump("Follow Up");
-      for (const f of SIGNAL_FILTERS) if (matchesSignal(it.signals, f as SignalFilter)) bump(f);
-      if (it.unread > 0) bump("Unread");
-      const pr = it.state?.priority ?? "Normal";
-      if (pr === "High Priority" || pr === "Important") bump("Priority");
+      for (const f of COUNTED) if (inFilter(it, f)) counts[f] = (counts[f] ?? 0) + 1;
     }
     return counts;
   }, [allRows]);
@@ -776,24 +804,42 @@ export function MessagesInbox({
             />
           </div>
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                data-inbox-filter={f}
-                className={cn(
-                  "shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold transition",
-                  filter === f
-                    ? "bg-primary text-primary-foreground"
-                    : f === "Pain" || f === "Needs Response"
-                      ? "bg-secondary/60 text-foreground hover:bg-secondary"
-                      : "bg-secondary/60 text-muted-foreground hover:bg-secondary",
-                )}
-              >
-                {FILTER_LABEL[f] ?? f}
-                {filterCounts[f] ? <span className="ml-1 tabular-nums opacity-75">{filterCounts[f]}</span> : null}
-              </button>
-            ))}
+            {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => {
+              const n = FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;
+              const on = filter === f;
+              const label = FILTER_LABEL[f] ?? f;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  data-inbox-filter={f}
+                  aria-label={n ? `${label}, ${n}` : label}
+                  aria-pressed={on}
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded-full py-1 text-[11px] font-semibold transition",
+                    n ? "pl-3 pr-1" : "px-3",
+                    on
+                      ? "bg-primary text-primary-foreground"
+                      : n
+                        ? "bg-secondary/60 text-foreground hover:bg-secondary"
+                        : "bg-secondary/60 text-muted-foreground hover:bg-secondary",
+                  )}
+                >
+                  {label}
+                  {n > 0 && (
+                    <span
+                      data-filter-badge={FILTER_BADGE[f]}
+                      className={cn(
+                        "ml-1.5 inline-block h-[18px] min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold leading-[18px] tabular-nums",
+                        on ? "bg-primary-foreground/25 text-primary-foreground" : BADGE_STYLE[FILTER_BADGE[f]!],
+                      )}
+                    >
+                      {badgeNumber(n)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           {filter === "Overdue" && (
             <Link
