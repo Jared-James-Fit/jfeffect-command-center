@@ -133,51 +133,42 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
   );
 }
 
-// Most pressing first, the same order as the tags on a row.
-const FILTERS = [
-  "Inbox", "Needs Response", "Pain", "Overdue", "To Review", "Media", "Sessions",
-  "Unread", "Follow Up", "Priority", "Waiting on Client", "Done", "Archived",
-] as const;
+// Only what the inbox can't already show at a glance: forms first (the coach
+// works his forms queue first), then pain, media and session requests.
+// Needs reply, unread, follow up and priority already show on every row (bold
+// name, blue dot, the line under it) and on the Messages tab badge, so they
+// aren't filters. Inbox is "everything"; Archived is the way back to archived
+// chats. Every chip but Inbox shows only while something's in it.
+const FILTERS = ["Inbox", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 const FILTER_LABEL: Partial<Record<Filter, string>> = {
-  "Needs Response": "Needs reply",
   "To Review": "Forms to review",
   Overdue: "Overdue forms",
-  Media: "Photos & videos",
   Pain: "Pain flagged",
+  Media: "Photos & videos",
   Sessions: "Session requests",
-  "Follow Up": "Follow up",
-  "Waiting on Client": "Waiting on client",
 };
-/** Shown only while something's in them (or picked): the row of filters stays short. */
-const ONLY_WHEN_ANY = new Set<Filter>(["To Review", "Overdue", "Media", "Pain", "Sessions", "Priority"]);
+const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));
 
 /**
- * Filters that are work for me carry a count badge in the colour of their tag
- * on a row (unread in iMessage blue); the rest (Inbox, Waiting on client, Done,
- * Archived) don't, so the numbers only ever mean "this is waiting on you".
+ * Work for me carries a count badge in the colour of its line on a row;
+ * Archived doesn't, so a number only ever means "this is waiting on you".
  */
-const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info" | "unread">> = {
-  "Needs Response": "urgent", Pain: "urgent",
-  Overdue: "warn", "Follow Up": "warn", Priority: "warn",
-  "To Review": "info", Media: "info", Sessions: "info",
-  Unread: "unread",
+const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info">> = {
+  "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info",
 };
 const BADGE_STYLE = {
   urgent: "bg-red-500 text-white",
   warn: "bg-amber-500/25 text-amber-700 dark:text-amber-300",
   info: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
-  unread: "bg-[#007AFF] text-white",
 } as const;
 const COUNTED = FILTERS.filter((f) => FILTER_BADGE[f] || ONLY_WHEN_ANY.has(f));
 const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));
 
 type FilterRow = {
-  state?: { status?: string | null; priority?: string | null } | null;
+  state?: { status?: string | null } | null;
   workflow: { state: string };
-  waiting?: string | null;
   signals: ClientSignals;
-  unread: number;
   last?: unknown;
   liftReview?: unknown;
 };
@@ -185,17 +176,9 @@ type FilterRow = {
 /** Which chats a filter shows. The list and its count badge both use it, so they always agree. */
 function inFilter(it: FilterRow, filter: Filter): boolean {
   const status = it.state?.status ?? "open";
-  const priority = it.state?.priority ?? "Normal";
   switch (filter) {
-    case "Needs Response": return it.workflow.state === "needs_response" && status !== "archived";
-    // Only chats where I'm actually waiting on an answer; closers like "Perf thanks!" aren't.
-    case "Waiting on Client": return it.workflow.state === "waiting_on_client" && it.waiting !== "fyi" && status !== "archived";
-    case "Follow Up": return it.workflow.state === "waiting_on_client" && it.waiting === "overdue" && status !== "archived";
     case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
       return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
-    case "Unread": return it.unread > 0 && status !== "archived";
-    case "Priority": return (priority === "High Priority" || priority === "Important") && status !== "archived";
-    case "Done": return it.workflow.state === "done";
     case "Archived": return status === "archived";
     default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
   }

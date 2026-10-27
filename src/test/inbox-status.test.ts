@@ -124,10 +124,9 @@ describe("latestToReview", () => {
 import { readFileSync } from "node:fs";
 describe("inbox wiring", () => {
   const route = readFileSync("src/route-pages/_authenticated/admin/messages.tsx", "utf8");
-  it("splits Waiting on Client into waiting / follow up, and keeps closers out of it", () => {
-    expect(route).toContain('"Follow Up"');
-    expect(route).toContain('it.workflow.state === "waiting_on_client" && it.waiting !== "fyi"');
-    // waiting / follow up show as a "Follow up" tag on the row and in the Brief
+  it("follow up is on the row's line and in the Brief, not a filter (closers like \"Perf thanks!\" never ask for one)", () => {
+    expect(route).not.toContain('"Follow Up"');
+    expect(route).not.toContain('"Waiting on Client"');
     expect(route).toContain('followUp: workflow.state === "waiting_on_client" && status.waiting === "overdue"');
     expect(route).toContain('"Not read yet"');
   });
