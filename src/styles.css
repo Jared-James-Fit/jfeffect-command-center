@@ -1216,15 +1216,6 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
   outline: none;
 }
 
-/* Cleo's floating button: above the mobile tab bar, and lifted over a
-   page's own floating button when one is showing (html[data-page-fab]). */
-.summer-fab { bottom: calc(var(--mobile-bar-top) + 14px); }
-html[data-page-fab] .summer-fab { bottom: calc(var(--mobile-bar-top) + 78px); }
-@media (min-width: 768px) {
-  .summer-fab { bottom: 1.5rem; }
-  html[data-page-fab] .summer-fab { bottom: 5.5rem; }
-}
-
 /* SlowLoadHint: fades in after 4s, without waiting for JavaScript. Only the
    delay matters, so reduced-motion (which shortens the duration) still works. */
 .slow-load-hint {
