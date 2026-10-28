@@ -1,8 +1,9 @@
 /**
- * Staff-only: "N deleted" link above the composer that opens a log of
- * messages an admin silently removed from this chat — what it said, when it
- * was sent and when it was deleted. Admins and the client's coach see it;
- * clients/members never do (RLS) and never see a placeholder.
+ * Admin-only: "N deleted" link above the composer that opens a log of
+ * messages an admin took out of this chat (no placeholder left): what it
+ * said, when it was sent and when it was deleted. Coaches, clients and
+ * members never see it (RLS). Messages deleted for everyone stay as a
+ * placeholder in the chat, where an admin taps "See it" instead.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -42,7 +43,7 @@ export function DeletedMessagesStrip(scope: { clientId?: string; groupId?: strin
         <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))]">
           <SheetHeader className="text-left">
             <SheetTitle>Deleted messages</SheetTitle>
-            <SheetDescription>Only coaches and admins see this. The client sees nothing where these were.</SheetDescription>
+            <SheetDescription>Only admins see this. The client sees nothing where these were.</SheetDescription>
           </SheetHeader>
           <div className="mt-3 space-y-2">
             {rows.map((r: MessageDeletion) => (

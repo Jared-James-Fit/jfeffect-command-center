@@ -575,6 +575,8 @@ export type MessageDeletion = {
   id: string;
   message_id: string;
   chat: "dm" | "group";
+  /** removed = an admin took it out (no placeholder); unsent = deleted for everyone (placeholder stays). */
+  kind?: "removed" | "unsent";
   client_id: string | null;
   group_id: string | null;
   sender_role: string | null;
@@ -585,13 +587,47 @@ export type MessageDeletion = {
   deleted_at: string;
 };
 
-/** Staff log of silently deleted messages for one 1:1 chat or group. */
+/**
+ * Admin log of messages taken out of one 1:1 chat or group (no placeholder
+ * left). Ones deleted for everyone show where they were instead (listMessageHistory).
+ */
 export async function listMessageDeletions(scope: { clientId?: string; groupId?: string }) {
-  let q = (db as any).from("message_deletions").select("*").order("deleted_at", { ascending: false }).limit(100);
+  let q = (db as any).from("message_deletions").select("*").eq("kind", "removed").order("deleted_at", { ascending: false }).limit(100);
   q = scope.groupId ? q.eq("group_id", scope.groupId) : q.eq("client_id", scope.clientId);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as MessageDeletion[];
+}
+
+/** The words an edit replaced (one row per edit, oldest first). */
+export type MessageEdit = { id: string; message_id: string; body: string; edited_at: string };
+
+export type MessageHistory = {
+  /** What a message deleted for everyone said, by message id. */
+  deleted: Record<string, MessageDeletion>;
+  /** Earlier versions of an edited message, by message id, oldest first. */
+  edits: Record<string, MessageEdit[]>;
+};
+
+/**
+ * Admins only (RLS returns nothing to anyone else): what the deleted and
+ * edited messages in one coach chat said before. Kept by the database since
+ * Oct 28 2026; nothing changed before then was ever stored.
+ */
+export async function listMessageHistory(clientId: string): Promise<MessageHistory> {
+  const [del, ed] = await Promise.all([
+    (db as any).from("message_deletions").select("*")
+      .eq("client_id", clientId).eq("chat", "dm").eq("kind", "unsent").limit(500),
+    (db as any).from("message_edits").select("id, message_id, body, edited_at")
+      .eq("client_id", clientId).order("edited_at", { ascending: true }).limit(1000),
+  ]);
+  if (del.error) throw del.error;
+  if (ed.error) throw ed.error;
+  const deleted: Record<string, MessageDeletion> = {};
+  for (const r of (del.data ?? []) as MessageDeletion[]) deleted[r.message_id] = r;
+  const edits: Record<string, MessageEdit[]> = {};
+  for (const r of (ed.data ?? []) as MessageEdit[]) (edits[r.message_id] ??= []).push(r);
+  return { deleted, edits };
 }
 
 /* ------------------------------- Reactions ------------------------------- */
