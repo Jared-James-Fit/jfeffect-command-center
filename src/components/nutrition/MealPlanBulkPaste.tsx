@@ -11,6 +11,7 @@ import { quickPastePrompt, type ClientBasics, type QA, type WorkoutMealsMode } f
 import { currentRequest } from "@/lib/form-request-state";
 import { listNutritionRequestsFn } from "@/lib/nutrition-ai-plans.functions";
 import type { TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
+import { plainPastedText } from "@/lib/nutrition-targets/plain-paste";
 
 export type ParsedDay = {
   day_label: string;
@@ -199,7 +200,7 @@ function labelFromHeader(header: string): string {
 
 /** The trailing FOOD-WEIGHING RULES block (heading included), or null. */
 export function parseFoodWeighingRules(text: string): string | null {
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const lines = plainPastedText(text).split("\n");
   const start = lines.findIndex((l) => /^FOOD[- ]?WEIGHING\b/i.test(l.trim()));
   if (start < 0) return null;
   const body = lines.slice(start + 1).join("\n").trim();
@@ -208,7 +209,7 @@ export function parseFoodWeighingRules(text: string): string | null {
 
 export function parseMealPlan(text: string): ParsedDay[] {
   if (!text.trim()) return [];
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const lines = plainPastedText(text).split("\n");
   // Find menu section indices
   const sections: { header: string; start: number }[] = [];
   lines.forEach((ln, i) => {
