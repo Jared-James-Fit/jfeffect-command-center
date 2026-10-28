@@ -139,21 +139,30 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 1. Create one menu per day-type the client needs (e.g. TRAINING-DAY MENU, NON-TRAINING-DAY MENU, HIGH-DAY MENU). Each menu header ends with the word MENU in ALL CAPS.
 2. Inside each menu, list "Meal 1", "Meal 2", "Meal 3"… on their own line.
 2b. WORKOUT MEALS — on TRAINING-DAY and HIGH-DAY menus, tag the meal eaten before training as "Meal X (Pre-Workout)" and the first meal after training as "Meal Y (Post-Workout)" — exact spelling, in brackets on the meal line. Meals are numbered in the order they are eaten; place these two using the TRAINING TIME RULE in the client details.
-   - Pre-Workout (eaten 60–120 min before training): fuel for the session. Mostly easy-to-digest carbs + moderate protein: about 25–40 g protein and roughly 0.25–0.5 g carbs per lb of bodyweight (top of the range on High Day and for heavier lifters). Keep fat at or under ~15 g and fibre at or under ~6 g so nothing sits heavy. Good picks: white rice, bagel / bread + jam, cream of rice, oats, cereal, fruit, rice cakes, lean meat, Greek yogurt, whey.
-   - Small snack 30–60 min before (client preference or early-morning training): 20–40 g fast carbs + 15–25 g protein, under 5 g fat (e.g. banana + whey, rice cakes + jam + Greek yogurt).
+   - Pre-Workout (eaten 60–120 min before training): fuel for the session. Mostly easy-to-digest carbs + moderate protein: about 25–40 g protein and roughly 0.25–0.5 g carbs per lb of bodyweight (top of the range on High Day and for heavier lifters). Keep fat at or under ~15 g and fibre at or under ~6 g so nothing sits heavy. Good picks: chicken or lean beef with white rice or potatoes, or a banana with whey / Greek yogurt; bagels, cream of rice, cereal or rice cakes only when the client already eats them.
+   - Small snack 30–60 min before (client preference or early-morning training): 20–40 g fast carbs + 15–25 g protein, under 5 g fat (e.g. a banana + whey, or a banana + Greek yogurt).
    - Post-Workout (within 2 hours after training): recovery. 30–50 g protein + roughly 0.3–0.6 g carbs per lb of bodyweight; fat can be moderate. A normal whole-food meal is ideal.
    - Together the Pre- and Post-Workout meals should carry about 35–50% of that day's carbs. On the High Day, most of the extra carbs go into these two meals. Put vegetables, high-fibre foods and most of the day's fat in the other meals.
    - Client trains fasted: no Pre-Workout meal; the first meal after training is the Post-Workout meal and should be one of the biggest meals of the day.
    - Never tag meals on NON-TRAINING-DAY menus. Keep the same number of meals there with carbs spread evenly.
    - The COACH WORKOUT MEALS instruction below always wins over these defaults.
 2c. SAME FOODS EVERY DAY (meal-prep logic: few groceries, easy to follow):
-   - Build the TRAINING-DAY MENU first, then make every other menu the SAME meals with the SAME foods in the same order. Between day types only the portions change, mostly the carbs (rice, potatoes, oats, bread / bagels, fruit) up or down. Protein foods and portions stay the same every day.
+   - Build the TRAINING-DAY MENU first, then make every other menu the SAME meals with the SAME foods in the same order. Between day types only the portions change, mostly the carbs (rice, potatoes, sweet potatoes, fruit) up or down. Protein foods and portions stay the same every day.
    - Keep the whole plan to a short grocery list: about 2–3 protein sources, 2–3 carb sources, 1–2 fat sources, 1–2 vegetables and 1 fruit. Never add a food just for variety.
-   - A food stays in the same meal slot every day (e.g. oats are always in Meal 1).
+   - A food stays in the same meal slot every day (e.g. rice is always in Meal 2).
    - Only use a different food when the targets can't be hit with portions alone, the client asked for a swap, or it's the High-Day free meal. Prefer changing an amount over changing a food.
    - Use the same fat source(s) every day; adjust fats with the amount (oil, peanut butter, nuts), not a new food.
-   - Pick foods that batch-cook and store well (rice, potatoes, chicken, lean ground beef, eggs, Greek yogurt, oats) and keep amounts easy to weigh (multiples of 5 g, whole eggs, full scoops).
+   - Pick foods that batch-cook and store well (chicken, lean ground beef, rice, potatoes, sweet potatoes) and keep amounts easy to weigh (multiples of 5 g, whole eggs, full scoops).
    - On the NON-TRAINING-DAY MENU keep the same meals untagged with fewer carbs; on the HIGH-DAY MENU the extra carbs go into the same carb foods (bigger portions), mostly the Pre- and Post-Workout meals.
+2d. BODYBUILDING SIMPLE (plain foods, portions that make sense):
+   - Every food line is one plain food you buy and cook simply (grill, bake, air-fry, boil, pan-cook). Never a recipe, dressing, vinaigrette, sauce, marinade, homemade mix, bowl, wrap or smoothie, and no cooking steps. Spices, salt, garlic, herbs, lemon / lime, vinegar, mustard, hot sauce, salsa and zero-calorie sauces are free: never list them (FOOD-WEIGHING RULES covers them). Even when keeping the CURRENT MEALS, drop extras like these unless the client asked to keep them, and move their calories into the meal's main foods.
+   - Protein defaults: chicken breast and lean ground beef (93% lean on fat loss, 85–90% lean when gaining and the fats allow), sometimes white fish (cod, tilapia) or salmon. Breakfast or a snack can use eggs / egg whites, Greek yogurt or whey instead. Spread protein evenly: about 30–50 g a meal (up to ~60 g for big lifters), which is roughly 120–250 g of cooked meat.
+   - Carb defaults: white rice, potatoes and sweet potatoes, plus one fruit. Use pasta, oats, bagels, bread, cream of rice or cereal only when the client's answers (preferred foods, current meals, swaps) call for them, swapped like for like (pasta in for rice). If a day has so many carbs that one meal would need more than ~450 g cooked rice or ~600 g potatoes, move some into a denser carb they'll eat (cream of rice, bagels, cereal, juice) instead of a giant plate.
+   - Fats come from the meat, eggs or salmon plus one measured fat: cooking oil (5–15 g olive or avocado oil), peanut butter or nuts. Never add a fat food just to fill the fats.
+   - Vegetables are a side, never the meal: one vegetable (broccoli, green beans, asparagus or a frozen mixed-vegetable blend counts as one) at 75–150 g a serving, in 1–2 meals a day, never in the Pre-Workout meal. A serving is never bigger than the carb food in the same meal (400 g of vegetables next to 400 g of rice is wrong), except in a fat-loss phase, where up to 200 g helps fullness. Fruit: 1 serving a day (a banana or 100–150 g berries), best before training.
+   - Each meal is 2–4 foods: a protein and a carb (a low-carb day's meal can drop the carb), then a vegetable or fruit and the fat it's cooked with. The protein and carb lead; nothing minor out-weighs them.
+   - Fibre is an output, not a target: report what the foods give (about 20–40 g a day comes naturally from the potatoes, fruit and vegetables). Never add foods or bigger vegetable portions to raise it.
+   - The client's answers win over every default here: drop anything in Allergies / dislikes, build around their Preferred foods (a vegetarian gets eggs, Greek yogurt, tofu, tempeh, whey or a plant protein), and follow the MEALS rule.
 3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
 4. After each meal add a blank line, then:
    Approximate macros:
@@ -164,7 +173,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 5. End every menu with:
    Daily Total
    Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
-6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, weigh consistently, track all calorie beverages, seasonings/zero-cal drinks allowed).
+6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
 
@@ -332,7 +341,7 @@ export function classifyTrainingTime(trainTime: string): TrainingTimeClass {
 
 const TIMING_RULES: Record<Exclude<TrainingTimeClass, "other">, string> = {
   none: "Training time not given — assume late afternoon (about 4–6pm): the mid-afternoon meal is Pre-Workout, dinner is Post-Workout.",
-  varies: "Training time changes day to day. Make Pre-Workout and Post-Workout two back-to-back meals in the middle of the day, built from simple, portable foods (e.g. bagel + jam + whey; rice + chicken), so the client can slide that pair to wherever training lands. The other meals stay normal.",
+  varies: "Training time changes day to day. Make Pre-Workout and Post-Workout two back-to-back meals in the middle of the day, built from simple, portable foods (e.g. chicken + rice; a banana + whey), so the client can slide that pair to wherever training lands. The other meals stay normal.",
   early: "Trains early morning (before 8am). Meal 1 is a small Pre-Workout snack 30–60 min before (or skip it if they train fasted). The next meal, straight after training, is the Post-Workout meal and one of the biggest meals of the day.",
   morning: "Trains in the morning (8–11am). Meal 1 (breakfast, 60–120 min before) is Pre-Workout; Meal 2 straight after training is Post-Workout.",
   midday: "Trains midday (11am–2pm). Breakfast stays a normal meal; the late-morning meal 1–2 h before training is Pre-Workout; lunch after training is Post-Workout.",
@@ -418,8 +427,8 @@ export function mealPlanUserPrompt(
       ? `- Daily calorie target: use the CALORIE TARGETS below for each day-type menu (Training Day, Non Training Day, High Day)`
       : `- Daily calorie target: (fill in for each day-type menu)`,
     hasTargets
-      ? `- Daily protein / carbs / fat / fibre targets: use the MACRO TARGETS below for each day-type; fibre 14 g per 1000 kcal`
-      : `- Daily protein / carbs / fat / fibre targets: (fill in for each day-type); fibre 14 g per 1000 kcal`,
+      ? `- Daily protein / carbs / fat / fibre targets: use the MACRO TARGETS below for each day-type; fibre is whatever the foods give (about 20–40 g), never a target to chase`
+      : `- Daily protein / carbs / fat / fibre targets: (fill in for each day-type); fibre is whatever the foods give (about 20–40 g), never a target to chase`,
     `- Allergies / dislikes: ${avoid || "none"}`,
     `- Preferred foods: ${love || "no preference"}`,
     meals ? `- Meals per day: ${meals}` : "",
