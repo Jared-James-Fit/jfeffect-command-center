@@ -14,7 +14,7 @@ import {
   editMessage, deleteMessageForEveryone, adminDeleteMessages, replyMediaFor,
   makeReplyPreview, replyPreviewText, mediaAttachments, keepReplyClip,
   listReactions, toggleReaction, REACTION_EMOJIS,
-  listOlderMessages,
+  listOlderMessages, listMessageHistory,
   type Message, type MessageAttachment, type SenderRole, type ConversationState,
   type MessageReaction,
 } from "@/lib/messages";
@@ -62,7 +62,7 @@ import {
   Paperclip, Send, X, FileText, Image as ImageIcon, Video, Link as LinkIcon, ExternalLink,
   Mic, Trash2, Play, Pause, Camera, File as FileIcon, Flag, AlertCircle, AlertTriangle,
   Gauge, Download, ChevronDown, ChevronUp, Square, Loader2, MoreHorizontal, Pencil, Check,
-  CheckCircle2, Circle, CheckSquare, Copy, Reply, ArrowDownToLine,
+  CheckCircle2, Circle, CheckSquare, Copy, Reply, ArrowDownToLine, Eye, EyeOff, Lock,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { runJob } from "@/lib/progress-jobs";
@@ -784,8 +784,18 @@ export function MessageThread({
   const povClient = role === "client" && viewingAsClient;
   // Coach "View as client": confirm before anything goes out under the client's name.
   const povGuard = usePovSendGuard();
-  // Admins (not coaches) can silently delete any message in the chat.
+  // Admins (not coaches) can silently delete any message in the chat, and see
+  // what a deleted or edited one said before (never in "View as client").
   const isAdmin = role === "admin" && appRole === "admin";
+  // Which kept versions the admin has opened: `${id}:deleted` / `${id}:edits`.
+  const [shownHistory, setShownHistory] = useState<Set<string>>(() => new Set());
+  const toggleHistory = useCallback((key: string) => {
+    setShownHistory((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -972,10 +982,38 @@ export function MessageThread({
   });
   const replySourceFor = (id?: string | null) => (id ? messageById.get(id) ?? replySources?.get(id) ?? null : null);
 
+  // Admins only: what deleted and edited messages here said before. Read only
+  // while the chat has one, and again when one is deleted or edited ("messages"
+  // keys never go to the phone's saved cache).
+  const historyKey = useMemo(
+    () => (isAdmin
+      ? allMessages
+          .filter((m) => !m.id.startsWith("optimistic-") && (m.deleted_at || m.edited_at))
+          .map((m) => `${m.id}:${m.deleted_at ? "d" : m.edited_at}`)
+          .join(",")
+      : ""),
+    [isAdmin, allMessages],
+  );
+  const { data: history } = useQuery({
+    queryKey: ["messages-history", clientId, historyKey],
+    enabled: isAdmin && !!clientId && historyKey !== "",
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+    queryFn: () => listMessageHistory(clientId),
+  });
+
   // Collect every attachment storage_path across visible messages so we can
   // resolve them in one batched createSignedUrls() call instead of N.
   const attachmentPaths = useMemo(() => {
     const out: string[] = [];
+    // A deleted message's photos and videos, once the admin opens it.
+    for (const key of shownHistory) {
+      if (!key.endsWith(":deleted")) continue;
+      for (const a of history?.deleted[key.slice(0, -":deleted".length)]?.attachments ?? []) {
+        if (a?.storage_path) out.push(a.storage_path);
+        if (a?.thumbnail_storage_path) out.push(a.thumbnail_storage_path);
+      }
+    }
     for (const m of allMessages) {
       const atts = m.attachments;
       if (!atts?.length) continue;
@@ -998,7 +1036,7 @@ export function MessageThread({
       }
     }
     return out;
-  }, [allMessages, replySources]);
+  }, [allMessages, replySources, shownHistory, history]);
   const signedUrls = useChatSignedUrls(attachmentPaths);
   const signedUrlMap = signedUrls.urls;
 
@@ -1964,6 +2002,11 @@ export function MessageThread({
           }
           const mine = m.sender_role === role;
           const isDeleted = !!m.deleted_at;
+          // Admins: the words (and files) a deleted or edited message had, kept by the database.
+          const kept = isAdmin && isDeleted ? history?.deleted[m.id] : undefined;
+          const keptShown = !!kept && shownHistory.has(`${m.id}:deleted`);
+          const priorVersions = isAdmin && !isDeleted && m.edited_at ? history?.edits[m.id] : undefined;
+          const priorShown = !!priorVersions?.length && shownHistory.has(`${m.id}:edits`);
           const isEditing = editingId === m.id;
           const isSelected = selectedIds.has(m.id);
           // A reply to a story/post: its cover leads and the words sit under it (Instagram style).
@@ -2103,7 +2146,7 @@ export function MessageThread({
                     ? "bg-primary text-primary-foreground rounded-br-md px-3 py-2 shadow-sm"
                     : "bg-secondary text-foreground px-3 py-2 shadow-sm",
                   !mine && !m.is_internal_note && !replyCard && "rounded-bl-md",
-                  isDeleted && "italic opacity-70",
+                  isDeleted && cn("italic", !keptShown && "opacity-70"),
                   selectionMode && isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
                 )}
                 style={{
@@ -2220,9 +2263,23 @@ export function MessageThread({
                   <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-warning">Internal Coach Note</div>
                 )}
                 {isDeleted ? (
-                  <div className="flex items-center gap-1.5 whitespace-pre-wrap break-words">
+                  <>
+                  <div className={cn("flex flex-wrap items-center gap-1.5 whitespace-pre-wrap break-words", keptShown && "opacity-70")}>
                     <Trash2 className="h-3 w-3 opacity-70" />
                     <span>This message was deleted</span>
+                    {kept && (
+                      <button
+                        type="button"
+                        data-no-doubletap
+                        data-show-deleted
+                        aria-pressed={keptShown}
+                        onClick={(e) => { e.stopPropagation(); toggleHistory(`${m.id}:deleted`); }}
+                        className="ml-1 inline-flex items-center gap-1 rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-semibold not-italic opacity-80 active:scale-95"
+                      >
+                        {keptShown ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        {keptShown ? "Hide" : "See it"}
+                      </button>
+                    )}
                     {role === "admin" && !m.id.startsWith("optimistic-") && (
                       <button
                         type="button"
@@ -2237,6 +2294,18 @@ export function MessageThread({
                       </button>
                     )}
                   </div>
+                  {keptShown && kept && (
+                    <div data-deleted-original className="mt-2 space-y-2 rounded-lg border border-dashed border-current/30 px-2.5 py-2 not-italic">
+                      <div className="flex items-center gap-1 text-[10px] font-semibold opacity-70">
+                        <Lock className="h-3 w-3 shrink-0" /> Deleted {fmtTime(kept.deleted_at)} · only you can see this
+                      </div>
+                      {kept.body?.trim() && <div className="whitespace-pre-wrap break-words">{kept.body}</div>}
+                      {(kept.attachments ?? []).map((a, i) => (
+                        <AttachmentView key={i} att={a} mine={mine} message={m} role={role} clientId={clientId} />
+                      ))}
+                    </div>
+                  )}
+                  </>
                 ) : replyCard ? (
                   <>
                     <CommunityPostChatCard att={replyCard} mine={mine} staff={role !== "client"} />
@@ -2306,10 +2375,34 @@ export function MessageThread({
                   replyCard ? cn("px-1 text-muted-foreground", mine && "justify-end") : mine ? "text-primary-foreground/70" : "text-muted-foreground",
                 )}>
                   <span>{fmtTime(m.created_at)}</span>
-                  {m.edited_at && !isDeleted && <span>· edited</span>}
+                  {m.edited_at && !isDeleted && (priorVersions?.length ? (
+                    <button
+                      type="button"
+                      data-no-doubletap
+                      data-show-edits
+                      aria-pressed={priorShown}
+                      onClick={(e) => { e.stopPropagation(); toggleHistory(`${m.id}:edits`); }}
+                      className="underline decoration-dotted underline-offset-2 active:opacity-60"
+                    >
+                      · edited{priorShown ? "" : " · see original"}
+                    </button>
+                  ) : <span>· edited</span>)}
                   {m.message_type !== "General" && <span>· {m.message_type}</span>}
                   {m.priority && <span>· {m.priority}</span>}
                 </div>
+                {priorShown && priorVersions && (
+                  <div data-edit-history className="mt-1.5 space-y-1.5 border-t border-current/15 pt-1.5">
+                    {priorVersions.map((v, i) => (
+                      <div key={v.id}>
+                        <div className="text-[10px] opacity-70">
+                          {i === 0 ? `Original · ${fmtTime(m.created_at)}` : `Edit ${i} · ${fmtTime(priorVersions[i - 1].edited_at)}`}
+                        </div>
+                        <div className="whitespace-pre-wrap break-words text-[13px] leading-snug">{v.body}</div>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-1 text-[10px] opacity-60"><Lock className="h-2.5 w-2.5" /> Only you can see this</div>
+                  </div>
+                )}
                 {/* Reaction chips (grouped by emoji) */}
                 {!isDeleted && (() => {
                   const list = reactionsByMsg.get(m.id) ?? [];
