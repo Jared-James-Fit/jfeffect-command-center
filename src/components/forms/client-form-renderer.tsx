@@ -95,12 +95,23 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     queryKey: ["form-prefill-profile", client?.id],
     enabled: !!client?.id && prefillQs.length > 0,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("clients")
-        .select("sex, height_cm, preferred_height_unit")
-        .eq("id", client!.id)
-        .maybeSingle();
-      return data;
+      const wantsPlan = prefillQs.some((q) => questionPrefill(q) === "nutrition_plan");
+      const [{ data }, plans] = await Promise.all([
+        supabase.from("clients").select("sex, height_cm, preferred_height_unit").eq("id", client!.id).maybeSingle(),
+        wantsPlan
+          ? (supabase as any)
+              .from("nutrition_targets")
+              .select("id, nutrition_target_days(id)")
+              .eq("client_id", client!.id)
+              .neq("status", "Archived")
+              .limit(5)
+          : Promise.resolve(null),
+      ]);
+      // Unknown (lookup failed) is null, so nothing gets pre-answered.
+      const has_nutrition_plan = !plans || plans.error
+        ? null
+        : ((plans.data ?? []) as any[]).some((t) => (t.nutrition_target_days ?? []).length > 0);
+      return data ? { ...data, has_nutrition_plan } : data;
     },
   });
 

@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { supabase } from "@/integrations/supabase/client";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
 import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, clientBasicsLines, manualMealPlanPrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
 import { WorkoutMealsSelect, workoutMealsLabel } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,8 @@ type Req = {
     updated_at?: string | null;
     phase: string | null;
     workout_meals?: WorkoutMealsMode | null;
+    /** The plan they were on when they sent this, and how it went (nutrition-history.ts). */
+    previous_plan?: PreviousPlan | null;
   };
 };
 
@@ -268,12 +271,12 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
               <DropdownMenuLabel className="text-xs">Run it manually in ChatGPT / Claude</DropdownMenuLabel>
               {submitted ? (
                 <>
-                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null), "Targets prompt")}>
+                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan)), "Targets prompt")}>
                     1 · Targets prompt <span className="ml-auto text-[10px] text-muted-foreground">with answers</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!plan?.targets_text}
-                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null), "Meal plan prompt")}
+                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan)), "Meal plan prompt")}
                   >
                     2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
                   </DropdownMenuItem>
@@ -308,6 +311,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
 
       {submitted && plan?.status === "ready" && (
         <div className="space-y-3">
+          <LastPlanSummary previous={plan.previous_plan ?? null} />
           {plan.targets_text && <CopyBlock title="AI targets" text={plan.targets_text} icon={<ClipboardList className="h-4 w-4 text-primary" />} />}
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
@@ -453,5 +457,16 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         />
       )}
     </Card>
+  );
+}
+
+/** "Last plan: Fat Loss for 6 weeks · −0.4%/wk (−2.6 lb) · stuck to it 4.3/5" — what the AI adjusted from. */
+function LastPlanSummary({ previous }: { previous: PreviousPlan | null }) {
+  const line = lastPlanSummary(previous);
+  if (!line) return null;
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs">
+      <span className="font-semibold">Adjusted from the last plan:</span> <span className="text-muted-foreground">{line}</span>
+    </div>
   );
 }
