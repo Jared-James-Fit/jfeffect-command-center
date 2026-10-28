@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { GalleryHorizontalEnd, Rows3 } from "lucide-react";
+import { Droplets, GalleryHorizontalEnd, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import {
@@ -18,6 +18,15 @@ import {
 import { useMealPlanView, type MealPlanView } from "@/lib/nutrition-targets/meal-plan-view";
 import { KCAL_PER_GRAM, MACRO_COLOR, formatKcal } from "./macro-palette";
 import { mealMacroNumbers, splitFoodLine } from "@/lib/nutrition-targets/meal-plan-reader";
+import {
+  formatDayWater,
+  formatMealWater,
+  parseWaterTarget,
+  splitWaterAcrossMeals,
+  type WaterUnit,
+} from "@/lib/nutrition-targets/meal-water";
+
+type MealWater = { amounts: number[]; unit: WaterUnit } | null;
 
 type MealSection = Extract<MealPlanSection, { kind: "meal" }>;
 type NonMealSection = Exclude<MealPlanSection, { kind: "meal" }>;
@@ -27,12 +36,29 @@ type NonMealSection = Exclude<MealPlanSection, { kind: "meal" }>;
  * else; only the presentation changes. Swipe shows one meal at a time
  * (default), Scroll shows the whole day. The choice sticks per person.
  */
-export function MealPlanReader({ text }: { text: string }) {
+export function MealPlanReader({ text, water }: { text: string; water?: string | null }) {
   const { user } = useAuth();
   const [view, setView] = useMealPlanView(user?.id ?? null);
   const sections = useMemo(() => parseMealPlanText(text), [text]);
 
   const meals = sections.filter((s): s is MealSection => s.kind === "meal");
+  // The day's water split across the meals (a little more around training).
+  const dayWater = useMemo(() => parseWaterTarget(water), [water]);
+  const mealWater: MealWater = useMemo(
+    () =>
+      dayWater && meals.length
+        ? {
+            amounts: splitWaterAcrossMeals(
+              dayWater.ml,
+              meals.map((m) => m.timing ?? null),
+              dayWater.unit,
+            ),
+            unit: dayWater.unit,
+          }
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dayWater, sections],
+  );
   const firstMeal = sections.findIndex((s) => s.kind === "meal");
   const before = (firstMeal < 0 ? sections : sections.slice(0, firstMeal)) as NonMealSection[];
   const after = (
@@ -53,16 +79,21 @@ export function MealPlanReader({ text }: { text: string }) {
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">
               {meals.length} {meals.length === 1 ? "meal" : "meals"}
+              {dayWater ? ` · ${formatDayWater(dayWater.ml, dayWater.unit)} water` : ""}
             </span>
             {canSwipe && <ViewToggle value={view} onChange={setView} />}
           </div>
 
           {mode === "swipe" ? (
-            <MealSwiper key={text} meals={meals} />
+            <MealSwiper key={text} meals={meals} water={mealWater} />
           ) : (
             <div className="space-y-3">
               {meals.map((m, i) => (
-                <MealCard key={i} meal={m} />
+                <MealCard
+                  key={i}
+                  meal={m}
+                  water={mealWater ? { amount: mealWater.amounts[i], unit: mealWater.unit } : null}
+                />
               ))}
             </div>
           )}
@@ -126,7 +157,7 @@ function prefersReducedMotion() {
   }
 }
 
-function MealSwiper({ meals }: { meals: MealSection[] }) {
+function MealSwiper({ meals, water }: { meals: MealSection[]; water: MealWater }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -214,7 +245,10 @@ function MealSwiper({ meals }: { meals: MealSection[] }) {
             aria-label={`${m.title}, ${i + 1} of ${meals.length}`}
             className="w-[86%] shrink-0 snap-start sm:w-[calc(50%-0.375rem)]"
           >
-            <MealCard meal={m} />
+            <MealCard
+              meal={m}
+              water={water ? { amount: water.amounts[i], unit: water.unit } : null}
+            />
           </div>
         ))}
       </div>
@@ -275,7 +309,13 @@ const TIMING_DOT: Record<Exclude<MealTiming, null>, string> = {
 
 /* ---------- Meal card ---------- */
 
-function MealCard({ meal }: { meal: MealSection }) {
+function MealCard({
+  meal,
+  water,
+}: {
+  meal: MealSection;
+  water?: { amount: number; unit: WaterUnit } | null;
+}) {
   const foods = meal.items.map(splitFoodLine);
   const macros = mealMacroNumbers(meal);
   const kcal =
@@ -322,7 +362,7 @@ function MealCard({ meal }: { meal: MealSection }) {
         </div>
       )}
 
-      {foods.length > 0 && (
+      {(foods.length > 0 || (water && water.amount > 0)) && (
         <ul className="mt-3 divide-y divide-border/60">
           {foods.map((f, j) =>
             f.amount ? (
@@ -335,6 +375,20 @@ function MealCard({ meal }: { meal: MealSection }) {
                 {f.name}
               </li>
             ),
+          )}
+          {water && water.amount > 0 && (
+            <li
+              className="grid grid-cols-[3.75rem_1fr] items-baseline gap-3 py-2.5"
+              data-meal-water
+            >
+              <span className="text-right text-[15px] font-bold tabular-nums text-sky-600 dark:text-sky-400">
+                {formatMealWater(water.amount, water.unit)}
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-base leading-snug text-foreground/90">
+                Water
+                <Droplets aria-hidden className="h-3.5 w-3.5 text-sky-500" />
+              </span>
+            </li>
           )}
         </ul>
       )}
@@ -383,23 +437,12 @@ function MealCard({ meal }: { meal: MealSection }) {
 /* ---------- Non-meal blocks (notes, daily total, high-day changes) ---------- */
 
 function PlanNote({ section }: { section: NonMealSection }) {
+  // The day's total is the targets card's job: never repeated under the meals.
   if (
     section.kind === "total" ||
     (section.kind === "other" && TOTAL_HEADING.test(section.items[0] ?? ""))
   ) {
-    const title = section.kind === "total" ? section.title : section.items[0];
-    const body =
-      section.kind === "total" ? (section.macros ? [section.macros] : []) : section.items.slice(1);
-    return (
-      <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
-        <div className="text-sm font-bold text-primary">{title.replace(/\s+/g, " ").trim()}</div>
-        {body.map((line, i) => (
-          <p key={i} className="mt-1 text-[15px] font-semibold leading-snug">
-            {line}
-          </p>
-        ))}
-      </div>
-    );
+    return null;
   }
   if (section.kind === "highday") {
     return (

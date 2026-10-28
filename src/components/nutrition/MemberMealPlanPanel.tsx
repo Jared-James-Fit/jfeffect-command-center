@@ -134,7 +134,7 @@ export function MemberMealPlanPanel() {
               />
             )}
             {active.notes && active.notes.trim() ? (
-              <MealPlanReader text={String(active.notes)} />
+              <MealPlanReader text={String(active.notes)} water={plan.water ?? null} />
             ) : !anyNotes && !plan.pdf_signed_url ? (
               <div className="text-xs text-muted-foreground">
                 Your coach hasn't added meal details for this day yet.

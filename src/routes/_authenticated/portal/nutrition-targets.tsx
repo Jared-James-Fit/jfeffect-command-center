@@ -19,7 +19,7 @@ import { PageBodySkeleton } from "@/components/route-pending";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Download, FileText, Loader2, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
+import { ChevronRight, ClipboardList, Download, FileText, Loader2, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { getClientWorkouts } from "@/lib/pl-programs";
@@ -38,6 +38,7 @@ import {
 import { TodaysPlanHero } from "@/components/nutrition/TodaysPlanHero";
 import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
 import { MealPlanReader } from "@/components/nutrition/MealPlanReader";
+import { NutritionInfoSheet, RulesList } from "@/components/nutrition/NutritionInfoSheet";
 import { TodaysIntakeCard, LogFoodToolButton } from "@/components/nutrition/TodaysIntakeCard";
 import { CookbookEntryCard } from "@/components/nutrition/CookbookSheet";
 import { NutritionToolsCard, ToolTile } from "@/components/nutrition/NutritionToolsCard";
@@ -171,6 +172,9 @@ function PortalNutrition() {
     .map((candidate) => ({ id: candidate.id as string, title: String(candidate.day_label).trim() }));
 
   const [downloading, setDownloading] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [disclaimerOpen, setDisclaimerOpen] = useState(false);
+  const weighingRules = plan?.food_weighing_rules ? String(plan.food_weighing_rules).trim() : "";
   const handleDownload = async () => {
     if (!plan) return;
     setDownloading(true);
@@ -226,7 +230,52 @@ function PortalNutrition() {
           />
         </SectionErrorBoundary>
 
-        {/* 2. Nutrition Targets for the selected day. */}
+        {/* 2. Meal Plan first: it's what the client opens Nutrition for. */}
+        {plan && day && (
+          <SectionErrorBoundary label="Meal plan">
+            <Card className="space-y-4 p-4 md:p-5">
+              <div className="flex items-center gap-2">
+                <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
+                  <Utensils className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
+                  <div className="text-[11px] text-muted-foreground">{day.day_label || DAY_TYPE_LABEL[automaticDayType]}</div>
+                </div>
+                <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5" onClick={handleDownload} disabled={downloading}>
+                  {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PDF
+                </Button>
+              </div>
+              {day.notes && String(day.notes).trim() ? (
+                <MealPlanReader text={String(day.notes)} water={plan.water ?? null} />
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  Your coach hasn't added meal details for this day yet.
+                </div>
+              )}
+              {weighingRules && (
+                <button
+                  type="button"
+                  onClick={() => setRulesOpen(true)}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Scale className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  <span className="min-w-0 flex-1 text-sm font-semibold">How to weigh your food</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                </button>
+              )}
+            </Card>
+          </SectionErrorBoundary>
+        )}
+
+        {/* 3. Grocery list, right under the meal plan. */}
+        {plan && clientId && (
+          <SectionErrorBoundary label="Grocery list">
+            <GroceryListEntryCard clientId={clientId} viewAsUserId={impersonatedClient?.user_id ?? null} />
+          </SectionErrorBoundary>
+        )}
+
+        {/* 4. Nutrition Targets for the same day as the meal plan. */}
         <SectionErrorBoundary label="Nutrition targets">
           {planQ.isLoading ? (
             <Card className="p-5 text-sm text-muted-foreground">Loading your nutrition plan…</Card>
@@ -276,50 +325,6 @@ function PortalNutrition() {
             </Card>
           )}
         </SectionErrorBoundary>
-
-        {/* 3. Meal Plan — always the same day as the targets above. */}
-        {plan && day && (
-          <SectionErrorBoundary label="Meal plan">
-            <Card className="space-y-4 p-4 md:p-5">
-              <div className="flex items-center gap-2">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-                  <Utensils className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
-                  <div className="text-[11px] text-muted-foreground">{day.day_label || DAY_TYPE_LABEL[automaticDayType]}</div>
-                </div>
-                <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5" onClick={handleDownload} disabled={downloading}>
-                  {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PDF
-                </Button>
-              </div>
-              {day.notes && String(day.notes).trim() ? (
-                <MealPlanReader text={String(day.notes)} />
-              ) : (
-                <div className="text-xs text-muted-foreground">
-                  Your coach hasn't added meal details for this day yet.
-                </div>
-              )}
-            </Card>
-          </SectionErrorBoundary>
-        )}
-
-        {/* Grocery list — right under the meal plan so clients can't miss it. */}
-        {plan && clientId && (
-          <SectionErrorBoundary label="Grocery list">
-            <GroceryListEntryCard clientId={clientId} viewAsUserId={impersonatedClient?.user_id ?? null} />
-          </SectionErrorBoundary>
-        )}
-
-        {plan?.food_weighing_rules && String(plan.food_weighing_rules).trim() && (
-          <Card className="p-4 md:p-5">
-            <div className="mb-2 flex items-center gap-2">
-              <Scale className="h-4 w-4 text-primary" />
-              <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Food-Weighing Rules</div>
-            </div>
-            <div className="whitespace-pre-wrap text-xs leading-relaxed">{plan.food_weighing_rules}</div>
-          </Card>
-        )}
 
         {plan?.client_notes && (
           <Card className="p-4 md:p-5">
@@ -378,13 +383,25 @@ function PortalNutrition() {
           <CookbookEntryCard viewer="client" />
         </SectionErrorBoundary>
 
-        {/* Nutrition disclaimer — always last on the page. */}
-        <div className="rounded-xl border border-border bg-secondary/20 p-4 text-[11px] leading-relaxed text-muted-foreground">
-          <div className="mb-1 flex items-center gap-1.5 font-black uppercase tracking-widest text-foreground/80">
-            <ShieldAlert className="h-3.5 w-3.5" /> {NUTRITION_DISCLAIMER_TITLE}
-          </div>
-          {NUTRITION_DISCLAIMER}
-        </div>
+        {/* Nutrition disclaimer: one quiet line, the full text a tap away. Always last. */}
+        <button
+          type="button"
+          onClick={() => setDisclaimerOpen(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg py-3 text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>Coaching guidance, not medical advice.</span>
+          <span className="font-semibold underline underline-offset-2">Read the disclaimer</span>
+        </button>
+
+        {weighingRules && (
+          <NutritionInfoSheet open={rulesOpen} onOpenChange={setRulesOpen} title="How to weigh your food" icon={Scale}>
+            <RulesList text={weighingRules} />
+          </NutritionInfoSheet>
+        )}
+        <NutritionInfoSheet open={disclaimerOpen} onOpenChange={setDisclaimerOpen} title={NUTRITION_DISCLAIMER_TITLE} icon={ShieldAlert}>
+          <p>{NUTRITION_DISCLAIMER}</p>
+        </NutritionInfoSheet>
       </div>
     </>
   );
