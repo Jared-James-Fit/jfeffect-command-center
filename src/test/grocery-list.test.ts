@@ -188,3 +188,20 @@ describe("shopping state", () => {
     expect(readCheckedIdentities("t1", "2026-08-17")).toEqual([]);
   });
 });
+
+describe("counted foods", () => {
+  it("reads halves and mixed amounts as numbers, never as part of the name", () => {
+    const [half, mixed, slash, slices, egg] = parseIngredientLines(
+      "½ bagel\n1½ scoops whey protein\n1 1/2 bagels\n2 slices whole wheat bread\n3 whole eggs",
+    );
+    expect(half.measure).toEqual({ kind: "count", qty: 0.5, unit: null });
+    expect(half.name).toBe("bagel");
+    expect(mixed.measure).toEqual({ kind: "count", qty: 1.5, unit: "scoop" });
+    expect(mixed.name).toBe("whey protein");
+    expect(slash.measure).toEqual({ kind: "count", qty: 1.5, unit: null });
+    expect(slash.name).toBe("bagels");
+    expect(slices.measure).toEqual({ kind: "count", qty: 2, unit: "slice" });
+    expect(egg.measure).toMatchObject({ kind: "count", qty: 3 });
+    expect(parseIngredientLines("1/2 cup berries")[0].measure).toEqual({ kind: "count", qty: 0.5, unit: "cup" });
+  });
+});

@@ -7,9 +7,9 @@ import type { MealPlanSection } from "@/components/meal-plan-display";
 type MealSection = Extract<MealPlanSection, { kind: "meal" }>;
 
 const AMOUNT_LINE =
-  /^(~?\s*(?:\d+(?:[.,]\d+)?|\d+\s*\/\s*\d+|[½¼¾⅓⅔])(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*(?:g|kg|mg|ml|l|oz|lbs?|tbsp|tsp|cups?|scoops?|slices?)?)\s+(.+)$/i;
+  /^(~?\s*(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*[½¼¾⅓⅔]|\d+(?:[.,]\d+)?|\d+\s*\/\s*\d+|[½¼¾⅓⅔])(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*(?:g|kg|mg|ml|l|oz|lbs?|tbsp|tsp|cups?|scoops?|slices?)?)\s+(.+)$/i;
 
-/** "30 g protein isolate" → amount "30 g", name "Protein isolate". Anything else stays a note line. */
+/** "30 g protein isolate" → amount "30 g", name "Protein isolate"; "1½ scoops whey" → "1½ scoops", "Whey". Anything else stays a note line. */
 export function splitFoodLine(line: string): { amount: string | null; name: string } {
   const m = line.trim().match(AMOUNT_LINE);
   if (!m) return { amount: null, name: line.trim() };

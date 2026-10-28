@@ -51,6 +51,11 @@ describe("meal plan reader", () => {
     expect(splitFoodLine("1/2 cup berries")).toEqual({ amount: "1/2 cup", name: "Berries" });
     expect(splitFoodLine("2 large eggs")).toEqual({ amount: "2", name: "Large eggs" });
     expect(splitFoodLine("1 lemon, zested")).toEqual({ amount: "1", name: "Lemon, zested" });
+    // Counted foods (bread, bagels, scoops): halves and mixed amounts stay amounts.
+    expect(splitFoodLine("½ bagel")).toEqual({ amount: "½", name: "Bagel" });
+    expect(splitFoodLine("1½ scoops whey protein")).toEqual({ amount: "1½ scoops", name: "Whey protein" });
+    expect(splitFoodLine("1 1/2 bagels")).toEqual({ amount: "1 1/2", name: "Bagels" });
+    expect(splitFoodLine("2 slices whole wheat bread")).toEqual({ amount: "2 slices", name: "Whole wheat bread" });
     expect(splitFoodLine("Cook in a non-stick pan")).toEqual({
       amount: null,
       name: "Cook in a non-stick pan",

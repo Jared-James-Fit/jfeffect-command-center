@@ -111,6 +111,21 @@ export function normalizeIdentityName(name: string): string {
     .trim();
 }
 
+const FRACTIONS: Record<string, number> = { "½": 1 / 2, "¼": 1 / 4, "¾": 3 / 4, "⅓": 1 / 3, "⅔": 2 / 3 };
+
+/** The amount a line starts with ("2", "2.5", "1/2", "1 1/2", "½", "1½") and what follows it. */
+function leadingQty(line: string): { qty: number; rest: string } | null {
+  let m = line.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)(?![\d.])\s*(.*)$/);
+  if (m && Number(m[3]) > 0) return { qty: Number(m[1]) + Number(m[2]) / Number(m[3]), rest: m[4] };
+  m = line.match(/^(\d+)\s*\/\s*(\d+)(?![\d.])\s*(.*)$/);
+  if (m && Number(m[2]) > 0) return { qty: Number(m[1]) / Number(m[2]), rest: m[3] };
+  m = line.match(/^(\d+)?\s*([½¼¾⅓⅔])\s*(.*)$/);
+  if (m) return { qty: Number(m[1] ?? 0) + FRACTIONS[m[2]], rest: m[3] };
+  m = line.match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  if (m) return { qty: Number(m[1].replace(",", ".")), rest: m[2] };
+  return null;
+}
+
 /** Parse a single line. Returns null when the line is not an ingredient. */
 export function parseIngredientLine(rawLine: string): ParsedIngredient | null {
   let line = normalizeWhitespace(String(rawLine ?? ""));
@@ -121,21 +136,21 @@ export function parseIngredientLine(rawLine: string): ParsedIngredient | null {
   if (MEAL_HEADER.test(line)) return null;
   if (TOTALS_LINE.test(line)) return null;
   if (MACRO_SHORTHAND.test(line)) return null;
-  if (!/\d/.test(line)) return null;
+  if (!/[\d½¼¾⅓⅔]/.test(line)) return null;
   if (MENU_HEADER.test(line) && !/^\d/.test(line)) return null;
   if (RULE_PROSE.test(line)) return null;
 
   line = stripMacroAnnotations(line);
   if (!line) return null;
 
-  const m = line.match(
-    /^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)?\s*(?:of\s+)?(.*)$/,
-  );
+  const lead = leadingQty(line);
+  if (!lead) return null;
+  const m = lead.rest.match(/^([a-zA-Z]+)?\s*(?:of\s+)?(.*)$/);
   if (!m) return null;
-  const qty = Number(String(m[1]).replace(",", "."));
+  const qty = lead.qty;
   if (!Number.isFinite(qty) || qty <= 0) return null;
-  const unitRaw = (m[2] ?? "").toLowerCase();
-  let rest = normalizeWhitespace(m[3] ?? "");
+  const unitRaw = (m[1] ?? "").toLowerCase();
+  let rest = normalizeWhitespace(m[2] ?? "");
 
   let measure: GroceryMeasure | null = null;
   if (unitRaw === "g" || unitRaw === "gram" || unitRaw === "grams") {
@@ -149,14 +164,14 @@ export function parseIngredientLine(rawLine: string): ParsedIngredient | null {
   } else if (unitRaw && COUNT_UNITS.has(unitRaw)) {
     if (!rest) {
       // "2 eggs" — the count word IS the food.
-      rest = String(m[2]);
+      rest = String(m[1]);
       measure = { kind: "count", qty, unit: null };
     } else {
       measure = { kind: "count", qty, unit: COUNT_UNIT_SINGULAR[unitRaw] ?? unitRaw };
     }
   } else if (unitRaw) {
     // Unknown trailing word — treat it as part of the food name (count item).
-    rest = normalizeWhitespace(`${m[2]} ${rest}`);
+    rest = normalizeWhitespace(`${m[1]} ${rest}`);
     measure = { kind: "count", qty, unit: null };
   } else {
     measure = { kind: "count", qty, unit: null };
