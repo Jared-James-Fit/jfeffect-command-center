@@ -63,6 +63,20 @@ describe("Copy ChatGPT prompt (Quick Paste)", () => {
     expect(u).toContain("- Phase / goal: use the Goal from the TARGETS below");
   });
 
+  it("asks for bodybuilding-simple plans: plain foods, default staples, vegetables sized as a side", () => {
+    expect(MEAL_PLAN_PROMPT).toContain("BODYBUILDING SIMPLE");
+    expect(MEAL_PLAN_PROMPT).toMatch(/Never a recipe, dressing, vinaigrette/);
+    expect(MEAL_PLAN_PROMPT).toContain("Protein defaults: chicken breast and lean ground beef");
+    expect(MEAL_PLAN_PROMPT).toContain("Carb defaults: white rice, potatoes and sweet potatoes");
+    expect(MEAL_PLAN_PROMPT).toContain("never bigger than the carb food in the same meal");
+    expect(MEAL_PLAN_PROMPT).toContain("Swap:");
+    // A fibre target forced vegetables up to match the rice; fibre is reported, never chased.
+    const u = mealPlanUserPrompt(QAS, "TRAINING DAY\nCalories: 2200");
+    expect(u).not.toMatch(/14 g per 1000 kcal/);
+    expect(u).toContain("never a target to chase");
+    expect(quickPastePrompt({ qas: QAS })).toContain("BODYBUILDING SIMPLE");
+  });
+
   it("the paste box no longer has its own blank copy of the prompt", () => {
     const src = readFileSync("src/components/nutrition/MealPlanBulkPaste.tsx", "utf8");
     expect(src).not.toContain("CHATGPT_PROMPT");
