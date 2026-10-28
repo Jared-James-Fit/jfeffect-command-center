@@ -65,6 +65,11 @@ describe("the admin's chat", () => {
     }
     expect(thread.match(/onClick=\{\(e\) => \{ e\.stopPropagation\(\); toggleHistory\(/g)).toHaveLength(2);
   });
+  it("whoever deletes a message is told a copy is kept, and the admin's own Remove says only admins see it", () => {
+    expect(thread).toContain("and a copy is kept in JF Effect's message records.");
+    expect(thread).toContain("Only admins can see it under “deleted”.");
+    expect(thread).not.toContain("Only coaches and admins can see it");
+  });
   it("a deleted message's photos are signed once the admin opens it", () => {
     expect(thread).toContain('for (const a of history?.deleted[key.slice(0, -":deleted".length)]?.attachments ?? []) {');
   });

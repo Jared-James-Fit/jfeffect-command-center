@@ -12,8 +12,9 @@
  * published wording can never be changed silently or lost). Clients re-sign
  * automatically only when RESIGN_REQUIRED_BELOW_VERSION rises above the version they
  * signed; a revision that new signers get but earlier signers don't need (like 2.1, which
- * changed how the Coach is named, and 2.2, which names each client's coach and adds the app
- * and in-person rules) leaves everyone who signed earlier exactly as they were.
+ * changed how the Coach is named, 2.2, which names each client's coach and adds the app
+ * and in-person rules, and 2.3, which says message records are kept) leaves everyone who
+ * signed earlier exactly as they were.
  *
  * Inline markup: `**bold**` only. Cross-references use `{{n:section-id}}`, which
  * resolves to that section's number so numbering can never drift. `{{coach}}` is the
@@ -29,7 +30,7 @@ export const AGREEMENT_SLUG = "coaching-agreement";
 export const AGREEMENT_TITLE = "JF Effect Coaching Agreement";
 export const AGREEMENT_SUBTITLE =
   "Liability Waiver, Release of Claims, Assumption of Risk & Indemnity";
-export const AGREEMENT_EFFECTIVE_DATE = "2026-10-17";
+export const AGREEMENT_EFFECTIVE_DATE = "2026-10-28";
 
 // Version numbers live in ./version so the always-loaded status rules never import this file.
 export { AGREEMENT_VERSION, RESIGN_REQUIRED_BELOW_VERSION, compareVersions } from "./version";
@@ -463,7 +464,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Messages and calls.",
-        text: "Messages, voice notes and calls in the app are for your coaching. They are not monitored around the clock and are not for emergencies. Coaching questions belong in Messages, not in Community comments.",
+        text: "Messages, voice notes and calls in the app are for your coaching. They are not monitored around the clock and are not for emergencies. Coaching questions belong in Messages, not in Community comments. Your messages with the Coach are kept as part of your coaching records: if you edit or delete a message, it changes in the chat for both of you, but the Coach keeps the original, which only JF Effect’s administrators can see, for record-keeping, safety and resolving disputes (see Section {{n:privacy}}).",
       },
       {
         label: "Changes and outages.",
@@ -531,7 +532,7 @@ const RAW_SECTIONS: RawSection[] = [
       },
       {
         label: "Your choices.",
-        text: "You may ask to see or correct your information, or ask the Coach to delete it, by emailing the official address. The Coach may keep records it is legally or reasonably required to keep (for example payment, tax and agreement records). You may withdraw consent for optional uses at any time, but some information is necessary to coach you safely and to bill you.",
+        text: "You may ask to see or correct your information, or ask the Coach to delete it, by emailing the official address. The Coach may keep records it is legally or reasonably required to keep (for example payment, tax, agreement and message records, including the original of a message you edited or deleted). You may withdraw consent for optional uses at any time, but some information is necessary to coach you safely and to bill you.",
       },
       {
         label: "Messages about your Services.",
@@ -780,7 +781,7 @@ const KEY_TERMS: { title: string; text: string }[] = [
   },
   {
     title: "Your privacy and content",
-    text: "Your health information and coaching content are used to coach you, with trusted providers and AI tools. Public use of your photos or results needs your permission, which you choose when you sign.",
+    text: "Your health information and coaching content are used to coach you, with trusted providers and AI tools. Messages are kept as records, including ones you edit or delete. Public use of your photos or results needs your permission, which you choose when you sign.",
   },
   {
     title: "Disputes",
@@ -894,6 +895,7 @@ export const PUBLISHED_CONTENT_HASHES: Record<string, string> = {
   "2.0": "4229b1a2f2913bbbc6728de7b3ad42b0257009cbea547d97de722d6c0a820711",
   "2.1": "a5ae2ab9930c92b6637ebdfa12ee243f43cac1219aa89e4418026e2d12a729d0",
   "2.2": "6d231b21d08cd23cfea6ba7041444926ebf3d9c2a0396bad9a4a90b1209f7fc3",
+  "2.3": "9fa2bd20456320164bed343be8199f08e7d3e5e777c53be4a0ab29a433e48a93",
 };
 
 export function sectionNumber(id: string): number {

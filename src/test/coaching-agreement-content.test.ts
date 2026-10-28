@@ -137,6 +137,17 @@ describe("the owner's commercial terms are preserved", () => {
   });
 });
 
+describe("2.3: messages are kept as coaching records", () => {
+  it("says edited and deleted messages are kept, admin-only, and why", () => {
+    const joined = AGREEMENT_CONTENT.sections.flatMap((s) => s.clauses.map((c) => c.text)).join(" ");
+    expect(joined).toMatch(/if you edit or delete a message, it changes in the chat for both of you, but the Coach keeps the original, which only JF Effect’s administrators can see/);
+    expect(joined).toMatch(/payment, tax, agreement and message records/);
+  });
+  it("keeps 2.2 exactly as signed in the archive", () => {
+    expect(createHash("sha256").update(readFileSync("supabase/agreement-archive/2.2.json", "utf8")).digest("hex")).toBe(PUBLISHED_CONTENT_HASHES["2.2"]);
+  });
+});
+
 describe("published wording can never change silently", () => {
   it("matches the recorded fingerprint for the current version", () => {
     const fingerprint = createHash("sha256").update(AGREEMENT_CONTENT_JSON).digest("hex");
@@ -204,11 +215,12 @@ describe("people who signed an earlier version are left exactly as they are", ()
     resolveAgreementState({ latestSignature: sig(version), exempt: null, resignRequestedAt: null, resignNote: null }).state;
 
   it("does not ask anyone who signed 2.0 to sign again", () => {
-    expect(AGREEMENT_VERSION).toBe("2.2");
+    expect(AGREEMENT_VERSION).toBe("2.3");
     expect(RESIGN_REQUIRED_BELOW_VERSION).toBe("2.0");
     expect(state("2.0")).toBe("signed");
     expect(state("2.1")).toBe("signed");
     expect(state("2.2")).toBe("signed");
+    expect(state("2.3")).toBe("signed");
     expect(state("1.0")).toBe("needs_signature");
   });
 
