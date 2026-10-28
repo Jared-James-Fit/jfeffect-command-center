@@ -35,10 +35,12 @@ export const PHASE_CALORIE_RULE: Record<string, string> = {
 export function phaseFromText(text: string | null | undefined): string | null {
   const t = String(text ?? "").toLowerCase();
   if (!t.trim()) return null;
-  if (/recomp/.test(t)) return "Recomp";
+  const loseFat = /fat loss|(?:lose|drop|burn|lower)\s+(?:some\s+|my\s+)?(?:body\s*)?fat|lose weight|weight loss|\bcut\b|cutting|deficit|\blean\b|shred/.test(t);
+  if (/recomp/.test(t) || (loseFat && /(?:build|gain|add)\s+(?:some\s+)?muscle/.test(t))) return "Recomp";
   if (/reverse/.test(t)) return "Reverse Diet";
   if (/lifestyle|habit/.test(t)) return "Lifestyle Reset";
-  if (/fat loss|lose fat|lose weight|cut|deficit|lean/.test(t)) return "Fat Loss";
+  if (/lean\s+(?:bulk|gain|mass)/.test(t)) return "Muscle Gain";
+  if (loseFat) return "Fat Loss";
   if (/muscle|gain|bulk|surplus/.test(t)) return "Muscle Gain";
   if (/perform|strength|athlet|sport/.test(t)) return "Performance";
   if (/maint/.test(t)) return "Maintenance";

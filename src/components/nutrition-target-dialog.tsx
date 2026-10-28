@@ -12,7 +12,11 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { listNutritionRequestsFn } from "@/lib/nutrition-ai-plans.functions";
+import { currentRequest } from "@/lib/form-request-state";
+import { phaseSourceText, suggestTargetsPhase } from "@/lib/nutrition-targets/phase-suggest";
 import { NUTRITION_PHASES, NUTRITION_STRUCTURES, PHASE_GOAL, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
@@ -71,12 +75,18 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const [phaseAuto, setPhaseAuto] = useState(false);
   /** The coach picked Phase / Goal themselves (the default "Maintenance" isn't a choice). */
   const [phasePicked, setPhasePicked] = useState(false);
+  /** Where an auto-filled Phase / Goal came from (shown under it). */
+  const [phaseSource, setPhaseSource] = useState<string | null>(null);
+  /** What set it: the suggestion re-runs (another client picked), a paste or an AI prefill stays. */
+  const [phaseFrom, setPhaseFrom] = useState<"suggest" | "paste" | "prefill" | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const today = todayLocalISO();
     setPhaseAuto(false);
     setPhasePicked(false);
+    setPhaseSource(null);
+    setPhaseFrom(null);
     if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {
@@ -107,6 +117,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           ...(prefill.phase ? { phase: prefill.phase, goal: PHASE_GOAL[prefill.phase] ?? f.goal } : {}),
         });
         setPhaseAuto(!!prefill.phase);
+        setPhaseSource(prefill.phase ? "From the AI plan for their Nutrition Update" : null);
+        setPhaseFrom(prefill.phase ? "prefill" : null);
         Object.assign(f, {
           food_weighing_rules: prefill.food_weighing_rules ?? "",
           admin_notes: prefill.admin_notes ?? "",
@@ -118,6 +130,65 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         : DEFAULT_NEW_DAYS.map((label, i) => ({ day_label: label, sort_order: i })));
     }
   }, [open, initial, clientId, prefill]);
+
+  // New targets start on the phase the client is actually working toward
+  // (suggestTargetsPhase), never the default "Maintenance".
+  const suggestFor = open && !initial ? (form?.client_id || clientId || null) : null;
+  const listRequests = useServerFn(listNutritionRequestsFn);
+  const requestsQ = useQuery({
+    queryKey: ["nutrition-requests", suggestFor],
+    enabled: !!suggestFor,
+    queryFn: () => listRequests({ data: { clientId: suggestFor! } }),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const contextQ = useQuery({
+    queryKey: ["nutrition-phase-context", suggestFor],
+    enabled: !!suggestFor,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const [t, c] = await Promise.all([
+        (supabase as any)
+          .from("nutrition_targets")
+          .select("phase, custom_phase, created_at")
+          .eq("client_id", suggestFor!)
+          .neq("status", "Archived")
+          .order("created_at", { ascending: false })
+          .limit(1),
+        (supabase as any).from("clients").select("goals").eq("id", suggestFor!).maybeSingle(),
+      ]);
+      return {
+        current: (t.data?.[0] ?? null) as { phase: string | null; custom_phase: string | null; created_at: string } | null,
+        goals: c.data?.goals ? String(c.data.goals) : null,
+      };
+    },
+  });
+  useEffect(() => {
+    if (!form || initial || phasePicked || phaseFrom === "paste" || phaseFrom === "prefill" || !suggestFor) return;
+    if (requestsQ.isLoading || contextQ.isLoading) return;
+    const data = requestsQ.data as any;
+    const latest = data ? currentRequest(data.requests ?? [], data.requestedAt ?? null) : null;
+    const answered = latest && latest.status !== "in_progress" ? latest : null;
+    const qas = (answered?.answers ?? []) as Array<{ label: string; value: string }>;
+    const goalAnswer = qas.find((q) => /^goal\b/i.test(q.label.trim()))?.value ?? null;
+    const goalDetail = qas.find((q) => /goal/i.test(q.label) && !/^goal\b/i.test(q.label.trim()))?.value ?? null;
+    const s = suggestTargetsPhase({
+      requestPhase: data?.requestedPhase ?? null,
+      aiPhase: answered?.plan?.phase ?? null,
+      goalAnswer,
+      goalDetail,
+      submittedAt: answered?.submitted_at ?? null,
+      current: contextQ.data?.current ?? null,
+      profileGoals: contextQ.data?.goals ?? null,
+    });
+    if (!s) return;
+    const name = String(data?.client?.name ?? "").trim().split(/\s+/)[0] || null;
+    setForm((f: any) => (f ? { ...f, phase: s.phase, goal: PHASE_GOAL[s.phase] ?? f.goal } : f));
+    setPhaseAuto(true);
+    setPhaseFrom("suggest");
+    setPhaseSource(phaseSourceText(s, { name, submittedAt: answered?.submitted_at ?? null }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestFor, requestsQ.data, requestsQ.isLoading, contextQ.data, contextQ.isLoading, !!form, initial, phasePicked, phaseFrom]);
 
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
@@ -235,7 +306,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">Auto-filled · change anytime</span>
               )}
             </Label>
-            <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); setPhasePicked(true); set("phase", v); }}>
+            <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); setPhasePicked(true); setPhaseSource(null); setPhaseFrom(null); set("phase", v); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {NUTRITION_PHASES.map((s) => (
@@ -245,6 +316,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 ))}
               </SelectContent>
             </Select>
+            {phaseAuto && phaseSource && <p className="mt-1 text-[11px] text-muted-foreground">{phaseSource}</p>}
           </div>
           {form.phase === "Custom" && <div><Label>Custom phase / goal</Label><Input value={form.custom_phase ?? ""} onChange={(e) => set("custom_phase", e.target.value)} placeholder="e.g. Contest prep — 12 weeks out" /></div>}
           <div>
@@ -295,7 +367,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         <div className="space-y-3">
           <MealPlanBulkPaste
             clientId={form.client_id || clientId || null}
-            phase={initial || phasePicked ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
+            phase={initial || phasePicked || phaseAuto ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
             onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
               setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
               setForm((f: any) => ({
@@ -303,7 +375,11 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 ...(rules ? { food_weighing_rules: rules } : {}),
                 ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
               }));
-              if (phase) setPhaseAuto(true);
+              if (phase) {
+                setPhaseAuto(true);
+                setPhaseFrom("paste");
+                setPhaseSource("From the pasted plan's PHASE line");
+              }
             }}
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
