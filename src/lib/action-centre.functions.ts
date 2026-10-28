@@ -306,6 +306,27 @@ export const listActionCentre = createServerFn({ method: "GET" })
     });
   });
 
+/**
+ * The next due time, never on or before the last one done or skipped
+ * (`lastLocalDate`). "A second after the last due time" alone isn't enough:
+ * when a client's timezone moves west (Winnipeg → Edmonton), that instant is
+ * still the same Sunday before its 23:59, so the "next" landed in the week
+ * just done. That row could never be sent (the week already had a check-in)
+ * and, being open, stopped every check-in after it.
+ */
+export function nextDueAfterLast(
+  sched: EffectiveSchedule,
+  tz: string,
+  after: Date,
+  lastLocalDate: string | null,
+): { dueAtUtc: Date; localDate: string } | null {
+  let next = computeNextDueUtc(sched, tz, after);
+  for (let i = 0; next && lastLocalDate && next.localDate <= lastLocalDate && i < 60; i++) {
+    next = computeNextDueUtc(sched, tz, new Date(next.dueAtUtc.getTime() + 1000));
+  }
+  return next && lastLocalDate && next.localDate <= lastLocalDate ? null : next;
+}
+
 export async function ensureNextOccurrence(
   supabase: any,
   clientId: string,
@@ -315,12 +336,21 @@ export async function ensureNextOccurrence(
   const sched = await loadEffectiveSchedule(supabase, clientId, taskType);
   if (!sched || !sched.enabled || sched.frequency === "manual") return;
   const tz = await resolveClientTz(supabase, clientId, sched);
-  const next = computeNextDueUtc(sched, tz, after);
-  if (!next) return;
   // Occurrence generation is a system-side write (client role has no INSERT
   // policy on client_task_occurrences). Use the admin client so bootstrap /
   // completion flows can seed the next row regardless of the caller.
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: last } = await supabaseAdmin
+    .from("client_task_occurrences")
+    .select("due_local_date")
+    .eq("client_id", clientId)
+    .eq("task_type", taskType)
+    .in("status", ["completed", "skipped"])
+    .order("due_local_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const next = nextDueAfterLast(sched, tz, after, (last as any)?.due_local_date ?? null);
+  if (!next) return;
   const { error } = await supabaseAdmin.from("client_task_occurrences").insert({
     client_id: clientId,
     task_type: taskType,
