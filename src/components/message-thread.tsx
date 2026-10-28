@@ -3257,8 +3257,9 @@ export function MessageThread({
             <AlertDialogTitle>{confirmDelete?.label ?? "Delete?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {isAdmin
-                ? "Removed for everyone with no trace — the client won't see a placeholder or timestamp. Only coaches and admins can see it under “deleted”."
-                : "This cannot be undone. Both sides will see a \"This message was deleted\" placeholder."}
+                ? "Removed for everyone with no trace — the client won't see a placeholder or timestamp. Only admins can see it under “deleted”."
+                // Said at the moment it matters (Privacy Policy section 8, Coaching Agreement 2.3): the words leave the chat, not JF Effect's records.
+                : "This can't be undone. You'll both see “This message was deleted”, and a copy is kept in JF Effect's message records."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -3,7 +3,7 @@
  * that only compares versions (the status rules and the launch popup, which load on every
  * signed-in page) doesn't pull the whole text into the app's main bundle.
  */
-export const AGREEMENT_VERSION = "2.2";
+export const AGREEMENT_VERSION = "2.3";
 
 /**
  * Clients whose latest signed version is below this must sign again. Raise it only
@@ -19,6 +19,11 @@ export const AGREEMENT_VERSION = "2.2";
  * the app, Community and in-person session rules. New signers get it; everyone who already
  * signed 2.0 or 2.1 stays signed on the version they agreed to and is never asked again for it.
  * Their signed versions already cover in-person training, the app and the release.
+ *
+ * 2.3 says in the agreement itself that messages are kept as coaching records, including the
+ * original of one a client edits or deletes (only admins see it). That is already covered for
+ * everyone who signed earlier by their privacy section, which collects messages and defers to the
+ * Privacy Policy (updated the same day, with notice), so earlier signers are not asked again.
  *
  * This must stay "2.0" (the database view coaching_agreement_resign_below_version() says the
  * same, and a test checks it).
