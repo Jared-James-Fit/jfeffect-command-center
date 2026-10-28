@@ -114,12 +114,18 @@ export const generateNutritionPlanFn = createServerFn({ method: "POST" })
       .select("status, updated_at")
       .eq("submission_id", data.submissionId)
       .maybeSingle();
-    const { planBusy, runPlan } = await aiPlans();
+    const { planBusy, planQueued, queueNutritionPlan } = await aiPlans();
     if (planBusy(existing)) return { status: "generating" as const };
+    if (planQueued(existing) && !(staff && data.force)) return { status: "pending" as const };
     if (existing?.status === "ready" && !(staff && data.force)) return { status: "ready" as const };
     if (!staff && existing && existing.status !== "error") return { status: existing.status };
 
-    return runPlan(sb, data.submissionId, staff ? data.phase ?? null : null, !staff, staff ? data.workoutMeals ?? null : null);
+    // Written in the background (nutrition-plans-tick), never inside this
+    // request: leaving the screen would cut the AI off mid-plan.
+    return queueNutritionPlan(sb, data.submissionId, {
+      phase: staff ? data.phase ?? null : null,
+      workoutMeals: staff ? data.workoutMeals ?? null : null,
+    });
   });
 
 /** Coach view: a client's nutrition requests with answers + AI output. */

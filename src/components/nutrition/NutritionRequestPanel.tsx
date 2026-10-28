@@ -293,7 +293,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       {submitted && (!plan || plan.status === "generating" || plan.status === "pending") && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-          AI is calculating targets and writing the meal plan — about 30 seconds.
+          AI is calculating targets and writing the meal plan. Usually a minute or two, and you can leave this page.
         </div>
       )}
 

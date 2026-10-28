@@ -187,16 +187,93 @@ export function planBusy(existing: { status?: string | null; updated_at?: string
   return existing?.status === "generating" && !!existing.updated_at && now - new Date(existing.updated_at).getTime() < 3 * 60_000;
 }
 
+/** Queued for the background writer in the last 3 minutes (asking again would only queue it twice). */
+export function planQueued(existing: { status?: string | null; updated_at?: string | null } | null | undefined, now = Date.now()): boolean {
+  return existing?.status === "pending" && !!existing.updated_at && now - new Date(existing.updated_at).getTime() < 3 * 60_000;
+}
+
+/** A "generating" run this old was cut off (its request ended before the AI finished). */
+export const STALE_RUN_MS = 10 * 60_000;
+
 /**
- * A client just sent their Nutrition Update Request: write their AI targets
- * and meal plan here, on the server, so it never depends on their phone
- * staying open or loading anything (the coach is told the request is in
- * before this runs, and again when the plan is ready). Once per submission:
- * one already being written, or written, is left alone.
+ * Hand a plan to the background writer: the row goes to "pending" (with the
+ * coach's phase / workout-meals choice for this run, or null for the
+ * defaults), and the database's `nutrition_ai_plans_queue_run` trigger calls
+ * the nutrition-plans-tick hook at once (pg_cron's run of the same hook every
+ * 5 minutes catches anything that slipped). Never written inside the
+ * caller's request: a phone or a tab that closes would cut the AI off
+ * mid-plan and leave it "generating" forever.
+ */
+export async function queueNutritionPlan(
+  sb: any,
+  submissionId: string,
+  opts: { phase?: string | null; workoutMeals?: WorkoutMealsMode | null } = {},
+) {
+  const { data: subRow } = await sb.from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
+  if (!subRow) throw new Error("Submission not found");
+  const { error } = await sb.from("nutrition_ai_plans").upsert(
+    {
+      submission_id: submissionId,
+      client_id: subRow.client_id,
+      status: "pending",
+      error: null,
+      phase: opts.phase ?? null,
+      workout_meals: opts.workoutMeals ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "submission_id" },
+  );
+  if (error) throw new Error(error.message);
+  return { status: "pending" as const };
+}
+
+/**
+ * The background writer (nutrition-plans-tick hook): claim a queued plan, or
+ * one whose run was cut off, and write it. The claim is one conditional
+ * update, so two runs never write the same plan. Without an id it takes the
+ * oldest waiting plan from the last 2 days.
+ */
+export async function runQueuedPlan(sb: any, submissionId?: string | null) {
+  let id = submissionId ?? null;
+  if (!id) {
+    const since = new Date(Date.now() - 2 * 24 * 3600_000).toISOString();
+    const stale = new Date(Date.now() - STALE_RUN_MS).toISOString();
+    const { data } = await sb
+      .from("nutrition_ai_plans")
+      .select("submission_id")
+      .gte("updated_at", since)
+      .or(`status.eq.pending,and(status.eq.generating,updated_at.lt."${stale}")`)
+      .order("updated_at", { ascending: true })
+      .limit(1);
+    id = data?.[0]?.submission_id ?? null;
+  }
+  if (!id) return { status: "idle" as const };
+  const stale = new Date(Date.now() - STALE_RUN_MS).toISOString();
+  const { data: claimed } = await sb
+    .from("nutrition_ai_plans")
+    .update({ status: "generating", error: null, updated_at: new Date().toISOString() })
+    .eq("submission_id", id)
+    .or(`status.eq.pending,and(status.eq.generating,updated_at.lt."${stale}")`)
+    .select("phase, workout_meals")
+    .maybeSingle();
+  if (!claimed) return { status: "skipped" as const, submissionId: id };
+  const res = await runPlan(sb, id, claimed.phase ?? null, true, (claimed.workout_meals as WorkoutMealsMode | null) ?? null);
+  return { ...res, submissionId: id };
+}
+
+/**
+ * A client just sent their Nutrition Update Request: queue their AI targets
+ * and meal plan for the background writer, so it never depends on their
+ * phone staying open (the coach is told the request is in before this runs,
+ * and again when the plan is ready). Once per submission: one already
+ * queued, being written, or written, is left alone.
  */
 export async function startNutritionPlan(sb: any, submissionId: string) {
   const { data: existing } = await sb.from("nutrition_ai_plans").select("status, updated_at").eq("submission_id", submissionId).maybeSingle();
   if (planBusy(existing)) return { status: "generating" as const };
-  if (existing && existing.status !== "error" && existing.status !== "generating") return { status: existing.status };
-  return runPlan(sb, submissionId, null, true);
+  if (planQueued(existing)) return { status: "pending" as const };
+  if (existing && existing.status !== "error" && existing.status !== "generating" && existing.status !== "pending") {
+    return { status: existing.status };
+  }
+  return queueNutritionPlan(sb, submissionId);
 }

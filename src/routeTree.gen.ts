@@ -238,6 +238,7 @@ import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/h
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
+import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
@@ -1584,6 +1585,12 @@ const ApiPublicHooksMediaArchiveRoute =
     path: '/api/public/hooks/media-archive',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksNutritionPlansTickRoute =
+  ApiPublicHooksNutritionPlansTickRouteImport.update({
+    id: '/api/public/hooks/nutrition-plans-tick',
+    path: '/api/public/hooks/nutrition-plans-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksNutritionTickRoute =
   ApiPublicHooksNutritionTickRouteImport.update({
     id: '/api/public/hooks/nutrition-tick',
@@ -1959,6 +1966,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
@@ -2212,6 +2220,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
@@ -2471,6 +2480,7 @@ export interface FileRoutesById {
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
+  '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
@@ -2730,6 +2740,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
@@ -2983,6 +2994,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
@@ -3241,6 +3253,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
+    | '/api/public/hooks/nutrition-plans-tick'
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
@@ -3337,6 +3350,7 @@ export interface RootRouteChildren {
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
+  ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
@@ -4962,6 +4976,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksMediaArchiveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/nutrition-plans-tick': {
+      id: '/api/public/hooks/nutrition-plans-tick'
+      path: '/api/public/hooks/nutrition-plans-tick'
+      fullPath: '/api/public/hooks/nutrition-plans-tick'
+      preLoaderRoute: typeof ApiPublicHooksNutritionPlansTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/nutrition-tick': {
       id: '/api/public/hooks/nutrition-tick'
       path: '/api/public/hooks/nutrition-tick'
@@ -5836,6 +5857,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
+  ApiPublicHooksNutritionPlansTickRoute: ApiPublicHooksNutritionPlansTickRoute,
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
