@@ -28,6 +28,7 @@ import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPl
 import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, dayKey, parseAiCardio, planCardioSync, type CardioDraft } from "@/lib/nutrition-cardio-sync";
+import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -302,14 +303,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       end_date: form.end_date || null,
       status: form.status,
       ending_soon_days: Number(form.ending_soon_days) || 7,
-      client_notes: form.client_notes,
-      food_weighing_rules: form.food_weighing_rules || null,
+      client_notes: plainOrNull(form.client_notes),
+      food_weighing_rules: plainOrNull(form.food_weighing_rules || null),
       admin_notes: form.admin_notes,
       visible_to_client: form.visible_to_client,
       pdf_url: form.pdf_url || null,
       pdf_name: form.pdf_name || null,
       last_updated_at: new Date().toISOString(),
-      water: form.water || null,
+      water: plainOrNull(form.water || null),
     };
     let targetId = form.id;
     if (targetId) {
@@ -327,7 +328,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         delete (rest as any).created_at;
         delete (rest as any).updated_at;
         delete (rest as any).target_id;
-        return { ...rest, target_id: targetId, sort_order: i };
+        return { ...rest, notes: plainOrNull(rest.notes ?? null), target_id: targetId, sort_order: i };
       });
       const { error } = await supabase.from("nutrition_target_days").insert(rows);
       if (error) { setSaving(false); return toast.error(error.message); }
