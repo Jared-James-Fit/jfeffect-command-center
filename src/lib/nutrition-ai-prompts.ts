@@ -152,7 +152,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
    - A food stays in the same meal slot every day (e.g. rice is always in Meal 2).
    - Only use a different food when the targets can't be hit with portions alone, the client asked for a swap, or it's the High-Day free meal. Prefer changing an amount over changing a food.
    - Use the same fat source(s) every day; adjust fats with the amount (oil, peanut butter, nuts), not a new food.
-   - Pick foods that batch-cook and store well (chicken, lean ground beef, rice, potatoes, sweet potatoes) and keep amounts easy to weigh (multiples of 5 g, whole eggs, full scoops).
+   - Pick foods that batch-cook and store well (chicken, lean ground beef, rice, potatoes, sweet potatoes) and keep amounts easy: multiples of 5 g for weighed foods, whole or half units for counted ones. Counted foods (bread, bagels, eggs, scoops, a banana) move in whole or half units, so fine-tune each day's numbers with the weighed foods (rice, potatoes, meat, oil).
    - On the NON-TRAINING-DAY MENU keep the same meals untagged with fewer carbs; on the HIGH-DAY MENU the extra carbs go into the same carb foods (bigger portions), mostly the Pre- and Post-Workout meals.
 2d. BODYBUILDING SIMPLE (plain foods, portions that make sense):
    - Every food line is one plain food you buy and cook simply (grill, bake, air-fry, boil, pan-cook). Never a recipe, dressing, vinaigrette, sauce, marinade, homemade mix, bowl, wrap or smoothie, and no cooking steps. Spices, salt, garlic, herbs, lemon / lime, vinegar, mustard, hot sauce, salsa and zero-calorie sauces are free: never list them (FOOD-WEIGHING RULES covers them). Even when keeping the CURRENT MEALS, drop extras like these unless the client asked to keep them, and move their calories into the meal's main foods.
@@ -163,7 +163,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
    - Each meal is 2–4 foods: a protein and a carb (a low-carb day's meal can drop the carb), then a vegetable or fruit and the fat it's cooked with. The protein and carb lead; nothing minor out-weighs them.
    - Fibre is an output, not a target: report what the foods give (about 20–40 g a day comes naturally from the potatoes, fruit and vegetables). Never add foods or bigger vegetable portions to raise it.
    - The client's answers win over every default here: drop anything in Allergies / dislikes, build around their Preferred foods (a vegetarian gets eggs, Greek yogurt, tofu, tempeh, whey or a plant protein), and follow the MEALS rule.
-3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
+3. Under each meal, list every food on its own line, amount first. Weigh only what needs a scale: "<amount> g <food>" for meat and fish, rice, potatoes, pasta, oats, vegetables, berries, Greek yogurt, oils, nut butters and nuts (cooked weight for meat, fish, rice, potatoes, pasta and vegetables; packaged weight for oats, peanut butter, oils and nuts). Foods that come in a unit are counted, never in grams: "2 slices whole wheat bread", "1 bagel", "½ bagel", "3 whole eggs", "1 scoop whey protein", "1 medium banana", "1 apple", "2 rice cakes", "1 tortilla wrap", "1 can tuna". Use whole or half units only (½, 1, 1½, 2), base their macros on a typical label (a slice of bread ~30 g, a bagel ~100 g, a large egg ~50 g, a scoop of whey ~30 g, a medium banana ~120 g) and add the size in brackets only where brands differ a lot (e.g. "1 scoop whey protein (about 30 g)", "1 bagel (about 100 g)").
 4. After each meal add a blank line, then:
    Approximate macros:
    <P> g protein
@@ -173,7 +173,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 5. End every menu with:
    Daily Total
    Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
-6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
+6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, bread / bagels / eggs / scoops / whole fruit are counted not weighed, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
 
@@ -498,4 +498,82 @@ export function cleanAiText(text: string): string {
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/^#+\s*/gm, "")
     .trim();
+}
+
+/* ------------------------------------------------------------------------ */
+/* Coach updates ("Change something" on a written plan)                      */
+
+/** Longest set of instructions the coach can send in one update. */
+export const REVISE_MAX_CHARS = 2000;
+
+/**
+ * Pass 1 of a coach update: the targets again, changed only where the
+ * instructions are about numbers (food-only changes give them back as is).
+ */
+export const REVISE_TARGETS_PROMPT = `you are an elite level nutrition coach under the brand: ${BRAND}
+
+the head coach wants a change to a client's plan. respond exactly in the required format.
+
+RULES
+
+- output the CURRENT TARGETS again in full: same sections, same headings, same order, same day types, plain text, nothing before or after
+- change only what the COACH INSTRUCTIONS ask for, plus what has to follow from it: each day's calories = protein x 4 + carbs x 4 + fat x 9, protein stays the same on every day type and fats within about 10 g between day types unless the coach says otherwise
+- instructions only about foods, meals, swaps, recipes or meal timing change no number: output the CURRENT TARGETS exactly as they are
+- steps and cardio changes go in DAILY STEPS TARGETS / CARDIO SESSIONS in the same format ("<minutes> min <type> · ~<kcal> kcal" or "none")
+- if a number changed and there is a CHANGES FROM LAST PLAN section, keep it true to the new numbers and add the coach's change to its Why: line`;
+
+export function reviseTargetsUserPrompt(targetsText: string, instructions: string): string {
+  return `CURRENT TARGETS:\n${targetsText.trim()}\n\nCOACH INSTRUCTIONS:\n${instructions.trim()}`;
+}
+
+const REVISE_MEAL_RULES = [
+  "COACH UPDATE: revise the CURRENT MEAL PLAN below. Do not build a new plan.",
+  "- Do exactly what the COACH INSTRUCTIONS at the end ask. They win over every default rule above, but never over the client's allergies.",
+  "- Everything they don't touch stays exactly as it is: the same menus, meals, foods, amounts, order and workout-meal tags.",
+  "- A swap or removal applies on every menu that has that food, unless the instructions name one day or meal.",
+  "- After the change, adjust portions (mostly the weighed carbs) only where needed so each menu's Daily Total still matches its TARGETS within ±3%, and update the Approximate macros of every meal you changed and each Daily Total.",
+  "- Output the full meal plan again in the same format: the PHASE line, every menu, then FOOD-WEIGHING RULES. Nothing before or after it.",
+].join("\n");
+
+/**
+ * Pass 2 of a coach update: the meal plan as it is, the (possibly updated)
+ * targets and the client's details, with the instructions last so they're
+ * the freshest thing the model reads. Runs under MEAL_PLAN_PROMPT, so a
+ * swapped-in food still follows the format and the plan's own rules.
+ */
+export function reviseMealPlanUserPrompt(opts: {
+  qas: QA[];
+  targetsText: string;
+  mealPlanText: string;
+  instructions: string;
+  phase?: string | null;
+  workoutMeals?: WorkoutMealsMode | null;
+  history?: TrainingPattern | null;
+}): string {
+  return [
+    REVISE_MEAL_RULES,
+    mealPlanUserPrompt(opts.qas, opts.targetsText, opts.phase, opts.workoutMeals, opts.history),
+    `CURRENT MEAL PLAN:\n${opts.mealPlanText.trim()}`,
+    `COACH INSTRUCTIONS:\n${opts.instructions.trim()}`,
+  ].join("\n\n");
+}
+
+/** The copy-paste version of an update, for ChatGPT / Claude by hand. */
+export function manualRevisePrompt(opts: Parameters<typeof reviseMealPlanUserPrompt>[0]): string {
+  return `${MEAL_PLAN_PROMPT}\n\n${reviseMealPlanUserPrompt(opts)}`;
+}
+
+/**
+ * An update's output is only used when it still reads as the same kind of
+ * text: targets keep their CALORIE / MACRO sections, a meal plan keeps at
+ * least one menu with a Daily Total. Anything else (a refusal, a question,
+ * a half answer) leaves the plan as it was.
+ */
+export function revisionLooksRight(kind: "targets" | "meals", original: string, revised: string): boolean {
+  const text = revised.trim();
+  if (text.length < 40) return false;
+  if (kind === "targets") {
+    return ["CALORIE TARGETS", "MACRO TARGETS"].every((h) => !original.includes(h) || text.includes(h));
+  }
+  return /^.{0,60}MENU\s*$/im.test(text) && /daily\s+total/i.test(text);
 }

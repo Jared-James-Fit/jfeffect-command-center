@@ -7,13 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, Footprints, Loader2, PencilLine, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, Footprints, Loader2, MessageSquarePlus, PencilLine, RefreshCw, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
-import { MEAL_PLAN_PROMPT, TARGETS_PROMPT, clientBasicsLines, manualMealPlanPrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
 import { WorkoutMealsSelect, workoutMealsLabel } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
@@ -27,7 +27,9 @@ import {
   generateNutritionPlanFn,
   listNutritionRequestsFn,
   markNutritionPlanAppliedFn,
+  reviseNutritionPlanFn,
   sendNutritionRequestFn,
+  undoNutritionRevisionFn,
 } from "@/lib/nutrition-ai-plans.functions";
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
@@ -52,6 +54,10 @@ type Req = {
     workout_meals?: WorkoutMealsMode | null;
     /** The plan they were on when they sent this, and how it went (nutrition-history.ts). */
     previous_plan?: PreviousPlan | null;
+    /** A coach update waiting to be written (or kept after a failed try, with `error`). */
+    revise_instructions?: string | null;
+    /** Coach updates already written, newest last (Undo restores the plan before the last one). */
+    revisions?: Array<{ at: string; instructions: string }> | null;
   };
 };
 
@@ -133,6 +139,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const sendFn = useServerFn(sendNutritionRequestFn);
   const genFn = useServerFn(generateNutritionPlanFn);
   const appliedFn = useServerFn(markNutritionPlanAppliedFn);
+  const reviseFn = useServerFn(reviseNutritionPlanFn);
+  const undoFn = useServerFn(undoNutritionRevisionFn);
+  const [change, setChange] = useState("");
+  const [changing, setChanging] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -159,6 +169,11 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const latest = currentRequest(requests, data?.requestedAt ?? null);
   const submitted = latest && latest.status !== "in_progress";
   const plan = latest?.plan ?? null;
+  // A coach update being written: the plan stays on screen until it lands.
+  const revising = !!plan?.revise_instructions && (plan.status === "pending" || plan.status === "generating");
+  const updateFailed = plan?.status === "ready" && !!plan.revise_instructions && !!plan.error;
+  const revisions = plan?.revisions ?? [];
+  const lastChangeAt = revisions[revisions.length - 1]?.at ?? null;
   // Sent, but no plan being written (or one that stalled): write it now, once.
   const kicked = useRef<string | null>(null);
   useEffect(() => {
@@ -256,9 +271,45 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     }
   };
 
+  const sendChange = async (text = change) => {
+    const instructions = text.trim();
+    if (!latest || instructions.length < 3) return;
+    setChanging(true);
+    try {
+      qc.setQueryData(key, (old: any) => old && ({
+        ...old,
+        requests: old.requests.map((r: Req) => r.id === latest.id && r.plan ? { ...r, plan: { ...r.plan, status: "pending", revise_instructions: instructions, error: null } } : r),
+      }));
+      await reviseFn({ data: { submissionId: latest.id, instructions } });
+      setChange("");
+      toast.success("Updating the plan. About a minute, and you can leave this page.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't send the change");
+    } finally {
+      setChanging(false);
+      qc.invalidateQueries({ queryKey: key });
+    }
+  };
+
+  const undoChange = async () => {
+    if (!latest) return;
+    setChanging(true);
+    try {
+      const res = await undoFn({ data: { submissionId: latest.id } });
+      toast.success(`Undone: “${res.instructions}”`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't undo");
+    } finally {
+      setChanging(false);
+      qc.invalidateQueries({ queryKey: key });
+    }
+  };
+
   const statusChip = !latest
     ? data?.requestedAt ? { label: "Sent · waiting on client", tone: "sky" } : { label: "Not requested", tone: "muted" }
     : !submitted ? { label: "Client filling it out", tone: "sky" }
+    : revising ? { label: "Updating the plan…", tone: "amber" }
+    : plan?.applied_at && lastChangeAt && lastChangeAt > plan.applied_at ? { label: "Changed · publish again", tone: "amber" }
     : plan?.applied_at ? { label: "Applied to targets", tone: "emerald" }
     : plan?.status === "ready" ? { label: "AI plan ready", tone: "amber" }
     : plan?.status === "error" ? { label: "AI failed", tone: "rose" }
@@ -348,7 +399,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         </div>
       </div>
 
-      {submitted && (!plan || plan.status === "generating" || plan.status === "pending") && (
+      {submitted && !revising && (!plan || plan.status === "generating" || plan.status === "pending") && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
           AI is calculating targets and writing the meal plan. Usually a minute or two, and you can leave this page.
@@ -364,7 +415,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         </div>
       )}
 
-      {submitted && plan?.status === "ready" && (
+      {submitted && plan && (plan.status === "ready" || revising) && (
         <div className="space-y-3">
           <LastPlanSummary previous={plan.previous_plan ?? null} />
           {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} />}
@@ -372,6 +423,88 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
           )}
+          <div className="space-y-2 rounded-xl border border-border bg-secondary/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="plan-change" className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
+                <MessageSquarePlus className="h-4 w-4 text-primary" /> Change something
+              </Label>
+              {revisions.length > 0 && !revising && (
+                <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={undoChange} disabled={changing}>
+                  <Undo2 className="h-3.5 w-3.5" /> Undo last change
+                </Button>
+              )}
+            </div>
+            {revising ? (
+              <div className="flex items-start gap-2 text-sm">
+                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-500" />
+                <span>Updating: <span className="text-muted-foreground">“{plan.revise_instructions}”</span></span>
+              </div>
+            ) : (
+              <>
+                {updateFailed && (
+                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-2.5 py-2 text-xs">
+                    Couldn't apply “{plan.revise_instructions}”: <span className="text-muted-foreground">{plan.error}</span>. The plan is unchanged.{" "}
+                    <button type="button" className="font-bold underline" onClick={() => sendChange(plan.revise_instructions ?? "")} disabled={changing}>
+                      Try again
+                    </button>
+                  </div>
+                )}
+                <Textarea
+                  id="plan-change"
+                  rows={3}
+                  maxLength={REVISE_MAX_CHARS}
+                  value={change}
+                  onChange={(e) => setChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      void sendChange();
+                    }
+                  }}
+                  placeholder="Tell the AI what to change, e.g. swap the beef for salmon on rest days · 4 meals instead of 5 · drop training-day carbs by 30 g · no bagels"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" className="gap-1.5 font-bold" onClick={() => sendChange()} disabled={changing || change.trim().length < 3}>
+                    {changing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Update plan
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 text-xs"
+                    disabled={change.trim().length < 3 || !plan.meal_plan_text}
+                    title="The same update as a prompt, to run in ChatGPT or Claude yourself"
+                    onClick={() =>
+                      plan.meal_plan_text &&
+                      copyText(
+                        manualRevisePrompt({
+                          qas: latest!.answers,
+                          targetsText: plan.targets_text ?? "",
+                          mealPlanText: plan.meal_plan_text,
+                          instructions: change,
+                          phase: plan.phase,
+                          workoutMeals: plan.workout_meals ?? null,
+                          history: data?.trainingPattern ?? null,
+                        }),
+                        "Update prompt",
+                      )
+                    }
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Copy as prompt
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground sm:ml-auto">Only what you ask changes; portions rebalance to the targets.</span>
+                </div>
+              </>
+            )}
+            {revisions.length > 0 && (
+              <ol className="space-y-0.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                {revisions.slice().reverse().map((r) => (
+                  <li key={r.at} className="truncate" title={r.instructions}>
+                    <span className="font-semibold text-foreground">{fmt(r.at)}</span> · {r.instructions}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
           {(plan.phase || plan.workout_meals) && (
             <div className="space-y-0.5 text-xs text-muted-foreground">
               {plan.phase && (
@@ -383,7 +516,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </div>
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button className="gap-2 font-bold" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length}>
+            <Button className="gap-2 font-bold" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length || revising}>
               <Check className="h-4 w-4" /> {plan.applied_at ? "Review & publish again" : "Review, edit & publish"}
             </Button>
             <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
@@ -396,7 +529,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                   onChange={setRegenWorkoutMeals}
                 />
               </div>
-              <Button variant="outline" className="col-span-2 shrink-0 gap-2 sm:col-span-1" onClick={regenerate} disabled={regenerating}>
+              <Button variant="outline" className="col-span-2 shrink-0 gap-2 sm:col-span-1" onClick={regenerate} disabled={regenerating || revising}>
                 <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Regenerate
               </Button>
             </div>

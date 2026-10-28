@@ -8,9 +8,13 @@
 import {
   MEAL_PLAN_PROMPT,
   NUTRITION_REQUEST_FORM_ID,
+  REVISE_TARGETS_PROMPT,
   TARGETS_PROMPT,
   cleanAiText,
   mealPlanUserPrompt,
+  reviseMealPlanUserPrompt,
+  reviseTargetsUserPrompt,
+  revisionLooksRight,
   targetsUserPrompt,
   type ClientBasics,
   type QA,
@@ -345,10 +349,22 @@ export const STALE_RUN_MS = 10 * 60_000;
 export async function queueNutritionPlan(
   sb: any,
   submissionId: string,
-  opts: { phase?: string | null; workoutMeals?: WorkoutMealsMode | null } = {},
+  opts: { phase?: string | null; workoutMeals?: WorkoutMealsMode | null; fresh?: boolean } = {},
 ) {
   const { data: subRow } = await sb.from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
   if (!subRow) throw new Error("Submission not found");
+  const now = new Date().toISOString();
+  // A coach update that's waiting (or was cut off) is put back in line as the
+  // same update, never turned into a whole new plan. Only Regenerate
+  // (`fresh`) replaces it.
+  if (!opts.fresh) {
+    const { data: row } = await sb.from("nutrition_ai_plans").select("revise_instructions, status").eq("submission_id", submissionId).maybeSingle();
+    if (row?.revise_instructions && (row.status === "pending" || row.status === "generating")) {
+      const { error } = await sb.from("nutrition_ai_plans").update({ status: "pending", error: null, updated_at: now }).eq("submission_id", submissionId);
+      if (error) throw new Error(error.message);
+      return { status: "pending" as const };
+    }
+  }
   const { error } = await sb.from("nutrition_ai_plans").upsert(
     {
       submission_id: submissionId,
@@ -357,12 +373,157 @@ export async function queueNutritionPlan(
       error: null,
       phase: opts.phase ?? null,
       workout_meals: opts.workoutMeals ?? null,
-      updated_at: new Date().toISOString(),
+      // A whole new plan: earlier updates (and their Undo) belong to the old one.
+      revise_instructions: null,
+      revisions: [],
+      updated_at: now,
     },
     { onConflict: "submission_id" },
   );
   if (error) throw new Error(error.message);
   return { status: "pending" as const };
+}
+
+/** Coach updates kept for Undo (the newest last). */
+export const REVISIONS_KEPT = 5;
+
+export type PlanRevision = {
+  at: string;
+  instructions: string;
+  before: { targets_text: string | null; meal_plan_text: string | null };
+};
+
+/**
+ * The coach's "Change something": queue an update of a written plan for the
+ * background writer (same queue and trigger as a whole plan). The plan stays
+ * as it is until the update is written; a failed one leaves it untouched.
+ */
+export async function queueNutritionRevision(sb: any, submissionId: string, instructions: string) {
+  const { data: row } = await sb
+    .from("nutrition_ai_plans")
+    .select("status, updated_at, meal_plan_text")
+    .eq("submission_id", submissionId)
+    .maybeSingle();
+  if (!row?.meal_plan_text) throw new Error("There's no plan to update yet");
+  if (planBusy(row) || planQueued(row)) return { status: row.status as "pending" | "generating" };
+  if (row.status !== "ready") throw new Error("The plan isn't ready to update");
+  const { error } = await sb
+    .from("nutrition_ai_plans")
+    .update({ status: "pending", revise_instructions: instructions.trim(), error: null, updated_at: new Date().toISOString() })
+    .eq("submission_id", submissionId);
+  if (error) throw new Error(error.message);
+  return { status: "pending" as const };
+}
+
+/** Undo the latest coach update: the plan as it was before it. */
+export async function undoNutritionRevision(sb: any, submissionId: string) {
+  const { data: row } = await sb.from("nutrition_ai_plans").select("status, revisions").eq("submission_id", submissionId).maybeSingle();
+  const revisions = (row?.revisions ?? []) as PlanRevision[];
+  const last = revisions[revisions.length - 1];
+  if (!row || row.status !== "ready" || !last) throw new Error("Nothing to undo");
+  const { error } = await sb
+    .from("nutrition_ai_plans")
+    .update({
+      targets_text: last.before.targets_text,
+      meal_plan_text: last.before.meal_plan_text,
+      revisions: revisions.slice(0, -1),
+      revise_instructions: null,
+      error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("submission_id", submissionId)
+    .eq("status", "ready");
+  if (error) throw new Error(error.message);
+  return { ok: true, instructions: last.instructions };
+}
+
+/**
+ * Write a coach update (the background writer, never a request): pass 1
+ * gives the targets back, changed only if the instructions are about
+ * numbers; pass 2 changes the meal plan as asked and keeps the rest. Output
+ * that doesn't read as a plan is thrown away, and any failure leaves the plan
+ * as it was ("ready", with the error and the instructions kept for Try again).
+ */
+export async function runRevision(sb: any, submissionId: string, instructions: string, notifyStaff = false) {
+  const { data: row } = await sb
+    .from("nutrition_ai_plans")
+    .select("client_id, targets_text, meal_plan_text, phase, workout_meals, revisions")
+    .eq("submission_id", submissionId)
+    .maybeSingle();
+  if (!row?.meal_plan_text) {
+    // Nothing written to update: write the whole plan instead.
+    await sb.from("nutrition_ai_plans").update({ revise_instructions: null }).eq("submission_id", submissionId);
+    return runPlan(sb, submissionId, row?.phase ?? null, notifyStaff, (row?.workout_meals as WorkoutMealsMode | null) ?? null);
+  }
+  try {
+    const { qas } = await loadQAs(sb, submissionId);
+    const history = await loadTrainingPattern(sb, row.client_id).catch(() => null);
+    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
+    const { generateText } = await import("ai");
+    const gateway = createLovableAiGateway();
+    const { data: g } = await sb.from("global_ai_config").select("default_model").limit(1).maybeSingle();
+    const modelId = g?.default_model || DEFAULT_AI_MODEL;
+
+    const oldTargets = String(row.targets_text ?? "");
+    let targetsText = oldTargets;
+    if (oldTargets.trim()) {
+      const t = await generateText({
+        model: gateway(modelId),
+        system: REVISE_TARGETS_PROMPT,
+        prompt: reviseTargetsUserPrompt(oldTargets, instructions),
+      });
+      const next = cleanAiText(t.text);
+      if (revisionLooksRight("targets", oldTargets, next)) targetsText = next;
+    }
+    const phase = row.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]);
+    const m = await generateText({
+      model: gateway(modelId),
+      system: MEAL_PLAN_PROMPT,
+      prompt: reviseMealPlanUserPrompt({
+        qas,
+        targetsText,
+        mealPlanText: row.meal_plan_text,
+        instructions,
+        phase,
+        workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
+        history,
+      }),
+    });
+    const mealPlanText = cleanAiText(m.text);
+    if (!revisionLooksRight("meals", row.meal_plan_text, mealPlanText)) {
+      throw new Error("The AI's answer didn't come back as a meal plan. Try wording the change differently");
+    }
+
+    const now = new Date().toISOString();
+    const revisions: PlanRevision[] = [
+      ...((row.revisions ?? []) as PlanRevision[]),
+      { at: now, instructions, before: { targets_text: row.targets_text ?? null, meal_plan_text: row.meal_plan_text } },
+    ].slice(-REVISIONS_KEPT);
+    await sb.from("nutrition_ai_plans").update({
+      status: "ready",
+      targets_text: targetsText,
+      meal_plan_text: mealPlanText,
+      revise_instructions: null,
+      revisions,
+      error: null,
+      model: modelId,
+      generated_at: now,
+      updated_at: now,
+    }).eq("submission_id", submissionId);
+    if (notifyStaff) {
+      const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+      await notifyAppEvent(sb, "nutrition_plan_ready", { clientId: row.client_id, sourceId: submissionId });
+    }
+    return { status: "ready" as const };
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    await sb.from("nutrition_ai_plans").update({
+      status: "ready",
+      error: msg.slice(0, 500),
+      updated_at: new Date().toISOString(),
+    }).eq("submission_id", submissionId);
+    return { status: "error" as const, error: msg };
+  }
 }
 
 /**
@@ -392,10 +553,12 @@ export async function runQueuedPlan(sb: any, submissionId?: string | null) {
     .update({ status: "generating", error: null, updated_at: new Date().toISOString() })
     .eq("submission_id", id)
     .or(`status.eq.pending,and(status.eq.generating,updated_at.lt."${stale}")`)
-    .select("phase, workout_meals")
+    .select("phase, workout_meals, revise_instructions")
     .maybeSingle();
   if (!claimed) return { status: "skipped" as const, submissionId: id };
-  const res = await runPlan(sb, id, claimed.phase ?? null, true, (claimed.workout_meals as WorkoutMealsMode | null) ?? null);
+  const res = claimed.revise_instructions
+    ? await runRevision(sb, id, claimed.revise_instructions, true)
+    : await runPlan(sb, id, claimed.phase ?? null, true, (claimed.workout_meals as WorkoutMealsMode | null) ?? null);
   return { ...res, submissionId: id };
 }
 

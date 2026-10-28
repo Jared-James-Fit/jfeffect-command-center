@@ -5,7 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NUTRITION_REQUEST_FORM_ID, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { NUTRITION_REQUEST_FORM_ID, REVISE_MAX_CHARS, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { NUTRITION_PHASES } from "@/lib/nutrition-cardio";
 
 /** The AI and the answers (server only: loaded inside the handlers). */
@@ -125,7 +125,35 @@ export const generateNutritionPlanFn = createServerFn({ method: "POST" })
     return queueNutritionPlan(sb, data.submissionId, {
       phase: staff ? data.phase ?? null : null,
       workoutMeals: staff ? data.workoutMeals ?? null : null,
+      // Regenerate replaces the plan, and any coach update waiting on it.
+      fresh: staff && !!data.force,
     });
+  });
+
+/**
+ * Coach: change a written plan by telling the AI what to change ("swap the
+ * beef for salmon on rest days", "4 meals instead of 5"). Queued for the
+ * background writer like a whole plan; Undo puts back the plan before it.
+ */
+export const reviseNutritionPlanFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      submissionId: z.string().uuid(),
+      instructions: z.string().trim().min(3, "Say what to change").max(REVISE_MAX_CHARS),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    return (await aiPlans()).queueNutritionRevision(await admin(), data.submissionId, data.instructions);
+  });
+
+export const undoNutritionRevisionFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ submissionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    return (await aiPlans()).undoNutritionRevision(await admin(), data.submissionId);
   });
 
 /** Coach view: a client's nutrition requests with answers + AI output. */
