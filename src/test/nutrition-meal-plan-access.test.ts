@@ -18,7 +18,7 @@ const hero = readFileSync(
 describe("client nutrition meal-plan access", () => {
   it("loads every saved day record from the visible active nutrition target", () => {
     expect(resolver).toContain(
-      "nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, notes, sort_order, use_on, weekdays)",
+      "nutrition_target_days(id, day_label, calories, protein, carbs, fats, fibre, steps, notes, sort_order, use_on, weekdays)",
     );
     expect(resolver).toContain('.eq("visible_to_client", true)');
     expect(resolver).toContain('.neq("status", "Archived")');

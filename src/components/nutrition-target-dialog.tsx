@@ -26,6 +26,8 @@ import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
 import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMeals";
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
 import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
+import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
+import { cardioDraftsFor, dayKey, parseAiCardio, planCardioSync, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -52,6 +54,10 @@ type Day = {
   /** When it's used (null = read from the name; see PlanDayRules). */
   use_on?: string | null;
   weekdays?: string[] | null;
+  /** The day's total step target. */
+  steps?: number | null;
+  /** This day type's cardio (synced to cardio_targets on save; never stored on the day). */
+  cardio?: CardioDraft;
 };
 
 type Props = {
@@ -61,7 +67,15 @@ type Props = {
   clients?: Array<{ id: string; full_name: string }>;
   initial?: any;
   /** New targets pre-filled from an AI nutrition plan (ignored when `initial` is set). */
-  prefill?: { days: Day[]; structure?: string; food_weighing_rules?: string | null; admin_notes?: string | null; phase?: string | null };
+  prefill?: {
+    days: Day[];
+    structure?: string;
+    food_weighing_rules?: string | null;
+    admin_notes?: string | null;
+    phase?: string | null;
+    /** The AI targets text: its daily steps + cardio sessions fill each day. */
+    targetsText?: string | null;
+  };
   /** Called after a successful save with the new/updated target id. */
   onSaved?: (targetId: string) => void;
 };
@@ -190,6 +204,44 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestFor, requestsQ.data, requestsQ.isLoading, contextQ.data, contextQ.isLoading, !!form, initial, phasePicked, phaseFrom]);
 
+  // Cardio moves with the plan: each day carries its cardio (and steps), filled
+  // from the AI plan when there is one, else from the client's current cardio.
+  const cardioClient = open ? (form?.client_id || clientId || null) : null;
+  const cardioQ = useQuery({
+    queryKey: ["nutrition-dialog-cardio", cardioClient],
+    enabled: !!cardioClient,
+    staleTime: 0,
+    queryFn: async () => {
+      const [rows, prefs] = await Promise.all([
+        supabase
+          .from("cardio_targets")
+          .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at")
+          .eq("client_id", cardioClient!),
+        (supabase as any)
+          .from("clients")
+          .select("committed_training_days, preferred_training_days, preferred_high_days")
+          .eq("id", cardioClient!)
+          .maybeSingle(),
+      ]);
+      return { rows: (rows.data ?? []) as any[], prefs: (prefs.data ?? null) as any };
+    },
+  });
+  // Any day without cardio yet (opened, pasted, added) gets it filled in.
+  useEffect(() => {
+    if (!open || !cardioQ.data || !cardioClient || !days.some((d) => !d.cardio)) return;
+    const ai = !initial && prefill?.targetsText ? parseAiCardio(prefill.targetsText) : null;
+    const trainingDays = resolveTrainingWeekdays(cardioQ.data.prefs).length;
+    const drafts = cardioDraftsFor({ labels: days.map((d) => d.day_label), rows: cardioQ.data.rows, ai, trainingDays });
+    setDays((cur) =>
+      cur.map((d) =>
+        d.cardio
+          ? d
+          : { ...d, steps: d.steps ?? ai?.get(dayKey(d.day_label))?.steps ?? null, cardio: drafts[d.day_label] },
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cardioQ.data, days, cardioClient, initial?.id]);
+
   if (!form) return null;
   const set = (k: string, v: any) => setForm({ ...form, [k]: v });
 
@@ -222,6 +274,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
   const setDayRule = (i: number, patch: { use_on?: string; weekdays?: string[] }) =>
     setDays(days.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+
+  const trainingDayCount = resolveTrainingWeekdays(cardioQ.data?.prefs).length;
+  const setCardio = (i: number, patch: Partial<CardioDraft>) =>
+    setDays(days.map((d, idx) => {
+      if (idx !== i) return d;
+      const base: CardioDraft = d.cardio ?? cardioDraftsFor({ labels: [d.day_label], rows: cardioQ.data?.rows ?? [], trainingDays: trainingDayCount })[d.day_label];
+      return { ...d, cardio: { ...base, ...patch, fromAi: false } };
+    }));
 
   const addDay = (label?: string) =>
     setDays([...days, { day_label: label ?? `Day ${days.length + 1}`, sort_order: days.length }]);
@@ -263,7 +323,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     }
     if (days.length) {
       const rows = days.map((d, i) => {
-        const { id: _omit, ...rest } = d as any;
+        const { id: _omit, cardio: _cardio, ...rest } = d as any;
         delete (rest as any).created_at;
         delete (rest as any).updated_at;
         delete (rest as any).target_id;
@@ -272,8 +332,38 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       const { error } = await supabase.from("nutrition_target_days").insert(rows);
       if (error) { setSaving(false); return toast.error(error.message); }
     }
+    // Cardio follows the plan the client is on: only an Active plan changes it.
+    let cardioMsg = "";
+    if (form.status === "Active" && cardioQ.data) {
+      const prefs = cardioQ.data.prefs;
+      const sync = planCardioSync({
+        clientId: form.client_id,
+        days: days.map((d) => ({ label: d.day_label, draft: d.cardio })),
+        rows: cardioQ.data.rows,
+        today: todayLocalISO(),
+        trainingDays: resolveTrainingWeekdays(prefs),
+        highDay: Array.isArray(prefs?.preferred_high_days) ? prefs.preferred_high_days[0] ?? null : null,
+      });
+      try {
+        if (sync.inserts.length) {
+          const { error } = await supabase.from("cardio_targets").insert(sync.inserts as any);
+          if (error) throw error;
+        }
+        for (const u of sync.updates) {
+          const { error } = await supabase.from("cardio_targets").update(u.patch as any).eq("id", u.id);
+          if (error) throw error;
+        }
+        const n = sync.inserts.length + sync.updates.length;
+        if (n) cardioMsg = ` · cardio synced (${[sync.updates.length && `${sync.updates.length} updated`, sync.inserts.length && `${sync.inserts.length} added`].filter(Boolean).join(", ")})`;
+        for (const k of [["cardio-targets", form.client_id], ["cal-client-cardio", form.client_id], ["client-cardio-resolved", form.client_id], ["week-sched-data"], ["nutrition-dialog-cardio", form.client_id]]) {
+          qc.invalidateQueries({ queryKey: k });
+        }
+      } catch (e: any) {
+        toast.error(`Nutrition saved, but cardio didn't sync: ${e?.message ?? "error"}. Fix it in Cardio Targets.`);
+      }
+    }
     setSaving(false);
-    toast.success(form.id ? "Updated" : "Created");
+    toast.success(`${form.id ? "Updated" : "Created"}${cardioMsg}`);
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
@@ -410,11 +500,17 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 {days.length > 1 && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDay(i)}>Remove</Button>}
               </div>
               <PlanDayUseEditor day={d} planSize={days.length} onChange={(patch) => setDayRule(i, patch)} />
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
                 {(["calories","protein","carbs","fats","fibre"] as const).map((k) => (
                   <div key={k}><Label className="text-[10px] uppercase">{k}</Label><Input type="number" value={d[k] ?? ""} onChange={(e) => updateDay(i, k, e.target.value)} /></div>
                 ))}
+                <div><Label className="text-[10px] uppercase">Daily steps</Label><Input type="number" inputMode="numeric" placeholder="e.g. 10000" value={d.steps ?? ""} onChange={(e) => updateDay(i, "steps", e.target.value)} /></div>
               </div>
+              <DayCardio
+                draft={d.cardio}
+                onChange={(patch) => setCardio(i, patch)}
+                willSync={form.status === "Active"}
+              />
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Meal Plan</Label>
                 <Textarea
@@ -464,5 +560,37 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+/** One day type's cardio, edited with its calories and saved with the plan. */
+function DayCardio({ draft, onChange, willSync }: { draft?: CardioDraft; onChange: (p: Partial<CardioDraft>) => void; willSync: boolean }) {
+  if (draft?.program) {
+    return (
+      <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+        Cardio: covered by the <span className="font-semibold text-foreground">{draft.program}</span> program. Edit it in Cardio Targets.
+      </div>
+    );
+  }
+  const on = !!draft?.enabled;
+  const num = (v: string) => (v === "" ? null : Math.max(0, Math.round(Number(v))));
+  return (
+    <div className="rounded-md border border-border bg-card/60 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Switch checked={on} onCheckedChange={(v) => onChange({ enabled: v })} aria-label="Cardio on this day" />
+        <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Cardio</span>
+        {draft?.fromAi && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">AI</span>}
+        <span className="text-[11px] text-muted-foreground">
+          {on ? draft?.cardio_type : "None on this day"}
+          {!willSync && " · syncs when the plan is Active"}
+        </span>
+      </div>
+      {on && (
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <div><Label className="text-[10px] uppercase">Minutes</Label><Input type="number" inputMode="numeric" value={draft?.duration_minutes ?? ""} onChange={(e) => onChange({ duration_minutes: num(e.target.value) })} /></div>
+          <div><Label className="text-[10px] uppercase">Times / week</Label><Input type="number" inputMode="numeric" value={draft?.frequency_per_week ?? ""} onChange={(e) => onChange({ frequency_per_week: num(e.target.value) })} /></div>
+          <div><Label className="text-[10px] uppercase">kcal</Label><Input type="number" inputMode="numeric" placeholder="auto" value={draft?.kcal ?? ""} onChange={(e) => onChange({ kcal: num(e.target.value) })} /></div>
+        </div>
+      )}
+    </div>
   );
 }

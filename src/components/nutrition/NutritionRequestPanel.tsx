@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, FileText, Loader2, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
+import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, Footprints, Loader2, PencilLine, RefreshCw, Send, Sparkles, Wand2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -31,6 +31,8 @@ import {
 } from "@/lib/nutrition-ai-plans.functions";
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
+import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
+import { LEAN_GROCERY_LIST, planFoodStats, type PlanFoodStats } from "@/lib/nutrition-targets/plan-foods";
 
 type Req = {
   id: string;
@@ -177,8 +179,42 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       food_weighing_rules: parseFoodWeighingRules(plan.meal_plan_text),
       admin_notes: plan.targets_text ?? null,
       phase: plan.phase ?? phaseFromPlanText(plan.meal_plan_text) ?? phaseFromText(plan.targets_text?.match(/^Goal:\s*(.+)$/m)?.[1]),
+      // Daily steps + cardio sessions ride along into the editor.
+      targetsText: plan.targets_text ?? null,
     };
   }, [plan?.meal_plan_text, plan?.targets_text, plan?.phase]);
+  const [manualOpen, setManualOpen] = useState(false);
+
+  // The plan at a glance: each day's numbers + steps + cardio, from the AI output.
+  const preview = useMemo(() => {
+    if (!prefill?.days.length) return [];
+    const cardio = parseAiCardio(plan?.targets_text);
+    return prefill.days.map((d: any) => {
+      const c = cardio.get(dayKey(d.day_label));
+      return {
+        label: d.day_label as string,
+        kcal: d.calories as number | null,
+        p: d.protein as number | null,
+        c: d.carbs as number | null,
+        f: d.fats as number | null,
+        steps: c?.steps ?? null,
+        cardio: !c ? "—" : c.none ? "none" : [c.minutes ? `${c.minutes} min` : null, c.kcal ? `~${c.kcal} kcal` : null].filter(Boolean).join(" · ") || "—",
+      };
+    });
+  }, [prefill, plan?.targets_text]);
+
+  /** Everything for this plan as one block (to paste into a doc, a chat or another AI). */
+  const everything = () => {
+    const client = data?.client ?? data?.clientName ?? "Client";
+    return [
+      latest && submitted ? nutritionSubmissionSummary({ client, qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }) : "",
+      previousPlanText(plan?.previous_plan),
+      data?.programText ? `TRAINING PROGRAM\n${data.programText}` : "",
+      data?.cardioText ?? "",
+      plan?.targets_text ? `AI TARGETS\n${plan.targets_text}` : "",
+      plan?.meal_plan_text ? `AI MEAL PLAN\n${plan.meal_plan_text}` : "",
+    ].filter(Boolean).join("\n\n------------------------\n\n");
+  };
 
   const send = async () => {
     setSending(true);
@@ -241,14 +277,14 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
-              <Sparkles className="h-4 w-4 text-primary" /> Nutrition Update Request
+              <Sparkles className="h-4 w-4 text-primary" /> Nutrition Plan
             </h3>
             <Badge variant="outline" className={cn("text-[10px]", tones[statusChip.tone])}>{statusChip.label}</Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {isLoading ? "Loading…"
               : submitted ? `Submitted ${fmt(latest!.submitted_at)} · AI builds the targets and a paste-ready meal plan automatically.`
-              : "Send the form → client fills it out → AI builds their targets and meal plan for you to review and apply."}
+              : "1 · Send the Nutrition Update → 2 · AI builds targets, meal plan, steps + cardio → 3 · Review, edit and publish. Or build it by hand."}
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Sent automatically every month while they have an active nutrition plan: the Monday that starts the final week, 9am their time.
@@ -260,19 +296,19 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </p>
           )}
         </div>
-        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+        <div className="grid w-full shrink-0 grid-cols-3 gap-2 sm:flex sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-1.5" title="Copy the AI prompts to run them manually">
-                <FileText className="h-4 w-4" /> Prompts
+              <Button variant="outline" className="gap-1.5" title="Copy prompts, answers and the plan to do it by hand">
+                <Copy className="h-4 w-4" /> Copy
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuLabel className="text-xs">Run it manually in ChatGPT / Claude</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel className="text-xs">Prompts to run it yourself (ChatGPT / Claude)</DropdownMenuLabel>
               {submitted ? (
                 <>
-                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan)), "Targets prompt")}>
-                    1 · Targets prompt <span className="ml-auto text-[10px] text-muted-foreground">with answers</span>
+                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null }), "Targets prompt")}>
+                    1 · Targets + steps + cardio prompt <span className="ml-auto text-[10px] text-muted-foreground">all context</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!plan?.targets_text}
@@ -280,15 +316,34 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                   >
                     2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
                 </>
-              ) : null}
+              ) : (
+                <DropdownMenuItem disabled>Prompts with answers unlock when the client submits</DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => copyText(TARGETS_PROMPT, "Targets formula")}>Blank targets formula</DropdownMenuItem>
               <DropdownMenuItem onClick={() => copyText(MEAL_PLAN_PROMPT, "Meal plan formula")}>Blank meal plan formula</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs">Copy text</DropdownMenuLabel>
+              <DropdownMenuItem disabled={!submitted} onClick={() => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers")}>
+                Client answers
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!plan?.targets_text} onClick={() => plan?.targets_text && copyText(plan.targets_text, "AI targets")}>AI targets + steps + cardio</DropdownMenuItem>
+              <DropdownMenuItem disabled={!plan?.meal_plan_text} onClick={() => plan?.meal_plan_text && copyText(plan.meal_plan_text, "AI meal plan")}>AI meal plan (paste-ready)</DropdownMenuItem>
+              <DropdownMenuItem disabled={!plan?.previous_plan} onClick={() => copyText(previousPlanText(plan?.previous_plan), "Last plan + results")}>Last plan + results</DropdownMenuItem>
+              <DropdownMenuItem disabled={!plan?.previous_plan} onClick={() => copyText(previousMealsText(plan?.previous_plan), "Last plan's meals")}>Last plan's meals</DropdownMenuItem>
+              <DropdownMenuItem disabled={!data?.cardioText} onClick={() => data?.cardioText && copyText(data.cardioText, "Current cardio")}>Current cardio</DropdownMenuItem>
+              <DropdownMenuItem disabled={!data?.programText} onClick={() => data?.programText && copyText(data.programText, "Training program")}>Training program (block + week)</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => copyText(everything(), "Everything")} className="font-semibold">
+                Everything in one block
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button className="flex-1 gap-2 bg-gradient-primary font-bold sm:flex-none" onClick={() => setSendOpen(true)}>
-            <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "Send new request" : "Send request"}
+          <Button variant="outline" className="gap-1.5" onClick={() => setManualOpen(true)} title="Build or paste a plan yourself (targets, meals, steps and cardio)">
+            <PencilLine className="h-4 w-4" /> Build
+          </Button>
+          <Button className="gap-2 bg-gradient-primary font-bold" onClick={() => setSendOpen(true)}>
+            <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "New request" : "Send request"}
           </Button>
         </div>
       </div>
@@ -312,6 +367,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       {submitted && plan?.status === "ready" && (
         <div className="space-y-3">
           <LastPlanSummary previous={plan.previous_plan ?? null} />
+          {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} />}
           {plan.targets_text && <CopyBlock title="AI targets" text={plan.targets_text} icon={<ClipboardList className="h-4 w-4 text-primary" />} />}
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
@@ -328,7 +384,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button className="gap-2 font-bold" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length}>
-              <Check className="h-4 w-4" /> {plan.applied_at ? "Apply again" : "Review & apply to targets"}
+              <Check className="h-4 w-4" /> {plan.applied_at ? "Review & publish again" : "Review, edit & publish"}
             </Button>
             <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
               <div className="min-w-0 sm:w-44">
@@ -437,6 +493,23 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         </DialogContent>
       </Dialog>
 
+      {manualOpen && (
+        <NutritionTargetDialog
+          open={manualOpen}
+          onOpenChange={setManualOpen}
+          clientId={clientId}
+          onSaved={async (targetId) => {
+            await supabase
+              .from("nutrition_targets")
+              .update({ status: "Archived" })
+              .eq("client_id", clientId)
+              .neq("id", targetId)
+              .neq("status", "Archived");
+            qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
+          }}
+        />
+      )}
+
       {applyOpen && prefill && (
         <NutritionTargetDialog
           open={applyOpen}
@@ -467,6 +540,47 @@ function LastPlanSummary({ previous }: { previous: PreviousPlan | null }) {
   return (
     <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs">
       <span className="font-semibold">Adjusted from the last plan:</span> <span className="text-muted-foreground">{line}</span>
+    </div>
+  );
+}
+
+/** Each day type's numbers, steps and cardio from the AI plan, before opening the editor. */
+function PlanPreview({ rows, foods }: { rows: Array<{ label: string; kcal: number | null; p: number | null; c: number | null; f: number | null; steps: number | null; cardio: string }>; foods: PlanFoodStats | null }) {
+  const heavy = !!foods && foods.total > LEAN_GROCERY_LIST;
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      {foods && foods.total > 0 && (
+        <div
+          className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", heavy ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "text-muted-foreground")}
+          title={foods.foods.join(", ")}
+        >
+          <span className="font-semibold">Grocery list: {foods.total} foods</span>
+          {foods.days > 1 && <span>· {foods.everyDay} used every day</span>}
+          {heavy && <span>· a lot to shop for. Regenerate, or swap foods in the editor so days share the same staples</span>}
+        </div>
+      )}
+      <table className="w-full min-w-[520px] text-xs">
+        <thead className="bg-muted/40 text-[10px] uppercase tracking-widest text-muted-foreground">
+          <tr>
+            <th className="px-3 py-2 text-left">Day</th>
+            <th className="px-2 py-2 text-right">kcal</th>
+            <th className="px-2 py-2 text-right">P / C / F</th>
+            <th className="px-2 py-2 text-right"><Footprints className="inline h-3 w-3" /> Steps</th>
+            <th className="px-3 py-2 text-left">Cardio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className="border-t border-border">
+              <td className="px-3 py-2 font-semibold">{r.label}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{r.kcal ?? "—"}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{[r.p, r.c, r.f].map((n) => n ?? "—").join(" / ")}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{r.steps != null ? r.steps.toLocaleString() : "—"}</td>
+              <td className="px-3 py-2">{r.cardio}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

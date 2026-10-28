@@ -44,6 +44,7 @@ CALCULATIONS
 - if a TRAINING PROGRAM is given, use it to judge training demand: higher volume or intensity blocks and weeks get more carbs on training days, a deload never lowers protein, and within 2 weeks of a meet keep foods familiar with no new big deficit unless the coach-selected phase says so. it never overrides the goal or the coach-selected phase
 
 - protein = 0.8–1g per lb bodyweight
+- protein is the SAME on every day type; fats stay within about 10 g between day types; the calorie difference between training, non training and high days comes from carbs (so the meal plan can use the same foods every day and only change carb portions)
 - fats = 20–30% of calories
 - carbs = remaining calories
 
@@ -52,6 +53,20 @@ CALCULATIONS
 - high day = highest carbs and calories
 - training time (morning / evening / fasted / varies) never changes the daily totals; it only changes which meals carry the carbs (pre- and post-workout meals)
 - a free meal on the high day fits inside the high day calories; never add calories for it
+
+------------------------
+
+STEPS + CARDIO
+
+- DAILY STEPS TARGETS = the day's total steps, a number only (e.g. 10,000)
+- CARDIO SESSIONS = that day type's planned cardio, written exactly as "<minutes> min <type> · ~<kcal> kcal" (e.g. "25 min incline walk · ~150 kcal"), or "none"
+- start from CURRENT CARDIO when it's given and keep their cardio type
+- fat loss: 8,000–12,000 steps, cardio 15–30 min low intensity / zone 2 most days. when fat loss stalls with good adherence, add 5–10 min of cardio or 1,000–2,000 daily steps alongside a smaller calorie cut, never only more cardio
+- muscle gain: 7,000–10,000 steps, cardio 10–20 min easy 2–3 days a week for health, never enough to eat the surplus
+- recomp / maintenance / performance: 8,000–10,000 steps, cardio 15–25 min easy a few days a week
+- never over 45 min of cardio in a day. keep it low intensity so it doesn't cut into lifting recovery
+- a deload, taper or meet week in the TRAINING PROGRAM = easy walks only, no hard cardio
+- cardio and steps are part of the estimated daily expenditure; don't count them twice
 
 ------------------------
 
@@ -68,7 +83,7 @@ PREVIOUS PLAN (only when one is given)
 - a new goal or a COACH-SELECTED PHASE different from the previous plan's phase overrides all of this: set targets for the new phase
 - protein stays at or above the previous plan's unless bodyweight changed a lot
 - keep the same day types as the previous plan
-- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", and Why: one short line from the results (e.g. "down 0.2% a week for 4 weeks at 4.5/5 adherence, so -150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
+- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", Cardio: what changed in steps / cardio (or "no change"), and Why: one short line from the results (e.g. "down 0.2% a week for 4 weeks at 4.5/5 adherence, so -150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
 
 === OUTPUT ===
 
@@ -100,12 +115,12 @@ Protein:
 Carbs:
 Fats:
 
-CARDIO STEPS TARGETS:
+DAILY STEPS TARGETS:
 Training Day:
 Non Training Day:
 High Day:
 
-CARDIO CALORIE TARGETS:
+CARDIO SESSIONS:
 Training Day:
 Non Training Day:
 High Day:
@@ -114,6 +129,7 @@ CHANGES FROM LAST PLAN
 Training Day:
 Non Training Day:
 High Day:
+Cardio:
 Why:`;
 
 export const MEAL_PLAN_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
@@ -130,6 +146,14 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
    - Client trains fasted: no Pre-Workout meal; the first meal after training is the Post-Workout meal and should be one of the biggest meals of the day.
    - Never tag meals on NON-TRAINING-DAY menus. Keep the same number of meals there with carbs spread evenly.
    - The COACH WORKOUT MEALS instruction below always wins over these defaults.
+2c. SAME FOODS EVERY DAY (meal-prep logic: few groceries, easy to follow):
+   - Build the TRAINING-DAY MENU first, then make every other menu the SAME meals with the SAME foods in the same order. Between day types only the portions change, mostly the carbs (rice, potatoes, oats, bread / bagels, fruit) up or down. Protein foods and portions stay the same every day.
+   - Keep the whole plan to a short grocery list: about 2–3 protein sources, 2–3 carb sources, 1–2 fat sources, 1–2 vegetables and 1 fruit. Never add a food just for variety.
+   - A food stays in the same meal slot every day (e.g. oats are always in Meal 1).
+   - Only use a different food when the targets can't be hit with portions alone, the client asked for a swap, or it's the High-Day free meal. Prefer changing an amount over changing a food.
+   - Use the same fat source(s) every day; adjust fats with the amount (oil, peanut butter, nuts), not a new food.
+   - Pick foods that batch-cook and store well (rice, potatoes, chicken, lean ground beef, eggs, Greek yogurt, oats) and keep amounts easy to weigh (multiples of 5 g, whole eggs, full scoops).
+   - On the NON-TRAINING-DAY MENU keep the same meals untagged with fewer carbs; on the HIGH-DAY MENU the extra carbs go into the same carb foods (bigger portions), mostly the Pre- and Post-Workout meals.
 3. Under each meal, list every food on its own line as: "<amount> g <food>" (use cooked weight for meat, rice, potatoes, vegetables; packaged weight for oats, whey, peanut butter, oils).
 4. After each meal add a blank line, then:
    Approximate macros:
@@ -197,6 +221,8 @@ export function targetsUserPrompt(
   program?: string | null,
   /** previousPlanText(): the plan they were on and how it went. */
   previous?: string | null,
+  /** currentCardioText(): the cardio they're doing now. */
+  cardio?: string | null,
 ): string {
   return [
     `CLIENT DATA`,
@@ -204,6 +230,7 @@ export function targetsUserPrompt(
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
     program ? `TRAINING PROGRAM\n${program}` : "",
     previous ? previous : "",
+    cardio ? cardio : "",
     "",
     formatAnswers(qas),
   ]
@@ -217,8 +244,9 @@ export function manualTargetsPrompt(
   qas: QA[],
   phase?: string | null,
   previous?: string | null,
+  extra?: { program?: string | null; cardio?: string | null },
 ): string {
-  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, null, previous)}`;
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null)}`;
 }
 
 /**

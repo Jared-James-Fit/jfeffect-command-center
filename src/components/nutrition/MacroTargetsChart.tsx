@@ -27,6 +27,7 @@ export function MacroTargetsChart({
   fats,
   fibre,
   water,
+  steps,
   extras: extrasOverride,
   className,
 }: {
@@ -36,6 +37,8 @@ export function MacroTargetsChart({
   fats?: Num;
   fibre?: Num;
   water?: string | null;
+  /** The day's step target. */
+  steps?: Num;
   /** Replaces the default fibre / water row. */
   extras?: TargetExtra[];
   className?: string;
@@ -64,6 +67,7 @@ export function MacroTargetsChart({
     ([
       fib != null ? { label: "Fibre", value: `${fib} g` } : null,
       waterText ? { label: "Water", value: waterText } : null,
+      toMacroNumber(steps) ? { label: "Steps", value: Number(toMacroNumber(steps)).toLocaleString() } : null,
     ].filter(Boolean) as TargetExtra[]);
 
   return (

@@ -146,8 +146,15 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
     const { data: plans } = ids.length
       ? await sb.from("nutrition_ai_plans").select("*").in("submission_id", ids)
       : { data: [] };
-    const { loadClientBasics, loadQAs, loadTrainingPattern } = await aiPlans();
-    const client = await loadClientBasics(sb, data.clientId);
+    const { loadClientBasics, loadQAs, loadTrainingPattern, loadCardioRows } = await aiPlans();
+    const { loadProgramContext } = await import("@/lib/program-context.server");
+    const { programContextText } = await import("@/lib/program-context");
+    const { currentCardioText } = await import("@/lib/nutrition-cardio-sync");
+    const [client, program, cardioRows] = await Promise.all([
+      loadClientBasics(sb, data.clientId),
+      loadProgramContext(sb, data.clientId).catch(() => null),
+      loadCardioRows(sb, data.clientId).catch(() => []),
+    ]);
     const { data: assignment } = await sb
       .from("nf_assignments")
       .select("created_at, updated_at, settings")
@@ -169,6 +176,9 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
       clientName: client.name,
       client,
       trainingPattern: await loadTrainingPattern(sb, data.clientId).catch(() => null),
+      // The same context the AI gets, for the coach's copy-paste prompts.
+      programText: programContextText(program, { readout: false }) || null,
+      cardioText: currentCardioText(cardioRows) || null,
     };
   });
 
