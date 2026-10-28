@@ -23,6 +23,14 @@ import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-ta
 import { resolveTiming } from "@/lib/analytics/training-time";
 import { programContextText } from "@/lib/program-context";
 import { formAnswerText as answerValue } from "@/lib/form-answer-text";
+import { answerFor } from "@/lib/nutrition-ai-prompts";
+import {
+  pickPreviousPlan,
+  planResults,
+  previousMealsText,
+  previousPlanText,
+  type PreviousPlan,
+} from "@/lib/nutrition-history";
 
 export async function loadQAs(sb: any, submissionId: string): Promise<{ sub: any; qas: QA[] }> {
   const { data: sub, error } = await sb
@@ -93,6 +101,116 @@ export async function loadTrainingPattern(sb: any, clientId: string): Promise<Tr
   return summarizeTrainingTimes(starts, client?.timezone || "UTC");
 }
 
+const LB = 2.2046226;
+
+/** A bodyweight answer ("182", "182 lbs", "82 kg") in kg. The form asks in lbs. */
+function answerKg(text: string): number | null {
+  const m = String(text ?? "").match(/(\d+(?:\.\d+)?)\s*(kg|lb|lbs)?/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return /kg/i.test(m[2] ?? "") ? n : n / LB;
+}
+
+/**
+ * The plan the client was on when they sent this update (the latest one made
+ * before it), and how it went: bodyweight trend, weekly check-in adherence
+ * and flags. Null for a first plan.
+ */
+export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: string; submitted_at?: string | null }, qas: QA[]): Promise<PreviousPlan | null> {
+  const before = sub.submitted_at ?? new Date().toISOString();
+  const { data: targets } = await sb
+    .from("nutrition_targets")
+    .select("id, phase, custom_phase, goal, custom_goal, start_date, created_at, nutrition_target_days(day_label, calories, protein, carbs, fats, fibre, notes, sort_order)")
+    .eq("client_id", sub.client_id)
+    .lt("created_at", before)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  const t = pickPreviousPlan(
+    ((targets ?? []) as any[]).map((x) => ({ ...x, days: x.nutrition_target_days ?? [] })),
+    before,
+  );
+  if (!t) return null;
+
+  const start = String(t.start_date ?? t.created_at).slice(0, 10);
+  const end = before.slice(0, 10);
+  const [{ data: client }, { data: prevSubs }] = await Promise.all([
+    sb.from("clients").select("user_id, preferred_weight_unit").eq("id", sub.client_id).maybeSingle(),
+    sb
+      .from("nf_submissions")
+      .select("id, submitted_at")
+      .eq("form_id", NUTRITION_REQUEST_FORM_ID)
+      .eq("client_id", sub.client_id)
+      .neq("id", sub.id)
+      .lt("submitted_at", before)
+      .order("submitted_at", { ascending: false })
+      .limit(1),
+  ]);
+  const unit: "lb" | "kg" = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
+  const [{ data: weights }, { data: checkins }] = await Promise.all([
+    client?.user_id
+      ? sb
+          .from("progress_bodyweight")
+          .select("logged_date, weight_value, weight_unit")
+          .eq("user_id", client.user_id)
+          .gte("logged_date", start)
+          .lte("logged_date", end)
+      : Promise.resolve({ data: [] }),
+    sb
+      .from("messenger_checkins")
+      .select("answers")
+      .eq("client_id", sub.client_id)
+      .eq("task_type", "weekly_checkin")
+      .eq("status", "completed")
+      .gte("submitted_at", `${start}T00:00:00Z`)
+      .lt("submitted_at", before),
+  ]);
+
+  // Fallback trend: the last Nutrition Update's bodyweight answer vs this one.
+  let formFallback: { fromKg: number; toKg: number; days: number } | null = null;
+  const prev = (prevSubs ?? [])[0];
+  const nowKg = answerKg(answerFor(qas, "bodyweight"));
+  if (prev?.submitted_at && nowKg) {
+    const { qas: prevQas } = await loadQAs(sb, prev.id).catch(() => ({ qas: [] as QA[] }));
+    const fromKg = answerKg(answerFor(prevQas, "bodyweight"));
+    const days = (Date.parse(before) - Date.parse(prev.submitted_at)) / 86_400_000;
+    if (fromKg) formFallback = { fromKg, toKg: nowKg, days };
+  }
+
+  const days = ((t as any).days as any[])
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((d) => ({
+      label: String(d.day_label ?? "Day"),
+      calories: d.calories ?? null,
+      protein: d.protein ?? null,
+      carbs: d.carbs ?? null,
+      fats: d.fats ?? null,
+      fibre: d.fibre ?? null,
+      meals: d.notes ?? null,
+    }));
+  const weeksOn = Math.round(((Date.parse(before) - Date.parse(`${start}T00:00:00Z`)) / (7 * 86_400_000)) * 10) / 10;
+  return {
+    target_id: (t as any).id,
+    phase: (t as any).phase === "Custom" ? (t as any).custom_phase ?? "Custom" : (t as any).phase ?? null,
+    goal: (t as any).goal === "Custom" ? (t as any).custom_goal ?? null : (t as any).goal ?? null,
+    start_date: start,
+    weeks_on: weeksOn >= 0 ? weeksOn : null,
+    days,
+    results: planResults({
+      start,
+      end,
+      unit,
+      weights: ((weights ?? []) as any[]).map((w) => ({
+        date: String(w.logged_date),
+        kg: String(w.weight_unit ?? "").toLowerCase().startsWith("lb") ? Number(w.weight_value) / LB : Number(w.weight_value),
+      })),
+      checkins: ((checkins ?? []) as any[]).map((c) => ({ answers: c.answers ?? null })),
+      formFallback,
+    }),
+  };
+}
+
 async function coachSettings(sb: any, clientId: string): Promise<{ phase: string | null; workoutMeals: WorkoutMealsMode | null }> {
   const { data } = await sb
     .from("nf_assignments")
@@ -125,6 +243,14 @@ export async function runPlan(
   try {
     const { sub, qas } = await loadQAs(sb, submissionId);
     const { loadProgramContext } = await import("@/lib/program-context.server");
+    // The plan they were on, snapshotted the first time so a regenerate after
+    // it was replaced or deleted still sees it.
+    const { data: planRow } = await sb.from("nutrition_ai_plans").select("previous_plan").eq("submission_id", submissionId).maybeSingle();
+    let previous = (planRow?.previous_plan ?? null) as PreviousPlan | null;
+    if (!previous) {
+      previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
+      if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
+    }
     const [coach, basics, history, program] = await Promise.all([
       coachSettings(sb, sub.client_id),
       loadClientBasics(sb, sub.client_id),
@@ -148,14 +274,14 @@ export async function runPlan(
     const t = await generateText({
       model: gateway(modelId),
       system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false })),
+      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous)),
     });
     const targetsText = cleanAiText(t.text);
 
     const m = await generateText({
       model: gateway(modelId),
       system: MEAL_PLAN_PROMPT,
-      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history),
+      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history, previousMealsText(previous)),
     });
     const mealPlanText = cleanAiText(m.text);
 

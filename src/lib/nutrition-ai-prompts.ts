@@ -5,6 +5,7 @@
  */
 
 import type { TrainingBucket, TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
+import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib/nutrition-history";
 
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
 export const NUTRITION_REQUEST_FORM_TYPE = "nutrition_update";
@@ -50,6 +51,24 @@ CALCULATIONS
 - non training day = lower carbs
 - high day = highest carbs and calories
 - training time (morning / evening / fasted / varies) never changes the daily totals; it only changes which meals carry the carbs (pre- and post-workout meals)
+- a free meal on the high day fits inside the high day calories; never add calories for it
+
+------------------------
+
+PREVIOUS PLAN (only when one is given)
+
+- start from the previous plan's numbers and adjust them using RESULTS ON THE PREVIOUS PLAN. do not rebuild from scratch
+- judge bodyweight by the % of bodyweight per week, never one weigh-in
+- the first 2–3 weeks after calories or carbs go up include about 1–3 lb of water and glycogen, and the first 1–2 weeks of a cut drop extra water. if the plan is 3 weeks old or less, don't correct for a fast early change; only act on it once it holds past that
+- fat loss: aim for 0.5–1% per week. under 0.25% per week with adherence 4/5 or better = drop 5–10% of calories (about 100–200 kcal), from carbs and fats, protein stays. over 1.25% per week, or hunger / low energy flagged most weeks = add 100–150 kcal, mostly carbs
+- muscle gain: aim for 0.25–0.5% per week. under that with good adherence = add 100–150 kcal, mostly carbs. over 0.75% per week = take off about 100 kcal
+- recomp / maintenance / performance: within about ±0.25% per week = keep calories. drifting past that = nudge about 100 kcal the other way
+- adherence under 4/5 = keep calories the same. the numbers aren't the problem, consistency is
+- under 2 weeks on the plan, or not enough weigh-ins = keep calories unless the goal changed
+- a new goal or a COACH-SELECTED PHASE different from the previous plan's phase overrides all of this: set targets for the new phase
+- protein stays at or above the previous plan's unless bodyweight changed a lot
+- keep the same day types as the previous plan
+- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", and Why: one short line from the results (e.g. "down 0.2% a week for 4 weeks at 4.5/5 adherence, so -150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
 
 === OUTPUT ===
 
@@ -89,7 +108,13 @@ High Day:
 CARDIO CALORIE TARGETS:
 Training Day:
 Non Training Day:
-High Day:`;
+High Day:
+
+CHANGES FROM LAST PLAN
+Training Day:
+Non Training Day:
+High Day:
+Why:`;
 
 export const MEAL_PLAN_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
 
@@ -170,12 +195,15 @@ export function targetsUserPrompt(
   phase?: string | null,
   /** programContextText() for the client, when they have a program. */
   program?: string | null,
+  /** previousPlanText(): the plan they were on and how it went. */
+  previous?: string | null,
 ): string {
   return [
     `CLIENT DATA`,
     ...clientBasicsLines(client, qas),
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
     program ? `TRAINING PROGRAM\n${program}` : "",
+    previous ? previous : "",
     "",
     formatAnswers(qas),
   ]
@@ -188,8 +216,9 @@ export function manualTargetsPrompt(
   client: string | ClientBasics,
   qas: QA[],
   phase?: string | null,
+  previous?: string | null,
 ): string {
-  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase)}`;
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, null, previous)}`;
 }
 
 /**
@@ -229,8 +258,9 @@ export function manualMealPlanPrompt(
   phase?: string | null,
   workoutMeals?: WorkoutMealsMode | null,
   history?: TrainingPattern | null,
+  currentMeals?: string | null,
 ): string {
-  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history)}`;
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history, currentMeals)}`;
 }
 
 /** Coach override for pre/post-workout meals (stored on the request). */
@@ -315,13 +345,19 @@ export function effectiveTrainingTime(
   return { time: formAnswer, fromHistory: false };
 }
 
-/** Pass 2 input: the CLIENT DETAILS block filled from the form + pass-1 targets. */
+/**
+ * Pass 2 input: the CLIENT DETAILS block filled from the form + pass-1
+ * targets. `currentMeals` (previousMealsText) is the plan they're on now:
+ * the client's meal choice on the form decides whether it's kept, swapped
+ * or replaced, and their free-meal answer shapes the High Day.
+ */
 export function mealPlanUserPrompt(
   qas: QA[],
   targetsText: string,
   phase?: string | null,
   workoutMeals?: WorkoutMealsMode | null,
   history?: TrainingPattern | null,
+  currentMeals?: string | null,
 ): string {
   const trainTime = answerFor(qas, "time", "train");
   const placed = effectiveTrainingTime(trainTime, history);
@@ -332,7 +368,14 @@ export function mealPlanUserPrompt(
   const preEat = answerFor(qas, "eat before training");
   const bw = answerFor(qas, "bodyweight") || answerFor(qas, "weight");
   const days = answerFor(qas, "training days") || answerFor(qas, "days per week");
-  const meals = answerFor(qas, "meals per day") || answerFor(qas, "meals");
+  const meals = answerFor(qas, "how many meals") || answerFor(qas, "meals per day");
+  const hasMeals = !!currentMeals?.trim();
+  const mealRule = mealChoiceRule(
+    mealChoiceOf(answerFor(qas, "meals in your current plan")),
+    answerFor(qas, "foods or meals do you want changed"),
+    hasMeals,
+  );
+  const highDay = freeMealRule(wantsFreeMeal(answerFor(qas, "free meal on your high day")), answerFor(qas, "go-to free meal"));
   const avoid = answerFor(qas, "allerg") || answerFor(qas, "dislike");
   const love = answerFor(qas, "foods you love") || answerFor(qas, "prefer") || answerFor(qas, "favourite") || answerFor(qas, "favorite");
   // No targets yet (the coach copying the prompt before pass 1 ran): leave the numbers for them to fill in.
@@ -359,9 +402,13 @@ export function mealPlanUserPrompt(
       placed.fromHistory ? " (Based on their logged workout times.)" : ""
     }${disagrees ? ` (Logged workouts point to ${history!.label}; the form answer is newer, so follow the form.)` : ""}`,
     workoutMeals && workoutMeals !== "auto" ? `- COACH WORKOUT MEALS: ${WORKOUT_MEALS_RULE[workoutMeals]}` : "",
+    mealRule ? `- MEALS: ${mealRule}` : "",
+    highDay ? `- HIGH DAY: ${highDay}` : "",
     "",
     hasTargets ? "TARGETS (match each menu's Daily Total to these within ±3%):" : "",
     targetsText.trim(),
+    hasMeals ? "\nCURRENT MEALS (the plan the client is on now):" : "",
+    hasMeals ? currentMeals!.trim() : "",
   ].filter((l) => l !== "").join("\n");
 }
 
