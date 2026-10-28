@@ -30,7 +30,7 @@ Weigh oats, whey, peanut butter and oils as packaged.`;
 
 describe("nutrition AI plan", () => {
   it("keeps the coach's targets format in the prompt", () => {
-    for (const h of ["CLIENT OVERVIEW", "CALORIE TARGETS", "MACRO TARGETS", "CARDIO STEPS TARGETS:", "CARDIO CALORIE TARGETS:"]) {
+    for (const h of ["CLIENT OVERVIEW", "CALORIE TARGETS", "MACRO TARGETS", "DAILY STEPS TARGETS:", "CARDIO SESSIONS:"]) {
       expect(TARGETS_PROMPT).toContain(h);
     }
   });

@@ -318,6 +318,7 @@ function PortalNutrition() {
                   fats={day.fats}
                   fibre={day.fibre}
                   water={plan.water ?? null}
+                  steps={(day as any).steps ?? null}
                 />
               ) : (
                 <div className="text-xs text-muted-foreground">{missingDayNote ?? "No uploaded meal plan is available yet."}</div>
