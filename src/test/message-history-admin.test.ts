@@ -28,6 +28,10 @@ describe("the database keeps what a deleted or edited coach-chat message said", 
       expect(p).not.toMatch(/coach|coached_client_ids|clients/);
     }
   });
+  it("and the older coach rule on message_deletions is gone, so admins are the only readers", () => {
+    const drop = read("supabase/migrations/20270106091000_message_deletions_admin_only.sql");
+    expect(drop).toContain('DROP POLICY IF EXISTS "Staff read message deletions" ON public.message_deletions;');
+  });
   it("member-made chats are never copied", () => {
     expect(sql).not.toMatch(/ON public\.group_messages/);
   });
