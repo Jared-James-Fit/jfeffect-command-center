@@ -372,8 +372,8 @@ export function ClientProfileWorkspace({
 
   const confirmDelete = async () => {
     try {
-      await deleteFn({ data: { clientId: id, deleteAuthUser: true } });
-      toast.success("Client deleted");
+      const res = await deleteFn({ data: { clientId: id, deleteAuthUser: true } });
+      toast.success(res?.kept ? "Chat history kept: client deactivated instead of deleted" : "Client deleted");
       setDeleteStep(0);
       qc.invalidateQueries({ queryKey: ["clients"] });
       if (embedded) onClose?.(); else navigate({ to: "/admin/clients" });
@@ -1228,8 +1228,8 @@ export function ClientProfileWorkspace({
             <AlertDialogTitle>{deleteStep === 1 ? `Delete ${form.full_name}?` : "Are you absolutely sure?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteStep === 1
-                ? "This will permanently remove the client record and their login. You'll be asked to confirm one more time."
-                : "This action cannot be undone. The client's account, login, and all associated records will be permanently deleted."}
+                ? "This will permanently remove the client record and their login. If they have any chat history, it's kept: they're deactivated instead. You'll be asked to confirm one more time."
+                : "This action cannot be undone. The client's account, login, and all associated records will be permanently deleted. Chats are never deleted: if they have any, the client is deactivated instead."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

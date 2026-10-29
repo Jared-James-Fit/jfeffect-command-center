@@ -114,9 +114,24 @@ export const deleteGroupChats = createServerFn({ method: "POST" })
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     if (!isAdmin) throw new Error("Only admins can delete group chats");
 
-    const { error } = await supabase.from("chat_groups").delete().in("id", data.group_ids);
-    if (error) throw new Error(error.message);
-    return { deleted: data.group_ids.length };
+    // Chats are never deleted (the database refuses it too, chat_groups_guard_chat_delete):
+    // a group with any messages is archived (hidden from every list, messages kept);
+    // only an empty one is deleted.
+    const { data: withMessages, error: mErr } = await supabase
+      .from("group_messages").select("group_id").in("group_id", data.group_ids);
+    if (mErr) throw new Error(mErr.message);
+    const keep = [...new Set(((withMessages ?? []) as { group_id: string }[]).map((m) => m.group_id))];
+    const empty = data.group_ids.filter((id) => !keep.includes(id));
+    if (keep.length) {
+      const { error } = await supabase.from("chat_groups")
+        .update({ archived: true, updated_at: new Date().toISOString() }).in("id", keep);
+      if (error) throw new Error(error.message);
+    }
+    if (empty.length) {
+      const { error } = await supabase.from("chat_groups").delete().in("id", empty);
+      if (error) throw new Error(error.message);
+    }
+    return { deleted: empty.length, archived: keep.length };
   });
 
 /* ---------------- Mass message ---------------- */
