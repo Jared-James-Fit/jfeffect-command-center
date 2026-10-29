@@ -115,10 +115,10 @@ export function ManageGroupDialog({
 
   const doDelete = async () => {
     if (!isAdmin) return;
-    if (!window.confirm(`Permanently delete "${group.name}" and all its messages? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${group.name}"? It's removed for everyone. Chats are never deleted: if it has messages, it's archived and they're kept.`)) return;
     try {
-      await deleteGroups({ data: { group_ids: [group.id] } as any });
-      toast.success("Group deleted");
+      const res: any = await deleteGroups({ data: { group_ids: [group.id] } as any });
+      toast.success(res?.archived ? "Group archived: its messages are kept" : "Group deleted");
       qc.invalidateQueries({ queryKey: ["chat-groups"] });
       onOpenChange(false);
     } catch (e: any) { toast.error(e?.message ?? "Failed"); }

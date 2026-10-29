@@ -342,6 +342,35 @@ export const deleteClient = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Chats are never deleted with an account (the database refuses it too,
+    // clients_guard_chat_delete): a client with any chat history is
+    // deactivated instead, portal off and login kept, so every message and
+    // who sent it stays.
+    const { data: anyMessage, error: mErr } = await supabaseAdmin
+      .from("messages")
+      .select("id")
+      .eq("client_id", data.clientId)
+      .limit(1);
+    if (mErr) throw new Error(mErr.message);
+    if (anyMessage?.length) {
+      const { error: deErr } = await supabaseAdmin.from("clients").update({
+        status: "Deactivated",
+        deactivated_at: new Date().toISOString(),
+        deactivated_by: userId,
+        deactivation_reason: "Deleted by admin (chat history kept)",
+        portal_access_disabled: true,
+      }).eq("id", data.clientId);
+      if (deErr) throw new Error(deErr.message);
+      await supabaseAdmin.from("client_activity_log").insert({
+        client_id: data.clientId,
+        actor_user_id: userId,
+        actor_role: "admin",
+        action: "client_deactivated",
+        details: { instead_of_delete: true, reason: "chat history kept", portal_disabled: true },
+      });
+      return { ok: true, kept: true as const };
+    }
+
     const { error: delErr } = await supabaseAdmin
       .from("clients")
       .delete()
@@ -349,7 +378,9 @@ export const deleteClient = createServerFn({ method: "POST" })
     if (delErr) throw new Error(delErr.message);
 
     if (data.deleteAuthUser && client.user_id) {
-      await supabaseAdmin.auth.admin.deleteUser(client.user_id);
+      // Refused (and the login kept) if it has chats elsewhere, e.g. a member's group chats.
+      const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(client.user_id);
+      if (authErr) console.warn("[deleteClient] login kept:", authErr.message);
     }
-    return { ok: true };
+    return { ok: true, kept: false as const };
   });

@@ -723,10 +723,12 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
               onClick={async () => {
                 const ids = Object.keys(checked);
                 if (ids.length === 0) return;
-                if (!window.confirm(`Permanently delete ${ids.length} group${ids.length > 1 ? "s" : ""} and all their messages?`)) return;
+                if (!window.confirm(`Delete ${ids.length} group${ids.length > 1 ? "s" : ""}? Chats are never deleted: any with messages are archived and their messages kept.`)) return;
                 try {
-                  await deleteGroupsFn({ data: { group_ids: ids } as any });
-                  toast.success(`Deleted ${ids.length}`);
+                  const res: any = await deleteGroupsFn({ data: { group_ids: ids } as any });
+                  toast.success(res?.archived
+                    ? `${res.archived} archived (messages kept)${res.deleted ? `, ${res.deleted} deleted` : ""}`
+                    : `Deleted ${ids.length}`);
                   setChecked({});
                   setSelectMode(false);
                   if (selectedId && ids.includes(selectedId)) setSelectedId(null);

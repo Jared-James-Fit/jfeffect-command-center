@@ -575,8 +575,8 @@ export function MemberProfileWorkspace({
       <DangerZone
         memberEmail={member.email}
         onDelete={async () => {
-          await deleteMemberFn({ data: { memberId } });
-          toast.success("Member account deleted");
+          const res = await deleteMemberFn({ data: { memberId } });
+          toast.success(res?.kept ? "Chat history kept: member deactivated instead of deleted" : "Member account deleted");
           await qc.invalidateQueries({ queryKey: ["admin-members"] });
           navigate({ to: "/admin/members" });
         }}
@@ -607,7 +607,7 @@ function DangerZone({ memberEmail, onDelete }: { memberEmail: string; onDelete: 
       <div>
         <div className="text-xs uppercase tracking-wider text-destructive">Danger zone</div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Permanently deletes the member row and removes their auth account. This cannot be undone.
+          Permanently deletes the member row and removes their auth account. This cannot be undone. Chats are never deleted: if they have any chat history, they're deactivated instead (access off, chats kept).
         </p>
       </div>
       {!open ? (

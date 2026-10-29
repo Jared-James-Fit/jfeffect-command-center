@@ -39,6 +39,21 @@ export const deleteAdminMember = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Chats are never deleted with an account (the database refuses it too:
+    // app_members_guard_chat_delete, users_guard_chat_delete). A member with any
+    // chat history is deactivated instead: every access grant off, portal off,
+    // login and every message (and who sent it) kept.
+    if (await memberHasChats(supabaseAdmin, member.id, member.user_id)) {
+      const { error: deErr } = await supabaseAdmin
+        .from("app_members").update({ status: "Deactivated" }).eq("id", data.memberId);
+      if (deErr) throw new Error(deErr.message);
+      await supabaseAdmin.from("member_access").update({ active: false }).eq("member_id", data.memberId);
+      if (member.user_id) {
+        await supabaseAdmin.from("clients").update({ portal_access_disabled: true }).eq("user_id", member.user_id);
+      }
+      return { success: true, kept: true } as const;
+    }
+
     // Delete the app_members row first (RLS bypassed via service role)
     const { error: delErr } = await supabaseAdmin
       .from("app_members")
@@ -53,8 +68,28 @@ export const deleteAdminMember = createServerFn({ method: "POST" })
         throw new Error(`Member row deleted but auth account removal failed: ${authErr.message}`);
       }
     }
-    return { success: true } as const;
+    return { success: true, kept: false } as const;
   });
+
+/** Any support message, or any coach-chat / group message or reaction from their login. */
+async function memberHasChats(admin: any, memberId: string, userId: string | null): Promise<boolean> {
+  const checks = [admin.from("member_support_messages").select("id").eq("member_id", memberId).limit(1)];
+  if (userId) {
+    checks.push(
+      admin.from("messages").select("id").eq("sender_id", userId).limit(1),
+      admin.from("group_messages").select("id").eq("sender_id", userId).limit(1),
+      admin.from("member_support_messages").select("id").eq("sender_user_id", userId).limit(1),
+      admin.from("message_reactions").select("id").eq("user_id", userId).limit(1),
+      admin.from("group_message_reactions").select("id").eq("user_id", userId).limit(1),
+    );
+  }
+  const results = await Promise.all(checks);
+  for (const r of results) {
+    if (r.error) throw new Error(r.error.message);
+    if (r.data?.length) return true;
+  }
+  return false;
+}
 
 /* ---------- list / read ---------- */
 
