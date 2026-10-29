@@ -5,7 +5,8 @@ import { ArrowLeft, ChevronDown, ChevronRight, Flame, Scale } from "lucide-react
 import { supabase } from "@/integrations/supabase/client";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarPhoto } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useBadgeCatalog, useMyAchievements, usePublicAchievements, type AchievementMetrics } from "@/lib/athlete-achievements";
 import { AchievementCelebrations, MyAchievementsRow, PublicAchievements } from "@/components/portal/achievements-card";
@@ -470,7 +471,7 @@ function FinalStandings({ onOpenAthlete }: { onOpenAthlete: (id: string) => void
 function RankAvatar({ row, size }: { row: { display_name: string; avatar_url: string | null }; size: string }) {
   return (
     <Avatar className={cn(size, "shrink-0 border border-border")}>
-      {row.avatar_url && <AvatarImage src={row.avatar_url} alt={row.display_name} />}
+      <AvatarPhoto src={row.avatar_url} alt={row.display_name} />
       <AvatarFallback className="text-[11px] font-bold">{(row.display_name || "?").slice(0, 1).toUpperCase()}</AvatarFallback>
     </Avatar>
   );

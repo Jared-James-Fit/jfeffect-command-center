@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { AvatarImage } from "@/components/ui/avatar";
 
 // Module-level signed URL cache so list views with many avatars don't refetch.
 const cache = new Map<string, { url: string; expiresAt: number }>();
@@ -24,6 +25,42 @@ async function resolveAvatarUrl(value: string | null | undefined): Promise<strin
   })();
   inflight.set(value, p);
   return p;
+}
+
+/** A URL to show right away (a link as is, or a signed one still cached), else null. */
+function readyAvatarUrl(src: string | null | undefined): string | null {
+  if (!src) return null;
+  if (/^https?:\/\//i.test(src) || src.startsWith("data:")) return src;
+  const hit = cache.get(src);
+  return hit && hit.expiresAt > Date.now() ? hit.url : null;
+}
+
+/** A photo's URL to show: a path in `avatars` signed (and cached), a link as is. */
+export function useAvatarSrc(src: string | null | undefined): string | null {
+  const [url, setUrl] = useState<string | null>(() => readyAvatarUrl(src));
+  useEffect(() => {
+    let cancelled = false;
+    const ready = readyAvatarUrl(src);
+    setUrl(ready);
+    if (ready || !src) return;
+    resolveAvatarUrl(src).then((u) => {
+      if (!cancelled) setUrl(u);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  return url;
+}
+
+/**
+ * The photo inside a ui/avatar `<Avatar>` (its `AvatarFallback` shows until it
+ * loads or when there's none). Photos are stored as paths in the private
+ * `avatars` bucket, so a raw `<AvatarImage src={path}>` never loads.
+ */
+export function AvatarPhoto({ src, alt }: { src: string | null | undefined; alt: string }) {
+  const url = useAvatarSrc(src);
+  return url ? <AvatarImage src={url} alt={alt} /> : null;
 }
 
 function getInitials(name?: string | null): string {

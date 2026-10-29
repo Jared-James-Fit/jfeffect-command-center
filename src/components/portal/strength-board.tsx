@@ -8,7 +8,8 @@ import { useAuth } from "@/lib/auth";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarPhoto } from "@/components/user-avatar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CoachTag } from "@/components/portal/coach-tag";
 import { ATHLETE_SEX_KEYS, SexChoice } from "@/components/athlete-sex";
@@ -94,7 +95,7 @@ const MEDAL = ["text-amber-400", "text-slate-300", "text-orange-400"];
 function LifterAvatar({ row, size }: { row: StrengthRow; size: string }) {
   return (
     <Avatar className={cn(size, "border border-border")}>
-      {row.avatar_url && <AvatarImage src={row.avatar_url} alt={row.display_name} />}
+      <AvatarPhoto src={row.avatar_url} alt={row.display_name} />
       <AvatarFallback className="text-xs font-bold">{row.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
     </Avatar>
   );
@@ -766,7 +767,7 @@ function NotRankedYet({ people }: { people: UnrankedPerson[] }) {
           <li key={p.key} className={cn("flex items-center gap-3 px-3 py-2", p.is_me && "bg-primary/5")}>
             <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground/50">–</span>
             <Avatar className="h-8 w-8 shrink-0 border border-border opacity-80">
-              {p.avatar_url && <AvatarImage src={p.avatar_url} alt={p.display_name} />}
+              <AvatarPhoto src={p.avatar_url} alt={p.display_name} />
               <AvatarFallback className="text-xs font-bold">{p.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
