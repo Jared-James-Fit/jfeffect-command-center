@@ -25,7 +25,8 @@ const COMMON_LIFTS = [
   "Front Squat", "Tempo Squat", "Deficit Deadlift", "Overhead Press",
 ];
 
-export function ClientMaxesPanel({ clientId }: { clientId: string }) {
+/** `embedded`: inside the Training tab's Maxes sheet (the sheet has the title). */
+export function ClientMaxesPanel({ clientId, embedded = false }: { clientId: string; embedded?: boolean }) {
   const qc = useQueryClient();
   const { unit: clientUnit } = useClientWeightUnit(clientId);
   const [editing, setEditing] = useState<Partial<ClientMaxRow> | null>(null);
@@ -61,18 +62,23 @@ export function ClientMaxesPanel({ clientId }: { clientId: string }) {
     }
   };
 
+  const Wrapper = embedded ? "div" : Card;
   return (
-    <Card className="border-border bg-card p-6 md:col-span-3">
+    <Wrapper className={embedded ? "" : "border-border bg-card p-6 md:col-span-3"}>
       <div className="mb-4 flex items-center justify-between gap-2">
-        <div>
-          <h3 className="flex items-center gap-2 text-lg font-bold">
-            <Dumbbell className="h-4 w-4" /> Exercise Maxes
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            1RM &amp; training maxes used by the Program Builder for % calculations.
-          </p>
-        </div>
-        <Button size="sm" onClick={openNew}>
+        {embedded ? (
+          <p className="text-xs text-muted-foreground">The program builder works out % loads from these.</p>
+        ) : (
+          <div>
+            <h3 className="flex items-center gap-2 text-lg font-bold">
+              <Dumbbell className="h-4 w-4" /> Exercise Maxes
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              1RM &amp; training maxes used by the Program Builder for % calculations.
+            </p>
+          </div>
+        )}
+        <Button size="sm" className="shrink-0" onClick={openNew}>
           <Plus className="mr-1 h-4 w-4" /> Add max
         </Button>
       </div>
@@ -106,7 +112,7 @@ export function ClientMaxesPanel({ clientId }: { clientId: string }) {
         onClose={() => setEditing(null)}
         onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["pl-client-maxes", clientId] }); }}
       />
-    </Card>
+    </Wrapper>
   );
 }
 

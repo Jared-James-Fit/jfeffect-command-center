@@ -62,7 +62,7 @@ function statusTone(s: string) {
   }
 }
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   return (
     <Badge variant="outline" className={cn("text-[10px] shrink-0", statusTone(status))}>
       {STATUS_LABEL[status as keyof typeof STATUS_LABEL] ?? status}
@@ -603,7 +603,7 @@ const DIALOG_CLASS =
   "max-h-[100dvh] w-full gap-3 overflow-y-auto sm:max-w-lg " +
   "pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 
-function EndBlockEarlyDialog({
+export function EndBlockEarlyDialog({
   block, blocks, open, onOpenChange, onDone,
 }: {
   block: ScheduleBlock;
@@ -751,7 +751,7 @@ function EndBlockEarlyDialog({
   );
 }
 
-function ChangeBlockDatesDialog({
+export function ChangeBlockDatesDialog({
   block, open, onOpenChange, onDone,
 }: {
   block: ScheduleBlock;
@@ -841,8 +841,8 @@ function ChangeBlockDatesDialog({
   );
 }
 
-function AddNextBlockDialog({
-  open, onOpenChange, blocks, current, onDone, onAssignLibrary,
+export function AddNextBlockDialog({
+  open, onOpenChange, blocks, current, onDone, onAssignLibrary, initialBlockId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -852,12 +852,16 @@ function AddNextBlockDialog({
   current: ScheduleBlock | null;
   onDone: () => void;
   onAssignLibrary: () => void;
+  /** Pre-picks this block (the Training tab's Schedule on a draft). */
+  initialBlockId?: string | null;
 }) {
   const setSchedule = useServerFn(setBlockScheduleFn);
   const candidates = blocks.filter(
     (b) => b.id !== current?.id && (b.status_derived === "Draft" || b.status_derived === "Upcoming"),
   );
-  const [blockId, setBlockId] = useState(candidates[0]?.id ?? "");
+  const [blockId, setBlockId] = useState(
+    (initialBlockId && candidates.some((b) => b.id === initialBlockId) ? initialBlockId : null) ?? candidates[0]?.id ?? "",
+  );
   const [start, setStart] = useState(suggestedNextStart(current));
   const [busy, setBusy] = useState(false);
 

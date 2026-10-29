@@ -20,7 +20,7 @@ export type ScheduleDay = {
   schedule_locked: boolean | null; week_id: string;
 };
 export type ScheduleWeek = { id: string; week_index: number; block_id: string };
-export type ScheduleBlock = { id: string; name: string | null; start_date: string | null; end_date: string | null };
+export type ScheduleBlock = { id: string; name: string | null; start_date: string | null; end_date: string | null; status?: string | null };
 export type ScheduleCompletion = {
   day_id: string;
   completed_at: string | null;
@@ -284,13 +284,20 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       .slice(0, 30);
   }, [chips]);
 
-  const unscheduled = useMemo(
-    () =>
-      days
-        .filter((d) => !d.scheduled_date && !daysWithInstance.has(d.id))
-        .sort((a, b) => a.day_index - b.day_index),
-    [days, daysWithInstance],
-  );
+  // Workouts still waiting for a date: never one already done, or one in a
+  // block that's over (it would only put an old workout back on the calendar).
+  const unscheduled = useMemo(() => {
+    const todayIso = format(new Date(), "yyyy-MM-dd");
+    const done = new Set(completions.filter((c) => c.completed_at).map((c) => c.day_id));
+    return days
+      .filter((d) => {
+        if (d.scheduled_date || daysWithInstance.has(d.id) || done.has(d.id)) return false;
+        const blk = blockMap.get(weekMap.get(d.week_id)?.block_id ?? "");
+        if (!blk) return true;
+        return blk.status !== "Completed" && !(blk.end_date && blk.end_date < todayIso);
+      })
+      .sort((a, b) => a.day_index - b.day_index);
+  }, [days, daysWithInstance, completions, blockMap, weekMap]);
 
   const handleDragEnd = (e: DragEndEvent) => {
     setDragId(null);

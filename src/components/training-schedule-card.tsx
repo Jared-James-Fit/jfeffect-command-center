@@ -42,9 +42,11 @@ type Props = {
   embedded?: boolean;
   /** Called once a save lands or Cancel is tapped (the sheet closes). */
   onDone?: () => void;
+  /** The coach is setting them (the client's Training tab): asked about the athlete, not "you". */
+  coach?: boolean;
 };
 
-export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false, embedded = false, onDone }: Props) {
+export function TrainingScheduleCard({ client, editable = true, compact = false, defaultEditing = false, embedded = false, onDone, coach = false }: Props) {
   const qc = useQueryClient();
   const reschedule = useServerFn(rescheduleFromCommittedDays);
   const saveSchedule = useServerFn(saveCommittedSchedule);
@@ -194,7 +196,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
       ) : (
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">How many days per week are you committed to training? *</Label>
+            <Label className="text-xs">{coach ? "Days a week *" : "How many days per week are you committed to training? *"}</Label>
             <Select value={committedFreq ? String(committedFreq) : ""} onValueChange={(v) => setCommittedFreq(Number(v))}>
               <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Select frequency" /></SelectTrigger>
               <SelectContent>
@@ -204,7 +206,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
           </div>
           <div>
             <DayPicker
-              label={`What days are you committing to train? *${targetCount ? ` (pick ${targetCount})` : ""}`}
+              label={`${coach ? "Which days? *" : "What days are you committing to train? *"}${targetCount ? ` (pick ${targetCount})` : ""}`}
               selected={committedDays}
               onToggle={(d) => toggle(committedDays, setCommittedDays, d)}
             />
