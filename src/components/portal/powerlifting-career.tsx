@@ -6,7 +6,8 @@ import { Ban, Check, ExternalLink, History, Landmark, Loader2, RefreshCw } from 
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarPhoto } from "@/components/user-avatar";
 import { useWeightUnit } from "@/lib/use-weight-unit";
 import type { WeightUnit } from "@/lib/weight-lifted";
 import { formatLoad } from "@/lib/strength-board";
@@ -194,7 +195,7 @@ export function PowerliftingCareer({ athleteId }: { athleteId: string }) {
       <div className="rounded-2xl border bg-gradient-to-br from-amber-400/10 via-transparent to-transparent p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-14 w-14 border">
-            {c.athlete.avatar_url && <AvatarImage src={c.athlete.avatar_url} alt={c.athlete.display_name} />}
+            <AvatarPhoto src={c.athlete.avatar_url} alt={c.athlete.display_name} />
             <AvatarFallback className="text-lg font-black">{c.athlete.display_name.slice(0, 1)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
