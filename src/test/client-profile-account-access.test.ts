@@ -25,11 +25,12 @@ describe("client profile shell cleanup", () => {
     expect(SHELL.slice(tabsIdx, navIdx)).not.toContain("<Card");
   });
 
-  it("keeps header actions (Message, POV, More) and Assign Program in Training", () => {
+  it("keeps header actions (Message, POV, More) and one Training tab (program, schedule, setup, notes)", () => {
     expect(SHELL).toContain("EmbeddedIdentityHeader");
     expect(SHELL).toContain("POV");
     expect(SHELL).toContain("moreMenu");
-    expect(SHELL).toContain("<TrainingProgramHub");
+    expect(SHELL).toContain("<ClientTrainingTab");
+    expect(SHELL).not.toMatch(/<TrainingPhasesPanel|<ImportantDatesPanel|<AssignedProgramsCard|<TrainingProgramHub/);
   });
 
   it("surfaces Account & Access inside Summary without duplicating last sign-in", () => {

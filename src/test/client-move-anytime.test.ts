@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -18,7 +18,7 @@ describe("clients can move their own workouts any time", () => {
   });
   it("the coach's 'lock schedule editing' switch and the client's locked banner are gone", () => {
     expect(bulk).not.toContain("export const setScheduleLock");
-    expect(read("src/components/schedule/CoachOverridePanel.tsx")).not.toMatch(/Lock client schedule editing|setScheduleLock|<Switch/);
+    expect(existsSync("src/components/schedule/CoachOverridePanel.tsx")).toBe(false);
     expect(read("src/components/schedule/ScheduleManagerShell.tsx")).not.toContain("Your coach has locked schedule editing");
   });
   it("changing training days moves hand-placed workouts too, and never says 'locked'", () => {

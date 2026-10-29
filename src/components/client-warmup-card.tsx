@@ -9,7 +9,8 @@ import { WarmupPicker, WARMUP_PRIORITY_NOTE, type WarmupMode } from "@/component
 
 const sb = supabase as any;
 
-export function ClientWarmupCard({ clientId }: { clientId: string }) {
+/** `embedded`: inside the Training tab's Warm-up sheet (the sheet has the title). */
+export function ClientWarmupCard({ clientId, embedded = false, onSaved }: { clientId: string; embedded?: boolean; onSaved?: () => void }) {
   const qc = useQueryClient();
   const { data: client } = useQuery({
     queryKey: ["client-warmup", clientId],
@@ -44,15 +45,19 @@ export function ClientWarmupCard({ clientId }: { clientId: string }) {
     else {
       toast.success("Warm-up saved");
       qc.invalidateQueries({ queryKey: ["client-warmup", clientId] });
+      onSaved?.();
     }
   };
 
+  const Wrapper = embedded ? "div" : Card;
   return (
-    <Card className="border-border bg-card p-6 space-y-3">
-      <div className="flex items-center gap-2">
-        <Flame className="h-4 w-4 text-orange-500" />
-        <h3 className="font-bold">Warm-Up Protocol</h3>
-      </div>
+    <Wrapper className={embedded ? "space-y-3" : "border-border bg-card p-6 space-y-3"}>
+      {!embedded && (
+        <div className="flex items-center gap-2">
+          <Flame className="h-4 w-4 text-orange-500" />
+          <h3 className="font-bold">Warm-Up Protocol</h3>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">
         Client-level warm-up overrides block, day, and exercise defaults for this client.
       </p>
@@ -66,10 +71,10 @@ export function ClientWarmupCard({ clientId }: { clientId: string }) {
       />
       <p className="text-[11px] text-muted-foreground">{WARMUP_PRIORITY_NOTE}</p>
       <div className="flex justify-end">
-        <Button size="sm" onClick={save} disabled={saving || (mode === "custom" && !protocolId)}>
+        <Button size="sm" className="min-h-[40px]" onClick={save} disabled={saving || (mode === "custom" && !protocolId)}>
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>
-    </Card>
+    </Wrapper>
   );
 }

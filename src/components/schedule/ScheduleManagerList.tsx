@@ -130,9 +130,11 @@ export function buildScheduleManagerRows(opts: {
       continue;
     }
     const legacyDate: string | null = day.scheduled_date ?? null;
-    if (legacyDate) scheduledCount += 1;
-    else missingCount += 1;
     const completion = legacyCompletionByDay.get(day.id) ?? null;
+    const status = rowStatus({ completion, date: legacyDate, todayISO });
+    if (legacyDate) scheduledCount += 1;
+    // A workout already done (or started) with no date isn't one to place.
+    else if (status === "missing") missingCount += 1;
     rows.push({
       key: `day:${day.id}`,
       dayId: day.id,
@@ -140,7 +142,7 @@ export function buildScheduleManagerRows(opts: {
       blockId: "",
       weekId: day.week_id,
       date: legacyDate,
-      status: rowStatus({ completion, date: legacyDate, todayISO }),
+      status,
       day,
       copyIndex: null,
     });

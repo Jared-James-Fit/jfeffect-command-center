@@ -31,10 +31,15 @@ export type CalendarWorkout = {
   completed: boolean;
 };
 
+/** A program day with no date on the calendar yet. */
+export type UnscheduledWorkout = { dayId: string; blockId: string; weekIndex: number; title: string };
+
 export type ClientTrainingSchedule = {
   blocks: ScheduleBlock[];
   preps: any[];
   workouts: CalendarWorkout[];
+  /** program days with no date (instance or legacy), in program order */
+  unscheduled: UnscheduledWorkout[];
   /** prep_id of the assignment the client is actually training under */
   currentAssignmentId: string | null;
   /** next scheduled, incomplete workout of the current block */
@@ -60,6 +65,7 @@ export function useClientTrainingSchedule(clientId: string) {
         blocks,
         preps: preps ?? [],
         workouts: [],
+        unscheduled: [],
         currentAssignmentId: currentAssignmentId(blocks),
         nextWorkout: null,
         evidence: new Map(),
@@ -97,11 +103,22 @@ export function useClientTrainingSchedule(clientId: string) {
       for (const inst of (instances ?? []) as any[]) instanceByDay.set(inst.source_day_id, inst);
 
       const workouts: CalendarWorkout[] = [];
+      const unscheduled: UnscheduledWorkout[] = [];
       for (const d of days) {
         const inst = instanceByDay.get(d.id);
         const date = inst?.scheduled_date ?? d.scheduled_date ?? null;
-        if (!date) continue;
         const bId = d.pl_weeks?.block_id as string;
+        if (!date) {
+          if (!completedDays.has(d.id)) {
+            unscheduled.push({
+              dayId: d.id,
+              blockId: bId,
+              weekIndex: Number(d.pl_weeks?.week_index ?? 0),
+              title: d.title ?? `Day ${d.day_index ?? ""}`.trim(),
+            });
+          }
+          continue;
+        }
         workouts.push({
           id: inst?.id ?? d.id,
           dayId: d.id,
@@ -114,6 +131,7 @@ export function useClientTrainingSchedule(clientId: string) {
         });
       }
       workouts.sort((a, b) => a.date.localeCompare(b.date));
+      unscheduled.sort((a, b) => a.weekIndex - b.weekIndex);
 
       // Calendar evidence feeds the status derivation — never the other way round.
       const evidence = buildEvidence(workouts, today);
@@ -128,6 +146,7 @@ export function useClientTrainingSchedule(clientId: string) {
         blocks,
         preps: preps ?? [],
         workouts,
+        unscheduled,
         currentAssignmentId: currentAssignmentId(blocks),
         nextWorkout,
         evidence,

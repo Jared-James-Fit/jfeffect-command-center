@@ -31,7 +31,6 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
-import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { omitScheduleFields } from "@/lib/committed-schedule-realign";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
@@ -77,10 +76,6 @@ const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string
     const m = await loader();
     return { default: (m as any)[name] as ComponentType<any> };
   });
-const ScheduleManagerShell = lazyDefault(() => import("@/components/schedule/ScheduleManagerShell"), "ScheduleManagerShell");
-const TrainingPhasesPanel = lazyDefault(() => import("@/components/training-phases-panel"), "TrainingPhasesPanel");
-const ClientMaxesPanel = lazyDefault(() => import("@/components/client-maxes-panel"), "ClientMaxesPanel");
-const ImportantDatesPanel = lazyDefault(() => import("@/components/important-dates-panel"), "ImportantDatesPanel");
 const ClientSessionsPanel = lazyDefault(() => import("@/components/sessions/client-sessions-panel"), "ClientSessionsPanel");
 const NutritionRequestPanel = lazyDefault(() => import("@/components/nutrition/NutritionRequestPanel"), "NutritionRequestPanel");
 const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
@@ -89,18 +84,15 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
-const ClientNotesCard = lazyDefault(() => import("@/components/messages/client-notes-log"), "ClientNotesCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
 const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sales-table"), "ClientSalesTable");
 const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
 const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
-const AssignedProgramsCard = lazyDefault(() => import("@/components/assigned-programs-card"), "AssignedProgramsCard");
-const ClientWarmupCard = lazyDefault(() => import("@/components/client-warmup-card"), "ClientWarmupCard");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
-const TrainingProgramHub = lazyDefault(() => import("@/components/clients/training-program-hub"), "TrainingProgramHub");
+const ClientTrainingTab = lazyDefault(() => import("@/components/clients/client-training-tab"), "ClientTrainingTab");
 
 function TabFallback() {
   return <div className="md:col-span-3 p-6 text-sm text-muted-foreground">Loading…</div>;
@@ -775,25 +767,13 @@ export function ClientProfileWorkspace({
         </TabsContent>
 
         {/*
-          Calendar-first Training tab: the schedule the coach acts on every day
-          comes first, the program hub sits under it, and lower-frequency setup
-          panels moved to the "Program setup" tab so nothing was removed.
+          Training: only what builds, assigns and adjusts their training:
+          the program (roadmap, alerts, Add), the schedule, athlete setup
+          (training days, maxes, warm-up) and their workout notes.
         */}
         <TabsContent value="training" className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
           <Suspense fallback={<TabFallback />}>
-            <ScheduleManagerShell clientId={id} mode="coach" />
-            <TrainingProgramHub clientId={id} clientName={form?.full_name ?? null} />
-            {/* Program setup (was its own tab) */}
-            <div className={WORKSPACE_GRID_CLASS}>
-              <div className="md:col-span-3"><TrainingScheduleCard key={JSON.stringify([data?.committed_training_days, data?.committed_training_frequency])} client={data ?? form} /></div>
-              <AssignedProgramsCard clientId={id} mode="admin" />
-              <TrainingPhasesPanel clientId={id} />
-              <ImportantDatesPanel clientId={id} />
-              {/* pain, review notes and exercise notes they've sent (the same log as Notes in their chat) */}
-              <ClientNotesCard clientId={id} name={form.full_name ?? null} />
-              <ClientMaxesPanel clientId={id} />
-              <ClientWarmupCard clientId={id} />
-            </div>
+            <ClientTrainingTab clientId={id} client={(data ?? form) as any} />
           </Suspense>
         </TabsContent>
 

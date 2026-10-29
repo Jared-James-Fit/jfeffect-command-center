@@ -62,7 +62,8 @@ describe("the card and where the log lives", () => {
   });
   it("Notes in the coach's chat header, and the same log on the profile (Training)", () => {
     expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain("<ClientNotesSheet clientId={notesOpen ? selected.id : null}");
-    expect(read("src/route-pages/_authenticated/admin/clients.$id.tsx")).toContain("<ClientNotesCard clientId={id}");
+    expect(read("src/route-pages/_authenticated/admin/clients.$id.tsx")).toContain("<ClientTrainingTab clientId={id}");
+    expect(read("src/components/clients/client-training-tab.tsx")).toContain("<ClientNotesCard clientId={clientId} name={name} />");
   });
 });
 
