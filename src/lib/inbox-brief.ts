@@ -5,6 +5,7 @@
 
 import { OVERDUE_HOURS } from "@/lib/inbox-waiting";
 import type { ClientRequests } from "@/lib/inbox-requests";
+import { KIND_LABEL, classifyKind, type RequestKind } from "@/lib/form-requests";
 import { painLine, type WorkoutNotePain } from "@/lib/workout-notes";
 
 /** Photos, videos and pain notes older than this stop waiting (a stale backlog isn't a to-do). */
@@ -25,8 +26,9 @@ export type InboxMsg = {
 
 export type MediaWaiting = { messageId: string; at: string; photos: number; videos: number; files: number };
 export type PainWaiting = { messageId: string; at: string; line: string };
-export type ReviewItem = { kind: "form" | "checkin"; title: string; at: string };
-export type RequestItem = { title: string; since: string };
+/** `formKind`: weekly check-in, Nutrition Update or another form (the Forms tracker's own split, `classifyKind`). */
+export type ReviewItem = { kind: "form" | "checkin"; title: string; at: string; formKind?: RequestKind };
+export type RequestItem = { title: string; since: string; formKind?: RequestKind };
 
 export type ClientSignals = {
   needsReply: { since: string | null; detail: string | null } | null;
@@ -144,7 +146,7 @@ export function reviewItemsByClient(
       ? CHECKIN_TITLE[r.type ?? ""] ?? "Check-in"
       : (r.type && titles.get(r.type)) || "Form";
     const list = out.get(r.client_id) ?? [];
-    list.push({ kind: r.kind, title, at: r.submitted_at });
+    list.push({ kind: r.kind, title, at: r.submitted_at, formKind: classifyKind(r.kind, r.kind === "form" ? r.type ?? null : null) });
     out.set(r.client_id, list);
   }
   for (const list of out.values()) list.sort((a, b) => b.at.localeCompare(a.at));
@@ -156,7 +158,9 @@ export function splitRequests(req: ClientRequests | undefined, now = Date.now())
   const overdue: RequestItem[] = [];
   const pending: RequestItem[] = [];
   for (const p of req?.pending ?? []) {
-    const item = { title: p.title, since: p.since };
+    // keys are "checkin:<task type>" / "form:<form id>" (deriveRequests)
+    const formKind = classifyKind(p.kind, p.kind === "form" ? p.key.replace(/^form:/, "") : null);
+    const item = { title: p.title, since: p.since, formKind };
     (now - Date.parse(p.since) >= OVERDUE_HOURS * 3_600_000 ? overdue : pending).push(item);
   }
   return { overdue, pending };
@@ -164,11 +168,26 @@ export function splitRequests(req: ClientRequests | undefined, now = Date.now())
 
 /* ------------------------------ filters ------------------------------ */
 
-export type SignalFilter = "To Review" | "Overdue" | "Media" | "Pain" | "Sessions";
+export type SignalFilter = "Weekly" | "Nutrition" | "To Review" | "Overdue" | "Media" | "Pain" | "Sessions";
+
+/** The two forms with a filter of their own: everything waiting on one, filled in (to review) or overdue. */
+export const FORM_FILTER_KIND = { Weekly: "weekly_checkin", Nutrition: "nutrition_update" } as const satisfies Record<string, RequestKind>;
+
+/** One form's state for a client: filled in and waiting on the coach, or sent and overdue (or both, for two sends). */
+export function formKindWaiting(s: ClientSignals | undefined, kind: RequestKind): { review: ReviewItem | null; overdue: RequestItem | null } {
+  return {
+    review: s?.toReview.find((r) => r.formKind === kind) ?? null,
+    overdue: s?.overdue.find((o) => o.formKind === kind) ?? null,
+  };
+}
 
 export function matchesSignal(s: ClientSignals | undefined, f: SignalFilter): boolean {
   if (!s) return false;
   switch (f) {
+    case "Weekly": case "Nutrition": {
+      const w = formKindWaiting(s, FORM_FILTER_KIND[f]);
+      return !!(w.review || w.overdue);
+    }
     case "To Review": return s.toReview.length > 0;
     case "Overdue": return s.overdue.length > 0;
     case "Media": return s.media.length > 0;
@@ -218,6 +237,22 @@ export function signalTags(
   if (extra.followUp) tags.push({ key: "followup", label: "Follow up", tone: "warn" });
   if (extra.priority && extra.priority !== "Normal") tags.push({ key: "priority", label: extra.priority, tone: "warn" });
   return tags;
+}
+
+/**
+ * In a form's own filter, the row's line leads with that form: "Weekly
+ * check-in to review" (blue) or "Weekly check-in overdue" (amber), then the
+ * rest of the row's line without the general form tags it replaces.
+ */
+export function formKindTags(tags: SignalTag[], s: ClientSignals | undefined, kind: RequestKind): SignalTag[] {
+  const w = formKindWaiting(s, kind);
+  const label = KIND_LABEL[kind];
+  const lead: SignalTag | null = w.review
+    ? { key: "review", label: `${label} to review`, tone: "info" }
+    : w.overdue
+      ? { key: "overdue", label: `${label} overdue`, tone: "warn" }
+      : null;
+  return lead ? [lead, ...tags.filter((t) => t.key !== lead.key)] : tags;
 }
 
 /** How many things a client has waiting on the coach (the Brief's count). */

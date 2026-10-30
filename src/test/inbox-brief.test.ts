@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  briefWaitingLines, formTitles, matchesSignal, mediaWaitingByClient, painWaitingByClient, reviewItemsByClient,
+  briefWaitingLines, formKindTags, formTitles, matchesSignal, mediaWaitingByClient, painWaitingByClient, reviewItemsByClient,
   signalTags, splitRequests, waitingCount, type ClientSignals, type InboxMsg,
 } from "@/lib/inbox-brief";
+import { NUTRITION_REQUEST_FORM_ID } from "@/lib/nutrition-ai-prompts";
 
 const now = Date.parse("2026-10-27T18:00:00Z");
 const ago = (h: number) => new Date(now - h * 3_600_000).toISOString();
@@ -121,10 +122,53 @@ describe("one reading for filters, row tags and the Brief", () => {
   });
 });
 
+describe("weekly check-ins and Nutrition Updates have their own filters", () => {
+  const items = reviewItemsByClient([
+    { client_id: "c1", kind: "checkin", type: "weekly_checkin", submitted_at: ago(20) },
+    { client_id: "c2", kind: "form", type: NUTRITION_REQUEST_FORM_ID, submitted_at: ago(5) },
+    { client_id: "c3", kind: "form", type: "intake", submitted_at: ago(4) },
+  ], new Map());
+  const split = splitRequests({
+    pending: [
+      { key: "checkin:weekly_checkin", kind: "checkin", title: "Weekly check-in", since: ago(72) },
+      { key: `form:${NUTRITION_REQUEST_FORM_ID}`, kind: "form", title: "Nutrition Update Request", since: ago(50) },
+      { key: "form:intake", kind: "form", title: "Intake", since: ago(60) },
+    ],
+    toReview: 0, missed: 0,
+  }, now);
+  const base: ClientSignals = { needsReply: null, toReview: [], overdue: [], pending: [], missed: 0, media: [], pain: [], sessionRequests: 0 };
+
+  it("tags every form to review and every overdue one with its kind (the Forms tracker's split)", () => {
+    expect(items.get("c1")?.[0].formKind).toBe("weekly_checkin");
+    expect(items.get("c2")?.[0].formKind).toBe("nutrition_update");
+    expect(items.get("c3")?.[0].formKind).toBe("form");
+    expect(split.overdue.map((o) => o.formKind)).toEqual(["weekly_checkin", "nutrition_update", "form"]);
+  });
+
+  it("a chat is in a form's filter when that form is filled in to review or overdue, never for another form", () => {
+    const weeklyToReview = { ...base, toReview: items.get("c1")! };
+    const nutritionOverdue = { ...base, overdue: split.overdue.filter((o) => o.formKind === "nutrition_update") };
+    const otherForm = { ...base, toReview: items.get("c3")!, overdue: split.overdue.filter((o) => o.formKind === "form") };
+    expect(matchesSignal(weeklyToReview, "Weekly")).toBe(true);
+    expect(matchesSignal(weeklyToReview, "Nutrition")).toBe(false);
+    expect(matchesSignal(nutritionOverdue, "Nutrition")).toBe(true);
+    expect(matchesSignal(nutritionOverdue, "Weekly")).toBe(false);
+    expect(matchesSignal(otherForm, "Weekly") || matchesSignal(otherForm, "Nutrition")).toBe(false);
+    expect(matchesSignal(otherForm, "To Review")).toBe(true);
+  });
+
+  it("in a form's filter the row's line leads with that form", () => {
+    const s = { ...base, needsReply: { since: ago(2), detail: null }, toReview: [...items.get("c1")!, ...items.get("c2")!] };
+    expect(formKindTags(signalTags(s), s, "weekly_checkin").map((t) => t.label)).toEqual(["Weekly check-in to review", "Needs reply"]);
+    const late = { ...base, overdue: split.overdue };
+    expect(formKindTags(signalTags(late), late, "nutrition_update").map((t) => [t.label, t.tone])).toEqual([["Nutrition update overdue", "warn"]]);
+  });
+});
+
 describe("the coach inbox", () => {
   const route = read("src/route-pages/_authenticated/admin/messages.tsx");
   it("filters only what the rows can't already show: forms first, every chip but Inbox only while something's in it", () => {
-    expect(route).toContain('const FILTERS = ["Inbox", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;');
+    expect(route).toContain('const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;');
     for (const gone of ['"Needs Response"', 'case "Unread"', '"Follow Up"', 'case "Priority"', '"Waiting on Client"', 'case "Done"']) expect(route).not.toContain(gone);
     expect(route).toContain('const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));');
     expect(route).toContain('FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f)');

@@ -45,7 +45,7 @@ import { useResyncOnResume, onRealtimeRejoin } from "@/hooks/use-resync-on-resum
 import { listenChannel } from "@/lib/realtime-channel";
 import { latestOf, newestFirst } from "@/lib/recency";
 import {
-  formTitles, matchesSignal, mediaWaitingByClient, painWaitingByClient, reviewItemsByClient, signalTags, splitRequests, waitingCount,
+  FORM_FILTER_KIND, formKindTags, formKindWaiting, formTitles, matchesSignal, mediaWaitingByClient, painWaitingByClient, reviewItemsByClient, signalTags, splitRequests, waitingCount,
   type ClientSignals, type SignalFilter, type SignalTag,
 } from "@/lib/inbox-brief";
 import { ClientBriefSheet } from "@/components/messages/client-brief-sheet";
@@ -134,14 +134,17 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
 }
 
 // Only what the inbox can't already show at a glance: forms first (the coach
-// works his forms queue first), then pain, media and session requests.
+// works his forms queue first: the weekly check-ins and Nutrition Updates
+// each on their own, then every form), then pain, media and session requests.
 // Needs reply, unread, follow up and priority already show on every row (bold
 // name, blue dot, the line under it) and on the Messages tab badge, so they
 // aren't filters. Inbox is "everything"; Archived is the way back to archived
 // chats. Every chip but Inbox shows only while something's in it.
-const FILTERS = ["Inbox", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;
+const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;
 type Filter = typeof FILTERS[number];
 const FILTER_LABEL: Partial<Record<Filter, string>> = {
+  Weekly: "Weekly check-ins",
+  Nutrition: "Nutrition updates",
   "To Review": "Forms to review",
   Overdue: "Overdue forms",
   Pain: "Pain flagged",
@@ -155,7 +158,7 @@ const ONLY_WHEN_ANY = new Set<Filter>(FILTERS.filter((f) => f !== "Inbox"));
  * Archived doesn't, so a number only ever means "this is waiting on you".
  */
 const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info">> = {
-  "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info",
+  Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info",
 };
 const BADGE_STYLE = {
   urgent: "bg-red-500 text-white",
@@ -177,7 +180,7 @@ type FilterRow = {
 function inFilter(it: FilterRow, filter: Filter): boolean {
   const status = it.state?.status ?? "open";
   switch (filter) {
-    case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
+    case "Weekly": case "Nutrition": case "To Review": case "Overdue": case "Media": case "Pain": case "Sessions":
       return status !== "archived" && matchesSignal(it.signals, filter as SignalFilter);
     case "Archived": return status === "archived";
     default: return status !== "archived" && (it.workflow.state !== "done" || !!it.last || !!it.liftReview);
@@ -610,8 +613,28 @@ export function MessagesInbox({
         latestOf(a.last?.created_at, a.liftReview?.latestAt),
         latestOf(b.last?.created_at, b.liftReview?.latestAt),
       ));
+    // A form's own filter: each row's line leads with where that form stands.
+    if (filter === "Weekly" || filter === "Nutrition") {
+      const kind = FORM_FILTER_KIND[filter];
+      return items.map((it) => ({ ...it, tags: formKindTags(it.tags, it.signals, kind) }));
+    }
     return items;
   }, [allRows, search, filter]);
+
+  // The form filters' strip: how many filled in (to review) and how many overdue.
+  const formFilterSummary = useMemo(() => {
+    if (filter !== "Weekly" && filter !== "Nutrition") return null;
+    const kind = FORM_FILTER_KIND[filter];
+    let review = 0;
+    let overdue = 0;
+    for (const it of allRows) {
+      if ((it.state?.status ?? "open") === "archived") continue;
+      const w = formKindWaiting(it.signals, kind);
+      if (w.review) review += 1;
+      if (w.overdue) overdue += 1;
+    }
+    return { kind, review, overdue };
+  }, [allRows, filter]);
 
   // Live badge counts: the very rule the list filters by, over the same rows.
   const filterCounts = useMemo(() => {
@@ -836,6 +859,21 @@ export function MessagesInbox({
               );
             })}
           </div>
+          {formFilterSummary && (
+            <Link
+              to="/admin/forms"
+              search={{ tab: "requests", kind: formFilterSummary.kind } as any}
+              data-form-filter-summary
+              className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-[11px] font-semibold text-foreground hover:bg-secondary"
+            >
+              <span className="min-w-0 truncate">
+                <span className={formFilterSummary.review ? "text-sky-700 dark:text-sky-400" : "text-muted-foreground"}>{formFilterSummary.review} to review</span>
+                <span className="text-muted-foreground"> · </span>
+                <span className={formFilterSummary.overdue ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}>{formFilterSummary.overdue} overdue</span>
+              </span>
+              <span className="shrink-0">Every week in the tracker ›</span>
+            </Link>
+          )}
           {filter === "Overdue" && (
             <Link
               to="/admin/forms"
