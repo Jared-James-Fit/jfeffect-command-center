@@ -1,7 +1,9 @@
 /**
  * Cleo's lookups: the tools she calls mid-answer to read a client's file,
  * training log, body weight, records, program, check-ins, nutrition, coach
- * thread, purchases and the calendar.
+ * thread, purchases and the calendar; the business's documents (agreements,
+ * policies, FAQs); and anything else in the app (find_data / read_data,
+ * cleo-data-access.ts).
  *
  * Every read goes through the caller's own client (the finance login's is its
  * read-only admin view), so RLS decides what comes back, exactly as in the
@@ -21,6 +23,11 @@ import {
   bodyweightSummary, dayIn, formatSessions, groupSessions, matchesExercise, mergeBodyweight,
   type BodyweightEntry, type LoggedSet,
 } from "@/lib/cleo-data";
+import {
+  MEMBER_CHAT_SCOPED, READ_MAX_ROWS, READ_OPS, checkRead, describeTable, findTables, formatRows, visibleCatalog,
+  type CatalogTable, type ReadRequest,
+} from "@/lib/cleo-data-access";
+import { coachingAgreementDoc, readDocuments, textSections, type CleoDoc } from "@/lib/cleo-documents";
 
 const MAX_OUT = 14_000;
 const DAY = 86_400_000;
@@ -53,7 +60,66 @@ function answerText(v: unknown): string {
   return String(v).slice(0, 600);
 }
 
-type ToolCtx = { db: any; tz: string; today: string };
+/** `books`: the owner or the finance login, who may read the books and ledgers. */
+type ToolCtx = { db: any; tz: string; today: string; books?: boolean };
+
+// What exists is the same for every admin; reading still goes through each caller's own login.
+const CATALOG_TTL = 10 * 60_000;
+let catalogCache: { at: number; tables: CatalogTable[] } | null = null;
+
+async function loadCatalog(db: any): Promise<CatalogTable[]> {
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) return catalogCache.tables;
+  const { data, error } = await rpcRead(db, "cleo_data_catalog", {});
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data)) throw new Error("the data list is for admins only");
+  catalogCache = { at: Date.now(), tables: data as CatalogTable[] };
+  return catalogCache.tables;
+}
+
+/** The Coaching Agreement (from the code), every legal document's current version (Admin → Legal) and the coach FAQs. */
+async function loadDocuments(db: any): Promise<CleoDoc[]> {
+  const { AGREEMENT_CONTENT } = await import("@/lib/coaching-agreement/content");
+  const [docsRes, faqRes] = await Promise.all([
+    db.from("legal_documents").select("id, slug, title, audience, archived, current_version_id").eq("archived", false).limit(50),
+    db.from("coach_faqs").select("category, subcategory, question, answer, active, visible_coaching, visible_membership, visible_everyone").eq("active", true).order("sort_order").limit(200),
+  ]);
+  const legal = rows<any>(docsRes as any, "legal documents");
+  const ids = legal.map((d) => d.id);
+  const versions = ids.length
+    ? rows<any>(await db.from("legal_document_versions").select("id, document_id, version_number, status, body, effective_date, published_at").in("document_id", ids).limit(500), "versions")
+    : [];
+  const out: CleoDoc[] = [coachingAgreementDoc(AGREEMENT_CONTENT as any)];
+  for (const d of legal) {
+    const mine = versions.filter((v) => v.document_id === d.id);
+    const cur = mine.find((v) => v.id === d.current_version_id) ?? mine.filter((v) => v.status === "published").sort((a, b) => b.version_number - a.version_number)[0];
+    if (!cur?.body) continue;
+    const newer = mine.filter((v) => v.version_number > cur.version_number && v.status !== "published").sort((a, b) => b.version_number - a.version_number)[0];
+    out.push({
+      key: d.slug,
+      title: d.title,
+      version: `v${cur.version_number} ${cur.status}${cur.effective_date ? `, effective ${cur.effective_date}` : ""}${newer ? ` (a ${newer.status} v${newer.version_number} isn't published yet)` : ""}`,
+      about: `Admin → Legal; for ${String(d.audience ?? "everyone").replace(/_/g, " ")}`,
+      sections: textSections(cur.body),
+    });
+  }
+  const faqs = rows<any>(faqRes as any, "FAQs");
+  if (faqs.length) {
+    out.push({
+      key: "coach-faqs",
+      title: "Coach FAQs",
+      version: `${faqs.length} answers`,
+      about: "the coach's saved answers to common questions",
+      sections: faqs.map((f) => {
+        const shown = [f.visible_coaching && "coaching clients", f.visible_membership && "members", f.visible_everyone && "everyone"].filter(Boolean);
+        return {
+          title: `${[f.category, f.subcategory].filter(Boolean).join(" / ") || "FAQ"}: ${String(f.question ?? "").trim()}`,
+          text: `${String(f.answer ?? "").trim()}${shown.length ? `\n(Shown to: ${shown.join(", ")})` : ""}`,
+        };
+      }),
+    });
+  }
+  return out;
+}
 
 async function clientRow(db: any, id: string): Promise<any> {
   const { data, error } = await db.from("clients").select("*").eq("id", id).maybeSingle();
@@ -83,8 +149,74 @@ function safe<A>(name: string, fn: (args: A) => Promise<string>) {
 
 export function cleoReadTools(ctx: ToolCtx) {
   const { db, tz, today } = ctx;
+  const books = !!ctx.books;
 
   return {
+    business_documents: tool({
+      description:
+        "The business's own documents, word for word: the Coaching Agreement every coaching client signs (billing, cancelling, ending coaching, refunds, fixed terms, freezes, sessions, conduct...), the Terms of Service, Privacy Policy, Cancellation & Refund Policy, JF Membership Agreement, Recurring Billing Disclosure, and the coach FAQs. Use for any question about what a policy, agreement or FAQ says. Pass `search` with the topic (e.g. 'ending coaching cancel notice') to get the sections that answer it; `document` to read one (e.g. 'coaching-agreement'); nothing to list them.",
+      inputSchema: z.object({
+        document: z.string().max(80).optional().describe("A document's key or title, e.g. coaching-agreement, terms-of-service, privacy-policy, cancellation-and-refund-policy, membership-agreement, coach-faqs."),
+        search: z.string().max(200).optional().describe("The topic in a few words."),
+      }),
+      execute: safe("the documents", async ({ document, search }) => readDocuments(await loadDocuments(db), { document, search, max: MAX_OUT - 400 })),
+    }),
+
+    find_data: tool({
+      description:
+        "Find where anything in the app is kept when no other lookup covers it: offers and prices, discount codes, coaching applications and leads, forms and their questions, tasks, broadcasts, community posts and comments, agreements sent, booking types and hours, settings, the exercise library, program templates, payments, app members and more. Give a few words (e.g. 'coaching applications', 'discount codes', 'offer price'); returns the matching tables with their columns, to read with read_data.",
+      inputSchema: z.object({ query: z.string().trim().min(2).max(120) }),
+      execute: safe("the data list", async ({ query }) => {
+        const catalog = visibleCatalog(await loadCatalog(db), { books });
+        const exact = catalog.find((t) => t.t === query.trim());
+        const found = exact ? [exact] : findTables(catalog, query, 10);
+        if (!found.length) return `No table matches "${query}". Try other words (what it's called in the app, or what it holds).`;
+        return [`Tables matching "${query}" (read them with read_data):`, ...found.map(describeTable)].join("\n");
+      }),
+    }),
+
+    read_data: tool({
+      description: `Read rows from any table find_data listed, as the person asking (only what they can see in the app). Pick the columns you need, filter (eq, neq, gt, gte, lt, lte, ilike with % wildcards, in with values, is_null, not_null), order and limit (max ${READ_MAX_ROWS}). The answer says how many rows match in total, so a small limit also counts. Look up ids (a client's, an offer's) first, then filter by them.`,
+      inputSchema: z.object({
+        table: z.string().trim().min(2).max(80),
+        columns: z.array(z.string().max(80)).max(40).optional().describe("Columns to return; leave out for all."),
+        filters: z
+          .array(
+            z.object({
+              column: z.string().max(80),
+              op: z.enum(READ_OPS),
+              value: z.string().max(300).optional().describe("For eq, neq, gt, gte, lt, lte, ilike."),
+              values: z.array(z.string().max(300)).max(200).optional().describe("For in."),
+            }),
+          )
+          .max(10)
+          .optional(),
+        order: z.object({ column: z.string().max(80), ascending: z.boolean().optional() }).optional(),
+        limit: z.number().int().min(1).max(READ_MAX_ROWS).optional(),
+      }),
+      execute: safe("that data", async (req: ReadRequest) => {
+        const catalog = visibleCatalog(await loadCatalog(db), { books });
+        const { table, columns, limit } = checkRead(catalog, req);
+        let q = db.from(table.t).select(columns.join(","), { count: "exact" });
+        for (const f of req.filters ?? []) {
+          if (f.op === "in") q = q.in(f.column, f.values ?? []);
+          else if (f.op === "is_null") q = q.is(f.column, null);
+          else if (f.op === "not_null") q = q.not(f.column, "is", null);
+          else q = q[f.op](f.column, f.value);
+        }
+        const groupKey = MEMBER_CHAT_SCOPED[table.t];
+        if (groupKey) {
+          // coach-run groups only: members' own 1:1s and crews are theirs
+          const groups = rows<any>(await db.from("chat_groups").select("id").or("kind.is.null,kind.eq.group").limit(1000), "groups");
+          q = q.in(groupKey, groups.length ? groups.map((g) => g.id) : ["00000000-0000-0000-0000-000000000000"]);
+        }
+        if (req.order) q = q.order(req.order.column, { ascending: req.order.ascending ?? false, nullsFirst: false });
+        const res = await q.limit(limit);
+        if (res.error) throw new Error(res.error.message);
+        return formatRows(res.data ?? [], { table: table.t, total: res.count ?? null, limit });
+      }),
+    }),
+
     client_file: tool({
       description:
         "A client's file: status, plan, dates, goals, injuries, coach notes, training/nutrition/lifestyle notes, body weight goal, lifting unit, maxes on file and recent pinned notes. Use first when asked about a specific client.",
