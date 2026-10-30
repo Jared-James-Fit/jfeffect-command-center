@@ -111,7 +111,8 @@ function Tile({ label, value, sub, tone, active, onClick }: {
   );
 }
 
-export function RequestsTab() {
+/** `initialKind`: open on one form (the inbox's Weekly check-ins / Nutrition updates strip links here). */
+export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {}) {
   const qc = useQueryClient();
   const list = useServerFn(listFormTrackerFn);
   const del = useServerFn(deleteFormRequestsFn);
@@ -128,14 +129,22 @@ export function RequestsTab() {
   const openRows = useMemo(() => rows.filter((r) => r.state === "open"), [rows]);
   const overdueOpen = useMemo(() => openRows.filter((r) => trackedStatus(r, now) === "overdue").length, [openRows, now]);
 
-  // Default: the most recent week anything was sent.
+  // Default: the most recent week anything was sent (of that form, when
+  // opened on one: Nutrition Updates go out monthly, not every week).
   const [scope, setScope] = useState<Scope | null>(null);
   useEffect(() => {
-    if (scope === null && weeks.length) setScope(weeks[0].week);
-  }, [scope, weeks]);
+    if (scope !== null || !weeks.length) return;
+    const latestOfKind = initialKind
+      ? rows.filter((r) => r.kind === initialKind).reduce<string | null>((w, r) => {
+          const wk = weekOf(r.sentAt);
+          return !w || wk > w ? wk : w;
+        }, null)
+      : null;
+    setScope(latestOfKind ?? weeks[0].week);
+  }, [scope, weeks, rows, initialKind]);
   const activeScope: Scope = scope ?? weeks[0]?.week ?? "open";
 
-  const [kind, setKind] = useState<RequestKind | "all">("all");
+  const [kind, setKind] = useState<RequestKind | "all">(initialKind ?? "all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());

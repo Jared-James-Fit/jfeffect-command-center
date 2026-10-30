@@ -35,7 +35,7 @@ const Route = __getRouteApi("/_authenticated/admin/forms");
 
 
 export function FormsWorkspacePage() {
-  const { tab, sub } = Route.useSearch();
+  const { tab, sub, kind } = Route.useSearch();
   const navigate = useNavigate();
 
   // Persist last tab so direct /admin/forms hits remember the choice, while
@@ -82,7 +82,7 @@ export function FormsWorkspacePage() {
       <div>
         {tab === "website-forms" && <WebsiteFormsPanel />}
         {tab === "reviews" && <ReviewsTab />}
-        {tab === "requests" && <RequestsTab />}
+        {tab === "requests" && <RequestsTab key={kind ?? "all"} initialKind={kind} />}
         {tab === "builder" && <BuilderRouter sub={sub} />}
         {tab === "submissions" && <SubmissionsRouter sub={sub} />}
         {tab === "applications" && <ApplicationsInbox embedded />}
