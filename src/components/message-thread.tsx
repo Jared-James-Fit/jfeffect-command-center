@@ -906,12 +906,16 @@ export function MessageThread({
 
   const [olderMessages, setOlderMessages] = useState<Message[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  // Set once a page of older messages comes back short: that's the first
+  // message ever sent, so "Load earlier messages" gives way to the start.
+  const [reachedStart, setReachedStart] = useState(false);
   // Reset the older-messages buffer when switching conversations or roles.
   // Composer media also resets: an upload picked for one client must never
   // ride along into the next conversation.
   const resetUploads = uploads.reset;
   useEffect(() => {
     setOlderMessages([]);
+    setReachedStart(false);
     setReply(null);
     setFlashMessageId(null);
     setAttachments([]);
@@ -949,7 +953,9 @@ export function MessageThread({
     });
   }, [olderMessages, messages]);
 
-  const canLoadOlder = messages.length >= 25;
+  const OLDER_PAGE = 50;
+  // The first page is the latest 25; fewer means it's the whole history.
+  const canLoadOlder = !reachedStart && messages.length >= 25;
 
   const messageById = useMemo(() => new Map(allMessages.map((x) => [x.id, x])), [allMessages]);
 
@@ -1042,7 +1048,9 @@ export function MessageThread({
 
   const loadOlder = async () => {
     if (loadingOlder) return;
-    const earliest = allMessages[0];
+    // The oldest message actually loaded, not the oldest shown (the timeline
+    // hides superseded form cards, which would page from the wrong place).
+    const earliest = olderMessages[0] ?? messages[0];
     if (!earliest) return;
     // Capture current scroll geometry so we can restore the exact viewport
     // once older messages have been prepended (prevents jump-to-top).
@@ -1051,9 +1059,10 @@ export function MessageThread({
     const prevTop = el?.scrollTop ?? 0;
     setLoadingOlder(true);
     try {
-      const older = await listOlderMessages(clientId, earliest.created_at, 50, {
+      const older = await listOlderMessages(clientId, earliest.created_at, OLDER_PAGE, {
         includeInternal: role === "admin",
       });
+      if (older.length < OLDER_PAGE) setReachedStart(true);
       if (older.length) {
         setOlderMessages((prev) => {
           const seen = new Set([...prev, ...messages].map((m) => m.id));
@@ -1958,6 +1967,14 @@ export function MessageThread({
         onTouchEnd={onSwipeTouchEnd}
         onTouchCancel={onSwipeTouchEnd}
       >
+        {!canLoadOlder && visibleMessages.length > 0 && allMessages[0] && (
+          // Nothing older exists: say so, instead of a button that loads nothing.
+          <div className="flex justify-center pb-2 pt-1" data-thread-start>
+            <span className="rounded-full bg-secondary/60 px-3 py-1 text-[11px] text-muted-foreground">
+              Start of conversation · {format(parseISO(allMessages[0].created_at), "MMM d, yyyy")}
+            </span>
+          </div>
+        )}
         {canLoadOlder && (
           <div className="flex justify-center pb-1">
             <Button
