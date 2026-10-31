@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Plus, ExternalLink, Copy, MoreHorizontal, Pencil, Archive, Trash2, ArchiveRestore, FileEdit, Users, X } from "lucide-react";
+import { Plus, ExternalLink, Copy, MoreHorizontal, Pencil, Archive, Trash2, ArchiveRestore, FileEdit, Users, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { listForms, archiveForm, deleteForm, listFormAssignments, assignFormToClient, unassignFormFromClient, type FormLink } from "@/lib/form-links";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +27,8 @@ import { ActionButton } from "@/components/action-button";
 import { WEBSITE_FORMS, websiteFormUrl } from "@/lib/website-forms";
 import { getWebsiteFormStats } from "@/lib/coaching-applications.functions";
 import { useServerFn } from "@tanstack/react-start";
-import { TABS, LAST_TAB_KEY, type TabKey } from "@/route-pages/_authenticated/admin/forms-tabs";
+import { TABS, LAST_TAB_KEY, isMoreTab, type TabKey } from "@/route-pages/_authenticated/admin/forms-tabs";
+import { SubmissionsInbox } from "@/components/forms/submissions-inbox";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/forms");
 
@@ -48,17 +49,19 @@ export function FormsWorkspacePage() {
     navigate({ to: "/admin/forms", search: { tab: next }, replace: false });
   };
 
-  const visibleTabs = TABS.filter((t) => !("hidden" in t && (t as any).hidden));
+  const mainTabs = TABS.filter((t) => !("hidden" in t && t.hidden) && !("more" in t && t.more));
+  const moreTabs = TABS.filter((t) => "more" in t && t.more);
+  const moreActive = isMoreTab(tab) ? moreTabs.find((t) => t.value === tab) : undefined;
 
   return (
     <>
       <PageHeader
         title="Forms"
-        subtitle="One place for forms, submissions, AI-assisted reviews, applications, agreements, and integrations."
+        subtitle="What clients send in, what you've asked for, and the forms themselves."
       />
       <div className="border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
-          {visibleTabs.map((t) => {
+          {mainTabs.map((t) => {
             const active = t.value === tab;
             return (
               <button
@@ -77,14 +80,35 @@ export function FormsWorkspacePage() {
               </button>
             );
           })}
+          {/* Everything used now and then: one tap away, out of the way. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition-colors",
+                  moreActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {moreActive ? moreActive.label : "More"} <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {moreTabs.map((t) => (
+                <DropdownMenuItem key={t.value} onClick={() => setTab(t.value)} className={cn(t.value === tab && "font-semibold")}>
+                  {t.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <div>
-        {tab === "website-forms" && <WebsiteFormsPanel />}
+        {tab === "submissions" && <SubmissionsInbox />}
         {tab === "reviews" && <ReviewsTab />}
+        {tab === "fillout" && <FilloutSubmissionsPage embedded />}
         {tab === "requests" && <RequestsTab key={kind ?? "all"} initialKind={kind} />}
         {tab === "builder" && <BuilderRouter sub={sub} />}
-        {tab === "submissions" && <SubmissionsRouter sub={sub} />}
         {tab === "applications" && <ApplicationsInbox embedded />}
         {tab === "agreements" && <AgreementsAdminPage embedded />}
         {tab === "integrations" && <IntegrationsPanel />}
@@ -99,48 +123,30 @@ export function FormsWorkspacePage() {
  * Builder tab sub-router. `sub` query param selects between native forms,
  * document forms, and check-in style forms — keeping legacy deep-links alive.
  */
+/**
+ * Forms tab: the forms you send (native and external, in one list with when
+ * each was last used), document links and the website's public forms.
+ */
 function BuilderRouter({ sub }: { sub?: string }) {
   const navigate = useNavigate();
-  const current: "native" | "document" | "check-ins" =
-    sub === "document-forms" ? "document" : sub === "check-ins" ? "check-ins" : "native";
-  const setSub = (next: "native" | "document" | "check-ins") => {
+  const current: "app" | "document" | "website" =
+    sub === "document-forms" ? "document" : sub === "website" ? "website" : "app";
+  const setSub = (next: "app" | "document" | "website") => {
     navigate({
       to: "/admin/forms",
-      search: { tab: "builder", sub: next === "native" ? undefined : (next === "document" ? "document-forms" : "check-ins") },
+      search: { tab: "builder", sub: next === "app" ? undefined : next === "document" ? "document-forms" : "website" },
     });
   };
   return (
     <>
-      <div className="border-b border-border bg-background/30 px-2 md:px-4 py-2 flex gap-1">
-        <SubTab active={current === "native"} onClick={() => setSub("native")} label="Native forms" />
-        <SubTab active={current === "check-ins"} onClick={() => setSub("check-ins")} label="Check-ins" />
-        <SubTab active={current === "document"} onClick={() => setSub("document")} label="Document forms" />
+      <div className="flex gap-1 border-b border-border bg-background/30 px-2 py-2 md:px-4">
+        <SubTab active={current === "app"} onClick={() => setSub("app")} label="App forms" />
+        <SubTab active={current === "document"} onClick={() => setSub("document")} label="Document links" />
+        <SubTab active={current === "website"} onClick={() => setSub("website")} label="Website forms" />
       </div>
-      {/* AdminNativeForms hosts native + check-in style forms in its existing builder */}
-      {(current === "native" || current === "check-ins") && <AdminNativeForms embedded />}
+      {current === "app" && <AdminNativeForms embedded />}
       {current === "document" && <DocumentFormsPanel embedded />}
-    </>
-  );
-}
-
-function SubmissionsRouter({ sub }: { sub?: string }) {
-  const navigate = useNavigate();
-  const current: "all" | "fillout" =
-    sub === "fillout" ? "fillout" : "all";
-  const setSub = (next: "all" | "fillout") => {
-    navigate({
-      to: "/admin/forms",
-      search: { tab: "submissions", sub: next === "all" ? undefined : "fillout" },
-    });
-  };
-  return (
-    <>
-      <div className="border-b border-border bg-background/30 px-2 md:px-4 py-2 flex gap-1">
-        <SubTab active={current === "all"} onClick={() => setSub("all")} label="All sources" />
-        <SubTab active={current === "fillout"} onClick={() => setSub("fillout")} label="Fillout only" />
-      </div>
-      {current === "all" && <ReviewsTab />}
-      {current === "fillout" && <FilloutSubmissionsPage embedded />}
+      {current === "website" && <WebsiteFormsPanel />}
     </>
   );
 }
@@ -168,10 +174,10 @@ function IntegrationsPanel() {
         <p className="text-xs text-muted-foreground mb-3">
           Fillout submissions are ingested through the webhook at
           <code className="mx-1 rounded bg-muted px-1 py-0.5 text-[11px]">/api/public/hooks/fillout</code>.
-          Unmatched submissions appear in <strong>Submissions → Fillout only</strong>.
+          Unmatched submissions appear in <strong>More → Fillout inbox</strong>.
         </p>
         <a
-          href="/admin/forms?tab=submissions&sub=fillout"
+          href="/admin/forms?tab=fillout"
           className="text-xs font-semibold text-primary hover:underline"
         >
           Open Fillout submissions →
@@ -251,6 +257,9 @@ export function DocumentFormsPanel({ embedded = false }: { embedded?: boolean } 
                       {f.archived && <Badge variant="outline" className="text-xs">Archived</Badge>}
                     </div>
                     {f.description && <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>}
+                    {f.archived && f.archived_reason === "unused" && (
+                      <p className="mt-1 text-xs text-muted-foreground">Archived on its own: not used in 2 months. Restore to use it again.</p>
+                    )}
                     <div className="mt-1 text-xs text-muted-foreground truncate">{f.url}</div>
                   </div>
                   <div className="flex items-center gap-1.5">

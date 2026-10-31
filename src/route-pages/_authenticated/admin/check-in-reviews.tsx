@@ -34,9 +34,9 @@ import { getClientIntel } from "@/lib/coach-intel";
 export function CheckInReviewsRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    // Canonical destination is /admin/forms?tab=reviews — the unified
-    // AI-assisted review queue replaces the standalone Check-In Reviews page.
-    navigate({ to: "/admin/forms", search: { tab: "reviews" } as any, replace: true });
+    // Canonical destination is Forms → Submissions: every check-in and form
+    // clients send, with what's waiting on review.
+    navigate({ to: "/admin/forms", search: { tab: "submissions" } as any, replace: true });
   }, [navigate]);
   return null;
 }

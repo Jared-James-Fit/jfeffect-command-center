@@ -25,6 +25,8 @@ export type FormLink = {
   active: boolean;
   archived: boolean;
   archived_at: string | null;
+  /** "unused" = archived by archive_unused_forms; "manual" = by the coach. */
+  archived_reason?: string | null;
   notes_admin: string | null;
   created_at: string;
   updated_at: string;
@@ -50,7 +52,7 @@ export async function upsertForm(input: Partial<FormLink> & { id?: string }) {
 
 export async function archiveForm(id: string, archived: boolean) {
   const { error } = await supabase.from("forms" as any).update({
-    archived, archived_at: archived ? new Date().toISOString() : null,
+    archived, archived_at: archived ? new Date().toISOString() : null, archived_reason: archived ? "manual" : null,
   }).eq("id", id);
   if (error) throw error;
 }
