@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { eventNamesClient, looksLikeTraining, planImport, type ImportClient, type ImportEvent } from "@/lib/gcal-session-import";
 
@@ -68,5 +69,34 @@ describe("what each appointment becomes", () => {
   it("leaves out a session the title says was missed", () => {
     const missed = [ev("m", "PT Session - Nicolas (❌missed - Jared was asleep)", "2026-07-03T07:00:00-05:00", "2026-07-03T08:00:00-05:00")];
     expect(planImport(missed, [nico], { now }).skipped.map((s) => s.reason)).toEqual(["cancelled"]);
+  });
+});
+
+describe("an imported session is the default booking type's", () => {
+  const sql = readFileSync("supabase/migrations/20270110090000_session_place_from_booking_type.sql", "utf8");
+  const server = readFileSync("src/lib/gcal-session-import.server.ts", "utf8");
+
+  it("links the in-person credit type and books an upcoming one at its place, never Google's old text", () => {
+    expect(sql).toMatch(/WHERE b\.is_active AND b\.uses_credit AND b\.location_mode = 'in_person'\s+ORDER BY b\.sort_order, b\.created_at/);
+    expect(sql).toMatch(/WHEN _completed THEN COALESCE\(NULLIF\(_location, ''\), NULLIF\(v_card\.location, ''\), 'Iron Image Gym'\)/);
+    expect(sql).toMatch(/ELSE COALESCE\(NULLIF\(v_card\.location, ''\), NULLIF\(_location, ''\), 'Iron Image Gym'\)/);
+    expect(sql).toContain("COALESCE(v_card.session_type, 'Personal Training Session'), v_card.custom_type, v_card.id,");
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.import_calendar_pt_session\([^)]*\) TO service_role/);
+  });
+
+  it("writes that place onto an upcoming one's Google event, and leaves a past one as Google has it", () => {
+    expect(server).toMatch(/r\.result === "created" && !c\.past && r\.location && r\.location !== c\.location \? r\.location : null/);
+    expect(server).toContain("...(location ? { location } : {}),");
+  });
+
+  it("a booked session's Google event is confirmed, so one deleted in Google comes back", async () => {
+    const { sessionEventBody } = await import("@/lib/pt-session-gcal.server");
+    const body = sessionEventBody({
+      id: "s1", client_id: "c1", title: "1:1 Training", session_type: "Personal Training Session",
+      starts_at: "2026-11-07T16:00:00Z", ends_at: "2026-11-07T17:00:00Z", timezone: "America/Winnipeg",
+      location: "800 Vaughan Ave Unit 404, Selkirk, Manitoba R1A 4R4, Canada", notes: null, status: "Scheduled",
+      updated_at: "", google_event_id: "e1", google_calendar_id: "cal", gcal_attempts: 0,
+    }, "Nicolas Galli");
+    expect(body).toMatchObject({ status: "confirmed", summary: "Nicolas Galli · 1:1 Training", location: "800 Vaughan Ave Unit 404, Selkirk, Manitoba R1A 4R4, Canada" });
   });
 });
