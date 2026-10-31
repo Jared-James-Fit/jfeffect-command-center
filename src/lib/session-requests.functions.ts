@@ -223,7 +223,7 @@ async function sessionFromRequest(db: any, req: SessionRequest, client: any, sta
       base = card
         ? {
             title: card.name, session_type: card.session_type, custom_type: card.custom_type,
-            location: client?.default_session_location || card.location || "Iron Image Gym", booking_card_id: card.id,
+            location: card.location || client?.default_session_location || "Iron Image Gym", booking_card_id: card.id,
             visible_to_client: card.visible_to_client, reminders_enabled: card.reminders_enabled,
             client_visible_notes: card.client_visible_notes, send_confirmation_email: card.send_confirmation_email, uses_credit: true,
           }

@@ -90,6 +90,10 @@ export function sessionEventBody(s: SessionRow, clientName: string | null) {
     start: { dateTime: s.starts_at, timeZone: tz },
     end: { dateTime: s.ends_at, timeZone: tz },
     transparency: "opaque",
+    // A booked session is on the calendar: an event deleted in Google (a cancelled
+    // instance of a repeating one still answers an update with 200) comes back
+    // instead of the update "succeeding" on something nobody can see.
+    status: "confirmed",
     extendedProperties: { private: { [GCAL_PT_SESSION_KEY]: s.id } },
   };
 }

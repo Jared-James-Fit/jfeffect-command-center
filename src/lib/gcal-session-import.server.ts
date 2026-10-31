@@ -134,14 +134,21 @@ export async function previewGoogleImport(
   };
 }
 
-/** Mark the Google event as this session's copy (title, time and notes untouched). */
-async function tagEvent(calendarId: string, eventId: string, sessionId: string): Promise<boolean> {
+/**
+ * Mark the Google event as this session's copy (title, time and notes untouched).
+ * An upcoming one also takes the session's place (its booking type's), so Google
+ * and the app say the same gym.
+ */
+async function tagEvent(calendarId: string, eventId: string, sessionId: string, location?: string | null): Promise<boolean> {
   const res = await fetch(
     `${GATEWAY_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=none`,
     {
       method: "PATCH",
       headers: gatewayHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ extendedProperties: { private: { [GCAL_PT_SESSION_KEY]: sessionId } } }),
+      body: JSON.stringify({
+        ...(location ? { location } : {}),
+        extendedProperties: { private: { [GCAL_PT_SESSION_KEY]: sessionId } },
+      }),
     },
   );
   return res.ok;
@@ -165,13 +172,16 @@ export async function applyGoogleImport(admin: Admin, candidates: ImportCandidat
       _completed: c.past,
     });
     if (error) { out.errors.push(`${c.date} ${c.start} ${c.summary}: ${error.message}`); continue; }
-    const r = data as { id: string; result: string; took_over_tally?: boolean };
+    const r = data as { id: string; result: string; took_over_tally?: boolean; location?: string | null };
     if (r.result === "already_in_app") { out.alreadyInApp++; continue; }
     if (r.result === "linked") out.linked++;
     else out.created++;
     if (r.took_over_tally) out.tookOverHandCount++;
+    // A new upcoming session is at its booking type's place; Google says the same.
+    // A past one stays as Google has it (where it really was).
+    const place = r.result === "created" && !c.past && r.location && r.location !== c.location ? r.location : null;
     try {
-      if (await tagEvent(c.calendarId, c.eventId, r.id)) out.tagged++;
+      if (await tagEvent(c.calendarId, c.eventId, r.id, place)) out.tagged++;
       else out.errors.push(`${c.date} ${c.summary}: couldn't tag the Google event`);
     } catch (e: any) {
       out.errors.push(`${c.date} ${c.summary}: ${e?.message ?? "couldn't tag the Google event"}`);
