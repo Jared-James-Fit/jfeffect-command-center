@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Copy, GripVertical, FileEdit, ChevronUp, ChevronDown, Archive, ExternalLink, Search, Eye, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listForms, upsertForm, duplicateForm, archiveForm,
+  listForms, listFormLastUsed, upsertForm, duplicateForm, archiveForm,
   listQuestions, upsertQuestion, deleteQuestion, reorderQuestions,
   listAssignments,
   NF_QUESTION_TYPES, NF_QUESTION_TYPE_LABEL,
@@ -27,6 +27,7 @@ import {
 import { deleteNativeForms, replaceNativeFormAssignments, updateNativeFormAccess } from "@/lib/native-forms.functions";
 import { syncFilloutForms } from "@/lib/fillout-sync.functions";
 import { useBulkSelection } from "@/hooks/use-bulk-selection";
+import { FORM_UNUSED_DAYS } from "@/lib/form-submissions";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { ActionButton } from "@/components/action-button";
 import { NativeFormPreviewDialog } from "@/components/forms/native-form-preview";
@@ -70,6 +71,12 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
   }
 
   const { data: forms = [] } = useQuery({ queryKey: ["nf-forms"], queryFn: () => listForms({ includeArchived: true }) });
+  const { data: lastUsed = new Map<string, string>() } = useQuery({ queryKey: ["nf-forms-last-used"], queryFn: listFormLastUsed, staleTime: 60_000 });
+  // Forms in use first, most recently used on top; archived ones folded away at the bottom.
+  const usedAt = (f: NfForm) => lastUsed.get(f.id) ?? f.created_at;
+  const liveForms = useMemo(() => forms.filter((f) => !f.archived).sort((a, b) => usedAt(b).localeCompare(usedAt(a))), [forms, lastUsed]);
+  const archivedForms = useMemo(() => forms.filter((f) => f.archived).sort((a, b) => (b.archived_at ?? b.updated_at).localeCompare(a.archived_at ?? a.updated_at)), [forms]);
+  const [showArchived, setShowArchived] = useState(false);
   const formSelection = useBulkSelection(useMemo(() => forms.map((form) => form.id), [forms]));
 
   async function deleteSelectedForms() {
@@ -154,18 +161,47 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             No forms yet. Create a Native form (built in-app) or an External form (Fillout, Typeform, Google Forms link).
           </Card>
         )}
-        {forms.map((f) => {
-          return (
-            <FormRow
-              key={f.id}
-              form={f}
-              selected={formSelection.isSelected(f.id)}
-              onSelect={(checked) => formSelection.setOne(f.id, checked)}
-              onEdit={() => { setEditTab("settings"); setEditing(f); }}
-              onSend={() => { setEditTab("shared"); setEditing(f); }}
-            />
-          );
-        })}
+        {liveForms.map((f) => (
+          <FormRow
+            key={f.id}
+            form={f}
+            lastUsedAt={lastUsed.get(f.id) ?? null}
+            selected={formSelection.isSelected(f.id)}
+            onSelect={(checked) => formSelection.setOne(f.id, checked)}
+            onEdit={() => { setEditTab("settings"); setEditing(f); }}
+            onSend={() => { setEditTab("shared"); setEditing(f); }}
+          />
+        ))}
+        {archivedForms.length > 0 && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-left text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              aria-expanded={showArchived}
+            >
+              <span>Archived · {archivedForms.length}</span>
+              <span className="text-[11px] font-semibold normal-case tracking-normal">
+                {showArchived ? "Hide" : `Show · forms not used in ${FORM_UNUSED_DAYS / 30} months archive themselves`}
+              </span>
+            </button>
+            {showArchived && (
+              <div className="space-y-3">
+                {archivedForms.map((f) => (
+                  <FormRow
+                    key={f.id}
+                    form={f}
+                    lastUsedAt={lastUsed.get(f.id) ?? null}
+                    selected={formSelection.isSelected(f.id)}
+                    onSelect={(checked) => formSelection.setOne(f.id, checked)}
+                    onEdit={() => { setEditTab("settings"); setEditing(f); }}
+                    onSend={() => { setEditTab("shared"); setEditing(f); }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {editing && (
@@ -201,12 +237,14 @@ function NewFormDialog({ open, onPick, onClose }: { open: boolean; onPick: (k: N
 
 function FormRow({
   form,
+  lastUsedAt,
   selected,
   onSelect,
   onEdit,
   onSend,
 }: {
   form: NfForm;
+  lastUsedAt: string | null;
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onEdit: () => void;
@@ -248,8 +286,12 @@ function FormRow({
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {form.kind === "native" ? `${questions.length} questions` : (form.external_url ? "External link set" : "No URL yet")}
-            {" · "}{assignedCount}{" · "}{form.recurrence}
+            {" · "}{assignedCount}{form.recurrence !== "none" ? ` · ${form.recurrence}` : ""}
+            {" · "}{lastUsedAt ? `Last used ${new Date(lastUsedAt).toLocaleDateString([], { month: "short", day: "numeric", year: new Date(lastUsedAt).getFullYear() === new Date().getFullYear() ? undefined : "numeric" })}` : "Never used"}
           </div>
+          {form.archived && form.archived_reason === "unused" && (
+            <div className="mt-1 text-xs text-muted-foreground">Archived on its own: not used in {FORM_UNUSED_DAYS / 30} months. Unarchive to use it again.</div>
+          )}
           {hasAudience && (form.archived || !form.active) && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div className="text-xs font-medium text-warning">
@@ -292,6 +334,7 @@ function FormRow({
           <Button variant="outline" size="sm" onClick={async () => {
             await archiveForm(form.id, !form.archived);
             qc.invalidateQueries({ queryKey: ["nf-forms"] });
+            qc.invalidateQueries({ queryKey: ["nf-forms-for-client"] });
           }}><Archive className="mr-1 h-4 w-4" /> {form.archived ? "Unarchive" : "Archive"}</Button>
         </div>
       </div>

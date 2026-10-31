@@ -48,6 +48,9 @@ export type NfForm = {
   recurrence_day: string | null;
   active: boolean;
   archived: boolean;
+  archived_at?: string | null;
+  /** "unused" = archived by archive_unused_forms (no submission, send or edit in 60 days); "manual" = by the coach. */
+  archived_reason?: string | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -199,8 +202,24 @@ export async function duplicateForm(formId: string) {
 }
 
 export async function archiveForm(id: string, archived: boolean) {
-  const { error } = await db.from("nf_forms").update({ archived, active: archived ? false : true }).eq("id", id);
+  const { error } = await db
+    .from("nf_forms")
+    .update({ archived, active: archived ? false : true, archived_at: archived ? new Date().toISOString() : null, archived_reason: archived ? "manual" : null })
+    .eq("id", id);
   if (error) throw error;
+}
+
+/**
+ * When each form was last used: its latest submission, send in chat,
+ * assignment or Fillout entry (nf_form_last_used, staff only). Forms never
+ * used are missing from the map.
+ */
+export async function listFormLastUsed(): Promise<Map<string, string>> {
+  const { data, error } = await (db as any).rpc("nf_form_last_used");
+  if (error) throw error;
+  return new Map(((data ?? []) as Array<{ form_id: string; last_used_at: string | null }>)
+    .filter((r) => r.last_used_at)
+    .map((r) => [r.form_id, r.last_used_at as string]));
 }
 
 export async function deleteForm(id: string) {
