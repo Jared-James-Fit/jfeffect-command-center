@@ -59,6 +59,8 @@ type GoogleOccurrenceLike = {
   status?: string | null;
   start?: GoogleWhen;
   originalStartTime?: GoogleWhen;
+  /** self = this calendar organizes the event (an invitation copy has self false). */
+  organizer?: { email?: string | null; self?: boolean | null } | null;
 };
 
 function whenKey(w: GoogleWhen): string | null {
@@ -79,23 +81,34 @@ export function googleOccurrenceKey(e: GoogleOccurrenceLike): string {
   return `${e.iCalUID || e.id}|${whenKey(e.originalStartTime) ?? whenKey(e.start) ?? ""}`;
 }
 
+/** The calendar's own event, not an invitation copy of it (which only changes on that calendar). */
+export function isOrganizerCopy(e: Pick<GoogleOccurrenceLike, "organizer">): boolean {
+  return e.organizer?.self !== false;
+}
+
 /**
  * Merge the event lists of several calendars (the app's calendar plus the
  * coach's main one). Drops cancelled and start-less rows, and shows an event
- * that sits on both calendars once, keeping the first calendar's copy.
+ * that sits on both calendars once: the organizer's copy when one calendar
+ * holds the event and another only an invitation to it (edits to an invitation
+ * copy never reach the event itself), else the first calendar's copy.
  */
 export function mergeGoogleCalendarLists<T extends GoogleOccurrenceLike>(
   lists: Array<{ id: string; items: T[] }>,
 ): Array<{ calendarId: string; event: T }> {
-  const seen = new Set<string>();
+  const at = new Map<string, number>();
   const out: Array<{ calendarId: string; event: T }> = [];
   for (const { id: calendarId, items } of lists) {
     for (const e of items) {
       if (e.status === "cancelled" || !(e.start?.dateTime || e.start?.date)) continue;
       const key = googleOccurrenceKey(e);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ calendarId, event: e });
+      const i = at.get(key);
+      if (i === undefined) {
+        at.set(key, out.length);
+        out.push({ calendarId, event: e });
+      } else if (!isOrganizerCopy(out[i].event) && isOrganizerCopy(e)) {
+        out[i] = { calendarId, event: e };
+      }
     }
   }
   return out;

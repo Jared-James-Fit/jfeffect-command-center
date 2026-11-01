@@ -8,6 +8,23 @@
 
 export const DEFAULT_TZ = "America/Winnipeg";
 
+/**
+ * Order two start times by the moment they happen. Never compare them as text:
+ * the app writes "…13:30:00.000Z" and Google "…10:00:00-05:00", so as text
+ * Google's 10 AM and 1:30 PM sort before an 8:30 AM session. Missing or
+ * unreadable times sort first.
+ */
+export function compareInstants(a: string | null | undefined, b: string | null | undefined): number {
+  const ms = (s: string | null | undefined) => {
+    if (!s) return -Infinity;
+    const t = Date.parse(s.length === 10 ? `${s}T00:00:00` : s);
+    return Number.isNaN(t) ? -Infinity : t;
+  };
+  const x = ms(a);
+  const y = ms(b);
+  return x === y ? 0 : x < y ? -1 : 1;
+}
+
 function safeTz(tz: string | null | undefined): string {
   if (!tz) return DEFAULT_TZ;
   try {

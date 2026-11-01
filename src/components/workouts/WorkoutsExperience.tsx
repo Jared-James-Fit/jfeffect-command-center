@@ -85,7 +85,7 @@ import { SessionDot, WeekStrip, statusDotClass } from "@/components/workouts/wee
 import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
-import { compactTimeRange } from "@/lib/schedule-time";
+import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
 import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
@@ -151,7 +151,7 @@ export function WorkoutsExperience({
       if (/cancel|reschedul/i.test(it.status ?? "")) continue;
       m.set(it.date, [...(m.get(it.date) ?? []), it]);
     }
-    for (const list of m.values()) list.sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
+    for (const list of m.values()) list.sort((a, b) => compareInstants(a.startsAt, b.startsAt));
     return m;
   }, [sessionItems]);
   const sessionDays = useMemo(() => new Set(sessionsByDate.keys()), [sessionsByDate]);

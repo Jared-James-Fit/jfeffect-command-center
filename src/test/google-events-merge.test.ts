@@ -99,3 +99,29 @@ describe("Calendar page loads Google for the months on screen", async () => {
     expect(new Date(w.timeMax)).toEqual(new Date(2026, 10, 1));
   });
 });
+
+describe("an event on the coach's calendar and an invitation to it on another", () => {
+  // Nicolas's repeating session: organized by the JF Effect calendar, with the coach's
+  // main calendar invited. Editing the invitation copy changes only that copy.
+  const original = {
+    id: "a2sih_20261101T150000Z",
+    iCalUID: "a2sih@google.com",
+    summary: "PT Session - Nicolas",
+    start: { dateTime: "2026-11-01T10:00:00-06:00" },
+    end: { dateTime: "2026-11-01T11:00:00-06:00" },
+    originalStartTime: { dateTime: "2026-11-01T10:00:00-06:00" },
+    organizer: { email: "jf@group.calendar.google.com", self: true },
+  };
+  const invite = { ...original, organizer: { email: "jf@group.calendar.google.com", self: false } };
+
+  it("keeps the organizer's copy whichever calendar is read first", () => {
+    for (const lists of [
+      [{ id: "primary", items: [invite] }, { id: "jf@group.calendar.google.com", items: [original] }],
+      [{ id: "jf@group.calendar.google.com", items: [original] }, { id: "primary", items: [invite] }],
+    ]) {
+      const merged = mergeGoogleCalendarLists(lists);
+      expect(merged).toHaveLength(1);
+      expect(merged[0].calendarId).toBe("jf@group.calendar.google.com");
+    }
+  });
+});

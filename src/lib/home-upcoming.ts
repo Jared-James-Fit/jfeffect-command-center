@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@/lib/calendar-sources";
+import { compareInstants } from "@/lib/schedule-time";
 
 /**
  * Client Home schedule summary.
@@ -107,7 +108,7 @@ function addDaysIso(day: string, n: number): string {
 /** Workouts lead the day (untimed), then everything by start time, all-day items before timed ones. */
 function agendaOrder(a: CalendarItem, b: CalendarItem): number {
   const rank = (i: CalendarItem) => (i.kind === "workout" ? 0 : i.startsAt ? 2 : 1);
-  return rank(a) - rank(b) || (a.startsAt ?? "").localeCompare(b.startsAt ?? "") || a.title.localeCompare(b.title);
+  return rank(a) - rank(b) || compareInstants(a.startsAt, b.startsAt) || a.title.localeCompare(b.title);
 }
 
 export function buildHomeAgenda(

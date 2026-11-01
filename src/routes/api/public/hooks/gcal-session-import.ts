@@ -4,9 +4,11 @@ import { createFileRoute } from "@tanstack/react-router";
  * Google Calendar → app sessions for one or more clients, run by the
  * database (x-hook-secret) for back-office imports; coaches use the Sessions
  * tab's "From Google Calendar". POST { from, to, clients: [{ id, terms? }],
- * apply?, eventIds? }: without apply it returns what would be imported (no
- * event details beyond title, day and time); with apply it imports them (or
- * only eventIds). See src/lib/gcal-session-import.server.ts.
+ * apply?, eventIds?, inspect? }: without apply it returns what would be imported
+ * (no event details beyond title, day and time); with apply it imports them (or
+ * only eventIds); with inspect it lists every copy of those clients' events on
+ * every calendar, unmerged, with its organizer and linked session (for telling
+ * an event from an invitation to it). See src/lib/gcal-session-import.server.ts.
  */
 export const Route = createFileRoute("/api/public/hooks/gcal-session-import")({
   server: {
@@ -21,9 +23,12 @@ export const Route = createFileRoute("/api/public/hooks/gcal-session-import")({
           return Response.json({ error: "from, to (yyyy-mm-dd) and clients are required" }, { status: 400 });
         }
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { previewGoogleImport, applyGoogleImport } = await import("@/lib/gcal-session-import.server");
+        const { previewGoogleImport, applyGoogleImport, inspectGoogleCopies } = await import("@/lib/gcal-session-import.server");
         try {
           const terms = Object.fromEntries(clients.map((c: any) => [c.id, Array.isArray(c.terms) ? c.terms.map(String) : []]));
+          if (body.inspect) {
+            return Response.json({ copies: await inspectGoogleCopies(supabaseAdmin as any, { clientIds: clients.map((c: any) => c.id), from: body.from, to: body.to, terms }) });
+          }
           const preview = await previewGoogleImport(supabaseAdmin as any, { clientIds: clients.map((c: any) => c.id), from: body.from, to: body.to, terms });
           if (!body.apply) return Response.json(preview);
           const only = Array.isArray(body.eventIds) ? new Set(body.eventIds.map(String)) : null;
