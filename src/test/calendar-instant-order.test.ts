@@ -39,3 +39,15 @@ describe("the Google sync writes to the event, never an invitation copy", () => 
     expect(src).toMatch(/c\.accessRole === "owner" \|\| c\.accessRole === "writer"/);
   });
 });
+
+describe("Google's rate limit is a wait, not a failed try", () => {
+  it("recognises the limit and holds the rest of the run", async () => {
+    const { isRateLimit } = await import("@/lib/pt-session-gcal.server");
+    expect(isRateLimit(new Error("Rate Limit Exceeded"))).toBe(true);
+    expect(isRateLimit(new Error("User Rate Limit Exceeded"))).toBe(true);
+    expect(isRateLimit(new Error("Google update failed (500)"))).toBe(false);
+    const src = readFileSync("src/lib/pt-session-gcal.server.ts", "utf8");
+    expect(src).toContain("await runPool(rows, 2, async (row) => {");
+    expect(src).toMatch(/gcal_attempts: limited\s+\? Number\(row\.gcal_attempts \?\? 0\)/);
+  });
+});

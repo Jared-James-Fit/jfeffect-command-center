@@ -134,6 +134,11 @@ async function organizerCalendarOf(
   return own.ok ? (org.email as string) : null;
 }
 
+/** Google's "slow down" (403 rateLimitExceeded / 429): a wait, not a failure. */
+export function isRateLimit(e: unknown): boolean {
+  return /rate ?limit|quota exceeded|too many requests/i.test(String((e as any)?.message ?? e));
+}
+
 async function runPool<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
   let i = 0;
   const workers = Array.from({ length: Math.min(size, items.length) }, async () => {
@@ -179,10 +184,19 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
         .catch(() => new Set<string>()));
 
     // A few at a time: fast enough for a bulk booking, gentle on the request time limit.
-    await runPool(rows, 4, async (row) => {
+    // Google's per-minute write limit: once it says so, the rest of this run waits
+    // for the next one (released, not counted as a failed try).
+    let rateLimited = false;
+    // Two at a time: a repeating series takes its updates one instance at a time,
+    // and four in parallel (with the organizer lookups) tripped the limit.
+    await runPool(rows, 2, async (row) => {
       let eventId = row.google_event_id;
       let calendarId = row.google_calendar_id;
       let meetLink: string | null = row.meet_link ?? null;
+      if (rateLimited) {
+        await admin.from("pt_sessions").update({ gcal_claimed_at: null } as any).eq("id", row.id);
+        return;
+      }
       try {
         const client = clientById.get(row.client_id);
         const stale = new Date(row.ends_at).getTime() < Date.now() - HISTORY_CUTOFF_MS;
@@ -264,11 +278,15 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
         }
       } catch (e: any) {
         result.failed++;
+        const limited = isRateLimit(e);
+        if (limited) rateLimited = true;
         await admin
           .from("pt_sessions")
           .update({
             gcal_error: String(e?.message ?? e).slice(0, 500),
-            gcal_attempts: Math.min(MAX_ATTEMPTS, Number(row.gcal_attempts ?? 0) + 1),
+            gcal_attempts: limited
+              ? Number(row.gcal_attempts ?? 0)
+              : Math.min(MAX_ATTEMPTS, Number(row.gcal_attempts ?? 0) + 1),
             gcal_claimed_at: null,
             // An event we just created must not be created again on retry.
             google_event_id: eventId,
