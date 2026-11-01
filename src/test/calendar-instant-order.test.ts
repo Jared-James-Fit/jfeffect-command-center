@@ -35,7 +35,7 @@ describe("the Google sync writes to the event, never an invitation copy", () => 
   it("looks up the organizer's calendar before an update", () => {
     const src = readFileSync("src/lib/pt-session-gcal.server.ts", "utf8");
     expect(src).toContain("target = (await organizerCalendarOf(target, eventId, writable)) ?? target;");
-    expect(src).toMatch(/if \(!org \|\| org\.self !== false \|\| !org\.email \|\| org\.email === calendarId\) return null;/);
+    expect(src).toContain("if (!org?.email || isOrganizerCopy(r.data, calendarId)) return null;");
     expect(src).toMatch(/c\.accessRole === "owner" \|\| c\.accessRole === "writer"/);
   });
 });

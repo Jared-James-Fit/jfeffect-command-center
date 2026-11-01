@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { googleOccurrenceKey, mergeGoogleCalendarLists } from "@/lib/session-conflicts";
+import { googleOccurrenceKey, isOrganizerCopy, mergeGoogleCalendarLists } from "@/lib/session-conflicts";
 
 // What Google returns with singleEvents=true: every repeat of a recurring
 // event is its own row with its own id, but they all share the series' iCalUID.
@@ -123,5 +123,34 @@ describe("an event on the coach's calendar and an invitation to it on another", 
       expect(merged).toHaveLength(1);
       expect(merged[0].calendarId).toBe("jf@group.calendar.google.com");
     }
+  });
+});
+
+describe("Google marks an invitation as the coach's own when they own both calendars", () => {
+  // What Google really returned for Nicolas: organizer.self is true on both copies (the
+  // signed-in coach owns the JF Effect calendar), only the address tells them apart.
+  const jf = "49b37@group.calendar.google.com";
+  const base = {
+    id: "a2sih_20261107T150000Z",
+    iCalUID: "a2sih@google.com",
+    start: { dateTime: "2026-11-07T10:00:00-05:00" },
+    originalStartTime: { dateTime: "2026-11-07T10:00:00-05:00" },
+    organizer: { email: jf, self: true },
+  };
+
+  it("an event on a calendar other than its organizer's is an invitation copy", () => {
+    expect(isOrganizerCopy(base, jf)).toBe(true);
+    expect(isOrganizerCopy(base, "jaredjamesfit@gmail.com")).toBe(false);
+    // the "primary" alias has no address to compare: Google's flag decides
+    expect(isOrganizerCopy(base, "primary")).toBe(true);
+    expect(isOrganizerCopy({ organizer: { email: jf, self: false } }, "primary")).toBe(false);
+  });
+
+  it("the merge keeps the JF Effect calendar's copy", () => {
+    const merged = mergeGoogleCalendarLists([
+      { id: "jaredjamesfit@gmail.com", items: [base] },
+      { id: jf, items: [base] },
+    ]);
+    expect(merged.map((m) => m.calendarId)).toEqual([jf]);
   });
 });
