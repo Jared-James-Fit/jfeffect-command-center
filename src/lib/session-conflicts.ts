@@ -81,8 +81,17 @@ export function googleOccurrenceKey(e: GoogleOccurrenceLike): string {
   return `${e.iCalUID || e.id}|${whenKey(e.originalStartTime) ?? whenKey(e.start) ?? ""}`;
 }
 
-/** The calendar's own event, not an invitation copy of it (which only changes on that calendar). */
-export function isOrganizerCopy(e: Pick<GoogleOccurrenceLike, "organizer">): boolean {
+/**
+ * The calendar's own event, not an invitation copy of it (which only changes on
+ * that calendar). Told by the organizer's address against the calendar the copy
+ * is on: Google's `organizer.self` follows the signed-in account, so it says true
+ * on the coach's main calendar for an event their JF Effect calendar organizes.
+ * Only for the "primary" alias (no address to compare) does `self` decide.
+ */
+export function isOrganizerCopy(e: Pick<GoogleOccurrenceLike, "organizer">, calendarId?: string | null): boolean {
+  const org = e.organizer?.email?.toLowerCase();
+  const cal = calendarId?.toLowerCase();
+  if (org && cal && cal !== "primary") return org === cal;
   return e.organizer?.self !== false;
 }
 
@@ -106,7 +115,7 @@ export function mergeGoogleCalendarLists<T extends GoogleOccurrenceLike>(
       if (i === undefined) {
         at.set(key, out.length);
         out.push({ calendarId, event: e });
-      } else if (!isOrganizerCopy(out[i].event) && isOrganizerCopy(e)) {
+      } else if (!isOrganizerCopy(out[i].event, out[i].calendarId) && isOrganizerCopy(e, calendarId)) {
         out[i] = { calendarId, event: e };
       }
     }

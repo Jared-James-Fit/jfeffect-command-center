@@ -3,7 +3,7 @@
 // import_calendar_pt_session for the credits). Never import from client code.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { GATEWAY_BASE, gatewayHeaders, gcalListCalendars, gcalListEvents, listCalendarEvents, workspaceCalendarConfigured } from "@/lib/google-cal.server";
-import { GCAL_PT_SESSION_KEY } from "@/lib/session-conflicts";
+import { GCAL_PT_SESSION_KEY, isOrganizerCopy } from "@/lib/session-conflicts";
 import { eventNamesClient, looksLikeTraining, planImport, type ImportCandidate, type ImportClient, type ImportEvent, type SkippedEvent } from "@/lib/gcal-session-import";
 import { DEFAULT_TZ, localDateISO, localTimeHM } from "@/lib/schedule-time";
 
@@ -190,7 +190,7 @@ export async function inspectGoogleCopies(
         summary: e.summary ?? null,
         location: e.location ?? null,
         organizer: e.organizer?.email ?? null,
-        organizerIsThisCalendar: e.organizer?.self !== false,
+        organizerIsThisCalendar: isOrganizerCopy(e, cal.id),
         myResponse: (e.attendees ?? []).find((a: any) => a.self)?.responseStatus ?? null,
         appSessionId: ev.appSessionId ?? null,
         linkedSessionIds: [],

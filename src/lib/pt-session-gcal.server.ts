@@ -14,7 +14,7 @@ import {
   gcalListEvents,
   workspaceCalendarConfigured,
 } from "@/lib/google-cal.server";
-import { GCAL_PT_SESSION_KEY, googleEventBlocksTime, type BusyItem } from "@/lib/session-conflicts";
+import { GCAL_PT_SESSION_KEY, googleEventBlocksTime, isOrganizerCopy, type BusyItem } from "@/lib/session-conflicts";
 import { DEFAULT_TZ } from "@/lib/schedule-time";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -128,7 +128,7 @@ async function organizerCalendarOf(
   const r = await gapi("GET", eventPath(calendarId, eventId));
   if (!r.ok) return null;
   const org = r.data?.organizer;
-  if (!org || org.self !== false || !org.email || org.email === calendarId) return null;
+  if (!org?.email || isOrganizerCopy(r.data, calendarId)) return null;
   if (!(await writable()).has(org.email)) return null;
   const own = await gapi("GET", eventPath(org.email, eventId));
   return own.ok ? (org.email as string) : null;
