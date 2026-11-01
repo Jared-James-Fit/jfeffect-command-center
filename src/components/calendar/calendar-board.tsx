@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, ExternalLink, MapPin, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KIND_FAMILY, KIND_META, ctaLabel, placeLabel, scheduleTitle, type CalendarItem, type CalendarKind, type KindFamily } from "@/lib/calendar-sources";
-import { compactTimeRange, durationLabel } from "@/lib/schedule-time";
+import { compactTimeRange, compareInstants, durationLabel } from "@/lib/schedule-time";
 import { CalendarEmptyState } from "./empty-state";
 
 export type ViewMode = "month" | "week" | "day" | "upcoming";
@@ -450,7 +450,7 @@ function DayList({
       </div>
     );
   }
-  const sorted = [...items].sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""));
+  const sorted = [...items].sort((a, b) => compareInstants(a.startsAt, b.startsAt));
   return (
     <div className="space-y-2">
       <ul className="space-y-2">

@@ -10,6 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   GATEWAY_BASE,
   gatewayHeaders,
+  gcalListCalendars,
   gcalListEvents,
   workspaceCalendarConfigured,
 } from "@/lib/google-cal.server";
@@ -111,6 +112,28 @@ async function makeCalendarResolver(admin: Admin) {
   return (coachId: string | null | undefined) => (coachId && byCoach.get(coachId)) || fallback;
 }
 
+/**
+ * The calendar holding the event itself when `calendarId` only has an invitation
+ * to it, and that calendar is one the coach can write to: an edit to an invitation
+ * copy stays on that copy (Nicolas's sessions were imported from the coach's main
+ * calendar, invited to events the JF Effect calendar organizes, so the app's
+ * changes never reached the event everyone else sees). Null when this calendar is
+ * the organizer, the event can't be read, or the organizer isn't the coach's.
+ */
+async function organizerCalendarOf(
+  calendarId: string,
+  eventId: string,
+  writable: () => Promise<Set<string>>,
+): Promise<string | null> {
+  const r = await gapi("GET", eventPath(calendarId, eventId));
+  if (!r.ok) return null;
+  const org = r.data?.organizer;
+  if (!org || org.self !== false || !org.email || org.email === calendarId) return null;
+  if (!(await writable()).has(org.email)) return null;
+  const own = await gapi("GET", eventPath(org.email, eventId));
+  return own.ok ? (org.email as string) : null;
+}
+
 async function runPool<T>(items: T[], size: number, fn: (item: T) => Promise<void>) {
   let i = 0;
   const workers = Array.from({ length: Math.min(size, items.length) }, async () => {
@@ -148,6 +171,12 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
       .select("id, full_name, assigned_coach_id")
       .in("id", clientIds);
     const clientById = new Map(((clients ?? []) as any[]).map((c) => [c.id, c]));
+    // The coach's calendars the app may write to, read once per run and only if needed.
+    let writableIds: Promise<Set<string>> | null = null;
+    const writable = () =>
+      (writableIds ??= gcalListCalendars()
+        .then((cals) => new Set(cals.filter((c) => c.accessRole === "owner" || c.accessRole === "writer").map((c) => c.id)))
+        .catch(() => new Set<string>()));
 
     // A few at a time: fast enough for a bulk booking, gentle on the request time limit.
     await runPool(rows, 4, async (row) => {
@@ -159,9 +188,14 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
         const stale = new Date(row.ends_at).getTime() < Date.now() - HISTORY_CUTOFF_MS;
         const ended = new Date(row.ends_at).getTime() <= Date.now();
         if (row.status === "Scheduled" && !stale) {
-          const target: string = calendarId || resolveCalendar(client?.assigned_coach_id);
-          calendarId = target;
+          let target: string = calendarId || resolveCalendar(client?.assigned_coach_id);
           const body = sessionEventBody(row, client?.full_name ?? null);
+          if (eventId) {
+            // Write to the event itself, never an invitation copy of it: Google carries
+            // the event's changes to every copy.
+            target = (await organizerCalendarOf(target, eventId, writable)) ?? target;
+          }
+          calendarId = target;
           if (eventId) {
             const r = await gapi("PATCH", eventPath(target, eventId), body);
             if (r.ok) result.updated++;

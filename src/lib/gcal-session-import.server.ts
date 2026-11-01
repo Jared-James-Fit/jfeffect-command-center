@@ -2,7 +2,7 @@
 // appointments as app sessions (see gcal-session-import.ts for the rules and
 // import_calendar_pt_session for the credits). Never import from client code.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { GATEWAY_BASE, gatewayHeaders, gcalListCalendars, gcalListEvents, workspaceCalendarConfigured } from "@/lib/google-cal.server";
+import { GATEWAY_BASE, gatewayHeaders, gcalListCalendars, gcalListEvents, listCalendarEvents, workspaceCalendarConfigured } from "@/lib/google-cal.server";
 import { GCAL_PT_SESSION_KEY } from "@/lib/session-conflicts";
 import { eventNamesClient, looksLikeTraining, planImport, type ImportCandidate, type ImportClient, type ImportEvent, type SkippedEvent } from "@/lib/gcal-session-import";
 import { DEFAULT_TZ, localDateISO, localTimeHM } from "@/lib/schedule-time";
@@ -132,6 +132,79 @@ export async function previewGoogleImport(
     skipped: plan.skipped,
     handCountedOnly,
   };
+}
+
+export type GoogleCopy = {
+  calendarId: string;
+  accessRole: string;
+  id: string;
+  iCalUID: string | null;
+  status: string | null;
+  start: string | null;
+  end: string | null;
+  originalStart: string | null;
+  summary: string | null;
+  location: string | null;
+  organizer: string | null;
+  organizerIsThisCalendar: boolean;
+  myResponse: string | null;
+  appSessionId: string | null;
+  linkedSessionIds: string[];
+};
+
+/**
+ * Back-office check (the hook's `inspect`): every copy of a client's appointments
+ * on every calendar the coach can see, unmerged, with who organizes each one and
+ * which app session points at it. For telling an event from an invitation to it
+ * when Google and the app disagree.
+ */
+export async function inspectGoogleCopies(
+  admin: Admin,
+  opts: { clientIds: string[]; from: string; to: string; terms?: Record<string, string[]> },
+): Promise<GoogleCopy[]> {
+  if (!workspaceCalendarConfigured()) throw new Error("Google Calendar isn't connected.");
+  const clients = await loadClients(admin, opts.clientIds, opts.terms);
+  const calendars = await gcalListCalendars();
+  const timeMin = new Date(`${opts.from}T00:00:00Z`).toISOString();
+  const timeMax = new Date(`${opts.to}T23:59:59Z`).toISOString();
+  const out: GoogleCopy[] = [];
+  for (const cal of calendars) {
+    const { items } = await listCalendarEvents(cal.id, timeMin, timeMax);
+    for (const e of items as any[]) {
+      const ev: ImportEvent = {
+        id: e.id, calendarId: cal.id, summary: e.summary, description: e.description ?? null, location: e.location ?? null,
+        status: e.status ?? null, start: e.start?.dateTime || e.start?.date, end: e.end?.dateTime || e.end?.date,
+        allDay: !e.start?.dateTime, appSessionId: e.extendedProperties?.private?.[GCAL_PT_SESSION_KEY] ?? null,
+        timeZone: e.start?.timeZone ?? null, attendees: e.attendees ?? null,
+      };
+      if (!clients.some((c) => eventNamesClient(ev, c))) continue;
+      out.push({
+        calendarId: cal.id,
+        accessRole: cal.accessRole,
+        id: e.id,
+        iCalUID: e.iCalUID ?? null,
+        status: e.status ?? null,
+        start: ev.start ?? null,
+        end: ev.end ?? null,
+        originalStart: e.originalStartTime?.dateTime || e.originalStartTime?.date || null,
+        summary: e.summary ?? null,
+        location: e.location ?? null,
+        organizer: e.organizer?.email ?? null,
+        organizerIsThisCalendar: e.organizer?.self !== false,
+        myResponse: (e.attendees ?? []).find((a: any) => a.self)?.responseStatus ?? null,
+        appSessionId: ev.appSessionId ?? null,
+        linkedSessionIds: [],
+      });
+    }
+  }
+  const ids = Array.from(new Set(out.map((c) => c.id)));
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await admin.from("pt_sessions").select("id, google_event_id, google_calendar_id").in("google_event_id", ids.slice(i, i + 200));
+    for (const r of (data ?? []) as any[]) {
+      for (const c of out) if (c.id === r.google_event_id && (!r.google_calendar_id || r.google_calendar_id === c.calendarId)) c.linkedSessionIds.push(r.id);
+    }
+  }
+  return out.sort((a, b) => Date.parse(a.start ?? "") - Date.parse(b.start ?? "") || a.calendarId.localeCompare(b.calendarId));
 }
 
 /**

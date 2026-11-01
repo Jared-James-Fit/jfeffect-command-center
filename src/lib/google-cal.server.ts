@@ -309,7 +309,7 @@ const MAX_EVENT_PAGES = 4;
  * (ok=false when the first page can't be read; a later page failing keeps
  * what was already read).
  */
-async function listCalendarEvents(calendarId: string, timeMinISO: string, timeMaxISO: string): Promise<{ ok: boolean; items: any[] }> {
+export async function listCalendarEvents(calendarId: string, timeMinISO: string, timeMaxISO: string): Promise<{ ok: boolean; items: any[] }> {
   const items: any[] = [];
   let pageToken: string | undefined;
   for (let page = 0; page < MAX_EVENT_PAGES; page++) {

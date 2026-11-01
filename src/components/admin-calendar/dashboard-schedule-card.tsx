@@ -7,7 +7,7 @@ import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
 import { placeLabel, useGoogleCalendarStatus, type KindFamily } from "@/lib/calendar-sources";
 import { listGoogleEventsRange } from "@/lib/google-cal.functions";
-import { addDaysISO, compactTimeRange, deviceTodayISO } from "@/lib/schedule-time";
+import { addDaysISO, compactTimeRange, compareInstants, deviceTodayISO } from "@/lib/schedule-time";
 import {
   AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
@@ -90,7 +90,7 @@ function sessionRow(s: Session): Row {
 
 /** All day first, then by time. */
 function byTime(a: Row, b: Row) {
-  return (a.startsAt ? 1 : 0) - (b.startsAt ? 1 : 0) || (a.startsAt ?? "").localeCompare(b.startsAt ?? "") || a.title.localeCompare(b.title);
+  return (a.startsAt ? 1 : 0) - (b.startsAt ? 1 : 0) || compareInstants(a.startsAt, b.startsAt) || a.title.localeCompare(b.title);
 }
 
 /**
