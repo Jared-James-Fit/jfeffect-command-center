@@ -18,6 +18,7 @@ export function messagePreviewText(body: string | null | undefined, attachments:
   if (first?.kind === "payment_request") return "💳 Payment request";
   if (first?.kind === "signature_request") return "✍️ Something to sign";
   if (first?.kind === "recipe_share") return "🍽️ Shared a recipe";
+  if (first?.kind === "nutrition_plan") return "🍽️ Your nutrition plan";
   if (first?.kind === "gif") return "GIF";
   if (first?.kind === "sound") return "🔊 Sound";
   const images = list.filter((a) => a?.type === "image").length;

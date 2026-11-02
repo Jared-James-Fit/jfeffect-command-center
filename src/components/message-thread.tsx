@@ -30,6 +30,8 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/user-avatar";
 import { PaymentRequestCard } from "@/components/payment-request-card";
+import { NutritionPlanChatCard } from "@/components/messages/nutrition-plan-chat-card";
+import type { PlanMessageAttachment } from "@/lib/nutrition-targets/plan-message";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -521,6 +523,9 @@ function AttachmentView({
   }
   if (att.kind === "payment_request") {
     return <PaymentRequestCard att={att as unknown as SharedAttachment} mine={mine} />;
+  }
+  if (att.kind === "nutrition_plan") {
+    return <NutritionPlanChatCard att={att as unknown as PlanMessageAttachment} staff={role !== "client"} clientId={clientId} />;
   }
   if (att.kind === "sound") {
     return (
