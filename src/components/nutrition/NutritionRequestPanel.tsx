@@ -8,10 +8,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, Footprints, Loader2, MessageSquarePlus, PencilLine, RefreshCw, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
+import { fireAppEvent } from "@/lib/push/app-events.functions";
+import { invalidateGroceryList } from "@/lib/grocery-query-keys";
+import { clientPlansQuery, publishAiPlan } from "@/lib/nutrition-targets/plan-publish";
+import { nextPlanDates, planDate, planPeriod, splitPlans } from "@/lib/nutrition-targets/plan-history";
+import { todayLocalISO } from "@/lib/today";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { supabase } from "@/integrations/supabase/client";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
 import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
@@ -143,6 +147,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const undoFn = useServerFn(undoNutritionRevisionFn);
   const [change, setChange] = useState("");
   const [changing, setChanging] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const { data: plans = [] } = useQuery(clientPlansQuery(clientId));
+  const currentPlan = splitPlans(plans).current[0] ?? null;
   const [sendOpen, setSendOpen] = useState(false);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -305,12 +313,46 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     }
   };
 
+  const firstName = String((data?.client as any)?.name ?? data?.clientName ?? "").trim().split(/\s+/)[0] || "the client";
+
+  /** One tap: the AI plan becomes the client's plan from today; the one before it goes to Previous plans. */
+  const publish = async () => {
+    if (!latest || !plan?.meal_plan_text || !prefill?.days.length) return;
+    setPublishing(true);
+    try {
+      const res = await publishAiPlan({
+        clientId,
+        phase: prefill.phase ?? null,
+        structure: prefill.structure,
+        days: prefill.days,
+        targetsText: plan.targets_text,
+        foodWeighingRules: prefill.food_weighing_rules,
+      });
+      await appliedFn({ data: { submissionId: latest.id } }).catch(() => {});
+      fireAppEvent("nutrition_targets_updated", clientId);
+      const cardio = res.cardio && res.cardio.updated + res.cardio.inserted ? " · cardio synced" : "";
+      toast.success(`${firstName}'s plan is updated${res.archived ? " · the old one is in Previous plans" : ""}${cardio}`);
+      if (res.cardioError) toast.error(`Plan updated, but cardio didn't sync: ${res.cardioError}. Fix it in Cardio Targets.`);
+      setPublishOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't update the plan");
+    } finally {
+      setPublishing(false);
+      qc.invalidateQueries({ queryKey: key });
+      qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
+      for (const k of [["cardio-targets", clientId], ["cal-client-cardio", clientId], ["client-cardio-resolved", clientId], ["week-sched-data"]]) {
+        qc.invalidateQueries({ queryKey: k });
+      }
+      void invalidateGroceryList(qc, clientId);
+    }
+  };
+
   const statusChip = !latest
     ? data?.requestedAt ? { label: "Sent · waiting on client", tone: "sky" } : { label: "Not requested", tone: "muted" }
     : !submitted ? { label: "Client filling it out", tone: "sky" }
     : revising ? { label: "Updating the plan…", tone: "amber" }
     : plan?.applied_at && lastChangeAt && lastChangeAt > plan.applied_at ? { label: "Changed · publish again", tone: "amber" }
-    : plan?.applied_at ? { label: "Applied to targets", tone: "emerald" }
+    : plan?.applied_at ? { label: `Published ${new Date(plan.applied_at).toLocaleDateString([], { month: "short", day: "numeric" })}`, tone: "emerald" }
     : plan?.status === "ready" ? { label: "AI plan ready", tone: "amber" }
     : plan?.status === "error" ? { label: "AI failed", tone: "rose" }
     : { label: "AI is building the plan…", tone: "amber" };
@@ -516,8 +558,12 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </div>
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button className="gap-2 font-bold" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length || revising}>
-              <Check className="h-4 w-4" /> {plan.applied_at ? "Review & publish again" : "Review, edit & publish"}
+            {/* Default: one tap updates the client's plan. The editor is there for anything to change by hand. */}
+            <Button className="gap-2 font-bold" onClick={() => setPublishOpen(true)} disabled={!prefill?.days.length || revising}>
+              <Check className="h-4 w-4" /> {plan.applied_at ? "Update plan again" : `Update ${firstName}'s plan`}
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length || revising}>
+              <PencilLine className="h-4 w-4" /> Review & edit first
             </Button>
             <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
               <div className="min-w-0 sm:w-44">
@@ -631,15 +677,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           open={manualOpen}
           onOpenChange={setManualOpen}
           clientId={clientId}
-          onSaved={async (targetId) => {
-            await supabase
-              .from("nutrition_targets")
-              .update({ status: "Archived" })
-              .eq("client_id", clientId)
-              .neq("id", targetId)
-              .neq("status", "Archived");
-            qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
-          }}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["nutrition-targets"] })}
         />
       )}
 
@@ -649,19 +687,44 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           onOpenChange={setApplyOpen}
           clientId={clientId}
           prefill={prefill}
-          onSaved={async (targetId) => {
-            // The new plan replaces the old one: archive any other active targets.
-            await supabase
-              .from("nutrition_targets")
-              .update({ status: "Archived" })
-              .eq("client_id", clientId)
-              .neq("id", targetId)
-              .neq("status", "Archived");
+          onSaved={() => {
+            // The editor archives the plan it replaces (dated, in Previous plans).
             qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
             if (latest) void appliedFn({ data: { submissionId: latest.id } }).then(() => qc.invalidateQueries({ queryKey: key }));
           }}
         />
       )}
+
+      <Dialog open={publishOpen} onOpenChange={(o) => !publishing && setPublishOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update {firstName}'s plan?</DialogTitle>
+            <DialogDescription>The AI plan goes live as it is. Use Review & edit first to change anything.</DialogDescription>
+          </DialogHeader>
+          {preview.length > 0 && (
+            <ul className="space-y-1 rounded-xl border border-border p-3 text-xs">
+              {preview.map((r) => (
+                <li key={r.label} className="flex justify-between gap-3">
+                  <span className="font-semibold">{r.label}</span>
+                  <span className="tabular-nums text-muted-foreground">{r.kcal ?? "—"} kcal · {[r.p, r.c, r.f].map((n) => n ?? "—").join("/")}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul className="space-y-1.5 text-sm">
+            <li>• Starts today, runs to {planDate(nextPlanDates(todayLocalISO()).end_date)} (the next Nutrition Update goes out in its last week)</li>
+            {currentPlan && <li>• The current plan ({planPeriod(currentPlan)}) moves to Previous plans, kept with its dates</li>}
+            <li>• Meals, steps and cardio update together; water and notes to {firstName} carry over</li>
+            <li>• {firstName} gets a notification</li>
+          </ul>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setPublishOpen(false); setApplyOpen(true); }} disabled={publishing}>Review & edit first</Button>
+            <Button onClick={publish} disabled={publishing} className="gap-2 font-bold">
+              {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Update plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

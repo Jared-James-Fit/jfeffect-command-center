@@ -240,7 +240,11 @@ function PortalNutrition() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
-                  <div className="text-[11px] text-muted-foreground">{day.day_label || DAY_TYPE_LABEL[automaticDayType]}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {day.day_label || DAY_TYPE_LABEL[automaticDayType]}
+                    {/* When the coach last updated the plan: the same date the coach sees on it. */}
+                    {plan.updated_at ? ` · Updated ${format(new Date(plan.updated_at), "MMM d")}` : ""}
+                  </div>
                 </div>
                 <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5" onClick={handleDownload} disabled={downloading}>
                   {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PDF
