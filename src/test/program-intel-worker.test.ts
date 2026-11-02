@@ -185,7 +185,10 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(j.progress.stages.map((s: any) => [s.key, s.status])).toEqual([["context", "done"], ["strategy", "done"], ["construct:0", "done"], ["audit", "done"], ["save", "done"]]);
     // the strategy reads the whole history (too big for the design model in time: the app's default reads it);
     // building reads the compact brief and goes to the design model first
-    expect(calls.map((c) => c.model)).toEqual(["test-model", "google/gemini-3.1-pro-preview"]);
+    const { modelsFor } = await import("@/lib/program-intel/pipeline.server");
+    const cfg = { primary: "google/gemini-3.1-pro-preview", fallback: "test-model" };
+    expect(calls.map((c) => c.model)).toEqual(calls.map((c) => modelsFor(c.system.length + c.prompt.length, cfg)[0]));
+    expect(calls[0].model).toBe("test-model");
     expect(calls[0].prompt.length).toBeGreaterThan(70_000);
     expect(calls[1].prompt).not.toContain("## Previous program: full log, set by set");
     expect(calls[1].prompt).toContain("How it was laid out (its first full week, as written)");

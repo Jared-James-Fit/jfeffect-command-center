@@ -343,6 +343,24 @@ describe("Program quality audit and scorecard", () => {
   });
 });
 
+describe("A coach's unassigned draft is never read as training", () => {
+  it("the loader leaves out hidden, undated blocks (a generated draft), keeps hidden dated ones", async () => {
+    const { loadIntelRecords } = await import("@/lib/program-intel/load");
+    const blocks = [
+      { id: "b-real", client_id: "c", client_visible: true, start_date: "2026-10-05", end_date: "2026-11-01", status: "Active", name: "Real", created_at: "2026-10-01" },
+      { id: "b-old-hidden", client_id: "c", client_visible: false, start_date: "2026-09-07", end_date: "2026-10-04", status: "Archived", name: "Old", created_at: "2026-09-01" },
+      { id: "b-draft", client_id: "c", client_visible: false, start_date: null, end_date: null, status: "Draft", name: "Draft", created_at: "2026-11-02" },
+    ];
+    const q: any = (rows: any[]) => {
+      const me: any = { select: () => me, eq: () => me, is: () => me, in: () => me, order: () => me, not: () => me, gte: () => me, range: () => Promise.resolve({ data: rows, error: null }), maybeSingle: () => Promise.resolve({ data: rows[0] ?? null, error: null }), then: (r: any) => Promise.resolve({ data: rows, error: null }).then(r) };
+      return me;
+    };
+    const sb = { from: (t: string) => q(t === "clients" ? [{ id: "c", full_name: "X", timezone: "America/Winnipeg", preferred_weight_unit: "kg" }] : t === "pl_blocks" ? blocks : []) };
+    const rec = await loadIntelRecords(sb, "c", { kind: "history" }, { today: "2026-11-02" });
+    expect(rec.blocks.map((b) => b.id)).toEqual(["b-real", "b-old-hidden"]);
+  });
+});
+
 describe("Every recommendation is a valid setup", () => {
   it("home gym, powerlifter, bodybuilder and sparse data all pass the setup schema the server checks", () => {
     const wordy = homeGym();

@@ -36,12 +36,14 @@ type Db = any;
 /** The model that designs programs; the app's default model answers if it can't. */
 export const PROGRAM_DESIGN_MODEL = "google/gemini-3.1-pro-preview";
 /**
- * The design model answers a prompt up to about this size in time (in
- * production: 38k characters in 67s; 105k and 135k timed out at 170s).
- * Bigger prompts (the strategy reading the whole history) go to the app's
- * default model, which read 105k characters in 14s.
+ * The design model answers a prompt up to about this size in time. In
+ * production it answered a 38k-character repair in 67s but timed out at
+ * 170s on 63k (a block to build), 105k and 135k, while the app's default
+ * model read 130k in 12s and built a block from 63k in 26s. So the design
+ * model only takes the small prompts (repairs); everything else goes to the
+ * default model.
  */
-export const DESIGN_MODEL_MAX_PROMPT_CHARS = 70_000;
+export const DESIGN_MODEL_MAX_PROMPT_CHARS = 40_000;
 const CALL_TIMEOUT_MS = 170_000;
 
 /** Which models a call tries, in order, for its size. */

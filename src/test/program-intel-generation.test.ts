@@ -93,6 +93,7 @@ describe("Generate Next Program: every stage's answer is checked before it's use
   it("the design model gets the prompts it answers in time; bigger ones go to the app's default model", () => {
     const cfg = { primary: "pro", fallback: "flash" };
     expect(modelsFor(38_000, cfg)).toEqual(["pro", "flash"]);
+    expect(modelsFor(63_000, cfg)).toEqual(["flash"]);
     expect(modelsFor(105_000, cfg)).toEqual(["flash"]);
     expect(strategySystemPrompt("powerbuilding")).toContain("An observation that links a cause");
   });

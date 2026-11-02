@@ -44,6 +44,11 @@ export async function fetchByIds<T>(ids: string[], build: (chunk: string[], from
 
 const BLOCK_COLS = "id, prep_id, name, status, start_date, end_date, weeks, training_focus, goal, coach_notes, client_visible, archived, sort_order, created_at, source_template_block_key";
 
+/** Hidden from the client and undated: a coach's draft nobody has been given yet. */
+export function isUnassignedDraftBlock(b: Pick<RawBlock, "client_visible" | "start_date">): boolean {
+  return b.client_visible === false && !b.start_date;
+}
+
 /** The program a client is on now: the blocks of the meet prep / program their current block belongs to (else that block). */
 export function currentProgramBlocks(blocks: RawBlock[], today: string): { blocks: RawBlock[]; label: string; prepId: string | null } {
   const live = blocks.filter((b) => !b.archived && b.status !== "Archived" && !isAtHomeBackupReservedBlock(b));
@@ -85,7 +90,8 @@ export async function loadIntelRecords(
   if (!client) throw new Error("You don't have access to this client.");
   const today = opts.today ?? localDate(new Date().toISOString(), client.timezone) ?? new Date().toISOString().slice(0, 10);
 
-  const allBlocks: RawBlock[] = await fetchAll((f, t) => sb.from("pl_blocks").select(BLOCK_COLS).eq("client_id", clientId).order("created_at").range(f, t));
+  // A coach's unassigned draft (hidden and undated, e.g. a generated program waiting for review) isn't training the athlete did.
+  const allBlocks: RawBlock[] = (await fetchAll<RawBlock>((f, t) => sb.from("pl_blocks").select(BLOCK_COLS).eq("client_id", clientId).order("created_at").range(f, t))).filter((b) => !isUnassignedDraftBlock(b));
   const preps = await optional(
     "meet preps / programs",
     () => fetchAll<any>((f, t) => sb.from("pl_preps").select("id, title, goal_type, event_name, event_date, federation, weight_class, division, status, coach_notes").eq("client_id", clientId).range(f, t)),
