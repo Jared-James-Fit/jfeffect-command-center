@@ -27,8 +27,9 @@ import { AutoLabelWorkoutMeals } from "@/components/nutrition/AutoLabelWorkoutMe
 import { MealPlanBulkPaste, type ParsedDay } from "@/components/nutrition/MealPlanBulkPaste";
 import { PlanDayUseEditor, PlanDayWeekPreview } from "@/components/nutrition/PlanDayRules";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
-import { cardioDraftsFor, dayKey, parseAiCardio, planCardioSync, type CardioDraft } from "@/lib/nutrition-cardio-sync";
+import { cardioDraftsFor, dayKey, parseAiCardio, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
+import { archiveReplacedPlans, syncPlanCardio } from "@/lib/nutrition-targets/plan-publish";
 
 const QUICK_DAY_TYPES = [
   "Training Day",
@@ -333,29 +334,22 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       const { error } = await supabase.from("nutrition_target_days").insert(rows);
       if (error) { setSaving(false); return toast.error(error.message); }
     }
+    // A new current plan replaces the one before it: archived with its dates, never deleted.
+    let replacedMsg = "";
+    if (form.status === "Active" && (!form.id || initial?.status === "Archived")) {
+      try {
+        const n = await archiveReplacedPlans(form.client_id, targetId, form.start_date);
+        if (n) replacedMsg = " · the old plan is in Previous plans";
+      } catch (e: any) {
+        toast.error(`Saved, but the old plan wasn't archived: ${e?.message ?? "error"}`);
+      }
+    }
     // Cardio follows the plan the client is on: only an Active plan changes it.
     let cardioMsg = "";
     if (form.status === "Active" && cardioQ.data) {
-      const prefs = cardioQ.data.prefs;
-      const sync = planCardioSync({
-        clientId: form.client_id,
-        days: days.map((d) => ({ label: d.day_label, draft: d.cardio })),
-        rows: cardioQ.data.rows,
-        today: todayLocalISO(),
-        trainingDays: resolveTrainingWeekdays(prefs),
-        highDay: Array.isArray(prefs?.preferred_high_days) ? prefs.preferred_high_days[0] ?? null : null,
-      });
       try {
-        if (sync.inserts.length) {
-          const { error } = await supabase.from("cardio_targets").insert(sync.inserts as any);
-          if (error) throw error;
-        }
-        for (const u of sync.updates) {
-          const { error } = await supabase.from("cardio_targets").update(u.patch as any).eq("id", u.id);
-          if (error) throw error;
-        }
-        const n = sync.inserts.length + sync.updates.length;
-        if (n) cardioMsg = ` · cardio synced (${[sync.updates.length && `${sync.updates.length} updated`, sync.inserts.length && `${sync.inserts.length} added`].filter(Boolean).join(", ")})`;
+        const sync = await syncPlanCardio(form.client_id, days.map((d) => ({ label: d.day_label, draft: d.cardio })), cardioQ.data);
+        if (sync.inserted + sync.updated) cardioMsg = ` · cardio synced (${[sync.updated && `${sync.updated} updated`, sync.inserted && `${sync.inserted} added`].filter(Boolean).join(", ")})`;
         for (const k of [["cardio-targets", form.client_id], ["cal-client-cardio", form.client_id], ["client-cardio-resolved", form.client_id], ["week-sched-data"], ["nutrition-dialog-cardio", form.client_id]]) {
           qc.invalidateQueries({ queryKey: k });
         }
@@ -364,7 +358,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       }
     }
     setSaving(false);
-    toast.success(`${form.id ? "Updated" : "Created"}${cardioMsg}`);
+    toast.success(`${form.id ? "Updated" : "Created"}${replacedMsg}${cardioMsg}`);
     qc.invalidateQueries({ queryKey: ["nutrition-targets"] });
     qc.invalidateQueries({ queryKey: ["nutrition-targets", form.client_id] });
     void invalidateGroceryList(qc, form.client_id);
