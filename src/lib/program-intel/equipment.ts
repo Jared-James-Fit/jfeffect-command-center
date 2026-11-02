@@ -196,6 +196,9 @@ export function resolveEquipment(rec: IntelRecords, previousBlockIds: string[], 
       if (!item) item = group.find((g) => (g === "cable_high" && /high cable/.test(note)) || (g === "cable_low" && /low|floor cable/.test(note)) || (g === "adjustable_bench" && /adjustable bench/.test(note)) || (g === "adjustable_dumbbells" && /adjustable dumbbell/.test(note)));
       if (!item && group.includes("dumbbells")) item = "dumbbells";
       if (!item && group.includes("bench")) item = "bench";
+      // They trained it, so they have one of the options: the first stands for the choice (a lat pulldown
+      // done without a note saying "high cable" still proves pulldowns are possible).
+      if (!item) item = group[0];
       if (item && !proven.has(item)) {
         proven.add(item);
         provenFrom.set(item, name);

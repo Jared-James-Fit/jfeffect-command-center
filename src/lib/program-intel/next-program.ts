@@ -142,8 +142,41 @@ export async function resolveProgramExercises<P extends Pick<BuiltProgram, "bloc
 }
 
 /** The pl_exercise_rows columns for one exercise in one week (like Cleo's builder; % reads as % of estimated 1RM). */
+/** Steady cardio done for time (a walk, a bike), not a strength movement that happens to walk. */
+const TIMED_CARDIO_RE = /\b(treadmill|walk|walking|bike|biking|cycling|cycle|elliptical|stair ?master|stair climber|stepper|rowing machine|rower|erg|jog|jogging|run|running|cardio|airbike|assault)\b/i;
+const NOT_CARDIO_RE = /lunge|farmer|carry|gorilla|walkout|walk-?over|band walk|plank|crunch|kettlebell|^air bike$/i;
+export function isTimedCardio(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim();
+  return !!n && TIMED_CARDIO_RE.test(n) && !NOT_CARDIO_RE.test(n);
+}
+/** Minutes from a cardio prescription the model wrote as reps ("10", "10 min", "10-15"): the first number, 1–120. */
+export function cardioMinutes(reps: string | null | undefined): number | null {
+  const m = String(reps ?? "").match(/\d+(?:\.\d+)?/);
+  const n = m ? Number(m[0]) : NaN;
+  return Number.isFinite(n) && n >= 1 && n <= 120 ? Math.round(n) : null;
+}
+
 export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number): Record<string, unknown> {
   const rx = rxForWeek(ex, week);
+  // A walk or a bike is logged as time: "10" from the model is ten minutes, never ten reps.
+  if (isTimedCardio(ex.exercise_name)) {
+    const minutes = cardioMinutes(rx.reps) ?? 10;
+    const notes = athleteNotes(ex, week);
+    return {
+      sets: Math.max(1, Math.min(3, Number(rx.sets) || 1)),
+      reps_text: null,
+      rpe: null,
+      rest_seconds: 0,
+      measurement_type: "time",
+      tracking_type: "time",
+      duration_seconds: minutes * 60,
+      ...(notes ? { notes } : {}),
+      sort_order: sortOrder,
+      exercise_id: ex.exercise_id ?? null,
+      exercise_name_override: ex.exercise_id ? null : ex.exercise_name,
+      purpose_label: ex.role ?? null,
+    };
+  }
   const notes = athleteNotes(ex, week);
   const row = rxToRow({
     sets: rx.sets,
