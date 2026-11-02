@@ -65,3 +65,24 @@ export function isSetLogComplete(i: SetCompletionInput): boolean {
   if (i.hideWeight) return true;
   return isLoadComplete(i.loadType ?? "external", i.load);
 }
+
+/**
+ * A timed set (a treadmill walk, a plank) counts as done at its prescribed
+ * time once something else is logged on it (RPE, calories), the way a reps
+ * set counts at its prescribed reps: the timer is a tool, never a
+ * requirement. A time logged with the timer, or typed in it, always wins, and
+ * nothing is assumed before the person enters anything.
+ */
+export function timedSetAutoDuration(i: {
+  showTimer: boolean;
+  /** seconds already logged for this set (timer or typed) */
+  loggedSeconds: number | null | undefined;
+  /** the person entered something else on the set (RPE, calories) */
+  edited: boolean;
+  prescribedSeconds: number | null | undefined;
+}): number | null {
+  if (!i.showTimer || !i.edited) return null;
+  if (i.loggedSeconds != null && Number(i.loggedSeconds) > 0) return null;
+  const p = Number(i.prescribedSeconds);
+  return Number.isFinite(p) && p > 0 ? Math.round(p) : null;
+}

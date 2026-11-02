@@ -6,6 +6,7 @@
  * coach assigns it. The interpret run's prompt lives here too.
  */
 import { z } from "zod";
+import { isTimedCardio } from "@/lib/timed-cardio";
 import { rxToRow } from "@/lib/cleo-program";
 import { BRAIN_SUMMARY } from "./methods";
 import { missingEquipment, type EquipmentResolution } from "./equipment";
@@ -143,12 +144,7 @@ export async function resolveProgramExercises<P extends Pick<BuiltProgram, "bloc
 
 /** The pl_exercise_rows columns for one exercise in one week (like Cleo's builder; % reads as % of estimated 1RM). */
 /** Steady cardio done for time (a walk, a bike), not a strength movement that happens to walk. */
-const TIMED_CARDIO_RE = /\b(treadmill|walk|walking|bike|biking|cycling|cycle|elliptical|stair ?master|stair climber|stepper|rowing machine|rower|erg|jog|jogging|run|running|cardio|airbike|assault)\b/i;
-const NOT_CARDIO_RE = /lunge|farmer|carry|gorilla|walkout|walk-?over|band walk|plank|crunch|kettlebell|^air bike$/i;
-export function isTimedCardio(name: string | null | undefined): boolean {
-  const n = (name ?? "").trim();
-  return !!n && TIMED_CARDIO_RE.test(n) && !NOT_CARDIO_RE.test(n);
-}
+export { isTimedCardio };
 /** Minutes from a cardio prescription the model wrote as reps ("10", "10 min", "10-15"): the first number, 1–120. */
 export function cardioMinutes(reps: string | null | undefined): number | null {
   const m = String(reps ?? "").match(/\d+(?:\.\d+)?/);

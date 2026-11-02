@@ -130,7 +130,8 @@ import {
 import { computeDayReads, type DayRead, type DayReadRow } from "@/lib/workout-day-read";
 import { hasSeenFeature, markFeatureSeen } from "@/lib/feature-seen";
 import { WeightValueInput } from "@/components/workout-day/weight-value-input";
-import { isSetLogComplete } from "@/lib/set-completion";
+import { isSetLogComplete, timedSetAutoDuration } from "@/lib/set-completion";
+import { isTimedCardio, MAX_SET_CALORIES } from "@/lib/timed-cardio";
 import { planCascade, type CascadeOrigin, type CascadeSetState } from "@/lib/set-cascade";
 import { parseRepTarget, planFieldCascade } from "@/lib/set-input-cascade";
 import {
@@ -3452,10 +3453,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
   };
   const showVelocity = inputOverrides.velocity ?? velocityDefault;
+  // Cardio done for time (a treadmill walk, a bike) gets an optional Calories
+  // box by default; any row can turn it on or off in the columns menu. It's
+  // never needed for the set to count as done.
+  const cardioRow = trackingType === "time" && isTimedCardio(name);
+  const showCalories = inputOverrides.calories ?? cardioRow;
   const toggleInput = (field: keyof RowInputOverrides) => {
-    const current = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity }[field];
+    const current = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity, calories: showCalories }[field];
     const next: RowInputOverrides = { ...inputOverrides, [field]: !current };
-    // Never allow a row with no logging input at all.
+    // Never allow a row with no logging input at all (calories alone can't log a set).
     const resolved = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity, [field]: !current } as Record<string, boolean>;
     if (!resolved.reps && !resolved.weight && !resolved.timer && !resolved.velocity) return;
     setInputOverridesState(next);
@@ -3493,6 +3499,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     focusMode ? "30px" : "22px",
     showReps ? "1fr" : null,
     showTimer ? "1fr" : null,
+    showCalories ? "1fr" : null,
     showVelocity ? "1fr" : null,
     "1fr",
     !hideWeight ? "1.35fr" : null,
@@ -4520,6 +4527,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <span>Set</span>
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
+          {showCalories && <span title="Calories from the machine or your watch (optional)">Cal</span>}
           <EffortScaleHeader rir={showRir} />
           {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
@@ -4532,7 +4540,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                   <button
                     type="button"
                     aria-label={`Log columns for ${name}`}
-                    title="Choose what to log (reps, weight, timer, velocity)"
+                    title="Choose what to log (reps, weight, timer, calories, velocity)"
                     className="-my-1 ml-auto inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground"
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -4544,6 +4552,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     ["reps", "Reps", showReps],
                     ["weight", "Weight", showWeight],
                     ["timer", "Timer", showTimer],
+                    ["calories", "Calories", showCalories],
                     ["velocity", "Avg velocity (m/s)", showVelocity],
                   ] as const).map(([field, label, on]) => (
                     <DropdownMenuItem
@@ -4617,6 +4626,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               gridTemplate={gridTemplate}
               showReps={showReps}
               showTimer={showTimer}
+              showCalories={showCalories}
               showVelocity={showVelocity}
               prescribedDurationSeconds={effectivePrescribedDurationSec}
               onTimerTargetChange={pickTimerTarget}
@@ -4994,7 +5004,7 @@ function SetRow({
   fieldCascade = null,
   onFieldCascade,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
-  setCount, showReps = true, showTimer = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
+  setCount, showReps = true, showTimer = false, showCalories = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
   onTimerCascade,
   onRemoveSet,
@@ -5010,6 +5020,8 @@ function SetRow({
   /** Which inputs this row shows — Timer is just another optional column. */
   showReps?: boolean;
   showTimer?: boolean;
+  /** Optional calories input (cardio rows by default); never needed for the set to count as done. */
+  showCalories?: boolean;
   /** Optional average concentric velocity (m/s) input; multi-rep sets use the final rep. */
   showVelocity?: boolean;
   /** Shared grid-template-columns string from the exercise card header. */
@@ -5110,6 +5122,16 @@ function SetRow({
   const serverVelocity = (existing as any)?.mean_concentric_velocity_mps != null ? Number((existing as any).mean_concentric_velocity_mps) : null;
   const [velocity, setVelocity] = useState(serverVelocity != null ? String(serverVelocity) : "");
   useEffect(() => { setVelocity(serverVelocity != null ? String(serverVelocity) : ""); }, [serverVelocity]);
+  // Calories for a cardio set (from the machine or a watch). Optional.
+  const serverCalories = (existing as any)?.actual_calories != null ? Number((existing as any).actual_calories) : null;
+  const [calories, setCalories] = useState(serverCalories != null ? String(serverCalories) : "");
+  const [caloriesEdited, setCaloriesEdited] = useState(false);
+  // a save landing mid-typing must never replace what's still being typed
+  const caloriesFocusedRef = useRef(false);
+  useEffect(() => {
+    if (caloriesFocusedRef.current) return;
+    setCalories(serverCalories != null ? String(serverCalories) : "");
+  }, [serverCalories]);
   // Timer result for this set (seconds actually performed). Local state keeps
   // the cell responsive; the server value re-hydrates it whenever it changes.
   const serverDuration =
@@ -5421,12 +5443,17 @@ function SetRow({
     setRepsEdited(src?.actual_reps != null);
     setRpeEdited(src?.actual_rpe_num != null || !!src?.actual_rpe);
     setVelocity(src?.mean_concentric_velocity_mps != null ? String(src.mean_concentric_velocity_mps) : "");
+    setCalories(src?.actual_calories != null ? String(src.actual_calories) : "");
+    setCaloriesEdited(false);
     setDurationSec(src?.completed_duration_seconds != null ? Number(src.completed_duration_seconds) : null);
     adoptShownAsSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore?.token]);
 
-  const value = useMemo(() => ({ load, reps, rpe, velocity, unit: loadUnit, bw, loadType }), [load, reps, rpe, velocity, loadUnit, bw, loadType]);
+  const value = useMemo(() => ({ load, reps, rpe, velocity, calories, unit: loadUnit, bw, loadType }), [load, reps, rpe, velocity, calories, loadUnit, bw, loadType]);
+  // A timed set is done at its prescribed time once RPE or calories go in (timedSetAutoDuration).
+  const autoDurationFor = (edited: boolean): number | null =>
+    timedSetAutoDuration({ showTimer, loggedSeconds: durationSec, edited, prescribedSeconds: prescribedDurationSeconds });
   // Forward-ref to the autosave handle so effects defined above can call
   // markClean() without a TDZ error.
   const saveRef = useRef<ReturnType<typeof useAutosave<typeof value>> | null>(null);
@@ -5439,7 +5466,7 @@ function SetRow({
     // Unit-only changes are display/preference only. The raw typed load is
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
-      if (a.reps !== b.reps || a.rpe !== b.rpe || a.velocity !== b.velocity) return false;
+      if (a.reps !== b.reps || a.rpe !== b.rpe || a.velocity !== b.velocity || a.calories !== b.calories) return false;
       if (a.bw !== b.bw) return false;
       if (a.loadType !== b.loadType) return false;
       return equalDisplayLoads(a, b);
@@ -5456,7 +5483,7 @@ function SetRow({
     // Autosave even while a field remains focused so mobile keyboards / sticky
     // focus cannot leave workout inputs unsaved. The server hydration effect
     // still refuses to overwrite the focused field, so active typing is safe.
-    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || velocity.length > 0 || bw || !!existing),
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || velocity.length > 0 || calories.length > 0 || bw || !!existing),
     // A set that can't save right now (offline, or its first failed try) goes
     // to the durable queue at once, so leaving the workout or the app closing
     // can't lose it; the row's own later save supersedes it.
@@ -5466,6 +5493,8 @@ function SetRow({
       const repsNum = value.reps ? parseInt(value.reps, 10) : null;
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const velocityNum = value.velocity ? Number(value.velocity) : null;
+      const caloriesNum = value.calories ? Number(value.calories) : null;
+      const autoDuration = autoDurationFor(rpeEdited || caloriesEdited);
       const persistedLoad = value.bw
         ? { value: 0, unit: value.unit }
         : persistedLoadForDisplayValue(value.load, value.unit, existing);
@@ -5476,7 +5505,7 @@ function SetRow({
         loadType: value.loadType,
         load: value.bw ? 0 : value.load,
         reps: repsNum,
-        durationSeconds: durationSec,
+        durationSeconds: durationSec ?? autoDuration,
       })
         ? (existing?.completed_at ?? new Date().toISOString())
         : null;
@@ -5501,15 +5530,17 @@ function SetRow({
             actual_rpe: value.rpe || null,
             actual_rpe_num: rpeNum,
             mean_concentric_velocity_mps: velocityNum,
+            ...(showCalories ? { actual_calories: caloriesNum } : {}),
+            ...(autoDuration ? { completed_duration_seconds: autoDuration, completion_method: "prescribed_quick_confirm" } : {}),
             completed_at: completedAt,
           }, adapter, workoutId),
         },
       });
     },
-    onSave: async ({ load, reps, rpe, velocity, unit, bw, loadType }) => {
+    onSave: async ({ load, reps, rpe, velocity, calories, unit, bw, loadType }) => {
       if (readonly) return;
       if (!clientId) return;
-      if (!load && !reps && !rpe && !velocity && !bw && !existing) return;
+      if (!load && !reps && !rpe && !velocity && !calories && !bw && !existing) return;
       // Auto-start the Workout Session clock on the first meaningful log.
       beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
@@ -5517,8 +5548,10 @@ function SetRow({
       const repsNum = reps ? parseInt(reps, 10) : null;
       const rpeNum = rpe ? Number(rpe) : null;
       const velocityNum = velocity ? Number(velocity) : null;
+      const caloriesNum = calories ? Number(calories) : null;
       // a value that can't be saved as typed (never queued: retrying can't fix it)
       const invalid = (message: string) => Object.assign(new Error(message), { invalid: true });
+      if (calories && (caloriesNum == null || !Number.isInteger(caloriesNum) || caloriesNum < 0 || caloriesNum > MAX_SET_CALORIES)) throw invalid(`Calories must be 0–${MAX_SET_CALORIES}`);
       if (velocity && (velocityNum == null || !isFinite(velocityNum) || velocityNum <= 0 || velocityNum > 3.5)) throw invalid("Velocity must be 0.01–3.50 m/s");
       if (load && (displayLoadNum == null || !isFinite(displayLoadNum) || displayLoadNum < 0)) throw invalid("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw invalid("Reps must be a whole number");
@@ -5526,6 +5559,7 @@ function SetRow({
       const persistedLoad = bw
         ? { value: 0, unit }
         : persistedLoadForDisplayValue(load, loadUnit, existing);
+      const autoDuration = autoDurationFor(rpeEdited || caloriesEdited);
       const completedAt = isSetLogComplete({
         requireReps: showReps,
         requireTime: showTimer,
@@ -5533,10 +5567,14 @@ function SetRow({
         loadType,
         load: bw ? 0 : load,
         reps: repsNum,
-        durationSeconds: durationSec,
+        durationSeconds: durationSec ?? autoDuration,
       })
         ? (existing?.completed_at ?? new Date().toISOString())
         : null;
+      if (autoDuration) {
+        beginWorkoutSession(workoutId ?? null);
+        setDurationSec(autoDuration);
+      }
       const payload = withMemberWorkoutIndexes({
         row_id: rowId,
         load_type: loadType,
@@ -5551,6 +5589,10 @@ function SetRow({
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
         mean_concentric_velocity_mps: velocityNum,
+        ...(showCalories ? { actual_calories: caloriesNum } : {}),
+        ...(autoDuration
+          ? { completed_duration_seconds: autoDuration, completion_method: "prescribed_quick_confirm", timer_completed_at: new Date().toISOString() }
+          : {}),
         completed_at: completedAt,
       }, adapter, workoutId);
       let savedId: string | null = existing?.id ?? null;
@@ -5748,7 +5790,7 @@ function SetRow({
     loadType,
     load: bw ? 0 : load,
     reps,
-    durationSeconds: durationSec,
+    durationSeconds: durationSec ?? autoDurationFor(rpeEdited || caloriesEdited),
   });
   // Optimistic green: only while the row's own save for those values is still
   // in flight. Once it lands, `existing.completed_at` carries the state — and a
@@ -5764,7 +5806,7 @@ function SetRow({
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
-  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited;
+  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited || caloriesEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
 
   const isAbortError = (err: unknown) => {
@@ -5839,6 +5881,7 @@ function SetRow({
         actual_reps: repsNum,
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
+        ...(showCalories ? { actual_calories: calories ? Number(calories) : null } : {}),
       completed_at: nextCompletedAt,
     };
       payload = withMemberWorkoutIndexes(payload, adapter, workoutId);
@@ -6055,6 +6098,7 @@ function SetRow({
       actual_reps: repsNumNow,
       actual_rpe: rpe || null,
       actual_rpe_num: rpeNumNow,
+      ...(showCalories && calories && Number.isInteger(Number(calories)) ? { actual_calories: Number(calories) } : {}),
       completed_at: completeNow ? (existing?.completed_at ?? nowIso) : null,
       }, adapter, workoutId);
     try {
@@ -6145,6 +6189,25 @@ function SetRow({
             void saveTimeCompletion(secs, { method });
             void onTimerCascade?.(setIndex, secs);
           }}
+        />
+      )}
+      {showCalories && (
+        <Input
+          value={calories}
+          onChange={(e) => {
+            setCaloriesEdited(true);
+            setCalories(e.target.value.replace(/[^0-9]/g, "").slice(0, 4));
+          }}
+          onFocus={() => { caloriesFocusedRef.current = true; }}
+          onBlur={() => { caloriesFocusedRef.current = false; flushSaveAfterEdit(); }}
+          onKeyDown={onEnter}
+          inputMode="numeric"
+          enterKeyHint="done"
+          placeholder="kcal"
+          aria-label={`Set ${setIndex} calories (optional)`}
+          disabled={readonly}
+          data-set-calories
+          className={cn("h-8 px-1.5 text-center text-sm tabular-nums placeholder:text-muted-foreground/60", focusMode && "h-10 text-base")}
         />
       )}
       {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}

@@ -57,7 +57,7 @@ export function setTimerTarget(rowId: string, seconds: number | null) {
  * back to the coach's prescription — this only records explicit client
  * choices made through the input-type dropdown.
  */
-export type RowInputOverrides = { reps?: boolean; weight?: boolean; timer?: boolean; velocity?: boolean };
+export type RowInputOverrides = { reps?: boolean; weight?: boolean; timer?: boolean; velocity?: boolean; calories?: boolean };
 
 export function getRowInputs(rowId: string): RowInputOverrides {
   const raw = safeGet(INPUTS_KEY(rowId));
