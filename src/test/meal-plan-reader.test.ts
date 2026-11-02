@@ -130,6 +130,33 @@ describe("meal plan reader", () => {
     const reader = readFileSync("src/components/nutrition/MealPlanReader.tsx", "utf8");
     expect(reader).toContain("<MealTimingBadge");
     expect(reader).toContain("MEAL_TIMING_HINT[meal.timing]");
-    expect(reader).toContain("TIMING_RING[m.timing]");
+    expect(reader).toContain("<TimingIcon timing={m.timing}");
+  });
+});
+
+describe("meal cards are compact and swipe one at a time", () => {
+  const reader = readFileSync("src/components/nutrition/MealPlanReader.tsx", "utf8");
+
+  it("each card keeps its own height (no stretching to the tallest) and one swipe moves one card", () => {
+    expect(reader).toContain("snap-x snap-mandatory items-start");
+    expect(reader).toContain("[scroll-snap-stop:always]");
+    expect(reader).not.toContain('"flex h-full flex-col rounded-2xl');
+  });
+
+  it("food names sit left and amounts right, never wrapping", () => {
+    expect(reader).toMatch(/flex items-baseline justify-between[\s\S]{0,200}\{f\.name\}[\s\S]{0,200}whitespace-nowrap[\s\S]{0,80}\{f\.amount\}/);
+  });
+
+  it("macros are one compact row, and water is its own line under the foods", () => {
+    expect(reader).toContain("<MacroSummary macros={macros} />");
+    const foods = reader.indexOf("data-meal-foods");
+    const water = reader.indexOf("data-meal-water");
+    expect(foods).toBeGreaterThan(0);
+    expect(water).toBeGreaterThan(foods);
+    expect(reader).toContain("Water with this meal");
+  });
+
+  it("the meal tabs sit above the cards, out of the tab bar's way", () => {
+    expect(reader.indexOf("data-meal-pager")).toBeLessThan(reader.indexOf('aria-roledescription="carousel"'));
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Droplets, GalleryHorizontalEnd, Rows3 } from "lucide-react";
+import { Droplets, Dumbbell, GalleryHorizontalEnd, Rows3, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import {
@@ -77,9 +77,17 @@ export function MealPlanReader({ text, water }: { text: string; water?: string |
       {meals.length > 0 && (
         <>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">
+            <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground">
               {meals.length} {meals.length === 1 ? "meal" : "meals"}
-              {dayWater ? ` · ${formatDayWater(dayWater.ml, dayWater.unit)} water` : ""}
+              {dayWater && (
+                <>
+                  <span aria-hidden>·</span>
+                  <Droplets aria-hidden className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                  <span className="truncate" aria-label={`${formatDayWater(dayWater.ml, dayWater.unit)} water`}>
+                    {formatDayWater(dayWater.ml, dayWater.unit)}
+                  </span>
+                </>
+              )}
             </span>
             {canSwipe && <ViewToggle value={view} onChange={setView} />}
           </div>
@@ -87,7 +95,7 @@ export function MealPlanReader({ text, water }: { text: string; water?: string |
           {mode === "swipe" ? (
             <MealSwiper key={text} meals={meals} water={mealWater} />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {meals.map((m, i) => (
                 <MealCard
                   key={i}
@@ -134,7 +142,7 @@ function ViewToggle({
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               active
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
@@ -224,7 +232,30 @@ function MealSwiper({ meals, water }: { meals: MealSection[]; water: MealWater }
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
+      {/* Meal tabs sit above the cards, where the tab bar can never cover them. */}
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-meal-pager>
+        {meals.map((m, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => goTo(i)}
+            aria-label={`Show ${m.title}${m.timing ? `, ${MEAL_TIMING_LABEL[m.timing]}` : ""}`}
+            aria-current={i === active ? "true" : undefined}
+            title={m.timing ? MEAL_TIMING_LABEL[m.timing] : undefined}
+            className={cn(
+              "inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-full px-2.5 text-[13px] font-bold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              i === active
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary/70 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {i + 1}
+            {m.timing && <TimingIcon timing={m.timing} active={i === active} />}
+          </button>
+        ))}
+      </div>
+
       <div
         ref={trackRef}
         tabIndex={0}
@@ -232,8 +263,9 @@ function MealSwiper({ meals, water }: { meals: MealSection[]; water: MealWater }
         aria-roledescription="carousel"
         aria-label="Meals"
         className={cn(
-          "relative -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 md:-mx-5 md:px-5",
+          "relative -mx-4 flex snap-x snap-mandatory items-start gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 md:-mx-5 md:px-5",
           "scroll-px-4 md:scroll-px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "touch-pan-x touch-pan-y [-webkit-overflow-scrolling:touch]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
         )}
       >
@@ -243,7 +275,7 @@ function MealSwiper({ meals, water }: { meals: MealSection[]; water: MealWater }
             role="group"
             aria-roledescription="slide"
             aria-label={`${m.title}, ${i + 1} of ${meals.length}`}
-            className="w-[86%] shrink-0 snap-start sm:w-[calc(50%-0.375rem)]"
+            className="w-[88%] shrink-0 snap-start [scroll-snap-stop:always] sm:w-[calc(50%-0.3125rem)]"
           >
             <MealCard
               meal={m}
@@ -252,60 +284,21 @@ function MealSwiper({ meals, water }: { meals: MealSection[]; water: MealWater }
           </div>
         ))}
       </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {meals.map((m, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => goTo(i)}
-            aria-label={`Show ${m.title}${m.timing ? `, ${MEAL_TIMING_LABEL[m.timing]}` : ""}`}
-            aria-current={i === active ? "true" : undefined}
-            className={cn(
-              "grid h-9 min-w-9 place-items-center rounded-full px-2 text-sm font-bold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              i === active
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary/70 text-muted-foreground hover:text-foreground",
-              m.timing && `ring-2 ring-offset-2 ring-offset-card ${TIMING_RING[m.timing]}`,
-            )}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-
-      {meals.some((m) => m.timing) && (
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-          {meals.map((m, i) =>
-            m.timing ? (
-              <button
-                key={i}
-                type="button"
-                onClick={() => goTo(i)}
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span aria-hidden className={cn("h-2 w-2 rounded-full", TIMING_DOT[m.timing])} />
-                <span className="font-semibold text-foreground">{MEAL_TIMING_LABEL[m.timing]}</span>
-                <span>{m.title.replace(/\s+/g, " ").trim()}</span>
-              </button>
-            ) : null,
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-const TIMING_RING: Record<Exclude<MealTiming, null>, string> = {
-  pre: "ring-amber-500",
-  post: "ring-emerald-500",
-  pre_post: "ring-sky-500",
+const TIMING_TEXT: Record<Exclude<MealTiming, null>, string> = {
+  pre: "text-amber-500",
+  post: "text-emerald-500",
+  pre_post: "text-sky-500",
 };
-const TIMING_DOT: Record<Exclude<MealTiming, null>, string> = {
-  pre: "bg-amber-500",
-  post: "bg-emerald-500",
-  pre_post: "bg-sky-500",
-};
+
+/** The meal tab's pre / post mark: the same icon as the card's badge. */
+function TimingIcon({ timing, active }: { timing: Exclude<MealTiming, null>; active: boolean }) {
+  const Icon = timing === "post" ? Dumbbell : Zap;
+  return <Icon aria-hidden className={cn("h-3 w-3", active ? "text-primary-foreground" : TIMING_TEXT[timing])} />;
+}
 
 /* ---------- Meal card ---------- */
 
@@ -327,110 +320,123 @@ function MealCard({
 
   return (
     <article
+      data-meal-card
       className={cn(
-        "flex h-full flex-col rounded-2xl border bg-secondary/35 p-4",
-        meal.timing === "pre"
-          ? "border-amber-500/50"
-          : meal.timing === "post"
-            ? "border-emerald-500/50"
-            : meal.timing
-              ? "border-sky-500/50"
-              : "border-border/80",
+        "rounded-2xl border bg-secondary/30 px-3.5 pb-3 pt-3",
+        meal.timing ? TIMING_BORDER[meal.timing] : "border-border/70",
       )}
     >
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-lg font-black leading-tight">
-            {meal.title.replace(/\s+/g, " ").trim()}
-          </h3>
-          {meal.subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{meal.subtitle}</p>}
-        </div>
+      <header className="flex items-baseline justify-between gap-3">
+        <h3 className="min-w-0 truncate text-[17px] font-bold leading-tight">
+          {meal.title.replace(/\s+/g, " ").trim()}
+        </h3>
         {kcal != null && kcal > 0 && (
-          <span className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold tabular-nums text-muted-foreground">
             {formatKcal(kcal)} kcal
           </span>
         )}
       </header>
+      {meal.subtitle && (
+        <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{meal.subtitle}</p>
+      )}
 
       {meal.timing && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <MealTimingBadge timing={meal.timing} />
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <MealTimingBadge
+            timing={meal.timing}
+            className="gap-1 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal"
+          />
+          <span className="inline-flex min-w-0 items-center gap-1 text-xs leading-snug text-muted-foreground">
             {MEAL_TIMING_HINT[meal.timing]}
             <WorkoutMealInfo />
           </span>
         </div>
       )}
 
-      {(foods.length > 0 || (water && water.amount > 0)) && (
-        <ul className="mt-3 divide-y divide-border/60">
+      {macros ? (
+        <MacroSummary macros={macros} />
+      ) : meal.approx ? (
+        <p className="mt-2.5 text-[13px] font-semibold text-muted-foreground">Approx {meal.approx}</p>
+      ) : null}
+
+      {foods.length > 0 && (
+        <ul className="mt-2 divide-y divide-border/50" data-meal-foods>
           {foods.map((f, j) =>
             f.amount ? (
-              <li key={j} className="grid grid-cols-[3.75rem_1fr] items-baseline gap-3 py-2.5">
-                <span className="text-right text-[15px] font-bold tabular-nums">{f.amount}</span>
-                <span className="text-base leading-snug text-foreground/90">{f.name}</span>
+              <li key={j} className="flex items-baseline justify-between gap-3 py-[7px]">
+                <span className="min-w-0 text-[15px] leading-snug text-foreground/90">{f.name}</span>
+                <span className="shrink-0 whitespace-nowrap text-[15px] font-semibold tabular-nums">
+                  {f.amount}
+                </span>
               </li>
             ) : (
-              <li key={j} className="py-2.5 text-[15px] leading-snug text-muted-foreground">
+              <li key={j} className="py-[7px] text-[14px] leading-snug text-muted-foreground">
                 {f.name}
               </li>
             ),
           )}
-          {water && water.amount > 0 && (
-            <li
-              className="grid grid-cols-[3.75rem_1fr] items-baseline gap-3 py-2.5"
-              data-meal-water
-            >
-              <span className="text-right text-[15px] font-bold tabular-nums text-sky-600 dark:text-sky-400">
-                {formatMealWater(water.amount, water.unit)}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-base leading-snug text-foreground/90">
-                Water
-                <Droplets aria-hidden className="h-3.5 w-3.5 text-sky-500" />
-              </span>
-            </li>
-          )}
         </ul>
       )}
 
-      {macros ? (
-        <div className="mt-auto pt-4">
-          <dl className="grid grid-cols-4 gap-2 rounded-xl bg-card px-3 py-3">
-            {(
-              [
-                ["Protein", macros.protein, MACRO_COLOR.protein],
-                ["Carbs", macros.carbs, MACRO_COLOR.carbs],
-                ["Fat", macros.fats, MACRO_COLOR.fats],
-                ["Fibre", macros.fibre, MACRO_COLOR.fibre],
-              ] as const
-            ).map(([label, value, color]) => (
-              <div key={label} className="min-w-0">
-                <span
-                  aria-hidden
-                  className="block h-1 w-5 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
-                <dt className="mt-1.5 truncate text-[11px] text-muted-foreground">{label}</dt>
-                <dd className="text-base font-bold leading-tight tabular-nums">
-                  {value != null ? (
-                    <>
-                      {value}
-                      <span className="ml-0.5 text-xs font-semibold text-muted-foreground">g</span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
+      {water && water.amount > 0 && (
+        <div
+          className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-[13px] text-sky-700 dark:text-sky-300"
+          data-meal-water
+        >
+          <span className="inline-flex min-w-0 items-center gap-1.5">
+            <Droplets aria-hidden className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Water with this meal</span>
+          </span>
+          <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums">
+            {formatMealWater(water.amount, water.unit)}
+          </span>
         </div>
-      ) : meal.approx ? (
-        <div className="mt-auto pt-4 text-sm font-semibold text-muted-foreground">
-          Approx {meal.approx}
-        </div>
-      ) : null}
+      )}
     </article>
+  );
+}
+
+const TIMING_BORDER: Record<Exclude<MealTiming, null>, string> = {
+  pre: "border-amber-500/45",
+  post: "border-emerald-500/45",
+  pre_post: "border-sky-500/45",
+};
+
+/** The meal's macros in one compact row: number first, the macro's colour by its name. */
+function MacroSummary({ macros }: { macros: NonNullable<ReturnType<typeof mealMacroNumbers>> }) {
+  const cells = (
+    [
+      ["Protein", macros.protein, MACRO_COLOR.protein],
+      ["Carbs", macros.carbs, MACRO_COLOR.carbs],
+      ["Fat", macros.fats, MACRO_COLOR.fats],
+      ["Fibre", macros.fibre, null],
+    ] as const
+  ).filter(([label, value]) => label !== "Fibre" || value != null);
+  return (
+    <dl
+      className="mt-2.5 grid divide-x divide-border/50 rounded-xl bg-card/80 py-1.5"
+      style={{ gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))` }}
+      data-meal-macros
+    >
+      {cells.map(([label, value, color]) => (
+        <div key={label} className="flex min-w-0 flex-col-reverse items-center px-0.5">
+          <dt className="mt-0.5 flex min-w-0 items-center gap-[3px] text-[11px] text-muted-foreground">
+            {color && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />}
+            <span className="truncate">{label}</span>
+          </dt>
+          <dd className="text-[15px] font-bold leading-tight tabular-nums">
+            {value != null ? (
+              <>
+                {value}
+                <span className="ml-px text-[11px] font-semibold text-muted-foreground">g</span>
+              </>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
