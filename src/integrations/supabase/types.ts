@@ -18189,6 +18189,7 @@ export type Database = {
       }
       pl_row_results: {
         Row: {
+          actual_calories: number | null
           actual_load: number | null
           actual_load_kg: number | null
           actual_load_lb: number | null
@@ -18221,6 +18222,7 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          actual_calories?: number | null
           actual_load?: number | null
           actual_load_kg?: number | null
           actual_load_lb?: number | null
@@ -18253,6 +18255,7 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          actual_calories?: number | null
           actual_load?: number | null
           actual_load_kg?: number | null
           actual_load_lb?: number | null

@@ -29,10 +29,11 @@ export const SET_FIELDS = [
   "is_bodyweight",
   "load_type",
   "mean_concentric_velocity_mps",
+  "actual_calories",
 ] as const;
 type SetField = (typeof SET_FIELDS)[number];
 
-const NUMERIC = new Set<SetField>(["actual_load", "entered_value", "actual_reps", "actual_rpe_num", "actual_rir", "completed_duration_seconds", "mean_concentric_velocity_mps"]);
+const NUMERIC = new Set<SetField>(["actual_load", "entered_value", "actual_reps", "actual_rpe_num", "actual_rir", "completed_duration_seconds", "mean_concentric_velocity_mps", "actual_calories"]);
 const TIMESTAMP = new Set<SetField>(["completed_at", "timer_started_at", "timer_completed_at"]);
 /** NOT NULL columns: a missing value means the column default. */
 const DEFAULTS: Partial<Record<SetField, string | boolean>> = { is_bodyweight: false, load_type: "external" };
@@ -90,6 +91,7 @@ export function snapshotKey(s: CardSnapshot): string {
       x.completed_at != null,
       x.completed_duration_seconds,
       x.mean_concentric_velocity_mps,
+      x.actual_calories,
       x.load_type,
     ]),
     s.warmups,
