@@ -89,7 +89,7 @@ export function TrainingTimeSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl pb-safe">
         <SheetHeader className="pb-2 text-left">
-          <SheetTitle className="text-lg font-black">When did you train?</SheetTitle>
+          <SheetTitle className="text-lg font-bold">When did you train?</SheetTitle>
           <SheetDescription className="text-xs">
             {workoutTitle ? `${workoutTitle} · ` : ""}Your coach uses this to find your best training time.
           </SheetDescription>
@@ -131,7 +131,7 @@ export function TrainingTimeSheet({
                 >
                   <Minus className="h-4 w-4" />
                 </button>
-                <span className="min-w-[72px] text-center text-base font-black tabular-nums text-foreground">
+                <span className="min-w-[72px] text-center text-base font-bold tabular-nums text-foreground">
                   {formatMinutes(duration)}
                 </span>
                 <button
@@ -179,7 +179,7 @@ export function TrainingTimeSheet({
           >
             <Clock className={cn("h-5 w-5 shrink-0", inFuture ? "text-destructive" : "text-muted-foreground")} />
             <div className="min-w-0">
-              <div className="text-base font-black tabular-nums text-foreground">
+              <div className="text-base font-bold tabular-nums text-foreground">
                 {start && end ? `${formatClockAt(start, timezone)} → ${formatClockAt(end, timezone)}` : "Pick a day and time"}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -188,7 +188,7 @@ export function TrainingTimeSheet({
             </div>
           </div>
 
-          <Button size="lg" className="h-12 w-full text-base font-black" disabled={!start || inFuture || saving} onClick={onSave}>
+          <Button size="lg" className="h-12 w-full text-base font-bold" disabled={!start || inFuture || saving} onClick={onSave}>
             {saving ? "Saving…" : "Save session time"}
           </Button>
         </div>

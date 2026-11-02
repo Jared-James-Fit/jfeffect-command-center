@@ -69,7 +69,7 @@ export function RankBars({ rows, empty = "Nothing yet.", tone = "primary" }: {
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
             <div
-              className={cn("h-full rounded-full", tone === "warn" ? "bg-amber-500" : "bg-primary")}
+              className={cn("h-full rounded-full", tone === "warn" ? "bg-warning" : "bg-primary")}
               style={{ width: `${Math.max(2, Math.round((r.valueMinor / max) * 100))}%` }}
             />
           </div>

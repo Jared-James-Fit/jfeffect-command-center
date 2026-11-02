@@ -700,7 +700,7 @@ export function priorityTone(p?: string | null) {
     case "High Priority": return "border-destructive/40 bg-destructive/10 text-destructive";
     case "Important": return "border-warning/40 bg-warning/10 text-warning";
     case "Needs Response": return "border-primary/40 bg-primary/10 text-primary";
-    case "Resolved": return "border-emerald-500/40 bg-emerald-500/10 text-emerald-600";
+    case "Resolved": return "border-success/40 bg-success/10 text-success";
     default: return "border-border text-muted-foreground";
   }
 }

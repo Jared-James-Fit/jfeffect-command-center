@@ -68,7 +68,7 @@ function SmartTodayCardInner({ state, clientId }: { state: TodayState; clientId:
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
               view.statusPillClass ?? "bg-primary text-primary-foreground",
             )}
           >
@@ -84,13 +84,13 @@ function SmartTodayCardInner({ state, clientId }: { state: TodayState; clientId:
 
         {/* Block title — the big screenshot moment */}
         {blockName ? (
-          <div className="text-[11px] font-black uppercase tracking-[0.22em] text-primary/90">
+          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary/90">
             {blockName}
           </div>
         ) : null}
 
         {/* Day title — primary headline */}
-        <h2 className="text-3xl font-black leading-[1.05] tracking-tight text-white md:text-4xl">
+        <h2 className="text-3xl font-bold leading-[1.05] tracking-tight text-white md:text-4xl">
           {dayTitle ?? view.title}
         </h2>
         {dayFocus && (
@@ -191,10 +191,10 @@ function render(state: TodayState): View {
         subtitle: "Pick up where you left off.",
         meta,
         icon: <RotateCcw className="h-5 w-5 text-primary-foreground" />,
-        iconBg: "bg-amber-500",
-        borderClass: "border-amber-500",
-        bgClass: "bg-amber-500",
-        statusPillClass: "bg-amber-500 text-black",
+        iconBg: "bg-warning",
+        borderClass: "border-warning",
+        bgClass: "bg-warning",
+        statusPillClass: "bg-warning text-black",
         primary: startBtn(it, "Continue Workout", <Play className="mr-2 h-4 w-4" />),
       };
     }
@@ -205,10 +205,10 @@ function render(state: TodayState): View {
         title: "No workout scheduled today.",
         subtitle: "Recover, eat well, sleep well — see you next session.",
         icon: <Coffee className="h-5 w-5 text-primary-foreground" />,
-        iconBg: "bg-sky-500",
-        borderClass: "border-sky-500/60",
-        bgClass: "bg-sky-500",
-        statusPillClass: "bg-sky-500 text-white",
+        iconBg: "bg-info",
+        borderClass: "border-info/60",
+        bgClass: "bg-info",
+        statusPillClass: "bg-info text-white",
         primary: next ? (
           <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }} search={(next.scheduledWorkoutId ? { instance: next.scheduledWorkoutId } : undefined) as any}>
             <Button size="lg" variant="outline" className="font-bold uppercase">
@@ -265,10 +265,10 @@ function render(state: TodayState): View {
         title: state.block?.name ? `${state.block.name} — All Workouts Complete` : "All Workouts Complete",
         subtitle: "Nice work. Your coach will set up your next block.",
         icon: <CheckCircle2 className="h-5 w-5 text-primary-foreground" />,
-        iconBg: "bg-emerald-500",
-        borderClass: "border-emerald-500/60",
-        bgClass: "bg-emerald-500",
-        statusPillClass: "bg-emerald-500 text-white",
+        iconBg: "bg-success",
+        borderClass: "border-success/60",
+        bgClass: "bg-success",
+        statusPillClass: "bg-success text-white",
         primary: (
           <Link to="/portal/workouts">
             <Button size="lg" variant="outline" className="font-bold uppercase">

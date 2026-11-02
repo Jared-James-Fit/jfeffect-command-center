@@ -93,7 +93,7 @@ export function EditableCard<T extends Record<string, any>>({
           <Button variant="outline" className="min-h-[44px]" onClick={cancel} disabled={saving}>
             <X className="mr-2 h-4 w-4" /> Cancel
           </Button>
-          <Button className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save} disabled={saving}>
+          <Button className="min-h-[44px] bg-primary text-primary-foreground font-semibold" onClick={save} disabled={saving}>
             <Save className="mr-2 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>

@@ -67,10 +67,10 @@ function statusOf(t: BookingType): Status {
   if (!t.online_enabled)
     return { label: "In-app only", tone: "border-border text-muted-foreground" };
   if (!(t.hours ?? []).length)
-    return { label: "No hours set", tone: "border-amber-500/40 bg-amber-500/10 text-amber-500" };
+    return { label: "No hours set", tone: "border-warning/40 bg-warning/10 text-warning" };
   return {
     label: "Taking bookings",
-    tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-500",
+    tone: "border-success/40 bg-success/10 text-success",
   };
 }
 
@@ -199,7 +199,7 @@ export function AdminBookingPanel() {
         title="Booking"
         subtitle="Book a client in a tap, or send a link so people book themselves from your open hours."
         actions={
-          <Button size="sm" className="bg-gradient-primary font-bold" onClick={() => openNew(null)}>
+          <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => openNew(null)}>
             <Plus className="mr-1.5 h-4 w-4" /> New type
           </Button>
         }
@@ -212,14 +212,14 @@ export function AdminBookingPanel() {
           className={cn(
             "flex w-full items-start gap-3 rounded-xl border p-3 text-left",
             gcal?.connected
-              ? "border-emerald-500/30 bg-emerald-500/5"
-              : "border-amber-500/40 bg-amber-500/10",
+              ? "border-success/30 bg-success/5"
+              : "border-warning/40 bg-warning/10",
           )}
         >
           {gcal?.connected ? (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
           ) : (
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           )}
           <span className="min-w-0 text-xs leading-snug">
             {gcal?.connected ? (
@@ -324,7 +324,7 @@ export function AdminBookingPanel() {
                       {online ? (
                         <Button
                           size="sm"
-                          className="h-9 bg-gradient-primary font-bold"
+                          className="h-9 bg-primary text-primary-foreground font-semibold"
                           onClick={() => setShare({ name: t.name, slug: t.slug! })}
                         >
                           <Send className="mr-1.5 h-3.5 w-3.5" /> Send link

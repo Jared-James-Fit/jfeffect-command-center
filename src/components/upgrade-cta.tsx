@@ -21,9 +21,9 @@ export function UpgradeCTA({
 
   if (inline) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+      <div className="flex items-center justify-between gap-3 rounded-md border border-warning/30 bg-warning/10 p-3">
         <div className="flex items-center gap-2 text-sm">
-          <Lock className="h-4 w-4 text-amber-500" />
+          <Lock className="h-4 w-4 text-warning" />
           <span className="font-medium">{title}</span>
           <span className="text-muted-foreground hidden sm:inline">— {subtitle}</span>
         </div>
@@ -34,9 +34,9 @@ export function UpgradeCTA({
     );
   }
   return (
-    <Card className="border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-background to-background p-6">
+    <Card className="border-warning/30 bg-warning/5 p-6">
       <div className="flex items-start gap-3">
-        <Sparkles className="h-5 w-5 text-amber-500" />
+        <Sparkles className="h-5 w-5 text-warning" />
         <div className="min-w-0 flex-1">
           <div className="text-lg font-bold">{title}</div>
           <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div>

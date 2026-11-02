@@ -112,14 +112,14 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
 
   const Wrapper = embedded ? "div" : Card;
   return (
-    <Wrapper className={embedded ? "space-y-3" : `border-border bg-card ${compact ? "p-4" : "p-4 sm:p-6"} space-y-3 ${incomplete && editable ? "border-amber-500/50" : ""}`}>
+    <Wrapper className={embedded ? "space-y-3" : `border-border bg-card ${compact ? "p-4" : "p-4 sm:p-6"} space-y-3 ${incomplete && editable ? "border-warning/50" : ""}`}>
       {!embedded && <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <Calendar className="h-4 w-4 shrink-0" /> Committed Training Schedule
           </h3>
           {incomplete && (
-            <Badge variant="outline" className="whitespace-nowrap border-amber-500/40 text-amber-500">
+            <Badge variant="outline" className="whitespace-nowrap border-warning/40 text-warning">
               <AlertCircle className="mr-1 h-3 w-3" /> Required
             </Badge>
           )}
@@ -171,7 +171,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
               onToggle={(d) => toggle(committedDays, setCommittedDays, d)}
             />
             {targetCount > 0 && (
-              <div className={`mt-1 text-[11px] ${dayCountValid ? "text-muted-foreground" : "text-amber-500"}`}>
+              <div className={`mt-1 text-[11px] ${dayCountValid ? "text-muted-foreground" : "text-warning"}`}>
                 {committedDays.length} of {targetCount} selected
               </div>
             )}
@@ -180,7 +180,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
             <Button size="sm" variant="ghost" onClick={() => { reset(); setEditing(false); onDone?.(); }}>
               <X className="mr-1 h-3.5 w-3.5" /> Cancel
             </Button>
-            <Button size="sm" onClick={save} disabled={saving || !dayCountValid} className="bg-gradient-primary font-bold uppercase">
+            <Button size="sm" onClick={save} disabled={saving || !dayCountValid} className="bg-primary text-primary-foreground font-semibold">
               <Save className="mr-1 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>
@@ -276,7 +276,7 @@ export function TrainingScheduleChip({ client, editable = true, className }: { c
         aria-label={set ? `Training days: ${label}${editable ? ". Change" : ""}` : label}
         className={cn(
           "inline-flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-full border px-3 text-[12px] font-bold transition active:scale-[0.97] disabled:opacity-100",
-          needed ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400" : "border-border bg-card text-foreground",
+          needed ? "border-warning/50 bg-warning/10 text-warning" : "border-border bg-card text-foreground",
           className,
         )}
         data-training-days-chip
@@ -344,7 +344,7 @@ export function TrainingScheduleBadges({ client }: { client: Client }) {
         <Badge variant="outline">Rest: {formatDays(client.preferred_rest_days)}</Badge>
       )}
       {(client.preferred_high_days?.length ?? 0) > 0 && (
-        <Badge variant="outline" className="border-amber-500/40 text-amber-500">
+        <Badge variant="outline" className="border-warning/40 text-warning">
           High: {formatDays(client.preferred_high_days)}
         </Badge>
       )}

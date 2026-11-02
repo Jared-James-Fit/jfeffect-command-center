@@ -10,7 +10,7 @@ describe("Workouts: a compact top, no schedule card", () => {
   it("the title and Today / Analytics / ⋮ share one row on the athlete's page; the coach's keeps the name whole", () => {
     expect(page).toContain("actionsInline={mode === \"self\"}");
     expect(shell).toContain("if (actionsInline && !showBack) {");
-    expect(shell).toContain('<h1 className="min-w-0 truncate text-lg font-black');
+    expect(shell).toContain('<h1 className="min-w-0 truncate text-lg font-bold');
   });
   it("the committed days are one chip beside Week / Month (tap to change them in a sheet), not a card", () => {
     expect(page).not.toContain("<TrainingScheduleCard");

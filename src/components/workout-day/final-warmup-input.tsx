@@ -208,7 +208,7 @@ export function WarmupRows({
         ) : (
           <div
             key={s.id}
-            className="grid items-center gap-1.5 border-t border-builder-card-border/70 bg-orange-500/[0.05] px-2 py-1"
+            className="grid items-center gap-1.5 border-t border-builder-card-border/70 bg-warning/[0.05] px-2 py-1"
             style={{ gridTemplateColumns: gridTemplate }}
             data-testid="warmup-row"
           >
@@ -218,7 +218,7 @@ export function WarmupRows({
               disabled={!canEdit}
               onClick={() => onFormChange(s.id)}
               aria-label={canEdit ? `Edit warm-up ${describeWarmup(s, unit)}` : undefined}
-              className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-md px-1 text-left text-sm transition enabled:active:bg-orange-500/10 disabled:cursor-default"
+              className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-md px-1 text-left text-sm transition enabled:active:bg-warning/10 disabled:cursor-default"
               style={{ gridColumn: "2 / -1" }}
             >
               <span className="shrink-0 whitespace-nowrap font-bold tabular-nums text-foreground">
@@ -230,7 +230,7 @@ export function WarmupRows({
                 </span>
               )}
               {tunedId === s.id && (
-                <span className="truncate text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">✓ tuned</span>
+                <span className="truncate text-[11px] font-semibold text-success">✓ tuned</span>
               )}
               {canEdit && <Pencil className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
             </button>
@@ -245,19 +245,19 @@ export function WarmupRows({
             type="button"
             onClick={() => onFormChange("new")}
             data-testid="warmup-prompt"
-            className="grid w-full items-center gap-1.5 border-t border-orange-500/25 bg-orange-500/[0.07] px-2 py-1.5 text-left transition active:bg-orange-500/15"
+            className="grid w-full items-center gap-1.5 border-t border-warning/25 bg-warning/[0.07] px-2 py-1.5 text-left transition active:bg-warning/15"
             style={{ gridTemplateColumns: gridTemplate }}
           >
             <WBadge />
             <span className="flex min-w-0 items-center gap-1.5" style={{ gridColumn: "2 / -1" }}>
-              <Flame className="h-3.5 w-3.5 shrink-0 text-orange-500" aria-hidden="true" />
+              <Flame className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
                 <span className="font-bold">Last warm-up</span>
                 <span className="text-muted-foreground">
                   {prompt.suggested ? ` · ~${fmt(prompt.suggested.load)} × ${prompt.suggested.reps}` : " · sets today's weight"}
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-bold text-orange-600 dark:text-orange-400">Log</span>
+              <span className="shrink-0 text-xs font-bold text-warning">Log</span>
             </span>
           </button>
         )
@@ -268,7 +268,7 @@ export function WarmupRows({
 
 function WBadge() {
   return (
-    <span className="text-center text-sm font-bold text-orange-500" title="Warm-up — not counted as a working set">
+    <span className="text-center text-sm font-bold text-warning" title="Warm-up — not counted as a working set">
       W
     </span>
   );
@@ -345,7 +345,7 @@ function WarmupForm({
   const range = hint && hint.low !== hint.high ? `${fmt(hint.low)}–${fmt(hint.high)}` : null;
 
   return (
-    <div className="border-t border-orange-500/30 bg-orange-500/[0.06] px-2 pb-2 pt-1.5" data-testid="warmup-form">
+    <div className="border-t border-warning/30 bg-warning/[0.06] px-2 pb-2 pt-1.5" data-testid="warmup-form">
       {/* Row 1: W | weight × reps | close — lined up with the set table. */}
       <form
         className="grid items-center gap-1.5"
@@ -399,7 +399,7 @@ function WarmupForm({
             onClick={() => setRpe(f.rpe)}
             className={cn(
               "flex h-10 flex-col items-center justify-center rounded-md border text-xs font-bold leading-none transition active:scale-[0.97]",
-              rpe === f.rpe ? "border-orange-500 bg-orange-500 text-white" : "border-border bg-background text-foreground",
+              rpe === f.rpe ? "border-warning bg-warning text-white" : "border-border bg-background text-foreground",
             )}
           >
             {f.label}
@@ -416,7 +416,7 @@ function WarmupForm({
               Today: {target!.reps} {target!.reps === 1 ? "rep" : "reps"} @ RPE {fmt(target!.rpe)}
             </div>
             <div className="truncate">
-              <span className="text-base font-black tabular-nums text-foreground" data-testid="warmup-target">
+              <span className="text-base font-bold tabular-nums text-foreground" data-testid="warmup-target">
                 {hint ? `${fmt(hint.target)} ${unit}` : "—"}
               </span>
               {range && <span className="ml-1 text-[11px] tabular-nums text-muted-foreground">({range})</span>}

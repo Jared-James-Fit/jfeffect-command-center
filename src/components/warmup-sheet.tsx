@@ -30,7 +30,7 @@ export function WarmupButton(props: Props) {
         className={cn("gap-1.5", props.className)}
         onClick={() => setOpen(true)}
       >
-        <Flame className="h-4 w-4 text-orange-500" /> Warm-Up
+        <Flame className="h-4 w-4 text-warning" /> Warm-Up
       </Button>
       {open && <WarmupSheet {...props} open={open} onOpenChange={setOpen} />}
     </>
@@ -73,7 +73,7 @@ function WarmupSheet({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg pb-32">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-500" />
+            <Flame className="h-5 w-5 text-warning" />
             {data?.protocol?.name ?? "Warm-Up"}
           </SheetTitle>
           {data?.protocol && (

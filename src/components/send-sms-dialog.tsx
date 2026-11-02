@@ -74,8 +74,8 @@ export function SendSmsDialog({
         </DialogHeader>
         <div className="space-y-3">
           {settings && (!settings.from_phone || !settings.enabled) && (
-            <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-              <div className="font-semibold text-amber-700 dark:text-amber-400">SMS not ready to send</div>
+            <div className="rounded border border-warning/40 bg-warning/10 p-3 text-xs">
+              <div className="font-semibold text-warning">SMS not ready to send</div>
               <div className="mt-1 text-muted-foreground">
                 {!settings.from_phone && <div>• No Twilio From number configured.</div>}
                 {!settings.enabled && <div>• SMS sending is currently disabled.</div>}

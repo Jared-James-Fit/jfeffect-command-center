@@ -460,8 +460,8 @@ export function CardioApplyDefaultsDialog({
                     </div>
 
                     {row.enabled && row.day_type === "High Day" && (
-                      <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px]">
-                        <div className="mb-1 font-semibold text-amber-700 dark:text-amber-500">
+                      <div className="rounded-md border border-warning/30 bg-warning/5 px-2 py-1.5 text-[11px]">
+                        <div className="mb-1 font-semibold text-warning">
                           Scheduled weekday
                         </div>
                         <div className="flex flex-wrap gap-1">
@@ -472,7 +472,7 @@ export function CardioApplyDefaultsDialog({
                               onClick={() => setHighDayWeekday(d)}
                               className={`h-6 rounded px-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${
                                 highDayWeekday === d
-                                  ? "bg-amber-500 text-white"
+                                  ? "bg-warning text-white"
                                   : "border border-border bg-background text-muted-foreground hover:bg-secondary"
                               }`}
                             >
@@ -587,7 +587,7 @@ export function CardioApplyDefaultsDialog({
             onClick={apply}
             jobLabel="Applying default cardio"
             disabled={!isValid || saving}
-            className="bg-gradient-primary font-bold uppercase"
+            className="bg-primary text-primary-foreground font-semibold"
           >
             {isValid
               ? `Apply (${totalDays}/7 days)`
@@ -634,7 +634,7 @@ function WeeklyPreview({
           let label = "";
           let sub = "";
           if (isHigh) {
-            tone = "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-500";
+            tone = "border-warning/50 bg-warning/10 text-warning";
             label = "High";
             sub = highRow?.cardio_type ?? "";
           } else if (isTraining) {
@@ -656,7 +656,7 @@ function WeeklyPreview({
               className={`rounded border p-1 text-center transition-colors ${tone}`}
               title={`${d} · ${label}${sub ? " · " + sub : ""}`}
             >
-              <div className="text-[9px] font-black uppercase tracking-widest">{SHORT_DAY[d]}</div>
+              <div className="text-[9px] font-bold uppercase tracking-widest">{SHORT_DAY[d]}</div>
               <div className="text-[9px] font-bold leading-tight">{label}</div>
               {sub && <div className="truncate text-[8px] opacity-80">{sub}</div>}
             </li>

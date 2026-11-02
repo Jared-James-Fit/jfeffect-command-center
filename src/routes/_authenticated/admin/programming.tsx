@@ -181,7 +181,7 @@ function AdminProgramBrowser() {
                 </Link>
               </Button>
               {it.membershipPublished && (
-                <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-300">
+                <span className="rounded-full border border-destructive/40 bg-destructive/15 px-2 py-0.5 text-[10px] font-medium text-destructive">
                   In Membership Library
                 </span>
               )}

@@ -132,9 +132,9 @@ function SuggestedTargetsSection({
   if (!hasSuggestion) {
     return (
       <>
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4">
+        <Card className="border-primary/30 bg-card p-4">
           <div className="text-[10px] font-semibold uppercase tracking-widest text-primary">Suggested Nutrition Targets</div>
-          <div className="mt-1 text-base font-black leading-tight">Get your daily calories and macros</div>
+          <div className="mt-1 text-base font-bold leading-tight">Get your daily calories and macros</div>
           <p className="mt-1 text-xs text-muted-foreground">
             Six quick answers about you and your goal. We fill in what we already know.
           </p>
@@ -235,7 +235,7 @@ function TargetsStrip({
     <Card className={cn("space-y-4 p-4 transition-shadow duration-500 md:p-5", highlight && "ring-2 ring-primary")}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="text-sm font-black uppercase tracking-widest">Daily Targets</div>
+          <div className="text-sm font-bold uppercase tracking-widest">Daily Targets</div>
           {badge}
         </div>
         {action}
@@ -288,7 +288,7 @@ function QuickActions({
           <button
             type="button"
             onClick={() => setCalcOpen(true)}
-            className="flex items-center gap-3 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 text-left transition hover:border-primary active:scale-[0.98]"
+            className="flex items-center gap-3 rounded-xl border border-primary/30 bg-card p-4 text-left transition hover:border-primary active:scale-[0.98]"
           >
             <Calculator className="h-6 w-6 text-primary" />
             <div>

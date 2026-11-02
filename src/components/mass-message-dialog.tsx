@@ -191,7 +191,7 @@ export function MassMessageDialog({ open, onOpenChange }: { open: boolean; onOpe
           <div className="space-y-3">
             <div className="rounded border border-border bg-secondary/30 p-4">
               <div className="flex items-center gap-2 font-semibold">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertTriangle className="h-4 w-4 text-warning" />
                 You are about to send this message to {recipientCount} {mode === "group" ? "group" : "people"}.
               </div>
               <div className="mt-2 whitespace-pre-wrap rounded bg-background p-3 text-sm">{body}</div>

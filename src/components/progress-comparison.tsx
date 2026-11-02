@@ -253,7 +253,7 @@ function SummaryCard({ data, loading, tone }: { data: BlockData | null; loading:
     <Card className={`p-4 ${tone === "primary" ? "border-primary/40" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-black">{data.block.name}</div>
+          <div className="truncate text-sm font-bold">{data.block.name}</div>
           <div className="text-[11px] text-muted-foreground">
             {data.block.start_date ? format(parseISO(data.block.start_date), "MMM d, yyyy") : "—"}
             {data.block.end_date ? ` → ${format(parseISO(data.block.end_date), "MMM d, yyyy")}` : ""}
@@ -289,7 +289,7 @@ function SummaryCard({ data, loading, tone }: { data: BlockData | null; loading:
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-secondary/40 p-2">
-      <div className="text-base font-black">{value}</div>
+      <div className="text-base font-bold">{value}</div>
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
     </div>
   );
@@ -355,7 +355,7 @@ function ExerciseView({ a, b, loadingA, loadingB }: { a: BlockData | null; b: Bl
       {delta != null && (
         <Card className="p-3 text-center text-sm">
           <span className="text-muted-foreground">Best-set delta:</span>{" "}
-          <span className={`font-bold ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-destructive" : ""}`}>
+          <span className={`font-bold ${delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : ""}`}>
             {delta > 0 ? "+" : ""}{delta}{aBest?.actual_load_unit ? ` ${aBest.actual_load_unit}` : ""}
           </span>
           {aBest && bBest && aBest.actual_reps === bBest.actual_reps && (

@@ -82,7 +82,7 @@ export function MealPlanReader({ text, water }: { text: string; water?: string |
               {dayWater && (
                 <>
                   <span aria-hidden>·</span>
-                  <Droplets aria-hidden className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                  <Droplets aria-hidden className="h-3.5 w-3.5 shrink-0 text-info" />
                   <span className="truncate" aria-label={`${formatDayWater(dayWater.ml, dayWater.unit)} water`}>
                     {formatDayWater(dayWater.ml, dayWater.unit)}
                   </span>
@@ -289,9 +289,9 @@ function MealSwiper({ meals, water }: { meals: MealSection[]; water: MealWater }
 }
 
 const TIMING_TEXT: Record<Exclude<MealTiming, null>, string> = {
-  pre: "text-amber-500",
-  post: "text-emerald-500",
-  pre_post: "text-sky-500",
+  pre: "text-warning",
+  post: "text-success",
+  pre_post: "text-info",
 };
 
 /** The meal tab's pre / post mark: the same icon as the card's badge. */
@@ -380,7 +380,7 @@ function MealCard({
 
       {water && water.amount > 0 && (
         <div
-          className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-[13px] text-sky-700 dark:text-sky-300"
+          className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-info/10 px-2.5 py-1.5 text-[13px] text-info"
           data-meal-water
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -397,9 +397,9 @@ function MealCard({
 }
 
 const TIMING_BORDER: Record<Exclude<MealTiming, null>, string> = {
-  pre: "border-amber-500/45",
-  post: "border-emerald-500/45",
-  pre_post: "border-sky-500/45",
+  pre: "border-warning/45",
+  post: "border-success/45",
+  pre_post: "border-info/45",
 };
 
 /** The meal's macros in one compact row: number first, the macro's colour by its name. */

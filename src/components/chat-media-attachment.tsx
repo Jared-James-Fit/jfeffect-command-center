@@ -326,7 +326,7 @@ export function ChatImageAttachment({
       data-chat-media-source={sourceType}
     >
       {!loaded && (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-secondary/50" aria-hidden="true" />
+        <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />
       )}
       {displaySrc && (
         <img

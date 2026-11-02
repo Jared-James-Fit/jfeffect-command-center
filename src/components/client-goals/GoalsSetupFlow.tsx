@@ -323,7 +323,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
       )}
 
       {stepSaveFailed && !saveFailed && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <div className="flex-1">
             <span className="font-semibold">Last save didn't reach the server.</span>{" "}
@@ -526,7 +526,7 @@ function AvailabilityStep({
           tone="solid"
         />
         <p
-          className={cn("text-xs", trainingDays.length === 0 || run >= 3 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
+          className={cn("text-xs", trainingDays.length === 0 || run >= 3 ? "text-warning" : "text-muted-foreground")}
           data-training-days-note
         >
           {trainingDays.length === 0
@@ -1012,7 +1012,7 @@ function InjuriesStep({ value, setField }: StepProps) {
       />
       {value.injuries_has && (
         <>
-          <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             This information will be flagged for your coach.
           </div>

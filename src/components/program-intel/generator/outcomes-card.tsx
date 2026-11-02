@@ -14,7 +14,7 @@ import { KindChip } from "../sections";
 import { useRecordOutcome } from "../use-program-intel";
 import { SectionTitle } from "./overview";
 
-const VERDICT: Record<string, string> = { supported: "text-emerald-600", contradicted: "text-destructive", unclear: "text-muted-foreground" };
+const VERDICT: Record<string, string> = { supported: "text-success", contradicted: "text-destructive", unclear: "text-muted-foreground" };
 
 export function OutcomesCard({ clientId, outcomes, recordedKeys }: { clientId: string; outcomes: ProgramOutcome[]; recordedKeys: Set<string> }) {
   const record = useRecordOutcome(clientId);
@@ -36,7 +36,7 @@ export function OutcomesCard({ clientId, outcomes, recordedKeys }: { clientId: s
                   <div className="flex items-start gap-1.5">
                     <KindChip kind={i.kind} />
                     <span className="font-semibold">{i.title}</span>
-                    {i.verdict ? <span className={cn("ml-auto shrink-0 text-[10px] font-black uppercase", VERDICT[i.verdict])}>{i.verdict}</span> : null}
+                    {i.verdict ? <span className={cn("ml-auto shrink-0 text-[10px] font-bold uppercase", VERDICT[i.verdict])}>{i.verdict}</span> : null}
                   </div>
                   {i.detail ? <div className="text-[11px] text-muted-foreground">{i.detail}</div> : null}
                   {o.finished && (

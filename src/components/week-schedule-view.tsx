@@ -171,9 +171,9 @@ function statusFor(cell: DayCell): { label: string; tone: string } | null {
   if (cell.completion?.completed_at) {
     const completedDate = cell.completion.completed_date ?? cell.completion.completed_at.slice(0, 10);
     if (completedDate !== cell.dateISO) {
-      return { label: `Completed ${format(parseISO(completedDate), "MMM d")}`, tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" };
+      return { label: `Completed ${format(parseISO(completedDate), "MMM d")}`, tone: "border-success/40 bg-success/10 text-success" };
     }
-    return { label: "Completed", tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600" };
+    return { label: "Completed", tone: "border-success/40 bg-success/10 text-success" };
   }
   if (cell.isToday) return { label: "Today", tone: "border-primary/60 bg-primary/15 text-primary" };
   if (cell.workout && cell.isPast) return { label: "Missed", tone: "border-destructive/40 bg-destructive/10 text-destructive" };
@@ -237,8 +237,8 @@ export function WeekScheduleView({
     <div className="space-y-3">
       {/* Admin: availability change notice */}
       {mode === "admin" && change?.changed && (
-        <div className="flex flex-wrap items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <div className="flex flex-wrap items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
             <div className="font-semibold">Client availability changed. Review schedule.</div>
             <div className="text-muted-foreground">
@@ -267,7 +267,7 @@ export function WeekScheduleView({
       {todaysCell && (
         <Card className="border-primary/40 bg-primary/5 p-3">
           <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/20 text-primary font-black">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/20 text-primary font-bold">
               {format(parseISO(todaysCell.dateISO), "d")}
             </div>
             <div className="min-w-0 flex-1">
@@ -328,7 +328,7 @@ function DayCard({
       className={cn(
         "flex flex-col gap-2 p-3 transition-colors",
         cell.isToday && "border-primary/60 bg-primary/5",
-        cell.dayType === "High" && "border-amber-500/50",
+        cell.dayType === "High" && "border-warning/50",
         !cell.workout && cell.cardio.length === 0 && "bg-secondary/20",
       )}
     >
@@ -337,7 +337,7 @@ function DayCard({
           <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
             {SHORT_DAY[cell.weekday]}
           </div>
-          <div className="text-sm font-black">{format(parseISO(cell.dateISO), "MMM d")}</div>
+          <div className="text-sm font-bold">{format(parseISO(cell.dateISO), "MMM d")}</div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           {cell.isToday && <Badge className="bg-primary text-primary-foreground text-[10px]">Today</Badge>}
@@ -350,7 +350,7 @@ function DayCard({
             </Badge>
           )}
           {cell.dayType === "High" && (
-            <Badge variant="outline" className="gap-1 border-amber-500/50 text-[10px] text-amber-600 dark:text-amber-500">
+            <Badge variant="outline" className="gap-1 border-warning/50 text-[10px] text-warning">
               High Day
             </Badge>
           )}
@@ -383,7 +383,7 @@ function DayCard({
             </div>
           </div>
           {cell.completion?.completed_at ? (
-            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600">
+            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-success">
               <CheckCircle2 className="h-3 w-3" /> Logged
             </div>
           ) : (
@@ -406,7 +406,7 @@ function DayCard({
       {cell.cardio.map((c) => (
         <div key={c.id} className="rounded-md border border-border bg-card p-2">
           <div className="flex items-start gap-2">
-            <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
             <div className="min-w-0 flex-1">
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                 {c.dayType} Cardio
@@ -508,7 +508,7 @@ function HighDayRescheduleMenu({
                 className={cn(
                   "h-7 rounded px-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
                   recurringHighDays.includes(d)
-                    ? "bg-amber-500 text-white"
+                    ? "bg-warning text-white"
                     : "border border-border bg-background hover:bg-secondary",
                 )}
               >

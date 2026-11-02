@@ -41,7 +41,7 @@ import { withTax } from "@/lib/sale-money";
 const CREDIT_TEXT: Record<CreditState, string> = {
   held: "text-primary",
   used: "text-success",
-  banked: "text-sky-300",
+  banked: "text-info",
   free: "text-muted-foreground",
 };
 const ADJUST_REASONS = ["Bonus session", "Complimentary", "Correction", "Refund / manual adjustment", "No-show deduction", "Other"];
@@ -91,7 +91,7 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   return (
     <div className="min-w-0 rounded-lg border border-border bg-secondary/20 px-3 py-2">
       <div className="truncate text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`text-lg font-black tabular-nums ${toneCls}`}>{value}</div>
+      <div className={`text-lg font-bold tabular-nums ${toneCls}`}>{value}</div>
     </div>
   );
 }
@@ -230,7 +230,7 @@ export function ClientSessionsPanel({
           <h3 className="flex min-w-0 items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <CalendarDays className="h-4 w-4 shrink-0" /> <span className="truncate">Sessions</span>
           </h3>
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setBookOpen(true); }}>
+          <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => { setEditing(null); setBookOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Book Session
           </Button>
         </div>
@@ -342,7 +342,7 @@ export function ClientSessionsPanel({
                         {fmtTimeRange(s.start_time, s.end_time)} · {s.title}{s.location ? ` · ${s.location.split(",")[0]}` : ""}
                       </div>
                       {coachNotes?.get(s.id) && (
-                        <div className="mt-0.5 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-200">
+                        <div className="mt-0.5 flex items-start gap-1 text-xs text-warning">
                           <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
                           <span className="line-clamp-2">{coachNotes.get(s.id)}</span>
                         </div>

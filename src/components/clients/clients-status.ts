@@ -326,9 +326,9 @@ export function rowStatusChips(r: DirectoryRow): BadgeDef[] {
 
 export const BADGE_TONE: Record<BadgeDef["tone"], string> = {
   danger: "bg-destructive/15 text-destructive border-destructive/30",
-  warn:   "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  info:   "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  ok:     "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  warn:   "bg-warning/15 text-warning border-warning/30",
+  info:   "bg-info/15 text-info border-info/30",
+  ok:     "bg-success/15 text-success border-success/30",
   muted:  "bg-muted text-muted-foreground border-border",
 };
 
@@ -338,7 +338,7 @@ export function actionStyle(a: DirectoryNextAction, urgent: boolean): string {
     return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
   }
   if (a.kind === "next_phase" || a.kind === "nutrition" || a.kind === "cardio") {
-    return "bg-amber-500 text-amber-950 hover:bg-amber-500/90";
+    return "bg-warning text-black/85 hover:bg-warning/90";
   }
   if (a.kind === "open") {
     return "bg-secondary text-secondary-foreground hover:bg-secondary/80";

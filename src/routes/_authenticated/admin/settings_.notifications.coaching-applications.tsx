@@ -112,7 +112,7 @@ function CoachingAppNotificationsSettings() {
                   {r.role && <Badge variant="outline" className="text-[10px]">{r.role}</Badge>}
                   {r.paused && <Badge variant="secondary" className="text-[10px]"><Pause className="mr-1 h-2.5 w-2.5" /> Paused</Badge>}
                   {r.priority_only && <Badge className="text-[10px]">Priority only</Badge>}
-                  {r.phone_verified_at && <Badge variant="outline" className="text-[10px] text-emerald-400"><CheckCircle2 className="mr-1 h-2.5 w-2.5" /> Phone verified</Badge>}
+                  {r.phone_verified_at && <Badge variant="outline" className="text-[10px] text-success"><CheckCircle2 className="mr-1 h-2.5 w-2.5" /> Phone verified</Badge>}
                 </div>
                 <div className="mt-0.5 truncate text-xs text-muted-foreground">
                   {r.phone || "no phone"}{r.email ? ` · ${r.email}` : ""}

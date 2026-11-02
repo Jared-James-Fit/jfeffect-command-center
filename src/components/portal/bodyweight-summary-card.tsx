@@ -104,8 +104,8 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
   };
 
   const trendIcon = change == null ? null : change <= 0
-    ? <TrendingDown className="h-3.5 w-3.5 text-emerald-500" />
-    : <TrendingUp className="h-3.5 w-3.5 text-amber-500" />;
+    ? <TrendingDown className="h-3.5 w-3.5 text-success" />
+    : <TrendingUp className="h-3.5 w-3.5 text-warning" />;
 
   const hasData = series.length > 0;
 
@@ -164,9 +164,11 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
         <p className="mt-3 text-sm text-muted-foreground">Track your weight over time — log your first weigh-in to get started.</p>
       )}
 
+      {/* Secondary on purpose: Home's one red button is today's workout. */}
       <Button
         onClick={openSheet}
-        className="mt-4 h-12 w-full bg-gradient-primary text-sm font-bold uppercase"
+        variant="secondary"
+        className="mt-4 h-11 w-full text-sm"
       >
         <Plus className="mr-1.5 h-4 w-4" />
         {hasData ? "Log Weight" : "Log First Weight"}
@@ -229,7 +231,7 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
               loadingLabel="Saving…"
               successLabel="Saved"
               successToast={false}
-              className="h-12 w-full bg-gradient-primary font-bold uppercase"
+              className="h-12 w-full bg-primary text-primary-foreground font-semibold"
             >
               Save Bodyweight
             </ActionButton>

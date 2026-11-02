@@ -125,8 +125,8 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
   }
 
   const trendIcon = weekChange == null ? null : weekChange <= 0
-    ? <TrendingDown className="h-3.5 w-3.5 text-emerald-500" />
-    : <TrendingUp className="h-3.5 w-3.5 text-amber-500" />;
+    ? <TrendingDown className="h-3.5 w-3.5 text-success" />
+    : <TrendingUp className="h-3.5 w-3.5 text-warning" />;
 
   const hasData = !!stats;
 
@@ -179,7 +179,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
       <Button
         data-log-bw-trigger
         onClick={() => { setDate(todayLocalISO()); setOpen(true); }}
-        className="mt-4 h-12 w-full bg-gradient-primary text-sm font-bold uppercase"
+        className="mt-4 h-12 w-full bg-primary text-primary-foreground text-sm font-semibold"
       >
         <Plus className="mr-1.5 h-4 w-4" />
         {hasData ? "Log Weight" : "Log First Weight"}
@@ -240,7 +240,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
                 You already logged a weight for this date. Saving will update it.
               </div>
             ) : null}
-            <Button onClick={save} disabled={saving || !val} className="h-12 w-full bg-gradient-primary font-bold uppercase">
+            <Button onClick={save} disabled={saving || !val} className="h-12 w-full bg-primary text-primary-foreground font-semibold">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Bodyweight"}
             </Button>
           </div>

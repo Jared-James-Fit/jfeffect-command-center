@@ -295,7 +295,7 @@ function PlaygroundPanel() {
 
   return (
     <Card className="p-5 space-y-3 max-w-4xl">
-      <div className="text-xs uppercase tracking-wider font-semibold text-amber-400">
+      <div className="text-xs uppercase tracking-wider font-semibold text-warning">
         Test mode — no messages, reviews, or notifications are created.
       </div>
       <Field label="Form (optional, applies form-specific config)">

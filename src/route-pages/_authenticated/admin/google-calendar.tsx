@@ -92,9 +92,9 @@ export function GoogleCalendarPage({ embedded = false }: { embedded?: boolean } 
             <div>
               <div className="flex items-center gap-2 mb-1">
                 {status.connected ? (
-                  <Badge className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 border"><CheckCircle2 className="mr-1 h-3 w-3" /> Connected (workspace)</Badge>
+                  <Badge className="bg-success/10 text-success border-success/30 border"><CheckCircle2 className="mr-1 h-3 w-3" /> Connected (workspace)</Badge>
                 ) : (
-                  <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/30 border"><AlertCircle className="mr-1 h-3 w-3" /> Not configured</Badge>
+                  <Badge className="bg-warning/10 text-warning border-warning/30 border"><AlertCircle className="mr-1 h-3 w-3" /> Not configured</Badge>
                 )}
                 {status.email && <span className="text-sm text-muted-foreground">{status.email}</span>}
               </div>
@@ -128,7 +128,7 @@ export function GoogleCalendarPage({ embedded = false }: { embedded?: boolean } 
                 choose.mutate({ id: v, name: cal.summary ?? v });
               }}
             >
-              <SelectTrigger className={savedMissing ? "border-amber-500/50" : ""}>
+              <SelectTrigger className={savedMissing ? "border-warning/50" : ""}>
                 <SelectValue placeholder="Choose calendar" />
               </SelectTrigger>
               <SelectContent>
@@ -143,7 +143,7 @@ export function GoogleCalendarPage({ embedded = false }: { embedded?: boolean } 
               </SelectContent>
             </Select>
             {savedMissing && (
-              <p className="text-xs text-amber-300 mt-2 flex items-center gap-1">
+              <p className="text-xs text-warning mt-2 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 shrink-0" /> Selected calendar no longer available. Choose another calendar.
               </p>
             )}

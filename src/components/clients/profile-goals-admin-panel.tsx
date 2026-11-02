@@ -15,20 +15,20 @@ function ProfileStatusBadge({ client, goals }: { client: any; goals: any }) {
 
   if (needsReview) {
     return (
-      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400">
+      <Badge variant="outline" className="gap-1 border-warning/40 text-warning">
         <Clock className="h-3 w-3" /> Needs Review
       </Badge>
     );
   }
   if (!basicOk || !goalsOk) {
     return (
-      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400">
+      <Badge variant="outline" className="gap-1 border-warning/40 text-warning">
         <AlertTriangle className="h-3 w-3" /> Information Missing
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+    <Badge variant="outline" className="gap-1 border-success/40 text-success">
       <CheckCircle2 className="h-3 w-3" /> Profile Complete
     </Badge>
   );
@@ -59,13 +59,13 @@ function MissingFieldsList({ client, goals }: { client: any; goals: any }) {
 
   if (missing.length === 0) return null;
   return (
-    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+    <div className="rounded-md border border-warning/30 bg-warning/5 p-3">
+      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-warning">
         <AlertTriangle className="h-3 w-3" /> Missing information
       </div>
       <div className="flex flex-wrap gap-1">
         {missing.map((f) => (
-          <span key={f} className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">{f}</span>
+          <span key={f} className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">{f}</span>
         ))}
       </div>
     </div>
@@ -137,7 +137,7 @@ function InfoRow({ label, value, icon }: { label: string; value: string | null |
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
       <span className="flex items-center gap-1 text-sm">
         {icon && <span className="text-muted-foreground">{icon}</span>}
-        {value ? value : <span className="text-amber-600 dark:text-amber-400 text-xs">Missing</span>}
+        {value ? value : <span className="text-warning text-xs">Missing</span>}
       </span>
     </div>
   );

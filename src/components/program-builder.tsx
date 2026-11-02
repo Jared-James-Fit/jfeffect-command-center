@@ -175,7 +175,7 @@ export function SaveStatePill({ state, lastSavedAt }: { state: SaveState; lastSa
     );
   if (state === "saved")
     return (
-      <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500 text-[10px] font-normal">
+      <Badge variant="outline" className="gap-1 border-success/40 text-success text-[10px] font-normal">
         <Check className="h-3 w-3" /> {lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}` : "Saved"}
       </Badge>
     );
@@ -187,7 +187,7 @@ export function SaveStatePill({ state, lastSavedAt }: { state: SaveState; lastSa
     );
   if (state === "offline")
     return (
-      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500 text-[10px] font-normal">
+      <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px] font-normal">
         <CloudOff className="h-3 w-3" /> Offline — queued
       </Badge>
     );
@@ -418,7 +418,7 @@ export function CellInput({
         "pb-cell-input",
         DENSITY_CLASSES[density].input,
         "pr-5",
-        conflictRemote !== null && "border-amber-500/70 ring-1 ring-amber-500/40",
+        conflictRemote !== null && "border-warning/70 ring-1 ring-warning/40",
         className,
       )}
     />
@@ -456,18 +456,18 @@ export function CellInput({
   return (
     <div className="relative w-full">
       {wrappedInput}
-      <div className="absolute left-0 right-0 top-full z-40 mt-1 min-w-[180px] rounded-md border border-amber-500/60 bg-background p-1.5 text-[10px] shadow-lg">
+      <div className="absolute left-0 right-0 top-full z-40 mt-1 min-w-[180px] rounded-md border border-warning/60 bg-background p-1.5 text-[10px] shadow-lg">
         <div className="flex items-start gap-1">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-amber-600 dark:text-amber-400">This field was updated somewhere else.</div>
+            <div className="font-semibold text-warning">This field was updated somewhere else.</div>
             <div className="truncate text-muted-foreground">
               Latest saved: <span className="font-mono text-foreground">{conflictRemote || "(empty)"}</span>
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
               <button
                 onClick={() => setConflictRemote(null)}
-                className="rounded bg-amber-500 px-1.5 py-0.5 font-semibold text-white hover:bg-amber-600"
+                className="rounded bg-warning px-1.5 py-0.5 font-semibold text-white hover:bg-warning"
                 title="Keep your edit — it will autosave over the latest value"
               >
                 Keep mine
@@ -638,7 +638,7 @@ export function HighlightedText({
         part.toLowerCase() === needle.toLowerCase() ? (
           <mark
             key={i}
-            className="rounded-[2px] bg-yellow-300/70 px-0.5 text-foreground dark:bg-yellow-400/40"
+            className="rounded-[2px] bg-warning/70 px-0.5 text-foreground dark:bg-warning/40"
           >
             {part}
           </mark>
@@ -1017,7 +1017,7 @@ function ExerciseItem({
         onClick={(e) => { e.stopPropagation(); onFav(ex.id); }}
         className={cn(
           "opacity-0 group-hover:opacity-100",
-          fav && "opacity-100 text-yellow-500",
+          fav && "opacity-100 text-warning",
         )}
         title={fav ? "Unfavorite" : "Favorite"}
       >
@@ -1164,7 +1164,7 @@ export function movementAccent(name?: string | null, override?: string | null): 
     if (found) return found.cls;
   }
   void name;
-  return "bg-red-500/70";
+  return "bg-destructive/70";
 }
 
 /**
@@ -1212,7 +1212,7 @@ export function EditScopeDialog({
         <div className="space-y-2 text-sm">
           {description && <p className="text-muted-foreground">{description}</p>}
           {customDownstream > 0 && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+            <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
               {customDownstream} downstream day{customDownstream === 1 ? "" : "s"} {customDownstream === 1 ? "has" : "have"} custom edits and will be preserved.
             </p>
           )}
@@ -1258,10 +1258,10 @@ export function LinkBadge({
 }) {
   if (isCustom) {
     return (
-      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500 text-[10px]">
+      <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-[10px]">
         <Unlink className="h-3 w-3" /> Custom
         {onRelink && (
-          <button onClick={onRelink} className="ml-1 underline hover:text-amber-400" title="Re-link to previous week">re-link</button>
+          <button onClick={onRelink} className="ml-1 underline hover:text-warning" title="Re-link to previous week">re-link</button>
         )}
       </Badge>
     );

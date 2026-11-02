@@ -148,7 +148,7 @@ export function ClientWorkoutPeek({ clientId, clientName }: { clientId: string; 
               <span className="text-muted-foreground"> · {when}</span>
             </span>
             {sets && (
-              <span className="shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              <span className="shrink-0 rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-success">
                 {sets}
               </span>
             )}
@@ -306,8 +306,8 @@ function WorkoutPeekBody({
               onSelect={(d) => { if (d) { setSelected(toLocalISO(d)); setView("week"); } }}
               modifiers={modifiers}
               modifiersClassNames={{
-                done: "font-black text-emerald-500 underline decoration-emerald-500 decoration-2 underline-offset-4",
-                missed: "font-bold text-rose-500 underline decoration-rose-500 decoration-2 underline-offset-4",
+                done: "font-bold text-success underline decoration-success decoration-2 underline-offset-4",
+                missed: "font-bold text-destructive underline decoration-destructive decoration-2 underline-offset-4",
                 planned: "font-bold underline decoration-muted-foreground/60 decoration-2 underline-offset-4",
               }}
               className="mx-auto"
@@ -438,7 +438,7 @@ function WorkoutPeekCard({
       </div>
       {stats.length > 0 && <div className="text-[11px] font-medium text-muted-foreground">{stats.join(" · ")}</div>}
       {pain && (
-        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-600 dark:text-rose-300">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
           <span className="font-bold">Pain</span> · {pain}
         </div>
       )}

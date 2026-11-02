@@ -59,7 +59,7 @@ function RatingStars({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`h-3.5 w-3.5 ${i <= rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
+          className={`h-3.5 w-3.5 ${i <= rating ? "fill-warning text-warning" : "text-muted-foreground/30"}`}
         />
       ))}
     </div>
@@ -147,7 +147,7 @@ export function GraphDotDetail({ point, clientId, onClose, canOpenLog = false }:
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl pb-safe">
         <SheetHeader className="pb-3 border-b border-border">
-          <SheetTitle className="text-base font-black">{point.exercise_name}</SheetTitle>
+          <SheetTitle className="text-base font-bold">{point.exercise_name}</SheetTitle>
           <div className="text-xs text-muted-foreground">
             {format(new Date(point.date), "EEEE, MMM d, yyyy · h:mma")}
           </div>
@@ -305,7 +305,7 @@ function StatCard({ label, value, highlight = false }: { label: string; value: s
   return (
     <div className={`rounded-lg border p-3 ${highlight ? "border-primary/30 bg-primary/5" : "border-border bg-muted/30"}`}>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">{label}</div>
-      <div className={`text-base font-black ${highlight ? "text-primary" : "text-foreground"}`}>{value}</div>
+      <div className={`text-base font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</div>
     </div>
   );
 }

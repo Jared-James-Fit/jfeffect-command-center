@@ -194,7 +194,7 @@ export function OfferForm({ initial, onSubmit, submitting, submitLabel = "Save o
       </Section>
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={submitting} className="bg-gradient-primary font-bold uppercase">{submitting ? "Saving…" : submitLabel}</Button>
+        <Button type="submit" disabled={submitting} className="bg-primary text-primary-foreground font-semibold">{submitting ? "Saving…" : submitLabel}</Button>
       </div>
     </form>
   );

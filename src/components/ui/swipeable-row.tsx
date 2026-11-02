@@ -114,8 +114,8 @@ export function SwipeableRow({
             }}
             className={cn(
               "flex flex-1 flex-col items-center justify-center gap-1 px-2 text-[11px] font-bold text-white",
-              a.color === "destructive" && "bg-red-500 active:bg-red-600",
-              a.color === "primary" && "bg-blue-500 active:bg-blue-600",
+              a.color === "destructive" && "bg-destructive active:bg-destructive",
+              a.color === "primary" && "bg-info active:bg-info",
               a.color === "muted" && "bg-zinc-500 active:bg-zinc-600",
             )}
           >

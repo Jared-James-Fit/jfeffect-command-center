@@ -360,7 +360,7 @@ export function ClientAnalyticsDashboard({
         />
 
         {filter.preset === "exact_block" && !filter.hasBlockDates && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
             This block has not been scheduled yet. Planned structure is shown; date-based charts will fill in once workouts are scheduled.
           </div>
         )}
@@ -368,7 +368,7 @@ export function ClientAnalyticsDashboard({
           selectedBlockId &&
           selectedBlockId !== resolvedCurrentBlockId &&
           resolvedCurrentBlockId && (
-            <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-xs text-sky-700 dark:text-sky-300">
+            <div className="rounded-md border border-info/40 bg-info/10 p-3 text-xs text-info">
               Upcoming Block · No workouts completed yet.
             </div>
           )}
@@ -603,7 +603,7 @@ export function ClientAnalyticsDashboard({
                               : 0;
                             return (
                               <div className="max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                                <div className="flex items-center gap-2 font-extrabold text-foreground">
+                                <div className="flex items-center gap-2 font-bold text-foreground">
                                   <span
                                     aria-hidden
                                     className="h-2 w-2 rounded-full"
@@ -786,7 +786,7 @@ function SectionHeading({
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="flex min-w-0 items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex min-w-0 items-center gap-2 text-base font-bold uppercase tracking-wider text-foreground">
           <span className="shrink-0 text-primary">{icon}</span>
           <span className="truncate">{title}</span>
           {tip}
@@ -818,7 +818,7 @@ function StatCard({
         <span className="truncate">{label}</span>
         {tip && <span className="ml-auto normal-case">{tip}</span>}
       </div>
-      <div className="mt-1 truncate text-xl font-black tracking-tight text-foreground">
+      <div className="mt-1 truncate text-xl font-bold tracking-tight text-foreground">
         {value}
       </div>
       {sublabel && (
@@ -849,7 +849,7 @@ function AnalyticsEmptyPreview() {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Dumbbell className="h-7 w-7" />
         </div>
-        <h2 className="mt-4 text-xl font-black tracking-tight text-foreground">
+        <h2 className="mt-4 text-xl font-bold tracking-tight text-foreground">
           Analytics will appear here
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -868,7 +868,7 @@ function AnalyticsEmptyPreview() {
               <span style={{ color: s.color }}>{s.icon}</span>
               <span className="truncate">{s.label}</span>
             </div>
-            <div className="mt-1 text-xl font-black tracking-tight text-muted-foreground">
+            <div className="mt-1 text-xl font-bold tracking-tight text-muted-foreground">
               {s.value}
             </div>
           </Card>
@@ -880,7 +880,7 @@ function AnalyticsEmptyPreview() {
           <Card key={s.title} className="border-border/70 bg-card/60 p-4">
             <div className="flex items-center gap-2">
               {s.icon}
-              <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">
                 {s.title}
               </h3>
             </div>

@@ -152,7 +152,7 @@ export function SignInForm({ onSignedIn }: { onSignedIn?: () => void }) {
       <button
         type="submit"
         disabled={busy}
-        className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-80"
+        className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-primary text-primary-foreground text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-80"
       >
         {busy ? (
           <>

@@ -12,9 +12,9 @@ import { prescriptionText } from "@/lib/program-intel/export";
 import type { DayCompare, IntelRecords, IntelReport } from "@/lib/program-intel/types";
 
 const STATUS_CLS: Record<string, string> = {
-  completed: "bg-emerald-500/12 text-emerald-600",
-  done: "bg-emerald-500/12 text-emerald-600",
-  partial: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  completed: "bg-success/12 text-success",
+  done: "bg-success/12 text-success",
+  partial: "bg-warning/15 text-warning",
   missed: "bg-destructive/10 text-destructive",
   skipped: "bg-destructive/10 text-destructive",
   upcoming: "bg-muted text-muted-foreground",
@@ -75,7 +75,7 @@ export function DetailedData({ report, records }: { report: IntelReport; records
                           <span className="text-xs font-semibold">{r.exercise}</span>
                           {r.role && <span className="text-[10px] text-muted-foreground">{r.role}</span>}
                           <Pill s={r.status} />
-                          {!r.exerciseId && <span className="text-[10px] text-amber-600">not in library</span>}
+                          {!r.exerciseId && <span className="text-[10px] text-warning">not in library</span>}
                         </div>
                         <div className="mt-1 grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-0.5 text-[11px]">
                           <span className="font-bold text-muted-foreground">Prescribed</span>
@@ -120,7 +120,7 @@ export function DetailedData({ report, records }: { report: IntelReport; records
       })}
       {(blockNotes.length > 0 || records.fileNotes.length > 0) && (
         <Card className="space-y-1.5 p-3 text-xs">
-          <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Coach notes</div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Coach notes</div>
           {blockNotes.map((b) => (
             <div key={b.id}><b>{b.name}:</b> {b.coach_notes}</div>
           ))}

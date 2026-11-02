@@ -110,7 +110,7 @@ export function CountdownTimerButton({ seconds, onComplete, compact, className, 
           style={{ width: `${pct}%` }}
         />
         <span className="relative inline-flex items-center gap-1">
-          {done ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : running ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {done ? <Check className="h-3.5 w-3.5 text-success" /> : running ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
           {done ? "Done" : (running || remaining !== total) ? formatDurationShort(remaining) : (label ?? `Start · ${formatDurationShort(total)}`)}
         </span>
       </Button>

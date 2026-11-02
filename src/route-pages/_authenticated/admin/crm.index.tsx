@@ -44,12 +44,12 @@ export function CrmDashboard({ embedded = false }: { embedded?: boolean } = {}) 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
         <StatCard to="/admin/crm/contacts" search={{ scope: "prospects" }} icon={Users} label="Prospects" value={s?.total_prospects ?? 0} />
         <StatCard to="/admin/crm/contacts" search={{ scope: "applicants" }} icon={ClipboardList} label="New apps (7d)" value={s?.new_applications_7d ?? 0} />
-        <StatCard to="/admin/crm/contacts" search={{ lead_temperature: "hot", scope: "prospects" }} icon={Flame} label="Hot leads" value={s?.hot_leads ?? 0} tone="text-red-500" />
-        <StatCard to="/admin/crm/contacts" search={{ lead_temperature: "warm", scope: "prospects" }} icon={Flame} label="Warm leads" value={s?.warm_leads ?? 0} tone="text-amber-500" />
+        <StatCard to="/admin/crm/contacts" search={{ lead_temperature: "hot", scope: "prospects" }} icon={Flame} label="Hot leads" value={s?.hot_leads ?? 0} tone="text-destructive" />
+        <StatCard to="/admin/crm/contacts" search={{ lead_temperature: "warm", scope: "prospects" }} icon={Flame} label="Warm leads" value={s?.warm_leads ?? 0} tone="text-warning" />
         <StatCard to="/admin/crm/contacts" search={{ overdue: "true", scope: "prospects" }} icon={AlertTriangle} label="Follow-ups due" value={s?.follow_ups_due ?? 0} />
         <StatCard to="/admin/crm/contacts" search={{ call_booked: "true", scope: "prospects" }} icon={PhoneCall} label="Calls booked" value={s?.calls_booked ?? 0} />
-        <StatCard to="/admin/crm/contacts" search={{ scope: "active" }} icon={CheckCircle2} label="Active clients" value={s?.active_clients ?? 0} tone="text-emerald-500" />
-        <StatCard to="/admin/crm/contacts" search={{ lifecycle_stage: "won" }} icon={TrendingUp} label="Won (30d)" value={s?.won_30d ?? 0} tone="text-emerald-500" />
+        <StatCard to="/admin/crm/contacts" search={{ scope: "active" }} icon={CheckCircle2} label="Active clients" value={s?.active_clients ?? 0} tone="text-success" />
+        <StatCard to="/admin/crm/contacts" search={{ lifecycle_stage: "won" }} icon={TrendingUp} label="Won (30d)" value={s?.won_30d ?? 0} tone="text-success" />
         <StatCard to="/admin/crm/contacts" search={{ lifecycle_stage: "lost" }} icon={XCircle} label="Lost (30d)" value={s?.lost_30d ?? 0} tone="text-muted-foreground" />
         <Card className="flex flex-col justify-center p-4">
           <div className="text-xs text-muted-foreground">Conversion rate</div>

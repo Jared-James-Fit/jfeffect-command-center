@@ -154,7 +154,7 @@ export function AgreementLaunchPopup({ flowOpen }: { flowOpen: boolean }) {
           <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
             <FileSignature className="h-7 w-7" />
           </div>
-          <SheetTitle className="text-xl font-black tracking-tight">{prompt.title}</SheetTitle>
+          <SheetTitle className="text-xl font-bold tracking-tight">{prompt.title}</SheetTitle>
           <SheetDescription className="mt-1.5 text-[15px] leading-snug">
             {prompt.body}
           </SheetDescription>

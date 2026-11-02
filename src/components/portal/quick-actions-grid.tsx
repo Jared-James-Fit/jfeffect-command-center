@@ -50,7 +50,7 @@ export function QuickActionsGrid({
             className={cn(
               "relative flex min-h-[88px] flex-col items-start justify-between gap-2 rounded-2xl border bg-card p-3.5 transition active:scale-[0.98]",
               t.emphasis
-                ? "border-primary/40 bg-gradient-to-br from-primary/10 to-card hover:border-primary"
+                ? "border-primary/40 bg-card hover:border-primary"
                 : "border-border hover:border-primary/40 hover:bg-card/80",
             )}
           >

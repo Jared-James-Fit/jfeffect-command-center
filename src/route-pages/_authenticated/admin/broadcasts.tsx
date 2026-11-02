@@ -54,7 +54,7 @@ export function AdminBroadcasts({ embedded = false }: { embedded?: boolean } = {
               <Button variant="outline" onClick={() => { setEditing(null); setQuick(true); setOpen(true); }}>
                 <Zap className="mr-1 h-4 w-4" /> Quick Broadcast
               </Button>
-              <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-gradient-primary font-bold">
+              <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-primary text-primary-foreground font-semibold">
                 <Plus className="mr-1 h-4 w-4" /> New Broadcast
               </Button>
             </div>
@@ -66,7 +66,7 @@ export function AdminBroadcasts({ embedded = false }: { embedded?: boolean } = {
           <Button variant="outline" onClick={() => { setEditing(null); setQuick(true); setOpen(true); }}>
             <Zap className="mr-1 h-4 w-4" /> Quick Broadcast
           </Button>
-          <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-gradient-primary font-bold">
+          <Button onClick={() => { setEditing(null); setQuick(false); setOpen(true); }} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Broadcast
           </Button>
         </div>

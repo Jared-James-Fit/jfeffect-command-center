@@ -17,9 +17,9 @@ import {
 type Props = { userId: string | null | undefined };
 
 const SOURCE_TONE: Record<string, string> = {
-  calculated: "bg-sky-500/10 text-sky-700 border-sky-500/30",
-  manual: "bg-amber-500/10 text-amber-700 border-amber-500/30",
-  coach: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+  calculated: "bg-info/10 text-info border-info/30",
+  manual: "bg-warning/10 text-warning border-warning/30",
+  coach: "bg-success/10 text-success border-success/30",
 };
 
 export function CoachNutritionOverrideCard({ userId }: Props) {
@@ -113,7 +113,7 @@ export function CoachNutritionOverrideCard({ userId }: Props) {
           <p className="text-xs text-muted-foreground">
             No app-side macro targets set yet. You can enter coach-set numbers below.
           </p>
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setEditing(true)}>
+          <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => setEditing(true)}>
             Set Coach Targets
           </Button>
         </>
@@ -169,7 +169,7 @@ export function CoachNutritionOverrideCard({ userId }: Props) {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              className="min-h-[44px] bg-gradient-primary font-bold uppercase"
+              className="min-h-[44px] bg-primary text-primary-foreground font-semibold"
               onClick={() => save.mutate()}
               disabled={save.isPending || !calories || !protein || !carbs || !fat}
             >

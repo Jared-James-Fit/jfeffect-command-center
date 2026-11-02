@@ -3,11 +3,11 @@ import { AlertCircle } from "lucide-react";
 import type { WorkspaceAlert } from "./types";
 
 const TONE_TO_CLASS: Record<string, string> = {
-  info: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+  info: "border-info/40 bg-info/10 text-info",
   primary: "border-primary/40 bg-primary/10 text-primary",
-  warn: "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  rose: "border-rose-500/40 bg-rose-500/10 text-rose-300",
-  success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  warn: "border-warning/40 bg-warning/10 text-warning",
+  rose: "border-destructive/40 bg-destructive/10 text-destructive",
+  success: "border-success/40 bg-success/10 text-success",
 };
 
 export function WorkspaceAlertsStrip({ alerts, className }: { alerts: WorkspaceAlert[]; className?: string }) {

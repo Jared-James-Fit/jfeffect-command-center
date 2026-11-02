@@ -284,10 +284,10 @@ function MemberPlanEditor() {
         }
       />
       {conflictWatch.conflict && (
-        <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <Card className="flex flex-wrap items-start gap-3 border-warning/60 bg-warning/5 p-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-amber-700 dark:text-amber-400">This plan was updated somewhere else.</div>
+            <div className="font-semibold text-warning">This plan was updated somewhere else.</div>
             <div className="text-xs text-muted-foreground">
               Another coach (or another tab) saved changes to this plan after you started editing. Pick how to proceed:
             </div>

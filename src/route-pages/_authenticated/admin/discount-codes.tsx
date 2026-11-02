@@ -38,11 +38,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const STATUS_TONE: Record<string, string> = {
-  active: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+  active: "bg-success/10 text-success border-success/30",
   draft: "bg-muted text-muted-foreground",
-  scheduled: "bg-sky-500/10 text-sky-600 border-sky-500/30",
-  paused: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  expired: "bg-rose-500/10 text-rose-600 border-rose-500/30",
+  scheduled: "bg-info/10 text-info border-info/30",
+  paused: "bg-warning/10 text-warning border-warning/30",
+  expired: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
 function fmtDiscount(c: DiscountCode) {
@@ -117,7 +117,7 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
     <div className={embedded ? "mx-auto max-w-7xl space-y-4 p-4 md:p-6" : "mx-auto max-w-7xl space-y-4 p-4 md:p-6"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         {!embedded && (
-          <h1 className="text-2xl font-black flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
             <Ticket className="h-5 w-5" /> Discount Codes
           </h1>
         )}
@@ -192,7 +192,7 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
                 <td className="p-2">{fmtDiscount(c)}</td>
                 <td className="p-2 text-xs">
                   {c.pairing_allowed
-                    ? <span className="text-emerald-600">Pairable{c.pairable_category ? ` w/ ${CATEGORY_LABELS[c.pairable_category]}` : ""}</span>
+                    ? <span className="text-success">Pairable{c.pairable_category ? ` w/ ${CATEGORY_LABELS[c.pairable_category]}` : ""}</span>
                     : <span className="text-muted-foreground">Solo only</span>}
                 </td>
                 <td className="p-2">
@@ -207,14 +207,14 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
                   ) : <span className="text-muted-foreground">No expiration</span>}
                 </td>
                 <td className="p-2 text-xs">
-                  <div className={c.stripe_test_mode_synced ? "text-emerald-600" : "text-muted-foreground"}>
+                  <div className={c.stripe_test_mode_synced ? "text-success" : "text-muted-foreground"}>
                     Test: {c.stripe_test_mode_synced ? "✓ synced" : "—"}
                   </div>
-                  <div className={c.stripe_live_mode_synced ? "text-emerald-600" : "text-muted-foreground"}>
+                  <div className={c.stripe_live_mode_synced ? "text-success" : "text-muted-foreground"}>
                     Live: {c.stripe_live_mode_synced ? "✓ synced" : "—"}
                   </div>
                   {c.stripe_last_sync_error ? (
-                    <div className="text-rose-600 truncate max-w-[14rem]" title={c.stripe_last_sync_error}>
+                    <div className="text-destructive truncate max-w-[14rem]" title={c.stripe_last_sync_error}>
                       ⚠ {c.stripe_last_sync_error}
                     </div>
                   ) : null}
@@ -248,24 +248,24 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
                           toast.error(e?.message ?? "Sync failed");
                         }
                       }}>
-                      <RefreshCw className="h-3 w-3 text-sky-600" />
+                      <RefreshCw className="h-3 w-3 text-info" />
                     </Button>
                     {c.status !== "active" && (
                       <Button size="sm" variant="ghost" title="Activate"
                         onClick={() => setConfirmAction({ code: c, next: "active" })}>
-                        <Play className="h-3 w-3 text-emerald-600" />
+                        <Play className="h-3 w-3 text-success" />
                       </Button>
                     )}
                     {c.status === "active" && (
                       <Button size="sm" variant="ghost" title="Pause"
                         onClick={() => setConfirmAction({ code: c, next: "paused" })}>
-                        <Pause className="h-3 w-3 text-amber-600" />
+                        <Pause className="h-3 w-3 text-warning" />
                       </Button>
                     )}
                     {c.status !== "expired" && (
                       <Button size="sm" variant="ghost" title="Expire immediately"
                         onClick={() => setConfirmAction({ code: c, next: "expired" })}>
-                        <Square className="h-3 w-3 text-rose-600" />
+                        <Square className="h-3 w-3 text-destructive" />
                       </Button>
                     )}
                   </div>

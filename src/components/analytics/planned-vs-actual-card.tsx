@@ -18,9 +18,9 @@ function fmtDuration(secs: number): string {
 
 function toneFor(pct: number | null): string {
   if (pct == null) return "bg-muted text-muted-foreground";
-  if (pct >= 90) return "bg-emerald-500/15 text-emerald-500";
-  if (pct >= 70) return "bg-amber-500/15 text-amber-500";
-  return "bg-rose-500/15 text-rose-500";
+  if (pct >= 90) return "bg-success/15 text-success";
+  if (pct >= 70) return "bg-warning/15 text-warning";
+  return "bg-destructive/15 text-destructive";
 }
 
 export function PlannedVsActualCard({

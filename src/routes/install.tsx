@@ -93,8 +93,8 @@ function InstallPage() {
 
 function AlreadyInstalled() {
   return (
-    <Card className="border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
-      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-500/15 text-emerald-500">
+    <Card className="border-success/30 bg-success/5 p-6 text-center">
+      <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-success/15 text-success">
         <Check className="h-6 w-6" />
       </div>
       <h2 className="text-lg font-semibold">JF Effect is installed</h2>
@@ -112,9 +112,9 @@ function AlreadyInstalled() {
 
 function InAppBrowserWarning() {
   return (
-    <Card className="mb-4 border-amber-500/30 bg-amber-500/5 p-4">
+    <Card className="mb-4 border-warning/30 bg-warning/5 p-4">
       <div className="flex gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
         <div>
           <p className="text-sm font-medium">You're inside another app's browser</p>
           <p className="mt-1 text-xs text-muted-foreground">

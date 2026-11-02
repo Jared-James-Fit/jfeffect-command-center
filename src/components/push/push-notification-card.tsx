@@ -224,7 +224,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
           <p className="text-sm text-muted-foreground">
             Get workout updates, coach messages, check-in reminders, and billing alerts on your phone.
           </p>
-          <Button onClick={onEnable} disabled={busy === "enable"} className="bg-gradient-primary font-bold uppercase">
+          <Button onClick={onEnable} disabled={busy === "enable"} className="bg-primary text-primary-foreground font-semibold">
             {busy === "enable" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
             Enable Notifications
           </Button>
@@ -235,7 +235,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
-            <Header icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} title="Notifications Enabled" />
+            <Header icon={<CheckCircle2 className="h-4 w-4 text-success" />} title="Notifications Enabled" />
             <span className="text-xs text-muted-foreground">on this device</span>
           </div>
           <div className="flex flex-wrap gap-2">

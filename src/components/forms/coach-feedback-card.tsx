@@ -72,7 +72,7 @@ export function CoachFeedbackCard({ clientId }: { clientId?: string | null }) {
             <MessageSquareQuote className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-black uppercase tracking-widest">Coach Feedback</div>
+            <div className="text-sm font-bold uppercase tracking-widest">Coach Feedback</div>
             {latest ? (
               <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                 {latest.form_title} · {fmt(latest.created_at)} — tap to view
@@ -88,14 +88,14 @@ export function CoachFeedbackCard({ clientId }: { clientId?: string | null }) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl p-4 pt-16 md:p-6 md:pt-16">
           <SheetHeader className="mb-3 text-left">
-            <SheetTitle className="text-base font-black uppercase tracking-widest">
+            <SheetTitle className="text-base font-bold uppercase tracking-widest">
               Coach Feedback
             </SheetTitle>
           </SheetHeader>
           <div className="space-y-3 pb-10">
             {(showAll ? feedback : feedback.slice(0, 1)).map((f) => (
-              <Card key={f.id} className="border-emerald-500/30 bg-emerald-500/5 p-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+              <Card key={f.id} className="border-success/30 bg-success/5 p-4">
+                <div className="text-xs font-bold uppercase tracking-wider text-success">
                   {f.form_title} Feedback
                 </div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{fmt(f.created_at)}</div>

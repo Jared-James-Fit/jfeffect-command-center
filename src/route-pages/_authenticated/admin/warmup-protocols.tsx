@@ -116,15 +116,15 @@ export function WarmupProtocolsAdmin({ embedded = false }: { embedded?: boolean 
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Flame className="h-4 w-4 text-orange-500" />
+                      <Flame className="h-4 w-4 text-warning" />
                       <span className="font-bold">{p.name}</span>
                       {p.archived && <Badge variant="outline" className="text-[10px]">Archived</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-1">
                       <Badge variant="outline" className="text-[10px]">{categoryLabel(p.category)}</Badge>
                       {p.estimated_minutes != null && <Badge variant="outline" className="text-[10px]">~{p.estimated_minutes} min</Badge>}
-                      {p.is_default_general && <Badge className="text-[10px] bg-blue-500/15 text-blue-500">Default General</Badge>}
-                      {p.is_default_powerlifting && <Badge className="text-[10px] bg-orange-500/15 text-orange-500">Default Powerlifting</Badge>}
+                      {p.is_default_general && <Badge className="text-[10px] bg-info/15 text-info">Default General</Badge>}
+                      {p.is_default_powerlifting && <Badge className="text-[10px] bg-warning/15 text-warning">Default Powerlifting</Badge>}
                       {!p.visible_to_client && <Badge variant="outline" className="text-[10px]">Hidden from client</Badge>}
                     </div>
                   </div>

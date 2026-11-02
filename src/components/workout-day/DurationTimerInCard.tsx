@@ -168,13 +168,13 @@ export function DurationTimerInCard({
         onClick={() => { setDraft(String(completedSeconds)); setEditing(true); }}
         aria-label="Edit logged time"
         className={cn(
-          "flex w-full items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 text-left",
+          "flex w-full items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 text-left",
           height,
         )}
       >
-        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-        <span className="flex-1 text-sm font-bold tabular-nums text-emerald-700">{fmtSecs(completedSeconds)}</span>
-        <Pencil className="h-3 w-3 shrink-0 text-emerald-600/60" />
+        <Check className="h-3.5 w-3.5 shrink-0 text-success" />
+        <span className="flex-1 text-sm font-bold tabular-nums text-success">{fmtSecs(completedSeconds)}</span>
+        <Pencil className="h-3 w-3 shrink-0 text-success/60" />
       </button>
     );
   }
@@ -184,8 +184,8 @@ export function DurationTimerInCard({
       className={cn(
         "flex items-center gap-1 rounded-lg border px-1.5",
         height,
-        done ? "border-emerald-500/50 bg-emerald-500/10"
-          : started ? (paused ? "border-amber-500/50 bg-amber-500/10" : "border-primary bg-primary/10")
+        done ? "border-success/50 bg-success/10"
+          : started ? (paused ? "border-warning/50 bg-warning/10" : "border-primary bg-primary/10")
             : "border-border bg-muted/30",
       )}
     >
@@ -199,8 +199,8 @@ export function DurationTimerInCard({
         }}
         aria-label={started ? "Time remaining" : "Set time"}
         className={cn(
-          "min-w-0 flex-1 text-left text-sm font-black tabular-nums",
-          done ? "text-emerald-700" : paused ? "text-amber-700" : started ? "text-primary" : "text-foreground",
+          "min-w-0 flex-1 text-left text-sm font-bold tabular-nums",
+          done ? "text-success" : paused ? "text-warning" : started ? "text-primary" : "text-foreground",
         )}
       >
         {started
@@ -238,7 +238,7 @@ export function DurationTimerInCard({
         aria-label="Log this set"
         className={cn(
           "inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[11px] font-bold",
-          done ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
+          done ? "bg-success text-white" : "bg-primary text-primary-foreground",
         )}
       >
         <Check className="h-3.5 w-3.5" />

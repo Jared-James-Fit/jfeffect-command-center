@@ -100,7 +100,7 @@ function SearchResults({ term, onOpen }: { term: string; onOpen: (a: CommunityAu
   if (!data?.length) {
     return (
       <div className="px-6 py-10 text-center" data-discover-empty>
-        <div className="text-[15px] font-black">No one called “{term}”</div>
+        <div className="text-[15px] font-bold">No one called “{term}”</div>
         <p className="mt-1 text-[13px] text-muted-foreground">Try a first name or their @username.</p>
       </div>
     );
@@ -167,7 +167,7 @@ function FollowBackList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
   return (
     <section aria-label="Follow back" data-discover-follow-back>
       <div className="mb-1.5 flex items-baseline justify-between px-1">
-        <h2 className="text-[15px] font-black">Follow back</h2>
+        <h2 className="text-[15px] font-bold">Follow back</h2>
         {people.length > 3 && (
           <button type="button" onClick={() => setAll((v) => !v)} className="text-[13px] font-bold text-primary active:opacity-70">
             {all ? "Show less" : "See all"}
@@ -199,7 +199,7 @@ function SuggestedList({ onOpen }: { onOpen: (a: CommunityAuthor) => void }) {
   const shown = more ? people : people.slice(0, 5);
   return (
     <section aria-label="Suggested for you" data-discover-suggested>
-      <h2 className="mb-1.5 px-1 text-[15px] font-black">Suggested for you</h2>
+      <h2 className="mb-1.5 px-1 text-[15px] font-bold">Suggested for you</h2>
       <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
         <div className="divide-y divide-border/60">
           {shown.map((p) => (

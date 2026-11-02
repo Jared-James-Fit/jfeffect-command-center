@@ -285,7 +285,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
           {page.hostName}
         </span>
       </div>
-      <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{page.name}</h1>
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{page.name}</h1>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Clock className="h-4 w-4" /> {page.durationMin} min
@@ -324,11 +324,11 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
       <Shell>
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="space-y-4 p-6 text-center sm:p-8">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-500/15">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-success/15">
+              <CheckCircle2 className="h-8 w-8 text-success" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight">You're booked</h1>
+              <h1 className="text-2xl font-bold tracking-tight">You're booked</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {result.kind === "session"
                   ? "It's in your JF Effect app, with a reminder text the evening before."
@@ -354,13 +354,13 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               </div>
             </div>
             {result.noCreditLeft && (
-              <p className="mx-auto max-w-sm rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-left text-xs text-amber-500">
+              <p className="mx-auto max-w-sm rounded-lg border border-warning/40 bg-warning/10 p-3 text-left text-xs text-warning">
                 You're out of prepaid sessions, so this one isn't covered yet. Your coach has been
                 told and will sort it with you.
               </p>
             )}
             {result.meetLink && (
-              <Button asChild className="h-12 w-full max-w-sm bg-gradient-primary font-bold">
+              <Button asChild className="h-12 w-full max-w-sm bg-primary text-primary-foreground font-semibold">
                 <a href={result.meetLink} target="_blank" rel="noreferrer">
                   <Video className="mr-2 h-4 w-4" /> Video call link
                 </a>
@@ -432,7 +432,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               <ArrowLeft className="h-3.5 w-3.5" /> Change time
             </button>
             <div className="rounded-xl border border-primary/40 bg-primary/10 p-4">
-              <div className="text-lg font-black">
+              <div className="text-lg font-bold">
                 {longDay(localDateISO(new Date(slot.start), tz))}
               </div>
               <div className="text-sm font-semibold text-foreground/90">
@@ -501,7 +501,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               </div>
             )}
             <Button
-              className="h-12 w-full bg-gradient-primary text-base font-black"
+              className="h-12 w-full bg-primary text-primary-foreground text-base font-semibold"
               disabled={!valid || book.isPending}
               onClick={() => book.mutate()}
             >
@@ -617,7 +617,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
                       className={cn(
                         "mx-auto grid aspect-square w-full max-w-11 place-items-center rounded-full text-sm tabular-nums transition",
                         selected
-                          ? "bg-primary font-black text-primary-foreground"
+                          ? "bg-primary font-bold text-primary-foreground"
                           : open
                             ? "bg-primary/15 font-bold text-primary hover:bg-primary/25"
                             : "text-muted-foreground/45",
@@ -645,7 +645,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
                   <Loader2 className="h-4 w-4 animate-spin" /> Finding open times…
                 </div>
               ) : error === "calendar_unavailable" ? (
-                <div className="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
                   <p>
                     We couldn't check the calendar just now, so no times are shown (to keep anything
                     from double booking).

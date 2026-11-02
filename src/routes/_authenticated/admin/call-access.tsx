@@ -158,7 +158,7 @@ function CallAccessPage() {
             <Input value={myPhone} onChange={(e) => setMyPhone(e.target.value)} placeholder="+12042907443" className="h-9" />
             <Button onClick={saveMyPhone} disabled={savingMyPhone} size="sm"><Save className="h-4 w-4 mr-1" />{savingMyPhone ? "Saving…" : "Save"}</Button>
             {myPhone && (
-              <Button asChild size="icon" variant="outline" className="h-9 w-9 border-emerald-500/40 text-emerald-600">
+              <Button asChild size="icon" variant="outline" className="h-9 w-9 border-success/40 text-success">
                 <a href={`tel:${myPhone.replace(/[^+\d]/g, "")}`} title="Test call"><Phone className="h-4 w-4" /></a>
               </Button>
             )}
@@ -167,10 +167,10 @@ function CallAccessPage() {
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Active clients</div><div className="text-2xl font-black">{stats.total}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Access enabled</div><div className="text-2xl font-black text-emerald-600">{stats.enabled}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Callable now</div><div className="text-2xl font-black">{stats.callable}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Missing phone</div><div className="text-2xl font-black text-amber-600">{stats.noPhone}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Active clients</div><div className="text-2xl font-bold">{stats.total}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Access enabled</div><div className="text-2xl font-bold text-success">{stats.enabled}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Callable now</div><div className="text-2xl font-bold">{stats.callable}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Missing phone</div><div className="text-2xl font-bold text-warning">{stats.noPhone}</div></Card>
       </div>
 
       <Tabs defaultValue="clients" className="space-y-4">
@@ -237,7 +237,7 @@ function CallAccessPage() {
                             <Input defaultValue={c.phone ?? ""} placeholder="+15551234567" className="h-8 text-sm"
                               onBlur={(e) => { if (e.target.value !== (c.phone ?? "")) updateClient(c.id, { phone: e.target.value || null }); }} />
                             {tel && (
-                              <Button asChild size="icon" variant="outline" className="h-8 w-8 shrink-0 border-emerald-500/40 text-emerald-600">
+                              <Button asChild size="icon" variant="outline" className="h-8 w-8 shrink-0 border-success/40 text-success">
                                 <a href={`tel:${tel}`} title={`Call ${c.full_name}`}><Phone className="h-4 w-4" /></a>
                               </Button>
                             )}
@@ -246,8 +246,8 @@ function CallAccessPage() {
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <Switch checked={!!c.call_access_enabled} onCheckedChange={(v) => updateClient(c.id, { call_access_enabled: v })} />
-                            {c.call_access_enabled && !c.phone && <Badge variant="outline" className="border-amber-500/40 text-amber-600">Add phone</Badge>}
-                            {c.call_access_enabled && c.phone && <Badge variant="outline" className="border-emerald-500/40 text-emerald-600">Live</Badge>}
+                            {c.call_access_enabled && !c.phone && <Badge variant="outline" className="border-warning/40 text-warning">Add phone</Badge>}
+                            {c.call_access_enabled && c.phone && <Badge variant="outline" className="border-success/40 text-success">Live</Badge>}
                           </div>
                         </td>
                         <td className="px-3 py-2">
@@ -262,7 +262,7 @@ function CallAccessPage() {
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex items-center gap-1">
                             {c.call_access_enabled && tel && (
-                              <Button asChild size="icon" variant="outline" className="h-8 w-8 border-emerald-500/40 text-emerald-600">
+                              <Button asChild size="icon" variant="outline" className="h-8 w-8 border-success/40 text-success">
                                 <a href={`tel:${tel}`} title={`Call ${c.full_name}`}><Phone className="h-4 w-4" /></a>
                               </Button>
                             )}
@@ -333,7 +333,7 @@ function CallAccessPage() {
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex items-center gap-1">
                             {tel && (
-                              <Button asChild size="icon" variant="outline" className="h-8 w-8 border-emerald-500/40 text-emerald-600">
+                              <Button asChild size="icon" variant="outline" className="h-8 w-8 border-success/40 text-success">
                                 <a href={`tel:${tel}`} title={`Call ${co.full_name}`}><Phone className="h-4 w-4" /></a>
                               </Button>
                             )}

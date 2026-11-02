@@ -89,7 +89,7 @@ export function ClientBriefSheet({
         <div className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-3">
           <UserAvatar src={client.profile_picture_url ?? null} name={client.full_name ?? "Client"} size={44} ring expandable={false} />
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate text-base font-black tracking-tight">{client.full_name}</SheetTitle>
+            <SheetTitle className="truncate text-base font-bold tracking-tight">{client.full_name}</SheetTitle>
             <SheetDescription className="truncate text-xs text-muted-foreground">
               {count ? `${count} thing${count === 1 ? "" : "s"} waiting on you` : "Nothing waiting on you"}
               {client.last_active_at ? ` · in the app ${ago(client.last_active_at)}` : ""}
@@ -99,9 +99,9 @@ export function ClientBriefSheet({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
           {/* The AI read */}
-          <section className="rounded-2xl border border-border bg-gradient-to-br from-amber-500/[0.07] via-orange-500/[0.05] to-pink-500/[0.07] p-3.5" data-brief-ai>
+          <section className="rounded-2xl border border-border bg-warning/5 p-3.5" data-brief-ai>
             <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-orange-500" /> What's going on
+              <Sparkles className="h-3.5 w-3.5 text-warning" /> What's going on
               {ai.data && (
                 <button
                   type="button"
@@ -129,7 +129,7 @@ export function ClientBriefSheet({
                 <p className="text-[15px] leading-snug text-foreground">{ai.data.summary}</p>
                 {ai.data.next_step && (
                   <p className="mt-2 flex items-start gap-1.5 text-sm font-semibold text-foreground">
-                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" /> {ai.data.next_step}
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-warning" /> {ai.data.next_step}
                   </p>
                 )}
               </>
@@ -194,7 +194,7 @@ export function ClientBriefSheet({
               />
             )}
             {!count && !waitingOnClient && (
-              <p className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              <p className="flex items-center gap-2 rounded-xl bg-success/10 px-3 py-2.5 text-sm font-semibold text-success">
                 <Check className="h-4 w-4" /> All clear. Nothing's waiting on you.
               </p>
             )}
@@ -224,9 +224,9 @@ function mediaCount(s: ClientSignals): string {
 }
 
 const TONE: Record<"urgent" | "warn" | "info" | "muted", string> = {
-  urgent: "bg-red-500/12 text-red-600 dark:text-red-400",
-  warn: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  info: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
+  urgent: "bg-destructive/12 text-destructive",
+  warn: "bg-warning/15 text-warning",
+  info: "bg-info/12 text-info",
   muted: "bg-muted text-muted-foreground",
 };
 

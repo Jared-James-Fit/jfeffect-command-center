@@ -101,12 +101,12 @@ export function SupportMessenger({ sub, onOpen }: { sub?: string; onOpen: (sub: 
       <aside className={cn("flex w-full min-h-0 flex-col border-r border-border bg-card md:w-[360px] md:shrink-0", open ? "hidden md:flex" : "flex")}>
         <header className="space-y-2 border-b border-border px-3 py-2.5 md:px-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-black tracking-tight md:text-lg">Support</h1>
+            <h1 className="text-base font-bold tracking-tight md:text-lg">Support</h1>
             {counts.needs > 0 && (
               <span className="rounded-full bg-destructive px-1.5 text-[10px] font-bold leading-4 text-destructive-foreground">{counts.needs}</span>
             )}
             <label className="ml-auto flex items-center gap-1.5 rounded-full bg-secondary/60 py-1 pl-2.5 pr-1.5 text-[11px] font-semibold">
-              <span className={cn("h-2 w-2 rounded-full", live?.isAvailable ? "bg-emerald-400 shadow-[0_0_8px] shadow-emerald-400/70" : "bg-muted-foreground/50")} />
+              <span className={cn("h-2 w-2 rounded-full", live?.isAvailable ? "bg-success shadow-[0_0_8px] shadow-success/70" : "bg-muted-foreground/50")} />
               {live?.isAvailable ? "Live" : "Offline"}
               <Switch checked={!!live?.isAvailable} onCheckedChange={toggleLive} className="scale-75" aria-label="Live support" />
             </label>
@@ -197,7 +197,7 @@ function EmptyState({ filter }: { filter: SupportFilter }) {
   };
   return (
     <div className="px-6 py-12 text-center">
-      <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500/70" />
+      <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-success/70" />
       <div className="text-sm font-semibold">{copy[filter][0]}</div>
       <div className="mt-1 text-xs text-muted-foreground">{copy[filter][1]}</div>
     </div>
@@ -212,7 +212,7 @@ function ItemAvatar({ item }: { item: SupportItem }) {
     <span className="relative shrink-0">
       <UserAvatar src={item.avatar ?? undefined} name={item.name} size={40} />
       {item.kind === "alert" && (
-        <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-amber-500 text-white ring-2 ring-card">
+        <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full bg-warning text-white ring-2 ring-card">
           <TriangleAlert className="h-2.5 w-2.5" />
         </span>
       )}
@@ -222,10 +222,10 @@ function ItemAvatar({ item }: { item: SupportItem }) {
 
 function KindPill({ item }: { item: SupportItem }) {
   const tone = item.kind === "alert"
-    ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
-    : item.title === "Bug report" ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
-    : item.title === "Suggestion" ? "bg-violet-500/15 text-violet-600 dark:text-violet-300"
-    : "bg-sky-500/15 text-sky-600 dark:text-sky-300";
+    ? "bg-warning/15 text-warning"
+    : item.title === "Bug report" ? "bg-destructive/15 text-destructive"
+    : item.title === "Suggestion" ? "bg-muted-foreground/15 text-muted-foreground"
+    : "bg-info/15 text-info";
   return (
     <span className={cn("shrink-0 rounded px-1.5 py-px text-[10px] font-bold", tone)}>
       {item.kind === "alert" ? "App alert" : item.title}
@@ -336,7 +336,7 @@ function TicketThread({ id, onBack }: { id: string; onBack: () => void }) {
             <RotateCcw className="h-3.5 w-3.5" /> Reopen
           </button>
         ) : (
-          <button type="button" onClick={() => changeStatus("closed")} className="inline-flex h-9 items-center gap-1 rounded-full bg-emerald-600 px-3 text-xs font-semibold text-white active:scale-95">
+          <button type="button" onClick={() => changeStatus("closed")} className="inline-flex h-9 items-center gap-1 rounded-full bg-success px-3 text-xs font-semibold text-white active:scale-95">
             <Check className="h-3.5 w-3.5" /> Done
           </button>
         )}
@@ -439,15 +439,15 @@ function AlertThread({ alert, loading, onBack }: { alert: any; loading: boolean;
             <RotateCcw className="h-3.5 w-3.5" /> Reopen
           </button>
         ) : (
-          <button type="button" disabled={busy} onClick={resolve} className="inline-flex h-9 items-center gap-1 rounded-full bg-emerald-600 px-3 text-xs font-semibold text-white active:scale-95">
+          <button type="button" disabled={busy} onClick={resolve} className="inline-flex h-9 items-center gap-1 rounded-full bg-success px-3 text-xs font-semibold text-white active:scale-95">
             <Check className="h-3.5 w-3.5" /> Resolved
           </button>
         )}
       </ThreadHeader>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-4 md:px-6">
-        <div className="mx-auto max-w-lg rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+        <div className="mx-auto max-w-lg rounded-2xl border border-warning/30 bg-warning/10 p-4">
           <div className="flex items-center gap-2 text-sm font-bold">
-            <TriangleAlert className="h-4 w-4 text-amber-500" /> {titleFor(alert)}
+            <TriangleAlert className="h-4 w-4 text-warning" /> {titleFor(alert)}
           </div>
           <p className="mt-1.5 text-sm text-foreground/80">{summaryFor(alert)}</p>
           <div className="mt-2 text-[11px] text-muted-foreground">

@@ -81,7 +81,7 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
                       <span
                         className={
                           isUntagged
-                            ? "font-medium text-amber-600 dark:text-amber-400"
+                            ? "font-medium text-warning"
                             : "font-medium"
                         }
                       >
@@ -96,7 +96,7 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
                       <div
                         className={
                           isUntagged
-                            ? "h-full rounded-full bg-amber-500/70"
+                            ? "h-full rounded-full bg-warning/70"
                             : "h-full rounded-full bg-primary"
                         }
                         style={{ width: `${pct}%` }}
@@ -109,7 +109,7 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
           )}
 
           {v.untaggedRowCount > 0 && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2 text-[11px] text-amber-700 dark:text-amber-300">
+            <div className="rounded-md border border-warning/30 bg-warning/[0.06] p-2 text-[11px] text-warning">
               {v.untaggedRowCount} programmed row{v.untaggedRowCount === 1 ? "" : "s"} use an
               untagged exercise. Tag them in the Exercise Library to get accurate effective-set
               counts.

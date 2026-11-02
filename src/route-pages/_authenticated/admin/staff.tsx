@@ -67,8 +67,8 @@ function RoleBadge({ role, owner }: { role: string; owner?: boolean }) {
   const label = owner && role === "admin" ? "Owner" : staffRoleLabel(role);
   const tone =
     role === "admin" ? "bg-primary/15 text-primary"
-    : role === "finance" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-    : role === "coach" ? "bg-sky-500/15 text-sky-600 dark:text-sky-400"
+    : role === "finance" ? "bg-success/15 text-success"
+    : role === "coach" ? "bg-info/15 text-info"
     : "bg-muted text-muted-foreground";
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold", tone)}>{label}</span>;
 }
@@ -104,7 +104,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       {!embedded && (
         <header>
-          <h1 className="text-2xl font-black tracking-tight md:text-3xl">Staff access</h1>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Staff access</h1>
         </header>
       )}
 
@@ -378,7 +378,7 @@ function RoleDetail({ role }: { role: StaffRoleKey }) {
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Can</div>
           <ul className="space-y-1">
-            {info.can.map((c) => <li key={c} className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />{c}</li>)}
+            {info.can.map((c) => <li key={c} className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />{c}</li>)}
           </ul>
         </div>
       )}
@@ -594,8 +594,8 @@ function AddStaffDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenC
 
         {step === "done" && result && (
           <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+            <div className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/10 p-3">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
               <div className="text-sm">
                 <div className="font-semibold">
                   {result.sent && result.method === "messenger" ? `Sent to ${recipient?.name ?? form.first_name} in Messenger`

@@ -63,7 +63,7 @@ export function FormVersionHistory({ formId }: { formId: string }) {
           onChange={(e) => setReason(e.target.value)}
         />
         <div className="mt-2 flex justify-end">
-          <Button onClick={publish} disabled={busy} className="bg-gradient-primary font-bold">
+          <Button onClick={publish} disabled={busy} className="bg-primary text-primary-foreground font-semibold">
             <Rocket className="mr-1 h-4 w-4" /> Publish version
           </Button>
         </div>
@@ -161,13 +161,13 @@ function VersionCompare({ older, newer }: { older: NfFormVersion; newer: NfFormV
   });
   return (
     <div className="grid gap-3 text-xs sm:grid-cols-3">
-      <Card className="border-emerald-500/40 bg-emerald-500/5 p-2">
-        <div className="mb-1 font-bold text-emerald-700">Added ({added.length})</div>
+      <Card className="border-success/40 bg-success/5 p-2">
+        <div className="mb-1 font-bold text-success">Added ({added.length})</div>
         {added.map((q) => <div key={q.id}>+ {q.label}</div>)}
         {added.length === 0 && <div className="text-muted-foreground">None</div>}
       </Card>
-      <Card className="border-amber-500/40 bg-amber-500/5 p-2">
-        <div className="mb-1 font-bold text-amber-700">Changed ({changed.length})</div>
+      <Card className="border-warning/40 bg-warning/5 p-2">
+        <div className="mb-1 font-bold text-warning">Changed ({changed.length})</div>
         {changed.map((q) => <div key={q.id}>~ {q.label}</div>)}
         {changed.length === 0 && <div className="text-muted-foreground">None</div>}
       </Card>

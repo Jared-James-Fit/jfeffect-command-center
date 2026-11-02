@@ -316,7 +316,7 @@ function WorkoutFeedbackSection({
                 key={r.id}
                 className={
                   r.pain
-                    ? "p-4 border-amber-500/40 bg-amber-500/5"
+                    ? "p-4 border-warning/40 bg-warning/5"
                     : "p-4"
                 }
               >
@@ -328,7 +328,7 @@ function WorkoutFeedbackSection({
                         {blockName}{weekIdx ? ` · Week ${weekIdx}` : ""}
                       </span>
                       {r.reviewed_at && (
-                        <Badge variant="outline" className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300">
+                        <Badge variant="outline" className="border-success/40 text-success">
                           <CheckCircle2 className="mr-1 h-3 w-3" /> Reviewed
                         </Badge>
                       )}
@@ -343,12 +343,12 @@ function WorkoutFeedbackSection({
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={hard ? "border-amber-500/50 text-amber-700 dark:text-amber-300 font-bold" : "font-bold"}
+                      className={hard ? "border-warning/50 text-warning font-bold" : "font-bold"}
                     >
                       RPE {r.session_rpe}/10
                     </Badge>
                     {r.pain && (
-                      <Badge className="border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200 font-bold">
+                      <Badge className="border-warning/50 bg-warning/15 text-warning font-bold">
                         <AlertTriangle className="mr-1 h-3 w-3" /> Pain {r.pain_level ? `${r.pain_level}/10` : ""}
                       </Badge>
                     )}
@@ -358,7 +358,7 @@ function WorkoutFeedbackSection({
                   <div className="mt-3 space-y-1.5 text-sm">
                     {r.pain && (r.pain_area || r.pain_note) && (
                       <div>
-                        <span className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Pain</span>
+                        <span className="text-xs font-bold uppercase tracking-wide text-warning">Pain</span>
                         <div>
                           {r.pain_area ?? "Unspecified area"}
                           {r.pain_note ? ` — ${r.pain_note}` : ""}

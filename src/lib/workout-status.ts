@@ -108,10 +108,10 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
   };
 }
 
-const completedTone = "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
-const reviewPendingTone = "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300";
+const completedTone = "border-success/40 bg-success/10 text-success";
+const reviewPendingTone = "border-warning/40 bg-warning/10 text-warning";
 const todayTone = "border-primary/40 bg-primary/10 text-primary";
-const inProgressTone = "border-amber-500/40 bg-amber-500/10 text-amber-500";
+const inProgressTone = "border-warning/40 bg-warning/10 text-warning";
 const upcomingTone = "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
-const missedTone = "border-rose-500/40 bg-rose-500/10 text-rose-500";
+const missedTone = "border-destructive/40 bg-destructive/10 text-destructive";
 const neutralTone = "border-muted-foreground/20 bg-muted/20 text-muted-foreground";

@@ -41,9 +41,9 @@ function expiryStatus(endDate?: string | null): { label: string; tone: string; d
     const end = parseISO(endDate);
     const daysLeft = differenceInDays(end, new Date());
     if (daysLeft < 0) return { label: `Expired ${Math.abs(daysLeft)}d ago`, tone: "border-destructive/40 text-destructive bg-destructive/5", daysLeft };
-    if (daysLeft <= 14) return { label: `Expires in ${daysLeft}d`, tone: "border-amber-500/40 text-amber-600 bg-amber-500/5", daysLeft };
+    if (daysLeft <= 14) return { label: `Expires in ${daysLeft}d`, tone: "border-warning/40 text-warning bg-warning/5", daysLeft };
     if (daysLeft <= 30) return { label: `${daysLeft}d remaining`, tone: "border-warning/40 text-warning bg-warning/5", daysLeft };
-    return { label: `${daysLeft}d remaining`, tone: "border-green-500/40 text-green-600 bg-green-500/5", daysLeft };
+    return { label: `${daysLeft}d remaining`, tone: "border-success/40 text-success bg-success/5", daysLeft };
   } catch { return null; }
 }
 
@@ -343,7 +343,7 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
         <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
           <ShoppingBag className="h-4 w-4" />Purchases & Payment Setup Requests
         </h3>
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setPicker(true)}>
+        <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => setPicker(true)}>
           <Plus className="mr-1.5 h-3 w-3" />Send payment setup request
         </Button>
       </div>
@@ -370,7 +370,7 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
                     <span className="text-sm font-mono">{formatMoney(display.contractTotal, display.currency)}</span>
                     <Badge variant="outline" className={display.statusTone}>{display.statusLabel}</Badge>
                     {display.amountOutstanding > 0 && (
-                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 bg-amber-500/5">
+                      <Badge variant="outline" className="border-warning/40 text-warning bg-warning/5">
                         {formatMoney(display.amountOutstanding, display.currency)} outstanding
                       </Badge>
                     )}

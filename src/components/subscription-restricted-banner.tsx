@@ -37,7 +37,7 @@ export function SubscriptionRestrictedBanner({
       ? "Your billing is paused. Access resumes when the freeze ends — or reactivate now."
       : "Your account data and history are saved. Reactivate billing to restore membership access.";
   return (
-    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200 flex flex-wrap items-center gap-3">
+    <div className="rounded-md border border-warning/40 bg-warning/10 p-4 text-sm text-warning flex flex-wrap items-center gap-3">
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <div className="flex-1 min-w-[200px]">
         <div className="font-semibold">{reason}</div>
@@ -47,7 +47,7 @@ export function SubscriptionRestrictedBanner({
         <Button
           size="sm"
           variant="outline"
-          className="border-amber-500/50"
+          className="border-warning/50"
           onClick={() => {
             const el = document.getElementById("billing-status-card");
             if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -57,7 +57,7 @@ export function SubscriptionRestrictedBanner({
         </Button>
       ) : (
         <Link to={"/portal/membership" as any}>
-          <Button size="sm" variant="outline" className="border-amber-500/50">Manage billing</Button>
+          <Button size="sm" variant="outline" className="border-warning/50">Manage billing</Button>
         </Link>
       )}
     </div>

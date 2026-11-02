@@ -489,9 +489,9 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
               </div>
             )}
             {selectedClient && (
-              <div className={`rounded-md border p-3 text-sm ${selectedClient.agreement_signed ? "border-primary/40 bg-primary/5" : "border-amber-500/40 bg-amber-500/5"}`}>
+              <div className={`rounded-md border p-3 text-sm ${selectedClient.agreement_signed ? "border-primary/40 bg-primary/5" : "border-warning/40 bg-warning/5"}`}>
                 <div className="flex items-center gap-2 font-semibold">
-                  {selectedClient.agreement_signed ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                  {selectedClient.agreement_signed ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <AlertTriangle className="h-4 w-4 text-warning" />}
                   Coaching Agreement: <Badge variant="outline">{selectedClient.agreement_signed ? (selectedClient.agreement_status ?? "Signed") : (!selectedClient.agreement_status || selectedClient.agreement_status === "Not Sent" ? "Not signed yet" : selectedClient.agreement_status)}</Badge>
                 </div>
                 {selectedClient.agreement_signed ? (
@@ -550,7 +550,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         )}
         <DialogFooter>
           <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
-          <ActionButton disabled={!clientId} onClick={submit} className="bg-gradient-primary font-bold uppercase">
+          <ActionButton disabled={!clientId} onClick={submit} className="bg-primary text-primary-foreground font-semibold">
             {MODE_COPY[mode].button}
           </ActionButton>
         </DialogFooter>

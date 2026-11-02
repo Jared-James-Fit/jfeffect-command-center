@@ -50,7 +50,7 @@ export function dayTypeTone(day_type?: string | null): string {
     case "Rest Day":
       return "border-muted-foreground/40 text-muted-foreground";
     case "High Day":
-      return "border-amber-500/40 text-amber-500";
+      return "border-warning/40 text-warning";
     case "Custom":
       return "border-accent-foreground/40 text-accent-foreground";
     default:

@@ -391,8 +391,8 @@ export function displayWeekStatus(status: string | null | undefined): "Not Start
 
 export function weekStatusTone(s: "Not Started" | "In Progress" | "Completed" | "Locked"): string {
   switch (s) {
-    case "Completed": return "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
-    case "In Progress": return "border-amber-500/40 bg-amber-500/10 text-amber-500";
+    case "Completed": return "border-success/40 bg-success/10 text-success";
+    case "In Progress": return "border-warning/40 bg-warning/10 text-warning";
     case "Locked": return "border-muted-foreground/20 bg-muted/20 text-muted-foreground/70";
     default: return "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
   }

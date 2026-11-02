@@ -431,10 +431,10 @@ export function InlineWorkoutEditor({
         ) : (
           <div className="flex-1 space-y-4 overflow-y-auto px-1 py-2">
             {locked && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="flex items-start gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 text-xs">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div>
-                  <div className="font-semibold text-amber-700 dark:text-amber-400">
+                  <div className="font-semibold text-warning">
                     {completed ? "This workout is completed." : `${loggedSets} set${loggedSets === 1 ? "" : "s"} already logged.`}
                   </div>
                   <div className="mt-0.5 text-muted-foreground">
@@ -447,7 +447,7 @@ export function InlineWorkoutEditor({
 
             {/* Day details */}
             <div className="space-y-3 rounded-lg border border-border/60 p-3">
-              <div className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Workout details
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -477,7 +477,7 @@ export function InlineWorkoutEditor({
 
             {/* Exercise rows */}
             <div className="space-y-2">
-              <div className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Exercises ({rows.length})
               </div>
               {rows.map((r, i) => (

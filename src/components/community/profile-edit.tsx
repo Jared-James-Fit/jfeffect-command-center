@@ -99,7 +99,7 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
               <X className="h-4 w-4" />
             </SheetClose>
             <div className="min-w-0 flex-1 text-center">
-              <SheetTitle className="text-[16px] font-black">Edit profile</SheetTitle>
+              <SheetTitle className="text-[16px] font-bold">Edit profile</SheetTitle>
               <SheetDescription className="sr-only">Your username, bio, training, gym and privacy</SheetDescription>
             </div>
             <Button type="button" size="sm" className="h-9 rounded-full px-4 font-bold" disabled={!dirty || usernameBlocking || saving} onClick={() => void save()} data-profile-save>
@@ -126,7 +126,7 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
                     className="h-full min-w-0 flex-1 bg-transparent pl-0.5 text-[16px] outline-none"
                     data-username-input
                   />
-                  {usernameNote?.ok === true && <Check className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />}
+                  {usernameNote?.ok === true && <Check className="h-4 w-4 shrink-0 text-success" aria-hidden />}
                 </div>
               </Field>
 
@@ -228,7 +228,7 @@ function Field({ label, hint, hintTone, children }: { label: string; hint?: stri
     <div>
       <div className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
       {children}
-      {hint && <p className={cn("mt-1.5 text-[11.5px] leading-snug", hintTone === "bad" ? "text-destructive" : hintTone === "good" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{hint}</p>}
+      {hint && <p className={cn("mt-1.5 text-[11.5px] leading-snug", hintTone === "bad" ? "text-destructive" : hintTone === "good" ? "text-success" : "text-muted-foreground")}>{hint}</p>}
     </div>
   );
 }

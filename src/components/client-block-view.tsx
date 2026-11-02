@@ -458,7 +458,7 @@ export function ClientBlockView({
       {block && (
         <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Now viewing
           </span>
           <span className="truncate text-sm font-bold">
@@ -470,13 +470,13 @@ export function ClientBlockView({
             </span>
           )}
           {blockStatus === "completed" && (
-            <Badge variant="outline" className="h-5 border-emerald-500/40 px-1.5 text-[9px] font-bold text-emerald-500">Done</Badge>
+            <Badge variant="outline" className="h-5 border-success/40 px-1.5 text-[9px] font-bold text-success">Done</Badge>
           )}
           {blockStatus === "current" && (
             <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[9px] font-bold text-primary hover:bg-primary/20">Current</Badge>
           )}
           {blockStatus === "upcoming" && (
-            <Badge variant="outline" className="h-5 border-amber-500/40 px-1.5 text-[9px] font-bold text-amber-500">Upcoming</Badge>
+            <Badge variant="outline" className="h-5 border-warning/40 px-1.5 text-[9px] font-bold text-warning">Upcoming</Badge>
           )}
           {orderedBlocks.length > 1 && onBlockChange && (() => {
             const cur = orderedBlocks.find((b: any) => blockStatusFor(b) === "current");
@@ -495,7 +495,7 @@ export function ClientBlockView({
         </div>
         {(blockRoadmap?.label || blockRoadmap?.purpose) && (
           <div className="mt-1.5 border-t border-border/60 pt-1.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               {blockRoadmap.label && <span className="text-foreground/80">{blockRoadmap.label}</span>}
               {blockRoadmap.style && STYLE_LABEL[blockRoadmap.style] && <span>{STYLE_LABEL[blockRoadmap.style]}</span>}
               <span className="font-semibold normal-case tracking-normal">
@@ -558,7 +558,7 @@ export function ClientBlockView({
                 aria-label={`${b.name ?? "Block"} — ${statusLabel}`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-xs font-black uppercase tracking-wider">
+                  <span className="truncate text-xs font-bold uppercase tracking-wider">
                     {b.name ?? `Block`}
                   </span>
                   {st === "current" && (
@@ -569,13 +569,13 @@ export function ClientBlockView({
                   )}
                   {st === "upcoming" && (
                     <Badge variant="outline" className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
-                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-amber-500/40 text-amber-500")}>
+                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-warning/40 text-warning")}>
                       Next
                     </Badge>
                   )}
                   {st === "completed" && (
                     <Badge variant="outline" className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
-                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-emerald-500/40 text-emerald-500")}>
+                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-success/40 text-success")}>
                       Done
                     </Badge>
                   )}
@@ -593,7 +593,7 @@ export function ClientBlockView({
                 </div>
                 {st === "upcoming" && !isBlockAvailable(b, today) && (
                   <div className={cn("mt-0.5 text-[10px] font-semibold",
-                    isSel ? "text-primary-foreground/85" : "text-amber-600")}>
+                    isSel ? "text-primary-foreground/85" : "text-warning")}>
                     Preview · not available yet
                   </div>
                 )}
@@ -649,11 +649,11 @@ export function ClientBlockView({
                   aria-label={`Week ${w.week_index}${rw?.label ? `, ${rw.label}` : ""}${isCur ? " — current" : past ? " — done" : upcoming ? " — upcoming" : ""}`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black uppercase tracking-wider">W{w.week_index}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">W{w.week_index}</span>
                     {isCur && (
                       <Crosshair className={cn("h-3 w-3", isSel ? "" : "text-primary")} />
                     )}
-                    {allDone && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                    {allDone && <CheckCircle2 className="h-3 w-3 text-success" />}
                   </div>
                   {stats.total > 0 && (
                     <div className={cn("mt-0.5 text-[9px] font-semibold tabular-nums", isSel ? "text-primary-foreground/80" : "text-foreground/55")}>
@@ -740,9 +740,9 @@ export function ClientBlockView({
                   aria-label={`Day ${d.day_index}${dd ? `, ${format(dd, "EEEE, MMMM d")}` : ""}${done ? ", completed" : started ? ", in progress" : ""}`}
                 >
                   <div className="flex items-center gap-1 whitespace-nowrap">
-                    <span className="font-black uppercase tracking-wide">Day {d.day_index}</span>
-                    {done && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
-                    {started && !done && <span className="text-[9px] text-amber-500">●</span>}
+                    <span className="font-bold uppercase tracking-wide">Day {d.day_index}</span>
+                    {done && <CheckCircle2 className="h-3 w-3 text-success" />}
+                    {started && !done && <span className="text-[9px] text-warning">●</span>}
                   </div>
                   <div className={cn("mt-0.5 text-[10px] font-medium whitespace-nowrap",
                     isSel ? "text-primary-foreground/80" : "text-foreground/60")}>
@@ -757,7 +757,7 @@ export function ClientBlockView({
 
       {(weeklyPriorities.length > 0 || weekRoadmap?.label || weekRoadmap?.focus) && (
         <Card className="p-3">
-          <div className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-foreground/70">
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-foreground/70">
             Week {resolvedWeek?.week_index}
             {weekRoadmap?.label ? ` · ${weekRoadmap.label}` : weeklyPriorities.length > 0 ? " Priorities" : ""}
           </div>
@@ -767,7 +767,7 @@ export function ClientBlockView({
             </p>
           )}
           {weeklyPriorities.length > 0 && weekRoadmap?.label && (
-            <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Priorities</div>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Priorities</div>
           )}
           {weeklyPriorities.length > 0 && (
           <>
@@ -906,7 +906,7 @@ export function ClientBlockView({
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
-                        <h3 className="min-w-0 break-words text-sm font-black uppercase tracking-wide">
+                        <h3 className="min-w-0 break-words text-sm font-bold uppercase tracking-wide">
                           {cleanDayTitle(d.title, d.day_index)}
                         </h3>
                         {isToday && !done && blockStatus === "current" && (
@@ -915,7 +915,7 @@ export function ClientBlockView({
                           </Badge>
                         )}
                         {blockStatus === "upcoming" && !done && (
-                          <Badge variant="outline" className="h-4 shrink-0 whitespace-nowrap border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-bold text-amber-500">
+                          <Badge variant="outline" className="h-4 shrink-0 whitespace-nowrap border-warning/40 bg-warning/10 px-1 text-[9px] font-bold text-warning">
                             Upcoming
                           </Badge>
                         )}
@@ -931,11 +931,11 @@ export function ClientBlockView({
                     </div>
                     <div className="shrink-0 whitespace-nowrap">
                       {done ? (
-                        <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-500">
+                        <Badge variant="outline" className="border-success/40 bg-success/10 text-[10px] text-success">
                           <CheckCircle2 className="mr-0.5 h-3 w-3" /> Done
                         </Badge>
                       ) : started ? (
-                        <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-500">
+                        <Badge variant="outline" className="border-warning/40 bg-warning/10 text-[10px] text-warning">
                           In Progress
                         </Badge>
                       ) : weekLocked ? (

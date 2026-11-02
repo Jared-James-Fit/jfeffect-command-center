@@ -279,7 +279,7 @@ export function BulkMoveDialog({ open, onOpenChange, anchorDayId, initialTargetD
               rescheduled by this batch.
             </label>
             {isBlocked && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
                 {instanceBlockedMoves.length > 0 && (
                   <div>
                     <strong>{instanceBlockedMoves.length}</strong> of these

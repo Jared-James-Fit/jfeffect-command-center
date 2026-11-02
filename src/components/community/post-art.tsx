@@ -148,7 +148,7 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
       ) : failed ? (
         // couldn't paint it on this phone: its words, on the same dark card
         <div className="absolute inset-0 flex items-center px-[9%] text-white">
-          <p className="line-clamp-6 text-balance text-[22px] font-black leading-tight">{alt}</p>
+          <p className="line-clamp-6 text-balance text-[22px] font-bold leading-tight">{alt}</p>
         </div>
       ) : (
         <div className="absolute inset-0 animate-pulse bg-[radial-gradient(85%_70%_at_100%_0%,rgba(239,51,64,0.32),transparent_60%)]" aria-label="Loading picture" role="img" />

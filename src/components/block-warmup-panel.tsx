@@ -117,7 +117,7 @@ export function BlockWarmupPanel({ blockId }: { blockId: string }) {
   return (
     <Card className="border-border bg-card p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <Flame className="h-4 w-4 text-orange-500" />
+        <Flame className="h-4 w-4 text-warning" />
         <h3 className="font-bold">Warm-Up Settings</h3>
       </div>
 

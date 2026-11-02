@@ -19,12 +19,12 @@ import { ManageSubscriptionPanel } from "@/components/billing/manage-subscriptio
 function fmt(d: string | null | undefined) { return d ? new Date(d).toLocaleString() : "—"; }
 
 const STATUS_TONE: Record<string, string> = {
-  "Trialing": "bg-amber-500/10 text-amber-300 border-amber-500/30",
-  "Active": "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
-  "Past Due": "bg-rose-500/10 text-rose-300 border-rose-500/30",
-  "Payment Failed": "bg-rose-500/10 text-rose-300 border-rose-500/30",
-  "Paused": "bg-sky-500/10 text-sky-300 border-sky-500/30",
-  "Hold Plan": "bg-violet-500/10 text-violet-300 border-violet-500/30",
+  "Trialing": "bg-warning/10 text-warning border-warning/30",
+  "Active": "bg-success/10 text-success border-success/30",
+  "Past Due": "bg-destructive/10 text-destructive border-destructive/30",
+  "Payment Failed": "bg-destructive/10 text-destructive border-destructive/30",
+  "Paused": "bg-info/10 text-info border-info/30",
+  "Hold Plan": "bg-muted-foreground/10 text-muted-foreground border-border",
   "Cancelled": "bg-zinc-500/10 text-zinc-300 border-zinc-500/30",
 };
 
@@ -188,7 +188,7 @@ export function JfAdminBillingCard({ member }: { member: any }) {
         {/* Grant temporary access */}
         <div className="space-y-2">
           <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setShowTempForm(!showTempForm)}>
-            <ShieldCheck className="mr-2 h-3.5 w-3.5 text-emerald-400" />
+            <ShieldCheck className="mr-2 h-3.5 w-3.5 text-success" />
             Grant Temporary Access
             {showTempForm ? <ChevronUp className="ml-auto h-3.5 w-3.5" /> : <ChevronDown className="ml-auto h-3.5 w-3.5" />}
           </Button>
@@ -214,14 +214,14 @@ export function JfAdminBillingCard({ member }: { member: any }) {
         {/* Extend trial */}
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" className="flex-1 justify-start" onClick={() => extendTrial.mutate()} disabled={extendTrial.isPending}>
-            <Clock className="mr-2 h-3.5 w-3.5 text-amber-400" />
+            <Clock className="mr-2 h-3.5 w-3.5 text-warning" />
             {extendTrial.isPending ? "Extending…" : `Extend Trial +${extendDays}d`}
           </Button>
           <Input className="h-8 w-16" type="number" min="1" value={extendDays} onChange={e => setExtendDays(e.target.value)} />
         </div>
 
         {/* Revoke access */}
-        <Button size="sm" variant="outline" className="w-full justify-start text-red-400 border-red-500/30 hover:bg-red-500/10" onClick={() => revoke.mutate()} disabled={revoke.isPending}>
+        <Button size="sm" variant="outline" className="w-full justify-start text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => revoke.mutate()} disabled={revoke.isPending}>
           <ShieldOff className="mr-2 h-3.5 w-3.5" />
           {revoke.isPending ? "Revoking…" : "Revoke Access (Kill Switch)"}
         </Button>
@@ -230,7 +230,7 @@ export function JfAdminBillingCard({ member }: { member: any }) {
       {/* ── Manual payment recording ── */}
       <div className="space-y-2 pt-3 border-t border-border">
         <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => setShowManualForm(!showManualForm)}>
-          <DollarSign className="mr-2 h-3.5 w-3.5 text-sky-400" />
+          <DollarSign className="mr-2 h-3.5 w-3.5 text-info" />
           Record Manual Payment
           {showManualForm ? <ChevronUp className="ml-auto h-3.5 w-3.5" /> : <ChevronDown className="ml-auto h-3.5 w-3.5" />}
         </Button>

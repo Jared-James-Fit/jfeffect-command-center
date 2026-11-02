@@ -330,7 +330,7 @@ export function RecipeForm({ open, onOpenChange, initial, onSaved }: Props) {
           <Button variant="outline" onClick={() => persist(false)} disabled={saving}>
             Save as {status}
           </Button>
-          <Button onClick={() => persist(true)} disabled={saving} className="bg-gradient-primary font-bold">
+          <Button onClick={() => persist(true)} disabled={saving} className="bg-primary text-primary-foreground font-semibold">
             {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
             Publish
           </Button>

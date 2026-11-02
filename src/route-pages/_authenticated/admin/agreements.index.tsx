@@ -86,8 +86,8 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
           </Link>
         </div>
         {!apiConnected && (
-          <Card className="border-amber-500/40 bg-amber-500/5 p-4 flex items-start gap-3">
-            <Info className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+          <Card className="border-warning/40 bg-warning/5 p-4 flex items-start gap-3">
+            <Info className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
             <div className="space-y-1 text-sm flex-1">
               <p className="font-semibold">Manual SignNow Link Mode</p>
               <p className="text-muted-foreground">
@@ -163,7 +163,7 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
                       <p className="font-semibold truncate">{t.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{t.agreement_type ?? "Custom type"}</p>
                     </div>
-                    <Badge variant="outline" className={t.is_active ? "border-emerald-500/40 text-emerald-500" : "border-muted text-muted-foreground"}>
+                    <Badge variant="outline" className={t.is_active ? "border-success/40 text-success" : "border-muted text-muted-foreground"}>
                       {t.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </div>
@@ -174,15 +174,15 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
                       <Badge variant="outline" className="border-muted text-[10px]">Manual</Badge>
                     )}
                     {ready ? (
-                      <Badge variant="outline" className="border-emerald-500/40 text-emerald-500 text-[10px]">Ready</Badge>
+                      <Badge variant="outline" className="border-success/40 text-success text-[10px]">Ready</Badge>
                     ) : isApiTemplate ? (
-                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">API Not Connected</Badge>
+                      <Badge variant="outline" className="border-warning/40 text-warning text-[10px]">API Not Connected</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Missing ID</Badge>
+                      <Badge variant="outline" className="border-warning/40 text-warning text-[10px]">Missing ID</Badge>
                     )}
                   </div>
                   {!ready && (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    <p className="text-[11px] text-warning">
                       {isApiTemplate
                         ? "SignNow API is not connected. Connect it in Settings to send invites with this template."
                         : "This template has no SignNow template ID or signing URL. Add one (or sync from SignNow) before sending."}
@@ -428,7 +428,7 @@ function TemplateActionDialog({
         </DialogHeader>
         <div className="space-y-3 text-sm">
           {!apiConnected && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-700 dark:text-amber-300">
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] text-warning">
               <strong>Manual mode:</strong> SignNow API isn't connected, so the app cannot email this invite for you.
               We'll save the record and the signing link — you must send it to the client yourself (email, text, copy/paste).
             </div>
@@ -466,7 +466,7 @@ function TemplateActionDialog({
             <Label className="text-xs">Signing link override (optional)</Label>
             <Input value={linkOverride} onChange={(e) => setLinkOverride(e.target.value)} placeholder={tpl?.signnow_url ?? "https://app.signnow.com/..."} />
             {!isApiTemplate && !tpl?.signnow_url && !linkOverride && (
-              <p className="text-[11px] text-amber-500 mt-1">This template has no SignNow URL saved. Paste one or edit the template.</p>
+              <p className="text-[11px] text-warning mt-1">This template has no SignNow URL saved. Paste one or edit the template.</p>
             )}
             {isApiTemplate && (
               <p className="text-[11px] text-muted-foreground mt-1">Optional. The SignNow API will generate and email the signing link using template ID <code>{tpl?.signnow_template_id}</code>.</p>

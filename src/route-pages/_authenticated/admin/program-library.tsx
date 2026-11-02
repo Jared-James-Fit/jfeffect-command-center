@@ -1470,7 +1470,7 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
         ) : pendingIssues ? (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
+              <DialogTitle className="flex items-center gap-2 text-warning">
                 <AlertTriangle className="h-4 w-4" />
                 Missing requirements
               </DialogTitle>
@@ -1481,11 +1481,11 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
                 {pendingIssues.length} day{pendingIssues.length === 1 ? "" : "s"} with missing
                 requirements. The client will see incomplete workouts if you continue.
               </p>
-              <div className="max-h-72 overflow-y-auto rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+              <div className="max-h-72 overflow-y-auto rounded-md border border-warning/40 bg-warning/5 p-3 text-xs">
                 <ul className="space-y-2">
                   {pendingIssues.map((d, i) => (
                     <li key={i}>
-                      <div className="font-semibold text-amber-700 dark:text-amber-200">{d.location}</div>
+                      <div className="font-semibold text-warning">{d.location}</div>
                       <ul className="mt-0.5 list-disc pl-4 space-y-0.5 text-muted-foreground">
                         {d.missing.map((m, j) => <li key={j}>{m}</li>)}
                       </ul>
@@ -1634,7 +1634,7 @@ export function AssignDialog({ template, onClose }: { template: any; onClose: ()
               )}
 
               {isBlockish && conflict && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <div className="flex-1">
@@ -1789,7 +1789,7 @@ function MaxesGate({
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-300">
+        <DialogTitle className="flex items-center gap-2 text-warning">
           <AlertTriangle className="h-4 w-4" />
           Set 1RM / Training Max for {clientName}
         </DialogTitle>

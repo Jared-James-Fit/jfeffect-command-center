@@ -26,7 +26,7 @@ export function Kpi({ label, value, sub, tone }: { label: string; value: string;
   return (
     <Card className="min-w-0 p-3 sm:p-4">
       <div className="truncate text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 truncate text-xl font-semibold tabular-nums sm:text-2xl", tone === "good" && "text-emerald-500", tone === "warn" && "text-amber-500")}>{value}</div>
+      <div className={cn("mt-1 truncate text-xl font-semibold tabular-nums sm:text-2xl", tone === "good" && "text-success", tone === "warn" && "text-warning")}>{value}</div>
       {sub && <div className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</div>}
     </Card>
   );
@@ -78,7 +78,7 @@ export function CollectList({ rows, today, onRecord, onSend }: {
   if (!rows.length) {
     return (
       <div className="flex items-center gap-2 px-4 pb-4 text-sm text-muted-foreground">
-        <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Nothing outstanding.
+        <CheckCircle2 className="h-4 w-4 text-success" /> Nothing outstanding.
       </div>
     );
   }
@@ -104,7 +104,7 @@ export function CollectList({ rows, today, onRecord, onSend }: {
               <div className="shrink-0 text-right">
                 <div className="text-sm font-semibold tabular-nums">{fmtCad(o.outstandingMinor)}</div>
                 {o.createdOn && (
-                  <div className={cn("text-[11px] tabular-nums text-muted-foreground", age != null && age > 30 && "font-medium text-amber-600 dark:text-amber-400")}>
+                  <div className={cn("text-[11px] tabular-nums text-muted-foreground", age != null && age > 30 && "font-medium text-warning")}>
                     since {shortDay(o.createdOn)}
                   </div>
                 )}

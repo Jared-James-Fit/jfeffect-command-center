@@ -363,7 +363,7 @@ function BlockMaxesDialog({
                       </div>
                     </div>
                     {d.unit !== clientUnit && d.one_rm !== "" && Number(d.one_rm) > 0 && (
-                      <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200">
+                      <div className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-[10px] text-warning">
                         Client logs in <b>{clientUnit}</b>: {d.one_rm} {d.unit} ={" "}
                         <b>
                           {Math.round(Number(d.one_rm) * (d.unit === "kg" ? 2.20462262 : 1 / 2.20462262) * 10) / 10} {clientUnit}

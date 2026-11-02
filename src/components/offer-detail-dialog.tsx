@@ -78,7 +78,7 @@ export function OfferDetailDialog({ offer, onClose, onAssign, onEdit }: {
           <Row label="Admin notes" value={offer.admin_notes} />
         </div>
         <div className="flex flex-wrap gap-2 pt-4">
-          {onAssign && <Button className="bg-gradient-primary font-bold uppercase" onClick={() => onAssign(offer)}>Assign to client</Button>}
+          {onAssign && <Button className="bg-primary text-primary-foreground font-semibold" onClick={() => onAssign(offer)}>Assign to client</Button>}
           {onEdit && <Button variant="outline" onClick={() => onEdit(offer)}>Edit</Button>}
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>

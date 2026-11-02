@@ -32,10 +32,10 @@ export type CommentType = typeof COMMENT_TYPES[number];
 
 export function statusTone(status: string) {
   switch (status) {
-    case "Pending Review": return "border-amber-500/40 bg-amber-500/10 text-amber-300";
-    case "In Review":      return "border-blue-500/40 bg-blue-500/10 text-blue-300";
-    case "Reviewed":       return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
-    case "Needs Follow-Up":return "border-rose-500/40 bg-rose-500/10 text-rose-300";
+    case "Pending Review": return "border-warning/40 bg-warning/10 text-warning";
+    case "In Review":      return "border-info/40 bg-info/10 text-info";
+    case "Reviewed":       return "border-success/40 bg-success/10 text-success";
+    case "Needs Follow-Up":return "border-destructive/40 bg-destructive/10 text-destructive";
     case "Archived":       return "border-muted bg-muted/30 text-muted-foreground";
     default:               return "border-border bg-muted/30 text-muted-foreground";
   }

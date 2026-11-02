@@ -164,8 +164,8 @@ export function CoverPicker({
         <button type="button" onClick={onCancel} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 active:scale-95" aria-label="Cancel">
           <X className="h-6 w-6" />
         </button>
-        <div className="flex-1 text-center text-[16px] font-black">Cover</div>
-        <button type="button" onClick={() => void done()} disabled={busy} className="inline-flex h-11 items-center gap-1.5 rounded-full bg-primary px-4 text-[14px] font-black text-primary-foreground active:scale-95 disabled:opacity-60" aria-label="Use this cover">
+        <div className="flex-1 text-center text-[16px] font-bold">Cover</div>
+        <button type="button" onClick={() => void done()} disabled={busy} className="inline-flex h-11 items-center gap-1.5 rounded-full bg-primary px-4 text-[14px] font-bold text-primary-foreground active:scale-95 disabled:opacity-60" aria-label="Use this cover">
           <Check className="h-5 w-5" /> Done
         </button>
       </div>

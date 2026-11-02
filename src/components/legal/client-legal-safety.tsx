@@ -168,9 +168,9 @@ function DocRow({ doc }: { doc: any }) {
           <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
             <span>v{doc.version?.version_number}</span>
             {isAccepted ? (
-              <Badge variant="outline" className="border-emerald-500/40 text-emerald-600">Accepted</Badge>
+              <Badge variant="outline" className="border-success/40 text-success">Accepted</Badge>
             ) : doc.is_required ? (
-              <Badge variant="outline" className="border-amber-500/40 text-amber-600">Action required</Badge>
+              <Badge variant="outline" className="border-warning/40 text-warning">Action required</Badge>
             ) : (
               <Badge variant="outline">Active</Badge>
             )}

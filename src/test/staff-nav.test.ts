@@ -63,3 +63,37 @@ describe("membership is a section of the admin menu, not a separate mode", () =>
     expect(topBar).not.toContain("setPovPersona");
   });
 });
+
+describe("the sidebar has one way into each page", () => {
+  const sidebarPaths = (role: "admin" | "coach") =>
+    buildInternalNavCollapsed(role).flatMap((i) => [i.to, ...(i.children ?? []).map((c) => c.to)]);
+
+  it("leaves out workspace tabs and redirect stubs another entry already opens", () => {
+    const admin = sidebarPaths("admin");
+    // each of these is a tab or section of a page the sidebar does list
+    for (const to of [
+      "/admin/communication", "/admin/broadcasts", "/admin/program-library", "/admin/exercises",
+      "/admin/recipes", "/admin/native-forms", "/admin/check-in-reviews", "/admin/pt-calendar",
+      "/admin/coaches", "/admin/staff", "/admin/discount-codes", "/admin/apps", "/admin/faqs",
+    ]) expect(admin).not.toContain(to);
+    // ...and the pages that open them are there
+    for (const to of ["/admin/messages", "/admin/programming", "/admin/forms", "/admin/calendar", "/admin/team", "/admin/settings"]) {
+      expect(admin).toContain(to);
+    }
+    // the Add-ons group is folded into Settings
+    expect(buildInternalNavCollapsed("admin").some((i) => i.label === "Add-ons")).toBe(false);
+    expect(admin.length).toBeLessThan(50);
+  });
+
+  it("hidden pages stay reachable: saved phone bars, search and the finance menu read the full list", () => {
+    const flat = buildInternalNav("admin").map((i) => i.to);
+    for (const to of ["/admin/communication", "/admin/exercises", "/admin/discount-codes", "/admin/membership/support"]) {
+      expect(flat).toContain(to);
+    }
+    expect(buildInternalNav("admin").some((i) => "sidebar" in i)).toBe(false);
+  });
+
+  it("coaches get a short menu", () => {
+    expect(sidebarPaths("coach").length).toBeLessThanOrEqual(20);
+  });
+});

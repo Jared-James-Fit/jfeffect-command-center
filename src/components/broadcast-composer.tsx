@@ -360,7 +360,7 @@ export function BroadcastComposer({ open, onOpenChange, initial, quick, onSaved 
           {!quick && (
             <Button variant="outline" onClick={() => save("Draft")} disabled={saving}>Save Draft</Button>
           )}
-          <Button onClick={() => save("Active")} disabled={saving} className="bg-gradient-primary font-bold">
+          <Button onClick={() => save("Active")} disabled={saving} className="bg-primary text-primary-foreground font-semibold">
             {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
             {scheduleNow ? "Publish Now" : "Save"}
           </Button>

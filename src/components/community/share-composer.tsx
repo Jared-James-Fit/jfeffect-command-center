@@ -445,7 +445,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         <div ref={setStageEl} className="relative min-h-0 flex-1">
           {/* a clip: one tap to change which part goes */}
           {media?.kind === "video" && (
-            <button type="button" onClick={() => void retrim()} className="absolute right-3 top-2 z-10 inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-black backdrop-blur active:scale-95" aria-label="Trim the clip" data-composer-trim>
+            <button type="button" onClick={() => void retrim()} className="absolute right-3 top-2 z-10 inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-bold backdrop-blur active:scale-95" aria-label="Trim the clip" data-composer-trim>
               <Scissors className="h-4 w-4" /> Trim{pickedSeconds(media) != null ? ` · ${formatClock(pickedSeconds(media)!)}` : ""}
             </button>
           )}
@@ -516,7 +516,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         <div className="shrink-0 space-y-2 px-4 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
           {current === "sticker" ? (
             <div className="grid grid-cols-[1fr_auto] gap-2">
-              <Button type="button" disabled={!!busy || !base} onClick={() => void copySticker()} className={cn("h-14 rounded-2xl text-[16px] font-black text-white shadow-lg", SHARE_GRADIENT)}>
+              <Button type="button" disabled={!!busy || !base} onClick={() => void copySticker()} className={cn("h-14 rounded-2xl text-[16px] font-bold text-white shadow-lg", SHARE_GRADIENT)}>
                 <Copy className="mr-2 h-5 w-5" />
                 {busy === "copy" ? "Copying…" : "Copy sticker"}
               </Button>
@@ -526,7 +526,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             </div>
           ) : (
             <div className="grid grid-cols-[1fr_auto] gap-2">
-              <Button type="button" disabled={!!busy || !base} onClick={() => void shareOut()} className={cn("h-14 rounded-2xl text-[16px] font-black text-white shadow-lg", SHARE_GRADIENT)}>
+              <Button type="button" disabled={!!busy || !base} onClick={() => void shareOut()} className={cn("h-14 rounded-2xl text-[16px] font-bold text-white shadow-lg", SHARE_GRADIENT)}>
                 <Share2 className="mr-2 h-5 w-5" />
                 {busy === "share" ? "Preparing…" : "Share"}
               </Button>
@@ -539,9 +539,9 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
             type="button"
             disabled={!base || !!statsError}
             onClick={() => setPostOpen(true)}
-            className="h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black hover:bg-white/90"
+            className="h-12 w-full rounded-2xl bg-white text-[15px] font-bold text-black hover:bg-white/90"
           >
-            {postedAs ? <Check className="mr-2 h-5 w-5 text-emerald-600" /> : <Users className="mr-2 h-5 w-5" />}
+            {postedAs ? <Check className="mr-2 h-5 w-5 text-success" /> : <Users className="mr-2 h-5 w-5" />}
             {isCrewAudience(postedAs) ? "Posted. Edit post" : postedAs === "close_friends" ? "Sent to Close friends. Edit" : postedAs === "coach" ? "Sent to coach. Edit" : postedAs === "private" ? "Saved. Edit post" : existing ? "Edit community post" : "Post to JF Community"}
           </Button>
         </div>
@@ -550,15 +550,15 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         {stickerHelp && (
           <Overlay onClose={() => setStickerHelp(false)}>
             <div className="text-center">
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-white"><Check className="h-6 w-6" /></div>
-              <div className="mt-3 text-lg font-black">Sticker copied</div>
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-success text-white"><Check className="h-6 w-6" /></div>
+              <div className="mt-3 text-lg font-bold">Sticker copied</div>
             </div>
             <ol className="mt-4 space-y-2.5 text-[14px] text-white/85">
               <li><b className="text-white">1.</b> Open Instagram and start a Story</li>
               <li><b className="text-white">2.</b> Snap or pick your gym photo</li>
               <li><b className="text-white">3.</b> Tap the screen and choose <b className="text-white">Paste</b> (or the sticker pop-up)</li>
             </ol>
-            <a href="instagram://story-camera" className={cn("mt-5 flex h-12 w-full items-center justify-center rounded-2xl text-[15px] font-black text-white", SHARE_GRADIENT)}>
+            <a href="instagram://story-camera" className={cn("mt-5 flex h-12 w-full items-center justify-center rounded-2xl text-[15px] font-bold text-white", SHARE_GRADIENT)}>
               Open Instagram
             </a>
             <button type="button" onClick={() => setStickerHelp(false)} className="mt-2 h-11 w-full rounded-2xl text-[14px] font-bold text-white/70">Done</button>
@@ -568,7 +568,7 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
         {/* Post to the JF community */}
         {postOpen && (
           <Overlay onClose={() => !posting && setPostOpen(false)} light>
-            <div className="text-lg font-black text-foreground">Post it</div>
+            <div className="text-lg font-bold text-foreground">Post it</div>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
               {hasMedia ? "Your photo + workout. Pick who sees it." : "Your workout. Add a photo to stand out."}
             </p>
@@ -585,11 +585,11 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
               <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} />
             </div>
             {pointsHint && (
-              <p className={cn("mt-3 rounded-xl px-3 py-2 text-[13px]", pointsHint.tone === "earn" ? "bg-primary/10 font-black text-primary" : "bg-muted text-muted-foreground")}>
+              <p className={cn("mt-3 rounded-xl px-3 py-2 text-[13px]", pointsHint.tone === "earn" ? "bg-primary/10 font-bold text-primary" : "bg-muted text-muted-foreground")}>
                 {pointsHint.text}
               </p>
             )}
-            <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-black" disabled={posting} onClick={() => void post()}>
+            <Button type="button" className="mt-4 h-13 w-full rounded-2xl py-3.5 text-[16px] font-bold" disabled={posting} onClick={() => void post()}>
               <Send className="mr-2 h-5 w-5" />
               {posting
                 ? media?.kind === "video" && Math.max(progress, early.progress) > 0 && Math.max(progress, early.progress) < 100 ? `Uploading ${Math.max(progress, early.progress)}%` : "Posting…"

@@ -44,9 +44,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATE_STYLE: Record<RecoveryState, { label: string; cls: string }> = {
-  good: { label: "Recovered", cls: "bg-emerald-500/15 text-emerald-400" },
-  watch: { label: "Watch", cls: "bg-amber-500/15 text-amber-400" },
-  low: { label: "Low recovery", cls: "bg-red-500/15 text-red-400" },
+  good: { label: "Recovered", cls: "bg-success/15 text-success" },
+  watch: { label: "Watch", cls: "bg-warning/15 text-warning" },
+  low: { label: "Low recovery", cls: "bg-destructive/15 text-destructive" },
   unknown: { label: "Building baseline", cls: "bg-muted text-muted-foreground" },
 };
 
@@ -346,7 +346,7 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
               </span>
             </div>
             {c.last_error && c.status !== "connected" && (
-              <p className="text-xs text-red-400">{c.last_error}</p>
+              <p className="text-xs text-destructive">{c.last_error}</p>
             )}
             {isOwner && mode === "full" && (
               <>

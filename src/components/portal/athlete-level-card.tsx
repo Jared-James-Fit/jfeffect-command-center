@@ -85,11 +85,11 @@ export function AthleteLevelCard({ clientId, openPrevious = false }: {
       <div className="space-y-3">
         <section data-standing="league" className="overflow-hidden rounded-2xl border bg-card">
           <div className="flex items-baseline justify-between gap-3 px-4 pt-3.5">
-            <h3 className="text-lg font-black tracking-tight">{monthName(monthStart)} League</h3>
+            <h3 className="text-lg font-bold tracking-tight">{monthName(monthStart)} League</h3>
             {/* live, and how long is left: one quiet line instead of a pill by the tabs */}
             <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold">
               {!me?.month_closed && <><LiveMark size={6}>Live</LiveMark><span className="text-muted-foreground">·</span></>}
-              <span className={finalWeek ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}>{monthClockLabel(finalWeek)}</span>
+              <span className={finalWeek ? "text-warning" : "text-muted-foreground"}>{monthClockLabel(finalWeek)}</span>
             </span>
           </div>
 
@@ -190,9 +190,9 @@ function YouPanel({ me, rows }: { me: Row | null; rows: Row[] }) {
   return (
     <div data-league-you className="mx-3 mt-2.5 rounded-xl bg-muted/40">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
-        <span className="w-10 shrink-0 text-center text-[22px] font-black leading-none tabular-nums text-primary">#{me.rank}</span>
+        <span className="w-10 shrink-0 text-center text-[22px] font-bold leading-none tabular-nums text-primary">#{me.rank}</span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-black leading-tight tabular-nums">
+          <span className="block text-[15px] font-bold leading-tight tabular-nums">
             You · {formatLeaguePoints(me.total_points)} <span className="text-[12px] font-bold text-muted-foreground">pts</span>
           </span>
           <span className="block truncate text-[12px] font-semibold leading-snug text-muted-foreground">{standingText(standing)}</span>
@@ -217,14 +217,14 @@ function BoostProgressLine({ me }: { me: Row | null }) {
   if (!p) return null;
   return (
     <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-xl bg-muted/40 px-3 py-2">
-      <Flame className="h-4 w-4 shrink-0 text-orange-500" />
+      <Flame className="h-4 w-4 shrink-0 text-warning" />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2 text-[11px] font-bold">
           <span className="truncate">Final Week Boost</span>
           <span className="shrink-0 tabular-nums text-muted-foreground">{p.done} / {p.target} workouts</span>
         </div>
         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted-foreground/15">
-          <div className="h-full rounded-full bg-orange-500" style={{ width: `${p.pct}%` }} />
+          <div className="h-full rounded-full bg-warning" style={{ width: `${p.pct}%` }} />
         </div>
       </div>
     </div>
@@ -235,7 +235,7 @@ function BoardRow({ row: r, finalWeek, onOpen }: { row: Row; finalWeek: boolean;
   const place = Number(r.rank);
   return (
     <button type="button" onClick={onOpen} className={cn("flex w-full items-center gap-2.5 px-2.5 py-2 text-left active:bg-muted", r.is_me && "bg-primary/10")}>
-      <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{MEDALS[place - 1] ?? place}</span>
+      <span className="w-6 shrink-0 text-center text-[12px] font-bold tabular-nums text-muted-foreground">{MEDALS[place - 1] ?? place}</span>
       <RankAvatar row={r} size="h-7 w-7" />
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
@@ -244,7 +244,7 @@ function BoardRow({ row: r, finalWeek, onOpen }: { row: Row; finalWeek: boolean;
         </span>
         {finalWeek && <RowBoost row={r} />}
       </span>
-      <span className="shrink-0 text-[13px] font-black tabular-nums">{formatLeaguePoints(r.total_points)}</span>
+      <span className="shrink-0 text-[13px] font-bold tabular-nums">{formatLeaguePoints(r.total_points)}</span>
     </button>
   );
 }
@@ -261,13 +261,13 @@ function HowPointsWork() {
         {LEAGUE_RULES.map((rule) => (
           <li key={rule.key} className="flex items-baseline justify-between gap-3 text-xs">
             <span>{rule.label}{"note" in rule && rule.note ? <span className="text-muted-foreground"> · {rule.note}</span> : null}</span>
-            <span className="shrink-0 font-black text-primary">+{rule.points}</span>
+            <span className="shrink-0 font-bold text-primary">+{rule.points}</span>
           </li>
         ))}
       </ul>
       {/* the tie rule gets its own line, so nobody has to dig for it */}
       <div data-tiebreak-rule className="mt-2.5 rounded-lg bg-muted/50 px-2.5 py-2 text-xs">
-        <span className="font-black">🤝 Ties</span> · {TIEBREAK_NOTE}
+        <span className="font-bold">🤝 Ties</span> · {TIEBREAK_NOTE}
       </div>
       <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
         🔥 Final Week Boost: finish 90%+ of your prescribed workouts and your workout points are matched to the month's highest.
@@ -335,7 +335,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
   return (
     <div className="rounded-2xl border bg-card px-3 py-2.5">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-0.5 text-xl font-black tabular-nums leading-tight">{value}</div>
+      <div className="mt-0.5 text-xl font-bold tabular-nums leading-tight">{value}</div>
       {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
     </div>
   );
@@ -390,7 +390,7 @@ function CompareView({ clientId, myStats, myBadgeCount, me, them, live, onBack }
           <div className="flex items-center gap-3">
             <RankAvatar row={{ display_name: p.display_name, avatar_url: p.avatar_url }} size="h-14 w-14" />
             <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-lg font-black">{isMe ? "You" : p.display_name}</span>{p.is_coach && <CoachTag />}</div>
+              <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-lg font-bold">{isMe ? "You" : p.display_name}</span>{p.is_coach && <CoachTag />}</div>
               <div className="mt-0.5 text-[12px] font-semibold text-muted-foreground">{rankLine ?? `${publicBadges.length} milestones`}</div>
             </div>
           </div>
@@ -450,14 +450,14 @@ function FinalStandings({ onOpenAthlete }: { onOpenAthlete: (id: string) => void
             {listed.map((r) => (
               <li key={r.client_id}>
                 <button type="button" onClick={() => onOpenAthlete(r.client_id)} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm active:bg-muted", r.is_me && "bg-primary/5")}>
-                  <span className="w-7 shrink-0 text-center font-black text-muted-foreground">{MEDALS[Number(r.rank) - 1] ?? `#${r.rank}`}</span>
+                  <span className="w-7 shrink-0 text-center font-bold text-muted-foreground">{MEDALS[Number(r.rank) - 1] ?? `#${r.rank}`}</span>
                   <RankAvatar row={r} size="h-9 w-9" />
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-1.5"><span className="truncate font-bold">{r.is_me ? "You" : r.display_name}</span>{r.is_coach && <CoachTag />}</span>
                     <span className="block text-[10px] text-muted-foreground">{plural(r.workouts_completed, "workout")}</span>
                     <PointsBar row={r} max={top} className="mt-1.5" />
                   </span>
-                  <span className="shrink-0 text-xs font-black text-primary">{formatLeaguePoints(r.total_points)} pts</span>
+                  <span className="shrink-0 text-xs font-bold text-primary">{formatLeaguePoints(r.total_points)} pts</span>
                 </button>
               </li>
             ))}

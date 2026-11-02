@@ -453,7 +453,7 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
           <ActionButton variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </ActionButton>
-          <ActionButton onClick={save} jobLabel="Saving cardio target" className="bg-gradient-primary font-bold uppercase">
+          <ActionButton onClick={save} jobLabel="Saving cardio target" className="bg-primary text-primary-foreground font-semibold">
             Save
           </ActionButton>
         </DialogFooter>

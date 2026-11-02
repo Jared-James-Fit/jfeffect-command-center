@@ -101,10 +101,10 @@ export function dateTypeLabel(d: ImportantDate) {
 
 export function importantToneClasses(tone: ImportantDateDerived["tone"]) {
   switch (tone) {
-    case "green": return "bg-green-500/15 text-green-400 border-green-500/30";
-    case "yellow": return "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
-    case "red": return "bg-red-500/15 text-red-400 border-red-500/30";
-    case "blue": return "bg-blue-500/15 text-blue-400 border-blue-500/30";
+    case "green": return "bg-success/15 text-success border-success/30";
+    case "yellow": return "bg-warning/15 text-warning border-warning/30";
+    case "red": return "bg-destructive/15 text-destructive border-destructive/30";
+    case "blue": return "bg-info/15 text-info border-info/30";
     case "grey":
     default: return "bg-muted text-muted-foreground border-border";
   }

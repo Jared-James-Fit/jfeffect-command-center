@@ -202,7 +202,7 @@ export function RepostNoteEditor({ post, onClose, preview }: { post: CommunityPo
               </div>
               <button type="button" onClick={focusNote} className="relative mt-2 shrink-0 rounded-full" aria-label="Write your note" {...keepFocus}>
                 <UserAvatar src={me?.author.avatar_url ?? null} name={me?.author.name ?? "You"} size={keyboard ? 84 : 108} expandable={false} />
-                <span className={cn("absolute grid place-items-center rounded-full bg-emerald-500 text-white ring-[3px] ring-black/70", keyboard ? "-bottom-0.5 -right-0.5 h-7 w-7" : "bottom-0 right-0 h-8 w-8")} aria-hidden>
+                <span className={cn("absolute grid place-items-center rounded-full bg-success text-white ring-[3px] ring-black/70", keyboard ? "-bottom-0.5 -right-0.5 h-7 w-7" : "bottom-0 right-0 h-8 w-8")} aria-hidden>
                   <Repeat2 className={keyboard ? "h-4 w-4" : "h-[18px] w-[18px]"} strokeWidth={2.8} />
                 </span>
               </button>

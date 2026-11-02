@@ -114,7 +114,7 @@ export function TypedValueInput({
             cellHeight,
             hasValue
               ? "border-border/60 bg-muted/40 text-foreground"
-              : "border-blue-500/40 bg-blue-500/10 text-muted-foreground",
+              : "border-info/40 bg-info/10 text-muted-foreground",
             !disabled && "cursor-text hover:bg-muted/60",
           )}
         >

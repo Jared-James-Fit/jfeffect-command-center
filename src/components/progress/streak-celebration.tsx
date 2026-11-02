@@ -94,14 +94,14 @@ export function StreakCelebration({ userId }: Props) {
   return (
     <Card className="p-4 flex flex-wrap items-center gap-4">
       <div className="flex items-center gap-2">
-        <Flame className="h-5 w-5 text-orange-500" />
+        <Flame className="h-5 w-5 text-warning" />
         <div>
           <div className="text-sm text-muted-foreground">Current streak</div>
           <div className="text-xl font-semibold">{streak} {streak === 1 ? "week" : "weeks"}</div>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Trophy className="h-5 w-5 text-amber-500" />
+        <Trophy className="h-5 w-5 text-warning" />
         <div>
           <div className="text-sm text-muted-foreground">Total check-ins</div>
           <div className="text-xl font-semibold">{total}</div>

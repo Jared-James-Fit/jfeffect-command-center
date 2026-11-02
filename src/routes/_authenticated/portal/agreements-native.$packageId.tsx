@@ -162,7 +162,7 @@ function ClientNativeAgreementPage() {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6">
         <Card className="space-y-3 p-7 text-center">
-          <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+          <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
           <h1 className="text-2xl font-semibold">Agreement signed</h1>
           <p className="text-sm text-muted-foreground">
             Your signature is recorded against the immutable {snapshot.snapshot_hash.slice(0, 16)}…

@@ -185,11 +185,11 @@ export function MealPlanDisplay({ text, className }: Props) {
               key={i}
               className={cn(
                 "rounded-md border bg-secondary/20 px-3 py-2.5",
-                s.timing === "pre" ? "border-amber-500/50" : s.timing === "post" ? "border-emerald-500/50" : s.timing ? "border-sky-500/50" : "border-border",
+                s.timing === "pre" ? "border-warning/50" : s.timing === "post" ? "border-success/50" : s.timing ? "border-info/50" : "border-border",
               )}
             >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
+                <div className="text-[11px] font-bold uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
                 {s.timing && <MealTimingBadge timing={s.timing} />}
                 {s.subtitle && (
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">— {s.subtitle}</div>
@@ -215,7 +215,7 @@ export function MealPlanDisplay({ text, className }: Props) {
               )}
               {s.approxMacros && s.approxMacros.items.length > 0 && (
                 <div className="mt-4 rounded-md border border-border/60 bg-secondary/30 px-3 py-2.5">
-                  <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.approxMacros.title)}</div>
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-primary">{titleCase(s.approxMacros.title)}</div>
                   <ul className="mt-2 space-y-1">
                     {s.approxMacros.items.map((it, j) => (
                       <li key={j} className="flex items-center justify-between text-[13px] text-foreground/90">
@@ -231,7 +231,7 @@ export function MealPlanDisplay({ text, className }: Props) {
         if (s.kind === "total") {
           return (
             <div key={i} className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2.5">
-              <div className="text-[11px] font-black uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-primary">{titleCase(s.title)}</div>
               {s.macros && <div className="mt-1 text-sm font-bold">{s.macros}</div>}
             </div>
           );
@@ -239,7 +239,7 @@ export function MealPlanDisplay({ text, className }: Props) {
         if (s.kind === "highday") {
           return (
             <div key={i} className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2.5">
-              <div className="text-[11px] font-black uppercase tracking-widest text-warning">{titleCase(s.title)}</div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-warning">{titleCase(s.title)}</div>
               {s.items.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">
                   {s.items.map((it, j) => {
@@ -279,10 +279,10 @@ export function MealTimingBadge({ timing, className }: { timing: Exclude<MealTim
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider",
-        timing === "pre" && "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-        timing === "post" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-        timing === "pre_post" && "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+        timing === "pre" && "bg-warning/15 text-warning",
+        timing === "post" && "bg-success/15 text-success",
+        timing === "pre_post" && "bg-info/15 text-info",
         className,
       )}
     >

@@ -50,7 +50,7 @@ export function ClientTrainingScheduleGate({ children }: { children: ReactNode }
             <CalendarClock className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tight">Set your training schedule</h2>
+            <h2 className="text-lg font-bold tracking-tight">Set your training schedule</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Tell us how many days a week you're committed to training and which days. This is required before you can use the rest of the portal — you can update it anytime in Account Settings.
             </p>

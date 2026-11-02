@@ -182,7 +182,7 @@ export function CalendarBoard({
             {onCreate && (
               <Button
                 size="sm"
-                className="h-8 bg-gradient-primary font-bold"
+                className="h-8 bg-primary text-primary-foreground font-semibold"
                 onClick={() => onCreate(view === "day" || view === "week" ? isoDate(cursor) : isoDate(new Date()))}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" /> Book
@@ -508,7 +508,7 @@ function UpcomingList({
         const dateObj = new Date(d + "T00:00:00");
         return (
           <section key={d} className="space-y-1.5">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               {dateObj.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
               <span className="ml-1 text-muted-foreground/60">({list.length})</span>
             </h4>
@@ -606,7 +606,7 @@ function EventDetailSheet({
                   search={(item.href as any).search as any}
                   onClick={onClose}
                 >
-                  <Button size="sm" className="w-full bg-gradient-primary font-bold uppercase">{ctaLabel(item)}</Button>
+                  <Button size="sm" className="w-full bg-primary text-primary-foreground font-semibold">{ctaLabel(item)}</Button>
                 </Link>
               )}
             </div>

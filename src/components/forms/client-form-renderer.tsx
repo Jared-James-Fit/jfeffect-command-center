@@ -431,8 +431,8 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
 
       <div className={embedded ? "mx-auto max-w-3xl space-y-4 pb-24" : "mx-auto max-w-3xl space-y-4 p-4 md:p-8"}>
         {review && (
-          <Card className="border-emerald-500/30 bg-emerald-500/5 p-4">
-            <div className="mb-2 text-xs font-bold uppercase tracking-wider text-emerald-600">
+          <Card className="border-success/30 bg-success/5 p-4">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wider text-success">
               Coach Reply
             </div>
             <p className="whitespace-pre-wrap text-sm">{review.reply_text}</p>
@@ -457,7 +457,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
               data-form-question={q.question_type}
             >
               <div className="flex items-start gap-3">
-                <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-black tabular-nums text-muted-foreground" aria-hidden>
+                <span className="mt-px grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[13px] font-bold tabular-nums text-muted-foreground" aria-hidden>
                   {idx + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -487,7 +487,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
                 />
               </div>
               {issue ? (
-                <p className="mt-2 text-[13px] font-semibold text-amber-600 dark:text-amber-400" data-form-number-issue>{issue}</p>
+                <p className="mt-2 text-[13px] font-semibold text-warning" data-form-number-issue>{issue}</p>
               ) : (
                 flag && <p className="mt-2 text-[13px] font-semibold text-destructive">This one needs an answer</p>
               )}
@@ -525,7 +525,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
               successToast="Submitted! Coach Jared will reply in messenger."
               jobLabel="Submitting onboarding form"
               jobDescription={form?.title ?? undefined}
-              className="h-14 w-full rounded-2xl bg-gradient-primary text-[16px] font-black"
+              className="h-14 w-full rounded-2xl bg-primary text-primary-foreground text-[16px] font-semibold"
               icon={<Send className="h-5 w-5" />}
             >
               {form.button_label ||
@@ -971,7 +971,7 @@ function ExternalFormView({
                 ? "This form provider blocked embedding. Use the button below to open it."
                 : "This form opens in a new tab."}
             </p>
-            <Button asChild className="mt-3 bg-gradient-primary font-bold">
+            <Button asChild className="mt-3 bg-primary text-primary-foreground font-semibold">
               <a href={url} target="_blank" rel="noreferrer">
                 <ExternalLink className="mr-2 h-4 w-4" />
                 {form.button_label || `Open ${form.title}`}
@@ -995,7 +995,7 @@ function ExternalFormView({
               successToast={submitted ? false : "Marked submitted"}
               jobLabel="Marking form submitted"
               jobDescription={form?.title ?? undefined}
-              className="bg-gradient-primary font-bold"
+              className="bg-primary text-primary-foreground font-semibold"
               icon={<Check className="h-4 w-4" />}
             >
               {submitted ? "Submitted" : "Mark as submitted"}

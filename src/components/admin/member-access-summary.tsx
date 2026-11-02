@@ -64,7 +64,7 @@ export function MemberAccessSummary({
           return (
             <div key={k} className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-2 py-1.5 text-sm">
               {on
-                ? <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                ? <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                 : <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />}
               <span className={on ? "" : "text-muted-foreground"}>
                 {DEFAULT_ACCESS_LABELS[k] ?? k}
@@ -83,7 +83,7 @@ export function MemberAccessSummary({
             return (
               <div key={f.key} className="flex items-center gap-2 px-2 py-1 text-xs">
                 {granted
-                  ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  ? <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                   : <XCircle className="h-3.5 w-3.5 text-muted-foreground" />}
                 <span className={granted ? "" : "text-muted-foreground"}>{f.label}</span>
               </div>

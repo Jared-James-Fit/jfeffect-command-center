@@ -49,7 +49,7 @@ export function LessonStoryFrame({ post }: { post: CommunityPost }) {
       data-story-place={layout.place}
     >
       {/* no "Methods & cues" style label: it's his story, not a series' */}
-      <span className="block text-[28px] font-black leading-[1.08]">{lesson.title}</span>
+      <span className="block text-[28px] font-bold leading-[1.08]">{lesson.title}</span>
       {lesson.visual && (
         <div className="mt-4 rounded-2xl bg-white/[0.04] px-3 py-3 ring-1 ring-white/10" aria-label={visualLabel(lesson.visual)}>
           <LessonVisualArt visual={lesson.visual} tone="dark" />

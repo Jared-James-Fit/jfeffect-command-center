@@ -54,10 +54,10 @@ type View = "schedule" | "calendar" | "history";
 
 function statusTone(s: string) {
   switch (s) {
-    case "Active": return "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-    case "Upcoming": return "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400";
-    case "Completed": return "border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400";
-    case "EndedEarly": return "border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400";
+    case "Active": return "border-success/40 bg-success/10 text-success";
+    case "Upcoming": return "border-warning/40 bg-warning/10 text-warning";
+    case "Completed": return "border-info/40 bg-info/10 text-info";
+    case "EndedEarly": return "border-border bg-muted-foreground/10 text-muted-foreground";
     default: return "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
   }
 }
@@ -170,7 +170,7 @@ export function TrainingScheduleBoard({
       ) : view === "schedule" ? (
         <div className="space-y-4">
           {overlaps.length > 0 && (
-            <Card className="border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            <Card className="border-warning/40 bg-warning/10 p-3 text-xs text-warning">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="min-w-0">
@@ -281,7 +281,7 @@ export function TrainingScheduleBoard({
                     {durationLabel(nextBlock) ? ` · ${durationLabel(nextBlock)}` : ""}
                   </div>
                   {gap > 0 && (
-                    <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    <div className="mt-1 text-xs text-warning">
                       {gap}-day training gap after the current block
                     </div>
                   )}
@@ -546,9 +546,9 @@ function ScheduleCalendarView({
                         className={cn(
                           "mt-0.5 truncate rounded px-1 text-[9px]",
                           w.completed
-                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                            ? "bg-success/20 text-success"
                             : iso < today
-                              ? "bg-rose-500/20 text-rose-700 dark:text-rose-300"
+                              ? "bg-destructive/20 text-destructive"
                               : "bg-secondary/70 text-foreground",
                         )}
                       >
@@ -561,9 +561,9 @@ function ScheduleCalendarView({
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-3 border-t border-border p-2 text-[10px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-emerald-500/60" /> Completed</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-success/60" /> Completed</span>
             <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-secondary" /> Scheduled</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-rose-500/50" /> Missed</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-destructive/50" /> Missed</span>
             <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded ring-1 ring-primary" /> Today</span>
           </div>
         </Card>
@@ -581,7 +581,7 @@ function ScheduleCalendarView({
                     key={w.id}
                     className={cn(
                       "truncate rounded px-1.5 py-1 text-[11px]",
-                      w.completed ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-secondary/60",
+                      w.completed ? "bg-success/15 text-success" : "bg-secondary/60",
                     )}
                   >
                     {w.title}
@@ -705,12 +705,12 @@ export function EndBlockEarlyDialog({
                     <Label htmlFor="next-start" className="text-xs">Next block starts</Label>
                     <Input id="next-start" type="date" className="min-h-[44px]" value={nextStart} onChange={(e) => setNextStart(e.target.value)} />
                     {gapDays(newEnd, nextStart) > 0 && (
-                      <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-[11px] text-warning">
                         {gapDays(newEnd, nextStart)}-day training gap (allowed)
                       </p>
                     )}
                     {nextStart <= newEnd && (
-                      <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                      <p className="mt-1 text-[11px] text-warning">
                         Overlaps the block you are ending.
                       </p>
                     )}
@@ -911,9 +911,9 @@ export function AddNextBlockDialog({
             <div className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
               <div>Start: <span className="font-semibold">{pretty(start)}</span></div>
               <div>Expected end: <span className="font-semibold">{pretty(expectedEnd)}</span></div>
-              {gap > 0 && <div className="mt-1 text-amber-600 dark:text-amber-400">{gap}-day training gap (allowed)</div>}
+              {gap > 0 && <div className="mt-1 text-warning">{gap}-day training gap (allowed)</div>}
               {overlaps && (
-                <div className="mt-1 inline-flex items-start gap-1 text-amber-600 dark:text-amber-400">
+                <div className="mt-1 inline-flex items-start gap-1 text-warning">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                   Overlaps the current block ({formatRange(current?.effective_start, current?.effective_end)}).
                 </div>

@@ -37,7 +37,7 @@ export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }:
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl p-0">
         <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 pt-5 pb-3 backdrop-blur">
           <SheetHeader className="text-left">
-            <SheetTitle className="text-lg font-black">{title}</SheetTitle>
+            <SheetTitle className="text-lg font-bold">{title}</SheetTitle>
             <SheetDescription className="text-xs">{description}</SheetDescription>
           </SheetHeader>
         </div>
@@ -131,9 +131,9 @@ function BasicInfoStep({ client, clientId, onDone }: { client: any; clientId: st
   return (
     <div className="space-y-4">
       {remaining.length > 0 && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-          <div className="font-bold text-amber-700 dark:text-amber-300">Still needed ({remaining.length})</div>
-          <div className="mt-1 text-amber-700/80 dark:text-amber-300/80">{remaining.join(" · ")}</div>
+        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+          <div className="font-bold text-warning">Still needed ({remaining.length})</div>
+          <div className="mt-1 text-warning/80">{remaining.join(" · ")}</div>
         </div>
       )}
       <BasicInfoForm values={form} onChange={(p) => setForm({ ...form, ...p })} />

@@ -122,7 +122,7 @@ const KIND_LABEL: Record<string, string> = {
 const KIND_TONE: Record<string, string> = {
   training: "text-primary",
   non_training: "text-muted-foreground",
-  high: "text-amber-500",
+  high: "text-warning",
 };
 
 /** This week, date by date, as the client's Nutrition page will pick it. */
@@ -215,7 +215,7 @@ export function PlanDayWeekPreview({
                 {String(day.day_label ?? "").trim() || "Untitled day"}
               </span>
             ) : (
-              <span className="min-w-0 truncate font-semibold text-amber-500">
+              <span className="min-w-0 truncate font-semibold text-warning">
                 No plan for this day
               </span>
             )}

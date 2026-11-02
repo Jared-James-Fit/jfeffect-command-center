@@ -112,7 +112,7 @@ export function WeightUnitPrompt() {
           <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
             <Dumbbell className="h-6 w-6" />
           </div>
-          <SheetTitle className="text-lg font-black">Pounds or kilograms?</SheetTitle>
+          <SheetTitle className="text-lg font-bold">Pounds or kilograms?</SheetTitle>
           <SheetDescription className="mt-1 text-sm">
             Pick the unit you lift in. Your workouts, maxes, PRs, bodyweight and the Crew all use it. You can change it any time in Account Settings.
           </SheetDescription>
@@ -128,7 +128,7 @@ export function WeightUnitPrompt() {
                 {saving === c.unit ? (
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 ) : (
-                  <span className="text-2xl font-black">{c.hint}</span>
+                  <span className="text-2xl font-bold">{c.hint}</span>
                 )}
                 <span className="text-xs font-semibold text-muted-foreground">{c.label}</span>
               </button>

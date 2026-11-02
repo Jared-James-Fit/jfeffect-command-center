@@ -39,7 +39,7 @@ export function HomeActionTiles({ tiles }: { tiles: HomeActionTile[] }) {
             className={cn(
               "group relative flex min-h-[112px] flex-col justify-between rounded-2xl border bg-card p-4 transition active:scale-[0.98]",
               t.emphasis
-                ? "border-primary/50 bg-gradient-to-br from-primary/10 to-card hover:border-primary"
+                ? "border-primary/50 bg-card hover:border-primary"
                 : "border-border hover:border-primary/40 hover:bg-card/80",
             )}
           >

@@ -302,14 +302,14 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                     key={w.key}
                     className={cn(
                       "rounded-lg border px-3 py-2",
-                      isBest ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-muted/20",
+                      isBest ? "border-success/40 bg-success/5" : "border-border bg-muted/20",
                     )}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-[92px] shrink-0">
-                        <div className="flex items-center gap-1 text-sm font-black text-foreground">
+                        <div className="flex items-center gap-1 text-sm font-bold text-foreground">
                           {w.label}
-                          {isBest && <span className="rounded bg-emerald-600 px-1 text-[9px] font-black uppercase text-white">Best</span>}
+                          {isBest && <span className="rounded bg-success px-1 text-[9px] font-bold uppercase text-white">Best</span>}
                         </div>
                         <div className="text-[10px] text-muted-foreground">{w.range}</div>
                       </div>
@@ -319,7 +319,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                           style={{ width: `${(w.sessions / maxWindow) * 100}%`, background: ANALYTICS_COLORS.blue }}
                         />
                       </div>
-                      <div className="w-8 shrink-0 text-right text-sm font-black tabular-nums text-foreground">{w.sessions}</div>
+                      <div className="w-8 shrink-0 text-right text-sm font-bold tabular-nums text-foreground">{w.sessions}</div>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-0 text-[11px] text-muted-foreground sm:pl-[100px]">
                       <span>
@@ -393,7 +393,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">
                       {s.start.toLocaleDateString("en-US", { weekday: "short", timeZone: timezone })}
                     </div>
-                    <div className="text-sm font-black tabular-nums text-foreground">
+                    <div className="text-sm font-bold tabular-nums text-foreground">
                       {s.start.toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: timezone })}
                     </div>
                   </div>
@@ -408,7 +408,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                   <div className="flex shrink-0 items-center gap-1.5">
                     {(s.notes || s.reviewNote) && <FileText className="h-3.5 w-3.5 text-muted-foreground" aria-label="Has notes" />}
                     {s.source === "suspect" ? (
-                      <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">Set time</span>
+                      <span className="rounded-md bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">Set time</span>
                     ) : s.rating != null ? (
                       <span className="text-xs font-bold tabular-nums text-foreground">{s.rating}★</span>
                     ) : null}
@@ -456,7 +456,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
 
 function SubHeading({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <h3 className={cn("mb-2 text-[11px] font-black uppercase tracking-widest text-muted-foreground", className)}>
+    <h3 className={cn("mb-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground", className)}>
       {children}
     </h3>
   );
@@ -469,7 +469,7 @@ function Kpi({ icon, color, label, value, sub }: { icon: ReactNode; color: strin
         <span style={{ color }}>{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1 truncate text-lg font-black tracking-tight text-foreground">{value}</div>
+      <div className="mt-1 truncate text-lg font-bold tracking-tight text-foreground">{value}</div>
       <div className="truncate text-[11px] text-muted-foreground">{sub}</div>
     </div>
   );
@@ -482,8 +482,8 @@ function InsightRow({ insight }: { insight: Insight }) {
       <span
         className={cn(
           "mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
-          insight.tone === "good" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-          insight.tone === "warn" && "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+          insight.tone === "good" && "bg-success/15 text-success",
+          insight.tone === "warn" && "bg-warning/15 text-warning",
           insight.tone === "info" && "bg-primary/15 text-primary",
         )}
       >
@@ -527,7 +527,7 @@ function SessionChart({
     const s: TrainingSession = d.session;
     return (
       <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">
-        <div className="font-extrabold text-foreground">{d.title}</div>
+        <div className="font-bold text-foreground">{d.title}</div>
         <div className="text-muted-foreground">{d.label}</div>
         <div className="mt-1 tabular-nums">
           {formatClockAt(s.start, timezone)} · {formatMinutes(s.durationMin)}
@@ -631,7 +631,7 @@ function SessionDetailSheet({
     <Sheet open onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl pb-safe">
         <SheetHeader className="border-b border-border pb-3 text-left">
-          <SheetTitle className="text-base font-black">{s.title || "Workout"}</SheetTitle>
+          <SheetTitle className="text-base font-bold">{s.title || "Workout"}</SheetTitle>
           <div className="text-xs text-muted-foreground">
             {dateLabel}
             {slot && !suspect ? ` · ${slot.label}` : ""}
@@ -644,10 +644,10 @@ function SessionDetailSheet({
             <button
               type="button"
               onClick={() => onEditTime(s.id)}
-              className="flex w-full items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-left"
+              className="flex w-full items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-left"
             >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <div className="text-xs text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="text-xs text-warning">
                 <b>This looks logged after training.</b> Tap to set when it really happened so it counts toward your training-time stats.
               </div>
             </button>
@@ -730,9 +730,9 @@ function SessionDetailSheet({
 
 function Stat({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={cn("rounded-lg border p-2.5", highlight ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-muted/30")}>
+    <div className={cn("rounded-lg border p-2.5", highlight ? "border-success/40 bg-success/5" : "border-border bg-muted/30")}>
       <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("mt-0.5 truncate text-sm font-black tabular-nums", highlight ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>{value}</div>
+      <div className={cn("mt-0.5 truncate text-sm font-bold tabular-nums", highlight ? "text-success" : "text-foreground")}>{value}</div>
     </div>
   );
 }
@@ -742,7 +742,7 @@ function Chip({ label, value, warn = false }: { label: string; value: string; wa
     <span
       className={cn(
         "rounded-md border px-2 py-1",
-        warn ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200" : "border-border bg-background text-foreground",
+        warn ? "border-warning/40 bg-warning/10 text-warning" : "border-border bg-background text-foreground",
       )}
     >
       <span className="text-muted-foreground">{label}: </span>

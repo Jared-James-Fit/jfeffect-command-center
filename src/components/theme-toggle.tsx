@@ -44,7 +44,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       <Sun
         aria-hidden
         className={cn(
-          "pointer-events-none absolute left-[9px] h-3.5 w-3.5 text-amber-300/70 transition-opacity duration-300",
+          "pointer-events-none absolute left-[9px] h-3.5 w-3.5 text-warning/70 transition-opacity duration-300",
           dark ? "opacity-100" : "opacity-0",
         )}
       />
@@ -68,7 +68,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         {dark ? (
           <Moon className="h-3.5 w-3.5 fill-[oklch(0.90_0.04_275)] text-[oklch(0.90_0.04_275)]" />
         ) : (
-          <Sun className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+          <Sun className="h-3.5 w-3.5 fill-warning text-warning" />
         )}
       </span>
     </button>

@@ -87,7 +87,7 @@ export function ManualCheckInReviewModal({ clientId }: { clientId: string | null
           </Link>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleLater}>View Later</Button>
-            <Button size="sm" onClick={handleGotIt} className="bg-gradient-primary font-bold">
+            <Button size="sm" onClick={handleGotIt} className="bg-primary text-primary-foreground font-semibold">
               <CheckCircle2 className="mr-1 h-4 w-4" /> Got it
             </Button>
           </div>

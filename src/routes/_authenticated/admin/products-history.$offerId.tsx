@@ -25,10 +25,10 @@ export const Route = createFileRoute("/_authenticated/admin/products-history/$of
 
 function statusTone(s?: string | null) {
   const v = (s ?? "").toLowerCase();
-  if (v === "paid" || v === "active") return "bg-emerald-500/15 text-emerald-500 border-emerald-500/30";
-  if (v === "refunded" || v === "cancelled" || v === "voided") return "bg-amber-500/15 text-amber-600 border-amber-500/30";
-  if (v === "failed") return "bg-red-500/15 text-red-500 border-red-500/30";
-  if (v === "pending") return "bg-blue-500/15 text-blue-500 border-blue-500/30";
+  if (v === "paid" || v === "active") return "bg-success/15 text-success border-success/30";
+  if (v === "refunded" || v === "cancelled" || v === "voided") return "bg-warning/15 text-warning border-warning/30";
+  if (v === "failed") return "bg-destructive/15 text-destructive border-destructive/30";
+  if (v === "pending") return "bg-info/15 text-info border-info/30";
   return "bg-muted text-muted-foreground border-border";
 }
 
@@ -119,7 +119,7 @@ function OfferHistory() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card className="p-4"><div className="text-xs uppercase tracking-widest text-muted-foreground">Purchases</div><div className="mt-1 text-2xl font-semibold">{purchases.length}</div></Card>
-          <Card className="p-4"><div className="text-xs uppercase tracking-widest text-muted-foreground">Paid</div><div className="mt-1 text-2xl font-semibold text-emerald-500">{stats.paidCount}</div></Card>
+          <Card className="p-4"><div className="text-xs uppercase tracking-widest text-muted-foreground">Paid</div><div className="mt-1 text-2xl font-semibold text-success">{stats.paidCount}</div></Card>
           <Card className="p-4"><div className="text-xs uppercase tracking-widest text-muted-foreground">Active</div><div className="mt-1 text-2xl font-semibold">{stats.activeCount}</div></Card>
           <Card className="p-4"><div className="text-xs uppercase tracking-widest text-muted-foreground">Revenue</div><div className="mt-1 text-2xl font-semibold">{new Intl.NumberFormat(undefined, { style: "currency", currency }).format(stats.revenue)}</div></Card>
         </div>

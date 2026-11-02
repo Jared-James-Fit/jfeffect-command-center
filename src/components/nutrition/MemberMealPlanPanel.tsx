@@ -69,7 +69,7 @@ export function MemberMealPlanPanel() {
               <Utensils className="h-4 w-4" />
             </div>
             <div>
-              <div className="text-sm font-black uppercase tracking-widest">Your Meal Plan</div>
+              <div className="text-sm font-bold uppercase tracking-widest">Your Meal Plan</div>
               <div className="text-[11px] text-muted-foreground">
                 {[plan.phase, plan.goal, plan.structure].filter(Boolean).join(" · ") || "Assigned by your coach"}
               </div>

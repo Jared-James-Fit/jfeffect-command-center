@@ -253,7 +253,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         className="bottom-0 top-auto flex w-full max-w-none translate-x-[-50%] translate-y-0 flex-col overflow-hidden rounded-b-none rounded-t-[24px] border-border/80 bg-background p-0 shadow-2xl sm:bottom-auto sm:top-1/2 sm:max-w-[520px] sm:-translate-y-1/2 sm:rounded-[24px] [&>button]:hidden"
         style={{ height: "min(96dvh, 820px)", maxHeight: "96dvh" }}
       >
-        <header className="relative shrink-0 overflow-hidden border-b border-border/70 bg-gradient-to-b from-primary/[0.12] via-primary/[0.04] to-background px-4 pb-4 pt-3 sm:px-5">
+        <header className="relative shrink-0 overflow-hidden border-b border-border/70 px-4 pb-4 pt-3 sm:px-5">
           <div className="mx-auto mb-2 h-1 w-9 rounded-full bg-muted-foreground/20 sm:hidden" />
           <Button
             type="button"
@@ -268,13 +268,13 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
           <SoundToggleButton className="absolute left-3 top-3 z-10" onMute={() => stopStingRef.current()} />
 
           <div className={`mx-auto flex w-full max-w-[calc(100%-4.5rem)] flex-col items-center text-center transition-all duration-500 ${revealStage >= 1 ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}>
-            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 || recordCount > 0 ? "bg-amber-500 text-white ring-4 ring-amber-500/15" : "bg-primary text-primary-foreground"}`}>
+            <div className={`relative grid h-14 w-14 place-items-center rounded-full shadow-lg ${prList.length > 0 || recordCount > 0 ? "bg-warning text-white ring-4 ring-warning/15" : "bg-primary text-primary-foreground"}`}>
               {prList.length > 0 || recordCount > 0 ? <Trophy className="h-7 w-7 animate-in zoom-in spin-in-6 duration-500" /> : <CheckCircle2 className="h-7 w-7" />}
               {revealStage >= 2 && <Sparkles className="absolute -right-2 -top-1 h-5 w-5 animate-pulse text-primary" />}
             </div>
-            <div className="mt-2 text-[10px] font-black uppercase tracking-[0.22em] text-primary">Workout complete</div>
+            <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-primary">Workout complete</div>
             <DialogHeader className="mx-auto mt-1 flex min-h-0 w-full flex-col items-center space-y-0 !pl-0 text-center sm:text-center">
-              <DialogTitle className="block w-full text-center text-2xl font-black leading-tight tracking-tight">{headline}</DialogTitle>
+              <DialogTitle className="block w-full text-center text-2xl font-bold leading-tight tracking-tight">{headline}</DialogTitle>
               <DialogDescription className="mt-1 text-[11px]">
                 {workoutTitle ?? "Workout"}{dateLabel ? ` · ${dateLabel}` : ""}
               </DialogDescription>
@@ -282,16 +282,16 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
             <div className="mt-3 grid w-full place-items-center tabular-nums">
               <div className="relative inline-flex items-baseline justify-center">
-                <span className="text-5xl font-black leading-none text-primary">{displayScore}</span>
+                <span className="text-5xl font-bold leading-none text-primary">{displayScore}</span>
                 <span className="absolute left-full ml-1 whitespace-nowrap text-xs font-bold text-muted-foreground">/100</span>
               </div>
             </div>
-            <div className="mt-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
+            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Workout score</div>
 
             {ratingStars > 0 && revealStage >= 2 && (
               <div className="mt-2 flex items-center gap-0.5 animate-in fade-in zoom-in-95 duration-500">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                  <Star key={i} className={`h-3.5 w-3.5 ${i <= ratingStars ? "fill-warning text-warning" : "text-muted-foreground/20"}`} />
                 ))}
               </div>
             )}
@@ -304,18 +304,18 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             {records && <NewRecordsSection records={records} unit={displayUnit} />}
             {points && <WorkoutPointsCard points={points} />}
             {prList.length > 0 && (
-              <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/[0.14] via-amber-500/[0.06] to-background p-4 shadow-sm duration-700">
-                <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-amber-500" />
+              <section className="relative overflow-hidden animate-in zoom-in-90 fade-in slide-in-from-bottom-3 rounded-2xl border-2 border-warning/40 bg-warning/5 p-4 shadow-sm duration-700">
+                <Sparkles className="absolute right-3 top-3 h-5 w-5 animate-pulse text-warning" />
                 <div className="mb-2 flex items-center gap-2">
-                  <div className="grid h-9 w-9 place-items-center rounded-full bg-amber-500 text-white shadow-md">
+                  <div className="grid h-9 w-9 place-items-center rounded-full bg-warning text-white shadow-md">
                     <Medal className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Achievement unlocked</div>
-                    <div className="text-base font-black leading-tight text-foreground">{prList.length === 1 ? "New all-time record" : `${prList.length} all-time records`}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-warning">Achievement unlocked</div>
+                    <div className="text-base font-bold leading-tight text-foreground">{prList.length === 1 ? "New all-time record" : `${prList.length} all-time records`}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-warning">
                   <Trophy className="h-3.5 w-3.5" />
                   ATPR breakdown
                 </div>
@@ -336,7 +336,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
             {displayTakeaways.length > 0 && (
               <section className="rounded-2xl border border-border/80 bg-card/70 p-3">
-                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
                   Today's takeaways
                 </div>
                 <div className="mt-1.5 space-y-1">
@@ -376,8 +376,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 <div className="flex items-center gap-3 border-t border-border/70 px-3.5 py-3">
                   <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
-                    <div className="mt-0.5 truncate text-xl font-black leading-tight text-foreground">{summary.totalLiftedFmt}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
+                    <div className="mt-0.5 truncate text-xl font-bold leading-tight text-foreground">{summary.totalLiftedFmt}</div>
                   </div>
                 </div>
               )}
@@ -385,7 +385,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
             {prList.length === 0 && recordCount === 0 && displayTakeaways.length === 0 && (
               <section className="rounded-2xl border border-primary/20 bg-primary/[0.05] p-3 text-center">
-                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-primary">Baseline logged</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">Baseline logged</div>
                 <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   Your trends and achievements will build as you log more sessions.
                 </div>
@@ -407,10 +407,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             )}
 
             {summary.missedExercises.length > 0 && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2.5 text-xs">
-                <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+              <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/[0.06] px-3 py-2.5 text-xs">
+                <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div className="min-w-0">
-                  <div className="font-bold text-amber-700 dark:text-amber-300">
+                  <div className="font-bold text-warning">
                     {summary.missedExercises.length} missed / not logged
                   </div>
                   <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
@@ -479,11 +479,11 @@ function CompactStat({
 }) {
   return (
     <div className="flex min-w-0 flex-col items-center justify-center px-2.5 py-3 text-center">
-      <div className="flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.08em] text-muted-foreground">
+      <div className="flex items-center justify-center gap-1 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1 w-full truncate text-center text-[1rem] font-black leading-tight tabular-nums text-foreground">{value}</div>
+      <div className="mt-1 w-full truncate text-center text-[1rem] font-bold leading-tight tabular-nums text-foreground">{value}</div>
     </div>
   );
 }
@@ -530,7 +530,7 @@ function Cell({ label, value, highlight, tone }: { label: string; value: string;
     <div>
       <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={
-        `text-sm font-black ${highlight ? "text-primary" : ""} ${tone === "warn" ? "text-amber-700 dark:text-amber-300" : ""}`
+        `text-sm font-bold ${highlight ? "text-primary" : ""} ${tone === "warn" ? "text-warning" : ""}`
       }>{value}</div>
     </div>
   );

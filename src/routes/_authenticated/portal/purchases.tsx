@@ -118,7 +118,7 @@ function MyPurchases() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          {!r.terms_accepted && <Badge className="bg-gradient-primary">Action needed</Badge>}
+                          {!r.terms_accepted && <Badge className="bg-primary text-primary-foreground">Action needed</Badge>}
                           <Badge variant="outline" className={d.statusTone}>{d.statusLabel}</Badge>
                           {d.receiptUrl && (
                             <a

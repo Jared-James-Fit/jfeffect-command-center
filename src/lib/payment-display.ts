@@ -223,9 +223,9 @@ export function resolvePaymentDisplay(p: PurchaseInput): PaymentDisplay {
     switch (status) {
       case "paid":
       case "active_subscription":
-        return "border-emerald-500/40 text-emerald-500 bg-emerald-500/10";
+        return "border-success/40 text-success bg-success/10";
       case "partially_paid":
-        return "border-amber-500/40 text-amber-500 bg-amber-500/10";
+        return "border-warning/40 text-warning bg-warning/10";
       case "past_due":
       case "unpaid":
         return "border-destructive/40 text-destructive bg-destructive/5";
@@ -304,7 +304,7 @@ function fmtDate(iso: string | null | undefined): string | null {
 const RENEWAL_TONE = {
   neutral: "text-muted-foreground",
   info: "text-foreground",
-  warn: "text-amber-500",
+  warn: "text-warning",
   danger: "text-destructive",
 } as const;
 
@@ -436,9 +436,9 @@ export function formatMoney(amount: number, currency: string): string {
  */
 export function ledgerStatusTone(status: string | null | undefined): string {
   const s = (status ?? "").toLowerCase();
-  if (s === "paid") return "border-emerald-500/40 text-emerald-500 bg-emerald-500/10";
-  if (s === "refunded" || s === "voided") return "border-amber-500/40 text-amber-500 bg-amber-500/10";
+  if (s === "paid") return "border-success/40 text-success bg-success/10";
+  if (s === "refunded" || s === "voided") return "border-warning/40 text-warning bg-warning/10";
   if (s === "failed" || s === "past_due" || s === "overdue") return "border-destructive/40 text-destructive bg-destructive/5";
-  if (s === "pending") return "border-blue-500/40 text-blue-500 bg-blue-500/10";
+  if (s === "pending") return "border-info/40 text-info bg-info/10";
   return "border-border text-muted-foreground";
 }

@@ -180,7 +180,7 @@ function MembershipCalendarPage() {
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors",
             includeGoogle
-              ? "bg-sky-500/15 text-sky-300 border-sky-500/30"
+              ? "bg-info/15 text-info border-info/30"
               : "border-border text-muted-foreground opacity-60 hover:opacity-100",
           )}
         >

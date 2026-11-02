@@ -425,7 +425,7 @@ export function SessionActionsSheet({
   });
   if (session.status !== "Cancelled" && session.status !== "Rescheduled") {
     choices.push({
-      icon: <PiggyBank className="h-5 w-5 text-sky-300" />,
+      icon: <PiggyBank className="h-5 w-5 text-info" />,
       title: session.status === "Completed"
         ? "Didn't happen · bank the credit"
         : session.status === "Missed" ? "Don't count it · bank the credit" : "Cancel · bank the credit",
@@ -455,7 +455,7 @@ export function SessionActionsSheet({
               <Badge variant="outline" className={statusTone(session.status)}>{sessionStatusLabel(session.status)}</Badge>
               {usesCredit && <Badge variant="outline" className={creditChipClasses(credit.state)}>{credit.label}</Badge>}
               {session.google_event_id && (
-                <Badge variant="outline" className="border-sky-500/30 bg-sky-500/10 text-sky-300">In Google</Badge>
+                <Badge variant="outline" className="border-info/30 bg-info/10 text-info">In Google</Badge>
               )}
             </div>
             <SheetTitle className="text-left">
@@ -486,9 +486,9 @@ export function SessionActionsSheet({
               <button
                 type="button"
                 onClick={() => setEditingNote(true)}
-                className="flex w-full items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left"
+                className="flex w-full items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-left"
               >
-                <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+                <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <span className="min-w-0 flex-1 whitespace-pre-wrap text-sm">{coachNote}</span>
                 <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">Edit</span>
               </button>
@@ -504,8 +504,8 @@ export function SessionActionsSheet({
           )}
 
           {request && mode === "menu" && (
-            <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-              <div className="text-sm font-semibold text-amber-200">
+            <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
+              <div className="text-sm font-semibold text-warning">
                 {request.kind === "move"
                   ? proposed ? `${first} asked to move it to ${whenLabel(proposed.date, proposed.start)}` : `${first} asked to move this session`
                   : `${first} can't make this session`}
@@ -518,7 +518,7 @@ export function SessionActionsSheet({
               {request.kind === "move" ? (
                 proposed ? (
                   <div className="grid grid-cols-2 gap-2">
-                    <Button className="col-span-2 h-12 bg-gradient-primary font-bold" onClick={approveProposed}>
+                    <Button className="col-span-2 h-12 bg-primary text-primary-foreground font-semibold" onClick={approveProposed}>
                       <CheckCircle2 className="mr-2 h-4 w-4" /> Approve {whenLabel(proposed.date, proposed.start)}
                     </Button>
                     <Button variant="outline" className="h-11" onClick={() => { setApproving(false); setMode("move"); }}>
@@ -528,7 +528,7 @@ export function SessionActionsSheet({
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
-                    <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("move")}>
+                    <Button className="h-11 bg-primary text-primary-foreground font-semibold" onClick={() => setMode("move")}>
                       <CalendarClock className="mr-2 h-4 w-4" /> Pick new time
                     </Button>
                     <Button variant="outline" className="h-11" onClick={() => setMode("decline")}>Decline</Button>
@@ -536,7 +536,7 @@ export function SessionActionsSheet({
                 )
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="h-11 bg-gradient-primary font-bold" onClick={() => pick("bank")}>
+                  <Button className="h-11 bg-primary text-primary-foreground font-semibold" onClick={() => pick("bank")}>
                     <PiggyBank className="mr-2 h-4 w-4" /> Bank it
                   </Button>
                   <Button variant="outline" className="h-11" onClick={() => pick("use")}>
@@ -553,7 +553,7 @@ export function SessionActionsSheet({
               {/* Mid-session: straight into the client's workout for that day, as they see it. */}
               {pov.canPov && (
                 <Button
-                  className="h-12 w-full bg-gradient-primary font-bold"
+                  className="h-12 w-full bg-primary text-primary-foreground font-semibold"
                   disabled={pov.busy}
                   onClick={() => pov.enter(session.client_id, { to: `/portal/workouts?open=${session.session_date}`, fallbackName: name })}
                 >
@@ -583,7 +583,7 @@ export function SessionActionsSheet({
             <div className="space-y-3">
               <BackButton onClick={() => setMode("menu")} />
               {request?.kind === "move" && (proposed || request.preferred_times) && (
-                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
                   {proposed && <>{first} asked for {whenLabel(proposed.date, proposed.start)}.{request.preferred_times ? " " : ""}</>}
                   {request.preferred_times && <>Other times that work: {request.preferred_times}</>}
                 </p>
@@ -624,7 +624,7 @@ export function SessionActionsSheet({
               {canMove && <NoteField value={noteDraft} onChange={setNoteDraft} label="Why (optional)" placeholder="e.g. moved to Sunday, I volunteered Tuesday" />}
               {canMove && <p className="text-xs text-muted-foreground">{moveOutcome(date, today, usesCredit)}</p>}
               <Button
-                className="h-12 w-full bg-gradient-primary font-bold"
+                className="h-12 w-full bg-primary text-primary-foreground font-semibold"
                 disabled={busy || !canMove || (target === "Scheduled" && (blocked || conflictCheck.checking))}
                 onClick={doMove}
               >

@@ -264,7 +264,7 @@ export function WeightValueInput({
       </div>
 
       {sheet === "confirm" && confirmValue != null ? (
-        <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+        <div className="space-y-2 rounded-md border border-warning/40 bg-warning/10 p-2">
           <div className="text-[12px] font-medium text-foreground">
             This is above the normal weight cap ({cap} {unit}). Save anyway?
           </div>
@@ -343,9 +343,9 @@ export function WeightValueInput({
               "flex w-full items-center justify-center whitespace-nowrap rounded-md border pl-2 pr-5 text-sm font-medium transition-colors",
               cellHeight,
               loadType === "bodyweight" && "text-[10px] font-semibold uppercase tracking-tight",
-              loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
+              loadType === "assisted" && "border-warning/50 bg-warning/10",
               isEmpty
-                ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
+                ? "border-info/40 bg-info/10 text-muted-foreground"
                 : "border-border/60 bg-muted/40 text-foreground",
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}
@@ -375,7 +375,7 @@ export function WeightValueInput({
         )}
       </div>
       {loadType === "assisted" && !editing && (
-        <div className="mt-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-amber-600">
+        <div className="mt-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-warning">
           Assisted
         </div>
       )}

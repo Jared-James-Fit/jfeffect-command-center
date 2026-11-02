@@ -68,7 +68,7 @@ function PortalRecipes() {
                 <Target className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-black uppercase tracking-widest">Your Targets</div>
+                <div className="text-sm font-bold uppercase tracking-widest">Your Targets</div>
                 <div className="text-[11px] text-muted-foreground">
                   {t.source === "coach" ? "Set by your coach" : t.source === "manual" ? "Manually set" : "Calculated"}
                 </div>
@@ -84,7 +84,7 @@ function PortalRecipes() {
         </div>
       )}
       <div className="p-4 pb-28 md:p-6 md:pb-12">
-        <div className="mb-3 text-xs font-black uppercase tracking-widest text-muted-foreground">Recipes</div>
+        <div className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Recipes</div>
         <RecipeBrowser viewer="client" userId={portalUserId ?? undefined} goals={goals} profile={profile} />
       </div>
     </>

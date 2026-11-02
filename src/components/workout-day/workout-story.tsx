@@ -625,7 +625,7 @@ export function StoryChrome({
         }}
         className={cn(
           "flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-4 text-sm font-bold active:scale-[0.98] disabled:opacity-70",
-          finish.review ? "bg-amber-500 text-black" : "bg-primary text-primary-foreground shadow-md shadow-primary/25",
+          finish.review ? "bg-warning text-black" : "bg-primary text-primary-foreground shadow-md shadow-primary/25",
         )}
       >
         {finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : finish.review ? <MessageCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -689,7 +689,7 @@ export function StoryChrome({
                       key={justDone?.i === i ? justDone.k : "fill"}
                       className={cn(
                         "absolute inset-0 rounded-full transition-colors duration-300",
-                        i === index ? (done[i] ? "bg-emerald-500" : "bg-foreground") : "bg-emerald-500/50",
+                        i === index ? (done[i] ? "bg-success" : "bg-foreground") : "bg-success/50",
                         done[i] && justDone?.i === i && "jf-bar-fill",
                       )}
                     />
@@ -723,7 +723,7 @@ export function StoryChrome({
                     key={justDone?.i === index ? justDone.k : "done"}
                     data-testid="story-done"
                     className={cn(
-                      "inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 font-bold text-emerald-500",
+                      "inline-flex shrink-0 items-center gap-0.5 rounded-full bg-success/15 px-1.5 font-bold text-success",
                       justDone?.i === index && "jf-done-pop",
                     )}
                   >

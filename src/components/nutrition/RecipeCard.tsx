@@ -6,11 +6,11 @@ import type { Recipe } from "@/lib/recipes";
 import { getRecipeCardMeta } from "@/lib/recipe-meta";
 
 const CATEGORY_ACCENT: Record<string, string> = {
-  Breakfast: "from-amber-500/30 to-amber-500/0",
-  Lunch: "from-emerald-500/30 to-emerald-500/0",
-  Dinner: "from-indigo-500/30 to-indigo-500/0",
-  Snack: "from-pink-500/30 to-pink-500/0",
-  "Meal Prep": "from-sky-500/30 to-sky-500/0",
+  Breakfast: "from-warning/30 to-warning/0",
+  Lunch: "from-success/30 to-success/0",
+  Dinner: "from-muted/30 to-muted/0",
+  Snack: "from-muted/30 to-muted/0",
+  "Meal Prep": "from-info/30 to-info/0",
 };
 
 export function RecipeCard({
@@ -72,7 +72,7 @@ export function RecipeCard({
         )}
 
         <div className="relative mt-1 flex items-center justify-between rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-primary">
-          <span className="text-[11px] font-black uppercase tracking-widest">View Recipe</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest">View Recipe</span>
           <ChevronRight className="h-4 w-4" />
         </div>
       </Card>

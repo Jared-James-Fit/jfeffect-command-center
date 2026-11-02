@@ -113,7 +113,7 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
                           <div className="text-sm font-medium truncate">{c.full_name}</div>
                           <div className="text-[11px] text-muted-foreground truncate">{c.phone || "no phone"}</div>
                         </div>
-                        {!canReceive && <Badge variant="outline" className="border-amber-500/40 text-amber-600 text-[10px]">{c.sms_opt_out ? "Opted out" : "No phone"}</Badge>}
+                        {!canReceive && <Badge variant="outline" className="border-warning/40 text-warning text-[10px]">{c.sms_opt_out ? "Opted out" : "No phone"}</Badge>}
                       </li>
                     );
                   })}
@@ -140,7 +140,7 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
                 </div>
               )}
               {blocked > 0 && (
-                <div className="flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-400">
+                <div className="flex items-start gap-2 rounded border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning">
                   <AlertTriangle className="h-3 w-3 mt-0.5" />
                   {blocked} selected client{blocked === 1 ? "" : "s"} will be skipped (no phone or opted out).
                 </div>

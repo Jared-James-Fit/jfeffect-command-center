@@ -166,7 +166,7 @@ export function WorkoutSyncBanner({ clientId, workoutId, pageRoute, className }:
           "text-xs select-none transition-opacity",
           pill.variant === "gray" && "text-muted-foreground",
           pill.variant === "amber" &&
-            "bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-full px-2.5 py-1 cursor-pointer active:opacity-70",
+            "bg-warning/10 text-warning border border-warning/20 rounded-full px-2.5 py-1 cursor-pointer active:opacity-70",
           pill.variant === "red" &&
             "bg-destructive/10 text-destructive border border-destructive/20 rounded-full px-2.5 py-1 cursor-pointer active:opacity-70",
         )}

@@ -28,7 +28,7 @@ function Stepper({ value, min, max, onChange, suffix, testId }: { value: number;
   return (
     <div className="inline-flex items-center gap-1" data-testid={testId}>
       <Button type="button" size="icon" variant="outline" className="h-9 w-9" disabled={value <= min} onClick={() => onChange(value - 1)} aria-label="Less"><Minus className="h-4 w-4" /></Button>
-      <span className="min-w-[3.5rem] text-center text-sm font-black tabular-nums">{value}{suffix ? ` ${suffix}` : ""}</span>
+      <span className="min-w-[3.5rem] text-center text-sm font-bold tabular-nums">{value}{suffix ? ` ${suffix}` : ""}</span>
       <Button type="button" size="icon" variant="outline" className="h-9 w-9" disabled={value >= max} onClick={() => onChange(value + 1)} aria-label="More"><Plus className="h-4 w-4" /></Button>
     </div>
   );
@@ -107,7 +107,7 @@ function Row({ label, value, why, edited, children, testId }: { label: string; v
         <span className="min-w-0">
           <span className="block text-[11px] font-semibold text-muted-foreground">
             {label}
-            {edited ? <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-[10px] font-black uppercase text-primary">your change</span> : null}
+            {edited ? <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-[10px] font-bold uppercase text-primary">your change</span> : null}
           </span>
           <span className="block text-[13px] font-bold leading-snug">{value}</span>
           {why && !edited ? <span className="block text-[11px] leading-snug text-muted-foreground">{why.source}: {why.reason}</span> : null}
@@ -208,7 +208,7 @@ export function SetupCard({
         </div>
       </Row>
       {redistribution && (
-        <div className={cn("mb-1 space-y-0.5 rounded-xl p-2.5 text-[11px]", redistribution.fits ? "bg-sky-500/10 text-sky-900 dark:text-sky-100" : "bg-amber-500/10 text-amber-900 dark:text-amber-100")} data-testid="gen-redistribution">
+        <div className={cn("mb-1 space-y-0.5 rounded-xl p-2.5 text-[11px]", redistribution.fits ? "bg-info/10 text-info" : "bg-warning/10 text-warning")} data-testid="gen-redistribution">
           <div className="font-bold">What {redistribution.fromDays} → {redistribution.toDays} days does</div>
           {redistribution.lines.map((l) => <div key={l}>{l}</div>)}
         </div>
@@ -293,7 +293,7 @@ export function AdvancedControls({ intel, setup, edited, onChange }: { intel: Ge
   const strength = STRENGTH_BRAINS.includes(setup.brain);
   const hyper = HYPERTROPHY_BRAINS.includes(setup.brain) || setup.brain === "general_fitness";
   const options = exerciseOptions(intel);
-  const mark = (k: SetupField) => (edited.has(k) ? <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-[10px] font-black uppercase text-primary">changed</span> : null);
+  const mark = (k: SetupField) => (edited.has(k) ? <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-[10px] font-bold uppercase text-primary">changed</span> : null);
   const listEditor = (k: "frequency" | "volume", unit: string, max: number) => {
     const rows = setup[k] as Array<{ target: string; perWeek?: number; setsPerWeek?: number }>;
     const field = k === "frequency" ? "perWeek" : "setsPerWeek";
@@ -320,7 +320,7 @@ export function AdvancedControls({ intel, setup, edited, onChange }: { intel: Ge
         </summary>
         <div className="mt-3 space-y-4 text-[12px]">
           <fieldset className="space-y-2">
-            <legend className="mb-1 text-[11px] font-black uppercase tracking-widest text-muted-foreground">Goal and emphasis</legend>
+            <legend className="mb-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Goal and emphasis</legend>
             <div>
               <Label className="text-[11px]">Secondary goals{mark("secondaryGoals")}</Label>
               <Chips values={setup.secondaryGoals} onChange={(v) => onChange("secondaryGoals", v)} placeholder="Add a goal" />
@@ -333,7 +333,7 @@ export function AdvancedControls({ intel, setup, edited, onChange }: { intel: Ge
             )}
           </fieldset>
           <fieldset className="space-y-2">
-            <legend className="mb-1 text-[11px] font-black uppercase tracking-widest text-muted-foreground">Training prescription</legend>
+            <legend className="mb-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Training prescription</legend>
             <div>
               <Label className="text-[11px]">Frequency per week{mark("frequency")}</Label>
               {listEditor("frequency", "× / week", 7)}
@@ -376,7 +376,7 @@ export function AdvancedControls({ intel, setup, edited, onChange }: { intel: Ge
             </div>
           </fieldset>
           <fieldset className="space-y-2">
-            <legend className="mb-1 text-[11px] font-black uppercase tracking-widest text-muted-foreground">Athlete context</legend>
+            <legend className="mb-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Athlete context</legend>
             <div>
               <Label className="text-[11px]">Exercise preferences{mark("preferences")}</Label>
               <Textarea value={setup.preferences} onChange={(e) => onChange("preferences", e.target.value)} rows={2} className="text-[12px]" placeholder="e.g. Prefers safety-bar squats; dislikes lunges" />
@@ -409,11 +409,11 @@ function AddTarget({ onAdd }: { onAdd: (t: string) => void }) {
 export function ConflictsCard({ conflicts }: { conflicts: Conflict[] }) {
   if (!conflicts.length) return null;
   return (
-    <Card className="space-y-2 border-amber-500/40 p-3.5" data-testid="gen-conflicts">
+    <Card className="space-y-2 border-warning/40 p-3.5" data-testid="gen-conflicts">
       <SectionTitle hint={`${conflicts.filter((c) => c.severity === "blocker").length} to fix`}>Conflicts</SectionTitle>
       {conflicts.map((c) => (
-        <div key={c.id} className={cn("flex gap-2 rounded-xl p-2 text-[12px]", c.severity === "blocker" ? "bg-destructive/10" : "bg-amber-500/10")}>
-          <AlertTriangle className={cn("mt-0.5 h-4 w-4 shrink-0", c.severity === "blocker" ? "text-destructive" : "text-amber-600")} />
+        <div key={c.id} className={cn("flex gap-2 rounded-xl p-2 text-[12px]", c.severity === "blocker" ? "bg-destructive/10" : "bg-warning/10")}>
+          <AlertTriangle className={cn("mt-0.5 h-4 w-4 shrink-0", c.severity === "blocker" ? "text-destructive" : "text-warning")} />
           <div>
             <div className="font-semibold">{c.title}{c.severity === "blocker" ? " (fix before generating)" : ""}</div>
             {c.detail ? <div className="text-muted-foreground">{c.detail}</div> : null}

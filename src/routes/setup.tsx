@@ -198,14 +198,14 @@ function SetupPage() {
 
       {phase === "confirm" && (
         <div className="space-y-4 text-center">
-          <h2 className="text-xl font-black tracking-tight">Welcome to JF Effect</h2>
+          <h2 className="text-xl font-bold tracking-tight">Welcome to JF Effect</h2>
           <p className="text-sm text-muted-foreground">
             Tap continue to set up your account.
           </p>
           <Button
             onClick={verifyTokenHash}
             disabled={verifying}
-            className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+            className="w-full bg-primary text-primary-foreground py-6 text-sm font-semibold"
           >
             {verifying ? "Verifying…" : "Continue setup"}
           </Button>
@@ -214,12 +214,12 @@ function SetupPage() {
 
       {phase === "expired" && (
         <div className="space-y-4 text-center">
-          <h2 className="text-xl font-black">This setup link has expired</h2>
+          <h2 className="text-xl font-bold">This setup link has expired</h2>
           <p className="text-sm text-muted-foreground">
             Please contact Coach Jared or request a new setup link.
           </p>
           <a href="mailto:jaredjamesfit@gmail.com?subject=New%20setup%20link%20request">
-            <Button className="w-full bg-gradient-primary font-bold uppercase tracking-wider">
+            <Button className="w-full bg-primary text-primary-foreground font-semibold">
               Request new setup link
             </Button>
           </a>
@@ -229,7 +229,7 @@ function SetupPage() {
       {phase === "ready" && (
         <>
           <div className="text-center">
-            <h2 className="text-xl font-black tracking-tight">
+            <h2 className="text-xl font-bold tracking-tight">
               {fullName ? `Welcome, ${fullName.split(" ")[0]}` : "Welcome"}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -249,7 +249,7 @@ function SetupPage() {
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirm password</Label>
               <PasswordInput required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1.5" />
             </div>
-            <Button type="submit" disabled={busy} className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow">
+            <Button type="submit" disabled={busy} className="w-full bg-primary text-primary-foreground py-6 text-sm font-semibold">
               {busy ? "Creating…" : "Create my account"}
             </Button>
           </form>
@@ -262,7 +262,7 @@ function SetupPage() {
             <FileSignature className="h-7 w-7" />
           </div>
           <div>
-            <h2 className="text-xl font-black tracking-tight">Sign your Coaching Agreement</h2>
+            <h2 className="text-xl font-bold tracking-tight">Sign your Coaching Agreement</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Every client signs one agreement. It covers every service and purchase, so you only do
               this once. It takes about 2 minutes.
@@ -272,7 +272,7 @@ function SetupPage() {
             <Button
               type="button"
               onClick={() => setSignOpen(true)}
-              className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+              className="w-full bg-primary text-primary-foreground py-6 text-sm font-semibold"
             >
               Review &amp; sign
             </Button>
@@ -294,7 +294,7 @@ function SetupPage() {
       {phase === "social" && (
         <div className="space-y-5">
           <div className="text-center">
-            <h2 className="text-xl font-black tracking-tight">Social Media (optional)</h2>
+            <h2 className="text-xl font-bold tracking-tight">Social Media (optional)</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Add just your username/handle for any platform you use. Skip any you don't.
             </p>
@@ -309,7 +309,7 @@ function SetupPage() {
               type="button"
               onClick={saveSocialsAndContinue}
               disabled={busy}
-              className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+              className="w-full bg-primary text-primary-foreground py-6 text-sm font-semibold"
             >
               {busy ? "Saving…" : "Save & continue"}
             </Button>
@@ -352,8 +352,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center justify-center gap-3">
-            <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl shadow-glow" />
-            <span className="text-lg font-black tracking-tight">JF EFFECT</span>
+            <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl" />
+            <span className="text-lg font-bold tracking-tight">JF EFFECT</span>
           </div>
           <Card className="border-border bg-card/60 p-6 backdrop-blur-sm">{children}</Card>
           <p className="mt-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">

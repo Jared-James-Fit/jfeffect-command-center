@@ -26,7 +26,7 @@ export function NextProgramLink({ job, clientId }: { job: IntelJob; clientId: st
       <Link to="/admin/client-programs/$clientId/next-program" params={{ clientId }} className="flex items-center gap-3 p-3.5">
         {working ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" /> : null}
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Next program</div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Next program</div>
           <div className="truncate text-[13px] font-bold">{text}</div>
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />

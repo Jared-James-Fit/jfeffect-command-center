@@ -183,7 +183,7 @@ function NoteEditor({
   return (
     <div className={cn("rounded-lg border px-3 py-2", hidden && "opacity-60")}>
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{title}</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
         {shown.byCoach ? (
           <Badge variant="outline" className="h-4 px-1 text-[9px]">Your words</Badge>
         ) : shown.label || shown.summary ? (

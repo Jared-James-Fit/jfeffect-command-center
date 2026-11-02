@@ -56,7 +56,7 @@ export function ClientGoalsSetupGate({ children }: { children: ReactNode }) {
             <Target className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-black tracking-tight">Goals & Setup</h2>
+            <h2 className="text-lg font-bold tracking-tight">Goals & Setup</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               A few quick answers so Coach Jared can build the right program for you. This is required before you can use the rest of the portal — you can update it anytime.
             </p>

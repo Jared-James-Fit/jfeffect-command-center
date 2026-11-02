@@ -143,14 +143,14 @@ export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
 };
 
 export const REVIEW_STATUS_TONE: Record<ReviewStatus, string> = {
-  submitted:        "bg-sky-500/15 text-sky-300 border-sky-500/40",
-  processing:       "bg-amber-500/15 text-amber-300 border-amber-500/40",
-  needs_review:     "bg-amber-500/15 text-amber-300 border-amber-500/40",
-  draft_ready:      "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
-  coach_editing:    "bg-violet-500/15 text-violet-300 border-violet-500/40",
+  submitted:        "bg-info/15 text-info border-info/40",
+  processing:       "bg-warning/15 text-warning border-warning/40",
+  needs_review:     "bg-warning/15 text-warning border-warning/40",
+  draft_ready:      "bg-success/15 text-success border-success/40",
+  coach_editing:    "bg-muted-foreground/15 text-muted-foreground border-border",
   approved:         "bg-primary/15 text-primary border-primary/40",
-  scheduled:        "bg-indigo-500/15 text-indigo-300 border-indigo-500/40",
-  sending:          "bg-amber-500/15 text-amber-300 border-amber-500/40",
+  scheduled:        "bg-muted-foreground/15 text-muted-foreground border-border",
+  sending:          "bg-warning/15 text-warning border-warning/40",
   sent:             "bg-muted text-muted-foreground border-border",
   delivery_failed:  "bg-destructive/15 text-destructive border-destructive/40",
   archived:         "bg-muted text-muted-foreground border-border",

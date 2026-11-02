@@ -217,7 +217,7 @@ export function StoryThumb({ row, data, onOpen }: { row: LessonPlanRow; data: Le
   return (
     <button type="button" onClick={onOpen} className={cn(box, "active:scale-[0.99]")} style={size} aria-label="Play the story full screen and arrange it" data-lesson-preview="story">
       {stage}
-      <span className="absolute inset-x-0 bottom-3 mx-auto flex w-max items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[12px] font-black text-black shadow-lg">
+      <span className="absolute inset-x-0 bottom-3 mx-auto flex w-max items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[12px] font-bold text-black shadow-lg">
         <Play className="h-3.5 w-3.5 fill-black" /> Play & arrange
       </span>
     </button>
@@ -358,7 +358,7 @@ export function LessonStoryPlayer({ rows, startId, data, onClose }: { rows: Less
 
         <div className="flex items-center gap-2 px-4 pb-2" style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-black">{row.item?.title}</div>
+            <div className="truncate text-[15px] font-bold">{row.item?.title}</div>
             <div className="truncate text-[12px] text-white/60">
               {dayLabel(row.day)} · {coachTimeLabel(row.post_at)} · {lessonStatusLabel(row, data.mode)}
             </div>
@@ -397,7 +397,7 @@ export function LessonStoryPlayer({ rows, startId, data, onClose }: { rows: Less
             <p className="flex items-center justify-center gap-1.5 text-center text-[12px] font-semibold text-white/60" data-lesson-arrange-hint>
               <Move className="h-3.5 w-3.5" /> Drag the sticker up or down to move it
               {sticker.y !== undefined && (
-                <button type="button" onClick={() => place(undefined)} className="ml-1 font-black text-white underline-offset-2 active:underline">
+                <button type="button" onClick={() => place(undefined)} className="ml-1 font-bold text-white underline-offset-2 active:underline">
                   Reset
                 </button>
               )}
@@ -408,7 +408,7 @@ export function LessonStoryPlayer({ rows, startId, data, onClose }: { rows: Less
               <ChevronLeft className="h-5 w-5" />
             </button>
             {posted ? (
-              <button type="button" onClick={() => row.post_id && openCommunityPost(row.post_id)} className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full bg-white text-[14px] font-black text-black">
+              <button type="button" onClick={() => row.post_id && openCommunityPost(row.post_id)} className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full bg-white text-[14px] font-bold text-black">
                 Open the post <ChevronRight className="h-4 w-4" />
               </button>
             ) : (
@@ -421,7 +421,7 @@ export function LessonStoryPlayer({ rows, startId, data, onClose }: { rows: Less
                 </button>
                 {live && data.mode === "review" &&
                   (row.status === "approved" ? (
-                    <button type="button" disabled={act.isPending} onClick={() => run({ kind: "unapprove", id: row.id }, "Back to needing your OK")} className="flex h-12 flex-1 flex-col items-center justify-center rounded-2xl bg-emerald-500/20 text-[11px] font-black text-emerald-300" data-lesson-player-unapprove>
+                    <button type="button" disabled={act.isPending} onClick={() => run({ kind: "unapprove", id: row.id }, "Back to needing your OK")} className="flex h-12 flex-1 flex-col items-center justify-center rounded-2xl bg-success/20 text-[11px] font-bold text-success" data-lesson-player-unapprove>
                       <Check className="h-4 w-4" />
                       <span className="inline-flex items-center gap-0.5">Approved · <Undo2 className="h-3 w-3" /></span>
                     </button>
@@ -430,7 +430,7 @@ export function LessonStoryPlayer({ rows, startId, data, onClose }: { rows: Less
                       type="button"
                       disabled={act.isPending}
                       onClick={() => run({ kind: "approve", id: row.id }, `Approved for ${whenLabel(row)}`, () => go(1))}
-                      className="flex h-12 flex-1 flex-col items-center justify-center rounded-2xl bg-primary text-[11px] font-black text-primary-foreground"
+                      className="flex h-12 flex-1 flex-col items-center justify-center rounded-2xl bg-primary text-[11px] font-bold text-primary-foreground"
                       data-lesson-player-approve
                     >
                       <Check className="h-4 w-4" /> Approve

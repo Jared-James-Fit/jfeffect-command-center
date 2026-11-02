@@ -22,7 +22,7 @@ function Delta({ label, prev, next, unit = "" }: { label: string; prev: number |
   if (next == null) return null;
   const diff = prev == null ? null : Number(next) - Number(prev);
   const sign = diff == null || diff === 0 ? "" : diff > 0 ? "+" : "";
-  const tone = diff == null || diff === 0 ? "text-muted-foreground" : diff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400";
+  const tone = diff == null || diff === 0 ? "text-muted-foreground" : diff > 0 ? "text-success" : "text-warning";
   return (
     <div className="flex flex-col items-start gap-0.5">
       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>

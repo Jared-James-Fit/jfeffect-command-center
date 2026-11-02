@@ -287,7 +287,7 @@ function StatCard({
       </div>
       <div
         className={`mt-2 text-2xl font-bold tabular-nums ${
-          tone === "warn" ? "text-amber-500" : ""
+          tone === "warn" ? "text-warning" : ""
         }`}
       >
         {value}

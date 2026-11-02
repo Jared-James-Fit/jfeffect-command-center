@@ -28,7 +28,7 @@ export function ClientCheckInConversations({
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-In Conversations</h3>
           <p className="text-xs text-muted-foreground mt-1">Past responses + ongoing chats with this client.</p>
         </div>
-        <Button size="sm" className="bg-gradient-primary font-bold" onClick={onCompose}>
+        <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={onCompose}>
           <Send className="mr-1 h-4 w-4" /> New Check-In Response
         </Button>
       </div>

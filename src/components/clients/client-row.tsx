@@ -134,7 +134,7 @@ const TAG = "cursor-pointer rounded-full border border-border bg-muted/40 px-1.5
 /** Last seen turns amber after a week without opening the app and red after two. */
 const SEEN_TONE = {
   danger: "border-destructive/40 bg-destructive/10 text-destructive",
-  warn: "border-amber-500/40 bg-amber-500/10 text-amber-600",
+  warn: "border-warning/40 bg-warning/10 text-warning",
   muted: "border-border bg-muted/40",
 } as const;
 
@@ -190,7 +190,7 @@ export function ClientRow({ r, onArchive, calSync }: { r: DirectoryRow; onArchiv
                   className={TAG}
                 >
                   <span className="inline-flex items-center gap-1">
-                    <CalendarDays className={"h-3 w-3 " + (calSync ? "text-emerald-500" : "opacity-50")} />
+                    <CalendarDays className={"h-3 w-3 " + (calSync ? "text-success" : "opacity-50")} />
                     {calSync === "google" ? "Google" : calSync === "feed" ? "Feed" : "No sync"}
                   </span>
                 </StatusTip>
@@ -226,7 +226,7 @@ export function ClientRow({ r, onArchive, calSync }: { r: DirectoryRow; onArchiv
                   title="Missed workouts"
                   body={`${r.missed_workouts_count} scheduled workouts in the last 14 days weren't completed. Two or more is flagged.`}
                   tone="warn"
-                  className="cursor-pointer rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-1 text-amber-600 font-medium"
+                  className="cursor-pointer rounded-full border border-warning/40 bg-warning/10 px-1.5 py-1 text-warning font-medium"
                 >
                   {r.missed_workouts_count} missed
                 </StatusTip>
@@ -359,7 +359,7 @@ function StatusPill({
       )}
       className={
         ok
-          ? "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400 transition hover:bg-emerald-500/20"
+          ? "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-1 text-[11px] font-medium text-success transition hover:bg-success/20"
           : "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-semibold text-destructive transition hover:bg-destructive/20"
       }
     >
@@ -532,7 +532,7 @@ function AssignmentStatusStrip({
                     "inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 font-semibold transition hover:brightness-110",
                     end.state === "ended"
                       ? "border-destructive/40 bg-destructive/10 text-destructive"
-                      : "border-amber-500/40 bg-amber-500/10 text-amber-500",
+                      : "border-warning/40 bg-warning/10 text-warning",
                   )}
                 >
                   <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
@@ -562,7 +562,7 @@ function AssignmentStatusStrip({
                 <span
                   className={cn(
                     "block h-full rounded-full transition-all",
-                    end?.needsNext ? (end.state === "ended" ? "bg-destructive" : "bg-amber-500") : "bg-emerald-500",
+                    end?.needsNext ? (end.state === "ended" ? "bg-destructive" : "bg-warning") : "bg-success",
                   )}
                   style={{ width: `${prog.pct}%` }}
                 />
@@ -577,7 +577,7 @@ function AssignmentStatusStrip({
           body="The next training block is already set up for this client, and this is when it starts. Nothing to do here."
           icon={ArrowRight}
           tone="info"
-          className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400"
+          className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-info/30 bg-info/10 px-2 py-1 text-[11px] font-medium text-info"
         >
           <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
           <span className="truncate">

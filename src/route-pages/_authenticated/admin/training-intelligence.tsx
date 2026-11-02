@@ -132,9 +132,9 @@ export function TrainingIntelPage({ embedded = false }: { embedded?: boolean } =
 
 function SummaryStat({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone?: "amber" | "red" | "violet" | "primary" }) {
   const cls =
-    tone === "amber" ? "bg-amber-500/15 text-amber-400" :
-    tone === "red"   ? "bg-red-500/15 text-red-400" :
-    tone === "violet"? "bg-violet-500/15 text-violet-400" :
+    tone === "amber" ? "bg-warning/15 text-warning" :
+    tone === "red"   ? "bg-destructive/15 text-destructive" :
+    tone === "violet"? "bg-muted-foreground/15 text-muted-foreground" :
     tone === "primary"? "bg-primary/15 text-primary" :
     "bg-secondary text-foreground";
   return (
@@ -142,7 +142,7 @@ function SummaryStat({ icon: Icon, label, value, tone }: { icon: any; label: str
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-black">{value}</div>
+          <div className="mt-1 text-2xl font-bold">{value}</div>
         </div>
         <div className={`grid h-9 w-9 place-items-center rounded-md ${cls}`}><Icon className="h-4 w-4" /></div>
       </div>
@@ -205,8 +205,8 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
   const [followupOpen, setFollowupOpen] = useState(false);
   const complianceTone =
     c.compliance_pct == null ? "text-muted-foreground" :
-    c.compliance_pct >= 80 ? "text-green-500" :
-    c.compliance_pct >= 60 ? "text-amber-400" : "text-red-400";
+    c.compliance_pct >= 80 ? "text-success" :
+    c.compliance_pct >= 60 ? "text-warning" : "text-destructive";
   const myFollowups = (allFollowups ?? c.open_followups).filter((f: any) => f.client_id === c.client_id && f.status === "open");
 
   return (
@@ -225,9 +225,9 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
       {/* Pain flags */}
       {(focus === "pain" || c.pain_flags.length > 0) && c.pain_flags.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-red-400 font-bold">Pain / discomfort</div>
+          <div className="text-[10px] uppercase tracking-widest text-destructive font-bold">Pain / discomfort</div>
           {c.pain_flags.slice(0, 3).map((p) => (
-            <div key={p.id} className="rounded border border-red-500/30 bg-red-500/5 p-2 text-xs space-y-1">
+            <div key={p.id} className="rounded border border-destructive/30 bg-destructive/5 p-2 text-xs space-y-1">
               <div className="text-muted-foreground">
                 {p.day_title ?? "Workout"}{p.exercise && ` • ${p.exercise}`}
                 {p.note_date && ` • ${new Date(p.note_date).toLocaleDateString()}`}
@@ -245,7 +245,7 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
       {/* Missed workouts */}
       {(focus === "missed" || focus === "followup") && c.missed_days.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold">
+          <div className="text-[10px] uppercase tracking-widest text-warning font-bold">
             Missed {c.missed_days.length} workout{c.missed_days.length > 1 ? "s" : ""}
           </div>
           {c.missed_days.slice(0, 3).map((m) => (
@@ -266,9 +266,9 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
       {/* PR events */}
       {focus === "pr" && c.recent_prs.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-violet-400 font-bold">ATPRs (30d)</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">ATPRs (30d)</div>
           {c.recent_prs.slice(0, 4).map((p) => (
-            <div key={p.alert_key} className="flex items-center justify-between gap-2 rounded border border-violet-500/30 bg-violet-500/5 p-2 text-xs">
+            <div key={p.alert_key} className="flex items-center justify-between gap-2 rounded border border-border bg-muted-foreground/5 p-2 text-xs">
               <div className="min-w-0">
                 <div className="truncate font-medium">
                   {p.exercise} — {p.actual_load} × {p.actual_reps}
@@ -306,7 +306,7 @@ function ClientActionCard({ c, focus, allFollowups }: { c: ClientIntel; focus?: 
       {/* Open follow-ups */}
       {(focus === "followup" || myFollowups.length > 0) && myFollowups.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Open follow-ups</div>
+          <div className="text-[10px] uppercase tracking-widest text-warning font-bold">Open follow-ups</div>
           {myFollowups.slice(0, 3).map((f: any) => <FollowupRow key={f.id} f={f} />)}
         </div>
       )}

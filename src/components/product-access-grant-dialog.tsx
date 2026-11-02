@@ -103,7 +103,7 @@ export function ProductAccessGrantDialog({ productId, productName, initialIsMemb
           </DialogDescription>
         </DialogHeader>
         {grantData && grantData.offerId === null && (
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
             This product isn't linked to an Offer yet. Open the product editor and set its Offer first, then return here.
           </div>
         )}

@@ -33,7 +33,7 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
       style={{ borderLeft: `4px solid ${color}` }}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-        <div className="min-w-0 text-sm font-extrabold leading-tight text-foreground sm:text-base">
+        <div className="min-w-0 text-sm font-bold leading-tight text-foreground sm:text-base">
           <span className="truncate">{pr.exercise_name}</span>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -58,7 +58,7 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
       </div>
       {assisted ? (
         <>
-          <div className={`mt-2 font-black tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
+          <div className={`mt-2 font-bold tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
             {fmtNum(conv(pr.assist))}{" "}
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {displayUnit} · assistance
@@ -73,7 +73,7 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
         </>
       ) : (
         <>
-      <div className={`mt-2 font-black tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
+      <div className={`mt-2 font-bold tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
         {fmtNum(conv(pr.est_1rm))}{" "}
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {displayUnit} · est 1RM

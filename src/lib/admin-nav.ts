@@ -158,25 +158,27 @@ export const coachNav: NavItem[] = [
   { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid },
 ];
 
+// The phone's More menu and the desktop sidebar, in three groups. More
+// leaves out what's already on the bottom bar (still found by its search).
 export const clientNav: NavItem[] = [
-  { to: "/portal", label: "Home", icon: LayoutDashboard },
-  { to: "/portal/goals-setup", label: "Goals & Setup", icon: ClipboardCheck },
-  { to: "/portal/messages", label: "Messages", icon: MessageCircle },
-  { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal", label: "Home", icon: LayoutDashboard, group: "Training" },
+  { to: "/portal/goals-setup", label: "Goals & Setup", icon: ClipboardCheck, group: "Your coach" },
+  { to: "/portal/messages", label: "Messages", icon: MessageCircle, group: "Your coach" },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity, group: "Training" },
   // One Calendar: workouts, sessions, calls, events and key dates (old
   // Appointments / Events / Schedule pages redirect here). Right after
   // Workouts, so it's easy to find in the menu.
-  { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","appointments","sessions","events","booking","reschedule","cancel"] },
-  { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
-  { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
-  { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
-  { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
-  { to: "/portal/purchases", label: "My Purchases", icon: Package },
-  { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
-  { to: "/portal/resources", label: "Resources", icon: FolderOpen },
-  { to: "/portal/account", label: "Account Settings", icon: Settings },
+  { to: "/portal/calendar", label: "Calendar", icon: Calendar, group: "Training", keywords: ["calendar","schedule","appointments","sessions","events","booking","reschedule","cancel"] },
+  { to: "/portal/progress", label: "Progress", icon: Camera, group: "Training", keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, group: "Training", keywords: ["nutrition","macros","targets","recipes","meals"] },
+  { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck, group: "Your coach" },
+  { to: "/portal/announcements", label: "Announcements", icon: Megaphone, group: "Your coach" },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, group: "Training", keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
+  { to: "/portal/exercises", label: "Exercises", icon: Dumbbell, group: "Training" },
+  { to: "/portal/purchases", label: "My Purchases", icon: Package, group: "Account" },
+  { to: "/portal/agreements", label: "Agreements", icon: FileSignature, group: "Account" },
+  { to: "/portal/resources", label: "Resources", icon: FolderOpen, group: "Your coach" },
+  { to: "/portal/account", label: "Account Settings", icon: Settings, group: "Account" },
 ];
 
 // Mobile bottom-tab nav for the client portal: five destinations, Crew as the
@@ -198,20 +200,20 @@ export const clientBottomNav: NavItem[] = [
 // minus the coach (Messages, Check-Ins, Agreements, Goals & Setup, Purchases),
 // plus what a member manages themselves: plans, support, their membership.
 export const selfServeNav: NavItem[] = [
-  { to: "/portal", label: "Home", icon: LayoutDashboard },
-  { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","workouts","events"] },
-  { to: "/portal/plans", label: "Plan Library", icon: BookOpen, keywords: ["plans","programs","library","start","training"] },
-  { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","compare"] },
-  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
-  { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","community","members","posts"] },
-  { to: "/portal/support", label: "Support", icon: HelpCircle, keywords: ["help","support","question","bug","contact"] },
-  { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
-  { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
-  { to: "/portal/resources", label: "Resources", icon: FolderOpen },
-  { to: "/portal/tools", label: "Tools", icon: Wrench, keywords: ["calculator","1rm","macro","plate","water","sleep"] },
-  { to: "/portal/membership", label: "Membership", icon: CreditCard, keywords: ["billing","subscription","payment","cancel","hold","plan","upgrade"] },
-  { to: "/portal/account", label: "Account Settings", icon: Settings },
+  { to: "/portal", label: "Home", icon: LayoutDashboard, group: "Training" },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity, group: "Training" },
+  { to: "/portal/calendar", label: "Calendar", icon: Calendar, group: "Training", keywords: ["calendar","schedule","workouts","events"] },
+  { to: "/portal/plans", label: "Plan Library", icon: BookOpen, group: "Training", keywords: ["plans","programs","library","start","training"] },
+  { to: "/portal/progress", label: "Progress", icon: Camera, group: "Training", keywords: ["progress","photos","videos","bodyweight","measurements","compare"] },
+  { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, group: "Training", keywords: ["nutrition","macros","targets","recipes","meals"] },
+  { to: "/portal/community", label: "Crew", icon: UsersRound, group: "Training", keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","community","members","posts"] },
+  { to: "/portal/support", label: "Support", icon: HelpCircle, group: "Help & updates", keywords: ["help","support","question","bug","contact"] },
+  { to: "/portal/announcements", label: "Announcements", icon: Megaphone, group: "Help & updates" },
+  { to: "/portal/exercises", label: "Exercises", icon: Dumbbell, group: "Training" },
+  { to: "/portal/resources", label: "Resources", icon: FolderOpen, group: "Help & updates" },
+  { to: "/portal/tools", label: "Tools", icon: Wrench, group: "Training", keywords: ["calculator","1rm","macro","plate","water","sleep"] },
+  { to: "/portal/membership", label: "Membership", icon: CreditCard, group: "Account", keywords: ["billing","subscription","payment","cancel","hold","plan","upgrade"] },
+  { to: "/portal/account", label: "Account Settings", icon: Settings, group: "Account" },
 ];
 
 // Members' bottom tabs: Crew stays the raised centre; Support takes Messages' place.

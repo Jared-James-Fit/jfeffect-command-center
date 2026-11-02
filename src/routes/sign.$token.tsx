@@ -58,7 +58,7 @@ function SignPage() {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <Card className="p-8 text-center space-y-3">
-          <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
+          <CheckCircle2 className="h-12 w-12 text-success mx-auto" />
           <h1 className="text-2xl font-semibold">Signed</h1>
           <p className="text-muted-foreground">Thank you. A copy will be sent to {data.signer?.email}.</p>
         </Card>

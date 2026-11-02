@@ -350,7 +350,7 @@ export function AgreementsPanel({ clientId, clientName }: { clientId: string; cl
         <Button size="sm" variant="ghost" onClick={() => bulkAction("archive")}>
           <Archive className="h-3.5 w-3.5 mr-1" />Archive
         </Button>
-        <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => bulkAction("delete")}>
+        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => bulkAction("delete")}>
           <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
         </Button>
       </BulkActionBar>
@@ -485,7 +485,7 @@ function SummaryCard({ summary }: {
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed?</p>
-        <p className={`text-sm font-semibold mt-1 ${signed ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+        <p className={`text-sm font-semibold mt-1 ${signed ? "text-success" : "text-warning"}`}>
           {signed ? "Yes" : "No"}
         </p>
         {summary.latestSigned?.signed_at && (
@@ -506,7 +506,7 @@ function SummaryCard({ summary }: {
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Signed copy</p>
-        <p className={`text-sm font-semibold mt-1 ${summary.hasSignedCopy ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+        <p className={`text-sm font-semibold mt-1 ${summary.hasSignedCopy ? "text-success" : "text-muted-foreground"}`}>
           {summary.hasSignedCopy ? "Available" : "Missing"}
         </p>
         <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -565,8 +565,8 @@ function AgreementRow({
       </div>
 
       {ag.signer_mismatch && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs flex items-start gap-2 ml-8">
-          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs flex items-start gap-2 ml-8">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
           <div>
             Signer name mismatch. SignNow showed <strong>{ag.signer_name_in_signnow}</strong> but the agreement belongs to <strong>{ag.correct_client_name}</strong>.
           </div>
@@ -678,7 +678,7 @@ function AgreementRow({
               </DropdownMenuItem>
             )}
             {isVerified && (
-              <DropdownMenuItem onClick={() => onAction("remove-verification")} className="text-amber-600 dark:text-amber-400">
+              <DropdownMenuItem onClick={() => onAction("remove-verification")} className="text-warning">
                 <ShieldCheck className="h-3.5 w-3.5 mr-2" />Remove verification
               </DropdownMenuItem>
             )}
@@ -701,7 +701,7 @@ function AgreementRow({
                 <Archive className="h-3.5 w-3.5 mr-2" />Archive
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => onAction("delete")} className="text-red-600 dark:text-red-400">
+            <DropdownMenuItem onClick={() => onAction("delete")} className="text-destructive">
               <Trash2 className="h-3.5 w-3.5 mr-2" />Delete permanently
             </DropdownMenuItem>
           </DropdownMenuContent>

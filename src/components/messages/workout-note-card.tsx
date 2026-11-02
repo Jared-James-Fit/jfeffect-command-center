@@ -69,12 +69,12 @@ export function WorkoutNoteCard({ att, messageId, role, clientId }: {
 
   return (
     <div className="w-[min(78vw,320px)] overflow-hidden rounded-2xl border border-border/70 bg-background text-left text-foreground" data-workout-note={pain ? "pain" : source}>
-      <div className={cn("flex items-center gap-2 px-3.5 py-2", pain ? "bg-red-500/12 text-red-600 dark:text-red-400" : "bg-muted/60 text-muted-foreground")}>
+      <div className={cn("flex items-center gap-2 px-3.5 py-2", pain ? "bg-destructive/12 text-destructive" : "bg-muted/60 text-muted-foreground")}>
         {pain ? <AlertTriangle className="h-4 w-4 shrink-0" /> : source === "exercise" ? <StickyNote className="h-4 w-4 shrink-0" /> : <NotebookPen className="h-4 w-4 shrink-0" />}
-        <span className="text-[11px] font-black uppercase tracking-[0.12em]">{pain ? "Pain flagged" : source === "exercise" ? "Exercise note" : "Workout note"}</span>
+        <span className="text-[11px] font-bold uppercase tracking-[0.12em]">{pain ? "Pain flagged" : source === "exercise" ? "Exercise note" : "Workout note"}</span>
       </div>
       <div className="space-y-1.5 px-3.5 py-2.5">
-        {pain && <div className="text-[15px] font-black leading-snug" data-workout-note-pain>{painLine(pain)}</div>}
+        {pain && <div className="text-[15px] font-bold leading-snug" data-workout-note-pain>{painLine(pain)}</div>}
         {exercise && <div className="text-[13px] font-bold">{exercise}</div>}
         {removed ? (
           <p className="text-[13px] italic text-muted-foreground">{staff ? "They removed this note." : "You removed this note."}</p>

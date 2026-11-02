@@ -81,7 +81,7 @@ export function MacroTargetsChart({
               : "Calorie target"
           }
         >
-          <div className="text-[28px] font-black leading-none tracking-tight tabular-nums">
+          <div className="text-[28px] font-bold leading-none tracking-tight tabular-nums">
             {centerKcal != null ? formatKcal(centerKcal) : "—"}
           </div>
           <div className="mt-1 text-xs font-medium text-muted-foreground">kcal</div>
@@ -100,7 +100,7 @@ export function MacroTargetsChart({
                   <span>{r.label}</span>
                   {r.pct != null && <span className="tabular-nums">{r.pct}%</span>}
                 </div>
-                <div className="text-xl font-black leading-tight tabular-nums">
+                <div className="text-xl font-bold leading-tight tabular-nums">
                   {r.grams ?? "—"}
                   {r.grams != null && (
                     <span className="ml-0.5 text-sm font-semibold text-muted-foreground">g</span>

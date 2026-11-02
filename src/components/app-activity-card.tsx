@@ -92,7 +92,7 @@ export function AppActivityCard({ clientId, lastSignedInAt, lastActiveAt, lastAc
           <Smartphone className="h-3 w-3" /> Home Screen
         </div>
         {hsStatus === "complete" ? (
-          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-500">
+          <Badge variant="outline" className="border-success/40 bg-success/10 text-success">
             <CheckCircle2 className="mr-1 h-3 w-3" /> Installed
           </Badge>
         ) : (
@@ -126,20 +126,20 @@ function derivePresence(lastActive: string | null | undefined, lastSignedIn: str
   }
   const diffMs = Date.now() - new Date(lastActive).getTime();
   const min = diffMs / 60000;
-  if (min < 5) return { label: "Online now", tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-500", dot: "text-emerald-500" };
-  if (min < 60 * 24) return { label: "Active today", tone: "border-blue-500/40 bg-blue-500/10 text-blue-400", dot: "text-blue-400" };
+  if (min < 5) return { label: "Online now", tone: "border-success/40 bg-success/10 text-success", dot: "text-success" };
+  if (min < 60 * 24) return { label: "Active today", tone: "border-info/40 bg-info/10 text-info", dot: "text-info" };
   const days = Math.floor(min / (60 * 24));
-  if (days < 7) return { label: `Active ${days}d ago`, tone: "border-blue-500/30 bg-blue-500/5 text-blue-300", dot: "text-blue-300" };
-  if (days < 14) return { label: `Inactive ${days}d`, tone: "border-amber-500/40 bg-amber-500/10 text-amber-400", dot: "text-amber-400" };
-  return { label: `Inactive ${days}d`, tone: "border-rose-500/40 bg-rose-500/10 text-rose-400", dot: "text-rose-400" };
+  if (days < 7) return { label: `Active ${days}d ago`, tone: "border-info/30 bg-info/5 text-info", dot: "text-info" };
+  if (days < 14) return { label: `Inactive ${days}d`, tone: "border-warning/40 bg-warning/10 text-warning", dot: "text-warning" };
+  return { label: `Inactive ${days}d`, tone: "border-destructive/40 bg-destructive/10 text-destructive", dot: "text-destructive" };
 }
 
 function complianceTone(status: string) {
   switch (status) {
-    case "On Track": return "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
-    case "Watch": return "border-amber-500/40 bg-amber-500/10 text-amber-400";
-    case "Needs Follow-Up": return "border-orange-500/40 bg-orange-500/10 text-orange-400";
-    case "Non-Compliant": return "border-rose-500/40 bg-rose-500/10 text-rose-400";
+    case "On Track": return "border-success/40 bg-success/10 text-success";
+    case "Watch": return "border-warning/40 bg-warning/10 text-warning";
+    case "Needs Follow-Up": return "border-warning/40 bg-warning/10 text-warning";
+    case "Non-Compliant": return "border-destructive/40 bg-destructive/10 text-destructive";
     case "Paused": return "border-muted-foreground/40 bg-muted text-muted-foreground";
     default: return "border-border";
   }

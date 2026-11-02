@@ -131,7 +131,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 
-  const addSale = <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setPicker(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add sale</Button>;
+  const addSale = <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => setPicker(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add sale</Button>;
   const close = (o: boolean) => { if (!o) setDialog(null); };
 
   return (
@@ -220,7 +220,7 @@ function SaleNotes({ raw, waiting }: { raw: any; waiting: boolean }) {
   if (!helper && !reminder && !expiry) return null;
   return <div className="space-y-0.5 text-xs">
     {helper && <p className="text-warning">{helper}</p>}
-    {reminder && <p className={reminder.tone === "warn" ? "text-amber-500" : "text-muted-foreground"}>{reminder.text}</p>}
+    {reminder && <p className={reminder.tone === "warn" ? "text-warning" : "text-muted-foreground"}>{reminder.text}</p>}
     {expiry && <p className="text-muted-foreground">{expiry}</p>}
   </div>;
 }

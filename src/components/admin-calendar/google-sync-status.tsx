@@ -57,11 +57,11 @@ export function GoogleSyncStatusCard() {
       {data && (
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-md border border-border bg-secondary/20 p-2">
-            <div className="text-lg font-black tabular-nums">{data.upcomingSynced}</div>
+            <div className="text-lg font-bold tabular-nums">{data.upcomingSynced}</div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Upcoming in Google</div>
           </div>
           <div className="rounded-md border border-border bg-secondary/20 p-2">
-            <div className="text-lg font-black tabular-nums">{data.waiting}</div>
+            <div className="text-lg font-bold tabular-nums">{data.waiting}</div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Waiting</div>
           </div>
           <div className="rounded-md border border-border bg-secondary/20 p-2">

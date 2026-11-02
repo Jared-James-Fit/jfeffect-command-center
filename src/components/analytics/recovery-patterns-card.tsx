@@ -94,7 +94,7 @@ export function RecoveryPatternsCard({ clientId, rangeStart, rangeEnd }: Props) 
   return (
     <section aria-label="Recovery patterns">
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-foreground">
           <Lightbulb className="h-5 w-5 text-primary" />
           Detected Patterns
         </h2>

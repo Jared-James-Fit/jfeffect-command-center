@@ -300,10 +300,10 @@ export async function uploadActionFile(clientId: string, file: File) {
 
 export function actionStatus(r: Pick<ClientActionRequest, "completed_at" | "seen_at">) {
   if (r.completed_at)
-    return { label: "Completed", tone: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" } as const;
+    return { label: "Completed", tone: "bg-success/15 text-success border-success/30" } as const;
   if (r.seen_at)
-    return { label: "Viewed · Not Done", tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" } as const;
-  return { label: "Sent · Unseen", tone: "bg-blue-500/15 text-blue-300 border-blue-500/30" } as const;
+    return { label: "Viewed · Not Done", tone: "bg-warning/15 text-warning border-warning/30" } as const;
+  return { label: "Sent · Unseen", tone: "bg-info/15 text-info border-info/30" } as const;
 }
 
 export function actionKindLabel(r: ClientActionRequest) {

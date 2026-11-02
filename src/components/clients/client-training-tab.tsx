@@ -252,7 +252,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
                   <span className="text-muted-foreground"> · {next.title}</span>
                 </span>
               ) : (
-                <span className="text-amber-600 dark:text-amber-400">Nothing on the calendar ahead</span>
+                <span className="text-warning">Nothing on the calendar ahead</span>
               )}
             </div>
           </>
@@ -263,11 +263,11 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
             {alerts.map((a, i) => {
               const action = alertAction(a);
               return (
-                <li key={i} className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                <li key={i} className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span className="min-w-0 flex-1">{alertText(a)}</span>
                   {action && (
-                    <Button size="sm" variant="outline" className="h-9 shrink-0 border-amber-500/50 bg-background/60 px-3 text-xs" onClick={action.run}>
+                    <Button size="sm" variant="outline" className="h-9 shrink-0 border-warning/50 bg-background/60 px-3 text-xs" onClick={action.run}>
                       {action.label}
                     </Button>
                   )}
@@ -439,7 +439,7 @@ function RoadmapRow({
           aria-hidden
           className={cn(
             "h-2.5 w-2.5 shrink-0 rounded-full",
-            active ? "bg-emerald-500 ring-4 ring-emerald-500/20" : draft ? "border-2 border-dashed border-muted-foreground/60" : past ? "bg-muted-foreground/30" : "bg-primary/70",
+            active ? "bg-success ring-4 ring-success/20" : draft ? "border-2 border-dashed border-muted-foreground/60" : past ? "bg-muted-foreground/30" : "bg-primary/70",
           )}
         />
         <span className="min-w-0">
@@ -460,7 +460,7 @@ function RoadmapRow({
         <span
           className={cn(
             "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-            active ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : past ? "text-muted-foreground" : "bg-secondary text-foreground/80",
+            active ? "bg-success/15 text-success" : past ? "text-muted-foreground" : "bg-secondary text-foreground/80",
           )}
         >
           {label}
@@ -698,7 +698,7 @@ function SetupRow({
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground/80">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{title}</span>
-        <span className={cn("block truncate text-xs", value ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}>
+        <span className={cn("block truncate text-xs", value ? "text-muted-foreground" : "text-warning")}>
           {value ?? empty ?? "Not set"}
         </span>
       </span>

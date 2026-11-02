@@ -52,8 +52,8 @@ export function PipelineProgress({ job, onRetry, onDiscard, busy }: { job: Intel
 }
 
 const OVERALL: Record<string, [string, string]> = {
-  passed: ["Passed", "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"],
-  review: ["Needs review", "bg-amber-500/15 text-amber-800 dark:text-amber-200"],
+  passed: ["Passed", "bg-success/12 text-success"],
+  review: ["Needs review", "bg-warning/15 text-warning"],
   failed: ["Failed validation", "bg-destructive/12 text-destructive"],
 };
 const ROW_LABEL: Record<string, string> = { passed: "Passed", review: "Needs review", failed: "Failed", skipped: "Not checked" };
@@ -66,7 +66,7 @@ export function Scorecard({ audit }: { audit: any }) {
   return (
     <div className="space-y-1.5" data-testid="gen-scorecard">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wider", cls)} data-testid="gen-overall">{label}</span>
+        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider", cls)} data-testid="gen-overall">{label}</span>
         <span className="text-[11px] text-muted-foreground">{counts("passed")} passed · {counts("review")} to review · {counts("failed")} failed · {counts("skipped")} not checked</span>
       </div>
       <ul className="divide-y divide-border/50 rounded-xl border border-border/60">
@@ -126,7 +126,7 @@ export function ProgramWeeks({ program, sessions, unmatched }: { program: BuiltP
           return (
             <div key={di} className="rounded-xl bg-secondary/40 p-2.5" data-testid="gen-day">
               <div className="flex items-baseline justify-between gap-2">
-                <div className="text-[13px] font-black">Day {di + 1}: {d.title}</div>
+                <div className="text-[13px] font-bold">Day {di + 1}: {d.title}</div>
                 {est ? <div className="shrink-0 text-[11px] text-muted-foreground">~{est} min</div> : null}
               </div>
               {d.focus ? <div className="text-[11px] text-muted-foreground">{d.focus}</div> : null}
@@ -138,11 +138,11 @@ export function ProgramWeeks({ program, sessions, unmatched }: { program: BuiltP
                     <li key={ei} className="rounded-lg bg-background p-2 text-[12px]">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <span className={cn("font-bold", notInLib && "text-amber-600")}>{e.superset ? `${e.superset} ` : ""}{e.exercise_name}</span>
-                          {notInLib ? <span className="ml-1 text-[10px] font-bold text-amber-600">not in library</span> : null}
+                          <span className={cn("font-bold", notInLib && "text-warning")}>{e.superset ? `${e.superset} ` : ""}{e.exercise_name}</span>
+                          {notInLib ? <span className="ml-1 text-[10px] font-bold text-warning">not in library</span> : null}
                           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{[e.role, e.station].filter(Boolean).join(" · ")}</div>
                         </div>
-                        <div className="shrink-0 text-right font-black tabular-nums">{fmtRx(rx)}</div>
+                        <div className="shrink-0 text-right font-bold tabular-nums">{fmtRx(rx)}</div>
                       </div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">
                         {[e.rest_seconds != null ? `rest ${Math.floor(e.rest_seconds / 60)}:${String(e.rest_seconds % 60).padStart(2, "0")}` : null, e.tempo ? `tempo ${e.tempo}` : null].filter(Boolean).join(" · ")}
@@ -196,15 +196,15 @@ export function DraftView({
     <Card className="space-y-3 p-3.5" data-testid="gen-draft" data-status={job.status}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">{job.status === "assigned" ? "Assigned" : job.status === "discarded" ? "Discarded draft" : "Draft · hidden from the client"}</div>
-          <div className="text-base font-black leading-tight">{program.program_name}</div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{job.status === "assigned" ? "Assigned" : job.status === "discarded" ? "Discarded draft" : "Draft · hidden from the client"}</div>
+          <div className="text-base font-bold leading-tight">{program.program_name}</div>
           <div className="text-[11px] text-muted-foreground">{BRAIN_LABEL[job.brain]} · {job.created_at.slice(0, 10)}{job.model ? ` · ${job.model}` : ""}{job.result?.strategySource === "coach" ? " · from your approved strategy" : " · recommended strategy auto-accepted"}</div>
         </div>
         <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[11px]" onClick={onInspect} data-testid="gen-inspect"><FileSearch className="mr-1 h-3.5 w-3.5" /> Context</Button>
       </div>
       {audit && <Scorecard audit={audit} />}
       {unmatched.length > 0 && (
-        <div className="flex gap-1.5 rounded-xl bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-200">
+        <div className="flex gap-1.5 rounded-xl bg-warning/10 p-2.5 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span><b>{unmatched.length} not in your library:</b> {unmatched.join(", ")}. In the draft by name only; pick the library exercise in the editor. No exercise was created.</span>
         </div>

@@ -88,7 +88,7 @@ export function BlockWeekColumns({
                 )}
               >
                 <div className="flex w-full items-center justify-between gap-1">
-                  <span className="text-[11px] font-black uppercase tracking-wider">
+                  <span className="text-[11px] font-bold uppercase tracking-wider">
                     Week {week?.week_index ?? "—"}
                   </span>
                   {now && (
@@ -225,7 +225,7 @@ export function BlockWeekColumns({
                         {done ? (
                           <Badge
                             variant="outline"
-                            className="border-green-500/30 bg-green-500/10 px-1.5 text-[10px] text-green-500"
+                            className="border-success/30 bg-success/10 px-1.5 text-[10px] text-success"
                           >
                             <CheckCircle2 className="mr-0.5 h-3 w-3" />
                             Completed
@@ -233,7 +233,7 @@ export function BlockWeekColumns({
                         ) : started ? (
                           <Badge
                             variant="outline"
-                            className="border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] text-amber-500"
+                            className="border-warning/30 bg-warning/10 px-1.5 text-[10px] text-warning"
                           >
                             In Progress
                           </Badge>

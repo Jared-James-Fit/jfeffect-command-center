@@ -22,9 +22,9 @@ export type AgendaLink = { to: string; search?: Record<string, unknown> };
 
 /** A hairline in the item's colour family: the only colour on a row. */
 export const FAMILY_ACCENT: Record<KindFamily, string> = {
-  training: "bg-cyan-500",
-  people: "bg-violet-500",
-  coach: "bg-amber-500",
+  training: "bg-info",
+  people: "bg-muted-foreground",
+  coach: "bg-warning",
   google: "bg-slate-400/70",
 };
 
@@ -85,10 +85,10 @@ export function DateTile({ day }: { day: string }) {
   const d = new Date(`${day}T00:00:00`);
   return (
     <span aria-hidden className="flex h-10 w-10 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-center shadow-sm">
-      <span className="bg-primary py-px text-[9px] font-black uppercase leading-tight tracking-wider text-primary-foreground">
+      <span className="bg-primary py-px text-[9px] font-bold uppercase leading-tight tracking-wider text-primary-foreground">
         {d.toLocaleDateString(undefined, { weekday: "short" })}
       </span>
-      <span className="flex flex-1 items-center justify-center text-base font-black leading-none tabular-nums">{d.getDate()}</span>
+      <span className="flex flex-1 items-center justify-center text-base font-bold leading-none tabular-nums">{d.getDate()}</span>
     </span>
   );
 }
@@ -103,7 +103,7 @@ export function AgendaHeader({ today, link, right }: { today: string; link?: Age
     <>
       <DateTile day={today} />
       <span className="min-w-0">
-        <span className="flex items-center gap-0.5 text-[15px] font-black leading-tight">
+        <span className="flex items-center gap-0.5 text-[15px] font-bold leading-tight">
           Calendar {link && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </span>
         <span className="block truncate text-xs text-muted-foreground">Today · {date}</span>
@@ -154,7 +154,7 @@ export function AgendaWeek({ today, dots, link }: { today: string; dots: (day: s
             </span>
             <span
               className={cn(
-                "grid h-7 w-7 place-items-center rounded-full text-sm font-black tabular-nums",
+                "grid h-7 w-7 place-items-center rounded-full text-sm font-bold tabular-nums",
                 isToday ? "bg-primary text-primary-foreground" : past ? "text-muted-foreground" : "text-foreground",
               )}
             >
@@ -193,7 +193,7 @@ export function AgendaEmpty({ children }: { children: ReactNode }) {
 export function NowLine() {
   return (
     <div className={cn(TIME_COL, "items-center")} aria-label="Now">
-      <span className="text-right text-[10px] font-black uppercase tracking-wider text-primary">Now</span>
+      <span className="text-right text-[10px] font-bold uppercase tracking-wider text-primary">Now</span>
       <span className="flex items-center">
         <span className="h-1.5 w-1.5 rounded-full bg-primary" />
         <span className="h-px flex-1 bg-primary/50" />
@@ -295,13 +295,15 @@ export function AgendaFooter({ children }: { children: ReactNode }) {
 export function ActionPill({ label, done }: { label: string; done?: boolean }) {
   if (done) {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-500">
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-success">
         <Check className="h-3.5 w-3.5" strokeWidth={3} /> {label}
       </span>
     );
   }
   return (
-    <span className="inline-flex h-6 shrink-0 items-center gap-0.5 rounded-full bg-primary pl-2.5 pr-1.5 text-[11px] font-bold text-primary-foreground">
+    // The row is the tap target; the pill is what it does, sized to read as
+    // the screen's main action (Start today's workout), not a footnote.
+    <span className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full bg-primary pl-3 pr-2 text-xs font-semibold text-primary-foreground">
       {label} <ChevronRight className="h-3.5 w-3.5" />
     </span>
   );

@@ -34,7 +34,7 @@ export function ProgramStatusBadge({
   if (ready) {
     return (
       <span
-        className={`inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 font-medium text-emerald-600 dark:text-emerald-400 ${pad} ${className}`}
+        className={`inline-flex items-center gap-1 rounded-full border border-success/40 bg-success/10 font-medium text-success ${pad} ${className}`}
         title="All required fields are set. This template is ready to assign."
       >
         <CheckCircle2 className="h-3 w-3" />
@@ -48,15 +48,15 @@ export function ProgramStatusBadge({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 dark:text-amber-400 ${pad} ${className}`}
+          className={`inline-flex items-center gap-1 rounded-full border border-warning/50 bg-warning/10 font-medium text-warning hover:bg-warning/20 ${pad} ${className}`}
         >
           <AlertTriangle className="h-3 w-3" />
           {issueCount} {issueCount === 1 ? "issue" : "issues"} — incomplete
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(22rem,90vw)] p-0">
-        <div className="border-b border-border bg-amber-500/10 px-3 py-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+        <div className="border-b border-border bg-warning/10 px-3 py-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-warning">
             <AlertTriangle className="h-3.5 w-3.5" />
             Missing fields ({issueCount})
           </div>

@@ -104,7 +104,7 @@ export function MissingBodyweightPrompt({ userId, defaultUnit = "lb" }: { userId
           <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
             <Scale className="h-6 w-6" />
           </div>
-          <SheetTitle className="text-lg font-black">Add your bodyweight</SheetTitle>
+          <SheetTitle className="text-lg font-bold">Add your bodyweight</SheetTitle>
           <SheetDescription className="mt-1 text-sm">
             One quick entry qualifies you for the Performance League and makes your strength and progress tracking more accurate.
           </SheetDescription>

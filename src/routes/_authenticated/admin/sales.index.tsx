@@ -139,7 +139,7 @@ function SalesWorkspace() {
           className="hidden w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border bg-card/40 p-2 lg:flex xl:w-56"
           aria-label="Sales sections"
         >
-          <div className="px-2 pb-1 pt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <div className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Sales
           </div>
           {navItems.map((s) => {

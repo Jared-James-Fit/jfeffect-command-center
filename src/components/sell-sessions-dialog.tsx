@@ -261,7 +261,7 @@ export function SellSessionsDialog({ open, onOpenChange, clientId }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold uppercase">
+          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground font-semibold">
             {saving ? "Adding…" : "Add Session Pack"}
           </Button>
         </DialogFooter>

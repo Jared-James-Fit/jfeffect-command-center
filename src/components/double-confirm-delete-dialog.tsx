@@ -65,7 +65,7 @@ export function DoubleConfirmDeleteDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <AlertTriangle className="h-4 w-4 text-destructive" />
             {title}
           </DialogTitle>
         </DialogHeader>
@@ -74,7 +74,7 @@ export function DoubleConfirmDeleteDialog({
           <div className="space-y-3 text-sm">
             <p>{message ?? defaultMessage}</p>
             {strongWarning && (
-              <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs">
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
                 <strong>Warning:</strong> {strongWarning}
               </div>
             )}
@@ -90,7 +90,7 @@ export function DoubleConfirmDeleteDialog({
               Type <code className="rounded bg-muted px-1 py-0.5 font-mono">DELETE</code> to confirm.
             </p>
             {strongWarning && (
-              <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs">
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
                 <strong>Warning:</strong> {strongWarning}
               </div>
             )}

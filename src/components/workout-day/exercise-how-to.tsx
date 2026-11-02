@@ -96,7 +96,7 @@ function ExerciseHowToSheet({
             <Button variant="outline" size="sm" className="h-10 shrink-0 rounded-full px-3" onClick={close}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
             </Button>
-            <SheetTitle className="min-w-0 truncate text-base font-black">{name}</SheetTitle>
+            <SheetTitle className="min-w-0 truncate text-base font-bold">{name}</SheetTitle>
           </div>
           {details ? (
             <SheetDescription className="text-xs">{details}</SheetDescription>

@@ -287,9 +287,9 @@ export function InlineWorkoutPreview({
             />
             <div className="mt-0.5 shrink-0" aria-hidden>
               {isComplete ? (
-                <Check className="h-4 w-4 text-emerald-500" />
+                <Check className="h-4 w-4 text-success" />
               ) : isPartial ? (
-                <CircleDot className="h-4 w-4 text-amber-500" />
+                <CircleDot className="h-4 w-4 text-warning" />
               ) : (
                 <Circle className="h-4 w-4 text-muted-foreground/60" />
               )}

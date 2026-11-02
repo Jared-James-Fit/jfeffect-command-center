@@ -40,9 +40,9 @@ export function useCleoActions(open: boolean) {
 
 const TONE: Record<CleoActionView["status"], string> = {
   proposed: "text-primary",
-  awaiting_approval: "text-amber-600 dark:text-amber-400",
+  awaiting_approval: "text-warning",
   running: "text-muted-foreground",
-  done: "text-emerald-600 dark:text-emerald-400",
+  done: "text-success",
   failed: "text-destructive",
   declined: "text-destructive",
   cancelled: "text-muted-foreground",
@@ -108,7 +108,7 @@ export function CleoActionCard({
         {mode === "mine" && <span className={cn("shrink-0 text-[11px] font-medium", TONE[action.status])}>{statusLabel(action.status, ownerName)}</span>}
       </div>
       <p className="whitespace-pre-wrap text-sm text-foreground/90">{action.summary}</p>
-      {action.status === "done" && action.result && <p className="mt-1.5 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"><Check className="h-3.5 w-3.5" /> {action.result}</p>}
+      {action.status === "done" && action.result && <p className="mt-1.5 flex items-center gap-1 text-xs text-success"><Check className="h-3.5 w-3.5" /> {action.result}</p>}
       {action.status === "done" && ((action.link && onOpen) || action.undo) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           {action.link && onOpen && (
@@ -176,8 +176,8 @@ export function CleoActionCard({
 export function CleoApprovals({ approvals, ownerName, onOpen }: { approvals: CleoActionView[]; ownerName: string; onOpen?: (href: string) => void }) {
   if (!approvals.length) return null;
   return (
-    <div className="space-y-2 rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3">
-      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Waiting for your OK ({approvals.length})</p>
+    <div className="space-y-2 rounded-2xl border border-warning/40 bg-warning/5 p-3">
+      <p className="text-xs font-semibold text-warning">Waiting for your OK ({approvals.length})</p>
       {approvals.map((a) => (
         <CleoActionCard key={a.id} action={a} ownerName={ownerName} mode="approval" onOpen={onOpen} />
       ))}

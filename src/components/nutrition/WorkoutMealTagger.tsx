@@ -38,8 +38,8 @@ export function WorkoutMealTagger({ text, onChange }: { text: string; onChange: 
                     aria-pressed={active}
                     className={cn(
                       "flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-bold transition",
-                      active && c.value === "pre" && "bg-amber-500/20 text-amber-600 dark:text-amber-400",
-                      active && c.value === "post" && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+                      active && c.value === "pre" && "bg-warning/20 text-warning",
+                      active && c.value === "post" && "bg-success/20 text-success",
                       active && c.value === null && "bg-secondary text-foreground",
                       !active && "text-muted-foreground hover:bg-secondary/60",
                     )}

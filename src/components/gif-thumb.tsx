@@ -37,7 +37,7 @@ export function GifThumb({
   const showEmoji = hasError;
 
   return (
-    <div className={cn("relative overflow-hidden bg-gradient-to-br from-secondary/60 to-secondary/30", className)}>
+    <div className={cn("relative overflow-hidden bg-secondary/50", className)}>
       {showImg && (
         <img
           src={src!}

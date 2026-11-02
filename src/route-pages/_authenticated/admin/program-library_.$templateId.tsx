@@ -705,10 +705,10 @@ export function TemplateEditor() {
       statusTemplate={{ ...tpl, payload }}
     >
       {conflictWatch.conflict && (
-          <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <Card className="flex flex-wrap items-start gap-3 border-warning/60 bg-warning/5 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-amber-700 dark:text-amber-400">This template was updated somewhere else.</div>
+              <div className="font-semibold text-warning">This template was updated somewhere else.</div>
               <div className="text-xs text-muted-foreground">Another coach saved changes to the template settings after you started editing.</div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -959,8 +959,8 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           className={cn(
             "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition",
             compact
-              ? "border-green-600 bg-green-600 text-white hover:bg-green-700 hover:border-green-700"
-              : "border-red-500 bg-red-500 text-white hover:bg-red-600 hover:border-red-600"
+              ? "border-success bg-success text-white hover:bg-success hover:border-success"
+              : "border-destructive bg-destructive text-white hover:bg-destructive hover:border-destructive"
           )}
           title="Toggle compact mode"
         >
@@ -1203,7 +1203,7 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
 
       {/* Program overview */}
       {inRecovery && (
-        <Card className="border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        <Card className="border-warning/50 bg-warning/10 p-3 text-xs text-warning">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">
@@ -1732,9 +1732,9 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
 }
 
 const SCHEDULE_STATUS_BADGE_CLASS: Record<string, string> = {
-  emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  amber: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  blue: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  emerald: "border-success/40 bg-success/10 text-success",
+  amber: "border-warning/40 bg-warning/10 text-warning",
+  blue: "border-info/40 bg-info/10 text-info",
   neutral: "",
 };
 
@@ -1817,7 +1817,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
               {/* Derived Day label + optional coach subtitle. Reordering
                   updates the visible number automatically. */}
               <div className="min-w-0 flex-1">
-                <div className={cn("font-black leading-none tracking-tight", compact ? "text-sm" : "text-lg")}>
+                <div className={cn("font-bold leading-none tracking-tight", compact ? "text-sm" : "text-lg")}>
                   {dayLabel}
                 </div>
                 <Input
@@ -1854,7 +1854,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-6 border-amber-500/40 px-2 text-[10px] text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+                      className="h-6 border-warning/40 px-2 text-[10px] text-warning hover:bg-warning/10"
                       onClick={() => onFixCalendarIssue(dayStatus.dayId)}
                       title="Align this day's editor date with the calendar (calendar wins; history is never changed)"
                     >
@@ -1865,7 +1865,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
               )}
             </div>
             {dayStatus?.missingDate && (
-              <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+              <p className="flex items-center gap-1 text-[11px] text-warning">
                 <AlertTriangle className="h-3 w-3" />
                 Not on the calendar — set a Training Date so the client sees this workout.
               </p>
@@ -2088,8 +2088,8 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
               className={cn(
                 "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold",
                 videoStats.missing === 0
-                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                  : "border-amber-400/40 bg-amber-500/10 text-amber-300",
+                  ? "border-success/40 bg-success/10 text-success"
+                  : "border-warning/40 bg-warning/10 text-warning",
               )}
               title={
                 videoStats.missing === 0
@@ -2135,7 +2135,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
       </div>
       {dayIssues.length > 0 && rows.length > 0 && (
         <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200"
+          className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning"
           role="status"
         >
           <div className="flex items-start gap-2">
@@ -2486,8 +2486,8 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const videoBadgeCls = cn(
     "inline-flex shrink-0 items-center justify-center rounded-full border p-0.5",
     rowHasVideo
-      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
-      : "border-amber-400/50 bg-amber-500/10 text-amber-300",
+      ? "border-success/40 bg-success/10 text-success hover:bg-success/20"
+      : "border-warning/50 bg-warning/10 text-warning",
   );
   const VideoBadge = rowHasVideo && videoUrl ? (
     <a
@@ -3172,7 +3172,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               onClick={() => setLoadMode(suggestedOn ? "none" : "manual")}
               className={cn(
                 "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors border",
-                suggestedOn ? "bg-green-600 border-green-600" : "bg-red-500 border-red-500",
+                suggestedOn ? "bg-success border-success" : "bg-destructive border-destructive",
               )}
               title={suggestedOn ? "Click to remove suggested load" : "Click to add a suggested load"}
             >
@@ -3234,7 +3234,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       )}
       {expanded && row.manual_override && (
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-600 dark:text-amber-400">
+          <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 font-semibold text-warning">
             Manual override
             {row.override_of_pct && <span className="text-muted-foreground">(was {row.override_of_pct}%)</span>}
           </span>
@@ -3245,7 +3245,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
           {computed.status === "ok" && (
             <>
-            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-emerald-700 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-0.5 font-mono text-success">
               <PbCalculator className="h-3 w-3" />
               {row.percentage}% {computed.baseLabel} = <strong>{computed.load} {computed.unit}</strong>
               <span className="text-muted-foreground">(of {computed.base?.toFixed(1)})</span>
@@ -3369,7 +3369,7 @@ function WeekPriorityWarnings({ week, exercises }: { week: any; exercises: any[]
   }, [week, exercises]);
   if (!warnings.length) return null;
   return (
-    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
+    <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] text-warning">
       <div className="mb-1 flex items-center gap-1.5 font-semibold">
         <AlertTriangle className="h-3.5 w-3.5" />
         Priority checks

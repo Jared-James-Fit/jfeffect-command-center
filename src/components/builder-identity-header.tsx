@@ -14,10 +14,10 @@ function initialsOf(name: string | null | undefined) {
 
 function statusTone(status: string | null | undefined) {
   const s = (status ?? "").toLowerCase();
-  if (s === "active") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-  if (s === "completed") return "border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+  if (s === "active") return "border-success/40 bg-success/10 text-success";
+  if (s === "completed") return "border-info/40 bg-info/10 text-info";
   if (s === "archived") return "border-muted-foreground/30 bg-muted/40 text-muted-foreground";
-  return "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"; // Draft etc.
+  return "border-warning/40 bg-warning/10 text-warning"; // Draft etc.
 }
 
 /**
@@ -89,7 +89,7 @@ export function ClientBuilderIdentityHeader(props: {
               </span>
             ) : null}
             {unsaved ? (
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[10px] font-medium text-amber-600 dark:text-amber-400">
+              <span className="rounded-full border border-warning/40 bg-warning/10 px-1.5 py-px text-[10px] font-medium text-warning">
                 Unsaved changes for <span className="font-semibold">{clientName}</span>
               </span>
             ) : null}
@@ -182,7 +182,7 @@ export function ClientBuilderStickyChip(props: {
  */
 export function TemplateBuilderIdentityBadge(props: { templateName: string; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-1 text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400", props.className)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-1.5 py-1 text-[10px] uppercase tracking-wide text-warning", props.className)}>
       <LibraryBig className="h-3 w-3" /> Program Template
     </span>
   );

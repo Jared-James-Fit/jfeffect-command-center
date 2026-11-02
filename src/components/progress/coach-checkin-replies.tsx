@@ -148,7 +148,7 @@ export function CoachCheckinReplies() {
       <Sheet open={!!openThreadId} onOpenChange={(v) => { if (!v) { setOpenThreadId(null); setReplyText(""); } }}>
         <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl pb-safe flex flex-col">
           <SheetHeader className="pb-3 border-b border-border">
-            <SheetTitle className="text-base font-black flex items-center gap-2">
+            <SheetTitle className="text-base font-bold flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-primary" /> Coach Check-In Reply
             </SheetTitle>
           </SheetHeader>

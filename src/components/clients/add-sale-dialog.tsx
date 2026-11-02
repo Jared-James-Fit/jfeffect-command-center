@@ -252,7 +252,7 @@ export function AddSaleDialog({
                             <Badge variant="outline" className="text-[10px]">{p.product_type}</Badge>
                           )}
                           {!el.assignable && (
-                            <Badge variant="outline" className="border-amber-500/40 text-[10px] text-amber-500">
+                            <Badge variant="outline" className="border-warning/40 text-[10px] text-warning">
                               {el.reason}
                             </Badge>
                           )}
@@ -637,7 +637,7 @@ export function AddSaleDialog({
           <div className={`flex items-center justify-end gap-2 ${SALE_DIALOG_FOOTER_CLASS}`}>
             <Button variant="ghost" onClick={close}>Cancel</Button>
             {tab === "custom" && (
-              <Button onClick={buildCustom} disabled={creating} className="bg-gradient-primary font-bold uppercase">
+              <Button onClick={buildCustom} disabled={creating} className="bg-primary text-primary-foreground font-semibold">
                 {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Continue
               </Button>

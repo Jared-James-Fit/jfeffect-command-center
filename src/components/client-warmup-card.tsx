@@ -54,7 +54,7 @@ export function ClientWarmupCard({ clientId, embedded = false, onSaved }: { clie
     <Wrapper className={embedded ? "space-y-3" : "border-border bg-card p-6 space-y-3"}>
       {!embedded && (
         <div className="flex items-center gap-2">
-          <Flame className="h-4 w-4 text-orange-500" />
+          <Flame className="h-4 w-4 text-warning" />
           <h3 className="font-bold">Warm-Up Protocol</h3>
         </div>
       )}

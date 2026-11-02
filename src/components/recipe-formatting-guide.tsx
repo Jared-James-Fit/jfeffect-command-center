@@ -73,7 +73,7 @@ export function RecipeFormattingGuide() {
             <Button variant="outline" size="sm" onClick={onCopy}>
               <Copy className="mr-1 h-4 w-4" /> Copy
             </Button>
-            <Button size="sm" onClick={onSave} disabled={saving} className="bg-gradient-primary font-bold">
+            <Button size="sm" onClick={onSave} disabled={saving} className="bg-primary text-primary-foreground font-semibold">
               {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
               Save
             </Button>

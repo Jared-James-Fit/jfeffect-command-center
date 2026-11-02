@@ -53,7 +53,7 @@ function Row({ icon: Icon, tone, title, when, on, onToggle, note, to, hash, sear
         <div className="flex items-center gap-2">
           <span className="min-w-0 text-sm font-semibold leading-tight">{title}</span>
           {on !== undefined && (
-            <span className={cn("shrink-0 rounded px-1.5 text-[10px] font-bold leading-4", on ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+            <span className={cn("shrink-0 rounded px-1.5 text-[10px] font-bold leading-4", on ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}>
               {on ? "ON" : "OFF"}
             </span>
           )}
@@ -134,7 +134,7 @@ export function AutomationsHub() {
       <SettingsTabs />
       <div className="mx-auto max-w-3xl space-y-6 p-4 pb-32 md:p-6">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-black tracking-tight"><Zap className="h-5 w-5 text-primary" />Automations</h1>
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight"><Zap className="h-5 w-5 text-primary" />Automations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Everything the app sends on its own. Flip a switch to stop one. Tap it to change what it says.
           </p>
@@ -146,23 +146,23 @@ export function AutomationsHub() {
         </div>
 
         <Section title="Texts (SMS)" hint={`Every text introduces itself as "${smsSender(sms?.default_coach_name, sms?.brand_name)}" — using each client's own coach.`}>
-          <Row icon={MessageSquare} tone="bg-sky-500/15 text-sky-500" title="All texts" to="/admin/settings/sms"
+          <Row icon={MessageSquare} tone="bg-info/15 text-info" title="All texts" to="/admin/settings/sms"
             when="Master switch. Off pauses every text below." note={smsNote}
             on={!!sms?.enabled} locked={!isAdmin}
             onToggle={(v) => run(() => saveSms({ data: { enabled: v } }), v ? "Texts are on" : "All texts paused")} />
           <Row icon={Sparkles} tone="bg-primary/15 text-primary" title="Who texts are from" to="/admin/settings/sms"
             when={`"Hi Alex, this is ${smsSender(sms?.default_coach_name, sms?.brand_name)}…" — change the business or fallback coach name.`} />
-          <Row icon={Bell} tone="bg-sky-500/15 text-sky-500" title="Unread message reminder" to="/admin/settings/sms"
+          <Row icon={Bell} tone="bg-info/15 text-info" title="Unread message reminder" to="/admin/settings/sms"
             when={`Texts a client when they haven't read your message (${steps.filter((s) => s.enabled).map((s) => `${Math.round(s.delay_minutes / 60)}h`).join(" + ") || "no steps"}). 9am–8pm their time, max 1 a day.`}
             note={smsOn ? undefined : smsNote}
             on={unreadOn} locked={!isAdmin}
             onToggle={(v) => run(() => saveSms({ data: { reminder_steps: steps.map((s) => ({ ...s, enabled: v })) } }), v ? "Unread reminders on" : "Unread reminders off")} />
-          <Row icon={CalendarClock} tone="bg-sky-500/15 text-sky-500" title="Session reminder" to="/admin/calendar"
+          <Row icon={CalendarClock} tone="bg-info/15 text-info" title="Session reminder" to="/admin/calendar"
             when="Evening before a PT session, plus a text if it's moved or cancelled last minute." note="On per session (in the session editor)" />
-          <Row icon={CreditCard} tone="bg-sky-500/15 text-sky-500" title="Payment setup text" to="/admin/clients"
+          <Row icon={CreditCard} tone="bg-info/15 text-info" title="Payment setup text" to="/admin/clients"
             when="One text ~3 days after a payment link if they still haven't set up payment." note="Pause per sale from the client's Sales tab" />
           {(data?.autos ?? []).map((a) => (
-            <Row key={a.id} icon={Zap} tone="bg-sky-500/15 text-sky-500" title={a.name.replace(/\s*\(draft\)\s*$/i, "")} to="/admin/settings/sms"
+            <Row key={a.id} icon={Zap} tone="bg-info/15 text-info" title={a.name.replace(/\s*\(draft\)\s*$/i, "")} to="/admin/settings/sms"
               when={TRIGGER_WHEN[a.trigger_type] ?? a.trigger_type}
               on={!!a.active} locked={!isAdmin}
               onToggle={(v) => run(async () => {
@@ -173,40 +173,40 @@ export function AutomationsHub() {
         </Section>
 
         <Section title="In-app messages" hint="Sent into the client's chat as you.">
-          <Row icon={ClipboardList} tone="bg-violet-500/15 text-violet-500" title="Weekly check-in request" to="/admin/coaching" search={{ tab: "schedules" }}
+          <Row icon={ClipboardList} tone="bg-muted-foreground/15 text-muted-foreground" title="Weekly check-in request" to="/admin/coaching" search={{ tab: "schedules" }}
             when="Sends the check-in form on each client's check-in day. Change day/time per client in Schedules."
             on={data?.checkin ? !!data.checkin.enabled : undefined} locked={!isAdmin}
             onToggle={data?.checkin ? (v) => run(async () => {
               const { error } = await db.from("coach_task_definitions").update({ enabled: v }).eq("id", data.checkin!.id);
               if (error) throw error;
             }, v ? "Check-in requests on" : "Check-in requests off") : undefined} />
-          <Row icon={ClipboardList} tone="bg-violet-500/15 text-violet-500" title="Monthly nutrition update" to="/admin/forms" search={{ tab: "builder" }}
+          <Row icon={ClipboardList} tone="bg-muted-foreground/15 text-muted-foreground" title="Monthly nutrition update" to="/admin/forms" search={{ tab: "builder" }}
             when="Last week of the month, 9am their time — clients with an active nutrition plan."
             note={data?.nutritionOn === false ? "Off — the form is switched off" : "Turn off by switching the form off in Forms"} />
-          <Row icon={CreditCard} tone="bg-violet-500/15 text-violet-500" title="Payment setup reminders" to="/admin/clients"
+          <Row icon={CreditCard} tone="bg-muted-foreground/15 text-muted-foreground" title="Payment setup reminders" to="/admin/clients"
             when="Chat reminders on day 1, 6 and 12 after a payment link until they pay." note="Pause per sale from the client's Sales tab" />
-          <Row icon={Cake} tone="bg-violet-500/15 text-violet-500" title="Birthday message" to="/admin/community" hash="tab=posts"
+          <Row icon={Cake} tone="bg-muted-foreground/15 text-muted-foreground" title="Birthday message" to="/admin/community" hash="tab=posts"
             when="Drafted the night before. Nothing sends until you approve it." note="You approve each one" />
         </Section>
 
         <Section title="Community posts" hint="Posted to the community feed as you.">
-          <Row icon={Megaphone} tone="bg-amber-500/15 text-amber-500" title="Coach posts" to="/admin/community" hash="tab=posts"
+          <Row icon={Megaphone} tone="bg-warning/15 text-warning" title="Coach posts" to="/admin/community" hash="tab=posts"
             when="Lessons Mon · Tue · Thu · Fri · Sat (Sat: technique fixes) · Wed Wins · Sun Recap. Lessons wait for your OK unless you let them run."
             on={series.data ? !series.data.paused : undefined}
             onToggle={(v) => seriesAction.mutate({ kind: "pause", paused: !v }, {
               onSuccess: () => toast.success(v ? "Coach posts back on" : "Coach posts paused"),
               onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
             })} />
-          <Row icon={Cake} tone="bg-amber-500/15 text-amber-500" title="Birthday post" to="/admin/community" hash="tab=posts"
+          <Row icon={Cake} tone="bg-warning/15 text-warning" title="Birthday post" to="/admin/community" hash="tab=posts"
             when="A birthday shout-out at 8am their time, after you approve the draft." note="You approve each one" />
         </Section>
 
         <Section title="Popups, email & push" hint="Everything else that reaches clients on its own.">
-          <Row icon={Smartphone} tone="bg-emerald-500/15 text-emerald-500" title="Popups" to="/admin/popups"
+          <Row icon={Smartphone} tone="bg-success/15 text-success" title="Popups" to="/admin/popups"
             when="Events, birthday cards, install prompt and setup gates." />
-          <Row icon={Mail} tone="bg-emerald-500/15 text-emerald-500" title="Membership welcome email" to="/admin/membership/onboarding-email"
+          <Row icon={Mail} tone="bg-success/15 text-success" title="Membership welcome email" to="/admin/membership/onboarding-email"
             when="Emailed when someone buys a membership." on={data?.emailOn ?? undefined} />
-          <Row icon={MessagesSquare} tone="bg-emerald-500/15 text-emerald-500" title="Push notifications" to="/notifications"
+          <Row icon={MessagesSquare} tone="bg-success/15 text-success" title="Push notifications" to="/notifications"
             when="Morning game plan, monthly recap, new messages and reviews." note="Each person picks theirs in their notification settings" />
         </Section>
       </div>

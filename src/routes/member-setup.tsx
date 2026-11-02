@@ -27,7 +27,7 @@ function MemberSetupPage() {
     return (
       <main className="grid min-h-screen place-items-center p-6 text-center">
         <div className="max-w-sm">
-          <h1 className="text-xl font-black">Setup link missing</h1>
+          <h1 className="text-xl font-bold">Setup link missing</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             This setup link is incomplete. Ask the admin for a new one.
           </p>
@@ -59,9 +59,9 @@ function MemberSetupPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-3">
           <img src="/logo.png" alt="JF Effect" className="h-10 w-10 rounded-xl" />
-          <span className="text-base font-black tracking-tight">JF EFFECT</span>
+          <span className="text-base font-bold tracking-tight">JF EFFECT</span>
         </div>
-        <h1 className="text-balance text-center text-xl font-black">Set your password</h1>
+        <h1 className="text-balance text-center text-xl font-bold">Set your password</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
           Create a password to access your membership.
         </p>

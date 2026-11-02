@@ -73,7 +73,7 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
       {/* Top bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <div className={`rounded-md px-2 py-0.5 text-xs font-bold ${draft.published ? "bg-emerald-500/15 text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+          <div className={`rounded-md px-2 py-0.5 text-xs font-bold ${draft.published ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
             {draft.published ? "Live" : "Unpublished"}
           </div>
           <a href={`/${pageKey}`} target="_blank" rel="noreferrer">

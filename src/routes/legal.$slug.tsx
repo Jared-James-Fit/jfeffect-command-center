@@ -55,7 +55,7 @@ function PublicLegalPage() {
         </p>
         {v.summary ? <p className="mt-2 text-sm text-muted-foreground">{v.summary}</p> : null}
         {v.needs_legal_review ? (
-          <div className="mt-3 inline-flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          <div className="mt-3 inline-flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>This document is a starter template and still requires professional legal review.</span>
           </div>

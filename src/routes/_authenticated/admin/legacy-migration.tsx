@@ -37,12 +37,12 @@ const STAGE_META: Record<Stage, { label: string; tone: string; help: string }> =
   },
   invited: {
     label: "Invited",
-    tone: "bg-sky-500/10 text-sky-700 border-sky-500/30",
+    tone: "bg-info/10 text-info border-info/30",
     help: "Entitlement created. Waiting for the client to sign in to the app.",
   },
   access_active: {
     label: "Access active",
-    tone: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+    tone: "bg-success/10 text-success border-success/30",
     help: "Using the JF Effect app. Billing remains in legacy Trainerize Stripe.",
   },
 };
@@ -71,7 +71,7 @@ function LegacyMigrationPage() {
         subtitle="Move existing Trainerize coaching clients into the JF Effect app without touching their billing."
       />
       <div className="space-y-6 p-3 sm:p-4 md:p-6">
-        <Card className="border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+        <Card className="border-warning/30 bg-warning/5 p-4 text-sm">
           <div className="font-semibold mb-1">Billing safety</div>
           <p className="text-muted-foreground">
             Every client below is locked to the legacy <span className="font-semibold">JF Effect Trainerize</span> Stripe account. Inviting them into the app grants app access only — no Stripe customer, subscription, or charge is created in the new JF Effect Stripe account.

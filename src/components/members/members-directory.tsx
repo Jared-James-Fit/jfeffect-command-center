@@ -133,9 +133,9 @@ export function TestAccountCard({ returnTo = MEMBERS_HREF, className }: { return
     enter("test", () => personaFn({ data: { persona } as any }), persona, "Viewing the member app as your test account");
 
   return (
-    <Card className={cn("border-emerald-500/30 bg-emerald-500/5 p-3.5", className)}>
+    <Card className={cn("border-success/30 bg-success/5 p-3.5", className)}>
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-success/15 text-success">
           <FlaskConical className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -154,7 +154,7 @@ export function TestAccountCard({ returnTo = MEMBERS_HREF, className }: { return
             onClick={() => setPersona(p.key)}
             className={cn(
               "flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors",
-              persona === p.key ? "bg-emerald-600 text-white" : "text-muted-foreground hover:text-foreground",
+              persona === p.key ? "bg-success text-white" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {p.label}
@@ -162,7 +162,7 @@ export function TestAccountCard({ returnTo = MEMBERS_HREF, className }: { return
         ))}
       </div>
       <div className="mt-2 flex gap-2">
-        <Button className="h-10 flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => void openTest()} disabled={!!busy}>
+        <Button className="h-10 flex-1 bg-success hover:bg-success" onClick={() => void openTest()} disabled={!!busy}>
           {busy === "test" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
           Open member app
         </Button>
@@ -238,7 +238,7 @@ export function MembersDirectory({ returnTo = MEMBERS_HREF, showTest = true }: {
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
               filter === f.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
-              f.key === "billing" && filter !== f.key && "border-rose-500/40 text-rose-600 dark:text-rose-400",
+              f.key === "billing" && filter !== f.key && "border-destructive/40 text-destructive",
             )}
           >
             {f.label} <span className="tabular-nums opacity-70">{counts[f.key]}</span>
@@ -268,9 +268,9 @@ export function MembersDirectory({ returnTo = MEMBERS_HREF, showTest = true }: {
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary text-xs font-bold">{initials(m)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{m.full_name || m.email || "Member"}</span>
-                    <span className={cn("block truncate text-xs", line.warn ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground")}>
+                    <span className={cn("block truncate text-xs", line.warn ? "text-destructive" : "text-muted-foreground")}>
                       {line.text}
-                      {!m.user_id && <span className="text-amber-600 dark:text-amber-400"> · Not set up</span>}
+                      {!m.user_id && <span className="text-warning"> · Not set up</span>}
                     </span>
                   </span>
                 </a>

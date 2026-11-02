@@ -125,9 +125,9 @@ export function AssignmentCalendar({ existing, incoming, initialMonth, onDayClic
                   className={
                     "mt-0.5 truncate rounded px-1 text-[9px] " +
                     (d.completed
-                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-success/20 text-success"
                       : d.locked
-                        ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                        ? "bg-warning/20 text-warning"
                         : "bg-secondary/60 text-muted-foreground")
                   }
                   title={`${d.blockName ?? ""} · ${d.title ?? ""}`}
@@ -141,7 +141,7 @@ export function AssignmentCalendar({ existing, incoming, initialMonth, onDayClic
                   className={
                     "mt-0.5 truncate rounded px-1 text-[9px] " +
                     (hasConflict || d.hasConflict
-                      ? "bg-rose-500/30 text-rose-700 dark:text-rose-300"
+                      ? "bg-destructive/30 text-destructive"
                       : "bg-primary/30 text-primary")
                   }
                   title={d.title}
@@ -154,10 +154,10 @@ export function AssignmentCalendar({ existing, incoming, initialMonth, onDayClic
         })}
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-border p-2 text-[10px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-emerald-500/60" /> Completed</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-success/60" /> Completed</span>
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-secondary" /> Scheduled</span>
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-primary/40" /> Incoming</span>
-        <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-rose-500/40" /> Conflict</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded bg-destructive/40" /> Conflict</span>
       </div>
     </div>
   );

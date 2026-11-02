@@ -107,7 +107,7 @@ export function ClientQuickLinksCard({
       </div>
 
       {/* Main Drive folder block */}
-      <div className="rounded-lg border-2 border-primary/40 bg-gradient-to-br from-primary/10 to-primary/0 p-4 space-y-3">
+      <div className="rounded-lg border-2 border-primary/40 p-4 space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
             <div className="rounded-md bg-primary/15 p-2"><FolderOpen className="h-6 w-6 text-primary" /></div>
@@ -125,14 +125,14 @@ export function ClientQuickLinksCard({
           <div className="space-y-2">
             <Input value={draftDrive} onChange={(e) => setDraftDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" autoFocus />
             <div className="flex gap-2">
-              <Button size="sm" onClick={saveDrive} className="bg-gradient-primary uppercase font-bold">Save</Button>
+              <Button size="sm" onClick={saveDrive} className="bg-primary text-primary-foreground font-semibold">Save</Button>
               <Button size="sm" variant="ghost" onClick={() => { setEditingDrive(false); setDraftDrive(driveFolderLink ?? ""); }}>Cancel</Button>
             </div>
           </div>
         ) : driveFolderLink ? (
           <div className="flex flex-wrap gap-2">
             <a href={driveFolderLink} target="_blank" rel="noreferrer">
-              <Button size="sm" className="bg-gradient-primary uppercase font-bold"><ExternalLink className="mr-1 h-4 w-4" /> Open Drive Folder</Button>
+              <Button size="sm" className="bg-primary text-primary-foreground font-semibold"><ExternalLink className="mr-1 h-4 w-4" /> Open Drive Folder</Button>
             </a>
             <Button size="sm" variant="outline" onClick={() => copyLink(driveFolderLink)}><Copy className="mr-1 h-4 w-4" /> Copy Link</Button>
             <Button size="sm" variant="outline" onClick={() => { setDraftDrive(driveFolderLink); setEditingDrive(true); }}><Pencil className="mr-1 h-4 w-4" /> Edit</Button>
@@ -140,7 +140,7 @@ export function ClientQuickLinksCard({
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground italic">No Google Drive folder linked yet.</p>
-            <Button size="sm" onClick={() => { setDraftDrive(""); setEditingDrive(true); }} className="bg-gradient-primary uppercase font-bold">
+            <Button size="sm" onClick={() => { setDraftDrive(""); setEditingDrive(true); }} className="bg-primary text-primary-foreground font-semibold">
               <Plus className="mr-1 h-4 w-4" /> Add Drive Folder
             </Button>
           </div>
@@ -200,8 +200,8 @@ export function ClientQuickLinksCard({
 }
 
 function VisibilityBadge({ visibility }: { visibility: QuickLink["visibility"] }) {
-  if (visibility === "client") return <Badge variant="outline" className="text-[10px] border-emerald-500/40 bg-emerald-500/10 text-emerald-300"><Eye className="mr-1 h-3 w-3" />Client visible</Badge>;
-  if (visibility === "coach") return <Badge variant="outline" className="text-[10px] border-sky-500/40 bg-sky-500/10 text-sky-300"><Eye className="mr-1 h-3 w-3" />Coach visible</Badge>;
+  if (visibility === "client") return <Badge variant="outline" className="text-[10px] border-success/40 bg-success/10 text-success"><Eye className="mr-1 h-3 w-3" />Client visible</Badge>;
+  if (visibility === "coach") return <Badge variant="outline" className="text-[10px] border-info/40 bg-info/10 text-info"><Eye className="mr-1 h-3 w-3" />Coach visible</Badge>;
   return <Badge variant="outline" className="text-[10px] border-muted-foreground/30 text-muted-foreground"><EyeOff className="mr-1 h-3 w-3" />Admin only</Badge>;
 }
 
@@ -281,7 +281,7 @@ function QuickLinkDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary uppercase font-bold">{saving ? "Saving…" : "Save"}</Button>
+          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground font-semibold">{saving ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

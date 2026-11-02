@@ -27,8 +27,8 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
 
   const complianceTone =
     data.compliance_pct == null ? "text-muted-foreground" :
-    data.compliance_pct >= 80 ? "text-green-500" :
-    data.compliance_pct >= 60 ? "text-amber-400" : "text-red-400";
+    data.compliance_pct >= 80 ? "text-success" :
+    data.compliance_pct >= 60 ? "text-warning" : "text-destructive";
 
   return (
     <Card className="p-5 space-y-4">
@@ -53,12 +53,12 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 text-xs">
         <Stat label="Compliance (14d)" value={data.compliance_pct != null ? `${data.compliance_pct}%` : "—"} hint={`${data.completed}/${data.assigned} workouts`} cls={complianceTone} />
-        <Stat label="Missed workouts" value={String(data.missed)} icon={AlertTriangle} cls={data.missed > 0 ? "text-amber-400" : ""} />
+        <Stat label="Missed workouts" value={String(data.missed)} icon={AlertTriangle} cls={data.missed > 0 ? "text-warning" : ""} />
         <Stat label="Last workout" value={data.last_completed_at ? formatDistanceToNow(new Date(data.last_completed_at), { addSuffix: true }) : "—"} />
         <Stat label="Avg duration Δ" value={data.duration_delta_min != null ? `${data.duration_delta_min > 0 ? "+" : ""}${data.duration_delta_min} min` : "Not logged"} icon={Timer} />
-        <Stat label="e1RM ATPRs (30d)" value={String(data.recent_prs.length)} icon={Trophy} cls={data.recent_prs.length > 0 ? "text-violet-400" : ""} />
+        <Stat label="e1RM ATPRs (30d)" value={String(data.recent_prs.length)} icon={Trophy} cls={data.recent_prs.length > 0 ? "text-muted-foreground" : ""} />
         <Stat label="Client notes" value={String(data.recent_notes.length)} icon={MessageSquare} />
-        <Stat label="Pain flags" value={String(data.pain_flags.length)} icon={AlertTriangle} cls={data.pain_flags.length > 0 ? "text-red-400" : ""} />
+        <Stat label="Pain flags" value={String(data.pain_flags.length)} icon={AlertTriangle} cls={data.pain_flags.length > 0 ? "text-destructive" : ""} />
         {data.event_date && <Stat label="Event" value={data.event_name ?? "—"} hint={data.days_to_event != null ? `${data.days_to_event} days out` : ""} icon={Calendar} />}
       </div>
 
@@ -69,7 +69,7 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
       {data.pain_flags.length > 0 && (
         <Section title="Pain / discomfort" tone="red">
           {data.pain_flags.map((p) => (
-            <div key={p.id} className="rounded border border-red-500/30 bg-red-500/5 p-2 text-xs space-y-1">
+            <div key={p.id} className="rounded border border-destructive/30 bg-destructive/5 p-2 text-xs space-y-1">
               <div className="text-muted-foreground">
                 {p.day_title ?? "Workout"}{p.exercise && ` • ${p.exercise}`}{p.note_date && ` • ${new Date(p.note_date).toLocaleDateString()}`}
               </div>
@@ -103,7 +103,7 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
       {data.recent_prs.length > 0 && (
         <Section title="Recent e1RM ATPRs" tone="violet">
           {data.recent_prs.slice(0, 5).map((p) => (
-            <div key={p.alert_key} className="flex items-center justify-between gap-2 rounded border border-violet-500/30 bg-violet-500/5 p-2 text-xs">
+            <div key={p.alert_key} className="flex items-center justify-between gap-2 rounded border border-border bg-muted-foreground/5 p-2 text-xs">
               <div className="min-w-0">
                 <div className="truncate font-medium">{p.exercise} — {p.actual_load} × {p.actual_reps}</div>
                 <div className="text-muted-foreground">est 1RM {p.est_1rm} (was {p.baseline}) • {new Date(p.date).toLocaleDateString()}</div>
@@ -146,7 +146,7 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
 }
 
 function Section({ title, tone, children }: { title: string; tone?: "red" | "amber" | "violet"; children: React.ReactNode }) {
-  const cls = tone === "red" ? "text-red-400" : tone === "amber" ? "text-amber-400" : tone === "violet" ? "text-violet-400" : "text-muted-foreground";
+  const cls = tone === "red" ? "text-destructive" : tone === "amber" ? "text-warning" : tone === "violet" ? "text-muted-foreground" : "text-muted-foreground";
   return (
     <div className="space-y-2">
       <div className={`text-[10px] uppercase tracking-widest font-bold ${cls}`}>{title}</div>

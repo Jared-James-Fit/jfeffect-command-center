@@ -86,15 +86,15 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
     <Card className="border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-info/10 text-info">
             <Droplet className="h-4 w-4" />
           </div>
           <h3 className="text-base font-bold">Water Today</h3>
         </div>
         <Link
           to={historyHref}
-          search={{ action: "history" } as never}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          search={{ action: "water" } as never}
+          className="-my-2 -mr-2 inline-flex min-h-11 items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
         >
           <History className="h-3.5 w-3.5" /> Open
         </Link>
@@ -102,7 +102,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
 
       <div className="mt-3 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-2xl font-black tabular-nums">
+          <div className="text-2xl font-bold tabular-nums">
             {formatWater(summary.total, "L")}
             <span className="ml-1 text-sm font-medium text-muted-foreground">/ {formatWater(targetMl, "L")}</span>
           </div>
@@ -126,7 +126,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
       <Button
         type="button"
         variant="ghost"
-        className="mt-1.5 h-9 w-full rounded-lg text-xs font-semibold text-sky-700 dark:text-sky-300"
+        className="mt-1.5 h-9 w-full rounded-lg text-xs font-semibold text-info"
         onClick={() => setCustomOpen(true)}
       >
         <Plus className="mr-1.5 h-3.5 w-3.5" /> Add custom amount
@@ -150,8 +150,8 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
           </div>
           <Link
             to={historyHref}
-            search={{ action: "history" } as never}
-            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md py-2 text-xs font-semibold text-sky-700 hover:bg-sky-500/10 dark:text-sky-300"
+            search={{ action: "water" } as never}
+            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-md py-2 text-xs font-semibold text-info hover:bg-info/10"
           >
             <History className="h-3.5 w-3.5" /> View full history
           </Link>

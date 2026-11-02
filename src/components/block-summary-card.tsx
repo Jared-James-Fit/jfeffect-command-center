@@ -26,12 +26,12 @@ type Mode = "admin" | "client";
 
 function statusTone(status?: string | null) {
   switch (status) {
-    case "Active": return "border-emerald-500/40 bg-emerald-500/10 text-emerald-500";
+    case "Active": return "border-success/40 bg-success/10 text-success";
     case "Complete":
-    case "Completed": return "border-sky-500/40 bg-sky-500/10 text-sky-500";
+    case "Completed": return "border-info/40 bg-info/10 text-info";
     case "Upcoming":
     case "Draft": return "border-muted-foreground/30 bg-muted/30 text-muted-foreground";
-    case "Archived": return "border-amber-500/40 bg-amber-500/10 text-amber-500";
+    case "Archived": return "border-warning/40 bg-warning/10 text-warning";
     default: return "";
   }
 }
@@ -162,7 +162,7 @@ export function BlockSummaryCard({
       </div>
 
       {mode === "admin" && endPassed && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
           <span>End date has passed. Archive this block?</span>
           <div className="flex gap-1">
             <Button size="sm" variant="outline" onClick={async () => {

@@ -128,7 +128,7 @@ function useHold(hold: Hold | undefined, blocked: boolean) {
 /** The clip's time over the shutter while it films. */
 function FilmingTime({ seconds }: { seconds: number }) {
   return (
-    <span className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+    <span className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 rounded-full bg-destructive px-2.5 py-0.5 text-[13px] font-bold tabular-nums text-white" data-recording-time>
       {`0:${String(seconds).padStart(2, "0")}`}
     </span>
   );
@@ -168,8 +168,8 @@ function Shutter({ onShoot, disabled, counting, hold }: { onShoot: () => void; d
         data-shutter
         data-filming={filming ? "" : undefined}
       >
-        <span className={cn("block rounded-full transition-all", filming ? "h-[62px] w-[62px] bg-black/30 p-[14px]" : counting ? "h-7 w-7 rounded-md bg-red-500" : "h-[60px] w-[60px] bg-white")}>
-          {filming && <span className="block h-full w-full rounded-md bg-red-500" />}
+        <span className={cn("block rounded-full transition-all", filming ? "h-[62px] w-[62px] bg-black/30 p-[14px]" : counting ? "h-7 w-7 rounded-md bg-destructive" : "h-[60px] w-[60px] bg-white")}>
+          {filming && <span className="block h-full w-full rounded-md bg-destructive" />}
         </span>
       </button>
     </div>
@@ -270,7 +270,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
       {/* what the ring holds, above it (the clip's time while filming) */}
       <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && !filming && "sr-only")}>
         {filming ? (
-          <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+          <span className="rounded-full bg-destructive px-2.5 py-0.5 text-[13px] font-bold tabular-nums text-white" data-recording-time>
             {`0:${String(hold!.seconds).padStart(2, "0")}`}
           </span>
         ) : (
@@ -330,10 +330,10 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
               >
                 {on && filming ? (
                   <span className="block h-[46px] w-[46px] rounded-full bg-black/30 p-[11px]">
-                    <span className="block h-full w-full rounded-md bg-red-500" />
+                    <span className="block h-full w-full rounded-md bg-destructive" />
                   </span>
                 ) : on && counting ? (
-                  <span className="block h-6 w-6 rounded-md bg-red-500" />
+                  <span className="block h-6 w-6 rounded-md bg-destructive" />
                 ) : on && l.look === "plain" ? (
                   // no filter in the ring: just the shutter, like Instagram's
                   <span className="sr-only">{l.label}</span>

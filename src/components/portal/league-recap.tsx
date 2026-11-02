@@ -69,7 +69,7 @@ function Rise({ children, delay = 0, className }: { children: ReactNode; delay?:
 }
 
 function Kicker({ children }: { children: ReactNode }) {
-  return <div className="text-[11px] font-black uppercase tracking-[0.28em] text-white/60">{children}</div>;
+  return <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/60">{children}</div>;
 }
 
 function buildSlides(r: LeagueRecap): Slide[] {
@@ -99,7 +99,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
           <Rise><Kicker>Performance League</Kicker></Rise>
           <Rise delay={150}>
             <div
-              className="mt-4 whitespace-nowrap font-black leading-none tracking-tight text-white"
+              className="mt-4 whitespace-nowrap font-bold leading-none tracking-tight text-white"
               style={{ fontSize: `min(64px, calc((min(100vw, 420px) - 4rem) / ${(month.length * 0.64).toFixed(2)}))` }}
             >
               {month.split("").map((ch, i) => (
@@ -107,7 +107,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
               ))}
             </div>
           </Rise>
-          <Rise delay={700}><div className="mt-2 text-2xl font-black text-red-400">Recap</div></Rise>
+          <Rise delay={700}><div className="mt-2 text-2xl font-bold text-red-400">Recap</div></Rise>
           <Rise delay={1100}><p className="mt-6 text-base text-white/70">Here's how your month stacked up 👀</p></Rise>
         </div>
       ),
@@ -121,7 +121,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
           {me.rank ? (
             <>
               <Rise delay={150}>
-                <div className="jf-rc-pop mt-3 text-[120px] font-black leading-none text-white">
+                <div className="jf-rc-pop mt-3 text-[120px] font-bold leading-none text-white">
                   #<Count to={me.rank} active={a} />
                 </div>
               </Rise>
@@ -135,7 +135,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
               )}
               {change && (
                 <Rise delay={1100}>
-                  <div className={cn("mt-3 inline-flex items-center gap-1 text-sm font-black",
+                  <div className={cn("mt-3 inline-flex items-center gap-1 text-sm font-bold",
                     change.dir === "up" ? "text-emerald-400" : change.dir === "down" ? "text-rose-400" : "text-white/70")}>
                     {change.dir === "up" ? <ArrowUpRight className="h-4 w-4" /> : change.dir === "down" ? <ArrowDownRight className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                     {change.text}
@@ -145,7 +145,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
             </>
           ) : (
             <Rise delay={150}>
-              <div className="mt-4 text-3xl font-black text-white">Unranked</div>
+              <div className="mt-4 text-3xl font-bold text-white">Unranked</div>
               <p className="mt-3 text-sm text-white/70">Log a bodyweight to get on the board — your points still counted.</p>
             </Rise>
           )}
@@ -160,8 +160,8 @@ function buildSlides(r: LeagueRecap): Slide[] {
           <Rise><Kicker>Points</Kicker></Rise>
           <Rise delay={120}>
             <div className="mt-2 flex items-baseline gap-2">
-              <Count to={me.total_points} active={a} className="text-[84px] font-black leading-none text-white" />
-              <span className="text-2xl font-black text-amber-300">pts</span>
+              <Count to={me.total_points} active={a} className="text-[84px] font-bold leading-none text-white" />
+              <span className="text-2xl font-bold text-amber-300">pts</span>
             </div>
           </Rise>
           <div className="mt-6 space-y-3">
@@ -169,7 +169,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
               <Rise key={b.label} delay={350 + i * 140}>
                 <div className="flex items-baseline justify-between text-sm font-semibold text-white/85">
                   <span>{b.label}</span>
-                  <span className="font-black text-white">+{b.value}</span>
+                  <span className="font-bold text-white">+{b.value}</span>
                 </div>
                 <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-white/10">
                   <div
@@ -183,11 +183,11 @@ function buildSlides(r: LeagueRecap): Slide[] {
           {r.league && (
             <Rise delay={1200}>
               <div className="mt-6 text-sm text-white/70">
-                League average <span className="font-black text-white">{r.league.avg_points}</span>
+                League average <span className="font-bold text-white">{r.league.avg_points}</span>
                 {" · "}
                 {me.total_points >= r.league.avg_points
-                  ? <span className="font-black text-emerald-400">You +{me.total_points - r.league.avg_points}</span>
-                  : <span className="font-black text-rose-300">{me.total_points - r.league.avg_points}</span>}
+                  ? <span className="font-bold text-emerald-400">You +{me.total_points - r.league.avg_points}</span>
+                  : <span className="font-bold text-rose-300">{me.total_points - r.league.avg_points}</span>}
               </div>
             </Rise>
           )}
@@ -209,13 +209,13 @@ function buildSlides(r: LeagueRecap): Slide[] {
         return (
           <div className="flex h-full flex-col justify-center px-7">
             <Rise><Kicker>The grind</Kicker></Rise>
-            <Rise delay={100}><div className="mt-2 text-3xl font-black leading-tight text-white">You put in the work.</div></Rise>
+            <Rise delay={100}><div className="mt-2 text-3xl font-bold leading-tight text-white">You put in the work.</div></Rise>
             <div className="mt-6 grid grid-cols-2 gap-3">
               {tiles.map((t, i) => (
                 <Rise key={t.label} delay={300 + i * 140}>
                   <div className="rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/10">
                     <t.icon className="h-5 w-5 text-emerald-300" />
-                    <Count to={t.value} active={a} className="mt-2 block text-4xl font-black text-white" />
+                    <Count to={t.value} active={a} className="mt-2 block text-4xl font-bold text-white" />
                     <div className="text-xs font-semibold uppercase tracking-wide text-white/60">{t.label}</div>
                   </div>
                 </Rise>
@@ -224,8 +224,8 @@ function buildSlides(r: LeagueRecap): Slide[] {
             {me.adherence_pct != null && me.adherence_pct > 0 && (
               <Rise delay={1000}>
                 <div className="mt-4 text-sm text-white/70">
-                  Completed <span className="font-black text-white">{Math.round(me.adherence_pct)}%</span> of your prescribed workouts
-                  {me.boost_qualified && <span className="font-black text-amber-300"> · Boost qualified 🔥</span>}
+                  Completed <span className="font-bold text-white">{Math.round(me.adherence_pct)}%</span> of your prescribed workouts
+                  {me.boost_qualified && <span className="font-bold text-amber-300"> · Boost qualified 🔥</span>}
                 </div>
               </Rise>
             )}
@@ -244,7 +244,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
         <div className="flex h-full flex-col justify-center px-6">
           <Rise><Kicker>Head to head</Kicker></Rise>
           <Rise delay={100}>
-            <div className="mt-2 flex items-center gap-2 text-3xl font-black text-white">
+            <div className="mt-2 flex items-center gap-2 text-3xl font-bold text-white">
               <Swords className="h-7 w-7 text-violet-300" /> Your top {r.rivals.length} rivals
             </div>
           </Rise>
@@ -258,13 +258,13 @@ function buildSlides(r: LeagueRecap): Slide[] {
                   <div className="flex items-center gap-3">
                     <UserAvatar src={rv.avatar_url} name={rv.display_name} size={40} expandable={false} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-base font-black text-white">{rv.display_name}</span>{rv.is_coach && <CoachTag onDark />}</div>
+                      <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-base font-bold text-white">{rv.display_name}</span>{rv.is_coach && <CoachTag onDark />}</div>
                       <div className="text-xs text-white/60">
                         {rv.rank ? `#${rv.rank} · ` : ""}{rv.total_points} pts · {rv.workouts_completed} workouts
                         {rv.atpr_lifts ? ` · ${rv.atpr_lifts} ATPR` : ""}
                       </div>
                     </div>
-                    <span className={cn("shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide",
+                    <span className={cn("shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide",
                       line.tone === "win" ? "bg-emerald-400/15 text-emerald-300" : line.tone === "loss" ? "bg-amber-400/15 text-amber-300" : "bg-white/10 text-white/80")}>
                       {line.tone === "win" ? "W" : line.tone === "loss" ? "L" : "T"}
                     </span>
@@ -302,14 +302,14 @@ function buildSlides(r: LeagueRecap): Slide[] {
       render: () => (
         <div className="flex h-full flex-col justify-center px-6">
           <Rise><Kicker>{month} champions</Kicker></Rise>
-          <Rise delay={100}><div className="mt-2 text-3xl font-black text-white">The podium</div></Rise>
+          <Rise delay={100}><div className="mt-2 text-3xl font-bold text-white">The podium</div></Rise>
           <div className="mt-8 grid grid-cols-3 items-end gap-2">
             {order.map((p, i) => p ? (
               <div key={p.display_name} className="flex flex-col items-center text-center">
                 <div className="jf-rc-rise flex flex-col items-center" style={{ animationDelay: `${p.rank === 1 ? 1100 : p.rank === 2 ? 700 : 400}ms` }}>
                   <Medal className={cn("h-6 w-6", p.rank === 1 ? "text-yellow-300" : p.rank === 2 ? "text-slate-300" : "text-amber-600")} />
                   <UserAvatar src={p.avatar_url} name={p.display_name} size={p.rank === 1 ? 56 : 46} expandable={false} className="mt-1" />
-                  <div className={cn("mt-1 w-full truncate text-xs font-black", p.is_me ? "text-red-300" : "text-white")}>{p.display_name}{p.is_me ? " (You)" : ""}</div>
+                  <div className={cn("mt-1 w-full truncate text-xs font-bold", p.is_me ? "text-red-300" : "text-white")}>{p.display_name}{p.is_me ? " (You)" : ""}</div>
                   {p.is_coach && <CoachTag onDark className="mt-0.5" />}
                   <div className="text-[11px] font-bold text-white/70">{p.total_points} pts</div>
                 </div>
@@ -317,13 +317,13 @@ function buildSlides(r: LeagueRecap): Slide[] {
                   className={cn("jf-rc-grow mt-2 w-full rounded-t-xl", p.rank === 1 ? "h-28 bg-gradient-to-b from-yellow-300/70 to-yellow-600/30" : p.rank === 2 ? "h-20 bg-gradient-to-b from-slate-200/60 to-slate-500/25" : "h-14 bg-gradient-to-b from-amber-500/60 to-amber-800/25")}
                   style={{ animationDelay: `${p.rank === 1 ? 900 : p.rank === 2 ? 500 : 200}ms` }}
                 >
-                  <div className="pt-2 text-center text-lg font-black text-white/90">{p.rank}</div>
+                  <div className="pt-2 text-center text-lg font-bold text-white/90">{p.rank}</div>
                 </div>
               </div>
             ) : <div key={i} />)}
           </div>
           {me.rank && me.rank > 3 && (
-            <Rise delay={1500}><div className="mt-5 text-center text-sm text-white/70">You were <span className="font-black text-white">{ordinal(me.rank)}</span> — {r.podium[2] ? `${Math.max(0, r.podium[2].total_points - me.total_points)} pts off the podium` : ""}</div></Rise>
+            <Rise delay={1500}><div className="mt-5 text-center text-sm text-white/70">You were <span className="font-bold text-white">{ordinal(me.rank)}</span> — {r.podium[2] ? `${Math.max(0, r.podium[2].total_points - me.total_points)} pts off the podium` : ""}</div></Rise>
           )}
         </div>
       ),
@@ -337,7 +337,7 @@ function buildSlides(r: LeagueRecap): Slide[] {
     render: () => (
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
         <Rise><Kicker>New month · new board</Kicker></Rise>
-        <Rise delay={150}><div className="mt-4 text-5xl font-black leading-tight text-white">{nextMonthName(r.month_start)} is live</div></Rise>
+        <Rise delay={150}><div className="mt-4 text-5xl font-bold leading-tight text-white">{nextMonthName(r.month_start)} is live</div></Rise>
         <Rise delay={500}><p className="mt-4 text-base leading-relaxed text-white/75">{outroLine(r)}</p></Rise>
       </div>
     ),
@@ -640,7 +640,7 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
                     type="button"
                     onClick={() => void shareRecap("share")}
                     disabled={!!sharing}
-                    className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 text-[14px] font-black text-white ring-1 ring-white/20 backdrop-blur transition active:scale-[0.98] disabled:opacity-60"
+                    className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 text-[14px] font-bold text-white ring-1 ring-white/20 backdrop-blur transition active:scale-[0.98] disabled:opacity-60"
                   >
                     <Share2 className="h-4 w-4" /> {sharing === "share" ? "Preparing…" : "Share"}
                   </button>
@@ -648,7 +648,7 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
                     type="button"
                     onClick={() => void shareRecap("save")}
                     disabled={!!sharing}
-                    className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 text-[14px] font-black text-white ring-1 ring-white/20 backdrop-blur transition active:scale-[0.98] disabled:opacity-60"
+                    className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 text-[14px] font-bold text-white ring-1 ring-white/20 backdrop-blur transition active:scale-[0.98] disabled:opacity-60"
                   >
                     <Download className="h-4 w-4" /> {sharing === "save" ? "Preparing…" : "Save image"}
                   </button>
@@ -656,7 +656,7 @@ export function LeagueRecapStory({ recap, open, onClose }: { recap: LeagueRecap;
                 <button
                   type="button"
                   onClick={onClose}
-                  className="jf-rc-rise h-12 w-full rounded-2xl bg-white text-[15px] font-black text-black transition active:scale-[0.98]"
+                  className="jf-rc-rise h-12 w-full rounded-2xl bg-white text-[15px] font-bold text-black transition active:scale-[0.98]"
                   style={{ animationDelay: "900ms" }}
                 >
                   Let's go 💪
@@ -768,11 +768,11 @@ export function LeagueRecapButton({ className, variant = "banner" }: {
           {/* a thumbnail, like a video: it plays */}
           <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl shadow-sm" style={{ background: RECAP_GRADIENT }} aria-hidden>
             <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-black">
-              <span className="ml-0.5 text-xs font-black">▶</span>
+              <span className="ml-0.5 text-xs font-bold">▶</span>
             </span>
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-black leading-5 tracking-tight">Your {monthName(recap.month_start)} recap</span>
+            <span className="block truncate text-[15px] font-bold leading-5 tracking-tight">Your {monthName(recap.month_start)} recap</span>
             <span className="mt-0.5 block truncate text-[12px] font-semibold text-muted-foreground">{result}</span>
           </span>
           <Clapperboard className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
@@ -792,12 +792,12 @@ export function LeagueRecapButton({ className, variant = "banner" }: {
         style={{ background: RECAP_GRADIENT }}
       >
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-black">
-          <span className="ml-0.5 text-sm font-black">▶</span>
+          <span className="ml-0.5 text-sm font-bold">▶</span>
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
-            <span className="truncate text-[16px] font-black leading-5 tracking-tight">Your {monthName(recap.month_start)} recap</span>
-            {fresh && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[10px] font-black uppercase leading-4 text-black">New</span>}
+            <span className="truncate text-[16px] font-bold leading-5 tracking-tight">Your {monthName(recap.month_start)} recap</span>
+            {fresh && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold uppercase leading-4 text-black">New</span>}
           </span>
           <span className="mt-0.5 block truncate text-[13px] font-semibold text-white/80">{result}</span>
         </span>

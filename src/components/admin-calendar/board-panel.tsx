@@ -113,7 +113,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
           aria-checked={includeGoogle}
           onClick={() => chooseSource(true)}
           title={gcalStatus?.calendarName ? `Adds ${gcalStatus.calendarName} and your main Google calendar` : undefined}
-          className={cn("inline-flex items-center gap-1 rounded-full px-3", includeGoogle ? "bg-sky-500 text-white" : "text-muted-foreground")}
+          className={cn("inline-flex items-center gap-1 rounded-full px-3", includeGoogle ? "bg-info text-white" : "text-muted-foreground")}
         >
           <CalIcon className="h-3 w-3" /> + Google
         </button>

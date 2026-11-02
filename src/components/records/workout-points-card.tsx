@@ -44,14 +44,14 @@ export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
-      <div className="px-3.5 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">Points earned</div>
+      <div className="px-3.5 pt-3 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Points earned</div>
       <div>
         {/* League */}
         <div className="p-3.5">
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
             <Trophy className="h-3.5 w-3.5 text-primary" /> League
           </div>
-          <div className="mt-0.5 text-3xl font-black tabular-nums text-primary">+{leagueTotal}</div>
+          <div className="mt-0.5 text-3xl font-bold tabular-nums text-primary">+{leagueTotal}</div>
           <ul className="mt-1.5 space-y-0.5 text-[11px] leading-snug">
             {leagueLines.map(({ label, n }) => (
               <li key={label} className="flex justify-between gap-2">
@@ -73,7 +73,7 @@ export function WorkoutPointsCard({ points }: { points: WorkoutPoints }) {
                   )}
                   title={`${r.exercise_name} · ${SCOPE_LABEL[r.scope]}`}
                 >
-                  <span className="font-black">{SCOPE_LABEL[r.scope]}</span> · {r.exercise_name}
+                  <span className="font-bold">{SCOPE_LABEL[r.scope]}</span> · {r.exercise_name}
                 </span>
               ))}
             </div>

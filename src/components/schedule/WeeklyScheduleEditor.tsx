@@ -161,7 +161,7 @@ export function WeeklyScheduleEditor({ days, weeks, weekId, scheduledInstances }
           </Button>
         </div>
         {instanceBlockedMoves.length > 0 && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+          <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
             {instanceBlockedMoves.length} of these workouts use the new
             scheduling system. Move them from the workout calendar instead —
             this weekly editor would silently desync the schedule.

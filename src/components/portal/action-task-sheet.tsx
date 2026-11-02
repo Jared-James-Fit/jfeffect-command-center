@@ -36,7 +36,7 @@ function targetForTask(item: ActionCentreItem): TaskTarget {
 }
 
 const TONE_TO_CHIP: Record<ActionCentreItem["chip"]["tone"], string> = {
-  success: "bg-emerald-500/15 text-emerald-500",
+  success: "bg-success/15 text-success",
   warning: "bg-warning/15 text-warning",
   danger: "bg-destructive/15 text-destructive",
   info: "bg-primary/15 text-primary",

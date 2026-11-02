@@ -357,7 +357,7 @@ export function SlideTray({ tray, cover, onCamera, onLibrary, hasCover = true }:
       {hasCover && (
         <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-white/10 ring-2 ring-white" aria-label="Slide 1, on screen">
           {cover && <img src={cover} alt="" className="h-full w-full object-cover" />}
-          <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-black">1</span>
+          <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-bold">1</span>
         </div>
       )}
       {tray.items.map((it, i) => {
@@ -374,8 +374,8 @@ export function SlideTray({ tray, cover, onCamera, onLibrary, hasCover = true }:
             >
               {src && <img src={src} alt="" className="h-full w-full object-cover" />}
               {it.kind === "video" && (it.video ? <Scissors className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow" /> : <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />)}
-              {it.seconds != null && !busy && it.status !== "error" && <span className="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-0.5 text-[8px] font-black tabular-nums">{formatClock(it.seconds)}</span>}
-              <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-black">{i + first}</span>
+              {it.seconds != null && !busy && it.status !== "error" && <span className="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-0.5 text-[8px] font-bold tabular-nums">{formatClock(it.seconds)}</span>}
+              <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-bold">{i + first}</span>
               {busy && (
                 <span className="absolute inset-x-1 bottom-1 h-1 overflow-hidden rounded-full bg-black/50">
                   <span className="block h-full rounded-full bg-white transition-[width]" style={{ width: `${Math.max(8, it.progress)}%` }} />
@@ -383,7 +383,7 @@ export function SlideTray({ tray, cover, onCamera, onLibrary, hasCover = true }:
               )}
               {it.status === "error" && (
                 <span className="absolute inset-0 grid place-items-center bg-black/55">
-                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <AlertCircle className="h-5 w-5 text-destructive" />
                 </span>
               )}
             </button>

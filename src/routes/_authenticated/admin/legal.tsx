@@ -92,14 +92,14 @@ function LegalAdminPage() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium truncate">{d.title}</span>
                       <Badge variant="outline" className={
-                        status === "Published" ? "border-emerald-500/40 text-emerald-600" :
-                        status === "Draft" ? "border-amber-500/40 text-amber-600" :
+                        status === "Published" ? "border-success/40 text-success" :
+                        status === "Draft" ? "border-warning/40 text-warning" :
                         ""
                       }>{status}</Badge>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mt-1">
                       <span>{d.doc_type.replace(/_/g," ")}</span>
-                      {needsReview && <span className="text-amber-600">· Needs legal review</span>}
+                      {needsReview && <span className="text-warning">· Needs legal review</span>}
                     </div>
                   </button>
                 </li>
@@ -260,7 +260,7 @@ function DocumentDetail({ documentId }: { documentId: string }) {
             <FileText className="h-4 w-4" /> {editing ? "Edit draft" : published ? "Create next version" : "First draft"}
           </h3>
           {current.needs_legal_review && (
-            <Badge variant="outline" className="border-amber-500/40 text-amber-600 flex items-center gap-1">
+            <Badge variant="outline" className="border-warning/40 text-warning flex items-center gap-1">
               <ShieldAlert className="h-3 w-3" /> Requires professional legal review before publishing
             </Badge>
           )}
@@ -324,7 +324,7 @@ function DocumentDetail({ documentId }: { documentId: string }) {
           </Sheet>
           <Button onClick={save}>Save draft</Button>
           {editing && !editing.needs_legal_review && (
-            <Button onClick={() => publish(editing.id)} className="bg-emerald-600 hover:bg-emerald-700">Publish</Button>
+            <Button onClick={() => publish(editing.id)} className="bg-success hover:bg-success">Publish</Button>
           )}
           {editing && editing.needs_legal_review && (
             <Button disabled title="Turn off 'Still needs professional legal review' once it has been reviewed.">Publish</Button>
@@ -341,8 +341,8 @@ function DocumentDetail({ documentId }: { documentId: string }) {
                 <div className="text-sm font-medium flex items-center gap-2">
                   v{v.version_number} — {v.title}
                   <Badge variant="outline" className={
-                    v.status === "published" ? "border-emerald-500/40 text-emerald-600" :
-                    v.status === "draft" ? "border-amber-500/40 text-amber-600" :
+                    v.status === "published" ? "border-success/40 text-success" :
+                    v.status === "draft" ? "border-warning/40 text-warning" :
                     "text-muted-foreground"
                   }>{v.status}</Badge>
                 </div>
@@ -380,7 +380,7 @@ function DocumentDetail({ documentId }: { documentId: string }) {
             <AlertDialogAction
               disabled={confirmBusy}
               onClick={(e) => { e.preventDefault(); runConfirm(); }}
-              className={confirmState?.kind === "publish" ? "bg-emerald-600 hover:bg-emerald-700" : undefined}
+              className={confirmState?.kind === "publish" ? "bg-success hover:bg-success" : undefined}
             >
               {confirmBusy
                 ? (confirmState?.kind === "publish" ? "Publishing…" : "Archiving…")

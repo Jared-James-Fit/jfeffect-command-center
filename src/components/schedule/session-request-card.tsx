@@ -160,7 +160,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
   if (isLoading) return <div className="h-24 w-64 animate-pulse rounded-2xl bg-secondary/40" />;
   if (!req) return null;
 
-  const tone = req.status === "approved" ? "border-emerald-500/40 bg-emerald-500/10"
+  const tone = req.status === "approved" ? "border-success/40 bg-success/10"
     : req.status === "pending" ? "border-primary/40 bg-primary/5"
     : "border-border bg-secondary/30";
   const StatusIcon = req.status === "approved" ? CalendarCheck2 : req.status === "pending" ? Clock : CalendarX2;
@@ -247,7 +247,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
               </div>
               {credit && (
                 <div className={cn("text-[11px]",
-                  credit.tone === "none" ? "text-amber-600 dark:text-amber-300" : credit.tone === "renewal" ? "text-foreground/80" : "text-muted-foreground")}>
+                  credit.tone === "none" ? "text-warning" : credit.tone === "renewal" ? "text-foreground/80" : "text-muted-foreground")}>
                   {credit.text}
                 </div>
               )}
@@ -289,7 +289,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
                   <span>Clashes with {clashes[0].title}{clashes.length > 1 ? ` and ${clashes.length - 1} more` : ""}</span>
                 </div>
               ) : conflict.failed ? (
-                <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-300"><AlertTriangle className="h-3 w-3" /> Couldn't check your calendar.</div>
+                <div className="flex items-center gap-1.5 text-[11px] text-warning"><AlertTriangle className="h-3 w-3" /> Couldn't check your calendar.</div>
               ) : (
                 <div className="flex items-center gap-1.5 text-[11px] text-success"><CheckCircle2 className="h-3 w-3" /> You're free then.</div>
               )
@@ -305,7 +305,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
 
       {!answering && (
         <div className={cn("flex items-center gap-1.5 text-xs font-semibold",
-          req.status === "approved" ? "text-emerald-600 dark:text-emerald-400" : req.status === "pending" ? "text-primary" : "text-muted-foreground")}>
+          req.status === "approved" ? "text-success" : req.status === "pending" ? "text-primary" : "text-muted-foreground")}>
           <StatusIcon className="h-3.5 w-3.5" />
           {approvedLabel}
         </div>
@@ -316,7 +316,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
         <div className="space-y-1.5 pt-1">
           <div className="grid grid-cols-2 gap-2">
             <Button size="sm"
-              className={cn("h-9 font-bold", clashes.length || blockedByPackage ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-gradient-primary")}
+              className={cn("h-9 font-bold", clashes.length || blockedByPackage ? "bg-warning text-white hover:bg-warning/90" : "bg-primary text-primary-foreground")}
               disabled={busy || (oneTap && (needsTime || !end || checking))}
               onClick={approve}>
               {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : !(clashes.length || blockedByPackage) && <Check className="mr-1 h-4 w-4" />}

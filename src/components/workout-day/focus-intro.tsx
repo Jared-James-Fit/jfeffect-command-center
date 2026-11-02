@@ -72,7 +72,7 @@ function FocusIntroAnimation() {
       </div>
       <div className="absolute inset-x-0 bottom-1.5 top-[11px] overflow-hidden">
         <div className="jf-fi-track flex h-[300%] w-full flex-col">
-          {["bg-emerald-500", "bg-sky-500", "bg-primary"].map((tone, i) => (
+          {["bg-success", "bg-info", "bg-primary"].map((tone, i) => (
             <div key={i} className="h-1/3 w-full px-1.5 pb-1">
               <div className="flex h-full flex-col gap-[3px] rounded-[5px] border border-border bg-card p-1">
                 <span className={`h-[3px] w-3 rounded-full ${tone}`} />
@@ -96,12 +96,12 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
       data-testid="focus-intro"
       role="region"
       aria-label="New: Focus"
-      className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/[0.13] via-card to-card p-3.5 animate-in fade-in-0 slide-in-from-top-2 duration-500"
+      className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-primary/30 bg-card p-3.5 animate-in fade-in-0 slide-in-from-top-2 duration-500"
     >
       <FocusIntroAnimation />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-primary-foreground">New</span>
+          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-primary-foreground">New</span>
           <span className="text-sm font-bold text-foreground">Focus</span>
         </div>
         <p className="mt-1 text-[13px] leading-snug text-muted-foreground">

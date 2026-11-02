@@ -305,10 +305,10 @@ export function statusTone(s: LiftVideoStatus) {
   switch (s) {
     case "New Upload": return "border-primary/40 bg-primary/10 text-primary";
     case "Awaiting Review": return "border-warning/40 bg-warning/10 text-warning";
-    case "Watched": return "border-blue-500/40 bg-blue-500/10 text-blue-600";
-    case "Commented": return "border-purple-500/40 bg-purple-500/10 text-purple-600";
+    case "Watched": return "border-info/40 bg-info/10 text-info";
+    case "Commented": return "border-border bg-muted-foreground/10 text-muted-foreground";
     case "Needs Follow-Up": return "border-destructive/40 bg-destructive/10 text-destructive";
-    case "Reviewed": return "border-emerald-500/40 bg-emerald-500/10 text-emerald-600";
+    case "Reviewed": return "border-success/40 bg-success/10 text-success";
     default: return "border-border text-muted-foreground";
   }
 }

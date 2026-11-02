@@ -58,7 +58,7 @@ function AuthPage() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="flex h-[54px] w-full items-center justify-center rounded-2xl bg-gradient-primary text-[17px] font-semibold text-primary-foreground transition active:scale-[0.985]"
+              className="flex h-[54px] w-full items-center justify-center rounded-2xl bg-primary text-primary-foreground text-[17px] font-semibold text-primary-foreground transition active:scale-[0.985]"
             >
               Try again
             </button>

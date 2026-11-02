@@ -86,7 +86,7 @@ export function LoadSuggestionCard({
       <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-base font-black tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
+          <span className="text-base font-bold tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
           <span className="truncate text-[11px] font-medium text-muted-foreground">
             {plan.reps} @ RPE {fmtNum(plan.rpe)}
           </span>
@@ -95,7 +95,7 @@ export function LoadSuggestionCard({
               data-testid="load-badge"
               className={cn(
                 "ml-auto shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold",
-                badge.live ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+                badge.live ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
               )}
             >
               {badge.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-current align-middle" aria-hidden="true" />}
@@ -105,9 +105,9 @@ export function LoadSuggestionCard({
         </div>
         <div className="truncate text-[11px] tabular-nums text-muted-foreground" data-testid="load-audible">
           {range && <>{range}<span aria-hidden="true"> · </span></>}
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400">▲ Fast +{fmtNum(audible)}</span>
+          <span className="font-semibold text-success">▲ Fast +{fmtNum(audible)}</span>
           <span aria-hidden="true"> · </span>
-          <span className="font-semibold text-amber-600 dark:text-amber-400">▼ Slow −{fmtNum(audible)}</span>
+          <span className="font-semibold text-warning">▼ Slow −{fmtNum(audible)}</span>
         </div>
       </div>
       <Popover>
@@ -248,13 +248,13 @@ export function LoadSuggestionsDone({
   const read = pct == null ? null : Math.abs(own! - 1) < 0.015 ? "right on your usual" : `${Math.abs(pct)}% ${pct > 0 ? "above" : "below"} your usual`;
   return (
     <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-2 py-1.5 text-[11px] leading-snug text-muted-foreground" data-testid="load-suggestion-done">
-      <Check className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
+      <Check className="mt-px h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
       <span>
         All sets in
         {read && <> · today ran <span className="font-semibold text-foreground">{read}</span></>}
         {next && (
           <span className="block" data-testid="load-next-time">
-            Next time: <span className="text-sm font-black tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
+            Next time: <span className="text-sm font-bold tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
             {plan && <> for {plan.reps} @ RPE {fmtNum(plan.rpe)}</>}
           </span>
         )}

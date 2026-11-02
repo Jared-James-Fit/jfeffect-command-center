@@ -26,7 +26,7 @@ function Cell({ label, value, progress }: { label: string; value: string; progre
   return (
     <div>
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-black">{value}</div>
+      <div className="mt-1 text-lg font-bold">{value}</div>
       {progress != null && <Progress value={progress} className="mt-2 h-1.5" />}
     </div>
   );

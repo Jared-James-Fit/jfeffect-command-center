@@ -72,7 +72,7 @@ export function ProgressReviewQueue() {
         <Card className="p-8 text-center text-sm text-muted-foreground">
           {status === "awaiting_review" ? (
             <>
-              <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-500" />
+              <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-success" />
               All caught up — no submissions waiting for review.
             </>
           ) : (

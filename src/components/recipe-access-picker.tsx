@@ -112,7 +112,7 @@ export function RecipeAccessPicker({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold">
+          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground font-semibold">
             Save Access
           </Button>
         </DialogFooter>

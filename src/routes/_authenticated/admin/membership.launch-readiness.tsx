@@ -13,10 +13,10 @@ export const Route = createFileRoute("/_authenticated/admin/membership/launch-re
 });
 
 const STATE_META: Record<string, { label: string; icon: any; cls: string }> = {
-  ready:   { label: "Ready",   icon: CheckCircle2, cls: "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" },
-  warning: { label: "Warning", icon: AlertTriangle, cls: "text-amber-300 bg-amber-500/15 border-amber-500/30" },
-  blocked: { label: "Blocked", icon: XCircle,     cls: "text-rose-300 bg-rose-500/15 border-rose-500/30" },
-  manual:  { label: "Manual",  icon: EyeOff,      cls: "text-sky-300 bg-sky-500/15 border-sky-500/30" },
+  ready:   { label: "Ready",   icon: CheckCircle2, cls: "text-success bg-success/15 border-success/30" },
+  warning: { label: "Warning", icon: AlertTriangle, cls: "text-warning bg-warning/15 border-warning/30" },
+  blocked: { label: "Blocked", icon: XCircle,     cls: "text-destructive bg-destructive/15 border-destructive/30" },
+  manual:  { label: "Manual",  icon: EyeOff,      cls: "text-info bg-info/15 border-info/30" },
 };
 
 function LaunchReadinessPage() {
@@ -47,12 +47,12 @@ function LaunchReadinessPage() {
   const promotionBlockers = blockers.filter((b) => b.blocks_promotion && !b.blocks_checkout);
 
   const summaryTone = data?.summary === "Ready to Promote and Sell"
-    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+    ? "bg-success/15 text-success border-success/30"
     : data?.summary === "Ready for Final Manual Verification"
-      ? "bg-sky-500/15 text-sky-300 border-sky-500/30"
+      ? "bg-info/15 text-info border-info/30"
       : data?.summary === "Ready for Test-Mode QA"
-        ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-        : "bg-rose-500/15 text-rose-300 border-rose-500/30";
+        ? "bg-warning/15 text-warning border-warning/30"
+        : "bg-destructive/15 text-destructive border-destructive/30";
 
   return (
     <div className="space-y-5">
@@ -73,12 +73,12 @@ function LaunchReadinessPage() {
         <>
           <Card className={`p-4 border ${summaryTone}`}>
             <div className="text-xs uppercase tracking-widest opacity-80">Overall</div>
-            <div className="text-2xl font-black tracking-tight">{data?.summary}</div>
+            <div className="text-2xl font-bold tracking-tight">{data?.summary}</div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <Badge variant="outline" className="border-emerald-500/30">{data?.counts.ready ?? 0} ready</Badge>
-              <Badge variant="outline" className="border-amber-500/30">{data?.counts.warning ?? 0} warning</Badge>
-              <Badge variant="outline" className="border-rose-500/30">{data?.counts.blocked ?? 0} blocked</Badge>
-              <Badge variant="outline" className="border-sky-500/30">{data?.counts.manual ?? 0} manual</Badge>
+              <Badge variant="outline" className="border-success/30">{data?.counts.ready ?? 0} ready</Badge>
+              <Badge variant="outline" className="border-warning/30">{data?.counts.warning ?? 0} warning</Badge>
+              <Badge variant="outline" className="border-destructive/30">{data?.counts.blocked ?? 0} blocked</Badge>
+              <Badge variant="outline" className="border-info/30">{data?.counts.manual ?? 0} manual</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <Link to="/admin/membership/billing-events"><Button size="sm" variant="outline">Billing Events</Button></Link>
@@ -89,22 +89,22 @@ function LaunchReadinessPage() {
           </Card>
 
           {blockers.length > 0 && (
-            <Card className="p-4 border border-rose-500/30 bg-rose-500/5 space-y-3">
+            <Card className="p-4 border border-destructive/30 bg-destructive/5 space-y-3">
               <div>
-                <div className="text-xs uppercase tracking-widest text-rose-300">Action required</div>
+                <div className="text-xs uppercase tracking-widest text-destructive">Action required</div>
                 <div className="text-lg font-bold">
                   {checkoutBlockers.length} blocker(s) for Checkout · {promotionBlockers.length} additional blocker(s) for Promotion
                 </div>
               </div>
               <ul className="space-y-2">
                 {blockers.map((b) => (
-                  <li key={b.key} className="flex flex-col gap-1 rounded-md border border-rose-500/20 bg-background/40 p-3 sm:flex-row sm:items-start sm:justify-between">
+                  <li key={b.key} className="flex flex-col gap-1 rounded-md border border-destructive/20 bg-background/40 p-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold">{b.label}</span>
                         {b.owner && <Badge variant="outline" className="text-[10px]">Owner: {b.owner}</Badge>}
-                        {b.blocks_checkout && <Badge className="bg-rose-500/20 text-rose-200 text-[10px] border border-rose-500/40">Blocks Checkout</Badge>}
-                        {b.blocks_promotion && !b.blocks_checkout && <Badge className="bg-amber-500/20 text-amber-200 text-[10px] border border-amber-500/40">Blocks Promotion</Badge>}
+                        {b.blocks_checkout && <Badge className="bg-destructive/20 text-destructive text-[10px] border border-destructive/40">Blocks Checkout</Badge>}
+                        {b.blocks_promotion && !b.blocks_checkout && <Badge className="bg-warning/20 text-warning text-[10px] border border-warning/40">Blocks Promotion</Badge>}
                       </div>
                       {b.next_step ? (
                         <div className="mt-1 text-xs text-muted-foreground">{b.next_step}</div>

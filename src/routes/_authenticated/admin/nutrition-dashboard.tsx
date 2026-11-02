@@ -39,13 +39,13 @@ function NutritionDashboardSkeleton() {
 }
 
 const STATUS_META: Record<string, { label: string; tone: string }> = {
-  overdue: { label: "Overdue", tone: "bg-red-500/15 text-red-400 border-red-500/30" },
-  due_today: { label: "Due today", tone: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  due_soon: { label: "Due soon", tone: "bg-amber-500/10 text-amber-300 border-amber-500/20" },
-  submitted: { label: "Submitted", tone: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
-  under_review: { label: "Under review", tone: "bg-blue-500/10 text-blue-300 border-blue-500/20" },
-  up_to_date: { label: "Up to date", tone: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  published: { label: "Published", tone: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  overdue: { label: "Overdue", tone: "bg-destructive/15 text-destructive border-destructive/30" },
+  due_today: { label: "Due today", tone: "bg-warning/15 text-warning border-warning/30" },
+  due_soon: { label: "Due soon", tone: "bg-warning/10 text-warning border-warning/20" },
+  submitted: { label: "Submitted", tone: "bg-info/15 text-info border-info/30" },
+  under_review: { label: "Under review", tone: "bg-info/10 text-info border-info/20" },
+  up_to_date: { label: "Up to date", tone: "bg-success/15 text-success border-success/30" },
+  published: { label: "Published", tone: "bg-success/15 text-success border-success/30" },
   paused: { label: "Paused", tone: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30" },
   not_needed: { label: "Not needed", tone: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30" },
 };
@@ -83,10 +83,10 @@ function NutritionDashboard() {
   const counts = data?.counts ?? { overdue: 0, due_today: 0, submitted: 0, due_this_week: 0, up_to_date: 0, paused: 0 };
 
   const tiles = [
-    { key: "overdue", label: "Overdue", value: counts.overdue, icon: AlertTriangle, tone: "text-red-400" },
-    { key: "due_today", label: "Due today", value: counts.due_today, icon: Clock, tone: "text-amber-400" },
-    { key: "submitted", label: "Submitted", value: counts.submitted, icon: Inbox, tone: "text-blue-400" },
-    { key: "up_to_date", label: "Up to date", value: counts.up_to_date, icon: CheckCircle2, tone: "text-emerald-400" },
+    { key: "overdue", label: "Overdue", value: counts.overdue, icon: AlertTriangle, tone: "text-destructive" },
+    { key: "due_today", label: "Due today", value: counts.due_today, icon: Clock, tone: "text-warning" },
+    { key: "submitted", label: "Submitted", value: counts.submitted, icon: Inbox, tone: "text-info" },
+    { key: "up_to_date", label: "Up to date", value: counts.up_to_date, icon: CheckCircle2, tone: "text-success" },
     { key: "paused", label: "Paused", value: counts.paused, icon: Pause, tone: "text-zinc-300" },
   ] as const;
 
@@ -102,7 +102,7 @@ function NutritionDashboard() {
                 <span className="text-xs uppercase tracking-wide text-muted-foreground">{t.label}</span>
                 <t.icon className={`h-4 w-4 ${t.tone}`} />
               </div>
-              <div className="mt-1 text-2xl font-black">{t.value}</div>
+              <div className="mt-1 text-2xl font-bold">{t.value}</div>
             </button>
           ))}
         </div>
@@ -151,7 +151,7 @@ function NutritionDashboard() {
                         </ClientNameLink>
                         <Badge variant="outline" className={`text-[10px] ${meta.tone}`}>{meta.label}</Badge>
                         {r.open_submission ? (
-                          <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-300 border-blue-500/30">New submission</Badge>
+                          <Badge variant="outline" className="text-[10px] bg-info/10 text-info border-info/30">New submission</Badge>
                         ) : null}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
@@ -252,7 +252,7 @@ function PendingTargetsApprovalCard() {
   });
   if (rows.length === 0) return null;
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+    <Card className="border-warning/40 bg-warning/5 p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="font-semibold">Pending target approvals</div>
         <Badge variant="outline">{rows.length}</Badge>

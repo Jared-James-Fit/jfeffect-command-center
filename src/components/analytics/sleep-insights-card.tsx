@@ -144,7 +144,7 @@ export function SleepInsightsCard({ clientId, blockStart, blockEnd, blockLabel }
   const header = (
     <div className="mb-3 flex items-center gap-2">
       <Moon className="h-5 w-5 shrink-0 text-primary" />
-      <h2 className="text-base font-black uppercase tracking-wider text-foreground">Sleep Insights</h2>
+      <h2 className="text-base font-bold uppercase tracking-wider text-foreground">Sleep Insights</h2>
       <InfoTip label="About sleep insights" title="Sleep Insights" align="start">
         Sleep comes from the rating logged on workout reviews/check-ins — it is
         only as reliable as how often entries are logged. Averages convert each
@@ -183,8 +183,8 @@ export function SleepInsightsCard({ clientId, blockStart, blockEnd, blockLabel }
       : trend === "Dropping" ? <TrendingDown className="h-3.5 w-3.5" />
       : <Minus className="h-3.5 w-3.5" />;
   const trendClass =
-    trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
-      : trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
+    trend === "Improving" ? "text-success"
+      : trend === "Dropping" ? "text-destructive"
       : "text-muted-foreground";
 
   return (
@@ -237,7 +237,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="mt-0.5 text-lg font-black text-foreground tabular-nums">{value}</div>
+      <div className="mt-0.5 text-lg font-bold text-foreground tabular-nums">{value}</div>
     </div>
   );
 }

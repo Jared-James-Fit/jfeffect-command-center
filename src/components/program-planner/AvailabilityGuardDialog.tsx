@@ -94,8 +94,8 @@ export function AvailabilityGuardDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 pr-8 text-left">
             {tone === "ok"
-              ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-              : <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />}
+              ? <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+              : <AlertTriangle className="h-5 w-5 shrink-0 text-warning" />}
             {guard.title}
           </DialogTitle>
           <DialogDescription className="text-left">{guard.message}</DialogDescription>
@@ -125,7 +125,7 @@ export function AvailabilityGuardDialog({
           )}
 
           {guard.variableFrequency && (
-            <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px] text-amber-700 dark:text-amber-400">
+            <div className="rounded border border-warning/40 bg-warning/5 p-2 text-[11px] text-warning">
               This program's weekly frequency changes between weeks
               {guard.frequency.min ? ` (${guard.frequency.min}–${guard.frequency.max} workouts/week)` : ""}.
               Availability must support the busiest week ({required} days).

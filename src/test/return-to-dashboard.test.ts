@@ -16,11 +16,11 @@ describe("‹ Today pill", () => {
     expect(withinReturnScope("/admin/programming", "/admin/clients")).toBe(false);
   });
 
-  it("dashboard quick looks arm it; quick actions and the More sheet don't", () => {
+  it("dashboard quick looks arm it; there's no quick-action grid repeating the bottom bar", () => {
     const src = readFileSync("src/routes/_authenticated/admin/index.tsx", "utf8");
     expect(src).toMatch(/onClickCapture=\{onDashboardClickCapture\}/);
-    expect(src).toMatch(/className="grid grid-cols-5 gap-2" data-no-return/);
-    expect(src).toMatch(/<SheetContent side="bottom" className="rounded-t-2xl" data-no-return>/);
+    expect(src).not.toContain("QUICK ACTIONS");
+    expect(src).not.toContain("function ActionsSheet(");
     expect(readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8")).toMatch(/<ReturnToDashboardPill \/>/);
   });
 });

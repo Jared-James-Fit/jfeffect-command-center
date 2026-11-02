@@ -83,7 +83,7 @@ export function CoachingManagementBoard() {
             <Badge variant="outline">{status.label}</Badge>
             {row.coaching_type && <span className="text-xs text-muted-foreground">{row.coaching_type}</span>}
             {alert && (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-500" title={alert.detail}>
+              <span className="inline-flex items-center gap-1 text-xs text-warning" title={alert.detail}>
                 <AlertTriangle className="h-3.5 w-3.5" />{alert.label}
               </span>
             )}

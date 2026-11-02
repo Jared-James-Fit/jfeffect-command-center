@@ -270,7 +270,7 @@ export function MaxEditorDialog({
           </div>
 
           {mismatch && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-200">
+            <p className="rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-xs text-warning">
               This client logs in <b>{clientUnit}</b>. {form.one_rm} {unit} = <b>{converted} {clientUnit}</b>. If you meant {form.one_rm} {clientUnit}, switch the unit below.
             </p>
           )}

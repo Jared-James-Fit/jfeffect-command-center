@@ -59,8 +59,8 @@ describe("client tab bar: Crew in the centre", () => {
   it("the centre button is only brand-red on its own page, and every label sits on one line", () => {
     // a Cleo-style disc: brand gradient when you're on Crew, a quiet raised disc otherwise,
     // so it never reads as the selected tab
-    expect(shell).toContain('? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring');
-    expect(shell).toContain(': "bg-gradient-to-b from-secondary to-card text-foreground inset-ring');
+    expect(shell).toContain('? "bg-primary text-primary-foreground inset-ring');
+    expect(shell).toContain(': "bg-secondary text-foreground inset-ring');
     // springy press, and the icon settles in when Crew opens
     expect(shell).toContain("group-active/tab:scale-[0.92]");
     expect(shell).toContain('lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none"');
@@ -118,7 +118,7 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("ring-[3px] ring-card");
     // The trophy is gold in both states; lit, the satellite glows gold (Crew lights red).
     const satellite = shell.slice(shell.indexOf("data-featured-shortcut"), shell.indexOf("<ShortcutIcon"));
-    expect(satellite.match(/text-amber-500/g)?.length).toBe(2);
+    expect(satellite.match(/text-warning/g)?.length).toBe(2);
     expect(satellite).not.toContain("text-primary-foreground");
     // the Crew screen follows the hash, so the shortcut and Crew switch the view in place
     const crew = read("src/components/community/community-screen.tsx");

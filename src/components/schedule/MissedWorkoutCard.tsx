@@ -113,10 +113,10 @@ export function MissedWorkoutCard({ clientId }: MissedWorkoutCardProps) {
 
   return (
     <>
-      <Card className="border-amber-500/40">
+      <Card className="border-warning/40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <AlertCircle className="h-4 w-4 text-amber-500" /> Missed workouts ({missed.length})
+            <AlertCircle className="h-4 w-4 text-warning" /> Missed workouts ({missed.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">

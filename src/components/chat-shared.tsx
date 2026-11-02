@@ -846,10 +846,10 @@ function PostCardInChat({ att, mine }: { att: SharedAttachment; mine: boolean })
 function statusTone(label: string) {
   const l = label.toLowerCase();
   if (l.includes("submit") || l.includes("sign") || l.includes("verifi") || l.includes("complete")) {
-    return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+    return "bg-success/15 text-success border-success/30";
   }
   if (l.includes("open") || l.includes("progress")) {
-    return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+    return "bg-warning/15 text-warning border-warning/30";
   }
   if (l.includes("error") || l.includes("declin") || l.includes("expired") || l.includes("cancel")) {
     return "bg-destructive/15 text-destructive border-destructive/30";

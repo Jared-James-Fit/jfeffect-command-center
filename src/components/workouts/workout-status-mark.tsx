@@ -54,7 +54,7 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
   const box = cn("inline-grid h-2.5 w-2.5 shrink-0 place-items-center", className);
   if (mark.kind === "done") {
     return (
-      <span className={cn(box, "rounded-full bg-emerald-500 text-white", onPrimary && "ring-1 ring-white/70")} aria-label="Completed">
+      <span className={cn(box, "rounded-full bg-success text-white", onPrimary && "ring-1 ring-white/70")} aria-label="Completed">
         <Check className="h-2 w-2" strokeWidth={4} />
       </span>
     );
@@ -62,7 +62,7 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
   if (mark.kind === "skipped") {
     return (
       <span
-        className={cn(box, "rounded-full border", onPrimary ? "border-white/60 text-white/70" : "border-rose-500/60 text-rose-500/70")}
+        className={cn(box, "rounded-full border", onPrimary ? "border-white/60 text-white/70" : "border-destructive/60 text-destructive/70")}
         aria-label="Skipped"
       >
         <Minus className="h-2 w-2" strokeWidth={3.5} />
@@ -107,7 +107,7 @@ export function WorkoutMarkLegend({ className, sessions }: { className?: string;
       ))}
       {sessions && (
         <span className="inline-flex items-center gap-1">
-          <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-violet-500" /> Session
+          <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-muted-foreground" /> Session
         </span>
       )}
     </div>

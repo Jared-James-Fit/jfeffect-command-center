@@ -113,9 +113,9 @@ export function QuickValueSelect({
             "flex w-full items-center justify-center rounded-md border px-2 text-sm font-medium transition-colors whitespace-nowrap",
             focusMode ? "h-9 text-base" : "h-8",
             !hasValue && highlightWhenEmpty
-              ? "border-blue-500/40 bg-blue-500/10 text-foreground"
+              ? "border-info/40 bg-info/10 text-foreground"
               : "border-border/60 bg-muted/40 text-muted-foreground",
-            !disabled && !hasValue && "hover:border-blue-500/60 hover:bg-blue-500/10 cursor-pointer",
+            !disabled && !hasValue && "hover:border-info/60 hover:bg-info/10 cursor-pointer",
             !disabled && hasValue && "hover:bg-muted/60 cursor-pointer",
             disabled && "cursor-default",
           )}

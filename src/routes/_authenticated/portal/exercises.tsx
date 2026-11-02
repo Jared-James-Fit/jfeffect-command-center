@@ -108,7 +108,7 @@ function ExerciseLibrary() {
           <Card className="border-primary/40 bg-card p-4">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-lg font-black">{selected.name}</div>
+                <div className="text-lg font-bold">{selected.name}</div>
                 <div className="text-xs text-muted-foreground">{selected.category} · {selected.muscle_group}</div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelected(null)}>Close</button>
@@ -140,9 +140,9 @@ function ExerciseLibrary() {
               ))
             : visible.map((e) => (
             <button key={e.id} onClick={() => setSelected(e)} className="text-left">
-              <Card className="group h-full border-border bg-card p-4 transition hover:border-primary hover:shadow-glow">
+              <Card className="group h-full border-border bg-card p-4 transition hover:border-primary">
                 <div className="flex items-start gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-md bg-gradient-primary text-primary-foreground"><Play className="h-4 w-4" /></div>
+                  <div className="grid h-10 w-10 place-items-center rounded-md bg-primary text-primary-foreground text-primary-foreground"><Play className="h-4 w-4" /></div>
                   <div className="min-w-0">
                     <div className="truncate font-bold">
                       <HighlightedExerciseName text={e.name} terms={highlightTerms} />

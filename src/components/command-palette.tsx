@@ -318,7 +318,7 @@ export function CommandPalette({
                 >
                   <Icon className={cn(
                     "mr-2 h-4 w-4 shrink-0",
-                    e.isAction ? "text-emerald-500" : "text-primary",
+                    e.isAction ? "text-success" : "text-primary",
                   )} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -326,7 +326,7 @@ export function CommandPalette({
                         <Highlighted text={e.label} ranges={e._ranges} query={debounced} />
                       </span>
                       {e.isAction && (
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-600">
+                        <span className="rounded bg-success/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-success">
                           Action
                         </span>
                       )}
@@ -394,14 +394,14 @@ function QuickActionsGroup({ role, limit, onPick }: {
             value={`qa-${a.id}-${a.label}`}
             onSelect={() => onPick(a)}
           >
-            <Icon className="mr-2 h-4 w-4 shrink-0 text-emerald-500" />
+            <Icon className="mr-2 h-4 w-4 shrink-0 text-success" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{a.label}</div>
               {a.parent && (
                 <div className="truncate text-[11px] text-muted-foreground">{a.parent}</div>
               )}
             </div>
-            <Sparkles className="ml-2 h-3.5 w-3.5 shrink-0 text-emerald-500/60" />
+            <Sparkles className="ml-2 h-3.5 w-3.5 shrink-0 text-success/60" />
           </CommandItem>
         );
       })}

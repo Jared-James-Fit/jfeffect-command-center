@@ -41,7 +41,7 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
   if (!rows.length) return null;
   return (
     <section className="animate-in zoom-in-95 fade-in rounded-2xl border-2 border-primary/40 bg-primary/5 p-3 duration-700">
-      <div className="mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-primary">
+      <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-primary">
         {rows.length === 1 ? "New milestone unlocked" : `${rows.length} milestones unlocked`}
       </div>
       <div className="space-y-2">
@@ -51,7 +51,7 @@ export function NewAchievementReveal({ open }: { open: boolean }) {
             <div key={r.badge_key} className="flex items-center gap-3">
               <BadgeIcon icon={b.icon_key} rarity={b.rarity} />
               <div className="min-w-0">
-                <div className="text-sm font-black leading-tight">{b.name}</div>
+                <div className="text-sm font-bold leading-tight">{b.name}</div>
                 <div className={cn("text-[10px] font-semibold uppercase tracking-wider", RARITY_STYLE[b.rarity]?.text)}>{RARITY_STYLE[b.rarity]?.label}</div>
                 <div className="truncate text-xs text-muted-foreground">{b.description}</div>
               </div>

@@ -56,7 +56,7 @@ export function PostShareSheet({ post, open, onOpenChange, onStory, onMessage, o
       <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]" data-post-share-sheet>
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-1 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">Share</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">Share</SheetTitle>
             <SheetDescription className="sr-only">Add this post to your story, message {first}{onInstagram ? ", or share it to Instagram" : ""}</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">

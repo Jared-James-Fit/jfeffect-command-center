@@ -2615,8 +2615,8 @@ function WorkoutDay({
               variant="outline"
               className={
                 reviewSubmitted
-                  ? "border-green-500/30 bg-green-500/10 text-green-500"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                  ? "border-success/30 bg-success/10 text-success"
+                  : "border-warning/40 bg-warning/10 text-warning"
               }
             >
               <CheckCircle2 className="mr-1 h-3 w-3" />
@@ -2666,8 +2666,8 @@ function WorkoutDay({
 
 
         {!readonly && isOutsideScheduledDay && !completion?.completed_at && scheduledDate && (
-          <Card className="flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <Card className="flex items-start gap-2 border-warning/30 bg-warning/5 p-3 text-xs">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div>
               This workout is scheduled for <strong>{format(scheduledDate, "EEE MMM d")}</strong>,
               but you can still complete it today. Your scheduled day is saved.
@@ -2834,7 +2834,7 @@ function WorkoutDay({
           <Card className="p-4">
             {autoFinishReady ? (
               <Button
-                className="w-full bg-amber-500 text-black hover:bg-amber-400"
+                className="w-full bg-warning text-black hover:bg-warning"
                 onClick={() => setQuickFinishReviewOpen(true)}
               >
                 <MessageCircle className="mr-2 h-4 w-4" />
@@ -3077,7 +3077,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
     <div className="mt-1 flex flex-wrap items-center gap-1.5">
       <div className={cn(
         "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold",
-        suspicious ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-primary/10 text-primary",
+        suspicious ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary",
       )}>
         Suggested Load: {formatDualLoad(load, unit)}
         <Popover>
@@ -3102,7 +3102,7 @@ function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: 
       {suspicious && (
         <Popover>
           <PopoverTrigger asChild>
-            <button type="button" className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+            <button type="button" className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
               <AlertTriangle className="h-3 w-3" /> Check suggested load
             </button>
           </PopoverTrigger>
@@ -3137,9 +3137,9 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
   const nav = useWorkoutNavigation();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+    <Card className="border-warning/40 bg-warning/5 p-4">
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
         <div className="space-y-1">
           <div className="text-sm font-bold">{name}</div>
           <p className="text-sm text-foreground/90">
@@ -3255,12 +3255,12 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   }
   const body = (
     <>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-sky-700/80 dark:text-sky-300/80">Last time</span>
+      <span className="text-[10px] font-bold uppercase tracking-wide text-info/80">Last time</span>
       <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
-      {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
+      {when && <span className="text-[10px] text-info/70">· {when}</span>}
     </>
   );
-  const chip = "inline-flex max-w-full items-center gap-[3px] rounded-md border border-sky-500/30 bg-sky-500/10 px-1.5 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100";
+  const chip = "inline-flex max-w-full items-center gap-[3px] rounded-md border border-info/30 bg-info/10 px-1.5 py-1 text-[11px] font-medium text-info";
   if (!onOpen) {
     return <div className={cn(chip, className)} title="Your top set the last time you trained this exercise">{body}</div>;
   }
@@ -3270,10 +3270,10 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
       onClick={onOpen}
       data-testid="last-time-history"
       aria-label={`Last time: ${loadStr}${repsStr}${when ? `, ${when}` : ""}. Open history`}
-      className={cn(chip, "h-7 transition hover:bg-sky-500/15 active:scale-[0.97]", className)}
+      className={cn(chip, "h-7 transition hover:bg-info/15 active:scale-[0.97]", className)}
     >
       {body}
-      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-sky-700/70 dark:text-sky-300/70" aria-hidden="true" />
+      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-info/70" aria-hidden="true" />
     </button>
   );
 }
@@ -4834,7 +4834,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideCloseButton className="keyboard-aware-bottom-sheet h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
         <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
-          <SheetTitle className="text-base font-black">{exerciseName}</SheetTitle>
+          <SheetTitle className="text-base font-bold">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
         </SheetHeader>
         <div className="px-5 py-4 space-y-4 pb-32">
@@ -6155,8 +6155,8 @@ function SetRow({
   return (
     <div className={cn(
       "border-t border-builder-card-border/70 transition-colors",
-      isConfirmed && "bg-emerald-500/[0.07] border-l-2 border-l-emerald-500/70",
-      isDraft && "bg-amber-500/[0.07] border-l-2 border-l-amber-500/60",
+      isConfirmed && "bg-success/[0.07] border-l-2 border-l-success/70",
+      isDraft && "bg-warning/[0.07] border-l-2 border-l-warning/60",
       statusError && "bg-destructive/10 border-l-2 border-l-destructive ring-1 ring-destructive/40",
     )}>
     <div
@@ -6313,8 +6313,8 @@ function SetRow({
             className={cn(
               "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-9 sm:w-9 [&_svg]:size-5",
               isConfirmed
-                ? "border-green-500/40 bg-green-500/10 text-green-500"
-                : "border-border bg-background text-muted-foreground hover:border-green-500/50 hover:text-green-500",
+                ? "border-success/40 bg-success/10 text-success"
+                : "border-border bg-background text-muted-foreground hover:border-success/50 hover:text-success",
               statusError && "border-destructive bg-destructive/10 text-destructive hover:text-destructive",
               statusSaving && "cursor-wait opacity-70",
             )}
@@ -6330,7 +6330,7 @@ function SetRow({
             )}
           </button>
         ) : (
-          isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />
+          isConfirmed && <CheckCircle2 className="h-4 w-4 text-success" />
         )}
         {onRemoveSet && (
           <button
@@ -6353,7 +6353,7 @@ function SetRow({
     ) : prBadge && (!hasRecords || (existing as any)?.load_type === "assisted") && (
       <div className="px-3 pb-1.5">
         <span
-          className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-500"
+          className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-bold text-warning"
           title={`Beats your previous all-time best for ${prBadge.reps} reps by ${fmtNum(prBadge.amount)} ${prBadge.unit}`}
         >
           <Trophy className="h-3 w-3" />

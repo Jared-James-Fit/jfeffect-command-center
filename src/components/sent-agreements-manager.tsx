@@ -219,10 +219,10 @@ export function SentAgreementsManager() {
   return (
     <>
       {attention.length > 0 && (
-        <Card className="border-amber-500/40 bg-amber-500/5 p-5 space-y-3">
+        <Card className="border-warning/40 bg-warning/5 p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <h2 className="text-sm font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <h2 className="text-sm font-bold uppercase tracking-widest text-warning">
               Agreements Needing Attention ({attention.length})
             </h2>
           </div>
@@ -320,7 +320,7 @@ export function SentAgreementsManager() {
         <Button size="sm" variant="ghost" onClick={() => bulkAction("archive")}>
           <Archive className="h-3.5 w-3.5 mr-1" />Archive
         </Button>
-        <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => bulkAction("delete")}>
+        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => bulkAction("delete")}>
           <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
         </Button>
       </BulkActionBar>
@@ -409,8 +409,8 @@ function AgreementRow({
               {a.verification_status}
             </Badge>
           )}
-          {a.signer_mismatch && <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Signer mismatch</Badge>}
-          {isSigned && !hasSignedCopy && <Badge variant="outline" className="border-amber-500/40 text-amber-500 text-[10px]">Signed copy missing</Badge>}
+          {a.signer_mismatch && <Badge variant="outline" className="border-warning/40 text-warning text-[10px]">Signer mismatch</Badge>}
+          {isSigned && !hasSignedCopy && <Badge variant="outline" className="border-warning/40 text-warning text-[10px]">Signed copy missing</Badge>}
           {a.archived && <Badge variant="outline" className="text-[10px]">Archived</Badge>}
         </div>
       </div>
@@ -482,7 +482,7 @@ function AgreementRow({
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-[10px] uppercase tracking-widest">Verification</DropdownMenuLabel>
             {isVerified ? (
-              <DropdownMenuItem onClick={() => onToggleVerification(false)} className="text-amber-600 dark:text-amber-400">
+              <DropdownMenuItem onClick={() => onToggleVerification(false)} className="text-warning">
                 <ShieldCheck className="h-3.5 w-3.5 mr-2" />Remove verification
               </DropdownMenuItem>
             ) : (
@@ -499,7 +499,7 @@ function AgreementRow({
             ) : (
               <DropdownMenuItem onClick={onArchive}><Archive className="h-3.5 w-3.5 mr-2" />Archive</DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={onDelete} className="text-red-600 dark:text-red-400">
+            <DropdownMenuItem onClick={onDelete} className="text-destructive">
               <Trash2 className="h-3.5 w-3.5 mr-2" />Delete permanently
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -76,7 +76,7 @@ function DashboardTodayCardInner({ state }: { state: TodayState }) {
           <Badge
             variant="outline"
             className={cn(
-              "text-[10px] font-black uppercase tracking-wider",
+              "text-[10px] font-bold uppercase tracking-wider",
               view.badgeClass,
             )}
           >
@@ -125,8 +125,8 @@ function buildView(state: TodayState) {
         title: `${dayDisplayTitle(it)}${it.day?.focus ? ` — ${it.day.focus}` : ""}`,
         subtitle: "Pick up where you left off.",
         icon: <RotateCcw className="h-5 w-5" />,
-        iconBg: "bg-amber-500",
-        badgeClass: "border-amber-500/30 bg-amber-500/10 text-amber-500",
+        iconBg: "bg-warning",
+        badgeClass: "border-warning/30 bg-warning/10 text-warning",
         primary: (
           <Button asChild size="sm">
             <Link to="/portal/workouts/$dayId" params={{ dayId: it.day.id }} search={(it.scheduledWorkoutId ? { instance: it.scheduledWorkoutId } : undefined) as any}>
@@ -144,8 +144,8 @@ function buildView(state: TodayState) {
         title: "No workout scheduled today",
         subtitle: nextLabel(next, today),
         icon: <Coffee className="h-5 w-5" />,
-        iconBg: "bg-sky-500",
-        badgeClass: "border-sky-500/30 bg-sky-500/10 text-sky-500",
+        iconBg: "bg-info",
+        badgeClass: "border-info/30 bg-info/10 text-info",
         primary: next ? (
           <Button asChild size="sm" variant="outline">
             <Link to="/portal/workouts/$dayId" params={{ dayId: next.day.id }} search={(next.scheduledWorkoutId ? { instance: next.scheduledWorkoutId } : undefined) as any}>
@@ -199,8 +199,8 @@ function buildView(state: TodayState) {
           : "All Workouts Complete",
         subtitle: "Nice work. Your coach will queue your next block.",
         icon: <CheckCircle2 className="h-5 w-5" />,
-        iconBg: "bg-emerald-500",
-        badgeClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
+        iconBg: "bg-success",
+        badgeClass: "border-success/30 bg-success/10 text-success",
         primary: (
           <Button asChild size="sm" variant="outline">
             <Link to="/portal/workouts">

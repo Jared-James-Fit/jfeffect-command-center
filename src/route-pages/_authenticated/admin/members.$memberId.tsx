@@ -278,7 +278,7 @@ export function MemberProfileWorkspace({
             title={member.full_name || member.email}
             subtitle={member.email}
             actions={<div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-bold uppercase tracking-wider">
+              <Badge variant="outline" className="bg-success/10 text-success border-success/30 font-bold uppercase tracking-wider">
                 JF Membership
               </Badge>
               <Badge variant="outline" className={(ACCOUNT_TYPES as any)[member.account_type]?.tone}>
@@ -770,11 +770,11 @@ function MembershipAccessCard({
         <div className="flex items-center gap-4">
           <div className="text-sm font-medium text-muted-foreground">Membership Access</div>
           {accessActive ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-lg font-bold text-emerald-300">
+            <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/15 px-4 py-2 text-lg font-bold text-success">
               <span>✓</span> Access Active
             </div>
           ) : (
-            <div className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/15 px-4 py-2 text-lg font-bold text-red-300">
+            <div className="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-destructive/15 px-4 py-2 text-lg font-bold text-destructive">
               <span>✗</span> Access Blocked
             </div>
           )}
@@ -784,8 +784,8 @@ function MembershipAccessCard({
           className={cn(
             "relative inline-flex h-10 w-[10.5rem] shrink-0 cursor-pointer items-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             accessActive
-              ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300"
-              : "border-red-500/50 bg-red-500/20 text-red-300",
+              ? "border-success/50 bg-success/20 text-success"
+              : "border-destructive/50 bg-destructive/20 text-destructive",
           )}
         >
           <span className="sr-only">Toggle membership access</span>
@@ -795,7 +795,7 @@ function MembershipAccessCard({
               accessActive ? "translate-x-[6.5rem]" : "translate-x-0",
             )}
           >
-            <span className={cn("text-xs font-bold", accessActive ? "text-emerald-500" : "text-red-500")}>
+            <span className={cn("text-xs font-bold", accessActive ? "text-success" : "text-destructive")}>
               {accessActive ? "ON" : "OFF"}
             </span>
           </span>
@@ -819,12 +819,12 @@ function MembershipAccessCard({
       </div>
 
       {disabledOn && (
-        <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-300">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
           🚫 Access is OFF — member is blocked regardless of Stripe
         </div>
       )}
       {overrideOn && !disabledOn && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300">
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm font-semibold text-warning">
           ⚠️ Manual override is ON — member has access regardless of Stripe
         </div>
       )}

@@ -365,7 +365,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
         <Card className="p-3">
           <AssignmentCalendar existing={existingCal as CalendarExistingDay[]} incoming={incomingCal} />
           {preview?.coverage?.gaps?.length ? (
-            <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            <div className="mt-2 text-xs text-warning">
               {preview.coverage.gaps.length} programming gap{preview.coverage.gaps.length === 1 ? "" : "s"} detected in the next 12 weeks.
             </div>
           ) : null}
@@ -461,7 +461,7 @@ export function ProgramAssignmentPlanner({ clientId, templateId, onDone }: Props
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              <CheckCircle2 className="h-5 w-5 text-success" />
               Program assigned
             </DialogTitle>
             <DialogDescription>
@@ -660,7 +660,7 @@ function MethodStep({
           Workouts will begin on the first selected training day on or after this date.
         </p>
         {startDateOnNonTrainingDay && (
-          <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-600">
+          <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-warning">
             <AlertTriangle className="h-3 w-3" />
             This date isn't a training day — the first workout will move to the next available day.
           </p>
@@ -703,8 +703,8 @@ function MethodStep({
                 {o.id === "client_days" && (
                   <div className="mt-2 space-y-1">
                     {noClientDays ? (
-                      <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px]">
-                        <div className="font-semibold text-amber-700 dark:text-amber-400">
+                      <div className="rounded border border-warning/40 bg-warning/5 p-2 text-[11px]">
+                        <div className="font-semibold text-warning">
                           No training days have been selected for this client.
                         </div>
                         <p className="mt-0.5 text-muted-foreground">
@@ -738,9 +738,9 @@ function MethodStep({
                         {workoutsPerWeek > 0 && (
                           <div className="text-[11px] text-muted-foreground">
                             {workoutsPerWeek} workout{workoutsPerWeek === 1 ? "" : "s"} per week ·{" "}
-                            {frequencyMatches === "match" && <span className="text-emerald-600">Matches client's {effective.length} day{effective.length === 1 ? "" : "s"}</span>}
+                            {frequencyMatches === "match" && <span className="text-success">Matches client's {effective.length} day{effective.length === 1 ? "" : "s"}</span>}
                             {frequencyMatches === "more-workouts" && (
-                              <span className="text-amber-600">
+                              <span className="text-warning">
                                 Program needs {workoutsPerWeek} days but client selected {effective.length}.
                               </span>
                             )}
@@ -846,8 +846,8 @@ function MethodStep({
       {/* Frequency mismatch banner — applies whichever method ends up
           producing a weekday list. */}
       {method === "client_days" && frequencyMatches === "more-workouts" && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2 text-[11px]">
-          <div className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+        <div className="rounded border border-warning/40 bg-warning/5 p-2 text-[11px]">
+          <div className="inline-flex items-center gap-1 font-semibold text-warning">
             <AlertTriangle className="h-3 w-3" />
             This program contains {workoutsPerWeek} workouts per week, but the client selected {effective.length} training day{effective.length === 1 ? "" : "s"}.
           </div>
@@ -868,7 +868,7 @@ function ConflictsStep({ conflicts, decisions, setDecisions }: {
   if (!conflicts.length) {
     return (
       <Card className="p-6 text-center text-sm text-muted-foreground">
-        <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-500" />
+        <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-success" />
         No conflicts detected.
       </Card>
     );
@@ -883,9 +883,9 @@ function ConflictsStep({ conflicts, decisions, setDecisions }: {
             setDecisions({ ...decisions, [c.incoming.dayKey]: { action, ...extra } });
           const isCompleted = c.type === "completed_protected";
           return (
-            <li key={i} className={"rounded border p-2 text-xs " + (isCompleted ? "border-rose-500/50 bg-rose-500/5" : "border-amber-500/40 bg-amber-500/5")}>
+            <li key={i} className={"rounded border p-2 text-xs " + (isCompleted ? "border-destructive/50 bg-destructive/5" : "border-warning/40 bg-warning/5")}>
               <div className="flex items-start gap-2">
-                <AlertTriangle className={"h-3.5 w-3.5 shrink-0 " + (isCompleted ? "text-rose-500" : "text-amber-500")} />
+                <AlertTriangle className={"h-3.5 w-3.5 shrink-0 " + (isCompleted ? "text-destructive" : "text-warning")} />
                 <div className="flex-1">
                   <div className="font-semibold">
                     {c.date ?? "no date"} · {c.incoming.title}
@@ -900,7 +900,7 @@ function ConflictsStep({ conflicts, decisions, setDecisions }: {
                     <Button size="sm" variant={dec?.action === "skip_incoming" ? "default" : "outline"} className="h-6 px-2 text-[10px]" onClick={() => choose("skip_incoming")}>Skip incoming</Button>
                     <Button size="sm" variant={dec?.action === "keep_both" ? "default" : "outline"} className="h-6 px-2 text-[10px]" onClick={() => choose("keep_both")}>Keep both</Button>
                     {isCompleted && !dec && (
-                      <span className="text-[10px] text-rose-600">Completed workout — choose Skip unless you really mean to overwrite.</span>
+                      <span className="text-[10px] text-destructive">Completed workout — choose Skip unless you really mean to overwrite.</span>
                     )}
                   </div>
                 </div>
@@ -930,7 +930,7 @@ function ReviewStep({ preview, publishStatus, setPublishStatus, publishAt, setPu
             {preview.placements.slice(0, 30).map((p: any) => (
               <li key={p.dayKey} className="flex items-center justify-between border-b border-border/40 py-1">
                 <span>{p.title}</span>
-                <span className={p.date ? "text-muted-foreground" : "text-rose-500"}>{p.date ?? "no date"}</span>
+                <span className={p.date ? "text-muted-foreground" : "text-destructive"}>{p.date ?? "no date"}</span>
               </li>
             ))}
             {preview.placements.length > 30 && <li className="text-[10px] text-muted-foreground">…and {preview.placements.length - 30} more</li>}

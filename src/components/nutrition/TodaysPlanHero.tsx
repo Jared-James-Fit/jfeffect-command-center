@@ -73,7 +73,7 @@ export function TodaysPlanHero({
           {!picking && <> · <span className="text-foreground">{todayTitle}</span></>}
         </h2>
         {suggested && (
-          <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-500">
+          <span className="shrink-0 rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning">
             Suggested
           </span>
         )}

@@ -90,10 +90,10 @@ describe("the Time box says what's logged and what's only the target", () => {
     expect(target).toContain("10:00");
     expect(target).toContain("border-dashed");
     expect(target).toContain("text-muted-foreground");
-    expect(target).not.toContain("emerald");
+    expect(target).not.toContain("success");
     const logged = box(600, true);
     expect(logged).toContain("10:00");
-    expect(logged).toContain("bg-emerald-500/10");
+    expect(logged).toContain("bg-success/10");
     expect(logged).not.toContain("border-dashed");
   });
 

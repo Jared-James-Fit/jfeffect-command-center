@@ -48,14 +48,14 @@ export function AdminClientActionRequests({ embedded = false }: { embedded?: boo
         title="Client Action Requests"
         subtitle="Send forms, links, and files. Pops up for the client until they confirm complete."
         actions={
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Action Request
           </Button>
         }
       />}
       {embedded && (
         <div className="flex justify-end px-4 pt-4 md:px-6">
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Action Request
           </Button>
         </div>
@@ -203,8 +203,8 @@ function ActionDetail({ request, onDeleted }: { request: any; onDeleted: () => v
       </Card>
 
       {request.internal_notes && (
-        <Card className="border-amber-500/20 bg-amber-500/5 p-4">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Admin-only Notes</div>
+        <Card className="border-warning/20 bg-warning/5 p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-warning">Admin-only Notes</div>
           <div className="mt-2 whitespace-pre-wrap text-sm">{request.internal_notes}</div>
         </Card>
       )}

@@ -143,7 +143,7 @@ export function ClientTodayPanel({
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Today</h3>
+        <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Today</h3>
         <Badge variant="outline" className="text-[10px]">{tiles.length}</Badge>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,12 +165,12 @@ type TileSpec = {
 };
 
 const TONE_CLASSES: Record<Tone, { border: string; eyebrow: string; iconBg: string }> = {
-  emerald: { border: "border-emerald-500/30 hover:border-emerald-500/60", eyebrow: "text-emerald-300", iconBg: "bg-emerald-500/15 text-emerald-300" },
-  rose:    { border: "border-rose-500/40 hover:border-rose-500/70",       eyebrow: "text-rose-300",    iconBg: "bg-rose-500/15 text-rose-300" },
-  amber:   { border: "border-amber-500/30 hover:border-amber-500/60",     eyebrow: "text-amber-300",   iconBg: "bg-amber-500/15 text-amber-300" },
-  violet:  { border: "border-violet-500/30 hover:border-violet-500/60",   eyebrow: "text-violet-300",  iconBg: "bg-violet-500/15 text-violet-300" },
-  blue:    { border: "border-blue-500/30 hover:border-blue-500/60",       eyebrow: "text-blue-300",    iconBg: "bg-blue-500/15 text-blue-300" },
-  sky:     { border: "border-sky-500/30 hover:border-sky-500/60",         eyebrow: "text-sky-300",     iconBg: "bg-sky-500/15 text-sky-300" },
+  emerald: { border: "border-success/30 hover:border-success/60", eyebrow: "text-success", iconBg: "bg-success/15 text-success" },
+  rose:    { border: "border-destructive/40 hover:border-destructive/70",       eyebrow: "text-destructive",    iconBg: "bg-destructive/15 text-destructive" },
+  amber:   { border: "border-warning/30 hover:border-warning/60",     eyebrow: "text-warning",   iconBg: "bg-warning/15 text-warning" },
+  violet:  { border: "border-border hover:border-border",   eyebrow: "text-muted-foreground",  iconBg: "bg-muted-foreground/15 text-muted-foreground" },
+  blue:    { border: "border-info/30 hover:border-info/60",       eyebrow: "text-info",    iconBg: "bg-info/15 text-info" },
+  sky:     { border: "border-info/30 hover:border-info/60",         eyebrow: "text-info",     iconBg: "bg-info/15 text-info" },
 };
 
 function Tile({ spec }: { spec: TileSpec }) {
@@ -181,7 +181,7 @@ function Tile({ spec }: { spec: TileSpec }) {
     <Card className={cn("group flex h-full flex-col gap-2 border bg-card p-3 transition-colors", tone.border)}>
       <div className="flex items-center gap-2">
         <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-md", tone.iconBg)}>{spec.icon}</span>
-        <span className={cn("text-[10px] font-black uppercase tracking-widest", tone.eyebrow)}>{spec.eyebrow}</span>
+        <span className={cn("text-[10px] font-bold uppercase tracking-widest", tone.eyebrow)}>{spec.eyebrow}</span>
       </div>
       <div className="text-sm font-semibold leading-tight">{spec.title}</div>
       {spec.meta && <div className="text-xs text-muted-foreground">{spec.meta}</div>}

@@ -77,9 +77,9 @@ export function RepostButton({ post, onReposted }: { post: CommunityPost; onRepo
       data-repost-button={mine ? "on" : "off"}
     >
       <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
-        <Repeat2 className={cn("h-[23px] w-[23px]", mine ? "text-emerald-500" : "text-foreground/80")} strokeWidth={mine ? 2.6 : 2} />
+        <Repeat2 className={cn("h-[23px] w-[23px]", mine ? "text-success" : "text-foreground/80")} strokeWidth={mine ? 2.6 : 2} />
       </span>
-      {count > 0 && <span className={cn("text-[13px] font-black tabular-nums", mine ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{count}</span>}
+      {count > 0 && <span className={cn("text-[13px] font-bold tabular-nums", mine ? "text-success" : "text-muted-foreground")}>{count}</span>}
     </button>
     {/* beside the button, never inside it: taps in the sheet must not reach the button */}
     {noteOpen && <RepostNoteEditor post={post} onClose={() => setNoteOpen(false)} />}
@@ -247,7 +247,7 @@ export function AlbumPickerSheet({ post, open, onOpenChange }: { post: Pick<Comm
       <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]" style={KEYBOARD_SAFE} data-album-picker>
         <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
         <div className="flex items-center justify-between px-5 pb-2 pt-3">
-          <SheetTitle className="text-[16px] font-black">Save to album</SheetTitle>
+          <SheetTitle className="text-[16px] font-bold">Save to album</SheetTitle>
           <button type="button" onClick={() => setNaming(true)} className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-[13px] font-bold text-primary active:bg-muted" data-new-album>
             <Plus className="h-4 w-4" /> New album
           </button>
@@ -402,7 +402,7 @@ export function RepostStamp({ who, note, onTap, mine = false, ask = false, inlin
       <span className="block rounded-full ring-2 ring-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.6)]">
         <UserAvatar src={who.avatar_url} name={who.name} size={inline ? 30 : 38} expandable={false} />
       </span>
-      <span className="absolute -bottom-0.5 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-white" aria-hidden>
+      <span className="absolute -bottom-0.5 -right-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-success text-white ring-2 ring-white" aria-hidden>
         <Repeat2 className="h-[11px] w-[11px]" strokeWidth={3} />
       </span>
     </span>
