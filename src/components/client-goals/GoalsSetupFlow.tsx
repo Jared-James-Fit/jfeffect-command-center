@@ -13,13 +13,21 @@ import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, CheckCircle2, AlertTr
 import { toast } from "sonner";
 import { ChipGrid } from "./chip-grid";
 import {
-  MAIN_GOALS, TRAINING_DAYS, WEEKDAYS, WEEKDAY_LABELS, WORKOUT_LENGTHS,
+  MAIN_GOALS, WEEKDAYS, WEEKDAY_LABELS, WORKOUT_LENGTHS,
   EXPERIENCE_LEVELS, TRAINING_STYLES, TRAINING_LOCATIONS, EQUIPMENT_OPTIONS,
   NUTRITION_GOALS, NUTRITION_PREFS, NUTRITION_CHALLENGES, NUTRITION_CHALLENGES_MAX,
   EDITABLE_GOALS_FIELDS,
   type ClientGoalsSetupRow,
 } from "@/lib/client-goals/schema";
 import { saveGoalsSetupFn } from "@/lib/client-goals/goals.functions";
+import {
+  availabilityWith, codesToDays, daysToCodes, pickTrainingDays, sameDays, weekOrder,
+} from "@/lib/client-goals/schedule-sync";
+import { listDays, longestRun } from "@/lib/plan-days-fit";
+import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
+import { refreshScheduleViews, toastScheduleSaved } from "@/components/training-schedule-card";
+import { SHORT_DAY, WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
+import { cn } from "@/lib/utils";
 import {
   classifyLocation,
   EQUIPMENT_GROUPS,
@@ -48,6 +56,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const saveGoalsSetup = useServerFn(saveGoalsSetupFn);
+  const reschedule = useServerFn(rescheduleFromCommittedDays);
   const navigate = useNavigate();
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [stepSaveFailed, setStepSaveFailed] = useState<string | null>(null);
@@ -66,14 +75,35 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
     },
   });
 
+  // The program schedule: "days a week" and "which days" here ARE these days
+  // (a save writes them and moves upcoming workouts; the DB mirrors changes
+  // made anywhere else back into Goals & Setup).
+  const { data: committedDays, isLoading: scheduleLoading } = useQuery({
+    queryKey: ["client-committed-days", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("committed_training_days")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) throw error;
+      return weekOrder((data as { committed_training_days: string[] | null } | null)?.committed_training_days);
+    },
+  });
+
   // Local working copy hydrated from server.
   const [local, setLocal] = useState<Partial<ClientGoalsSetupRow>>({});
+  // The exact training days picked here, and the schedule they were picked
+  // from (sent only when they differ, so an untouched step never overwrites a
+  // schedule changed elsewhere since).
+  const [trainingDays, setTrainingDays] = useState<WeekDay[]>([]);
+  const scheduleBaseRef = useRef<WeekDay[]>([]);
   const hydratedClientRef = useRef<string | null>(null);
   useEffect(() => {
     // Re-hydrate whenever the target client changes (coach switching
     // between client profiles in the admin sheet).
     if (hydratedClientRef.current === clientId) return;
-    if (isLoading) return;
+    if (isLoading || scheduleLoading) return;
     // Merge server row with any local draft from this device — the draft
     // wins so a tab reload doesn't lose unsaved typing.
     let draft: Partial<ClientGoalsSetupRow> | null = null;
@@ -83,9 +113,18 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
         if (raw) draft = JSON.parse(raw);
       }
     } catch { /* ignore parse / quota errors */ }
-    setLocal({ ...(row ?? {}), ...(draft ?? {}) });
+    const merged: Partial<ClientGoalsSetupRow> = { ...(row ?? {}), ...(draft ?? {}) };
+    const live = committedDays ?? [];
+    if (live.length) {
+      // The schedule wins over this device's draft: it may have changed since.
+      merged.training_days_per_week = live.length;
+      merged.available_weekdays = availabilityWith(merged.available_weekdays, live) as any;
+    }
+    scheduleBaseRef.current = live;
+    setTrainingDays(live);
+    setLocal(merged);
     hydratedClientRef.current = clientId;
-  }, [row, isLoading, clientId, draftKey]);
+  }, [row, isLoading, committedDays, scheduleLoading, clientId, draftKey]);
 
   // Persist working copy as a draft on this device — survives reload, tab
   // close, and network failures. Cleared after a successful save.
@@ -133,9 +172,20 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
   const upsert = useMutation({
     mutationFn: async (patch: Partial<ClientGoalsSetupRow> & { completed?: boolean }) => {
-      await saveGoalsSetup({ data: { clientId, patch } });
+      const days = trainingDays.length && !sameDays(trainingDays, scheduleBaseRef.current) ? trainingDays : undefined;
+      const res = await saveGoalsSetup({ data: { clientId, patch, trainingDays: days } });
+      if (days) scheduleBaseRef.current = days;
+      return res;
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
+      if (res?.schedule) {
+        // New training days: the program moved onto them.
+        refreshScheduleViews(qc, clientId);
+        toastScheduleSaved(res.schedule, res.schedule.days.length, async () => {
+          await reschedule({ data: { clientId, includePinned: true } });
+          refreshScheduleViews(qc, clientId);
+        });
+      }
       qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] });
       // Make sure dependent surfaces (Action Centre, banners) refresh too.
       qc.invalidateQueries({ queryKey: ["my-client"] });
@@ -197,7 +247,7 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || scheduleLoading) {
     return (
       <div className="flex h-48 items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
@@ -223,7 +273,15 @@ export function GoalsSetupFlow({ clientId, onComplete, compact }: Props) {
 
       <Card className="p-4 sm:p-5">
         {step === 0 && <GoalsStep value={local} setField={setField} />}
-        {step === 1 && <AvailabilityStep value={local} setField={setField} />}
+        {step === 1 && (
+          <AvailabilityStep
+            value={local}
+            setField={setField}
+            trainingDays={trainingDays}
+            onTrainingDays={setTrainingDays}
+            scheduled={scheduleBaseRef.current.length > 0}
+          />
+        )}
         {step === 2 && <ExperienceStep value={local} setField={setField} />}
         {step === 3 && <EquipmentStep value={local} setField={setField} />}
         {step === 4 && <NutritionStep value={local} setField={setField} />}
@@ -378,34 +436,123 @@ function GoalsStep({ value, setField }: StepProps) {
 }
 
 /* ---------- Step 2: Training availability ---------- */
-function AvailabilityStep({ value, setField }: StepProps) {
+// "Days a week" and the training days are one answer: the program schedule.
+// Picking a number fits the days (keeps the ones they train, then the days
+// they're available, spread out with rest between); tapping a day changes the
+// number to match, so the two can never disagree.
+const DAYS_A_WEEK = [1, 2, 3, 4, 5, 6, 7] as const;
+
+function AvailabilityStep({
+  value, setField, trainingDays, onTrainingDays, scheduled,
+}: StepProps & {
+  trainingDays: WeekDay[];
+  onTrainingDays: (days: WeekDay[]) => void;
+  /** They already have a training schedule (changing it moves their workouts). */
+  scheduled: boolean;
+}) {
+  const training = new Set(trainingDays);
+  const available = new Set(codesToDays(value.available_weekdays));
+
+  const apply = (next: WeekDay[]) => {
+    const days = weekOrder(next);
+    onTrainingDays(days);
+    setField("training_days_per_week", days.length || null);
+    // Training days are always available days; a day taken off training stays available.
+    setField("available_weekdays", availabilityWith(value.available_weekdays, days) as any);
+  };
+
+  // A days-a-week answer with no days picked yet (no schedule): pick them now,
+  // so what's saved is what's on screen.
+  const count = value.training_days_per_week ?? null;
+  useEffect(() => {
+    if (!trainingDays.length && count) {
+      apply(pickTrainingDays({ current: [], perWeek: count, available: value.available_weekdays }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pickCount = (n: number) => {
+    if (n === trainingDays.length) return;
+    apply(pickTrainingDays({ current: trainingDays, perWeek: n, available: value.available_weekdays }));
+  };
+  const toggleTraining = (d: WeekDay) =>
+    apply(training.has(d) ? trainingDays.filter((x) => x !== d) : [...trainingDays, d]);
+  const toggleAvailable = (d: WeekDay) => {
+    const next = available.has(d) ? [...available].filter((x) => x !== d) : [...available, d];
+    setField("available_weekdays", availabilityWith(daysToCodes(next), trainingDays) as any);
+  };
+
+  const run = longestRun(trainingDays);
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Q required>How many days per week can you realistically train?</Q>
-        <ChipGrid
-          options={TRAINING_DAYS}
-          value={value.training_days_per_week ?? null}
-          onChange={(v) => setField("training_days_per_week", v)}
-          labelFor={(n) => `${n} days`}
-        />
-      </div>
-      <div className="space-y-3">
-        <Q>Which days are you available?</Q>
-        <ChipGrid
-          options={WEEKDAYS}
-          value={(value.available_weekdays ?? []) as any}
-          onChange={(v) => {
-            const order = WEEKDAYS as readonly string[];
-            const sorted = [...(v as string[])].sort(
-              (a, b) => order.indexOf(a) - order.indexOf(b),
+        <Q required>How many days a week can you realistically train?</Q>
+        <div role="radiogroup" aria-label="Days a week" className="grid grid-cols-7 gap-1.5">
+          {DAYS_A_WEEK.map((n) => {
+            const on = trainingDays.length === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={`${n} day${n === 1 ? "" : "s"} a week`}
+                onClick={() => pickCount(n)}
+                className={cn(
+                  "h-12 min-w-0 rounded-xl border text-base font-bold transition active:scale-[0.97]",
+                  on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-primary/40",
+                )}
+              >
+                {n}
+              </button>
             );
-            setField("available_weekdays", sorted as any);
-          }}
-          multi
-          labelFor={(d) => WEEKDAY_LABELS[d as keyof typeof WEEKDAY_LABELS]}
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <Q required>Your training days</Q>
+          <Sub>
+            {scheduled
+              ? "Your workouts are on these days. Change them and your upcoming workouts move with them."
+              : "Your workouts go on these days."}
+          </Sub>
+        </div>
+        <WeekStrip
+          label="Training days"
+          isOn={(d) => training.has(d)}
+          onToggle={toggleTraining}
+          tone="solid"
+        />
+        <p
+          className={cn("text-xs", trainingDays.length === 0 || run >= 3 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
+          data-training-days-note
+        >
+          {trainingDays.length === 0
+            ? "Pick the days you'll train."
+            : `${trainingDays.length} day${trainingDays.length === 1 ? "" : "s"} a week: ${listDays(trainingDays)}.${
+                run >= 3 && trainingDays.length < 7
+                  ? ` That's ${run} days in a row. A rest day between them helps you recover.`
+                  : " Tap a day to change it."
+              }`}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <Q>Any other days you could train?</Q>
+          <Sub>Optional. If a week gets busy, a workout can move to one of these.</Sub>
+        </div>
+        <WeekStrip
+          label="Other days you could train"
+          isOn={(d) => available.has(d) && !training.has(d)}
+          isLocked={(d) => training.has(d)}
+          onToggle={toggleAvailable}
+          tone="soft"
         />
       </div>
+
       <div className="space-y-3">
         <Q required>How long can each workout be?</Q>
         <ChipGrid
@@ -415,6 +562,50 @@ function AvailabilityStep({ value, setField }: StepProps) {
           labelFor={(n) => `${n} min`}
         />
       </div>
+    </div>
+  );
+}
+
+/** Seven day buttons in one row (fits a 320px phone). */
+function WeekStrip({
+  label, isOn, isLocked, onToggle, tone,
+}: {
+  label: string;
+  isOn: (d: WeekDay) => boolean;
+  /** Shown as a training day and not tappable here. */
+  isLocked?: (d: WeekDay) => boolean;
+  onToggle: (d: WeekDay) => void;
+  tone: "solid" | "soft";
+}) {
+  return (
+    <div role="group" aria-label={label} className="grid grid-cols-7 gap-1.5">
+      {WEEK_DAYS.map((d) => {
+        const locked = isLocked?.(d) ?? false;
+        const on = !locked && isOn(d);
+        return (
+          <button
+            key={d}
+            type="button"
+            aria-pressed={locked ? undefined : on}
+            aria-label={locked ? `${d}: training day` : d}
+            disabled={locked}
+            onClick={() => onToggle(d)}
+            className={cn(
+              "flex h-12 min-w-0 flex-col items-center justify-center rounded-xl border text-[13px] font-semibold leading-tight transition active:scale-[0.97]",
+              locked
+                ? "border-dashed border-border bg-secondary/40 text-muted-foreground"
+                : on
+                  ? tone === "solid"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/40",
+            )}
+          >
+            <span>{SHORT_DAY[d]}</span>
+            {locked && <span className="text-[9px] font-medium uppercase tracking-wide">Train</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

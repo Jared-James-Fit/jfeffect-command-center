@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { rescheduleFromCommittedDays, saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
@@ -77,18 +77,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
       (a, b) => WEEK_DAYS.indexOf(a as WeekDay) - WEEK_DAYS.indexOf(b as WeekDay),
     );
 
-    // Everything the schedule change touches (the saved days, every future
-    // workout date, the calendar and the Workouts tab) is refreshed together.
-    const refresh = () => {
-      qc.invalidateQueries({ queryKey: ["client", client.id] });
-      qc.invalidateQueries({ queryKey: ["my-client"] });
-      qc.invalidateQueries({ queryKey: ["my-client-schedule"] });
-      qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
-      qc.invalidateQueries({ queryKey: ["client-training-schedule"] });
-      qc.invalidateQueries({ queryKey: ["cal-client-data"] });
-      invalidateScheduleQueries(qc, { clientId: client.id });
-      void invalidateGroceryList(qc, client.id);
-    };
+    const refresh = () => refreshScheduleViews(qc, client.id);
 
     // One server call saves the days AND re-dates every future, unstarted
     // workout (all blocks, including upcoming Draft blocks) onto them. Started,
@@ -108,39 +97,10 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
     refresh();
     setEditing(false);
     onDone?.();
-
-    if (res?.realignError) {
-      // The days are saved; only the calendar update failed. Offer a retry —
-      // the realign is idempotent so running it again is always safe.
-      toast.error("Schedule saved, but your workout calendar didn't update.", {
-        action: {
-          label: "Retry",
-          onClick: async () => {
-            try {
-              await reschedule({ data: { clientId: client.id, includePinned: true } });
-              refresh();
-              toast.success("Workout calendar updated");
-            } catch (err: any) {
-              toast.error(err?.message ?? "Still couldn't update the calendar");
-            }
-          },
-        },
-      });
-      return;
-    }
-
-    const movedCount: number = res?.applied ?? 0;
-    const unplaced: number = res?.unplaced ?? 0;
-    toast.success(
-      movedCount > 0
-        ? `Schedule saved · ${movedCount} upcoming workout${movedCount === 1 ? "" : "s"} moved to your new days`
-        : "Schedule saved",
-    );
-    if (unplaced > 0) {
-      toast.warning(
-        `${unplaced} workout${unplaced === 1 ? "" : "s"} couldn't fit on your ${sortedDays.length} training day${sortedDays.length === 1 ? "" : "s"} and kept their old date. Your coach can adjust the program.`,
-      );
-    }
+    toastScheduleSaved(res, sortedDays.length, async () => {
+      await reschedule({ data: { clientId: client.id, includePinned: true } });
+      refresh();
+    });
   };
 
   const toggle = (list: string[], set: (v: string[]) => void, day: WeekDay) => {
@@ -228,6 +188,62 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
       )}
     </Wrapper>
   );
+}
+
+/**
+ * Everything a change of training days touches (the saved days, every future
+ * workout date, the calendar, the Workouts tab and Goals & Setup, which mirrors
+ * the days) is refreshed together.
+ */
+export function refreshScheduleViews(qc: QueryClient, clientId: string) {
+  qc.invalidateQueries({ queryKey: ["client", clientId] });
+  qc.invalidateQueries({ queryKey: ["my-client"] });
+  qc.invalidateQueries({ queryKey: ["my-client-schedule"] });
+  qc.invalidateQueries({ queryKey: ["my-client-schedule-gate"] });
+  qc.invalidateQueries({ queryKey: ["client-training-schedule"] });
+  qc.invalidateQueries({ queryKey: ["cal-client-data"] });
+  qc.invalidateQueries({ queryKey: ["client-goals-setup", clientId] });
+  qc.invalidateQueries({ queryKey: ["client-committed-days", clientId] });
+  invalidateScheduleQueries(qc, { clientId });
+  void invalidateGroceryList(qc, clientId);
+}
+
+/** The toasts after new training days are saved: workouts moved, ones that didn't fit, or a calendar that didn't update (with Retry). */
+export function toastScheduleSaved(
+  res: { applied?: number; unplaced?: number; realignError?: string | null } | null | undefined,
+  dayCount: number,
+  retry: () => Promise<void>,
+) {
+  if (res?.realignError) {
+    // The days are saved; only the calendar update failed. Offer a retry —
+    // the realign is idempotent so running it again is always safe.
+    toast.error("Schedule saved, but your workout calendar didn't update.", {
+      action: {
+        label: "Retry",
+        onClick: async () => {
+          try {
+            await retry();
+            toast.success("Workout calendar updated");
+          } catch (err: any) {
+            toast.error(err?.message ?? "Still couldn't update the calendar");
+          }
+        },
+      },
+    });
+    return;
+  }
+  const movedCount = res?.applied ?? 0;
+  const unplaced = res?.unplaced ?? 0;
+  toast.success(
+    movedCount > 0
+      ? `Schedule saved · ${movedCount} upcoming workout${movedCount === 1 ? "" : "s"} moved to your new days`
+      : "Schedule saved",
+  );
+  if (unplaced > 0) {
+    toast.warning(
+      `${unplaced} workout${unplaced === 1 ? "" : "s"} couldn't fit on your ${dayCount} training day${dayCount === 1 ? "" : "s"} and kept their old date. Your coach can adjust the program.`,
+    );
+  }
 }
 
 /** The committed days, Mon-first, as short names. */

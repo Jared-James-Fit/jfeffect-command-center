@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { WEEKDAY_LABELS, isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { getEquipmentSummary } from "@/lib/client-goals/equipment-flow";
+import { weekOrder } from "@/lib/client-goals/schedule-sync";
+import { SHORT_DAY } from "@/lib/training-schedule";
 
 function Row({ label, value, warn }: { label: string; value: React.ReactNode; warn?: boolean }) {
   return (
@@ -80,6 +82,19 @@ export function GoalsSummaryCard({ clientId }: { clientId: string }) {
       return data as ClientGoalsSetupRow | null;
     },
   });
+  // The program schedule these answers mirror (the exact days workouts are on).
+  const { data: trainingDays } = useQuery({
+    queryKey: ["client-committed-days", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("committed_training_days")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) throw error;
+      return weekOrder((data as { committed_training_days: string[] | null } | null)?.committed_training_days);
+    },
+  });
 
   if (isLoading) {
     return <Card className="p-4 text-sm text-muted-foreground">Loading Goals & Setup…</Card>;
@@ -127,6 +142,7 @@ export function GoalsSummaryCard({ clientId }: { clientId: string }) {
         <Row label="Main goal" value={goal} />
         <Row label="Target / deadline" value={row.goal_target} />
         <Row label="Days / week" value={row.training_days_per_week ? `${row.training_days_per_week} days` : null} />
+        <Row label="Training days" value={chips((trainingDays ?? []).map((d) => SHORT_DAY[d]))} />
         <Row label="Available weekdays" value={chips(days)} />
         <Row label="Workout length" value={row.workout_length_minutes ? `${row.workout_length_minutes} min` : null} />
         <Row label="Experience" value={row.training_experience} />
