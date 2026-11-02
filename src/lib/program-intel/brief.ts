@@ -6,6 +6,7 @@
  * budget, in which case they're summarized per exercise AND the brief, the
  * job's context and the inspector all say so (never silently cut).
  */
+import { cardioBriefLines } from "./cardio";
 import { fmtLoad, fmtSet } from "./core";
 import type { AthleteContext } from "./context";
 import { EQUIPMENT_LABEL } from "./equipment";
@@ -167,6 +168,7 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
     "Next program setup (approved by the coach)",
     [setupText(x.setup), editedLines.length ? `\nChanged by the coach (these are requirements; honor them and adapt everything else around them):\n${editedLines.join("\n")}` : "\nThe coach accepted the recommended setup.", x.redistribution ? `\nWorkload redistribution (days changed):\n${list(x.redistribution.lines)}` : ""].join("\n"),
   );
+  add("cardio", "Cardio (the client's cardio plan, never workout rows)", cardioBriefLines(x.setup.cardio).join("\n") || "Not set: write no cardio into the workouts.");
   add(
     "requirements",
     "Coach requirements and conflicts",

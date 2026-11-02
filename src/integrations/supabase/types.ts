@@ -2239,6 +2239,7 @@ export type Database = {
           program_name: string | null
           scheduled_weekdays: string[]
           show_calories_to_client: boolean
+          source: string | null
           speed_max_mph: number | null
           speed_min_mph: number | null
           start_date: string
@@ -2277,6 +2278,7 @@ export type Database = {
           program_name?: string | null
           scheduled_weekdays?: string[]
           show_calories_to_client?: boolean
+          source?: string | null
           speed_max_mph?: number | null
           speed_min_mph?: number | null
           start_date: string
@@ -2315,6 +2317,7 @@ export type Database = {
           program_name?: string | null
           scheduled_weekdays?: string[]
           show_calories_to_client?: boolean
+          source?: string | null
           speed_max_mph?: number | null
           speed_min_mph?: number | null
           start_date?: string
@@ -17772,6 +17775,7 @@ export type Database = {
         Row: {
           basis_row_id: string | null
           card_color: string | null
+          cardio_target_id: string | null
           created_at: string
           day_id: string
           duration_seconds: number | null
@@ -17810,6 +17814,7 @@ export type Database = {
         Insert: {
           basis_row_id?: string | null
           card_color?: string | null
+          cardio_target_id?: string | null
           created_at?: string
           day_id: string
           duration_seconds?: number | null
@@ -17848,6 +17853,7 @@ export type Database = {
         Update: {
           basis_row_id?: string | null
           card_color?: string | null
+          cardio_target_id?: string | null
           created_at?: string
           day_id?: string
           duration_seconds?: number | null

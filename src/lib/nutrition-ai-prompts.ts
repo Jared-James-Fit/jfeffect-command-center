@@ -65,6 +65,7 @@ STEPS + CARDIO
 - muscle gain: 7,000–10,000 steps, cardio 10–20 min easy 2–3 days a week for health, never enough to eat the surplus
 - recomp / maintenance / performance: 8,000–10,000 steps, cardio 15–25 min easy a few days a week
 - never over 45 min of cardio in a day. keep it low intensity so it doesn't cut into lifting recovery
+- the Training Day session is the last exercise of every workout (see TRAINING DAYS), done right after lifting: keep it 10–25 min easy so the session stays doable; longer cardio belongs on Non-Training Days
 - a deload, taper or meet week in the TRAINING PROGRAM = easy walks only, no hard cardio
 - cardio and steps are part of the estimated daily expenditure; don't count them twice
 

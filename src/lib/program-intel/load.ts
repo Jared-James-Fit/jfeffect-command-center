@@ -6,6 +6,7 @@
  * record is ever silently cut off; a source that can't be read is named in
  * `unreadable` instead of being dropped quietly.
  */
+import type { RawCardioCompletion, RawCardioTarget } from "./cardio";
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { localDate } from "./core";
 import { answeredQuestions } from "@/lib/form-answer-text";
@@ -290,6 +291,28 @@ export async function loadIntelRecords(
     [],
   );
 
+  // The cardio plan (what the app adds to every workout and asks for on days off) and its log.
+  const cardioTargets = await optional<RawCardioTarget[]>(
+    "cardio plan",
+    async () => {
+      const { data, error } = await sb
+        .from("cardio_targets")
+        .select("id, day_type, cardio_type, custom_type, duration_minutes, frequency_per_week, scheduled_weekdays, incline, heart_rate_zone, status, enabled, visible_to_client, program_name, start_date, end_date, source, last_updated_at, updated_at")
+        .eq("client_id", clientId);
+      if (error) throw error;
+      return (data ?? []) as RawCardioTarget[];
+    },
+    [],
+  );
+  const cardioCompletions = await optional<RawCardioCompletion[]>(
+    "cardio log",
+    async () =>
+      fetchAll<RawCardioCompletion>((f, t) =>
+        sb.from("cardio_completions").select("cardio_target_id, completed_date, completed, skipped").eq("client_id", clientId).gte("completed_date", addDaysIso(today, -35)).order("completed_date").range(f, t),
+      ),
+    [],
+  );
+
   return {
     client: {
       id: client.id,
@@ -340,6 +363,8 @@ export async function loadIntelRecords(
     observations,
     checkins,
     profile,
+    cardioTargets,
+    cardioCompletions,
     settings: {
       e1rmFormula: settingsRow?.e1rm_formula === "brzycki" ? "brzycki" : "epley",
       workingRpeMin: Number(settingsRow?.working_set_rpe_min ?? 6) || 6,

@@ -12,6 +12,7 @@ import { missingEquipment, type EquipmentResolution } from "./equipment";
 import type { Pattern } from "./patterns";
 import { exerciseResponse, type ProgramReview } from "./review";
 import { calibrationFactor, estimateDay, type TimedExercise } from "./session-time";
+import { cardioGoal, liftingMinutesWith, proposeCardio, type CardioPlan } from "./cardio";
 import { BRAIN_LABEL, LIFTS, STRENGTH_BRAINS, type Brain, type EquipmentItem, type IntelReport, type Lift, type RawExercise } from "./types";
 
 export type ExerciseRef = { id: string | null; name: string };
@@ -44,6 +45,8 @@ export type GenerationSetup = {
   preferences: string;
   coachNotes: string;
   newCircumstances: string;
+  /** The cardio plan the program is built around: theirs, one proposed when there's none, or none. Never workout rows. */
+  cardio: CardioPlan | null;
 };
 export type SetupField = keyof GenerationSetup;
 export type Why = { source: string; reason: string; confidence: "high" | "medium" | "low" };
@@ -259,6 +262,26 @@ export function recommendSetup(x: {
   if (maxSessionMinutes != null) maxSessionMinutes = Math.min(300, Math.max(15, maxSessionMinutes));
   why.maxSessionMinutes = cap ? { source: "Goals & Setup", reason: "Their stated maximum session length.", confidence: "medium" } : maxSessionMinutes ? { source: "Logged sessions", reason: "The longest typical session (80th percentile).", confidence: "medium" } : { source: "Not on file", reason: "No limit on file.", confidence: "low" };
 
+  // Cardio: their plan (the app adds its training-day session to every workout), or, with none on
+  // file, one proposed from the goal that becomes their plan on Assign. Lifting leaves room for it.
+  const goalForCardio = cardioGoal(mainGoal) !== "none" ? mainGoal : [mainGoal, ...secondary, ctx.goals.target ?? ""].join(" ");
+  const cardio: CardioPlan =
+    ctx.cardio.source === "plan" ? ctx.cardio : proposeCardio({ goalText: goalForCardio, trainingDays, meetWeeksOut: meet?.weeksOut ?? null });
+  const lifting = liftingMinutesWith(cardio, sessionMinutes, cap);
+  if (lifting != null && sessionMinutes != null && lifting < sessionMinutes && cardio.trainingDay) {
+    why.sessionMinutes = {
+      source: why.sessionMinutes?.source ?? "Goals & Setup",
+      reason: `${why.sessionMinutes?.reason ?? ""} Lifting ${lifting} min so the ${cardio.trainingDay.minutes}-min cardio after it still fits their ${cap} min.`.trim(),
+      confidence: why.sessionMinutes?.confidence ?? "medium",
+    };
+    sessionMinutes = lifting;
+  }
+  why.cardio = {
+    source: cardio.source === "plan" ? (cardio.origin === "nutrition" ? "Nutrition plan" : cardio.origin === "program_rows" ? "Their program's cardio" : "Cardio targets") : cardio.source === "proposed" ? "Proposed (no plan on file)" : "No added cardio",
+    reason: cardio.why,
+    confidence: cardio.source === "plan" ? "high" : "medium",
+  };
+
   const blocks = blockStructure(brain, weeks, meet?.weeksOut ?? null);
   why.blocks = { source: "Brain + timeline", reason: meet ? `Built back from the meet (${meet.weeksOut} weeks).` : blocks.length === 1 ? `One block of ${weeks} weeks: ${p ? `the last program ran as ${prev?.blocks.length ?? 1} block${(prev?.blocks.length ?? 1) === 1 ? "" : "s"}` : "no need to split it"}.` : `${blocks.length} blocks over ${weeks} weeks.`, confidence: "medium" };
 
@@ -354,6 +377,7 @@ export function recommendSetup(x: {
     preferences: "",
     coachNotes: "",
     newCircumstances: "",
+    cardio,
   };
   // keep every value inside what the server's setup check accepts (free text on file can be long)
   const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);

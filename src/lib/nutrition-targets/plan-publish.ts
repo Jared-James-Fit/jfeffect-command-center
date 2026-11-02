@@ -24,7 +24,9 @@ const db = supabase as any;
 
 export type CardioContext = { rows: any[]; prefs: any };
 
-export async function loadCardioContext(clientId: string): Promise<CardioContext> {
+/** `client`: the database as the person acting (the server passes its own login; the app's default otherwise). */
+export async function loadCardioContext(clientId: string, client: any = db): Promise<CardioContext> {
+  const db = client;
   const [rows, prefs] = await Promise.all([
     db
       .from("cardio_targets")
@@ -40,7 +42,9 @@ export async function syncPlanCardio(
   clientId: string,
   days: Array<{ label: string; draft: CardioDraft | undefined }>,
   ctx: CardioContext,
+  client: any = db,
 ): Promise<{ updated: number; inserted: number }> {
+  const db = client;
   const sync = planCardioSync({
     clientId,
     days,
@@ -49,12 +53,14 @@ export async function syncPlanCardio(
     trainingDays: resolveTrainingWeekdays(ctx.prefs),
     highDay: Array.isArray(ctx.prefs?.preferred_high_days) ? ctx.prefs.preferred_high_days[0] ?? null : null,
   });
+  // the nutrition plan's cardio outranks any other (a program's proposal, one read from the program);
+  // the database then puts its training-day session on every upcoming workout (program_cardio_sync)
   if (sync.inserts.length) {
-    const { error } = await db.from("cardio_targets").insert(sync.inserts);
+    const { error } = await db.from("cardio_targets").insert(sync.inserts.map((r: Record<string, unknown>) => ({ ...r, source: "nutrition" })));
     if (error) throw new Error(error.message);
   }
   for (const u of sync.updates) {
-    const { error } = await db.from("cardio_targets").update(u.patch).eq("id", u.id);
+    const { error } = await db.from("cardio_targets").update({ ...u.patch, source: "nutrition" }).eq("id", u.id);
     if (error) throw new Error(error.message);
   }
   return { updated: sync.updates.length, inserted: sync.inserts.length };

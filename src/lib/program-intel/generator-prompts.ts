@@ -22,7 +22,8 @@ const EVIDENCE_RULES = `Evidence rules:
 const PROGRAMMING_RULES = `Programming rules:
 - Start from THIS athlete's response, never a generic template. Don't assume the next program needs a redesign: keep what worked and progress it; change what didn't only after naming the likely reason; every meaningful change has a purpose.
 - The coach's setup is binding: days per week, weeks, session limits, equipment, required and excluded exercises, restrictions. A setting the coach changed is a requirement. If two requirements conflict, say so in "conflicts" instead of silently dropping one.
-- Respect the athlete's real circumstances: their equipment (only what's listed), the equipment rules, their session time, injuries and pain reports, and what they actually adhere to.`;
+- Respect the athlete's real circumstances: their equipment (only what's listed), the equipment rules, their session time, injuries and pain reports, and what they actually adhere to.
+- Cardio is the client's cardio plan (see "Cardio" in the brief), not part of the program you write: the app adds the plan's training-day session as the last exercise of every workout and asks for its rest-day sessions on days off. Never write walking, treadmill, bike, elliptical, stair, rowing-machine or other steady cardio into a workout; leave the time for it and let it shape the lifting (fatigue, leg volume, session length).`;
 
 export function strategySystemPrompt(brain: Brain): string {
   return `You are the head coach's ${BRAIN_LABEL[brain]} programming brain at JF Effect, an elite strength and physique coaching business. Before any exercise is chosen, you write the PROGRAMMING STRATEGY for one athlete's next cycle: who they are and what they're training for, what the previous program was designed to do and what actually happened, what stays, what changes and why, what gets priority, what gets reduced, how the cycle progresses, and how success will be judged.
@@ -116,6 +117,9 @@ export function constructUserPrompt(x: {
     `Objective: ${b.objective}`,
     b.phases.length ? `Phases: ${b.phases.map((p) => `W${p.week} ${p.phase}`).join(", ")}` : "",
     `Training days: ${x.setup.daysPerWeek} a week${x.setup.trainingDays.length ? ` (${x.setup.trainingDays.join(", ")})` : ""} · target session ${x.setup.sessionMinutes ?? "—"} min, maximum ${x.setup.maxSessionMinutes ?? "—"} min`,
+    x.setup.cardio?.trainingDay
+      ? `Cardio: the app adds ${x.setup.cardio.trainingDay.type} ${x.setup.cardio.trainingDay.minutes} min after every workout (the client's cardio plan). The lifting fits ${x.setup.sessionMinutes ?? "the session"} min on its own; write NO cardio rows.`
+      : `Cardio: none after lifting; write NO cardio rows (any cardio lives in the client's cardio plan).`,
     ``,
     `## Blocks already built (continue their progression)`,
     before,
@@ -148,7 +152,8 @@ export function repairUserPrompt(x: { block: BuiltBlock; blockIndex: number; iss
     ``,
     `## Constraints`,
     `- ${x.setup.daysPerWeek} days a week, ${x.setup.weeks} weeks in the program; this block has ${x.block.weeks} weeks.`,
-    `- Session maximum: ${x.setup.maxSessionMinutes ?? x.setup.sessionMinutes ?? "—"} minutes.`,
+    `- Session maximum: ${x.setup.maxSessionMinutes ?? x.setup.sessionMinutes ?? "—"} minutes${x.setup.cardio?.trainingDay ? `, including the ${x.setup.cardio.trainingDay.minutes}-min cardio the app adds after the lifting` : ""}.`,
+    `- No walking, treadmill, bike or other steady cardio in the workouts: that's the client's cardio plan.`,
     `- Excluded exercises: ${x.setup.excluded.map((e) => e.name).join(", ") || "none"}; required: ${x.setup.required.map((e) => e.name).join(", ") || "none"}.`,
     ...x.equipmentRules.map((r) => `- ${r}`),
     ``,

@@ -691,6 +691,21 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
         throw new Error(dErr.message);
       }
       const visible = current ? current.visible_to_client !== false && (current.status ?? "Active") === "Active" : true;
+      // Cardio moves with the plan, as when the coach saves it in the targets dialog: each day's
+      // cardio keeps (or takes) the day's name, and the database moves it onto the workouts.
+      if (visible) {
+        try {
+          const { loadCardioContext, syncPlanCardio } = await import("@/lib/nutrition-targets/plan-publish");
+          const { cardioDraftsFor } = await import("@/lib/nutrition-cardio-sync");
+          const { resolveTrainingWeekdays } = await import("@/lib/cardio-prescription");
+          const ctx = await loadCardioContext(p.client_id, sb);
+          const labels = (p.days as any[]).map((d) => String(d.day_label ?? "")).filter(Boolean);
+          const drafts = cardioDraftsFor({ labels, rows: ctx.rows, trainingDays: resolveTrainingWeekdays(ctx.prefs).length });
+          await syncPlanCardio(p.client_id, labels.map((label) => ({ label, draft: drafts[label] })), ctx, sb);
+        } catch (e) {
+          console.warn("[cleo] cardio sync after nutrition targets failed", e);
+        }
+      }
       if (visible) {
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

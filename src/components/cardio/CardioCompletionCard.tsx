@@ -93,7 +93,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
       if (error) throw error;
       return ((data ?? []) as any[])[0] ?? null;
     },
-    staleTime: 30_000,
+    // logging the cardio inside the workout fills this in (the database does), so read it fresh
+    staleTime: 5_000,
   });
 
   const status = cardioStatus(completion as any);
