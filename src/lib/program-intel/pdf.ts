@@ -61,7 +61,7 @@ export function buildIntelPdf(report: IntelReport, rec: IntelRecords, meta: { pr
 
   const c = report.coverage;
   line("Data coverage", 12, true);
-  tableAt(["Workouts due", "Trained", "Missed", "Upcoming", "Sets due", "Working sets", "No RPE", "Check-outs", "Not in library", "Couldn't read"], [[c.dueDays, c.completedDays + c.partialDays, c.missedDays, c.upcomingDays, c.prescribedSetsDue, c.workingSets, c.setsWithoutRpePct != null ? `${c.setsWithoutRpePct}%` : "—", c.feedbackEntries, c.unmappedRows, c.unreadable.join(", ") || "nothing"]]);
+  tableAt(["Workouts due", "Trained", "Missed", "Upcoming", "Sets due", "Sets done", "RPE logged", "Check-outs", "Not in library", "Couldn't read"], [[c.dueDays, c.completedDays + c.partialDays, c.missedDays, c.upcomingDays, c.prescribedSetsDue, c.completedSets, c.setsWithRpePct != null ? `${c.setsWithRpePct}%` : "—", c.feedbackEntries, c.unmappedRows, c.unreadable.join(", ") || "nothing"]]);
 
   for (const [area, title] of AREA) {
     const list = report.findings.filter((f) => f.area === area);

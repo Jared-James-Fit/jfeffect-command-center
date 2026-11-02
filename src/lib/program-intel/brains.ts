@@ -7,8 +7,9 @@
  */
 import { fmtLoad, fmtSet, mean, round, sum } from "./core";
 import {
-  BRAIN_LABEL,
+  HYPERTROPHY_BRAINS,
   LIFTS,
+  STRENGTH_BRAINS,
   type BlockReport,
   type Brain,
   type Coverage,
@@ -56,7 +57,7 @@ export function commonFindings(b: BrainInput): Finding[] {
   const trained = c.completedDays + c.partialDays;
   if (due > 0) {
     const pct = Math.round((trained / due) * 100);
-    const setsPct = c.prescribedSetsDue ? Math.round((Math.min(c.workingSets, c.prescribedSetsDue) / c.prescribedSetsDue) * 100) : null;
+    const setsPct = c.prescribedSetsDue ? Math.round((Math.min(c.completedSets, c.prescribedSetsDue) / c.prescribedSetsDue) * 100) : null;
     const missedWeeks = weeks.filter((w) => w.missedDays > 0).map((w) => `${w.label}: ${w.missedDays} missed`);
     out.push(
       f({
@@ -64,7 +65,7 @@ export function commonFindings(b: BrainInput): Finding[] {
         area: pct >= 85 ? "improved" : pct < 75 ? "change" : "next",
         kind: "fact",
         subject: "adherence",
-        title: `Trained ${trained} of ${due} due workouts (${pct}%)${setsPct != null ? `, ${setsPct}% of prescribed working sets` : ""}`,
+        title: `Trained ${trained} of ${due} due workouts (${pct}%)${setsPct != null ? `, ${c.completedSets} of ${c.prescribedSetsDue} prescribed sets done (${setsPct}%)` : ""}`,
         detail: `${c.completedDays} finished, ${c.partialDays} partly logged, ${c.missedDays} missed. ${c.upcomingDays} still upcoming are not counted.`,
         evidence: missedWeeks.slice(0, 8),
       }),
@@ -141,7 +142,7 @@ export function commonFindings(b: BrainInput): Finding[] {
   }
   // What the records can't tell us.
   if (c.setsWithoutRpePct != null && c.setsWithoutRpePct >= 30)
-    out.push(f({ id: "missing:rpe", area: "missing", kind: "missing", subject: "data", title: `${c.setsWithoutRpePct}% of working sets have no RPE logged`, detail: "Effort, proximity to failure and RPE accuracy are read only from the sets that have one; e1RM for those sets uses reps alone." }));
+    out.push(f({ id: "missing:rpe", area: "missing", kind: "missing", subject: "data", title: `${c.setsWithoutRpePct}% of done sets have no RPE or RIR logged`, detail: "Effort, proximity to failure and RPE accuracy are read only from the sets that have one; e1RM for those sets uses reps alone." }));
   if (!c.feedbackEntries) out.push(f({ id: "missing:feedback", area: "missing", kind: "missing", subject: "data", title: "No post-workout check-outs in this period", detail: "Session RPE, fatigue, sleep and pain can't be read." }));
   if (!b.rec.goals) out.push(f({ id: "missing:goals", area: "missing", kind: "missing", subject: "data", title: "No Goals & Setup on file", detail: "Training days, session length, experience, equipment and injuries are unknown to this report." }));
   if (c.unmappedRows) out.push(f({ id: "missing:unmapped", area: "missing", kind: "missing", subject: "data", title: `${c.unmappedRows} prescribed exercise${c.unmappedRows === 1 ? "" : "s"} not linked to the exercise library`, detail: "Their muscle groups and lift family are unknown, so they don't count toward muscle volume or lift analysis." }));
@@ -318,17 +319,13 @@ export function decisionOutcomes(b: BrainInput): Finding[] {
 
 export function brainFindings(brain: Brain, b: BrainInput): Finding[] {
   const parts: Finding[][] = [commonFindings(b)];
-  if (brain === "powerlifting" || brain === "powerbuilding") parts.push(powerliftingFindings(b));
-  if (brain === "bodybuilding" || brain === "powerbuilding") parts.push(bodybuildingFindings(b));
-  if (brain === "general_fitness") parts.push(generalFindings(b), bodybuildingFindings(b).filter((x) => x.area !== "missing" && !x.id.startsWith("bb:goal")));
+  if (STRENGTH_BRAINS.includes(brain)) parts.push(powerliftingFindings(b).filter((x) => brain === "powerlifting" || brain === "powerbuilding" || !x.id.startsWith("pl:meet")));
+  if (HYPERTROPHY_BRAINS.includes(brain)) parts.push(bodybuildingFindings(b));
+  if (brain === "general_strength") parts.push(generalFindings(b).filter((x) => !x.id.startsWith("gf:ex:")));
+  if (brain === "general_fitness" || brain === "hybrid" || brain === "other") parts.push(generalFindings(b), bodybuildingFindings(b).filter((x) => x.area !== "missing" && !x.id.startsWith("bb:goal")));
   parts.push(decisionOutcomes(b));
   const seen = new Set<string>();
   return parts.flat().filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
 }
 
-export const BRAIN_SUMMARY: Record<Brain, string> = {
-  powerlifting: `${BRAIN_LABEL.powerlifting}: squat, bench and deadlift read separately: competition specificity, top sets and back-offs, RPE accuracy, estimated strength, frequency, variation transfer, fatigue, periodization and peaking.`,
-  bodybuilding: `${BRAIN_LABEL.bodybuilding}: hard sets per muscle group, frequency, exercise selection, load and rep progression, proximity to failure, recovery, physique priorities and adherence.`,
-  powerbuilding: `${BRAIN_LABEL.powerbuilding}: both brains: the competition lifts for strength and every muscle group for size.`,
-  general_fitness: `${BRAIN_LABEL.general_fitness}: consistency, balance and steady progression on the main exercises, with muscle volume as context.`,
-};
+export { BRAIN_SUMMARY } from "./methods";

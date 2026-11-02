@@ -6,6 +6,7 @@
  * from what was actually done, and measured facts kept apart from hypotheses.
  */
 import { BRAIN_SUMMARY } from "./brains";
+import { ANALYSIS_METHOD } from "./methods";
 import { LB_PER_KG, fmtLoad, fmtSet, round } from "./core";
 import { BRAIN_LABEL, LIFTS, type Finding, type IntelRecords, type IntelReport, type RowCompare, type SetLine, type Unit } from "./types";
 
@@ -57,6 +58,8 @@ export function privacySafeRecords(rec: IntelRecords): IntelRecords {
     fileNotes: [],
     observations: rec.observations.map((o) => ({ ...o, statement: s(o.statement) as string, corrected_statement: s(o.corrected_statement) })),
     meets: rec.meets.map((m) => ({ ...m, meet_name: s(m.meet_name) })),
+    checkins: [],
+    profile: rec.profile ? { ...rec.profile, equipment_profile: rec.profile.equipment_profile ? { ...rec.profile.equipment_profile, notes: s(rec.profile.equipment_profile.notes) } : null } : rec.profile,
     unreadable: rec.unreadable,
   };
 }
@@ -143,9 +146,14 @@ export function reportToMarkdown(report: IntelReport, rec: IntelRecords, meta: E
         ["Upcoming / undated", `${c.upcomingDays} / ${c.unscheduledDays}`],
         ["Prescribed exercises", c.prescribedRows],
         ["Prescribed sets due", c.prescribedSetsDue],
-        ["Logged sets (working / warm-up)", `${c.loggedSets} (${c.workingSets} / ${c.warmupSets})`],
-        ["Sets with a load / with an RPE", `${c.setsWithLoad} / ${c.setsWithRpe}`],
-        ["Working sets without RPE", pct(c.setsWithoutRpePct)],
+        ["Prescribed sets completed (per exercise, up to the prescribed count)", c.completedSets],
+        ["Skipped sets (exercise not logged) / incomplete (exercise cut short)", `${c.skippedSets} / ${c.incompleteSets}`],
+        ["Extra sets beyond the prescription / done outside the rep range", `${c.extraSets} / ${c.modifiedSets}`],
+        ["Logged set records (all) / not counted (warm-up flag, no reps)", `${c.loggedSets} / ${c.nonCountedRecords}`],
+        ["Working sets (done, at or above the effort floor)", c.workingSets],
+        ["Sets with a load / with an RPE or RIR", `${c.setsWithLoad} / ${c.setsWithRpe}`],
+        ["RPE or RIR logged on done sets", pct(c.setsWithRpePct)],
+        ["Sets with bar velocity", c.setsWithVelocity],
         ["Exercises not linked to the library", c.unmappedRows],
         ["Post-workout check-outs", c.feedbackEntries],
         ["Exercise notes / coach notes", `${c.exerciseNotes} / ${c.coachNotes}`],
@@ -178,13 +186,13 @@ export function reportToMarkdown(report: IntelReport, rec: IntelRecords, meta: E
   out.push(`## Weekly training (measured)`);
   out.push(
     table(
-      ["Week", "Dates", "Phase", "Sessions done/due", "Sets logged/due", "Set adherence", "Hard sets", "Avg RPE", "RPE vs target", "Tonnage", ...LIFTS.map((l) => `${l} sets / top e1RM`)],
+      ["Week", "Dates", "Phase", "Sessions done/due", "Sets done/due", "Set adherence", "Hard sets", "Avg RPE", "RPE vs target", "Tonnage", ...LIFTS.map((l) => `${l} sets / top e1RM`)],
       report.weeks.map((w) => [
         `${w.label} ${w.blockName}`,
         `${w.start ?? "?"} → ${w.end ?? "?"}`,
         w.phase,
         `${w.completedDays + w.partialDays}/${w.dueDays}`,
-        `${w.workingSetsLogged}/${w.prescribedSetsDue}`,
+        `${w.completedSets}/${w.prescribedSetsDue}`,
         pct(w.setAdherencePct),
         w.hardSets,
         w.avgRpe,
@@ -229,6 +237,15 @@ export function reportToMarkdown(report: IntelReport, rec: IntelRecords, meta: E
   for (const n of rec.fileNotes) out.push(`- Coach file note (${n.created_at?.slice(0, 10) ?? "?"}): ${[n.title, n.body].filter(Boolean).join(": ")}`);
   for (const b of rec.blocks) if (b.coach_notes?.trim()) out.push(`- Block note (${b.name}): ${b.coach_notes.trim()}`);
   out.push("");
+  out.push(trainingLogMarkdown(report));
+  out.push("");
+  return out.join("\n");
+}
+
+/** Every workout in a report, prescribed vs actual, set by set (the part of the report that's never summarized). */
+export function trainingLogMarkdown(report: IntelReport): string {
+  const u = report.client.unit;
+  const out: string[] = [];
   out.push(`## Full training log: prescribed vs actual`);
   out.push(`Every workout in scope, in program order. "Prescribed" is the coach's prescription; "Actual" lists each logged set (load×reps @RPE). Status: done = every prescribed set logged; partial; skipped = nothing logged on a due day.`);
   let lastWeek = "";
@@ -250,18 +267,12 @@ export function reportToMarkdown(report: IntelReport, rec: IntelRecords, meta: E
       for (const n of r.clientNotes) out.push(`  - Athlete note: "${n}"`);
     }
   }
-  out.push("");
   return out.join("\n");
 }
 
 // ── AI coaching prompt ────────────────────────────────────────────────────────
 
-const BRAIN_METHOD: Record<string, string> = {
-  powerlifting: `Analyze squat, bench press and deadlift independently. Weigh competition specificity, top sets and back-off sets, prescribed vs logged RPE, estimated strength (e1RM) and its trend, weekly frequency and volume per lift, which variations coincided with progress (association is not proof of transfer), fatigue, periodization and, if a meet is on file, the peak and taper.`,
-  bodybuilding: `Analyze hypertrophy variables: hard sets per muscle group per week, frequency per muscle, exercise selection (keep exercises that progressed; replace ones that stalled), load and rep progression, proximity to failure (RPE/RIR), recovery and pain reports, physique priorities from the goals, and adherence.`,
-  powerbuilding: `Combine both: the competition lifts for strength (each lift independently: specificity, top sets, back-offs, RPE accuracy, e1RM trend, frequency, variation transfer, fatigue, periodization) and every muscle group for hypertrophy (hard sets per muscle, frequency, exercise selection, load/rep progression, proximity to failure, recovery).`,
-  general_fitness: `Prioritize adherence, sustainable frequency and session length, balanced muscle volume (push/pull, upper/lower), steady load or rep progression on the main exercises, recovery and enjoyment.`,
-};
+const BRAIN_METHOD = ANALYSIS_METHOD;
 
 export function buildAiPrompt(report: IntelReport, rec: IntelRecords, meta: ExportMeta): string {
   const brain = BRAIN_LABEL[report.brain];
