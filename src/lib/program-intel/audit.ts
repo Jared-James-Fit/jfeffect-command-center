@@ -324,7 +324,9 @@ export function auditProgram(x: AuditInput): AuditResult {
     }
   }
   for (const r of strategy.exercise_plan.replace) {
-    const hit = allEx.find((a) => (r.exercise_id && a.e.exercise_id === r.exercise_id) || norm(a.e.exercise_name) === norm(r.name));
+    // the replacement the strategy named is not a leftover (a model sometimes puts the new exercise's id on the old one)
+    const isReplacement = (name: string) => !!r.with && norm(name) === norm(r.with);
+    const hit = allEx.find((a) => !isReplacement(a.e.exercise_name) && ((r.exercise_id && a.e.exercise_id === r.exercise_id) || norm(a.e.exercise_name) === norm(r.name)));
     if (hit) add("selection", "review", `The strategy says to replace ${r.name}${r.with ? ` with ${r.with}` : ""}, but it's still in block ${hit.bi + 1} (${hit.d.title}).`, hit.bi);
   }
   if (setup.restrictions.length) add("selection", "skipped", `Restrictions can't be checked automatically against exercise choice: check ${setup.restrictions.slice(0, 3).join("; ")}.`);

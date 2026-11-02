@@ -325,6 +325,11 @@ describe("Program quality audit and scorecard", () => {
     expect(a.repairs[0].join(" ")).toMatch(/Bench/);
     expect(a.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).toMatch(/replace Romanian Deadlift, but it's still in block 1/);
   });
+  it("the replacement a strategy names isn't flagged as a leftover, even when the model put its id on the old exercise", () => {
+    const strategy = strategyFor(setup, { exercise_plan: { retain: [], replace: [{ exercise_id: "e-pull", name: "Lat Pulldown", with: "Wide-Grip Lat Pulldown", why: "" }], add: [] } });
+    const a = auditProgram(input(good(), { strategy }));
+    expect(a.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).not.toMatch(/replace Lat Pulldown/);
+  });
   it("percentages that the reps can't fit fail; invented numbers in evidence are flagged", () => {
     expect(Math.floor(maxRepsAt(85))).toBe(5);
     const p = good();
