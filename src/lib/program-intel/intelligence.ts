@@ -10,7 +10,7 @@
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { buildAthleteContext, type AthleteContext } from "./context";
 import { resolveEquipment, type EquipmentResolution } from "./equipment";
-import { currentProgramBlocks, sliceRecords } from "./load";
+import { currentProgramBlocks, isUnassignedDraftBlock, sliceRecords } from "./load";
 import { findPatterns, type Pattern } from "./patterns";
 import { dataQuality, type DataQuality } from "./quality";
 import { recommendSetup, type SetupRecommendation } from "./recommend";
@@ -37,10 +37,8 @@ export type GeneratorIntel = {
   dataHash: string;
 };
 
-/** Blocks that are a coach's draft nobody has seen yet (hidden and undated) never count as a program the athlete did. */
-export function isUnassignedDraft(b: RawBlock): boolean {
-  return b.client_visible === false && !b.start_date;
-}
+/** Blocks that are a coach's draft nobody has seen yet (hidden and undated) never count as a program the athlete did (the loader leaves them out too). */
+export const isUnassignedDraft = (b: RawBlock): boolean => isUnassignedDraftBlock(b);
 
 /** The athlete's programs in order: a meet prep's blocks together, any other block on its own. */
 export function programGroups(rec: IntelRecords): Array<{ label: string; blockIds: string[]; start: string | null }> {
