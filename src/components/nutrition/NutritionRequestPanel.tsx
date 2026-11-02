@@ -712,7 +712,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </ul>
           )}
           <ul className="space-y-1.5 text-sm">
-            <li>• Starts today, runs to {planDate(nextPlanDates(todayLocalISO()).end_date)} (the next Nutrition Update goes out in its last week)</li>
+            <li>• Starts today. {planDate(nextPlanDates(todayLocalISO()).end_date)} is when the next update is due (the Nutrition Update goes out in its last week); {firstName} keeps this plan after that until a new one replaces it</li>
             {currentPlan && <li>• The current plan ({planPeriod(currentPlan)}) moves to Previous plans, kept with its dates</li>}
             <li>• Meals, steps and cardio update together; water and notes to {firstName} carry over</li>
             <li>• {firstName} gets a notification</li>
