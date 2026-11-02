@@ -74,9 +74,12 @@ export function CalendarBoard({
   onRangeChange,
   views = ["month", "week", "day", "upcoming"],
   initialDate,
+  initialView,
 }: {
   /** Which views to offer (first one is the default). */
   views?: ViewMode[];
+  /** The view to open on, when not the first of `views` (a day tapped elsewhere opens on that day). */
+  initialView?: ViewMode;
   /** yyyy-mm-dd to open on (a day tapped on Home); default today. */
   initialDate?: string | null;
   items: CalendarItem[];
@@ -93,7 +96,7 @@ export function CalendarBoard({
   /** The days on screen (yyyy-mm-dd, inclusive), so a source can load just those. */
   onRangeChange?: (range: VisibleRange) => void;
 }) {
-  const [view, setView] = useState<ViewMode>(views[0] ?? "month");
+  const [view, setView] = useState<ViewMode>(() => (initialView && views.includes(initialView) ? initialView : views[0] ?? "month"));
   const [cursor, setCursor] = useState<Date>(() => parseDay(initialDate) ?? startOfDay(new Date()));
   // Month view: the tapped day, listed under the grid (today, or the day they came for, until they tap).
   const [picked, setPicked] = useState<Date>(() => parseDay(initialDate) ?? startOfDay(new Date()));
@@ -140,7 +143,11 @@ export function CalendarBoard({
       const we = addDays(ws, 6);
       return `${ws.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${we.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
     }
-    if (view === "day") return fmtFullDate(cursor);
+    if (view === "day") {
+      // "Tuesday, Nov 3": fits beside Book on a phone (the year only when it isn't this one).
+      const thisYear = cursor.getFullYear() === new Date().getFullYear();
+      return cursor.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }) });
+    }
     return "Upcoming";
   }, [view, cursor]);
 

@@ -377,7 +377,7 @@ export function DashboardScheduleCard() {
         <button type="button" onClick={() => setBooking(today)} className={AGENDA_ACTION}>
           <CalendarPlus className="h-4 w-4" /> Book a session
         </button>
-        <Link to="/admin/calendar" className={AGENDA_LINK}>
+        <Link to="/admin/calendar" search={{ tab: "board" } as any} className={AGENDA_LINK}>
           Open calendar
           <ChevronRight className="h-4 w-4" />
         </Link>
