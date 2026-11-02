@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
-  MessageSquare, ClipboardCheck, CreditCard, User, Zap, Star, Archive,
+  MessageSquare, ClipboardCheck, CreditCard, User, Star, Archive,
   Download, Loader2, ShoppingCart,
 } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
@@ -12,7 +12,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
@@ -91,172 +90,6 @@ function useClientPdfDownloads(r: DirectoryRow) {
   return { workoutPending, mealPending, downloadWorkout, downloadMealPlan };
 }
 
-/** Compact "Quick Actions" launcher for a client row. */
-export function QuickActionsMenu({ r }: { r: DirectoryRow }) {
-  const hasProgram = !!r.block_id;
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-  const [sellOpen, setSellOpen] = useState(false);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const pdfs = useClientPdfDownloads(r);
-  return (
-    <>
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-11 w-11 md:h-9 md:w-9"
-              aria-label="Quick actions"
-            >
-              <Zap className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">Quick actions: assign a program, schedule a workout, send a payment link, download reports.</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel className="text-xs">Training Program</DropdownMenuLabel>
-        {hasProgram ? (
-          <>
-            <DropdownMenuItem asChild>
-              <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" /> Open Program
-              </Link>
-            </DropdownMenuItem>
-            {r.block_id && (
-              <DropdownMenuItem asChild>
-                <Link to="/admin/blocks/$blockId" params={{ blockId: r.block_id }} className="flex items-center gap-2">
-                  <Dumbbell className="h-4 w-4" /> Edit Current Program
-                </Link>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem asChild>
-              <Link to="/admin/client-programs/$clientId" params={{ clientId: r.id }} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" /> Build Next Phase
-              </Link>
-            </DropdownMenuItem>
-          </>
-        ) : (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setAssignOpen(true); }}>
-            <Dumbbell className="mr-2 h-4 w-4" /> Assign Program
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="training" className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" /> View Schedule
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs text-muted-foreground/70">Program Tools</DropdownMenuLabel>
-        {hasProgram && (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
-            <Plus className="mr-2 h-4 w-4" /> Schedule Workout
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
-          <Archive className="mr-2 h-4 w-4" /> Workout Archive
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={pdfs.workoutPending}
-          onSelect={(e) => { e.preventDefault(); pdfs.downloadWorkout(); }}
-        >
-          {pdfs.workoutPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="mr-2 h-4 w-4" />
-          )}
-          Download Training Report
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs">Nutrition &amp; Cardio</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
-            <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
-            <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={pdfs.mealPending}
-          onSelect={(e) => { e.preventDefault(); pdfs.downloadMealPlan(); }}
-        >
-          {pdfs.mealPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="mr-2 h-4 w-4" />
-          )}
-          Download Meal Plan PDF
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs">Client</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="messages" className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" /> Send Message
-          </ClientNameLink>
-        </DropdownMenuItem>
-        {r.pending_reviews > 0 && (
-          <DropdownMenuItem asChild>
-            <Link to="/admin/check-in-reviews" className="flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4" /> Review Check-In
-            </Link>
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="sessions" className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" /> Book Session
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
-          <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="billing" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" /> Add Payment
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} className="flex items-center gap-2">
-            <User className="h-4 w-4" /> Open Profile
-          </ClientNameLink>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    <AssignProgramDialog
-      open={assignOpen}
-      onOpenChange={setAssignOpen}
-      clientId={r.id}
-      clientName={r.full_name}
-    />
-    <WorkoutArchiveDialog
-      open={archiveOpen}
-      onOpenChange={setArchiveOpen}
-      clientId={r.id}
-      clientName={r.full_name}
-    />
-    <QuickSellSheet
-      open={sellOpen}
-      onOpenChange={setSellOpen}
-      clientId={r.id}
-      clientName={r.full_name}
-    />
-    <ScheduleWorkoutSheet
-      open={scheduleOpen}
-      onOpenChange={setScheduleOpen}
-      clientId={r.id}
-      clientName={r.full_name}
-    />
-    </>
-  );
-}
-
 /** Expanded sectioned "More" menu (three-dot). */
 export function ClientMoreMenu({
   r,
@@ -312,7 +145,7 @@ export function ClientMoreMenu({
         <DropdownMenuLabel className="text-xs">{r.full_name}</DropdownMenuLabel>
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} className="flex items-center gap-2">
-            <Star className="h-4 w-4" /> Open Client
+            <Star className="h-4 w-4" /> View Profile
           </ClientNameLink>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

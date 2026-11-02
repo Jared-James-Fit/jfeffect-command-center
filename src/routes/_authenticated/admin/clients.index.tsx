@@ -25,67 +25,26 @@ import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
 import { listClientCalendarSyncKinds } from "@/lib/schedule.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
-import { filtersFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
+import { filtersFromSearch, matchFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { STATUS_META } from "@/components/clients/clients-status";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
-import { cn } from "@/lib/utils";
 import { listMembers } from "@/lib/members.functions";
 import { listTeam } from "@/lib/staff-invites.functions";
 import { MembersDirectory, MEMBERS_KEY, NewMemberButton, TestAccountCard, realMemberCount } from "@/components/members/members-directory";
 import { StaffPage } from "@/route-pages/_authenticated/admin/staff";
 import { AccountsSwitcher, KINDS, useSwipeBetween, type AccountKind } from "@/components/accounts/accounts-switcher";
 
-function LifecycleTabs({ value }: { value: "active" | "archived" | "deactivated" }) {
-  const navigate = useNavigate({ from: "/admin/clients/" });
-  const OPTIONS: { key: "active" | "archived" | "deactivated"; label: string }[] = [
-    { key: "active", label: "Active" },
-    { key: "archived", label: "Archived" },
-    { key: "deactivated", label: "Deactivated" },
-  ];
-  return (
-    <div className="flex gap-1 rounded-xl border border-border bg-card/60 p-1 w-fit">
-      {OPTIONS.map((o) => {
-        const isActive = value === o.key;
-        return (
-          <button
-            key={o.key}
-            type="button"
-            onClick={() =>
-              navigate({
-                search: (prev: Record<string, unknown>) => ({
-                  ...prev,
-                  lifecycle: o.key === "active" ? undefined : o.key,
-                  status: "all",
-                  flags: undefined,
-                  page: 1,
-                }),
-                resetScroll: false,
-              })
-            }
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary/40",
-            )}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 const searchSchema = z.object({
   search:        fallback(z.string(),                                                       "").default(""),
   // Older single-filter spelling; still read so a bookmarked link works. The filters now live in `flags`.
   status:        fallback(z.enum(["all","needs_setup","needs_review","program_ending","payment_issues","no_payment","new_clients","missed_workouts","inactive"]), "all").default("all"),
-  // Comma-separated filter keys, e.g. "no_contract,no_nutrition". A client must match all of them.
+  // Comma-separated filter keys, e.g. "no_contract,no_nutrition".
   flags:         fallback(z.string(),                                                       "").default(""),
+  // With several filters: clients with any of them (default) or, with ?match=all, every one.
+  match:         fallback(z.enum(["any","all"]).optional(),                                 undefined as any),
   coachingType:  fallback(z.string(),                                                       "all").default("all"),
   coachId:       fallback(z.string().uuid().optional(),                                     undefined as any),
   sort:          fallback(z.enum(["attention","recent","name","ending","activity"]),       "name").default("name"),
@@ -152,6 +111,7 @@ function ClientsDirectoryPage() {
     () => filtersFromSearch({ status: search.status, flags: search.flags }),
     [search.status, search.flags],
   );
+  const match = matchFromSearch(search.match);
 
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["clients-directory", clientSearch],
@@ -160,6 +120,7 @@ function ClientsDirectoryPage() {
         data: {
           search: search.search || "",
           flags,
+          match,
           coachingType: search.coachingType,
           coachId: search.coachId ?? null,
           sort: search.sort,
@@ -198,7 +159,8 @@ function ClientsDirectoryPage() {
     search.coachingType !== "all" ||
     search.coachId
   );
-  const resultLabel = !hasActiveFilters
+  // With chips picked, the line under them says how many show.
+  const resultLabel = !hasActiveFilters || flags.length > 0
     ? null
     : isFetching && !data
       ? "Loading…"
@@ -255,8 +217,6 @@ function ClientsDirectoryPage() {
         </div>
       ) : (
       <div className="space-y-3 p-3 sm:p-4 md:p-6">
-        <LifecycleTabs value={lifecycle} />
-
         {/* Toolbar (search + filters + sort) — pinned near the top for
             fast lookups. Rendered BEFORE the analytics overview so the
             client list stays the primary focus on every viewport. */}
@@ -269,6 +229,8 @@ function ClientsDirectoryPage() {
           isAdmin={isAdmin}
           resultLabel={resultLabel}
           flags={flags}
+          match={match}
+          lifecycle={lifecycle}
           counts={counts}
           total={total}
           loading={isFetching && !data}
@@ -287,6 +249,7 @@ function ClientsDirectoryPage() {
           <EmptyState
             hasFilters={hasActiveFilters}
             flags={flags}
+            match={match}
             lifecycle={lifecycle}
             // Back to the default view, but stay on the same tab (Active / Archived / Deactivated).
             onClear={() => navigate({ search: (prev: any) => ({ lifecycle: prev.lifecycle }), resetScroll: false })}
@@ -347,11 +310,13 @@ function ClientsDirectoryPage() {
 function EmptyState({
   hasFilters,
   flags,
+  match,
   lifecycle,
   onClear,
 }: {
   hasFilters: boolean;
   flags: DirectoryFilterKey[];
+  match: "any" | "all";
   lifecycle: string;
   onClear: () => void;
 }) {
@@ -376,7 +341,9 @@ function EmptyState({
             ? labels.length === 1
               ? `Nobody matches “${labels[0]}” right now. Try clearing it or adjusting your search.`
               : labels.length > 1
-                ? `Nobody matches all of: ${labels.join(", ")}. Remove one to widen the list.`
+                ? match === "all"
+                  ? `Nobody has all of: ${labels.join(", ")}. Switch Match to Any, or remove one.`
+                  : `Nobody has any of: ${labels.join(", ")} right now.`
                 : "Try clearing filters or adjusting your search."
             : lifecycle === "active"
               ? "Add your first client to get started."

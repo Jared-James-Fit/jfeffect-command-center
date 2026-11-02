@@ -21,7 +21,7 @@ import {
   Smartphone,
   type LucideIcon,
 } from "lucide-react";
-import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { differenceInCalendarDays, format, formatDistanceToNow, parseISO } from "date-fns";
 import type { DirectoryNextAction, DirectoryRow } from "@/lib/clients-directory.functions";
 import type { DirectoryFilterKey } from "@/lib/clients-directory-filters";
 
@@ -55,20 +55,70 @@ export const STATUS_META: Record<
   new_clients:      { label: "New Clients",         icon: UserPlus,        tone: "ok",     hint: "Joined in the last 7 days." },
 };
 
-/** How the filters are grouped, in the order they appear in the quick row and the filter sheet. */
+/**
+ * How the filters are grouped, in the order they appear in the quick row and the filter sheet:
+ * what needs you now first (most urgent first), then what's missing, then account.
+ */
 export const FILTER_GROUPS: {
   key: "missing" | "attention" | "account";
   label: string;
   keys: DirectoryFilterKey[];
 }[] = [
-  { key: "missing", label: "Missing", keys: ["no_contract", "no_payment", "no_program", "no_nutrition", "no_cardio"] },
   {
     key: "attention",
     label: "Needs attention",
-    keys: ["payment_issues", "payment_pending", "needs_review", "missed_workouts", "inactive", "program_ending"],
+    keys: ["payment_issues", "needs_review", "missed_workouts", "program_ending", "payment_pending", "inactive"],
   },
+  { key: "missing", label: "Missing", keys: ["no_program", "no_payment", "no_contract", "no_nutrition", "no_cardio"] },
   { key: "account", label: "Account", keys: ["needs_setup", "new_clients"] },
 ];
+
+/** Several filters: clients with at least one of them, or only those with every one. */
+export type FilterMatch = "any" | "all";
+
+export const MATCH_HINT: Record<FilterMatch, string> = {
+  any: "Clients with at least one of these",
+  all: "Only clients with every one of these",
+};
+
+/**
+ * The quick row: the filters with someone in them, plus any already picked (so it can be
+ * switched off). Empty filters wait in the Filters sheet, so the row is only what needs you.
+ */
+export function quickFilterKeys(counts: Partial<Record<DirectoryFilterKey, number>> | undefined, picked: readonly DirectoryFilterKey[]) {
+  return FILTER_GROUPS.map((g) => ({
+    ...g,
+    keys: g.keys.filter((k) => picked.includes(k) || (counts?.[k] ?? 0) > 0),
+  })).filter((g) => g.keys.length > 0);
+}
+
+export type BlockEnd = {
+  /** ended: past its last day · today: its last day · soon: within 14 days · later: further out. */
+  state: "ended" | "today" | "soon" | "later";
+  days: number;
+  date: string;
+  /** "Ended Nov 1", "Ends today", "Ends in 3d", "15d left". */
+  label: string;
+  /** Nothing is queued after it, and it's ending: the coach has something to do. */
+  needsNext: boolean;
+};
+
+/** Where a client's current block stands, counted in calendar days (a block ending tomorrow is "1d", never "0d"). */
+export function blockEnd(endIso: string | null | undefined, nextBlockId: string | null | undefined, today: Date = new Date()): BlockEnd | null {
+  if (!endIso) return null;
+  let end: Date;
+  try {
+    end = parseISO(endIso);
+    if (Number.isNaN(end.getTime())) return null;
+  } catch {
+    return null;
+  }
+  const days = differenceInCalendarDays(end, today);
+  const date = format(end, "MMM d");
+  const state = days < 0 ? "ended" : days === 0 ? "today" : days <= 14 ? "soon" : "later";
+  const label = state === "ended" ? `Ended ${date}` : state === "today" ? "Ends today" : state === "soon" ? `Ends in ${days}d` : `${days}d left`;
+  return { state, days, date, label, needsNext: !nextBlockId && state !== "later" };
+}
 
 /** Buttons a status can offer next to its explanation; the row decides how each one works. */
 export type ChipAction = "billing" | "profile" | "reviews" | "mark_reviewed" | "program" | "agreement" | "remind";
@@ -84,6 +134,7 @@ export type BadgeDef = {
     | "missed"
     | "inactive"
     | "program_ending"
+    | "program_ended"
     | "new"
     | "active"
     | "contract";
@@ -139,6 +190,11 @@ export function rowBadges(r: DirectoryRow): BadgeDef[] {
     out.push({ id: "program_ending", label: "Program Ending", tone: "warn", icon: CalendarClock,
       hint: "Their current training block ends within 14 days and no next block is queued.",
       next: "Build the next block so they don't run out.", actions: ["program"] });
+  // A block that has finished with nothing after it: they have no workouts, so never "Active".
+  else if (r.block_id && r.f_missing_program)
+    out.push({ id: "program_ended", label: "Program Ended", tone: "danger", icon: CalendarClock,
+      hint: "Their training block has finished and nothing is queued after it, so they have no workouts.",
+      next: "Build the next block.", actions: ["program"] });
   if (r.f_new_client && out.length < 2)
     out.push({ id: "new", label: "New", tone: "ok", icon: UserPlus, hint: "Joined in the last 7 days." });
   // "All good" would contradict an agreement that still needs signing.

@@ -12,8 +12,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { DirectoryCounts } from "@/lib/clients-directory.functions";
 import type { DirectoryFilterKey } from "@/lib/clients-directory-filters";
-import { countPillClass } from "./client-filter-rail";
-import { FILTER_GROUPS, STATUS_META } from "./clients-status";
+import { MatchToggle, countPillClass } from "./client-filter-rail";
+import { FILTER_GROUPS, STATUS_META, type FilterMatch } from "./clients-status";
 
 export const COACHING_TYPES = [
   "Online Coaching",
@@ -30,6 +30,8 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   flags: DirectoryFilterKey[];
+  match: FilterMatch;
+  onMatch: (m: FilterMatch) => void;
   counts: DirectoryCounts | undefined;
   /** How many clients the current filters show. */
   total: number;
@@ -52,6 +54,8 @@ export function ClientFilterSheet({
   open,
   onOpenChange,
   flags,
+  match,
+  onMatch,
   counts,
   total,
   loading,
@@ -80,8 +84,9 @@ export function ClientFilterSheet({
         <SheetHeader className="shrink-0 pb-3 pl-28 pr-5 pt-4">
           <SheetTitle>Filters</SheetTitle>
           <SheetDescription>
-            Pick what you want to find. Pick more than one and you only see clients who match all of them.
+            Pick what you want to find. With more than one, Any shows clients with at least one of them and All only clients with every one.
           </SheetDescription>
+          {flags.length > 1 && <MatchToggle value={match} onChange={onMatch} className="pt-2 text-xs" />}
         </SheetHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
@@ -97,7 +102,12 @@ export function ClientFilterSheet({
                   const count = counts?.[key];
                   return (
                     <li key={key}>
-                      <label className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-lg px-1 py-2 active:bg-muted/50">
+                      <label
+                        className={cn(
+                          "flex min-h-[56px] cursor-pointer items-center gap-3 rounded-lg px-1 py-2 active:bg-muted/50",
+                          !count && !flags.includes(key) && "opacity-60",
+                        )}
+                      >
                         <Checkbox
                           checked={flags.includes(key)}
                           onCheckedChange={() => onToggleFlag(key)}

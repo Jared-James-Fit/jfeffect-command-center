@@ -49,7 +49,7 @@ describe("statuses explain themselves on a tap", () => {
     const pill = row.slice(row.indexOf("function StatusPill"), row.indexOf("function AssignmentStatusStrip"));
     expect(pill).toContain("<StatusTip");
     expect(pill).toContain("onAction()");
-    expect(row).toMatch(/title=\{ended \? "Program has ended" : "No next block queued"\}/);
+    expect(row).toContain('title={end.state === "ended" ? "Program has ended" : "No next block queued"}');
   });
 
   it("shows when they were last seen once, not twice, and the missed tag only when the status row can't", () => {
@@ -94,11 +94,11 @@ describe("the filters reach the database", () => {
   it("keeps the filters in the URL, and still understands the older ?status= link", () => {
     expect(page).toMatch(/flags:\s+fallback\(z\.string\(\)/);
     expect(page).toContain("filtersFromSearch({ status: search.status, flags: search.flags })");
-    expect(page).toContain("          flags,\n          coachingType: search.coachingType,");
+    expect(page).toContain("          flags,\n          match,\n          coachingType: search.coachingType,");
   });
 
   it("starts a different tab (Active / Archived / Deactivated) with no filters", () => {
-    expect(page).toMatch(/lifecycle: o\.key === "active" \? undefined : o\.key,\s+status: "all",\s+flags: undefined,/);
+    expect(toolbar).toMatch(/lifecycle: v === "active" \? undefined : v,\s+status: "all",\s+flags: undefined,\s+match: undefined,/);
   });
 
   it("clears back to the default view without dropping the tab you are on", () => {
@@ -120,10 +120,11 @@ describe("the filters reach the database", () => {
     expect(toolbar).toContain('to="/admin/coaching-agreements"');
   });
 
-  it("explains the filters it offers and says several mean all of them", () => {
+  it("explains the filters it offers and what Any and All mean", () => {
     const sheet = read("src/components/clients/client-filter-sheet.tsx");
     expect(sheet).toContain("meta.hint");
-    expect(sheet).toContain("you only see clients who match all of them");
-    expect(read("src/components/clients/client-filter-rail.tsx")).toContain("match all");
+    expect(sheet).toContain("Any shows clients with at least one of them and All only clients with every one");
+    expect(sheet).toContain("<MatchToggle value={match} onChange={onMatch}");
+    expect(read("src/components/clients/client-filter-rail.tsx")).toContain("<MatchToggle value={match} onChange={onMatch} />");
   });
 });

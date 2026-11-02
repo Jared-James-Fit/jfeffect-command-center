@@ -9,6 +9,14 @@ import type { DirectoryCounts } from "@/lib/clients-directory.functions";
 import { serializeFilterKeys, toggleFilterKey, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { ClientFilterRail, ActiveFilterSummary } from "./client-filter-rail";
 import { ClientFilterSheet } from "./client-filter-sheet";
+import type { FilterMatch } from "./clients-status";
+
+export type Lifecycle = "active" | "archived" | "deactivated";
+const LIFECYCLES: { v: Lifecycle; label: string }[] = [
+  { v: "active", label: "Active" },
+  { v: "archived", label: "Archived" },
+  { v: "deactivated", label: "Deactivated" },
+];
 
 // Sort options intentionally limited to what the directory RPC supports.
 // Labels re-worded to match the coach-first workflow, and kept short enough to show in full on a phone.
@@ -29,8 +37,11 @@ type Props = {
   isAdmin: boolean;
   /** Compact result count — only rendered when search/filters are active. */
   resultLabel?: string | null;
-  /** The "what's missing / needs attention" filters switched on (a client must match all of them). */
+  /** The "what's missing / needs attention" filters switched on. */
   flags: DirectoryFilterKey[];
+  /** Several filters: clients with any of them (default) or all of them. */
+  match: FilterMatch;
+  lifecycle: Lifecycle;
   counts: DirectoryCounts | undefined;
   /** How many clients the current filters show. */
   total: number;
@@ -38,7 +49,7 @@ type Props = {
 };
 
 export function ClientToolbar({
-  search, coachingType, coachId, coaches, sort, isAdmin, resultLabel, flags, counts, total, loading,
+  search, coachingType, coachId, coaches, sort, isAdmin, resultLabel, flags, match, lifecycle, counts, total, loading,
 }: Props) {
   const navigate = useNavigate({ from: "/admin/clients/" });
   const [local, setLocal] = useState(search);
@@ -60,11 +71,27 @@ export function ClientToolbar({
 
   // `status` is the older single-filter spelling of the URL; clearing it keeps a bookmarked
   // ?status=… link from reviving a filter the coach just switched off.
-  const setFlags = (next: DirectoryFilterKey[]) => set({ flags: serializeFilterKeys(next), status: undefined });
+  const setFlags = (next: DirectoryFilterKey[]) =>
+    set({ flags: serializeFilterKeys(next), status: undefined, ...(next.length < 2 ? { match: undefined } : {}) });
   const toggleFlag = (key: DirectoryFilterKey) => setFlags(toggleFilterKey(flags, key));
+  const setMatch = (m: FilterMatch) => set({ match: m === "all" ? "all" : undefined });
+  // Another tab (Active / Archived / Deactivated) starts with no filters.
+  const setLifecycle = (v: Lifecycle) =>
+    navigate({
+      search: (prev: any) => ({
+        ...prev,
+        lifecycle: v === "active" ? undefined : v,
+        status: "all",
+        flags: undefined,
+        match: undefined,
+        page: 1,
+      }),
+      resetScroll: false,
+    });
 
+  // The chips have their own Clear in the line under them; this one is for everything else.
   const hasFilters =
-    !!search || (coachingType && coachingType !== "all") || !!coachId || sort !== "name" || flags.length > 0;
+    !!search || (coachingType && coachingType !== "all") || !!coachId || sort !== "name";
 
   const activeCount =
     flags.length + (coachingType && coachingType !== "all" ? 1 : 0) + (coachId ? 1 : 0);
@@ -97,6 +124,18 @@ export function ClientToolbar({
 
         {/* Compact filter row — one horizontal line, no wrapping unless it must */}
         <div className="flex w-full items-center gap-1.5 overflow-x-auto sm:w-auto sm:gap-2 sm:overflow-visible">
+          <Select value={lifecycle} onValueChange={(v) => setLifecycle(v as Lifecycle)}>
+            <SelectTrigger
+              className={cn("h-11 w-[124px] shrink-0 font-semibold", lifecycle !== "active" && "border-primary/50 text-primary")}
+              aria-label="Which clients"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LIFECYCLES.map((l) => <SelectItem key={l.v} value={l.v}>{l.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
           <Select value={sort} onValueChange={(v) => set({ sort: v })}>
             <SelectTrigger className="h-11 w-[178px] shrink-0 sm:w-[190px]" aria-label="Sort by">
               <ArrowUpDown className="mr-2 h-4 w-4" aria-hidden />
@@ -147,9 +186,11 @@ export function ClientToolbar({
     <ClientFilterRail flags={flags} counts={counts} onToggle={toggleFlag} />
     <ActiveFilterSummary
       flags={flags}
+      match={match}
       total={total}
+      all={counts?.all}
       loading={loading}
-      onToggle={toggleFlag}
+      onMatch={setMatch}
       onClear={() => setFlags([])}
       extra={
         // The bulk "remind everyone unsigned" already lives on the Agreements page.
@@ -168,6 +209,8 @@ export function ClientToolbar({
       open={sheetOpen}
       onOpenChange={setSheetOpen}
       flags={flags}
+      match={match}
+      onMatch={setMatch}
       counts={counts}
       total={total}
       loading={loading}
@@ -177,7 +220,7 @@ export function ClientToolbar({
       isAdmin={isAdmin}
       onToggleFlag={toggleFlag}
       onChange={set}
-      onClearAll={() => set({ flags: undefined, status: undefined, coachingType: undefined, coachId: undefined })}
+      onClearAll={() => set({ flags: undefined, status: undefined, match: undefined, coachingType: undefined, coachId: undefined })}
     />
     </>
   );
