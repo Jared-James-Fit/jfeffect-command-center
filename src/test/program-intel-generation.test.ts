@@ -1,93 +1,94 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  draftBlockDates,
-  exerciseRow,
-  generationSystemPrompt,
-  interpretReplySchema,
-  parseJsonReply,
-  programReplySchema,
-  resolveProgramExercises,
-  weekRx,
-  type ProgramReply,
-} from "@/lib/program-intel/next-program";
+import { builtBlockSchema, strategySchema, type BuiltProgram } from "@/lib/program-intel/generator-schemas";
+import { constructSystemPrompt, strategySystemPrompt } from "@/lib/program-intel/generator-prompts";
+import { draftBlockDates, exerciseRow, interpretReplySchema, parseJsonReply, resolveProgramExercises } from "@/lib/program-intel/next-program";
+import { rxForWeek } from "@/lib/program-intel/program-view";
+import { blockIssues, strategyIssues } from "@/lib/program-intel/pipeline.server";
+import { BRAINS } from "@/lib/program-intel/types";
 import { currentProgramBlocks, fetchAll, fetchByIds } from "@/lib/program-intel/load";
 
-const program = (over: Partial<ProgramReply> = {}): any => ({
-  program_name: "Next cycle",
-  summary: "Squat progressed at 2x/week.",
-  blocks: [
+const block = (over: any = {}): any => ({
+  name: "Accumulation",
+  objective: "Volume",
+  weeks: 3,
+  week_phases: [{ week: 3, phase: "Deload" }],
+  deload_rule: "Week 3: half the sets",
+  progression_rules: ["Add load when the top of the range is hit at the target RPE"],
+  days: [
     {
-      name: "Accumulation",
-      focus: "Volume",
-      weeks: 3,
-      week_phases: [{ week: 3, phase: "Deload" }],
-      days: [
-        {
-          title: "Squat day",
-          exercises: [
-            { exercise_id: "ex-squat", exercise_name: "Comp Squat (typo)", role: "Primary Squat", sets: 4, reps: "5", rpe: "7", weeks: [{ week: 2, rpe: "8" }, { week: 3, sets: 2, rpe: "6" }] },
-            { exercise_id: null, exercise_name: "Bulgarian Split Squat", sets: 3, reps: "8-10", rpe: "8" },
-            { exercise_id: "made-up-id", exercise_name: "Zercher Moonwalk", sets: 3, reps: "10" },
-          ],
-        },
+      title: "Squat day",
+      exercises: [
+        { exercise_id: "ex-squat", exercise_name: "Comp Squat (typo)", role: "Primary Squat", sets: 4, reps: "5", rpe: "7", rest_seconds: 180, progression: "+2.5 kg when all sets ≤ RPE 7", substitutions: [{ exercise_id: null, exercise_name: "Safety Bar Squat" }], weeks: [{ week: 2, rpe: "8" }, { week: 3, sets: 2, rpe: "6" }] },
+        { exercise_id: null, exercise_name: "Bulgarian Split Squat", sets: 3, reps: "8-10", rpe: "8" },
+        { exercise_id: "made-up-id", exercise_name: "Zercher Moonwalk", sets: 3, reps: "10" },
       ],
     },
   ],
-  progression: "RPE +1 a week",
-  recovery: "Deload week 3",
-  changes: [{ change: "Squat 2x/week", why: "Progressed +4% at 2x", evidence: ["B1·W2 squat"], basis: "fact" }],
-  watch: [],
   ...over,
 });
+const program = (over: any = {}): BuiltProgram => ({ program_name: "Next cycle", summary: "", blocks: [builtBlockSchema.parse(block(over))], progression: "", recovery: "", changes: [], watch: [] });
 
-describe("Generate Next Program: the model's answer is checked before anything is written", () => {
-  it("JSON is pulled out of fences and prose, and must match the shape", () => {
-    const ok = parseJsonReply("Sure!\n```json\n" + JSON.stringify(program()) + "\n```", programReplySchema);
+describe("Generate Next Program: every stage's answer is checked before it's used", () => {
+  it("JSON is pulled out of fences and prose, and must match the block shape", () => {
+    const ok = parseJsonReply("Sure!\n```json\n" + JSON.stringify(block()) + "\n```", builtBlockSchema);
     expect(ok.ok).toBe(true);
-    const bad = parseJsonReply('{"program_name": "x"}', programReplySchema);
-    expect(bad.ok).toBe(false);
-    expect(parseJsonReply("no json here", programReplySchema).ok).toBe(false);
-    // at most 16 weeks in total
-    const long = program({ blocks: [{ ...program().blocks[0], weeks: 12 }, { ...program().blocks[0], weeks: 12 }] });
-    expect(parseJsonReply(JSON.stringify(long), programReplySchema).ok).toBe(false);
+    expect(parseJsonReply('{"name": "x"}', builtBlockSchema).ok).toBe(false);
+    expect(parseJsonReply("no json here", builtBlockSchema).ok).toBe(false);
+    expect(parseJsonReply(JSON.stringify(block({ weeks: 13 })), builtBlockSchema).ok).toBe(false);
   });
-  it("an unknown basis reads as a hypothesis, never as a fact", () => {
-    const p = parseJsonReply(JSON.stringify(program({ changes: [{ change: "x", why: "y", evidence: [], basis: "certain" as any }] })), programReplySchema);
-    expect(p.ok && p.value.changes![0].basis).toBe("hypothesis");
+  it("a strategy needs at least one decision; an unknown basis reads as a hypothesis, never a fact", () => {
+    const base = { athlete_read: "x", previous_program: {}, progression: {}, structure: { weeks: 4, days_per_week: 4, blocks: [{ name: "A", weeks: 4 }] }, weekly_layout: [{ day: 1, title: "A" }], exercise_plan: {} };
+    expect(parseJsonReply(JSON.stringify({ ...base, decisions: [] }), strategySchema).ok).toBe(false);
+    const p = parseJsonReply(JSON.stringify({ ...base, decisions: [{ observation: "o", change: "c", basis: "certain" }] }), strategySchema);
+    expect(p.ok && p.value.decisions[0].basis).toBe("hypothesis");
+  });
+  it("the strategy must match the coach's setup; a block must match the strategy", () => {
+    const s = strategySchema.parse({ athlete_read: "x", previous_program: {}, progression: {}, structure: { weeks: 5, days_per_week: 3, blocks: [{ name: "A", weeks: 4 }] }, weekly_layout: [{ day: 1, title: "A" }], exercise_plan: { retain: [{ name: "Leg Press" }] }, decisions: [{ observation: "o", change: "c" }] });
+    const issues = strategyIssues(s, { weeks: 4, daysPerWeek: 4, excluded: [{ id: null, name: "Leg Press" }], required: [{ id: null, name: "Nordic Curl" }] } as any);
+    expect(issues.join(" ")).toMatch(/structure.weeks is 5/);
+    expect(issues.join(" ")).toMatch(/days_per_week is 3/);
+    expect(issues.join(" ")).toMatch(/add up to 4, not 5/);
+    expect(issues.join(" ")).toMatch(/weekly_layout has 1 days/);
+    expect(issues.join(" ")).toMatch(/Leg Press is excluded/);
+    expect(issues.join(" ")).toMatch(/Nordic Curl isn't in exercise_plan/);
+    expect(blockIssues(builtBlockSchema.parse(block()), { weeks: 4, days: 2 })).toHaveLength(2);
   });
   it("interpretations are capped and carry evidence", () => {
     const p = parseJsonReply(JSON.stringify({ observations: [{ statement: "Squat responds to frequency", category: "squat", evidence: ["B1·W2"] }], questions: ["Sleep?"] }), interpretReplySchema);
     expect(p.ok && p.value.observations![0].evidence).toEqual(["B1·W2"]);
   });
-  it("exercises: catalog ids keep the library's name, names resolve through the library, the rest stay unmatched; nothing is created", async () => {
-    const parsed = programReplySchema.parse(program());
-    const known = new Map([["ex-squat", "Competition Squat"], ["ex-bss", "Bulgarian Split Squat"]]);
+  it("exercises: catalog ids keep the library's name, names resolve through the library, the rest stay unmatched; swaps are settled too; nothing is created", async () => {
+    const known = new Map([["ex-squat", "Competition Squat"], ["ex-bss", "Bulgarian Split Squat"], ["ex-ssb", "Safety Bar Squat"]]);
     const asked: string[] = [];
-    const { program: out, unmatched } = await resolveProgramExercises(parsed, known, async (name) => {
+    const { program: out, unmatched } = await resolveProgramExercises(program(), known, async (name) => {
       asked.push(name);
-      return name === "Bulgarian Split Squat" ? "ex-bss" : null;
+      return name === "Bulgarian Split Squat" ? "ex-bss" : name === "Safety Bar Squat" ? "ex-ssb" : null;
     });
     const ex = out.blocks[0].days[0].exercises;
     expect(ex[0]).toMatchObject({ exercise_id: "ex-squat", exercise_name: "Competition Squat" });
+    expect(ex[0].substitutions[0]).toMatchObject({ exercise_id: "ex-ssb", exercise_name: "Safety Bar Squat" });
     expect(ex[1]).toMatchObject({ exercise_id: "ex-bss", exercise_name: "Bulgarian Split Squat" });
     // an id the model made up is never trusted: it goes through the name, and stays a name if the library doesn't know it
     expect(ex[2]).toMatchObject({ exercise_id: null, exercise_name: "Zercher Moonwalk" });
     expect(unmatched).toEqual(["Zercher Moonwalk"]);
-    expect(asked).toEqual(["Bulgarian Split Squat", "Zercher Moonwalk"]);
+    expect(asked).toEqual(["Safety Bar Squat", "Bulgarian Split Squat", "Zercher Moonwalk"]);
   });
-  it("each week's rows: the base prescription with that week's overrides, % as % of estimated 1RM, unmatched as a name only", () => {
-    const parsed = programReplySchema.parse(program());
-    const sq = parsed.blocks[0].days[0].exercises[0];
-    expect(weekRx(sq, 1)).toMatchObject({ sets: 4, reps: "5", rpe: "7" });
-    expect(weekRx(sq, 2)).toMatchObject({ sets: 4, rpe: "8" });
-    expect(weekRx(sq, 3)).toMatchObject({ sets: 2, rpe: "6" });
+  it("each week's rows: the base with that week's changes, rest, the progression rule and swaps in the athlete's notes, unmatched as a name only", () => {
+    const b = builtBlockSchema.parse(block());
+    const sq = b.days[0].exercises[0];
+    expect(rxForWeek(sq, 1)).toMatchObject({ sets: 4, reps: "5", rpe: "7" });
+    expect(rxForWeek(sq, 2)).toMatchObject({ sets: 4, rpe: "8" });
+    expect(rxForWeek(sq, 3)).toMatchObject({ sets: 2, rpe: "6" });
     const r = exerciseRow(sq, 3, 0);
-    expect(r).toMatchObject({ sets: 2, reps_text: "5", rpe: "6", exercise_id: "ex-squat", exercise_name_override: null, purpose_label: "Primary Squat", sort_order: 0 });
-    const pct = exerciseRow({ ...sq, percentage: 80, rpe: null }, 1, 1);
+    expect(r).toMatchObject({ sets: 2, reps_text: "5", rpe: "6", rest_seconds: 180, exercise_id: "ex-squat", exercise_name_override: null, purpose_label: "Primary Squat", sort_order: 0 });
+    expect(String(r.notes)).toContain("Progress: +2.5 kg when all sets ≤ RPE 7");
+    expect(String(r.notes)).toContain("Swap if needed: Safety Bar Squat");
+    const pct = exerciseRow({ ...sq, percentage: 80, rpe: null, weeks: [] }, 1, 1);
     expect(pct).toMatchObject({ percentage: 80, percentage_basis: "est_1rm" });
-    const named = exerciseRow({ exercise_id: null, exercise_name: "Zercher Moonwalk", sets: 3, reps: "10" } as any, 1, 2);
-    expect(named).toMatchObject({ exercise_id: null, exercise_name_override: "Zercher Moonwalk" });
+    // after resolution an unknown exercise has no id: it's written by name only
+    const named = exerciseRow({ ...b.days[0].exercises[2], exercise_id: null }, 1, 2);
+    expect(named).toMatchObject({ exercise_name_override: "Zercher Moonwalk" });
   });
   it("assigning: blocks back to back from the start date, each week seven days", () => {
     const d = draftBlockDates("2026-11-02", [3, 2]);
@@ -95,15 +96,21 @@ describe("Generate Next Program: the model's answer is checked before anything i
     expect(d[0].weeks[2]).toEqual({ start: "2026-11-16", end: "2026-11-22" });
     expect(d[1]).toMatchObject({ start: "2026-11-23", end: "2026-12-06" });
   });
-  it("each brain writes from the athlete's response, cites evidence and uses the library", () => {
-    for (const b of ["powerlifting", "bodybuilding", "powerbuilding", "general_fitness"] as const) {
-      const s = generationSystemPrompt(b);
+  it("every brain writes from the athlete's response, cites evidence, and builds from the library and their equipment", () => {
+    for (const b of BRAINS) {
+      const s = strategySystemPrompt(b);
       expect(s).toContain("never a generic template");
-      expect(s).toContain("Never invent past results");
-      expect(s).toContain("exercise_id values from the catalog");
+      expect(s).toContain("Never compute, estimate or invent a past result");
+      expect(s).toContain("Observation → Evidence → Proposed change → Expected benefit → What to monitor");
+      const c = constructSystemPrompt(b);
+      expect(c).toContain("exercise_id values from the catalog");
+      expect(c).toContain("Only use exercises the athlete's equipment allows");
+      expect(c).toContain("no fake progression");
     }
-    expect(generationSystemPrompt("powerlifting")).toContain("squat, bench and deadlift independently");
-    expect(generationSystemPrompt("bodybuilding")).toContain("weekly hard sets per muscle");
+    expect(strategySystemPrompt("powerlifting")).toContain("squat, bench and deadlift independently");
+    expect(strategySystemPrompt("powerlifting")).toContain('never impose a generic rule (e.g. "bench 3×/week")');
+    expect(strategySystemPrompt("bodybuilding")).toContain("do not raise volume just because they progressed");
+    expect(strategySystemPrompt("powerbuilding")).toContain("Prioritize the main strength lifts");
   });
 });
 
@@ -153,14 +160,25 @@ describe("Program Intelligence is for the client's coaches and admins only", () 
     expect(sql).toContain("grant execute on function public.program_intel_can_coach(uuid, uuid) to service_role;");
     const worker = readFileSync("src/lib/program-intel/jobs.server.ts", "utf8");
     expect(worker).toContain('admin.rpc("program_intel_can_coach", { _user: job.created_by, _client: job.client_id })');
+    const pipeline = readFileSync("src/lib/program-intel/pipeline.server.ts", "utf8");
+    expect(pipeline).toContain('admin.rpc("program_intel_can_coach", { _user: job.created_by, _client: job.client_id })');
+  });
+  it("the model calls log is readable by the client's coaches only and written only by the worker", () => {
+    const v2 = readFileSync("supabase/migrations/20270113090000_program_intel_generator_v2.sql", "utf8");
+    expect(v2).toContain("alter table public.program_intel_job_calls enable row level security;");
+    expect(v2).toContain("revoke all on public.program_intel_job_calls from anon, authenticated;");
+    expect(v2).toContain("grant select on public.program_intel_job_calls to authenticated;");
+    expect(v2).not.toMatch(/grant (insert|update|delete)[^;]*program_intel_job_calls/);
+    expect(v2).toContain("or new.stage is distinct from old.stage or new.progress is distinct from old.progress");
+    expect(v2).toContain("and stage is null\n    and progress is null\n    and context is null\n    and result is null");
   });
   it("an AI statement is stored as a hypothesis until the coach approves it", () => {
     expect(sql).toContain("check (source <> 'ai' or confidence = 'hypothesis' or status in ('approved', 'corrected'))");
-    const worker = readFileSync("src/lib/program-intel/jobs.server.ts", "utf8");
+    const worker = readFileSync("src/lib/program-intel/jobs.server.ts", "utf8") + readFileSync("src/lib/program-intel/pipeline.server.ts", "utf8");
     expect(worker.match(/confidence: "hypothesis",\n\s+status: "proposed",\n\s+source: "ai"/g)).toHaveLength(2);
   });
   it("a draft is hidden, undated and never assigned by the AI", () => {
-    const worker = readFileSync("src/lib/program-intel/jobs.server.ts", "utf8");
+    const worker = readFileSync("src/lib/program-intel/pipeline.server.ts", "utf8");
     expect(worker).toContain('status: "Draft",\n          client_visible: false,\n          start_date: null,\n          end_date: null,');
     expect(worker).not.toContain("client_visible: true");
     expect(worker).not.toContain("realignClientToCommittedDays");

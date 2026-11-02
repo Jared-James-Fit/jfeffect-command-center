@@ -113,7 +113,10 @@ export function setLine(r: IntelRecords["results"][number], settings: IntelRecor
   const effort = rpe ?? (rir != null ? Math.max(0, Math.min(10, 10 - rir)) : null);
   const logged = !!r.completed_at || reps != null;
   const explicitWarmup = r.is_working_set === false;
-  const working = logged && !explicitWarmup && (reps ?? 0) > 0 && (effort == null || effort >= settings.workingRpeMin);
+  // A set counts toward the prescription when it was logged as done with reps (or a time), whatever its effort:
+  // an RPE 5 set the athlete did is still a completed set. Effort only decides whether it counts as working volume.
+  const done = logged && !explicitWarmup && ((reps ?? 0) > 0 || (toNum(r.completed_duration_seconds) ?? 0) > 0);
+  const working = done && (reps ?? 0) > 0 && (effort == null || effort >= settings.workingRpeMin);
   const hard = working && (effort == null || effort >= HARD_SET_RPE);
   const e1rm =
     working && loadType === "external" && kg != null && kg > 0 && reps != null && reps >= 1 && reps <= E1RM_MAX_REPS
@@ -127,8 +130,13 @@ export function setLine(r: IntelRecords["results"][number], settings: IntelRecor
     rpe: effort,
     rir: rir ?? (effort != null ? round(10 - effort, 1) : null),
     e1rm: e1rm && e1rm > 0 ? e1rm : null,
+    done,
     working,
     hard,
+    velocity: (() => {
+      const v = toNum(r.mean_concentric_velocity_mps);
+      return v != null && v > 0 && v < 3 ? round(v, 2) : null;
+    })(),
     loadType,
     logged,
     completedAt: r.completed_at ? localDate(r.completed_at, tz) : null,
@@ -307,6 +315,7 @@ function compareRow(
   const rpeR = rpeRange(row.rpe);
   const loadKg = toNum(row.load_kg) ?? (toNum(row.load_lb) != null ? round((toNum(row.load_lb) as number) / LB_PER_KG, 2) : null);
   const working = sets.filter((s) => s.working);
+  const doneSets = sets.filter((s) => s.done);
   const prescribed = prescribedSetCount(row, setBlocks);
   const repsHit = repR ? working.filter((s) => (s.reps ?? 0) >= repR[0]).length : null;
   const rpes = working.map((s) => s.rpe).filter((n): n is number => n != null);
@@ -315,10 +324,10 @@ function compareRow(
   const loadDelta = loadKg != null && loads.length ? round((mean(loads) as number) - loadKg, 2) : null;
   const top = working.filter((s) => s.e1rm != null).sort((a, b) => (b.e1rm as number) - (a.e1rm as number))[0] ?? null;
   let status: RowCompare["status"];
-  if (dayState === "upcoming") status = working.length ? "partial" : "upcoming";
-  else if (dayState === "unscheduled") status = working.length ? "partial" : "unscheduled";
-  else if (!working.length) status = "skipped";
-  else if (prescribed != null && working.length < prescribed) status = "partial";
+  if (dayState === "upcoming") status = doneSets.length ? "partial" : "upcoming";
+  else if (dayState === "unscheduled") status = doneSets.length ? "partial" : "unscheduled";
+  else if (!doneSets.length) status = "skipped";
+  else if (prescribed != null && doneSets.length < prescribed) status = "partial";
   else status = "done";
   return {
     rowId: row.id,
@@ -354,6 +363,7 @@ function compareRow(
     actual: sets,
     warmups,
     status,
+    setsDone: doneSets.length,
     workingSetsDone: working.length,
     repsHitPct: repR && working.length ? Math.round(((repsHit as number) / working.length) * 100) : null,
     rpeDelta,

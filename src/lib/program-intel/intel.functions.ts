@@ -8,6 +8,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { setupSchema, strategySchema } from "./generator-schemas";
 import { draftBlockDates } from "./next-program";
 import { BRAINS } from "./types";
 
@@ -18,21 +19,29 @@ const scopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("history") }),
 ]);
 
-const queueSchema = z.object({
-  clientId: z.string().uuid(),
-  kind: z.enum(["interpret", "generate"]),
-  scope: scopeSchema,
-  brain: z.enum(BRAINS as [string, ...string[]]),
-  instructions: z.string().trim().max(2000).nullish(),
-  options: z
-    .object({
-      daysPerWeek: z.number().int().min(1).max(7).nullish(),
-      weeks: z.number().int().min(1).max(16).nullish(),
-      sessionMinutes: z.number().int().min(15).max(240).nullish(),
-    })
-    .default({}),
-  privacySafe: z.boolean().default(false),
-});
+const queueSchema = z
+  .object({
+    clientId: z.string().uuid(),
+    kind: z.enum(["interpret", "strategy", "generate"]),
+    scope: scopeSchema,
+    brain: z.enum(BRAINS as [string, ...string[]]),
+    instructions: z.string().trim().max(2000).nullish(),
+    options: z
+      .object({
+        /** the setup the coach approved (Generate Next Program) */
+        setup: setupSchema.optional(),
+        /** which setup fields the coach changed from the recommendation */
+        edited: z.array(z.string().max(40)).max(40).optional(),
+        /** a strategy the coach approved (skips the strategy stage) */
+        strategy: strategySchema.optional(),
+        strategyJobId: z.string().uuid().optional(),
+        /** the data fingerprint on the coach's screen (to flag records that changed since) */
+        dataHash: z.string().max(40).optional(),
+      })
+      .default({}),
+    privacySafe: z.boolean().default(false),
+  })
+  .refine((d) => d.kind === "interpret" || !!d.options.setup, { message: "A setup is required to generate" });
 
 async function assertCoach(ctx: { supabase: unknown; userId: string }, clientId: string): Promise<"admin" | "coach"> {
   const db = ctx.supabase as any;
@@ -65,10 +74,11 @@ export const queueIntelJobFn = createServerFn({ method: "POST" })
         client_id: data.clientId,
         kind: data.kind,
         scope: data.scope,
-        brain: data.brain,
+        brain: data.options.setup?.brain ?? data.brain,
         instructions: data.instructions ?? null,
         options: data.options ?? {},
         privacy_safe: data.privacySafe,
+        strategy_job_id: data.options.strategyJobId ?? null,
         created_by: context.userId,
         status: "pending",
       })
@@ -87,20 +97,22 @@ export const retryIntelJobFn = createServerFn({ method: "POST" })
     if (!job) throw new Error("That run wasn't found.");
     await assertCoach(context, job.client_id);
     if (job.status !== "error") throw new Error("Only a failed run can be retried.");
-    const { error } = await sb.from("program_intel_jobs").update({ status: "pending" }).eq("id", job.id);
+    // it picks up at the stage that failed
+    const { error } = await sb.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const assignIntelDraftFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid(), startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(d))
+  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid(), startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), acknowledgeAudit: z.boolean().default(false) }).parse(d))
   .handler(async ({ data, context }) => {
     const sb = context.supabase as any;
     const { data: job } = await sb.from("program_intel_jobs").select("id, client_id, kind, status, result").eq("id", data.jobId).maybeSingle();
     if (!job || job.kind !== "generate") throw new Error("That draft wasn't found.");
     const role = await assertCoach(context, job.client_id);
     if (job.status !== "ready") throw new Error(job.status === "assigned" ? "This draft is already assigned." : "This draft isn't ready to assign.");
+    if (job.result?.audit?.overall === "failed" && !data.acknowledgeAudit) throw new Error("This draft failed validation. Review the scorecard (or fix it in the editor) and confirm to assign it anyway.");
     const blockIds: string[] = (job.result?.blockIds ?? []).filter(Boolean);
     const { data: blocks } = await sb.from("pl_blocks").select("id, weeks, client_id, client_visible").in("id", blockIds);
     const ordered = blockIds.map((id) => (blocks ?? []).find((b: any) => b.id === id)).filter(Boolean) as any[];

@@ -29,7 +29,7 @@ import { buildIntelReport } from "@/lib/program-intel/report";
 import { BRAIN_LABEL, BRAINS, type Brain, type Finding, type IntelScopeRequest } from "@/lib/program-intel/types";
 import { DetailedData } from "./detailed-data";
 import { MemorySection } from "./memory";
-import { DraftCard, GenerateSheet } from "./next-program-panel";
+import { NextProgramLink } from "./next-program-link";
 import { BlocksSection, ExercisesSection, FindingsSummary, LiftsSection, MusclesSection, RecoveryCard, WeeksSection } from "./sections";
 import { logIntelExport, newId, useBrainOverride, useIntelJobs, useIntelRecords, useIntelReport, useObservations, useSaveObservation } from "./use-program-intel";
 
@@ -79,13 +79,11 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
   const save = useSaveObservation(clientId);
   const queue = useServerFn(queueIntelJobFn);
   const [privacySafe, setPrivacySafe] = useState(false);
-  const [genOpen, setGenOpen] = useState(false);
   const [interpreting, setInterpreting] = useState(false);
   const tabsRef = useRef<HTMLDivElement | null>(null);
 
   const savedKeys = useMemo(() => new Set((observations.data ?? []).filter((o) => o.source === "analysis" && o.status !== "rejected").map((o) => o.finding_key ?? "").filter(Boolean)), [observations.data]);
-  const latestGenerate = (jobs.data ?? []).find((j) => j.kind === "generate" && j.status !== "discarded") ?? null;
-  const olderDrafts = (jobs.data ?? []).filter((j) => j.kind === "generate" && j !== latestGenerate && j.status !== "discarded");
+  const latestGenerate = (jobs.data ?? []).find((j) => (j.kind === "generate" || j.kind === "strategy") && j.status !== "discarded") ?? null;
   const latestInterpret = (jobs.data ?? []).find((j) => j.kind === "interpret") ?? null;
   // A run that just finished wrote observations or decisions: read the memory again.
   const finished = (jobs.data ?? []).filter((j) => j.status !== "pending" && j.status !== "running").map((j) => `${j.id}:${j.status}`).join(",");
@@ -228,9 +226,9 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
               <div className="grid grid-cols-4 gap-1.5 text-center">
                 {[
                   [`${c.completedDays + c.partialDays}/${c.dueDays}`, "workouts done"],
-                  [`${c.workingSets}/${c.prescribedSetsDue}`, "sets done/due"],
-                  [String(c.loggedSets), "sets logged"],
-                  [c.setsWithoutRpePct != null ? `${c.setsWithoutRpePct}%` : "—", "no RPE"],
+                  [`${c.completedSets}/${c.prescribedSetsDue}`, "sets done/due"],
+                  [String(c.loggedSets), "set records"],
+                  [c.setsWithRpePct != null ? `${c.setsWithRpePct}%` : "—", "RPE logged"],
                 ].map(([v, l]) => (
                   <div key={l} className="rounded-xl bg-secondary/50 px-1 py-1.5">
                     <div className="text-sm font-black tabular-nums">{v}</div>
@@ -243,6 +241,9 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                 <p className="mt-1">{BRAIN_SUMMARY[report.brain]}</p>
                 <p className="mt-1 font-semibold">Auto-classification ({BRAIN_LABEL[report.classification.auto]}):</p>
                 <ul className="pl-4">{report.classification.reasons.map((r, i) => <li key={i} className="list-disc">{r}</li>)}</ul>
+                <p className="mt-1" data-testid="intel-set-definitions">
+                  <b>How sets are counted:</b> {c.prescribedSetsDue} prescribed on due workouts; {c.completedSets} completed (a set logged with reps or a time, not flagged warm-up, counted up to what each exercise prescribed, whatever its RPE); {c.skippedSets} skipped (exercise not logged), {c.incompleteSets} short on exercises cut short; {c.extraSets} extra beyond the prescription; {c.modifiedSets} done outside the prescribed rep range. {c.loggedSets} set records in all, {c.nonCountedRecords} not counted (warm-up flag or no reps). {c.workingSets} working sets for volume (at or above RPE {records.data?.settings.workingRpeMin ?? 6} when an RPE was logged). RPE or RIR logged on {c.setsWithRpePct ?? 0}% of completed sets{c.setsWithVelocity ? `; bar velocity on ${c.setsWithVelocity}` : ""}.
+                </p>
                 <p className="mt-1">
                   {c.plannedDays} workouts planned ({c.missedDays} missed, {c.upcomingDays} upcoming, {c.unscheduledDays} undated) · {c.prescribedRows} prescribed exercises · {c.warmupSets} warm-up sets · {c.feedbackEntries} check-outs · {c.exerciseNotes} exercise notes · {c.coachNotes} coach notes · {c.bodyweightEntries} bodyweight entries · {c.maxesOnFile} maxes · {c.meetResults} meets
                   {c.unmappedRows ? ` · ${c.unmappedRows} exercises not in the library` : ""}
@@ -272,7 +273,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                   <DropdownMenuItem onSelect={() => void doDownload("csv")}><FileSpreadsheet className="mr-2 h-4 w-4" /> CSV · raw training log</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={() => setGenOpen(true)} data-testid="intel-generate">
+              <Button className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={() => void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } })} data-testid="intel-generate">
                 <Wand2 className="h-4 w-4" />
                 <span className="text-xs font-bold">Generate next program</span>
               </Button>
@@ -295,13 +296,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
               Privacy-safe copies and downloads: no name or personal notes (training data kept)
             </label>
 
-            {latestGenerate && <DraftCard job={latestGenerate} clientId={clientId} today={records.data!.today} />}
-            {olderDrafts.length > 0 && (
-              <details className="text-xs">
-                <summary className="cursor-pointer select-none font-semibold text-muted-foreground">Earlier drafts ({olderDrafts.length})</summary>
-                <div className="mt-2 space-y-2">{olderDrafts.map((j) => <DraftCard key={j.id} job={j} clientId={clientId} today={records.data!.today} />)}</div>
-              </details>
-            )}
+            {latestGenerate && <NextProgramLink job={latestGenerate} clientId={clientId} />}
 
             <div ref={tabsRef} className="scroll-mt-16">
               <Tabs value={TABS.some(([k]) => k === search.tab) ? search.tab : "summary"} onValueChange={(v) => setSearch({ tab: v })}>
@@ -332,7 +327,6 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                 <TabsContent value="data"><DetailedData report={report} records={records.data!} /></TabsContent>
               </Tabs>
             </div>
-            {genOpen && <GenerateSheet open={genOpen} onOpenChange={setGenOpen} clientId={clientId} report={report} records={records.data!} scope={scope} />}
           </>
         ) : null}
       </div>

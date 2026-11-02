@@ -259,6 +259,7 @@ import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lova
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdIntelligenceRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.intelligence'
+import { Route as AuthenticatedAdminClientProgramsClientIdNextProgramRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.next-program'
 import { Route as AuthenticatedAdminClientsIdProgressRouteImport } from './routes/_authenticated/admin/clients.$id.progress'
 import { Route as AuthenticatedAdminClientsIdScheduleRouteImport } from './routes/_authenticated/admin/clients.$id.schedule'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
@@ -1711,6 +1712,12 @@ const AuthenticatedAdminClientProgramsClientIdIntelligenceRoute =
     path: '/client-programs/$clientId/intelligence',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminClientProgramsClientIdNextProgramRoute =
+  AuthenticatedAdminClientProgramsClientIdNextProgramRouteImport.update({
+    id: '/client-programs/$clientId/next-program',
+    path: '/client-programs/$clientId/next-program',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminClientsIdProgressRoute =
   AuthenticatedAdminClientsIdProgressRouteImport.update({
     id: '/progress',
@@ -2018,6 +2025,7 @@ export interface FileRoutesByFullPath {
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
+  '/admin/client-programs/$clientId/next-program': typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   '/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
@@ -2274,6 +2282,7 @@ export interface FileRoutesByTo {
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
+  '/admin/client-programs/$clientId/next-program': typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   '/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
@@ -2536,6 +2545,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/_authenticated/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
+  '/_authenticated/admin/client-programs/$clientId/next-program': typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   '/_authenticated/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/_authenticated/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
@@ -2798,6 +2808,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/client-programs/$clientId/intelligence'
+    | '/admin/client-programs/$clientId/next-program'
     | '/admin/clients/$id/progress'
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
@@ -3054,6 +3065,7 @@ export interface FileRouteTypes {
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/client-programs/$clientId/intelligence'
+    | '/admin/client-programs/$clientId/next-program'
     | '/admin/clients/$id/progress'
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
@@ -3315,6 +3327,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
     | '/_authenticated/admin/client-programs/$clientId/intelligence'
+    | '/_authenticated/admin/client-programs/$clientId/next-program'
     | '/_authenticated/admin/clients/$id/progress'
     | '/_authenticated/admin/clients/$id/schedule'
     | '/_authenticated/admin/crm/contacts/$id'
@@ -5150,6 +5163,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/client-programs/$clientId/next-program': {
+      id: '/_authenticated/admin/client-programs/$clientId/next-program'
+      path: '/client-programs/$clientId/next-program'
+      fullPath: '/admin/client-programs/$clientId/next-program'
+      preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdNextProgramRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/clients/$id/progress': {
       id: '/_authenticated/admin/clients/$id/progress'
       path: '/progress'
@@ -5484,6 +5504,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   AuthenticatedAdminClientProgramsClientIdIntelligenceRoute: typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
+  AuthenticatedAdminClientProgramsClientIdNextProgramRoute: typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
@@ -5643,6 +5664,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminClientProgramsClientIdHistoryRoute,
     AuthenticatedAdminClientProgramsClientIdIntelligenceRoute:
       AuthenticatedAdminClientProgramsClientIdIntelligenceRoute,
+    AuthenticatedAdminClientProgramsClientIdNextProgramRoute:
+      AuthenticatedAdminClientProgramsClientIdNextProgramRoute,
     AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
     AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
       AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,

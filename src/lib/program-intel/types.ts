@@ -9,15 +9,22 @@ export type Unit = "kg" | "lb";
 export type Lift = "squat" | "bench" | "deadlift";
 export const LIFTS: Lift[] = ["squat", "bench", "deadlift"];
 
-/** The coaching brain a report is read with. */
-export type Brain = "powerlifting" | "bodybuilding" | "powerbuilding" | "general_fitness";
-export const BRAINS: Brain[] = ["powerlifting", "bodybuilding", "powerbuilding", "general_fitness"];
+/** The coaching brain (programming framework) a report is read with. */
+export type Brain = "powerlifting" | "bodybuilding" | "powerbuilding" | "general_strength" | "general_fitness" | "hybrid" | "other";
+export const BRAINS: Brain[] = ["powerlifting", "bodybuilding", "powerbuilding", "general_strength", "general_fitness", "hybrid", "other"];
 export const BRAIN_LABEL: Record<Brain, string> = {
   powerlifting: "Powerlifting",
-  bodybuilding: "Bodybuilding",
+  bodybuilding: "Bodybuilding / Hypertrophy",
   powerbuilding: "Powerbuilding",
+  general_strength: "General strength",
   general_fitness: "General fitness",
+  hybrid: "Hybrid / Athletic",
+  other: "Other (goal-specific)",
 };
+/** Brains that read squat, bench and deadlift lift by lift. */
+export const STRENGTH_BRAINS: Brain[] = ["powerlifting", "powerbuilding", "general_strength"];
+/** Brains that read hard sets per muscle group. */
+export const HYPERTROPHY_BRAINS: Brain[] = ["bodybuilding", "powerbuilding"];
 
 /** Which records a report covers. "program" is the current program (its blocks), resolved by the loader. */
 export type IntelScopeRequest =
@@ -49,6 +56,22 @@ export type RawClient = {
   injuries: string | null;
   training_notes: string | null;
   lifestyle_notes: string | null;
+  date_of_birth?: string | null;
+  height_cm?: number | null;
+  committed_training_days?: string[] | null;
+  committed_training_frequency?: number | null;
+  preferred_training_days?: string[] | null;
+  available_training_days?: string[] | null;
+  schedule_notes?: string | null;
+  schedule_updated_at?: string | null;
+  preferred_training_time?: string | null;
+  is_powerlifter?: boolean | null;
+  intake_training_experience?: string | null;
+  intake_injuries?: string | null;
+  bodyweight_goal_type?: string | null;
+  bodyweight_goal_value?: number | null;
+  bodyweight_goal_unit?: string | null;
+  program_phase?: string | null;
 };
 
 export type RawGoals = {
@@ -64,6 +87,11 @@ export type RawGoals = {
   injuries_has: boolean | null;
   injuries_details: string | null;
   final_notes: string | null;
+  available_weekdays?: string[] | null;
+  equipment_by_location?: unknown;
+  updated_at?: string | null;
+  completed_at?: string | null;
+  last_reviewed_at?: string | null;
 };
 
 export type RawPrep = {
@@ -178,6 +206,7 @@ export type RawResult = {
   completed_at: string | null;
   completed_duration_seconds: number | null;
   notes: string | null;
+  mean_concentric_velocity_mps?: number | null;
 };
 
 export type RawWarmup = { id: string; row_id: string; load: number | null; reps: number | null; rpe: number | null; unit: string | null };
@@ -230,6 +259,7 @@ export type RawExercise = {
   counts_toward_volume: boolean | null;
   volume_multiplier: number | null;
   has_video?: boolean;
+  equipment?: string | null;
 };
 
 export type RawMax = { lift: string | null; exercise_id: string | null; one_rm: number | null; training_max: number | null; estimated_1rm: number | null; unit: string | null; tested_at: string | null; source: string | null; active: boolean | null };
@@ -237,6 +267,47 @@ export type RawMeet = { meet_date: string | null; meet_name: string | null; body
 export type RawBodyweight = { date: string; kg: number };
 export type RawRoadmapNote = { block_id: string; week_id: string | null; ai_style: string | null; ai_label: string | null; coach_label: string | null; coach_summary: string | null; hidden: boolean | null };
 export type RawFileNote = { id: string; title: string | null; body: string | null; pinned: boolean | null; created_at: string | null };
+/** A submitted form (weekly check-in, nutrition update, ...) with its answered questions in form order. */
+export type RawCheckin = { id: string; form: string | null; submitted_at: string | null; period_start: string | null; answers: Array<{ q: string; a: string }> };
+
+/** What a coach set for this client in Program Intelligence (persisted). */
+export type EquipmentItem =
+  | "barbell"
+  | "rack"
+  | "bench"
+  | "adjustable_bench"
+  | "dumbbells"
+  | "adjustable_dumbbells"
+  | "cable_high"
+  | "cable_low"
+  | "landmine"
+  | "machines"
+  | "leg_press"
+  | "hack_squat"
+  | "smith"
+  | "leg_extension"
+  | "leg_curl"
+  | "lat_pulldown"
+  | "seated_row"
+  | "hip_thrust_machine"
+  | "pullup_bar"
+  | "dip_station"
+  | "bands"
+  | "kettlebells"
+  | "trap_bar"
+  | "belt_squat"
+  | "sled"
+  | "cardio";
+export type EquipmentProfile = {
+  location: string | null;
+  items: EquipmentItem[];
+  /** cable columns (each with a high and a low position) */
+  cableStations: number | null;
+  space: string | null;
+  notes: string | null;
+  confirmedAt?: string | null;
+};
+export type RawIntelProfile = { brain_override: string | null; equipment_profile: EquipmentProfile | null; updated_at?: string | null };
 
 /** Stored athlete observations (memory across programs): what the coach approved, corrected or rejected. */
 export type ObservationStatus = "proposed" | "approved" | "corrected" | "rejected";
@@ -286,6 +357,10 @@ export type IntelRecords = {
   roadmapNotes: RawRoadmapNote[];
   fileNotes: RawFileNote[];
   observations: RawObservation[];
+  /** Submitted forms (check-ins) in the period, answers as text. */
+  checkins?: RawCheckin[];
+  /** Program Intelligence settings the coach saved for this client. */
+  profile?: RawIntelProfile | null;
   settings: IntelSettings;
   scope: IntelScope;
   /** yyyy-mm-dd "today" in the athlete's time zone. */
@@ -320,8 +395,13 @@ export type SetLine = {
   rpe: number | null;
   rir: number | null;
   e1rm: number | null;
+  /** counts toward a prescribed set: logged, not a warm-up, reps (or time) recorded. Effort doesn't decide this. */
+  done: boolean;
+  /** used for volume and strength reads: done and at or above the working-set effort floor (when an effort was logged) */
   working: boolean;
   hard: boolean;
+  /** mean concentric velocity (m/s) when logged */
+  velocity: number | null;
   loadType: "external" | "bodyweight" | "assisted";
   logged: boolean;
   completedAt: string | null;
@@ -354,6 +434,8 @@ export type RowCompare = {
   actual: SetLine[];
   warmups: number;
   status: "done" | "partial" | "skipped" | "upcoming" | "unscheduled";
+  /** sets that count toward the prescription (see SetLine.done), all of them */
+  setsDone: number;
   workingSetsDone: number;
   repsHitPct: number | null;
   rpeDelta: number | null;
@@ -397,6 +479,8 @@ export type WeekMetrics = {
   missedDays: number;
   upcomingDays: number;
   prescribedSetsDue: number;
+  /** prescribed sets completed: per exercise, sets done up to the prescribed count */
+  completedSets: number;
   workingSetsLogged: number;
   hardSets: number;
   setAdherencePct: number | null;
@@ -524,12 +608,28 @@ export type Coverage = {
   unscheduledDays: number;
   prescribedRows: number;
   prescribedSetsDue: number;
+  /** prescribed sets completed on due workouts (per exercise, capped at what was prescribed) */
+  completedSets: number;
+  /** sets done beyond the prescription (extra sets) */
+  extraSets: number;
+  /** prescribed sets of exercises with nothing logged on a due workout */
+  skippedSets: number;
+  /** prescribed sets missing from exercises that were partly done */
+  incompleteSets: number;
+  /** done sets outside the prescribed rep range */
+  modifiedSets: number;
+  /** every logged set record (incl. warm-ups and records without reps) */
   loggedSets: number;
+  /** logged records that don't count as a set (flagged warm-up, or no reps / time) */
+  nonCountedRecords: number;
   workingSets: number;
   warmupSets: number;
   setsWithLoad: number;
   setsWithRpe: number;
+  /** of the sets that count, the share with an RPE or RIR logged */
+  setsWithRpePct: number | null;
   setsWithoutRpePct: number | null;
+  setsWithVelocity: number;
   unmappedRows: number;
   feedbackEntries: number;
   exerciseNotes: number;
@@ -544,7 +644,7 @@ export type Coverage = {
 
 export type Classification = {
   auto: Brain;
-  scores: { powerlifting: number; bodybuilding: number };
+  scores: { powerlifting: number; bodybuilding: number; strength?: number; general?: number; hybrid?: number };
   reasons: string[];
 };
 

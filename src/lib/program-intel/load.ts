@@ -8,7 +8,12 @@
  */
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { localDate } from "./core";
-import type { IntelRecords, IntelScope, IntelScopeRequest, RawBlock, RawObservation } from "./types";
+import { answeredQuestions } from "@/lib/form-answer-text";
+import type { IntelRecords, IntelScope, IntelScopeRequest, RawBlock, RawCheckin, RawIntelProfile, RawObservation } from "./types";
+
+function addDaysIso(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
 
 type Db = any;
 const PAGE = 1000;
@@ -71,7 +76,9 @@ export async function loadIntelRecords(
 
   const { data: client, error: ce } = await sb
     .from("clients")
-    .select("id, user_id, full_name, preferred_weight_unit, timezone, sex, coach_notes, goals, injuries, training_notes, lifestyle_notes")
+    .select(
+      "id, user_id, full_name, preferred_weight_unit, timezone, sex, coach_notes, goals, injuries, training_notes, lifestyle_notes, date_of_birth, height_cm, committed_training_days, committed_training_frequency, preferred_training_days, available_training_days, schedule_notes, schedule_updated_at, preferred_training_time, is_powerlifter, intake_training_experience, intake_injuries, bodyweight_goal_type, bodyweight_goal_value, bodyweight_goal_unit, program_phase",
+    )
     .eq("id", clientId)
     .maybeSingle();
   if (ce) throw new Error(ce.message);
@@ -126,7 +133,7 @@ export async function loadIntelRecords(
   const results = await fetchByIds<any>(rowIds, (ids, f, t) =>
     sb
       .from("pl_row_results")
-      .select("id, row_id, set_index, actual_load, actual_load_unit, normalized_kg, actual_load_kg, actual_reps, actual_rpe, actual_rpe_num, actual_rir, is_working_set, is_bodyweight, load_type, completed_at, completed_duration_seconds, notes")
+      .select("id, row_id, set_index, actual_load, actual_load_unit, normalized_kg, actual_load_kg, actual_reps, actual_rpe, actual_rpe_num, actual_rir, is_working_set, is_bodyweight, load_type, completed_at, completed_duration_seconds, notes, mean_concentric_velocity_mps")
       .in("row_id", ids)
       .eq("client_id", clientId)
       .order("set_index")
@@ -167,7 +174,7 @@ export async function loadIntelRecords(
   const exercises = await fetchByIds<any>(exerciseIds, (ids, f, t) =>
     sb
       .from("exercises")
-      .select("id, name, primary_muscle_group, muscle_groups, secondary_muscle_groups, movement_family, is_competition_lift, competition_lift_type, exercise_category, variation_type, counts_toward_volume, volume_multiplier, vimeo_embed_url, video_url, youtube_url")
+      .select("id, name, primary_muscle_group, muscle_groups, secondary_muscle_groups, movement_family, is_competition_lift, competition_lift_type, exercise_category, variation_type, counts_toward_volume, volume_multiplier, equipment, vimeo_embed_url, video_url, youtube_url")
       .in("id", ids)
       .range(f, t),
   ).then((list) => list.map(({ vimeo_embed_url, video_url, youtube_url, ...e }) => ({ ...e, has_video: !!(vimeo_embed_url || video_url || youtube_url) })));
@@ -208,7 +215,7 @@ export async function loadIntelRecords(
     async () => {
       const { data, error } = await sb
         .from("client_goals_setup")
-        .select("main_goal, main_goal_other, goal_target, training_days_per_week, workout_length_minutes, training_experience, training_styles, training_location, equipment, injuries_has, injuries_details, final_notes")
+        .select("main_goal, main_goal_other, goal_target, training_days_per_week, workout_length_minutes, training_experience, training_styles, training_location, equipment, injuries_has, injuries_details, final_notes, available_weekdays, equipment_by_location, updated_at, completed_at, last_reviewed_at")
         .eq("client_id", clientId)
         .maybeSingle();
       if (error) throw error;
@@ -239,6 +246,44 @@ export async function loadIntelRecords(
     [],
   );
 
+  const profile = await optional<RawIntelProfile | null>(
+    "Program Intelligence settings",
+    async () => {
+      const { data, error } = await sb.from("program_intel_profiles").select("brain_override, equipment_profile, updated_at").eq("client_id", clientId).maybeSingle();
+      if (error) throw error;
+      return (data as RawIntelProfile | null) ?? null;
+    },
+    null,
+  );
+  // Check-ins and other forms the athlete sent while this training ran (and the 4 weeks before it), answers as text.
+  const firstTrainingDate = [...blocks.map((b) => b.start_date).filter(Boolean)].sort()[0] as string | undefined;
+  const checkinsFrom = addDaysIso(scope.from ?? firstTrainingDate ?? today, -28);
+  const checkins = await optional<RawCheckin[]>(
+    "check-ins and forms",
+    async () => {
+      const subs = await fetchAll<any>((f, t) =>
+        sb.from("nf_submissions").select("id, form_id, submitted_at, period_start").eq("client_id", clientId).not("submitted_at", "is", null).gte("submitted_at", `${checkinsFrom}T00:00:00Z`).order("submitted_at").range(f, t),
+      );
+      if (!subs.length) return [];
+      const formIds = [...new Set(subs.map((x) => x.form_id).filter(Boolean))] as string[];
+      const forms = await fetchByIds<any>(formIds, (ids, f, t) => sb.from("nf_forms").select("id, title").in("id", ids).range(f, t));
+      const questions = await fetchByIds<any>(formIds, (ids, f, t) => sb.from("nf_questions").select("id, form_id, label, order_index, question_type").in("form_id", ids).range(f, t));
+      const answers = await fetchByIds<any>(subs.map((x) => x.id), (ids, f, t) => sb.from("nf_answers").select("submission_id, question_id, value_text, value_number, value_json").in("submission_id", ids).range(f, t));
+      const title = new Map(forms.map((x) => [x.id, x.title as string]));
+      return subs.map((x) => ({
+        id: x.id,
+        form: title.get(x.form_id) ?? null,
+        submitted_at: x.submitted_at,
+        period_start: x.period_start,
+        answers: answeredQuestions(
+          questions.filter((q) => q.form_id === x.form_id),
+          answers.filter((a) => a.submission_id === x.id),
+        ).map((a) => ({ q: a.label, a: a.value.slice(0, 600) })),
+      }));
+    },
+    [],
+  );
+
   return {
     client: {
       id: client.id,
@@ -251,6 +296,22 @@ export async function loadIntelRecords(
       injuries: client.injuries,
       training_notes: client.training_notes,
       lifestyle_notes: client.lifestyle_notes,
+      date_of_birth: client.date_of_birth ?? null,
+      height_cm: client.height_cm != null ? Number(client.height_cm) : null,
+      committed_training_days: client.committed_training_days ?? null,
+      committed_training_frequency: client.committed_training_frequency ?? null,
+      preferred_training_days: client.preferred_training_days ?? null,
+      available_training_days: client.available_training_days ?? null,
+      schedule_notes: client.schedule_notes ?? null,
+      schedule_updated_at: client.schedule_updated_at ?? null,
+      preferred_training_time: client.preferred_training_time ?? null,
+      is_powerlifter: client.is_powerlifter ?? null,
+      intake_training_experience: client.intake_training_experience ?? null,
+      intake_injuries: client.intake_injuries ?? null,
+      bodyweight_goal_type: client.bodyweight_goal_type ?? null,
+      bodyweight_goal_value: client.bodyweight_goal_value != null ? Number(client.bodyweight_goal_value) : null,
+      bodyweight_goal_unit: client.bodyweight_goal_unit ?? null,
+      program_phase: client.program_phase ?? null,
     },
     goals,
     preps,
@@ -271,6 +332,8 @@ export async function loadIntelRecords(
     roadmapNotes,
     fileNotes,
     observations,
+    checkins,
+    profile,
     settings: {
       e1rmFormula: settingsRow?.e1rm_formula === "brzycki" ? "brzycki" : "epley",
       workingRpeMin: Number(settingsRow?.working_set_rpe_min ?? 6) || 6,
@@ -280,5 +343,39 @@ export async function loadIntelRecords(
     today,
     loadedAt: new Date().toISOString(),
     unreadable,
+  };
+}
+
+/**
+ * The records of some blocks only (the previous program inside a full-history
+ * load), with everything that hangs off them, so one read serves both the
+ * whole history and the program being followed up.
+ */
+export function sliceRecords(rec: IntelRecords, blockIds: string[], label: string): IntelRecords {
+  const keep = new Set(blockIds);
+  const blocks = rec.blocks.filter((b) => keep.has(b.id));
+  const weeks = rec.weeks.filter((w) => keep.has(w.block_id));
+  const weekIds = new Set(weeks.map((w) => w.id));
+  const days = rec.days.filter((d) => weekIds.has(d.week_id));
+  const dayIds = new Set(days.map((d) => d.id));
+  const rows = rec.rows.filter((r) => dayIds.has(r.day_id));
+  const rowIds = new Set(rows.map((r) => r.id));
+  const dates = days.map((d) => d.scheduled_date).filter(Boolean).sort() as string[];
+  const from = blocks.map((b) => b.start_date).filter(Boolean).sort()[0] ?? dates[0] ?? null;
+  return {
+    ...rec,
+    blocks,
+    weeks,
+    days,
+    rows,
+    setBlocks: rec.setBlocks.filter((s) => rowIds.has(s.row_id)),
+    results: rec.results.filter((r) => rowIds.has(r.row_id)),
+    warmups: rec.warmups.filter((w) => rowIds.has(w.row_id)),
+    completions: rec.completions.filter((c) => dayIds.has(c.day_id)),
+    feedback: rec.feedback.filter((f) => !f.day_id || dayIds.has(f.day_id)),
+    exerciseNotes: rec.exerciseNotes.filter((n) => !n.day_id || dayIds.has(n.day_id)),
+    roadmapNotes: rec.roadmapNotes.filter((n) => keep.has(n.block_id)),
+    checkins: (rec.checkins ?? []).filter((c) => !from || !c.submitted_at || c.submitted_at.slice(0, 10) >= addDaysIso(from, -28)),
+    scope: { kind: "blocks", label, from: null, to: null, blockIds: blocks.map((b) => b.id) },
   };
 }

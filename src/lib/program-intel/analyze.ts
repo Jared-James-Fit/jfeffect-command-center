@@ -96,6 +96,7 @@ export function weekMetrics(rec: IntelRecords, g: Graph): WeekMetrics[] {
       const due = days.filter((d) => DUE.has(d.status));
       const trained = days.filter((d) => TRAINED.has(d.status));
       let prescribedSetsDue = 0;
+      let completedSets = 0;
       let workingSetsLogged = 0;
       let hardSets = 0;
       let tonnage = 0;
@@ -106,7 +107,10 @@ export function weekMetrics(rec: IntelRecords, g: Graph): WeekMetrics[] {
       const liftRpes: Record<Lift, number[]> = { squat: [], bench: [], deadlift: [] };
       const liftDays: Record<Lift, Set<string>> = { squat: new Set(), bench: new Set(), deadlift: new Set() };
       for (const { day, row } of rowsOf(days)) {
-        if (DUE.has(day.status)) prescribedSetsDue += row.prescribed.sets ?? 0;
+        if (DUE.has(day.status)) {
+          prescribedSetsDue += row.prescribed.sets ?? 0;
+          completedSets += row.prescribed.sets != null ? Math.min(row.setsDone, row.prescribed.sets) : row.setsDone;
+        }
         const working = workingOf(row);
         workingSetsLogged += working.length;
         if (row.rpeDelta != null) deltas.push(row.rpeDelta);
@@ -153,9 +157,10 @@ export function weekMetrics(rec: IntelRecords, g: Graph): WeekMetrics[] {
         missedDays: days.filter((d) => d.status === "missed").length,
         upcomingDays: days.filter((d) => d.status === "upcoming" || d.status === "unscheduled").length,
         prescribedSetsDue,
+        completedSets,
         workingSetsLogged,
         hardSets,
-        setAdherencePct: prescribedSetsDue > 0 ? Math.round((Math.min(workingSetsLogged, prescribedSetsDue) / prescribedSetsDue) * 100) : null,
+        setAdherencePct: prescribedSetsDue > 0 ? Math.round((Math.min(completedSets, prescribedSetsDue) / prescribedSetsDue) * 100) : null,
         sessionAdherencePct: due.length ? Math.round((trained.length / due.length) * 100) : null,
         tonnageKg: round(tonnage, 0),
         avgRpe: rpes.length ? round(mean(rpes) as number, 1) : null,
@@ -370,6 +375,7 @@ export function exerciseReports(g: Graph): ExerciseReport[] {
     const due = list.filter((x) => DUE.has(x.day.status));
     const setsDue = sum(due.map((x) => x.row.prescribed.sets ?? 0));
     const logged = sum(list.map((x) => workingOf(x.row).length));
+    const doneDue = sum(due.map((x) => (x.row.prescribed.sets != null ? Math.min(x.row.setsDone, x.row.prescribed.sets) : x.row.setsDone)));
     const t = trend(exposures.map((x) => ({ date: x.day.date, value: x.row.bestE1rm })));
     const allWorking = exposures.flatMap((x) => workingOf(x.row));
     const best = allWorking.filter((s) => s.e1rm != null).sort((a, b) => (b.e1rm as number) - (a.e1rm as number))[0] ?? allWorking.sort((a, b) => (b.reps ?? 0) - (a.reps ?? 0))[0] ?? null;
@@ -391,7 +397,7 @@ export function exerciseReports(g: Graph): ExerciseReport[] {
       exposures: exposures.length,
       setsPrescribedDue: setsDue,
       workingSetsLogged: logged,
-      adherencePct: setsDue > 0 ? Math.round((Math.min(logged, setsDue) / setsDue) * 100) : null,
+      adherencePct: setsDue > 0 ? Math.round((Math.min(doneDue, setsDue) / setsDue) * 100) : null,
       trend: t,
       bestSet: best,
       repsTrend: noLoad ? { first: repsPerExposure[0], last: repsPerExposure[repsPerExposure.length - 1] } : null,
@@ -414,7 +420,7 @@ export function blockReports(rec: IntelRecords, g: Graph, weeks: WeekMetrics[], 
       const due = sum(ws.map((w) => w.dueDays));
       const done = sum(ws.map((w) => w.completedDays + w.partialDays));
       const presc = sum(ws.map((w) => w.prescribedSetsDue));
-      const logged = sum(ws.map((w) => Math.min(w.workingSetsLogged, w.prescribedSetsDue || w.workingSetsLogged)));
+      const logged = sum(ws.map((w) => Math.min(w.completedSets, w.prescribedSetsDue || w.completedSets)));
       const rpes = ws.map((w) => w.avgRpe).filter((n): n is number => n != null);
       const deltas = ws.map((w) => w.avgRpeDelta).filter((n): n is number => n != null);
       const weekKeys = new Set(ws.map((w) => w.key));
@@ -459,6 +465,25 @@ export function coverage(rec: IntelRecords, g: Graph): Coverage {
   const rows = rowsOf(g.days);
   const sets = rows.flatMap((x) => x.row.actual.filter((s) => s.logged));
   const working = sets.filter((s) => s.working);
+  const done = sets.filter((s) => s.done);
+  const dueRows = rows.filter((x) => DUE.has(x.day.status));
+  let completedSets = 0;
+  let extraSets = 0;
+  let skippedSets = 0;
+  let incompleteSets = 0;
+  let modifiedSets = 0;
+  for (const { row } of rows) {
+    const p = row.prescribed.sets;
+    if (p != null && row.setsDone > p) extraSets += row.setsDone - p;
+    const rr = row.prescribed.repRange;
+    if (rr) modifiedSets += row.actual.filter((s) => s.done && s.reps != null && (s.reps < rr[0] || s.reps > rr[1] + 2)).length;
+  }
+  for (const { row } of dueRows) {
+    const p = row.prescribed.sets ?? 0;
+    completedSets += row.prescribed.sets != null ? Math.min(row.setsDone, p) : row.setsDone;
+    if (!row.setsDone) skippedSets += p;
+    else if (row.setsDone < p) incompleteSets += p - row.setsDone;
+  }
   const dates = g.days.filter((d) => TRAINED.has(d.status)).map((d) => d.date).filter(Boolean).sort() as string[];
   const dayIds = new Set(g.days.map((d) => d.dayId));
   return {
@@ -472,13 +497,21 @@ export function coverage(rec: IntelRecords, g: Graph): Coverage {
     upcomingDays: g.days.filter((d) => d.status === "upcoming").length,
     unscheduledDays: g.days.filter((d) => d.status === "unscheduled").length,
     prescribedRows: rows.length,
-    prescribedSetsDue: sum(rows.filter((x) => DUE.has(x.day.status)).map((x) => x.row.prescribed.sets ?? 0)),
+    prescribedSetsDue: sum(dueRows.map((x) => x.row.prescribed.sets ?? 0)),
+    completedSets,
+    extraSets,
+    skippedSets,
+    incompleteSets,
+    modifiedSets,
     loggedSets: sets.length,
+    nonCountedRecords: sets.length - done.length,
     workingSets: working.length,
-    warmupSets: sets.length - working.length + sum(rows.map((x) => x.row.warmups)),
+    warmupSets: sets.filter((s) => !s.done).length + sum(rows.map((x) => x.row.warmups)),
     setsWithLoad: sets.filter((s) => s.kg != null && s.kg > 0).length,
     setsWithRpe: sets.filter((s) => s.rpe != null).length,
-    setsWithoutRpePct: working.length ? Math.round((working.filter((s) => s.rpe == null).length / working.length) * 100) : null,
+    setsWithRpePct: done.length ? Math.round((done.filter((s) => s.rpe != null).length / done.length) * 100) : null,
+    setsWithoutRpePct: done.length ? Math.round((done.filter((s) => s.rpe == null).length / done.length) * 100) : null,
+    setsWithVelocity: sets.filter((s) => s.velocity != null).length,
     unmappedRows: rows.filter((x) => !x.row.exerciseId).length,
     feedbackEntries: rec.feedback.filter((f) => !f.day_id || dayIds.has(f.day_id)).length,
     exerciseNotes: rec.exerciseNotes.filter((n) => !n.day_id || dayIds.has(n.day_id)).length,
