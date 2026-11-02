@@ -69,3 +69,36 @@ describe("the logger's cardio row", () => {
     expect(snapshotKey(a)).not.toBe(snapshotKey(b));
   });
 });
+
+describe("the Time box says what's logged and what's only the target", () => {
+  it("before it's logged the time reads as a target (dashed, muted); once logged it's green with a tick", async () => {
+    const React = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { SetTimerInput } = await import("@/components/workout-day/set-timer-input");
+    const box = (completedSeconds: number | null, isConfirmed: boolean) =>
+      renderToStaticMarkup(
+        React.createElement(SetTimerInput, {
+          timerKey: `test:${completedSeconds}`,
+          prescribedSeconds: 600,
+          completedSeconds,
+          isConfirmed,
+          onCommit: () => {},
+          ariaLabel: "Set 1 timer",
+        }),
+      );
+    const target = box(null, false);
+    expect(target).toContain("10:00");
+    expect(target).toContain("border-dashed");
+    expect(target).toContain("text-muted-foreground");
+    expect(target).not.toContain("emerald");
+    const logged = box(600, true);
+    expect(logged).toContain("10:00");
+    expect(logged).toContain("bg-emerald-500/10");
+    expect(logged).not.toContain("border-dashed");
+  });
+
+  it("a row with no weight to log has no kg / lb switch", () => {
+    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(view).toContain("{!readonly && onUnitChange && !hideWeight && (");
+  });
+});

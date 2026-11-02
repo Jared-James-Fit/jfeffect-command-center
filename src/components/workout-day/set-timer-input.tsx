@@ -134,7 +134,9 @@ export function SetTimerInput({
                 ? "border-primary bg-primary/10 text-primary"
                 : paused
                   ? "border-amber-500/50 bg-amber-500/10 text-amber-600"
-                  : "border-blue-500/40 bg-blue-500/10 text-foreground",
+                  // Not logged yet: the target, drawn like a placeholder so it
+                  // never reads as a time already done.
+                  : "border-dashed border-blue-500/40 bg-transparent text-muted-foreground",
             !disabled && "cursor-pointer",
           )}
         >

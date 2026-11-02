@@ -4187,7 +4187,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           {position != null && <ExerciseOrderBadge position={position} family={family} className="mt-px" />}
           <div className="min-w-0 flex-1 text-base font-bold leading-snug break-words">{name}</div>
         </div>
-        {!readonly && onUnitChange && (
+        {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
+        {!readonly && onUnitChange && !hideWeight && (
           <div className="shrink-0">
             <UnitToggle unit={activeUnit} onChange={handleUnitToggle} compact />
           </div>
