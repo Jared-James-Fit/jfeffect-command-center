@@ -220,13 +220,16 @@ export function auditProgram(x: AuditInput): AuditResult {
   const factsWithoutEvidence = strategy.decisions.filter((d) => d.basis === "fact" && !d.evidence.length);
   if (factsWithoutEvidence.length) add("evidence", "review", `${factsWithoutEvidence.length} decision${factsWithoutEvidence.length === 1 ? " is" : "s are"} marked as fact without evidence; read ${factsWithoutEvidence.length === 1 ? "it" : "them"} as hypotheses.`);
 
-  // 5. Frequency against the strategy (its own commitment): a block that misses a target by a whole session goes back for repair.
+  // 5. Frequency against the strategy (its own commitment): a target is a minimum. A block that trains
+  // something a whole session less often goes back for repair; more often is only worth a look when
+  // it's two or more sessions over (fatigue is checked on its own below).
   program.blocks.forEach((b, bi) => {
     const wk = weekly.find((w) => w.block === bi && w.week === 1);
     for (const t of strategy.frequency_targets) {
       const got = targetIn(wk, t.target);
       if (!got || t.per_week > setup.daysPerWeek) continue;
-      if (Math.abs(got.days - t.per_week) >= 1) add("frequency", "failed", `${t.target}: ${got.days}×/week in block ${bi + 1}; the strategy targets ${t.per_week}×.`, bi, true);
+      if (t.per_week - got.days >= 1) add("frequency", "failed", `${t.target}: ${got.days}×/week in block ${bi + 1}; the strategy targets ${t.per_week}×.`, bi, true);
+      else if (got.days - t.per_week >= 2) add("frequency", "review", `${t.target}: ${got.days}×/week in block ${bi + 1}, well over the strategy's ${t.per_week}×.`, bi);
     }
   });
   for (const t of setup.frequency.filter((q) => q.perWeek > setup.daysPerWeek)) add("frequency", "review", `${t.target} target ${t.perWeek}× is more than the ${setup.daysPerWeek} training days.`);
@@ -327,7 +330,8 @@ export function auditProgram(x: AuditInput): AuditResult {
     // the replacement the strategy named is not a leftover (a model sometimes puts the new exercise's id on the old one)
     const isReplacement = (name: string) => !!r.with && norm(name) === norm(r.with);
     const hit = allEx.find((a) => !isReplacement(a.e.exercise_name) && ((r.exercise_id && a.e.exercise_id === r.exercise_id) || norm(a.e.exercise_name) === norm(r.name)));
-    if (hit) add("selection", "review", `The strategy says to replace ${r.name}${r.with ? ` with ${r.with}` : ""}, but it's still in block ${hit.bi + 1} (${hit.d.title}).`, hit.bi);
+    // the strategy's own decision, so it goes back for repair like a missed target
+    if (hit) add("selection", "failed", `The strategy says to replace ${r.name}${r.with ? ` with ${r.with}` : ""}, but it's still in block ${hit.bi + 1} (${hit.d.title}).`, hit.bi, true);
   }
   if (setup.restrictions.length) add("selection", "skipped", `Restrictions can't be checked automatically against exercise choice: check ${setup.restrictions.slice(0, 3).join("; ")}.`);
 

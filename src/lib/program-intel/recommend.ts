@@ -64,6 +64,10 @@ export type Baseline = {
 export type SetupRecommendation = { setup: GenerationSetup; why: Partial<Record<SetupField, Why>>; baseline: Baseline };
 
 const roundUp5 = (n: number) => Math.ceil(n / 5) * 5;
+/** An answer that says nothing ("None", "N/A", "-"). */
+const EMPTY_ANSWER = /^(none|n\/?a|na|no|nothing|nope|-+|\.)?$/i;
+/** Muscles worth training at least twice a week (the rest keep what they had). */
+const MAJOR_MUSCLES = /^(chest|back|upper back|lats|shoulders|delts|quads|glutes|hamstrings)$/i;
 const LIFT_NAME: Record<Lift, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift" };
 
 /** The previous program's real dose: what a redistribution keeps and an audit compares against. */
@@ -179,30 +183,39 @@ export function recommendSetup(x: {
     : goalBits[0]
       ? { source: "Goals & Setup", reason: `Stated goal${ctx.goals.updatedAt ? ` (updated ${ctx.goals.updatedAt.slice(0, 10)})` : ""}.${stale ? ` That's ${Math.round((goalsAgeDays as number) / 30)} months old: check it's still their goal.` : ""}`, confidence: stale ? "low" : "medium" }
       : { source: "Last program", reason: "No goal on file; taken from the last program's focus.", confidence: "low" };
-  const secondary = [...new Set([...(ctx.goals.styles ?? []).filter((s) => !/coach can decide/i.test(s)), ...(ctx.goals.target ? [ctx.goals.target] : []), ...(ctx.goals.bodyweightGoal ? [`Bodyweight: ${ctx.goals.bodyweightGoal}`] : [])])].slice(0, 5);
+  const secondary = [...new Set([...(ctx.goals.styles ?? []).filter((s) => !/coach can decide/i.test(s)), ...(ctx.goals.target ? [ctx.goals.target] : []), ...(ctx.goals.bodyweightGoal ? [`Bodyweight: ${ctx.goals.bodyweightGoal}`] : [])])]
+    .filter((s) => !EMPTY_ANSWER.test(s.trim()))
+    .slice(0, 5);
   if (goalBits[0] && progFocus && !new RegExp(goalBits[0].split(" ")[0], "i").test(progFocus)) secondary.push(`Keep the last program's focus: ${progFocus.split(" · ")[0]}`);
   why.secondaryGoals = { source: "Goals & Setup + last program", reason: "Training styles, target and the last program's focus.", confidence: "medium" };
 
-  // Days per week: what they actually trained, unless a newer constraint says otherwise.
+  // Days per week: their training schedule (clients.committed_training_days, which Goals & Setup
+  // follows) is where every workout lands, so a program with another number of days can't be placed.
+  // What they actually did only explains it; changing the number means changing their schedule.
   const committed = ctx.schedule.committedFrequency ?? (ctx.schedule.committedDays.length || null);
   const goalsDays = ctx.schedule.goalsDaysPerWeek;
   let days: number;
-  if (p && p.plannedDaysPerWeek && p.trained >= 6) {
-    const scheduleNewer = ctx.schedule.updatedAt && p.start && ctx.schedule.updatedAt.slice(0, 10) > p.start && committed && committed !== p.plannedDaysPerWeek;
-    if (scheduleNewer) {
-      days = committed as number;
-      why.daysPerWeek = { source: "Training schedule", reason: `Their schedule changed to ${committed} days on ${ctx.schedule.updatedAt!.slice(0, 10)}, after the last program started (${p.plannedDaysPerWeek} days).`, confidence: "high" };
-    } else if ((p.sessionAdherencePct ?? 0) >= 75) {
+  if (committed) {
+    days = committed;
+    const bits: string[] = [];
+    if (p && p.plannedDaysPerWeek && p.trained >= 6) {
+      bits.push(`last program: ${p.plannedDaysPerWeek} days, ${p.sessionAdherencePct}% of due workouts done`);
+      if ((p.sessionAdherencePct ?? 100) < 75)
+        bits.push(`keep sessions short and doable; if ${committed} days is too many, change their training days first`);
+    }
+    why.daysPerWeek = {
+      source: "Training schedule",
+      reason: `${ctx.schedule.committedDays.join(", ") || `${committed} days`}: the days their workouts go on (Goals & Setup follows them).${bits.length ? ` ${bits.join("; ")}.` : ""}`,
+      confidence: "high",
+    };
+  } else if (p && p.plannedDaysPerWeek && p.trained >= 6) {
+    if ((p.sessionAdherencePct ?? 0) >= 75) {
       days = p.plannedDaysPerWeek;
-      const notes = [goalsDays && goalsDays !== days ? `Goals & Setup says ${goalsDays}${ctx.goals.updatedAt ? ` (updated ${ctx.goals.updatedAt.slice(0, 10)})` : ""}` : null, committed && committed !== days ? `their committed schedule says ${committed}` : null].filter(Boolean);
-      why.daysPerWeek = { source: "Last program", reason: `Trained ${p.trained} of ${p.due} due workouts (${p.sessionAdherencePct}%) on ${days} days a week.${notes.length ? ` ${notes.join(" and ")}, but nothing newer than the program says to change it.` : ""}`, confidence: "high" };
+      why.daysPerWeek = { source: "Last program", reason: `Trained ${p.trained} of ${p.due} due workouts (${p.sessionAdherencePct}%) on ${days} days a week. No training schedule on file: set their days so workouts land on them.`, confidence: "medium" };
     } else {
       days = Math.max(1, Math.min(p.plannedDaysPerWeek, Math.round(p.trainedDaysPerWeek ?? p.plannedDaysPerWeek)));
       why.daysPerWeek = { source: "Last program (adherence)", reason: `Programmed ${p.plannedDaysPerWeek} days but trained about ${p.trainedDaysPerWeek ?? "?"} a week (${p.sessionAdherencePct}% of due workouts): matching what they actually did.`, confidence: "medium" };
     }
-  } else if (committed) {
-    days = committed;
-    why.daysPerWeek = { source: "Committed schedule", reason: `${ctx.schedule.committedDays.join(", ") || `${committed} days`} on file; too little training logged to go by.`, confidence: "medium" };
   } else if (goalsDays) {
     days = goalsDays;
     why.daysPerWeek = { source: "Goals & Setup", reason: "Their stated days per week; too little training logged to go by.", confidence: "medium" };
@@ -288,15 +301,26 @@ export function recommendSetup(x: {
   // Advanced: the previous dose per lift / muscle, so the next program starts from what they did.
   const frequency: GenerationSetup["frequency"] = [];
   const volume: GenerationSetup["volume"] = [];
+  // How often: what the last program did, but at least twice a week for the squat and bench and for
+  // the major muscles (and once for the deadlift) when the days allow it: the same weekly sets spread
+  // over two sessions build more than one, and a priority never gets less.
+  const half = (n: number) => Math.round(n * 2) / 2;
+  const isPriority = (t: string) => priorities.some((q) => q.toLowerCase() === t.toLowerCase());
+  const floorFor = (t: string, isLift: boolean) => {
+    if (isLift) return t === "Deadlift" ? 1 : 2;
+    return MAJOR_MUSCLES.test(t) || isPriority(t) ? 2 : 1;
+  };
+  const often = (t: string, was: number | null, isLift: boolean) => Math.max(1, Math.min(days, Math.max(half(was ?? 0), floorFor(t, isLift))));
   if (STRENGTH_BRAINS.includes(brain)) for (const l of LIFTS) {
-    if (baseline.liftFreq[l]) frequency.push({ target: LIFT_NAME[l], perWeek: Math.round((baseline.liftFreq[l] as number) * 2) / 2 });
+    const trained = baseline.liftFreq[l] != null || baseline.liftSets[l] != null;
+    if (trained || brain === "powerlifting" || brain === "powerbuilding") frequency.push({ target: LIFT_NAME[l], perWeek: often(LIFT_NAME[l], baseline.liftFreq[l], true) });
     if (baseline.liftSets[l]) volume.push({ target: LIFT_NAME[l], setsPerWeek: Math.round(baseline.liftSets[l] as number) });
   }
   if (brain !== "powerlifting") for (const m of baseline.muscleSets.slice(0, 10)) {
-    if (m.freq) frequency.push({ target: m.muscle, perWeek: Math.round(m.freq * 2) / 2 });
+    frequency.push({ target: m.muscle, perWeek: often(m.muscle, m.freq, false) });
     volume.push({ target: m.muscle, setsPerWeek: Math.round(m.sets) });
   }
-  why.frequency = { source: "Last program", reason: "How often each was trained (2+ hard sets) in the last program.", confidence: prev ? "high" : "low" };
+  why.frequency = { source: "Last program + at least 2×/week", reason: `How often each was trained in the last program, raised to at least twice a week for the squat, bench and major muscles (deadlift once) where ${days} day${days === 1 ? "" : "s"} allow it.`, confidence: prev ? "high" : "low" };
   why.volume = { source: "Last program", reason: "Weekly working sets (lifts) and hard sets (muscles, secondary muscles counted half) in the last program.", confidence: prev ? "high" : "low" };
   const style = prescriptionStyle(prev);
   why.intensity = { source: "Last program", reason: "Its rep ranges and RPE targets.", confidence: prev ? "medium" : "low" };

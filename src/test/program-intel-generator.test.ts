@@ -41,10 +41,11 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
     expect(intel.classification.reasons.join(" ")).toMatch(/strength \+ hypertrophy/i);
     expect(s.brain).toBe("powerbuilding");
   });
-  it("keeps the 4 days they actually trained, and says why it isn't the 3 in Goals & Setup", () => {
+  it("4 days on their training schedule (where the workouts land; Goals & Setup follows it), with the last program as context", () => {
     expect(s.daysPerWeek).toBe(4);
-    expect(why.daysPerWeek?.source).toBe("Last program");
-    expect(why.daysPerWeek?.reason).toMatch(/Goals & Setup says 3/);
+    expect(why.daysPerWeek?.source).toBe("Training schedule");
+    expect(why.daysPerWeek?.reason).toMatch(/Monday, Tuesday, Wednesday, Friday/);
+    expect(why.daysPerWeek?.reason).toMatch(/last program: 4 days/);
     expect(s.trainingDays).toEqual(["Monday", "Tuesday", "Wednesday", "Friday"]);
     expect(s.weeks).toBe(4);
   });
@@ -323,7 +324,17 @@ describe("Program quality audit and scorecard", () => {
     // incline dumbbell press and barbell bench are both bench work: 2 days, not the 3 the strategy set
     expect(freq.reasons[0]).toMatch(/Bench: 2×\/week in block 1; the strategy targets 3×/);
     expect(a.repairs[0].join(" ")).toMatch(/Bench/);
-    expect(a.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).toMatch(/replace Romanian Deadlift, but it's still in block 1/);
+    const sel = a.scorecard.find((r) => r.criterion === "selection")!;
+    expect(sel.reasons.join(" ")).toMatch(/replace Romanian Deadlift, but it's still in block 1/);
+    // the strategy's own decision: failed, and sent back for repair
+    expect(sel.status).toBe("failed");
+    expect(a.repairs[0].join(" ")).toMatch(/replace Romanian Deadlift/);
+  });
+  it("a frequency target is a minimum: training something more often than planned never fails", () => {
+    const strategy = strategyFor(setup, { frequency_targets: [{ target: "Bench", per_week: 1 }] });
+    const a = auditProgram(input(good(), { strategy }));
+    expect(a.scorecard.find((r) => r.criterion === "frequency")!.status).not.toBe("failed");
+    expect(Object.values(a.repairs).flat().join(" ")).not.toMatch(/Bench/);
   });
   it("the replacement a strategy names isn't flagged as a leftover, even when the model put its id on the old exercise", () => {
     const strategy = strategyFor(setup, { exercise_plan: { retain: [], replace: [{ exercise_id: "e-pull", name: "Lat Pulldown", with: "Wide-Grip Lat Pulldown", why: "" }], add: [] } });
@@ -391,5 +402,59 @@ describe("Learning from what happened", () => {
     expect(o.items.find((i) => i.key === "decision:0")!.detail).toMatch(/for you to judge/);
     expect(sliceRecords(rec, ids, "x").blocks).toHaveLength(1);
     expect(TODAY).toBe("2026-11-02");
+  });
+});
+
+describe("Setting a program up for the athlete, not as a copy of last block", () => {
+  it("days per week come from the training schedule even when they trained fewer, with a note to keep sessions doable", () => {
+    const rec = homeGym();
+    // they did about two of every three workouts
+    const due = rec.results.length;
+    rec.results = rec.results.filter((_, i) => i % 3 !== 0);
+    expect(rec.results.length).toBeLessThan(due);
+    const intel = buildGeneratorIntel(rec);
+    expect(intel.recommendation.setup.daysPerWeek).toBe(4);
+    expect(intel.recommendation.setup.trainingDays).toEqual(["Monday", "Tuesday", "Wednesday", "Friday"]);
+    expect(intel.recommendation.why.daysPerWeek?.source).toBe("Training schedule");
+  });
+  it("no schedule on file: the last program's days, and it says to set them", () => {
+    const rec = homeGym();
+    rec.client = { ...rec.client, committed_training_days: [], committed_training_frequency: null } as typeof rec.client;
+    const intel = buildGeneratorIntel(rec);
+    expect(intel.recommendation.setup.daysPerWeek).toBe(4);
+    expect(intel.recommendation.why.daysPerWeek?.reason).toMatch(/No training schedule on file/);
+  });
+  it("squat and bench at least twice a week, the deadlift at least once, never more than the days", () => {
+    const intel = buildGeneratorIntel(homeGym());
+    const f = (t: string) => intel.recommendation.setup.frequency.find((x) => x.target === t)?.perWeek ?? null;
+    expect(f("Squat")).toBeGreaterThanOrEqual(2);
+    expect(f("Bench")).toBeGreaterThanOrEqual(2);
+    expect(f("Deadlift") ?? 1).toBeGreaterThanOrEqual(1);
+    for (const x of intel.recommendation.setup.frequency) expect(x.perWeek).toBeLessThanOrEqual(intel.recommendation.setup.daysPerWeek);
+    expect(intel.recommendation.why.frequency?.reason).toMatch(/at least twice a week/);
+  });
+  it("major muscles at least twice a week in a hypertrophy setup", () => {
+    const intel = buildGeneratorIntel(bodybuilder());
+    const s = intel.recommendation.setup;
+    for (const x of s.frequency.filter((q) => /^(chest|back|lats|quads|glutes|hamstrings|shoulders)$/i.test(q.target))) expect(x.perWeek).toBeGreaterThanOrEqual(Math.min(2, s.daysPerWeek));
+  });
+  it("a trained lat pulldown proves pulldowns are possible, even without a note saying which machine", () => {
+    const rec = homeGym();
+    // no row note says "high cable" (Nicolas's didn't), so the pulldown alone has to prove it
+    rec.rows = rec.rows.map((r) => ({ ...r, notes: null }));
+    const intel = buildGeneratorIntel(rec);
+    expect(intel.equipment.items).toContain("lat_pulldown");
+    expect(missingEquipment({ name: "Wide-Grip Lat Pulldown", equipment: "Cable" }, intel.equipment)).toEqual([]);
+  });
+});
+
+describe("Cardio in a generated program is logged as time", () => {
+  it("a treadmill walk written as '10' becomes a 10-minute timed row", async () => {
+    const { exerciseRow, isTimedCardio } = await import("@/lib/program-intel/next-program");
+    const row = exerciseRow({ exercise_id: "e-walk", exercise_name: "Treadmill Walk", role: "Accessory", station: null, superset: null, sets: 1, reps: "10", rpe: "5", rest_seconds: 0, tempo: null, progression: "Maintain 10 minutes", substitutions: [], notes: "10 minutes finish", weeks: [] } as any, 1, 4);
+    expect(row).toMatchObject({ measurement_type: "time", tracking_type: "time", duration_seconds: 600, reps_text: null, rpe: null, sets: 1, sort_order: 4, exercise_id: "e-walk" });
+    expect(isTimedCardio("Walking Fast")).toBe(true);
+    expect(isTimedCardio("Stationary Exercise Bike")).toBe(true);
+    for (const n of ["Walking Lunges", "Dumbbell Farmer Walks", "Air Bike", "Lateral Band Walks", "Barbell Bench Press"]) expect(isTimedCardio(n)).toBe(false);
   });
 });
