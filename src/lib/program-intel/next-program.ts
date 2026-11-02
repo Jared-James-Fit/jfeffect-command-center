@@ -152,6 +152,24 @@ export function cardioMinutes(reps: string | null | undefined): number | null {
   return Number.isFinite(n) && n >= 1 && n <= 120 ? Math.round(n) : null;
 }
 
+/**
+ * A built block without steady cardio rows: the client's cardio plan is the one place for cardio
+ * (the app adds its training-day session to every workout), so a walk or bike the model wrote
+ * would be a second copy. Returns the names taken out.
+ */
+export function withoutCardioRows<B extends { days: Array<{ exercises: Array<{ exercise_name: string }> }> }>(block: B): { block: B; removed: string[] } {
+  const removed: string[] = [];
+  const days = block.days.map((d) => {
+    const keep = d.exercises.filter((e) => {
+      if (!isTimedCardio(e.exercise_name)) return true;
+      removed.push(e.exercise_name);
+      return false;
+    });
+    return keep.length === d.exercises.length ? d : { ...d, exercises: keep };
+  });
+  return { block: removed.length ? { ...block, days } : block, removed };
+}
+
 export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number): Record<string, unknown> {
   const rx = rxForWeek(ex, week);
   // A walk or a bike is logged as time: "10" from the model is ten minutes, never ten reps.

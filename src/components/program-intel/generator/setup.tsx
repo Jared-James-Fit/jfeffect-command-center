@@ -119,6 +119,41 @@ function Row({ label, value, why, edited, children, testId }: { label: string; v
   );
 }
 
+/** One line for a cardio session ("Incline Treadmill Walk 15 min"). */
+const cardioLine = (c: { type: string; minutes: number; perWeek: number | null } | null | undefined, rest = false) =>
+  c ? `${c.type} ${c.minutes} min${rest && c.perWeek ? ` ×${c.perWeek}` : ""}` : "none";
+
+/**
+ * Cardio is the client's cardio plan, not part of the program: the app adds its training-day
+ * session to every workout. Their plan is shown as is (it changes in their cardio targets or
+ * nutrition plan); a plan proposed because they have none can be switched off here.
+ */
+function CardioRow({ setup, recommended, why, edited, onChange }: { setup: GenerationSetup; recommended: GenerationSetup["cardio"]; why?: Why; edited: boolean; onChange: (field: SetupField, value: any) => void }) {
+  const c = setup.cardio;
+  const value = !c || c.source === "none"
+    ? "No added cardio"
+    : `${c.source === "proposed" ? "Proposed · " : ""}After lifting: ${cardioLine(c.trainingDay)} · Days off: ${cardioLine(c.restDay, true)}`;
+  return (
+    <Row label="Cardio" value={value} why={why} edited={edited} testId="gen-cardio">
+      {recommended?.source === "plan" ? (
+        <p className="text-[12px] text-muted-foreground">
+          This is their cardio plan: the app adds the after-lifting session to every workout and the program leaves time for it. Change it in their cardio targets or nutrition plan.
+        </p>
+      ) : recommended?.source === "proposed" ? (
+        <div className="space-y-2">
+          <p className="text-[12px] text-muted-foreground">They have no cardio plan. On Assign this becomes their plan until their nutrition plan sets one.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" size="sm" variant={c?.source === "proposed" ? "default" : "outline"} onClick={() => onChange("cardio", recommended)}>Use this plan</Button>
+            <Button type="button" size="sm" variant={c?.source === "none" ? "default" : "outline"} onClick={() => onChange("cardio", { ...recommended, source: "none", trainingDay: null, restDay: null, why: "The coach chose no added cardio." })}>No added cardio</Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-[12px] text-muted-foreground">No cardio is added for this goal (daily steps only). Set a cardio plan in their cardio targets or nutrition plan if they need one.</p>
+      )}
+    </Row>
+  );
+}
+
 export function SetupCard({
   intel,
   setup,
@@ -193,6 +228,7 @@ export function SetupCard({
           </div>
         </div>
       </Row>
+      <CardioRow setup={setup} recommended={intel.recommendation.setup.cardio} why={why.cardio} edited={edited.has("cardio")} onChange={onChange} />
       <Row label="Block structure" value={setup.blocks.map((b) => `${b.name} ${b.weeks}w`).join(" → ")} why={why.blocks} edited={edited.has("blocks")}>
         <BlocksEditor setup={setup} onChange={onChange} meetWeeks={meetWeeks} />
       </Row>

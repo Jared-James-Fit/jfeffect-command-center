@@ -5,6 +5,7 @@
  * before it. Every field says where it came from; a field nothing on file can
  * answer is null and listed as missing, never guessed. Deterministic.
  */
+import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
 import { daysBetween, localDate, mean, round } from "./core";
 import type { EquipmentResolution } from "./equipment";
 import type { IntelRecords, IntelReport, Unit } from "./types";
@@ -56,6 +57,8 @@ export type AthleteContext = {
     observedWeekdays: string[];
   };
   session: { goalsMinutes: number | null; observedMedian: number | null; observedP80: number | null; entries: number };
+  /** Their cardio plan (the app adds its training-day session to every workout), or none. */
+  cardio: CardioPlan;
   equipment: EquipmentResolution;
   injuries: { stated: string[]; painReports: Array<{ date: string | null; area: string | null; level: number | null; note: string | null }>; areas: string[] };
   notes: { coach: string[]; client: string[]; checkins: Array<{ date: string | null; form: string | null; answers: Array<{ q: string; a: string }> }> };
@@ -212,6 +215,7 @@ export function buildAthleteContext(x: {
       observedWeekdays,
     },
     session: { goalsMinutes: g?.workout_length_minutes ?? null, observedMedian: median(durations), observedP80: quantile(durations, 0.8), entries: durations.length },
+    cardio: cardioPlanFromTargets(x.rec.cardioTargets ?? [], x.rec.cardioCompletions ?? [], x.rec.today),
     equipment: x.equipment,
     injuries: { stated, painReports: pain, areas },
     notes: {

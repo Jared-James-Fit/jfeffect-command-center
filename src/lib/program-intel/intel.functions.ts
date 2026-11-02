@@ -5,6 +5,7 @@
  * training days) or discard it. Everything is written with the coach's own
  * session, so the database's rules apply too.
  */
+import { cardioTargetsFromProposal, type CardioPlan } from "./cardio";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -141,9 +142,39 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
     } catch (e) {
       console.warn("[program-intel] realign after assign failed", e);
     }
+    // Cardio: one plan. A plan proposed with this program becomes theirs only when they have none
+    // (their nutrition plan replaces it later); then every upcoming workout gets the plan's session.
+    let cardio: { proposedPlanAdded: boolean; synced: unknown } = { proposedPlanAdded: false, synced: null };
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const admin = supabaseAdmin as any;
+      const planned = (job.result?.setup?.cardio ?? null) as CardioPlan | null;
+      if (planned?.source === "proposed") {
+        const { data: live } = await admin
+          .from("cardio_targets")
+          .select("id, day_type")
+          .eq("client_id", job.client_id)
+          .eq("status", "Active")
+          .eq("enabled", true)
+          .is("program_name", null);
+        const hasPlan = ((live ?? []) as Array<{ day_type: string | null }>).some((t) => /training|rest/i.test(t.day_type ?? ""));
+        if (!hasPlan) {
+          const { data: c } = await admin.from("clients").select("committed_training_days").eq("id", job.client_id).maybeSingle();
+          const rows = cardioTargetsFromProposal(planned, { clientId: job.client_id, trainingDays: c?.committed_training_days ?? [], today: data.startDate });
+          if (rows.length) {
+            const { error: ce } = await admin.from("cardio_targets").insert(rows);
+            if (!ce) cardio.proposedPlanAdded = true;
+          }
+        }
+      }
+      const { data: synced } = await admin.rpc("program_cardio_sync", { p_client: job.client_id });
+      cardio.synced = synced ?? null;
+    } catch (e) {
+      console.warn("[program-intel] cardio after assign failed", e);
+    }
     const { error: je } = await sb.from("program_intel_jobs").update({ status: "assigned" }).eq("id", job.id);
     if (je) throw new Error(je.message);
-    return { ok: true, blockIds, start: dates[0].start, end: dates[dates.length - 1].end, placedOnTrainingDays: placed };
+    return { ok: true, blockIds, start: dates[0].start, end: dates[dates.length - 1].end, placedOnTrainingDays: placed, cardio };
   });
 
 export const discardIntelDraftFn = createServerFn({ method: "POST" })

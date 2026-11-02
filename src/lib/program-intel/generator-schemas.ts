@@ -14,6 +14,24 @@ export const MAX_PROGRAM_WEEKS = 16;
 const ref = z.object({ id: z.string().trim().max(64).nullable(), name: z.string().trim().min(1).max(120) });
 const shortText = (n: number) => z.string().trim().max(n).catch("");
 
+const cardioSessionSchema = z.object({
+  type: z.string().trim().min(1).max(60),
+  minutes: z.number().int().min(1).max(180),
+  perWeek: z.number().int().min(0).max(7).nullable(),
+  weekdays: z.array(z.string().trim().max(12)).max(7).default([]),
+  incline: z.number().min(0).max(20).nullable(),
+  zone: z.string().trim().max(40).nullable(),
+});
+export const cardioPlanSchema = z.object({
+  source: z.enum(["plan", "proposed", "none"]),
+  origin: z.enum(["nutrition", "coach", "program", "program_rows"]).nullable(),
+  trainingDay: cardioSessionSchema.nullable(),
+  restDay: cardioSessionSchema.nullable(),
+  updatedAt: z.string().max(40).nullable(),
+  done: z.object({ done: z.number().int().min(0), planned: z.number().int().min(0) }).nullable(),
+  why: z.string().trim().max(400),
+});
+
 export const setupSchema = z.object({
   brain: z.enum(BRAINS as [Brain, ...Brain[]]),
   mainGoal: z.string().trim().min(1).max(300),
@@ -49,6 +67,8 @@ export const setupSchema = z.object({
   preferences: z.string().trim().max(1000).default(""),
   coachNotes: z.string().trim().max(2000).default(""),
   newCircumstances: z.string().trim().max(2000).default(""),
+  /** The cardio plan the program is built around (never written into the workouts; see cardio.ts). */
+  cardio: cardioPlanSchema.nullable().default(null),
 });
 
 // ── Stage 4: the programming strategy ────────────────────────────────────────

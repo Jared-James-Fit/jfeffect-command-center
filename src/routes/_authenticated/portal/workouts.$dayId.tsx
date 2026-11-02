@@ -234,6 +234,7 @@ function RouteComponent() {
           date={parseLocalDate((dayRow as any)?.scheduled_date) ?? new Date()}
           hideWhenEmpty
           readonly={search.readonly === 1}
+          workoutDayId={dayId}
         />
       )}
     </WorkoutDayView>

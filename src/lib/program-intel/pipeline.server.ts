@@ -27,7 +27,7 @@ import { constructSystemPrompt, constructUserPrompt, PIPELINE_PROMPT_VERSION, re
 import { buildGeneratorIntel, type GeneratorIntel } from "./intelligence";
 import { privacySafeRecords } from "./export";
 import { loadIntelRecords } from "./load";
-import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, type CatalogExercise } from "./next-program";
+import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
 import { findConflicts, redistribution, type GenerationSetup, type SetupField } from "./recommend";
 import { BRAIN_LABEL, type Brain, type IntelRecords, type RawExercise } from "./types";
@@ -337,7 +337,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       (v) => blockIssues(v, { weeks: sb.weeks, days: setup.daysPerWeek }),
     );
     if (issues.length) throw new Error(`Block ${i + 1} didn't match the strategy: ${issues.join(" ")}`);
-    built[i] = { ...value, name: value.name || sb.name };
+    // cardio is the client's cardio plan (added to every workout by the app), never a second copy here
+    const lean = withoutCardioRows(value);
+    if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
+    built[i] = { ...lean.block, name: lean.block.name || sb.name };
     result.blocks = built;
     stages = setStage(stages, stage, "done", `${value.days.length} days · ${value.days.reduce((n, d) => n + d.exercises.length, 0)} exercises · ${model}`);
     const next = i + 1 < strategy.structure.blocks.length ? `construct:${i + 1}` : "audit";
@@ -355,7 +358,9 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       if (bi != null) {
         const issues: string[] = result.audit?.repairs?.[bi] ?? [];
         const { value } = await askChecked<BuiltBlock>(admin, job, `repair:block ${bi + 1}`, constructSystemPrompt(brain), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
-        result.blocks[bi] = value;
+        const lean = withoutCardioRows(value);
+        if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
+        result.blocks[bi] = lean.block;
         result.repairs = [...(result.repairs ?? []), { round: result.repairRound ?? 1, block: bi, issues }];
       }
       result.repairQueue = queue.slice(1);

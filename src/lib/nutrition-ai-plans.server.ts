@@ -220,9 +220,15 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
 export async function loadCardioRows(sb: any, clientId: string): Promise<any[]> {
   const { data } = await sb
     .from("cardio_targets")
-    .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at")
+    .select("id, day_type, status, enabled, program_name, cardio_type, duration_minutes, frequency_per_week, calorie_target_min, calorie_target_mode, updated_at, source")
     .eq("client_id", clientId);
   return (data ?? []) as any[];
+}
+
+/** The days the client trains (their committed schedule), for the cardio the AI writes. */
+export async function loadTrainingDays(sb: any, clientId: string): Promise<string[]> {
+  const { data } = await sb.from("clients").select("committed_training_days").eq("id", clientId).maybeSingle();
+  return ((data?.committed_training_days ?? []) as string[]).filter(Boolean);
 }
 
 async function coachSettings(sb: any, clientId: string): Promise<{ phase: string | null; workoutMeals: WorkoutMealsMode | null }> {
@@ -265,7 +271,7 @@ export async function runPlan(
       previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
       if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
     }
-    const [coach, basics, history, program, cardioRows] = await Promise.all([
+    const [coach, basics, history, program, cardioRows, trainingDays] = await Promise.all([
       coachSettings(sb, sub.client_id),
       loadClientBasics(sb, sub.client_id),
       // Never let a history lookup block the plan.
@@ -274,6 +280,7 @@ export async function runPlan(
       loadProgramContext(sb, sub.client_id),
       // Their cardio now: the AI adjusts it with the calories.
       loadCardioRows(sb, sub.client_id),
+      loadTrainingDays(sb, sub.client_id).catch(() => [] as string[]),
     ]);
     const selected = phaseOverride ?? coach.phase;
     const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -290,7 +297,7 @@ export async function runPlan(
     const t = await generateText({
       model: gateway(modelId),
       system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows)),
+      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays })),
     });
     const targetsText = cleanAiText(t.text);
 

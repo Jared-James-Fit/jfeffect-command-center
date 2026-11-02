@@ -361,6 +361,9 @@ export type IntelRecords = {
   checkins?: RawCheckin[];
   /** Program Intelligence settings the coach saved for this client. */
   profile?: RawIntelProfile | null;
+  /** The client's cardio plan (cardio_targets) and the last weeks of its log. */
+  cardioTargets?: import("./cardio").RawCardioTarget[];
+  cardioCompletions?: import("./cardio").RawCardioCompletion[];
   settings: IntelSettings;
   scope: IntelScope;
   /** yyyy-mm-dd "today" in the athlete's time zone. */

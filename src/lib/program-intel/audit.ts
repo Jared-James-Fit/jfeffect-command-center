@@ -353,9 +353,11 @@ export function auditProgram(x: AuditInput): AuditResult {
   // 11. Session practicality.
   const max = setup.maxSessionMinutes ?? null;
   const target = setup.sessionMinutes ?? null;
-  const long = sessions.filter((s) => max != null && s.minutes > max + 5);
+  // the cardio plan's training-day session follows every workout, so it counts toward the maximum
+  const cardioAfter = setup.cardio?.trainingDay?.minutes ?? 0;
+  const long = sessions.filter((s) => max != null && s.minutes + cardioAfter > max + 5);
   const firstWeeks = sessions.filter((s) => s.week === 1);
-  for (const s of long.filter((q, i, arr) => arr.findIndex((y) => y.block === q.block && y.day === q.day) === i).slice(0, 6)) add("practicality", "failed", `${s.title} (block ${s.block + 1}) runs about ${s.minutes} min, over the ${max}-min maximum.`, s.block, true);
+  for (const s of long.filter((q, i, arr) => arr.findIndex((y) => y.block === q.block && y.day === q.day) === i).slice(0, 6)) add("practicality", "failed", `${s.title} (block ${s.block + 1}) runs about ${s.minutes} min${cardioAfter ? ` + ${cardioAfter} min cardio` : ""}, over the ${max}-min maximum.`, s.block, true);
   if (!long.length && target != null) for (const s of firstWeeks.filter((q) => q.minutes > target + 10)) add("practicality", "review", `${s.title} (block ${s.block + 1}) runs about ${s.minutes} min vs the ${target}-min target.`, s.block);
   for (const { b, bi } of program.blocks.map((b, bi) => ({ b, bi }))) for (const d of b.days) if (d.exercises.length > 10) add("practicality", "review", `${d.title} (block ${bi + 1}) has ${d.exercises.length} exercises.`, bi);
   if (x.equipment.home) for (const s of firstWeeks.filter((q) => q.stationChanges > 4)) add("practicality", "review", `${s.title} (block ${s.block + 1}) moves between stations ${s.stationChanges} times.`, s.block, true);

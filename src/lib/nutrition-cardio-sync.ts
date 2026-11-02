@@ -115,6 +115,8 @@ type CardioRow = {
   calorie_target_min?: number | null;
   calorie_target_mode?: string | null;
   updated_at?: string | null;
+  /** who set it: nutrition / coach / program (proposed with a generated program) / program_rows (read from the program) */
+  source?: string | null;
 };
 
 const live = (rows: CardioRow[]) => rows.filter((r) => String(r.status ?? "Active") !== "Archived");
@@ -259,16 +261,26 @@ export function planCardioSync(input: {
   return { updates, inserts };
 }
 
-/** The client's cardio now, for the AI ("CURRENT CARDIO"). Empty when there is none. */
-export function currentCardioText(rows: CardioRow[]): string {
+/**
+ * The client's cardio now, for the AI ("CURRENT CARDIO"), with the days they train: the Training
+ * Day session is the last exercise of every workout (program_cardio_sync), so it's done right after
+ * lifting. Rows the training program set are named, for the AI to adjust rather than just keep.
+ * Empty when there's nothing to say.
+ */
+export function currentCardioText(rows: CardioRow[], opts: { trainingDays?: string[] | null } = {}): string {
   const list = live(rows).filter((r) => r.enabled !== false);
-  if (!list.length) return "";
+  const days = (opts.trainingDays ?? []).filter(Boolean);
+  const schedule = days.length
+    ? `TRAINING DAYS: ${days.join(", ")} (${days.length} a week). The Training Day cardio session is added to the end of every workout and logged there, so it's done right after lifting; Non-Training Day sessions are done on days off.`
+    : "";
+  if (!list.length) return schedule ? `CURRENT CARDIO\nnone yet\n${schedule}` : "";
   const lines = list.map((r) => {
     const kcal = r.calorie_target_mode === "custom" && r.calorie_target_min ? ` · ~${r.calorie_target_min} kcal` : "";
     const per = r.frequency_per_week ? ` · ${r.frequency_per_week}x/week` : "";
-    return `- ${r.day_type ?? "Any day"}: ${r.duration_minutes ?? "?"} min ${String(r.cardio_type ?? "cardio").toLowerCase()}${per}${kcal}${r.program_name ? ` (program: ${r.program_name})` : ""}`;
+    const from = r.source === "program" || r.source === "program_rows" ? " (set with the training program before any nutrition plan: adjust it to this plan)" : "";
+    return `- ${r.day_type ?? "Any day"}: ${r.duration_minutes ?? "?"} min ${String(r.cardio_type ?? "cardio").toLowerCase()}${per}${kcal}${r.program_name ? ` (program: ${r.program_name})` : ""}${from}`;
   });
-  return `CURRENT CARDIO\n${lines.join("\n")}`;
+  return `CURRENT CARDIO\n${lines.join("\n")}${schedule ? `\n${schedule}` : ""}`;
 }
 
 /** One-line summary of a day's steps + cardio, for previews and copy. */

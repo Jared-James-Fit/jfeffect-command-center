@@ -176,6 +176,8 @@ export function CardioTargetDialog({ open, onOpenChange, clientId, clients = [],
       completion_rule: "any_target",
       show_calories_to_client: form.show_calories_to_client !== false,
       last_updated_at: new Date().toISOString(),
+      // set by hand: outranks a plan proposed with or read from a training program
+      source: "coach",
     };
     const { error } = form.id
       ? await supabase.from("cardio_targets").update(payload).eq("id", form.id)

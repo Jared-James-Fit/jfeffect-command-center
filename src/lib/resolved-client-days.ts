@@ -98,21 +98,27 @@ export function pickCardioTargetForDay(
 ): CardioTargetLike | null {
   if (dayType === "rest") return null;
   const active = (targets ?? []).filter((target) => targetIsActiveForDate(target, dateISO));
-  // A saved weekday schedule is canonical. Legacy targets with no saved weekdays
-  // continue through the older day-type fallback so existing prescriptions remain visible.
-  const weekday = weekdayNameForISO(dateISO);
-  const explicitlyScheduled = active.filter((target) => Array.isArray(target.scheduled_weekdays) && target.scheduled_weekdays.length > 0);
-  const explicitlyScheduledForDay = explicitlyScheduled.find((target) =>
-    target.scheduled_weekdays!.some((day) => String(day).toLowerCase() === weekday.toLowerCase()),
-  );
-  if (explicitlyScheduledForDay) return explicitlyScheduledForDay;
+  const weekday = weekdayNameForISO(dateISO).toLowerCase();
+  const hasDays = (t: CardioTargetLike) => Array.isArray(t.scheduled_weekdays) && t.scheduled_weekdays.length > 0;
+  const onThisWeekday = (t: CardioTargetLike) => hasDays(t) && t.scheduled_weekdays!.some((day) => String(day).toLowerCase() === weekday);
+  const kindOf = (t: CardioTargetLike) => canonicalCardioDayType(t.day_type);
 
-  // During the additive migration, edited targets use canonical weekdays while
-  // untouched targets retain their legacy day-type rule. A saved weekday on one
-  // target must not suppress a valid legacy target for a different weekday.
-  const legacyActive = active.filter((target) => !Array.isArray(target.scheduled_weekdays) || target.scheduled_weekdays.length === 0);
-  const exact = legacyActive.find((target) => canonicalCardioDayType(target.day_type) === dayType);
+  // 1. The session for this kind of day (the one the "Today's plan" label names): on this weekday
+  //    when it names weekdays, else one for any day of that kind.
+  const sameKind = active.filter((t) => kindOf(t) === dayType);
+  const exact = sameKind.find(onThisWeekday) ?? sameKind.find((t) => !hasDays(t));
   if (exact) return exact;
+  // 2. A training day is wherever the workout is: the training-day session follows a workout
+  //    moved off its usual weekday (it's also the last exercise of that workout).
+  if (dayType === "training" && sameKind.length) return sameKind[0];
+
+  // 3. A session scheduled for this weekday (a coach's High Day on Saturday, a custom day), but
+  //    never the training-day session on a day without a workout.
+  const scheduled = active.find((t) => onThisWeekday(t) && (dayType === "training" || kindOf(t) !== "training"));
+  if (scheduled) return scheduled;
+
+  // 4. Older targets with no saved weekdays: their day-type rule.
+  const legacyActive = active.filter((target) => !hasDays(target));
   if (dayType === "non_training") {
     const customNonTraining = legacyActive.find((target) => {
       const label = `${target.day_type ?? ""} ${target.custom_day_type ?? ""}`.toLowerCase();
@@ -120,7 +126,7 @@ export function pickCardioTargetForDay(
     });
     if (customNonTraining) return customNonTraining;
   }
-  return legacyActive.find((target) => canonicalCardioDayType(target.day_type) === "general") ?? null;
+  return legacyActive.find((target) => kindOf(target) === "general") ?? null;
 }
 
 export function resolveWorkoutDatesFromSchedule(

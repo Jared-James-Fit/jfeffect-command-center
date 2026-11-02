@@ -13,8 +13,9 @@
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
-import { Loader2, Heart } from "lucide-react";
+import { Loader2, Heart, Dumbbell, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
 import { getClientWorkouts } from "@/lib/pl-programs";
@@ -31,6 +32,7 @@ export function ClientCardioSection({
   dayContext = "unknown",
   date,
   readonly = false,
+  workoutDayId,
 }: {
   clientId: string;
   hideWhenEmpty?: boolean;
@@ -38,6 +40,8 @@ export function ClientCardioSection({
   dayContext?: DayContext;
   date?: Date;
   readonly?: boolean;
+  /** Shown inside this workout: when the workout holds the plan's cardio as its last exercise, the card steps aside. */
+  workoutDayId?: string;
 }) {
   const dateStr = date ? toLocalISO(date) : todayLocalISO();
   const qc = useQueryClient();
@@ -92,13 +96,29 @@ export function ClientCardioSection({
       const target = day?.cardioTargetId
         ? ((targetsRes.data ?? []) as any[]).find((t) => t.id === day.cardioTargetId) ?? null
         : null;
-      return { day, target };
+      // On a training day the plan's cardio is the last exercise of that day's workout
+      // (program_cardio_sync): it's logged there, and that log is this card's too.
+      let inWorkout: { dayId: string } | null = null;
+      const dayIds = workoutDates.filter((w) => w.date === dateStr).map((w) => w.workoutId);
+      if (target && dayIds.length) {
+        const { data: linked } = await (supabase as any)
+          .from("pl_exercise_rows")
+          .select("day_id")
+          .in("day_id", dayIds)
+          .not("cardio_target_id", "is", null)
+          .limit(1);
+        inWorkout = linked?.[0]?.day_id ? { dayId: linked[0].day_id as string } : null;
+      }
+      return { day, target, inWorkout };
     },
     // every cardio / schedule edit invalidates this key, so a minute is safe
     staleTime: 60_000,
   });
 
   const filteredTargets = resolved?.target ? [resolved.target] : [];
+  const inWorkout = resolved?.inWorkout ?? null;
+  // Inside the very workout that holds it, the workout's own cardio exercise is the one to log.
+  if (inWorkout && workoutDayId && inWorkout.dayId === workoutDayId) return null;
   // Day classification is nutrition/day context — it is never part of the
   // cardio activity name, so it renders as subtle secondary text only.
   const resolvedLabel = resolved?.day?.cardioDayType === "high"
@@ -149,9 +169,25 @@ export function ClientCardioSection({
           target={t}
           clientId={clientId}
           date={date}
-          readonly={readonly}
+          // logged in the workout (one place), shown here with the same status
+          readonly={readonly || !!inWorkout}
         />
       ))}
+      {inWorkout && (
+        <Link
+          to="/portal/workouts/$dayId"
+          params={{ dayId: inWorkout.dayId }}
+          className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left transition active:scale-[0.99]"
+          data-cardio-in-workout
+        >
+          <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 text-[13px] leading-snug">
+            <span className="block font-semibold">It's the last exercise of {dateStr === todayLocalISO() ? "today's" : "this day's"} workout</span>
+            <span className="block text-muted-foreground">Log it there and it's checked off here too.</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </Link>
+      )}
     </div>
   );
 }
