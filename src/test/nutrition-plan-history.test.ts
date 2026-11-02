@@ -81,3 +81,24 @@ describe("publishing a plan never loses the one before it", () => {
     expect(panel).not.toContain('.update({ status: "Archived" })');
   });
 });
+
+describe("a plan past its date stays the client's plan until a new one replaces it", () => {
+  const clientReads = [
+    "src/lib/nutrition-targets/member-targets.functions.ts",
+    "src/lib/nutrition-targets/admin-meal-plan.functions.ts",
+  ].map((f) => readFileSync(f, "utf8"));
+  it("the client's plan is the newest one not archived, whatever its end date", () => {
+    for (const src of clientReads) {
+      expect(src).toContain('.neq("status", "Archived")');
+      expect(src).toContain('.order("start_date", { ascending: false })');
+      expect(src).not.toMatch(/\.(gte|gt|lte|lt)\("end_date"/);
+    }
+  });
+  it("only a new plan archives the old one (no job or date does)", () => {
+    const tick = readFileSync("src/routes/api/public/hooks/nutrition-tick.ts", "utf8");
+    expect(tick).not.toMatch(/status:\s*"Archived"/);
+    expect(tick).toContain("fn_recompute_nutrition_status");
+    const publish = readFileSync("src/lib/nutrition-targets/plan-publish.ts", "utf8");
+    expect(publish).toContain('status: "Archived"');
+  });
+});

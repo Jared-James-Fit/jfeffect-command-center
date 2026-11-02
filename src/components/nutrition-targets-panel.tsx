@@ -333,9 +333,13 @@ function UpdateDue({ t, requesting, onRequest }: { t: any; requesting: boolean; 
     <div className="mt-2 flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2 text-xs font-semibold">
         <BellRing className="h-4 w-4 shrink-0 text-warning" />
-        {d.state === "past-due"
-          ? `Nutrition update overdue by ${Math.abs(d.daysRemaining)} day${Math.abs(d.daysRemaining) === 1 ? "" : "s"}`
-          : d.state === "due-today" ? "Nutrition update due today" : `Nutrition update due in ${d.daysRemaining} day${d.daysRemaining === 1 ? "" : "s"}`}
+        <span>
+          {d.state === "past-due"
+            ? `Nutrition update overdue by ${Math.abs(d.daysRemaining)} day${Math.abs(d.daysRemaining) === 1 ? "" : "s"}`
+            : d.state === "due-today" ? "Nutrition update due today" : `Nutrition update due in ${d.daysRemaining} day${d.daysRemaining === 1 ? "" : "s"}`}
+          {/* A plan past its date is still the client's plan: nothing takes it away but a new one. */}
+          <span className="block font-normal text-muted-foreground">The client keeps this plan until you update it.</span>
+        </span>
       </div>
       <Button size="sm" className="h-8 gap-1.5 font-bold" disabled={requesting} onClick={onRequest}>
         <Send className="h-3.5 w-3.5" /> Send update request
