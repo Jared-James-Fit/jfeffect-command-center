@@ -19,7 +19,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  AlertTriangle, Archive, BarChart3, BookOpen, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
+  AlertTriangle, Archive, BarChart3, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
   Download, Dumbbell, Flame, FlagOff, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -204,6 +204,9 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
                   <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuItem asChild>
+                <Link to="/admin/client-programs/$clientId/intelligence" params={{ clientId }} search={{ scope: "program", from: "", to: "", tab: "summary" }}><BrainCircuit className="mr-2 h-4 w-4" /> Program Intelligence</Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/admin/client-programs/$clientId/analytics" params={{ clientId }}><BarChart3 className="mr-2 h-4 w-4" /> Analytics &amp; PRs</Link>
               </DropdownMenuItem>

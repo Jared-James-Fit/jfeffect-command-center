@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Wand2, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Target, Layers, History, BarChart3, BookOpen, CalendarClock, Wand2, Trash2, BrainCircuit } from "lucide-react";
 import { isAtHomeBackupClient } from "@/lib/at-home-backup";
 import { AtHomeBackupAdminPanel } from "@/components/workouts/at-home-backup-admin-panel";
 import { toast } from "sonner";
@@ -102,6 +102,9 @@ function ClientProgramsPage() {
           </Link>
           <Link to="/admin/client-programs/$clientId/analytics" params={{ clientId }}>
             <Button variant="outline"><BarChart3 className="mr-2 h-4 w-4" /> Analytics & PRs</Button>
+          </Link>
+          <Link to="/admin/client-programs/$clientId/intelligence" params={{ clientId }} search={{ scope: "program", from: "", to: "", tab: "summary" }}>
+            <Button variant="outline" data-testid="open-program-intelligence"><BrainCircuit className="mr-2 h-4 w-4" /> Program Intelligence</Button>
           </Link>
         </div>
 
