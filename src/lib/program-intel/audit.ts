@@ -179,13 +179,14 @@ export function auditProgram(x: AuditInput): AuditResult {
     }
   });
   const w1 = weekly[0];
-  const findTarget = (target: string): { sets: number; days: number } | null => {
+  const targetIn = (wk: AuditResult["weekly"][number] | undefined, target: string): { sets: number; days: number } | null => {
     const t = norm(target);
-    for (const l of LIFTS) if (t.includes(l)) return w1 ? w1.lifts[l] : null;
-    if (!w1) return null;
-    const key = Object.keys(w1.muscles).find((m) => norm(m) === t || norm(m).includes(t) || t.includes(norm(m)));
-    return key ? w1.muscles[key] : { sets: 0, days: 0 };
+    for (const l of LIFTS) if (t.includes(l)) return wk ? wk.lifts[l] : null;
+    if (!wk) return null;
+    const key = Object.keys(wk.muscles).find((m) => norm(m) === t || norm(m).includes(t) || t.includes(norm(m)));
+    return key ? wk.muscles[key] : { sets: 0, days: 0 };
   };
+  const findTarget = (target: string) => targetIn(w1, target);
 
   // 2. Goal alignment: priorities get at least the dose they had (or the strategy's target).
   const prios = [...new Set([...setup.priorities, ...strategy.prioritize.map((p) => p.item)])].slice(0, 8);
@@ -219,12 +220,15 @@ export function auditProgram(x: AuditInput): AuditResult {
   const factsWithoutEvidence = strategy.decisions.filter((d) => d.basis === "fact" && !d.evidence.length);
   if (factsWithoutEvidence.length) add("evidence", "review", `${factsWithoutEvidence.length} decision${factsWithoutEvidence.length === 1 ? " is" : "s are"} marked as fact without evidence; read ${factsWithoutEvidence.length === 1 ? "it" : "them"} as hypotheses.`);
 
-  // 5. Frequency against the strategy.
-  for (const t of strategy.frequency_targets) {
-    const got = findTarget(t.target);
-    if (!got) continue;
-    if (Math.abs(got.days - t.per_week) >= 1) add("frequency", "review", `${t.target}: ${got.days}×/week in week 1; the strategy targets ${t.per_week}×.`);
-  }
+  // 5. Frequency against the strategy (its own commitment): a block that misses a target by a whole session goes back for repair.
+  program.blocks.forEach((b, bi) => {
+    const wk = weekly.find((w) => w.block === bi && w.week === 1);
+    for (const t of strategy.frequency_targets) {
+      const got = targetIn(wk, t.target);
+      if (!got || t.per_week > setup.daysPerWeek) continue;
+      if (Math.abs(got.days - t.per_week) >= 1) add("frequency", "failed", `${t.target}: ${got.days}×/week in block ${bi + 1}; the strategy targets ${t.per_week}×.`, bi, true);
+    }
+  });
   for (const t of setup.frequency.filter((q) => q.perWeek > setup.daysPerWeek)) add("frequency", "review", `${t.target} target ${t.perWeek}× is more than the ${setup.daysPerWeek} training days.`);
 
   // 6. Volume and intensity: targets, jumps, and % vs reps.
@@ -318,6 +322,10 @@ export function auditProgram(x: AuditInput): AuditResult {
       if (seen.has(k)) add("selection", "review", `${e.exercise_name} appears twice with the same role on ${d.title} (block ${bi + 1}).`, bi);
       seen.add(k);
     }
+  }
+  for (const r of strategy.exercise_plan.replace) {
+    const hit = allEx.find((a) => (r.exercise_id && a.e.exercise_id === r.exercise_id) || norm(a.e.exercise_name) === norm(r.name));
+    if (hit) add("selection", "review", `The strategy says to replace ${r.name}${r.with ? ` with ${r.with}` : ""}, but it's still in block ${hit.bi + 1} (${hit.d.title}).`, hit.bi);
   }
   if (setup.restrictions.length) add("selection", "skipped", `Restrictions can't be checked automatically against exercise choice: check ${setup.restrictions.slice(0, 3).join("; ")}.`);
 

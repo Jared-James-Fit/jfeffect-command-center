@@ -71,6 +71,12 @@ export function ContextInspector({ open, onOpenChange, job }: { open: boolean; o
               ) : (
                 <div className="mt-1 text-muted-foreground">Nothing was cut for size.</div>
               )}
+              {c.construct_brief && (
+                <div className="mt-1 text-muted-foreground">
+                  Building and repair read a compact brief ({k(c.construct_brief.chars)} characters): the same, without {(c.construct_brief.left_out ?? []).includes("earlier") ? "the set-by-set logs" : "the full log"} (the strategy already read them; measured exercises, load references and the last program's layout stay).
+                </div>
+              )}
+              {c.model?.design_model_max_prompt_chars ? <div className="mt-1 text-muted-foreground">The design model takes prompts up to {k(c.model.design_model_max_prompt_chars)} characters; larger ones go to {c.model.fallback}.</div> : null}
               <Button size="sm" variant="outline" className="mt-2 h-8" onClick={() => setShowBrief(!showBrief)}>{showBrief ? "Hide" : "Show"} the full brief</Button>
               {showBrief && <pre className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/50 p-2 text-[10px] leading-snug">{c.brief_text}</pre>}
             </section>

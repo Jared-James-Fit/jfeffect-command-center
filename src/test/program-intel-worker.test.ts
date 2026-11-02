@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildGeneratorIntel } from "@/lib/program-intel/intelligence";
 import type { GenerationSetup } from "@/lib/program-intel/recommend";
 import type { IntelRecords } from "@/lib/program-intel/types";
-import { homeGym } from "./program-intel-scenarios";
+import { homeGym, sparse } from "./program-intel-scenarios";
 
 // The AI gateway, answered from the test (never a real call). Each call's model and prompt are kept.
 const replies: Array<string | Error> = [];
@@ -183,8 +183,12 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(j.status).toBe("ready");
     expect(j.stage).toBe("done");
     expect(j.progress.stages.map((s: any) => [s.key, s.status])).toEqual([["context", "done"], ["strategy", "done"], ["construct:0", "done"], ["audit", "done"], ["save", "done"]]);
-    // stage 5 used the design model first; prompts carry the setup and the brief
-    expect(calls.map((c) => c.model)).toEqual(["google/gemini-3.1-pro-preview", "google/gemini-3.1-pro-preview"]);
+    // the strategy reads the whole history (too big for the design model in time: the app's default reads it);
+    // building reads the compact brief and goes to the design model first
+    expect(calls.map((c) => c.model)).toEqual(["test-model", "google/gemini-3.1-pro-preview"]);
+    expect(calls[0].prompt.length).toBeGreaterThan(70_000);
+    expect(calls[1].prompt).not.toContain("## Previous program: full log, set by set");
+    expect(calls[1].prompt).toContain("How it was laid out (its first full week, as written)");
     expect(calls[0].prompt).toContain("Write the programming strategy for the next 4-week, 4-day program.");
     expect(calls[0].prompt).toContain("## Previous program: full log, set by set");
     expect(calls[1].prompt).toContain("## The approved strategy");
@@ -303,12 +307,29 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
   });
 
   it("falls back to the app's default model when the design model fails, and logs both", async () => {
-    replies.push(new Error("model not available"), strategyJson(recommended));
-    const db = memoryDb(seed(rec, job({ kind: "strategy" })));
+    const small = sparse();
+    const smallSetup = buildGeneratorIntel(small).recommendation.setup;
+    replies.push(new Error("model not available"), strategyJson(smallSetup));
+    const db = memoryDb(seed(small, job({ kind: "strategy", brain: smallSetup.brain, options: { setup: smallSetup, edited: [] } })));
     const r = await runToEnd(db);
+    expect(r.error ?? null).toBeNull();
     expect(r.status).toBe("ready");
     expect(calls.map((c) => c.model)).toEqual(["google/gemini-3.1-pro-preview", "test-model"]);
     expect(db.tables.program_intel_job_calls.map((c: any) => [c.model, c.ok])).toEqual([["google/gemini-3.1-pro-preview", false], ["test-model", true]]);
+  });
+
+  it("a block that misses the strategy's own frequency target goes back for repair", async () => {
+    const strat = JSON.parse(strategyJson(recommended, { frequency_targets: [{ target: "Bench", per_week: 2 }] }));
+    // first build has bench once (Upper B only); the repair adds the incline press back as bench work on Upper A
+    const once = JSON.parse(blockJson());
+    once.days[1].exercises = once.days[1].exercises.filter((x: any) => x.exercise_id !== "e-idb");
+    replies.push(JSON.stringify(strat), JSON.stringify(once), blockJson());
+    const db = memoryDb(seed(rec, job()));
+    const r = await runToEnd(db);
+    expect(r.status).toBe("ready");
+    const j = db.tables.program_intel_jobs[0];
+    expect(j.result.repairs[0].issues.join(" ")).toMatch(/Bench: 1×\/week in block 1; the strategy targets 2×/);
+    expect(j.result.audit.scorecard.find((x: any) => x.criterion === "frequency").status).toBe("passed");
   });
 
   it("refuses when the coach who asked no longer coaches the client", async () => {

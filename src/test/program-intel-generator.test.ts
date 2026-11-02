@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { auditProgram, maxRepsAt, unsupportedTokens } from "@/lib/program-intel/audit";
 import { buildBrief } from "@/lib/program-intel/brief";
 import { missingEquipment, requirementsOf } from "@/lib/program-intel/equipment";
-import type { BuiltBlock, BuiltProgram, Strategy } from "@/lib/program-intel/generator-schemas";
+import { setupSchema, type BuiltBlock, type BuiltProgram, type Strategy } from "@/lib/program-intel/generator-schemas";
 import { buildGeneratorIntel, type GeneratorIntel } from "@/lib/program-intel/intelligence";
 import { sliceRecords } from "@/lib/program-intel/load";
 import { generatedProgramOutcomes } from "@/lib/program-intel/outcomes";
@@ -108,6 +108,14 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
     expect(b.warnings).toEqual([]);
     expect(b.sections.every((x) => x.detail === "full")).toBe(true);
   });
+  it("building reads a compact brief: no set-by-set logs, but the measured exercises, load references and the last program's layout", () => {
+    const b = buildBrief(intel, { setup: s, edited: [], conflicts: [], redistribution: null, exclude: ["log", "earlier"] });
+    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "setup", "requirements", "quality", "previous", "patterns", "memory", "notes"]);
+    expect(b.text).not.toContain("## Previous program: full log");
+    expect(b.text).toContain("Load references (latest sets of each exercise)");
+    expect(b.text).toContain("Station 2 — High cable");
+    expect(b.chars).toBeLessThan(70_000);
+  });
   it("if earlier programs don't fit the budget they're summarized per exercise, and it says so (never silently)", () => {
     const b = buildBrief(intel, { setup: s, edited: [], conflicts: [], redistribution: null, budgetChars: 60_000 });
     const earlier = b.sections.find((x) => x.key === "earlier")!;
@@ -186,6 +194,8 @@ describe("Insufficient data", () => {
     expect(intel.equipment.confidence).not.toBe("confirmed");
     const b = buildBrief(intel, { setup: intel.recommendation.setup, edited: [], conflicts: [], redistribution: null });
     expect(b.text).toContain("RPE / RIR: 0%");
+    // the recommendation is always a valid setup (a sparse prescription can't estimate a 10-minute session)
+    expect(setupSchema.safeParse(intel.recommendation.setup).success).toBe(true);
   });
 });
 
@@ -305,6 +315,16 @@ describe("Program quality audit and scorecard", () => {
     expect(sel.reasons.join(" ")).toMatch(/Required exercise Nordic Curl isn't in the program/);
     expect(a.scorecard.find((r) => r.criterion === "completeness")!.reasons.join(" ")).toMatch(/3 training days a week; the setup asks for 4/);
   });
+  it("a block that misses the strategy's own frequency target fails for repair; a 'replaced' exercise still there is flagged", () => {
+    const strategy = strategyFor(setup, { frequency_targets: [{ target: "Bench", per_week: 3 }], exercise_plan: { retain: [], replace: [{ exercise_id: "e-rdl", name: "Romanian Deadlift", with: null, why: "" }], add: [] } });
+    const a = auditProgram(input(good(), { strategy }));
+    const freq = a.scorecard.find((r) => r.criterion === "frequency")!;
+    expect(freq.status).toBe("failed");
+    // incline dumbbell press and barbell bench are both bench work: 2 days, not the 3 the strategy set
+    expect(freq.reasons[0]).toMatch(/Bench: 2×\/week in block 1; the strategy targets 3×/);
+    expect(a.repairs[0].join(" ")).toMatch(/Bench/);
+    expect(a.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).toMatch(/replace Romanian Deadlift, but it's still in block 1/);
+  });
   it("percentages that the reps can't fit fail; invented numbers in evidence are flagged", () => {
     expect(Math.floor(maxRepsAt(85))).toBe(5);
     const p = good();
@@ -320,6 +340,18 @@ describe("Program quality audit and scorecard", () => {
     expect(a.scorecard.find((r) => r.criterion === "instructions")!.status).toBe("skipped");
     expect(a.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).toMatch(/can't be checked automatically/);
     expect(a.overall).toBe("review");
+  });
+});
+
+describe("Every recommendation is a valid setup", () => {
+  it("home gym, powerlifter, bodybuilder and sparse data all pass the setup schema the server checks", () => {
+    const wordy = homeGym();
+    wordy.client.injuries = "Left shoulder impingement since 2019. ".repeat(20);
+    wordy.goals!.goal_target = "Bigger glutes arms chest back shoulders legs bench squat deadlift total ".repeat(5);
+    for (const rec of [homeGym(), powerlifter(), bodybuilder(), sparse(), wordy]) {
+      const r = setupSchema.safeParse(buildGeneratorIntel(rec).recommendation.setup);
+      expect(r.success ? "ok" : r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")).toBe("ok");
+    }
   });
 });
 

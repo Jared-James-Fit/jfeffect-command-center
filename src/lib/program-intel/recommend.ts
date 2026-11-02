@@ -240,7 +240,10 @@ export function recommendSetup(x: {
     sessionMinutes = baseline.estMinutesPerSession ? roundUp5(baseline.estMinutesPerSession) : null;
     why.sessionMinutes = { source: sessionMinutes ? "Last program (estimated)" : "Not on file", reason: sessionMinutes ? "Estimated from the last program's prescription." : "No session length on file.", confidence: "low" };
   }
-  const maxSessionMinutes = cap ?? (ctx.session.observedP80 ? roundUp5(ctx.session.observedP80) : null);
+  // within what a setup accepts (a sparse prescription can estimate under 15 minutes)
+  if (sessionMinutes != null) sessionMinutes = Math.min(240, Math.max(15, sessionMinutes));
+  let maxSessionMinutes = cap ?? (ctx.session.observedP80 ? roundUp5(ctx.session.observedP80) : null);
+  if (maxSessionMinutes != null) maxSessionMinutes = Math.min(300, Math.max(15, maxSessionMinutes));
   why.maxSessionMinutes = cap ? { source: "Goals & Setup", reason: "Their stated maximum session length.", confidence: "medium" } : maxSessionMinutes ? { source: "Logged sessions", reason: "The longest typical session (80th percentile).", confidence: "medium" } : { source: "Not on file", reason: "No limit on file.", confidence: "low" };
 
   const blocks = blockStructure(brain, weeks, meet?.weeksOut ?? null);
@@ -328,6 +331,22 @@ export function recommendSetup(x: {
     coachNotes: "",
     newCircumstances: "",
   };
+  // keep every value inside what the server's setup check accepts (free text on file can be long)
+  const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+  setup.mainGoal = clip(setup.mainGoal, 300);
+  setup.secondaryGoals = setup.secondaryGoals.slice(0, 8).map((g) => clip(g, 200));
+  setup.priorities = setup.priorities.slice(0, 10).map((g) => clip(g, 60));
+  setup.restrictions = setup.restrictions.slice(0, 12).map((g) => clip(g, 300));
+  setup.retain = setup.retain.slice(0, 40).map((r) => ({ ...r, name: clip(r.name, 120) }));
+  setup.replace = setup.replace.slice(0, 30).map((r) => ({ ...r, name: clip(r.name, 120) }));
+  setup.frequency = setup.frequency.slice(0, 24).map((f) => ({ ...f, target: clip(f.target, 60), perWeek: Math.min(7, f.perWeek) }));
+  setup.volume = setup.volume.slice(0, 30).map((v) => ({ ...v, target: clip(v.target, 60), setsPerWeek: Math.min(60, v.setsPerWeek) }));
+  setup.intensity = clip(setup.intensity, 800);
+  setup.effort = clip(setup.effort, 400);
+  setup.progression = clip(setup.progression, 600);
+  setup.equipment.location = setup.equipment.location ? clip(setup.equipment.location, 120) : null;
+  setup.equipment.notes = setup.equipment.notes ? clip(setup.equipment.notes, 600) : null;
+  setup.blocks = setup.blocks.map((b) => ({ ...b, name: clip(b.name, 80), objective: clip(b.objective, 400) }));
   why.brain = { source: "Classification", reason: x.brainWhy, confidence: "medium" };
   why.equipment = { source: ctx.equipment.source === "coach" ? "Confirmed by you" : ctx.equipment.source === "program" ? "Last program" : ctx.equipment.source === "goals" ? "Goals & Setup" : "Not on file", reason: ctx.equipment.conflicts[0] ?? ctx.equipment.evidence.slice(0, 3).join("; "), confidence: ctx.equipment.confidence === "confirmed" ? "high" : ctx.equipment.confidence === "unknown" ? "low" : "medium" };
   return { setup, why, baseline };

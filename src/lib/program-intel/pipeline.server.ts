@@ -21,7 +21,7 @@
  * program_intel_job_calls (coach-readable) for the context inspector.
  */
 import { auditProgram, type AuditResult } from "./audit";
-import { buildBrief, loadReferences } from "./brief";
+import { buildBrief, CONSTRUCT_EXCLUDE, loadReferences } from "./brief";
 import { builtBlockSchema, setupSchema, strategySchema, type BuiltBlock, type BuiltProgram, type Strategy } from "./generator-schemas";
 import { constructSystemPrompt, constructUserPrompt, PIPELINE_PROMPT_VERSION, repairUserPrompt, strategySystemPrompt, strategyUserPrompt } from "./generator-prompts";
 import { buildGeneratorIntel, type GeneratorIntel } from "./intelligence";
@@ -35,7 +35,19 @@ import { BRAIN_LABEL, type Brain, type IntelRecords, type RawExercise } from "./
 type Db = any;
 /** The model that designs programs; the app's default model answers if it can't. */
 export const PROGRAM_DESIGN_MODEL = "google/gemini-3.1-pro-preview";
+/**
+ * The design model answers a prompt up to about this size in time (in
+ * production: 38k characters in 67s; 105k and 135k timed out at 170s).
+ * Bigger prompts (the strategy reading the whole history) go to the app's
+ * default model, which read 105k characters in 14s.
+ */
+export const DESIGN_MODEL_MAX_PROMPT_CHARS = 70_000;
 const CALL_TIMEOUT_MS = 170_000;
+
+/** Which models a call tries, in order, for its size. */
+export function modelsFor(promptChars: number, cfg: { primary: string; fallback: string }): string[] {
+  return promptChars <= DESIGN_MODEL_MAX_PROMPT_CHARS ? [...new Set([cfg.primary, cfg.fallback])] : [cfg.fallback];
+}
 const MAX_REPAIR_ROUNDS = 2;
 
 export type StageState = { key: string; label: string; status: "pending" | "running" | "done" | "skipped" | "error"; detail?: string };
@@ -59,12 +71,12 @@ async function modelConfig(admin: Db): Promise<{ primary: string; fallback: stri
   return { primary: PROGRAM_DESIGN_MODEL, fallback: (cfg?.default_model as string | undefined) || DEFAULT_AI_MODEL };
 }
 
-/** One logged model call: the primary model, then the app's default if it fails (not for rate limits or credits). */
+/** One logged model call: the design model (for prompts it answers in time), then the app's default if it fails (not for rate limits or credits). */
 async function callModel(admin: Db, job: any, stage: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
   const { createLovableAiGateway } = await import("@/lib/ai-gateway.server");
   const { generateText } = await import("ai");
   const cfg = await modelConfig(admin);
-  const models = [...new Set([cfg.primary, cfg.fallback])];
+  const models = modelsFor(system.length + prompt.length, cfg);
   let lastErr: any = null;
   for (const model of models) {
     const t0 = Date.now();
@@ -219,6 +231,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const { data: assigned } = await admin.from("program_intel_jobs").select("id, created_at, result, brain").eq("client_id", job.client_id).eq("kind", "generate").eq("status", "assigned").order("created_at");
     const outcomes = generatedProgramOutcomes(rec, (assigned ?? []) as any);
     const brief = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes) });
+    const compact = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), exclude: CONSTRUCT_EXCLUDE });
     const cfg = await modelConfig(admin);
     const context = {
       version: 2,
@@ -235,6 +248,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       redistribution: red,
       brief: { sections: brief.sections, warnings: brief.warnings, chars: brief.chars, est_tokens: brief.estTokens },
       brief_text: brief.text,
+      construct_brief: { sections: compact.sections, chars: compact.chars, est_tokens: compact.estTokens, left_out: CONSTRUCT_EXCLUDE },
+      construct_brief_text: compact.text,
       sources: {
         blocks: intel.history.blocks.length,
         workouts: intel.history.days.length,
@@ -247,7 +262,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
         unreadable: intel.history.coverage.unreadable,
       },
       quality_summary: intel.quality?.summary ?? null,
-      model: { primary: cfg.primary, fallback: cfg.fallback, temperature: 0.3, timeout_ms: CALL_TIMEOUT_MS },
+      model: { primary: cfg.primary, fallback: cfg.fallback, temperature: 0.3, timeout_ms: CALL_TIMEOUT_MS, design_model_max_prompt_chars: DESIGN_MODEL_MAX_PROMPT_CHARS },
       previous_adherence_pct: intel.ctx.previous?.sessionAdherencePct ?? null,
       // what the later stages build and audit from (the same data the brief came from)
       load_refs: loadReferences(intel.prev),
@@ -315,7 +330,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       job,
       stage,
       constructSystemPrompt(brain),
-      constructUserPrompt({ brief, setup, strategy, blockIndex: i, previousBlocks: built.slice(0, i), loadRefs: ctxRow.load_refs ?? "", athleteCatalog: athlete, libraryCatalog: library, catalogText }),
+      constructUserPrompt({ brief: ctxRow.construct_brief_text ?? brief, setup, strategy, blockIndex: i, previousBlocks: built.slice(0, i), loadRefs: ctxRow.load_refs ?? "", athleteCatalog: athlete, libraryCatalog: library, catalogText }),
       builtBlockSchema,
       (v) => blockIssues(v, { weeks: sb.weeks, days: setup.daysPerWeek }),
     );

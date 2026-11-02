@@ -4,7 +4,7 @@ import { builtBlockSchema, strategySchema, type BuiltProgram } from "@/lib/progr
 import { constructSystemPrompt, strategySystemPrompt } from "@/lib/program-intel/generator-prompts";
 import { draftBlockDates, exerciseRow, interpretReplySchema, parseJsonReply, resolveProgramExercises } from "@/lib/program-intel/next-program";
 import { rxForWeek } from "@/lib/program-intel/program-view";
-import { blockIssues, strategyIssues } from "@/lib/program-intel/pipeline.server";
+import { blockIssues, modelsFor, strategyIssues } from "@/lib/program-intel/pipeline.server";
 import { BRAINS } from "@/lib/program-intel/types";
 import { currentProgramBlocks, fetchAll, fetchByIds } from "@/lib/program-intel/load";
 
@@ -89,6 +89,12 @@ describe("Generate Next Program: every stage's answer is checked before it's use
     // after resolution an unknown exercise has no id: it's written by name only
     const named = exerciseRow({ ...b.days[0].exercises[2], exercise_id: null }, 1, 2);
     expect(named).toMatchObject({ exercise_name_override: "Zercher Moonwalk" });
+  });
+  it("the design model gets the prompts it answers in time; bigger ones go to the app's default model", () => {
+    const cfg = { primary: "pro", fallback: "flash" };
+    expect(modelsFor(38_000, cfg)).toEqual(["pro", "flash"]);
+    expect(modelsFor(105_000, cfg)).toEqual(["flash"]);
+    expect(strategySystemPrompt("powerbuilding")).toContain("An observation that links a cause");
   });
   it("assigning: blocks back to back from the start date, each week seven days", () => {
     const d = draftBlockDates("2026-11-02", [3, 2]);
