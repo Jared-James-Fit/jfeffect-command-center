@@ -242,6 +242,7 @@ import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/a
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
+import { Route as ApiPublicHooksProgramIntelTickRouteImport } from './routes/api/public/hooks/program-intel-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
@@ -257,6 +258,7 @@ import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/l
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
+import { Route as AuthenticatedAdminClientProgramsClientIdIntelligenceRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.intelligence'
 import { Route as AuthenticatedAdminClientsIdProgressRouteImport } from './routes/_authenticated/admin/clients.$id.progress'
 import { Route as AuthenticatedAdminClientsIdScheduleRouteImport } from './routes/_authenticated/admin/clients.$id.schedule'
 import { Route as AuthenticatedAdminCrmContactsIndexRouteImport } from './routes/_authenticated/admin/crm.contacts.index'
@@ -1609,6 +1611,12 @@ const ApiPublicHooksPostPicturesTickRoute =
     path: '/api/public/hooks/post-pictures-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProgramIntelTickRoute =
+  ApiPublicHooksProgramIntelTickRouteImport.update({
+    id: '/api/public/hooks/program-intel-tick',
+    path: '/api/public/hooks/program-intel-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProgressArchiveTickRoute =
   ApiPublicHooksProgressArchiveTickRouteImport.update({
     id: '/api/public/hooks/progress-archive-tick',
@@ -1695,6 +1703,12 @@ const AuthenticatedAdminClientProgramsClientIdHistoryRoute =
   AuthenticatedAdminClientProgramsClientIdHistoryRouteImport.update({
     id: '/client-programs/$clientId/history',
     path: '/client-programs/$clientId/history',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminClientProgramsClientIdIntelligenceRoute =
+  AuthenticatedAdminClientProgramsClientIdIntelligenceRouteImport.update({
+    id: '/client-programs/$clientId/intelligence',
+    path: '/client-programs/$clientId/intelligence',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminClientsIdProgressRoute =
@@ -1970,6 +1984,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
+  '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -2002,6 +2017,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
   '/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
@@ -2224,6 +2240,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
+  '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -2256,6 +2273,7 @@ export interface FileRoutesByTo {
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
   '/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
@@ -2484,6 +2502,7 @@ export interface FileRoutesById {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
+  '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -2516,6 +2535,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  '/_authenticated/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
   '/_authenticated/admin/clients/$id/progress': typeof AuthenticatedAdminClientsIdProgressRoute
   '/_authenticated/admin/clients/$id/schedule': typeof AuthenticatedAdminClientsIdScheduleRoute
   '/_authenticated/admin/crm/contacts/$id': typeof AuthenticatedAdminCrmContactsIdRoute
@@ -2744,6 +2764,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
+    | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
@@ -2776,6 +2797,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/admin/client-programs/$clientId/intelligence'
     | '/admin/clients/$id/progress'
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
@@ -2998,6 +3020,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
+    | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
@@ -3030,6 +3053,7 @@ export interface FileRouteTypes {
     | '/portal/workouts'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
+    | '/admin/client-programs/$clientId/intelligence'
     | '/admin/clients/$id/progress'
     | '/admin/clients/$id/schedule'
     | '/admin/crm/contacts/$id'
@@ -3257,6 +3281,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
+    | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
@@ -3289,6 +3314,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
+    | '/_authenticated/admin/client-programs/$clientId/intelligence'
     | '/_authenticated/admin/clients/$id/progress'
     | '/_authenticated/admin/clients/$id/schedule'
     | '/_authenticated/admin/crm/contacts/$id'
@@ -3354,6 +3380,7 @@ export interface RootRouteChildren {
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
+  ApiPublicHooksProgramIntelTickRoute: typeof ApiPublicHooksProgramIntelTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
@@ -5004,6 +5031,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPostPicturesTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/program-intel-tick': {
+      id: '/api/public/hooks/program-intel-tick'
+      path: '/api/public/hooks/program-intel-tick'
+      fullPath: '/api/public/hooks/program-intel-tick'
+      preLoaderRoute: typeof ApiPublicHooksProgramIntelTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/progress-archive-tick': {
       id: '/api/public/hooks/progress-archive-tick'
       path: '/api/public/hooks/progress-archive-tick'
@@ -5107,6 +5141,13 @@ declare module '@tanstack/react-router' {
       path: '/client-programs/$clientId/history'
       fullPath: '/admin/client-programs/$clientId/history'
       preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/client-programs/$clientId/intelligence': {
+      id: '/_authenticated/admin/client-programs/$clientId/intelligence'
+      path: '/client-programs/$clientId/intelligence'
+      fullPath: '/admin/client-programs/$clientId/intelligence'
+      preLoaderRoute: typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/clients/$id/progress': {
@@ -5442,6 +5483,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSalesIndexRoute: typeof AuthenticatedAdminSalesIndexRoute
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
+  AuthenticatedAdminClientProgramsClientIdIntelligenceRoute: typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
@@ -5599,6 +5641,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
     AuthenticatedAdminClientProgramsClientIdHistoryRoute:
       AuthenticatedAdminClientProgramsClientIdHistoryRoute,
+    AuthenticatedAdminClientProgramsClientIdIntelligenceRoute:
+      AuthenticatedAdminClientProgramsClientIdIntelligenceRoute,
     AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
     AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
       AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,
@@ -5861,6 +5905,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
+  ApiPublicHooksProgramIntelTickRoute: ApiPublicHooksProgramIntelTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,
   ApiPublicHooksScheduledMessagesWorkerRoute:
