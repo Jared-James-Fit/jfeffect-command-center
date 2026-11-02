@@ -98,12 +98,13 @@ export type DirectoryResult = {
 
 const InputSchema = z.object({
   search: z.string().optional().default(""),
-  // Every filter a client must match (all of them, not any).
+  // The filters picked; `match` says whether a client needs any of them or all of them.
   flags: z
     .array(z.enum(DIRECTORY_FILTER_KEYS))
     .max(DIRECTORY_FILTER_KEYS.length)
     .optional()
     .default([]),
+  match: z.enum(["any", "all"]).optional().default("any"),
   coachingType: z.string().optional().default("all"),
   coachId: z.string().uuid().optional().nullable(),
   sort: z
@@ -139,6 +140,7 @@ export const listClientsDirectoryFn = createServerFn({ method: "POST" })
         p_offset: offset,
         p_lifecycle: data.lifecycle,
         p_flags: data.flags,
+        p_match: data.match,
       } as any,
     );
     if (error) throw new Error(error.message);

@@ -3,7 +3,8 @@
  * the tests all share one definition of the keys.
  *
  * The database decides who matches each filter (the `flags` list inside admin_clients_directory).
- * With several selected a client must match ALL of them, so each extra filter narrows the list.
+ * With several selected, `match` decides: "any" (the default) lists clients with at least one of
+ * them, so each extra filter adds people; "all" lists only clients with every one, so each narrows.
  * Keep this list in step with the `flags:begin` block of that function; a test compares them.
  */
 export const DIRECTORY_FILTER_KEYS = [
@@ -73,4 +74,9 @@ export function emptyCounts(): DirectoryCounts {
   const counts = { all: 0 } as DirectoryCounts;
   for (const key of DIRECTORY_FILTER_KEYS) counts[key] = 0;
   return counts;
+}
+
+/** `?match=all` narrows to clients with every picked filter; anything else (or nothing) is "any". */
+export function matchFromSearch(raw: unknown): "any" | "all" {
+  return raw === "all" ? "all" : "any";
 }

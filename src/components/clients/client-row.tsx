@@ -7,19 +7,18 @@ import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useOpenClientProfile } from "@/lib/open-client-profile";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  ChevronRight, MoreHorizontal, CalendarDays, Dumbbell,
-  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, AlertTriangle, Upload,
+  MoreHorizontal, CalendarDays, Dumbbell,
+  Apple, HeartPulse, CheckCircle2, AlertCircle, Plus, Eye, ArrowRight, AlertTriangle,
   Bell, Loader2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { BADGE_TONE, lastSeenChip, rowStatusChips, type ChipAction } from "./clients-status";
+import { BADGE_TONE, blockEnd, lastSeenChip, rowStatusChips, type ChipAction } from "./clients-status";
 import { StatusTip } from "./status-tip";
 import { adminRemindAgreement } from "@/lib/coaching-agreement.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { format, parseISO, differenceInDays } from "date-fns";
-import { QuickActionsMenu, ClientMoreMenu } from "./quick-actions";
+import { ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { useAuth } from "@/lib/auth";
@@ -28,7 +27,7 @@ import { toast } from "sonner";
 import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 
 /** Hover text for the one primary button. Payment and check-in shortcuts live in the status badges. */
-const OPEN_CLIENT_HINT = "Open this client's full profile: training, nutrition, messages, billing and more.";
+const VIEW_PROFILE_HINT = "Their full profile: training, nutrition, messages, billing and more.";
 
 /** Buttons inside a status explanation. The first is the main one. */
 const actionClass = (primary: boolean) =>
@@ -289,41 +288,23 @@ export function ClientRow({ r, onArchive, calSync }: { r: DirectoryRow; onArchiv
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button asChild size="sm" className="h-9 min-w-[8rem] flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/80 xl:flex-none">
-                <ClientNameLink clientId={r.id}>
-                  <ArrowRight className="mr-1.5 h-4 w-4" aria-hidden />
-                  Open Client
-                </ClientNameLink>
+              <Button asChild size="sm" className="h-10 min-w-[8rem] flex-1 bg-secondary font-semibold text-secondary-foreground hover:bg-secondary/80 xl:flex-none">
+                <ClientNameLink clientId={r.id}>View Profile</ClientNameLink>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{OPEN_CLIENT_HINT}</TooltipContent>
+            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">{VIEW_PROFILE_HINT}</TooltipContent>
           </Tooltip>
-
-          <QuickActionsMenu r={r} />
 
           <ClientMoreMenu
             r={r}
             onArchive={onArchive}
-            tip="More options: schedule a workout, assign programs, download reports, mark payment status, archive."
+            tip="More: schedule a workout, assign or edit programs, nutrition and cardio, send a payment link, download reports, archive."
             trigger={
-              <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="More client actions">
+              <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More client actions">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             }
           />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <ClientNameLink
-                clientId={r.id}
-                ariaLabel={`Open ${r.full_name ?? "client"}`}
-                className="hidden h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground xl:flex"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </ClientNameLink>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs leading-snug">Open this client's profile.</TooltipContent>
-          </Tooltip>
         </div>
       </li>
     </TooltipProvider>
@@ -418,6 +399,7 @@ function AssignmentStatusStrip({
   const hasCardio = !r.f_missing_cardio;
   // A block can still be showing (it ended within the last week) with nothing queued after it.
   const programEnded = hasProgram && r.f_missing_program;
+  const end = hasProgram ? blockEnd(r.block_end, r.next_block_id) : null;
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
   const [assignProgramOpen, setAssignProgramOpen] = useState(false);
 
@@ -512,7 +494,7 @@ function AssignmentStatusStrip({
       </div>
       {hasProgram && (
         <>
-          {(range || prog) && (
+          {(range || prog || end) && (
             <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
               {range && (
                 <StatusTip
@@ -523,16 +505,50 @@ function AssignmentStatusStrip({
                   {range}
                 </StatusTip>
               )}
-              {prog && (
+              {end?.needsNext ? (
+                // Ending (or ended) with nothing after it: said where the dates are, with the fix one tap away.
+                <StatusTip
+                  title={end.state === "ended" ? "Program has ended" : "No next block queued"}
+                  body={end.state === "ended"
+                    ? `Their block ended ${end.date} and nothing is queued after it, so they have no workouts.`
+                    : `Their block ends ${end.state === "today" ? "today" : end.date} and nothing is queued after it, so they'll run out of workouts.`}
+                  next="Assign or build the next block."
+                  icon={AlertTriangle}
+                  tone={end.state === "ended" ? "danger" : "warn"}
+                  align="end"
+                  footer={(close) => (
+                    <button
+                      type="button"
+                      className={actionClass(true)}
+                      onClick={() => {
+                        close();
+                        setAssignProgramOpen(true);
+                      }}
+                    >
+                      Assign next block
+                    </button>
+                  )}
+                  className={cn(
+                    "inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 font-semibold transition hover:brightness-110",
+                    end.state === "ended"
+                      ? "border-destructive/40 bg-destructive/10 text-destructive"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-500",
+                  )}
+                >
+                  <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+                  {end.label} · Next block
+                  <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                </StatusTip>
+              ) : prog ? (
                 <StatusTip
                   title="Time left in the block"
                   body="Days left in the current block, and how far through it they are by calendar time (not workouts completed)."
                   align="end"
                   className="shrink-0 cursor-pointer py-1"
                 >
-                  {prog.left}d left · {prog.pct}%
+                  {end?.state === "today" ? "Last day" : `${end?.days ?? prog.left}d left`} · {prog.pct}%
                 </StatusTip>
-              )}
+              ) : null}
             </div>
           )}
           {prog && (
@@ -542,7 +558,15 @@ function AssignmentStatusStrip({
               label="Block progress"
               className="block w-full cursor-pointer py-1.5"
             >
-              <Progress value={prog.pct} className="h-1.5" />
+              <span className="block h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <span
+                  className={cn(
+                    "block h-full rounded-full transition-all",
+                    end?.needsNext ? (end.state === "ended" ? "bg-destructive" : "bg-amber-500") : "bg-emerald-500",
+                  )}
+                  style={{ width: `${prog.pct}%` }}
+                />
+              </span>
             </StatusTip>
           )}
         </>
@@ -569,56 +593,6 @@ function AssignmentStatusStrip({
           </span>
         </StatusTip>
       )}
-      {hasProgram && !r.next_block_id && (() => {
-        // No next block queued — surface program-end so the coach knows when to upload more.
-        const endIso = r.block_end;
-        if (!endIso) return null;
-        let daysLeft = 0;
-        try { daysLeft = differenceInDays(parseISO(endIso), new Date()); } catch { return null; }
-        const ended = daysLeft < 0;
-        const ending = daysLeft <= 14;
-        const tone = ended
-          ? "border-destructive/40 bg-destructive/10 text-destructive"
-          : ending
-          ? "border-amber-500/40 bg-amber-500/10 text-amber-500"
-          : "border-border bg-muted/40 text-muted-foreground";
-        const label = ended
-          ? `Program ended ${format(parseISO(endIso), "MMM d")} · upload next block`
-          : ending
-          ? `Program ends in ${daysLeft}d (${format(parseISO(endIso), "MMM d")}) · no next block`
-          : `Program ends ${format(parseISO(endIso), "MMM d")} · no next block queued`;
-        return (
-          <StatusTip
-            title={ended ? "Program has ended" : "No next block queued"}
-            body={ended
-              ? "Their program has ended and nothing is queued after it."
-              : "Nothing is queued after their current block, so they'll run out of workouts when it ends."}
-            next={ended ? "Assign or upload the next block." : "Assign or upload the next block before it ends."}
-            icon={ended || ending ? AlertTriangle : Upload}
-            tone={ended ? "danger" : ending ? "warn" : "muted"}
-            footer={(close) => (
-              <button
-                type="button"
-                className={actionClass(true)}
-                onClick={() => {
-                  close();
-                  setAssignProgramOpen(true);
-                }}
-              >
-                Assign next block
-              </button>
-            )}
-            className={cn(
-              "inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-medium transition hover:brightness-110",
-              tone,
-            )}
-          >
-            {ended || ending ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Upload className="h-3 w-3 shrink-0" />}
-            <span className="truncate">{label}</span>
-            <Plus className="h-3 w-3 shrink-0" />
-          </StatusTip>
-        );
-      })()}
       <ClientQuickSheet
         kind={sheet}
         clientId={r.id}
