@@ -2,13 +2,25 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { clientGoalsSetupSchema, EDITABLE_GOALS_FIELDS } from "@/lib/client-goals/schema";
+import { goalsForSchedule, scheduleForGoalsSave, weekOrder } from "@/lib/client-goals/schedule-sync";
+import { WEEK_DAYS } from "@/lib/training-schedule";
 
 const clientIdInput = z.object({ clientId: z.string().uuid() });
 
 const saveGoalsSetupInput = z.object({
   clientId: z.string().uuid(),
   patch: clientGoalsSetupSchema.partial().extend({ completed: z.boolean().optional() }),
+  /** The exact training days picked in Goals & Setup ("Monday"…): saved as the program schedule. */
+  trainingDays: z.array(z.enum(WEEK_DAYS)).min(1).max(7).optional(),
 });
+
+/** What a Goals & Setup save did to the program schedule (null: it stayed as it was). */
+export type GoalsScheduleResult = {
+  days: string[];
+  applied: number;
+  unplaced: number;
+  realignError: string | null;
+} | null;
 
 async function assertCoachOrAdmin(ctx: any, clientId: string) {
   // admin or coach role, or assigned coach for this client.
@@ -61,17 +73,89 @@ export const saveGoalsSetupFn = createServerFn({ method: "POST" })
     if (body.injuries_has === false) body.injuries_details = null;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("client_goals_setup")
-      .upsert(body as any, { onConflict: "client_id" });
+    const [storedRes, clientRes] = await Promise.all([
+      supabaseAdmin
+        .from("client_goals_setup")
+        .select("client_id, training_days_per_week, available_weekdays")
+        .eq("client_id", data.clientId)
+        .maybeSingle(),
+      supabaseAdmin.from("clients").select("committed_training_days").eq("id", data.clientId).maybeSingle(),
+    ]);
+    if (storedRes.error || clientRes.error) {
+      console.error("[saveGoalsSetupFn] read failed", { clientId: data.clientId, error: storedRes.error ?? clientRes.error });
+      throw new Error("We couldn't save your answers. Please try again.");
+    }
+    const stored = storedRes.data as { training_days_per_week: number | null; available_weekdays: string[] | null } | null;
+
+    // "Days a week" and "which days" are the program schedule: the days asked
+    // for become the committed schedule below, and Goals always says what the
+    // schedule is (a DB trigger keeps it so when the schedule changes elsewhere).
+    const live = weekOrder((clientRes.data as { committed_training_days: string[] | null } | null)?.committed_training_days);
+    const desired = scheduleForGoalsSave({
+      live,
+      stored,
+      patch: body as { training_days_per_week?: number | null; available_weekdays?: string[] | null },
+      trainingDays: data.trainingDays,
+    });
+    const synced = goalsForSchedule(
+      desired ?? live,
+      ("available_weekdays" in body ? body.available_weekdays : stored?.available_weekdays) as string[] | null,
+    );
+    if (synced) {
+      body.training_days_per_week = synced.training_days_per_week;
+      body.available_weekdays = synced.available_weekdays;
+    }
+
+    // Update the row when it exists: an upsert also runs the INSERT trigger,
+    // which logged a "(created)" audit line and re-touched the coach's task on
+    // every save.
+    const { client_id: _clientId, ...changes } = body;
+    let error: { code?: string; message?: string } | null = null;
+    if (stored) {
+      ({ error } = await supabaseAdmin.from("client_goals_setup").update(changes as any).eq("client_id", data.clientId));
+    } else {
+      ({ error } = await supabaseAdmin.from("client_goals_setup").insert(body as any));
+      if (error?.code === "23505") {
+        // Saved from another tab a moment ago: update that row instead.
+        ({ error } = await supabaseAdmin.from("client_goals_setup").update(changes as any).eq("client_id", data.clientId));
+      }
+    }
     if (error) {
       // Log raw error for ops; return a safe, human message to the client.
-      console.error("[saveGoalsSetupFn] upsert failed", {
+      console.error("[saveGoalsSetupFn] save failed", {
         clientId: data.clientId, error,
       });
       throw new Error("We couldn't save your answers. Please try again.");
     }
-    return { ok: true };
+
+    let schedule: GoalsScheduleResult = null;
+    if (desired) {
+      const { resolveActorAccess, writeCommittedDays, realignClientToCommittedDays } = await import(
+        "@/lib/schedule-bulk.functions"
+      );
+      try {
+        const { role } = await resolveActorAccess({ supabase: context.supabase, userId: context.userId }, data.clientId);
+        await writeCommittedDays({ clientId: data.clientId, userId: context.userId, role, days: desired });
+        try {
+          // New days are the instruction to move every upcoming, unstarted
+          // workout onto them (the Training Schedule card's save does the same).
+          const res = await realignClientToCommittedDays({
+            clientId: data.clientId, userId: context.userId, role, includePinned: true,
+          });
+          schedule = { days: desired, applied: res.applied ?? 0, unplaced: res.unplaced ?? 0, realignError: null };
+        } catch (e: any) {
+          schedule = {
+            days: desired, applied: 0, unplaced: 0,
+            realignError: (e?.message as string) || "Could not update the workout calendar.",
+          };
+        }
+      } catch (e: any) {
+        console.error("[saveGoalsSetupFn] schedule write failed", { clientId: data.clientId, error: e?.message ?? e });
+        // Thrown so the answers stay on the device and the next save tries again.
+        throw new Error("Your answers saved, but your training days didn't update. Please try again.");
+      }
+    }
+    return { ok: true, schedule };
   });
 
 /** Mark the client's Goals & Setup as reviewed by the current coach/admin. */

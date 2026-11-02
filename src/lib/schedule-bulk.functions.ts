@@ -31,7 +31,8 @@ function weekdayFromDate(dateISO: string): WeekDay | null {
 
 type Role = "client" | "member" | "coach" | "admin";
 
-async function resolveActorAccess(
+/** Who is changing this client's schedule (admin, their coach, or the client), or throws. */
+export async function resolveActorAccess(
   ctx: { supabase: any; userId: string },
   clientId: string,
 ): Promise<{ role: Role; client: any }> {

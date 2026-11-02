@@ -39,6 +39,12 @@ function spreadScore(days: readonly WeekDay[]): [number, number] {
   return [maxRun, gaps.reduce((s, g) => s + g * g, 0)];
 }
 
+/** The most training days in a row (Sunday runs into Monday), e.g. 3 for Mon/Tue/Wed/Fri. */
+export function longestRun(days: readonly WeekDay[]): number {
+  const set = new Set(days.filter((d) => WEEK_DAYS.includes(d)));
+  return set.size ? spreadScore([...set])[0] : 0;
+}
+
 function combinations<T>(pool: readonly T[], k: number): T[][] {
   if (k === 0) return [[]];
   if (k > pool.length) return [];
@@ -74,27 +80,54 @@ const inWeekOrder = (days: Iterable<WeekDay>) => {
   return WEEK_DAYS.filter((d) => set.has(d));
 };
 
-/** The committed days, fitted to `perWeek` workouts. */
-export function fitTrainingDays(committed: readonly WeekDay[], perWeek: number | null | undefined): DaysFit {
-  const mine = inWeekOrder(committed);
+/** The best `k` more days from `pool` to go with `mine` (most spread out). */
+function bestAdded(mine: readonly WeekDay[], pool: readonly WeekDay[], k: number): WeekDay[] {
+  let best: WeekDay[] | null = null;
+  for (const extra of combinations(pool, k)) {
+    const c = [...mine, ...extra];
+    if (!best || better(c, best)) best = c;
+  }
+  return best ?? [...mine];
+}
+
+/**
+ * The committed days, fitted to `perWeek` workouts. With `allowed` (the days
+ * someone is available; empty = any day), a committed day they're no longer
+ * available on is dropped first, and days are added from what they're
+ * available on before any other day of the week.
+ */
+export function fitTrainingDays(
+  committed: readonly WeekDay[],
+  perWeek: number | null | undefined,
+  opts: { allowed?: readonly WeekDay[] | null } = {},
+): DaysFit {
+  const all = inWeekOrder(committed);
+  const allowed = opts.allowed?.length ? new Set(opts.allowed) : null;
+  const mine = allowed ? all.filter((d) => allowed.has(d)) : all;
+  const unavailable = all.filter((d) => !mine.includes(d));
   const n = Math.max(0, Math.min(7, Math.round(perWeek ?? 0)));
-  if (!n || mine.length === n) return { days: mine, added: [], dropped: [] };
+  if (!n) return { days: all, added: [], dropped: [] };
+  if (mine.length === n) return { days: mine, added: [], dropped: unavailable };
 
   if (mine.length > n) {
     let best: WeekDay[] | null = null;
     for (const c of combinations(mine, n)) if (!best || better(c, best)) best = c;
     const days = inWeekOrder(best ?? []);
-    return { days, added: [], dropped: mine.filter((d) => !days.includes(d)) };
+    return { days, added: [], dropped: all.filter((d) => !days.includes(d)) };
   }
 
   const free = WEEK_DAYS.filter((d) => !mine.includes(d));
-  let best: WeekDay[] | null = null;
-  for (const extra of combinations(free, n - mine.length)) {
-    const c = [...mine, ...extra];
-    if (!best || better(c, best)) best = c;
+  const preferred = allowed ? free.filter((d) => allowed.has(d)) : free;
+  const need = n - mine.length;
+  let picked: WeekDay[];
+  if (preferred.length >= need) picked = bestAdded(mine, preferred, need);
+  else {
+    // Not enough available days: all of them, then the best-spread of the rest.
+    const withAvailable = [...mine, ...preferred];
+    picked = bestAdded(withAvailable, free.filter((d) => !preferred.includes(d)), need - preferred.length);
   }
-  const days = inWeekOrder(best ?? mine);
-  return { days, added: days.filter((d) => !mine.includes(d)), dropped: [] };
+  const days = inWeekOrder(picked);
+  return { days, added: days.filter((d) => !all.includes(d)), dropped: all.filter((d) => !days.includes(d)) };
 }
 
 /**
