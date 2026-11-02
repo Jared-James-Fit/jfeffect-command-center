@@ -176,8 +176,8 @@ function ResetPage() {
       <div className="flex min-h-screen items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center justify-center gap-3">
-            <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl shadow-glow" />
-            <span className="text-lg font-black tracking-tight">JF EFFECT</span>
+            <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl" />
+            <span className="text-lg font-bold tracking-tight">JF EFFECT</span>
           </div>
           <Card className="border-border bg-card/60 p-6 backdrop-blur-sm">
             {phase === "loading" && (
@@ -188,12 +188,12 @@ function ResetPage() {
             )}
             {phase === "confirm" && (
               <div className="space-y-4 text-center">
-                <h2 className="text-xl font-black tracking-tight">Reset your password</h2>
+                <h2 className="text-xl font-bold tracking-tight">Reset your password</h2>
                 <p className="text-sm text-muted-foreground">Tap continue to verify your link.</p>
                 <Button
                   onClick={verifyTokenHash}
                   disabled={verifying}
-                  className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                  className="w-full bg-primary text-primary-foreground py-6 text-sm font-semibold"
                 >
                   {verifying ? "Verifying…" : "Continue"}
                 </Button>
@@ -201,12 +201,12 @@ function ResetPage() {
             )}
             {phase === "expired" && (
               <div className="space-y-4 text-center">
-                <h2 className="text-xl font-black">Link no longer valid</h2>
+                <h2 className="text-xl font-bold">Link no longer valid</h2>
                 <p className="text-sm text-muted-foreground">
                   This recovery link is no longer valid. Request a new password reset to continue.
                 </p>
                 <Link to="/recover">
-                  <Button className="w-full bg-gradient-primary py-6 font-bold uppercase tracking-[0.15em] shadow-glow">
+                  <Button className="w-full bg-primary text-primary-foreground py-6 font-semibold">
                     Send a New Recovery Link
                   </Button>
                 </Link>
@@ -215,7 +215,7 @@ function ResetPage() {
             {phase === "ready" && (
               <>
                 <div className="text-center">
-                  <h2 className="text-xl font-black tracking-tight">Create a New Password</h2>
+                  <h2 className="text-xl font-bold tracking-tight">Create a New Password</h2>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Pick something strong — at least 10 characters with a mix of letters, numbers and symbols.
                   </p>
@@ -267,7 +267,7 @@ function ResetPage() {
                   <Button
                     type="submit"
                     disabled={busy || !allOk || !matches}
-                    className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                    className="w-full bg-primary text-primary-foreground py-6 text-sm font-semibold"
                   >
                     {busy ? "Updating…" : "Update Password"}
                   </Button>
@@ -276,7 +276,7 @@ function ResetPage() {
             )}
             {phase === "done" && (
               <div className="space-y-3 text-center">
-                <h2 className="text-xl font-black tracking-tight">All set</h2>
+                <h2 className="text-xl font-bold tracking-tight">All set</h2>
                 <p className="text-sm text-muted-foreground">
                   Your password has been updated. You can now log in with your new password.
                 </p>

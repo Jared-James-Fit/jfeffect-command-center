@@ -166,13 +166,13 @@ function StatusBadge({ status }: { status: ScheduleRowStatus }) {
       return <Badge variant="default">Completed</Badge>;
     case "in_progress":
       return (
-        <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+        <Badge variant="outline" className="border-warning/50 text-warning">
           In Progress
         </Badge>
       );
     case "missing":
       return (
-        <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+        <Badge variant="outline" className="border-warning/50 bg-warning/10 text-warning">
           Missing Date
         </Badge>
       );
@@ -263,7 +263,7 @@ export function ScheduleManagerList({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="text-sm font-medium">
           {total} workouts · {scheduledCount} scheduled ·{" "}
-          <span className={missingCount > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : ""}>
+          <span className={missingCount > 0 ? "text-warning font-semibold" : ""}>
             {missingCount} missing dates
           </span>
         </div>
@@ -283,8 +283,8 @@ export function ScheduleManagerList({
       </div>
 
       {missingCount > 0 && filter !== "completed" && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span>
             {missingCount} {missingCount === 1 ? "workout is" : "workouts are"} not scheduled and will
             not appear on the client calendar.
@@ -339,7 +339,7 @@ export function ScheduleManagerList({
                         <div
                           className={cn(
                             "text-xs",
-                            row.date ? "text-muted-foreground" : "font-medium text-amber-600 dark:text-amber-400",
+                            row.date ? "text-muted-foreground" : "font-medium text-warning",
                           )}
                         >
                           {row.date

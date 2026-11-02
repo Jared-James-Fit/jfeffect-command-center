@@ -83,7 +83,7 @@ export function NutritionToolsCard({
           <Wrench className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-black uppercase tracking-widest">Nutrition Tools</div>
+          <div className="text-sm font-bold uppercase tracking-widest">Nutrition Tools</div>
           <div className="text-[11px] text-muted-foreground">Everything you need, one tap away</div>
         </div>
       </div>

@@ -33,7 +33,7 @@ function ObservationRow({ o, clientId }: { o: RawObservation; clientId: string }
       <div className="flex flex-wrap items-center gap-1.5">
         <KindChip kind={o.confidence === "fact" ? "fact" : "hypothesis"} />
         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{o.kind === "decision" ? "Decision" : o.kind === "outcome" ? "Outcome" : "Observation"} · {SOURCE[o.source]} · {o.created_at.slice(0, 10)}</span>
-        {o.status !== "proposed" && <span className={cn("text-[10px] font-bold uppercase", o.status === "rejected" ? "text-destructive" : "text-emerald-600")}>{o.status}</span>}
+        {o.status !== "proposed" && <span className={cn("text-[10px] font-bold uppercase", o.status === "rejected" ? "text-destructive" : "text-success")}>{o.status}</span>}
       </div>
       {editing ? (
         <div className="space-y-1.5">
@@ -111,12 +111,12 @@ export function MemorySection({
 
       {proposed.length > 0 && (
         <section>
-          <h3 className="mb-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground">Waiting for your review ({proposed.length})</h3>
+          <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Waiting for your review ({proposed.length})</h3>
           <Card className="divide-y divide-border/60 p-0">{proposed.map((o) => <ObservationRow key={o.id} o={o} clientId={clientId} />)}</Card>
         </section>
       )}
       <section>
-        <h3 className="mb-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground">What we know about this athlete ({kept.length})</h3>
+        <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">What we know about this athlete ({kept.length})</h3>
         {kept.length ? <Card className="divide-y divide-border/60 p-0">{kept.map((o) => <ObservationRow key={o.id} o={o} clientId={clientId} />)}</Card> : <Card className="p-3 text-xs text-muted-foreground">Nothing kept yet. Keep a finding from the summary, approve an AI proposal or add your own note below. Kept observations go into every later report, prompt and generated program.</Card>}
       </section>
       <Card className="space-y-2 p-3.5">

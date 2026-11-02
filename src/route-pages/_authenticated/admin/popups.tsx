@@ -70,12 +70,12 @@ const TYPE_META: Record<PopupType, { label: string; icon: typeof Megaphone; colo
 
 function toneClass(t: UnifiedPopup["statusTone"]) {
   switch (t) {
-    case "active":    return "bg-emerald-500/15 text-emerald-600 border-emerald-500/40";
-    case "scheduled": return "bg-blue-500/15 text-blue-600 border-blue-500/40";
+    case "active":    return "bg-success/15 text-success border-success/40";
+    case "scheduled": return "bg-info/15 text-info border-info/40";
     case "expired":   return "bg-muted text-muted-foreground border-border";
-    case "draft":     return "bg-amber-500/15 text-amber-600 border-amber-500/40";
+    case "draft":     return "bg-warning/15 text-warning border-warning/40";
     case "off":       return "bg-muted text-muted-foreground border-border";
-    case "system":    return "bg-violet-500/15 text-violet-600 border-violet-500/40";
+    case "system":    return "bg-muted-foreground/15 text-muted-foreground border-border";
   }
 }
 

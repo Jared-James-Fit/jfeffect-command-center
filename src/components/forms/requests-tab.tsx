@@ -67,9 +67,9 @@ type Scope = string | "open";
 type StatusFilter = "all" | "open" | "submitted" | "missed";
 
 const STATUS_BADGE: Record<TrackedStatus, { label: string; cls: string }> = {
-  submitted: { label: "Submitted", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
-  waiting: { label: "Waiting", cls: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300" },
-  overdue: { label: "Overdue", cls: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300" },
+  submitted: { label: "Submitted", cls: "border-success/30 bg-success/10 text-success" },
+  waiting: { label: "Waiting", cls: "border-info/30 bg-info/10 text-info" },
+  overdue: { label: "Overdue", cls: "border-warning/40 bg-warning/10 text-warning" },
   missed: { label: "Missed", cls: "border-border bg-muted text-muted-foreground" },
 };
 
@@ -225,7 +225,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
         <div>
           <div className="text-sm font-bold">
             {openRows.length} not filled
-            {overdueOpen > 0 && <span className="ml-2 text-orange-600 dark:text-orange-400">· {overdueOpen} overdue</span>}
+            {overdueOpen > 0 && <span className="ml-2 text-warning">· {overdueOpen} overdue</span>}
           </div>
           <div className="text-xs text-muted-foreground">Every form and check-in you've sent, by week. Overdue = 48h+.</div>
         </div>
@@ -246,7 +246,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
           )}
         >
           <div className="text-[11px] font-semibold text-muted-foreground">Not filled</div>
-          <div className={cn("text-sm font-bold tabular-nums", openRows.length > 0 && "text-orange-600 dark:text-orange-400")}>
+          <div className={cn("text-sm font-bold tabular-nums", openRows.length > 0 && "text-warning")}>
             {openRows.length}
           </div>
           <div className="text-[10px] text-muted-foreground">any week</div>
@@ -269,7 +269,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
                 {w.submitted}/{w.sent}
               </div>
               <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-success" style={{ width: `${pct}%` }} />
               </div>
             </button>
           );
@@ -285,7 +285,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
               label="Submitted"
               value={totals.submitted}
               sub={totals.sent ? `${Math.round((totals.submitted / totals.sent) * 100)}%` : undefined}
-              tone="text-emerald-600 dark:text-emerald-400"
+              tone="text-success"
               active={status === "submitted"}
               onClick={() => { setStatus("submitted"); reset(); }}
             />
@@ -293,7 +293,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
               label="Waiting"
               value={totals.open}
               sub={totals.overdue ? `${totals.overdue} overdue` : undefined}
-              tone={totals.overdue ? "text-orange-600 dark:text-orange-400" : undefined}
+              tone={totals.overdue ? "text-warning" : undefined}
               active={status === "open"}
               onClick={() => { setStatus("open"); reset(); }}
             />
@@ -315,7 +315,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
           <button
             type="button"
             onClick={() => pickScope("open")}
-            className="w-full rounded-xl border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-left text-xs font-semibold text-orange-700 dark:text-orange-300"
+            className="w-full rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-left text-xs font-semibold text-warning"
           >
             {olderOpen} from earlier weeks still not filled · Show
           </button>
@@ -349,7 +349,7 @@ export function RequestsTab({ initialKind }: { initialKind?: RequestKind } = {})
         <Card className="p-4 text-sm text-destructive">Couldn't load requests: {(error as Error).message}</Card>
       ) : visible.length === 0 ? (
         <Card className="grid place-items-center gap-2 border-dashed p-8 text-center">
-          <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+          <CheckCircle2 className="h-6 w-6 text-success" />
           <div className="text-sm font-semibold">
             {activeScope === "open" && !search && kind === "all" ? "Nothing outstanding" : rows.length ? "Nothing here" : "No forms sent yet"}
           </div>

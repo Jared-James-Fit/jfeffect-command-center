@@ -96,7 +96,7 @@ export function AgreementRecordViewer({ signatureId, open, onOpenChange }: Props
           )}
           {isError && (
             <div className="mx-auto max-w-sm py-16 text-center">
-              <AlertTriangle className="mx-auto h-7 w-7 text-amber-500" />
+              <AlertTriangle className="mx-auto h-7 w-7 text-warning" />
               <p className="mt-3 text-sm text-muted-foreground">
                 {(error as Error)?.message ?? "We couldn't open this signed copy."}
               </p>
@@ -181,19 +181,19 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
     <div className="mx-auto max-w-2xl space-y-5">
       <section className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-emerald-500/50 text-emerald-600">
+          <Badge variant="outline" className="border-success/50 text-success">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Signed
           </Badge>
           <Badge variant="outline">Version {record.version}</Badge>
           {record.integrity ? (
-            <Badge variant="outline" className="border-emerald-500/50 text-emerald-600">
+            <Badge variant="outline" className="border-success/50 text-success">
               <BadgeCheck className="mr-1 h-3.5 w-3.5" /> Text verified
             </Badge>
           ) : (
             <Badge variant="destructive">Text fingerprint mismatch</Badge>
           )}
         </div>
-        <h1 className="text-2xl font-black leading-tight tracking-tight">{content.title}</h1>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight">{content.title}</h1>
         <p className="text-sm text-muted-foreground">{content.subtitle}</p>
         <p className="text-sm text-muted-foreground">
           Signed by <span className="font-semibold text-foreground">{record.typedName}</span> on{" "}
@@ -234,7 +234,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
         <ul className="mt-3 space-y-3">
           {record.acknowledgements.map((a) => (
             <li key={a.id} className="flex items-start gap-2.5 text-[14px] leading-snug">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
               <span className="text-muted-foreground">{a.text}</span>
             </li>
           ))}
@@ -248,7 +248,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
               <li key={c.label} className="flex justify-between gap-3">
                 <span>{c.label}</span>
                 <span
-                  className={c.granted ? "font-semibold text-emerald-600" : "text-muted-foreground"}
+                  className={c.granted ? "font-semibold text-success" : "text-muted-foreground"}
                 >
                   {c.granted ? "Allowed" : "Not allowed"}
                 </span>
@@ -301,7 +301,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
               {record.receiptEmailedAt ? formatSignedDateTime(record.receiptEmailedAt) : "not sent"}
             </p>
             {d.name_matches_profile === false && (
-              <p className="font-medium text-amber-600">
+              <p className="font-medium text-warning">
                 Typed name differs from the account name ({d.profile_name}).
               </p>
             )}

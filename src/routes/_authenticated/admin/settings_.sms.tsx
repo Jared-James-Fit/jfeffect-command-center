@@ -280,7 +280,7 @@ function SmsSettings() {
                   <div className="font-semibold truncate">{a.name}</div>
                   <Badge variant="outline">{a.category}</Badge>
                   <Badge variant="outline">{a.trigger_type}</Badge>
-                  {!a.active && <Badge variant="outline" className="border-amber-500/40 text-amber-600">Paused</Badge>}
+                  {!a.active && <Badge variant="outline" className="border-warning/40 text-warning">Paused</Badge>}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</div>
                 <div className="text-[11px] text-muted-foreground mt-1">
@@ -385,8 +385,8 @@ function SmsSettings() {
                     <div className="flex items-center gap-2">
                       <Switch checked={!!c.sms_opt_out} onCheckedChange={(v) => updateRecipient(c.id, { sms_opt_out: v })} />
                       {c.sms_opt_out
-                        ? <Badge variant="outline" className="border-amber-500/40 text-amber-600">Opted out</Badge>
-                        : c.phone ? <Badge variant="outline" className="border-emerald-500/40 text-emerald-600">Will receive</Badge>
+                        ? <Badge variant="outline" className="border-warning/40 text-warning">Opted out</Badge>
+                        : c.phone ? <Badge variant="outline" className="border-success/40 text-success">Will receive</Badge>
                           : <Badge variant="outline">No phone</Badge>}
                     </div>
                   </td>

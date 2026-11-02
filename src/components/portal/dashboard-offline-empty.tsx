@@ -32,7 +32,7 @@ export function DashboardOfflineEmpty({ onRetry }: { onRetry?: () => void }) {
   return (
     <main className="grid min-h-[80dvh] place-items-center px-6">
       <div className="flex w-full max-w-sm flex-col items-center gap-5 rounded-2xl border border-border/60 bg-card/60 px-6 py-8 text-center backdrop-blur">
-        <div className="grid h-14 w-14 place-items-center rounded-full bg-amber-500/10 text-amber-500">
+        <div className="grid h-14 w-14 place-items-center rounded-full bg-warning/10 text-warning">
           <WifiOff className="h-6 w-6" aria-hidden />
         </div>
         <div className="flex flex-col gap-1.5">

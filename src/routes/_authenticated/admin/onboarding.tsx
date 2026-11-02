@@ -153,7 +153,7 @@ function StatCard({ label, value, tone }: { label: string; value: number | strin
     <Card className="p-4">
       <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`mt-1 text-2xl font-bold ${
-        tone === "ok" ? "text-emerald-500" : tone === "warn" ? "text-amber-500" : ""
+        tone === "ok" ? "text-success" : tone === "warn" ? "text-warning" : ""
       }`}>
         {value}
       </div>
@@ -179,7 +179,7 @@ function OnboardingRow({ row, onSendReminder }: { row: any; onSendReminder: () =
         </div>
         <div className="truncate text-xs text-muted-foreground">{row.email}</div>
         {hasError && (
-          <div className="mt-1 text-[11px] text-rose-400">{row.last_setup_error}</div>
+          <div className="mt-1 text-[11px] text-destructive">{row.last_setup_error}</div>
         )}
         {row.last_setup_reminder_at && (
           <div className="mt-1 text-[11px] text-muted-foreground">
@@ -379,7 +379,7 @@ function Pill({ label, ok, icon: Icon }: { label: string; ok: boolean; icon: any
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
-        ok ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500" : "border-border text-muted-foreground"
+        ok ? "border-success/30 bg-success/10 text-success" : "border-border text-muted-foreground"
       }`}
     >
       <Icon className="h-3 w-3" />

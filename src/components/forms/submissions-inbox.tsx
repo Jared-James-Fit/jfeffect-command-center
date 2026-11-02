@@ -109,7 +109,7 @@ export function SubmissionsInbox() {
         <div>
           <div className="text-sm font-bold">
             {counts.all.toReview > 0 ? (
-              <span className="text-sky-700 dark:text-sky-400">{counts.all.toReview} to review</span>
+              <span className="text-info">{counts.all.toReview} to review</span>
             ) : (
               "All caught up"
             )}
@@ -164,7 +164,7 @@ export function SubmissionsInbox() {
         <div className="space-y-4">
           {groups.map((g) => (
             <section key={g.label} aria-label={g.label}>
-              <h3 className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground backdrop-blur">
+              <h3 className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground backdrop-blur">
                 {g.label} <span className="font-semibold">· {g.rows.length}</span>
               </h3>
               <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
@@ -242,7 +242,7 @@ function KindChip({ label, count, on, onClick }: { label: string; count: { total
         <span
           className={cn(
             "inline-block h-[18px] min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold leading-[18px] tabular-nums",
-            on ? "bg-primary-foreground/25 text-primary-foreground" : "bg-sky-500/20 text-sky-700 dark:text-sky-300",
+            on ? "bg-primary-foreground/25 text-primary-foreground" : "bg-info/20 text-info",
           )}
           aria-label={`${count.toReview} to review`}
         >
@@ -273,7 +273,7 @@ function SubmissionRow({
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <span className="relative shrink-0">
           <UserAvatar src={s.photo} name={s.clientName} size={36} expandable={false} />
-          {waiting && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-sky-500 ring-2 ring-card" aria-hidden />}
+          {waiting && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-info ring-2 ring-card" aria-hidden />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
@@ -286,7 +286,7 @@ function SubmissionRow({
               {s.detail ? ` · ${s.detail}` : ""}
             </span>
             {waiting ? (
-              <span className="shrink-0 font-semibold text-sky-700 dark:text-sky-400">To review</span>
+              <span className="shrink-0 font-semibold text-info">To review</span>
             ) : s.reviewed === true ? (
               <span className="shrink-0 text-muted-foreground"><Check className="mr-0.5 inline h-3 w-3" />Reviewed</span>
             ) : s.reviewed === false ? (

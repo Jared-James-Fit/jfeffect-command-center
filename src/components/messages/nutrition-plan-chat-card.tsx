@@ -21,7 +21,7 @@ export function NutritionPlanChatCard({ att, staff, clientId }: { att: PlanMessa
           <Utensils className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-widest">
+          <div className="text-[11px] font-bold uppercase tracking-widest">
             {att.update === "changed" ? "Plan updated" : "New nutrition plan"}
           </div>
           <div className="truncate text-[11px] text-muted-foreground">{[att.period, att.phase].filter(Boolean).join(" · ")}</div>
@@ -38,7 +38,7 @@ export function NutritionPlanChatCard({ att, staff, clientId }: { att: PlanMessa
                   <span className="shrink-0 text-sm font-bold tabular-nums">
                     {d.kcal != null ? `${d.kcal.toLocaleString("en-US")} kcal` : "—"}
                     {change && (
-                      <span className={cn("ml-1.5 text-[11px] font-semibold", change.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" : "text-sky-600 dark:text-sky-400")}>
+                      <span className={cn("ml-1.5 text-[11px] font-semibold", change.startsWith("+") ? "text-success" : "text-info")}>
                         {change}
                       </span>
                     )}

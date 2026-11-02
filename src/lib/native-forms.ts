@@ -742,9 +742,10 @@ export function statusTone(s: NfSubmissionStatus | "not_started") {
   switch (s) {
     case "not_started": return "border-border text-muted-foreground bg-muted/30";
     case "in_progress": return "border-warning/30 text-warning bg-warning/10";
+    // sent and waiting on the coach: information, not an alert (red reads as "overdue")
     case "submitted":
-    case "pending_review": return "border-primary/30 text-primary bg-primary/10";
-    case "reviewed": return "border-emerald-500/30 text-emerald-600 bg-emerald-500/10";
+    case "pending_review": return "border-info/30 text-info bg-info/10";
+    case "reviewed": return "border-success/30 text-success bg-success/10";
   }
 }
 

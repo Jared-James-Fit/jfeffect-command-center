@@ -64,7 +64,7 @@ export function SessionTimeRow({
         className={cn(
           "flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition-colors",
           suspect
-            ? "border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/15 dark:text-amber-200"
+            ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/15"
             : "border-border bg-card text-foreground hover:bg-secondary/60",
           className,
         )}

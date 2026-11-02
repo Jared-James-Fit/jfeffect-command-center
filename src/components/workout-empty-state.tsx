@@ -44,9 +44,9 @@ export function WorkoutEmptyCard({
     }
   };
   return (
-    <Card className="space-y-4 border-amber-500/30 bg-amber-500/5 p-6">
+    <Card className="space-y-4 border-warning/30 bg-warning/5 p-6">
       <div className="flex items-start gap-3">
-        <Inbox className="mt-1 h-6 w-6 shrink-0 text-amber-500" />
+        <Inbox className="mt-1 h-6 w-6 shrink-0 text-warning" />
         <div className="space-y-1">
           <div className="text-base font-bold">No exercises are assigned for this workout yet.</div>
           <div className="text-sm text-muted-foreground">

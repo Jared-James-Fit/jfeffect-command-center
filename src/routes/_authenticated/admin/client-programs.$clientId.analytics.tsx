@@ -227,7 +227,7 @@ function AnalyticsPage() {
           </div>
         )}
         {filter.preset === "exact_block" && !(filter as any).hasBlockDates && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
             This block has not been scheduled yet.
           </div>
         )}
@@ -239,7 +239,7 @@ function AnalyticsPage() {
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Dumbbell className="h-7 w-7" />
                 </div>
-                <h2 className="mt-4 text-xl font-black tracking-tight text-foreground">
+                <h2 className="mt-4 text-xl font-bold tracking-tight text-foreground">
                   No logged sets yet
                 </h2>
                 <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -270,7 +270,7 @@ function AnalyticsPage() {
                           </Badge>
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">{format(new Date(p.date), "MMM d, yyyy")}</div>
-                        <div className="mt-2 text-2xl font-black">{fmtNum(p.est_1rm)} <span className="text-xs font-normal text-muted-foreground">est 1RM</span></div>
+                        <div className="mt-2 text-2xl font-bold">{fmtNum(p.est_1rm)} <span className="text-xs font-normal text-muted-foreground">est 1RM</span></div>
                         <div className="mt-1 text-xs text-muted-foreground">{fmtNum(p.load)} × {p.reps} · prev best {fmtNum(p.prior_est)}</div>
                       </Card>
                     );
@@ -319,7 +319,7 @@ function AnalyticsPage() {
                             return (
                               <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
                                 <div className="text-xs font-bold uppercase text-muted-foreground">{d.date}</div>
-                                <div className="mt-1 font-extrabold text-foreground">{fmtNum(d.est)} <span className="text-xs font-medium text-muted-foreground">est 1RM</span></div>
+                                <div className="mt-1 font-bold text-foreground">{fmtNum(d.est)} <span className="text-xs font-medium text-muted-foreground">est 1RM</span></div>
                                 <div className="text-xs text-muted-foreground">{fmtNum(d.load)} × {d.reps}</div>
                               </div>
                             );
@@ -357,7 +357,7 @@ function AnalyticsPage() {
                             const d: any = payload[0].payload;
                             return (
                               <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
-                                <div className="flex items-center gap-2 font-extrabold text-foreground"><span aria-hidden className="h-2 w-2 rounded-full" style={{ background: d.color }} />{d.muscle}</div>
+                                <div className="flex items-center gap-2 font-bold text-foreground"><span aria-hidden className="h-2 w-2 rounded-full" style={{ background: d.color }} />{d.muscle}</div>
                                 <div className="text-xs text-muted-foreground">{d.sets} {d.sets === 1 ? "set" : "sets"}</div>
                               </div>
                             );

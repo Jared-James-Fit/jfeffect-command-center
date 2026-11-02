@@ -1279,7 +1279,7 @@ export default function NewProductModal({
             type="button"
             onClick={handleSave}
             disabled={submitting}
-            className="bg-gradient-primary font-bold uppercase tracking-wide"
+            className="bg-primary text-primary-foreground font-semibold"
           >
             {submitting ? (
               <>
@@ -1468,7 +1468,7 @@ function SummaryContent({
         </div>
       ) : (
         form.name && (
-          <div className="mt-3 flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-700">
+          <div className="mt-3 flex items-center gap-1.5 rounded-md border border-success/30 bg-success/5 p-2 text-[11px] text-success">
             <Sparkles className="h-3 w-3" /> Ready to create.
           </div>
         )

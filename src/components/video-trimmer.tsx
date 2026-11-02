@@ -408,8 +408,8 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
           <button type="button" onClick={() => onDone(null)} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 active:scale-95" aria-label="Cancel">
             <X className="h-6 w-6" />
           </button>
-          <div className="min-w-0 flex-1 text-center text-[15px] font-black">{step && step.count > 1 ? `Clip ${step.index} of ${step.count}` : "Trim"}</div>
-          <button type="button" onClick={() => void done()} className="inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-4 text-[15px] font-black text-black active:scale-95" data-trim-done>
+          <div className="min-w-0 flex-1 text-center text-[15px] font-bold">{step && step.count > 1 ? `Clip ${step.index} of ${step.count}` : "Trim"}</div>
+          <button type="button" onClick={() => void done()} className="inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-4 text-[15px] font-bold text-black active:scale-95" data-trim-done>
             {last ? <Check className="h-4 w-4" strokeWidth={3} /> : null}
             {last ? "Done" : "Next"}
           </button>
@@ -469,7 +469,7 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
         {/* timeline */}
         <div className="shrink-0 px-4 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}>
           <div className="mb-2.5 flex items-baseline justify-center gap-1.5" aria-live="polite">
-            <span className={cn("text-[17px] font-black tabular-nums", atMax && "text-amber-300")} data-trim-length>{formatClock(len)}</span>
+            <span className={cn("text-[17px] font-bold tabular-nums", atMax && "text-warning")} data-trim-length>{formatClock(len)}</span>
             <span className="text-[13px] font-semibold text-white/55 tabular-nums">selected · {formatClock(maxLen)} max</span>
           </div>
 
@@ -546,7 +546,7 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
                 {/* the exact time while a handle moves */}
                 {(dragging === "start" || dragging === "end") && (
                   <span
-                    className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[12px] font-black tabular-nums text-black shadow"
+                    className="pointer-events-none absolute -top-8 -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[12px] font-bold tabular-nums text-black shadow"
                     style={{ left: dragging === "start" ? xs : xe }}
                   >
                     {formatTenths(dragging === "start" ? sel.start : sel.end)}

@@ -116,9 +116,9 @@ function Welcome() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto max-w-2xl px-4 py-12 space-y-6">
-        <Card className="border-emerald-500/30 bg-emerald-500/5 p-6">
+        <Card className="border-success/30 bg-success/5 p-6">
           <div className="flex items-center gap-3">
-            <Sparkles className="h-6 w-6 text-emerald-400" />
+            <Sparkles className="h-6 w-6 text-success" />
             <div>
               <h1 className="text-2xl font-bold">Welcome to JF Membership</h1>
               <p className="text-sm text-muted-foreground">Finalizing your account…</p>
@@ -136,7 +136,7 @@ function Welcome() {
 
           {state.kind === "ok" && (
             <div className="mt-5 space-y-4">
-              <div className="flex items-center gap-2 text-sm text-emerald-300">
+              <div className="flex items-center gap-2 text-sm text-success">
                 <CheckCircle2 className="h-4 w-4" /> Your membership is ready.
               </div>
               {state.result?.email && (
@@ -172,7 +172,7 @@ function Welcome() {
 
           {state.kind === "error" && (
             <div className="mt-5 space-y-3">
-              <div className="flex items-start gap-2 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>{state.message}</div>
               </div>

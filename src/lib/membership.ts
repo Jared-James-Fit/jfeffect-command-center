@@ -1,9 +1,9 @@
 // Shared membership/account-type metadata used by admin UI and portal.
 
 export const ACCOUNT_TYPES = {
-  app_member:   { label: "App Member",     tone: "bg-sky-500/10 text-sky-300 border-sky-500/30" },
-  program_only: { label: "Program-Only",   tone: "bg-violet-500/10 text-violet-300 border-violet-500/30" },
-  jf_member:    { label: "JF Membership",  tone: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" },
+  app_member:   { label: "App Member",     tone: "bg-info/10 text-info border-info/30" },
+  program_only: { label: "Program-Only",   tone: "bg-muted-foreground/10 text-muted-foreground border-border" },
+  jf_member:    { label: "JF Membership",  tone: "bg-success/10 text-success border-success/30" },
 } as const;
 export type AccountType = keyof typeof ACCOUNT_TYPES;
 

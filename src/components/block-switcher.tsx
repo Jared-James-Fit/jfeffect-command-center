@@ -149,7 +149,7 @@ export function BlockSwitcher({
                 )}
                 {missingDates && (
                   <AlertTriangle
-                    className="h-3 w-3 shrink-0 text-amber-500"
+                    className="h-3 w-3 shrink-0 text-warning"
                     aria-label="No dates scheduled for this block"
                   />
                 )}

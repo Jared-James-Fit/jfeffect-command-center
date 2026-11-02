@@ -47,7 +47,7 @@ export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople, h
         <button type="button" onClick={onBack} className="-ml-2 grid h-10 w-10 place-items-center rounded-full active:bg-muted" aria-label="Back to the feed">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="min-w-0 flex-1 text-[20px] font-black tracking-tight">Activity</h1>
+        <h1 className="min-w-0 flex-1 text-[20px] font-bold tracking-tight">Activity</h1>
         <button type="button" onClick={onFindPeople} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground active:bg-muted" aria-label="Find people">
           <Search className="h-5 w-5" />
         </button>
@@ -86,13 +86,13 @@ export function CrewActivity({ onBack, onOpenPost, onOpenPerson, onFindPeople, h
           <span className="grid h-16 w-16 place-items-center rounded-full border-2 border-foreground/80">
             <Heart className="h-7 w-7" />
           </span>
-          <div className="mt-3 text-[16px] font-black">{filter === "all" ? "Nothing here yet" : `No ${ACTIVITY_FILTERS.find((f) => f.key === filter)!.label.toLowerCase()} yet`}</div>
+          <div className="mt-3 text-[16px] font-bold">{filter === "all" ? "Nothing here yet" : `No ${ACTIVITY_FILTERS.find((f) => f.key === filter)!.label.toLowerCase()} yet`}</div>
           <p className="mt-1 max-w-[260px] text-[13px] text-muted-foreground">When people like or comment on your posts or follow you, you'll see it here.</p>
         </div>
       ) : (
         sections.map((s) => (
           <section key={s.key} aria-label={s.label} data-activity-section={s.key}>
-            <h2 className="mb-1 mt-2 text-[15px] font-black">{s.label}</h2>
+            <h2 className="mb-1 mt-2 text-[15px] font-bold">{s.label}</h2>
             <ul>
               {s.items.map((it) => (
                 <ActivityRow key={it.key} it={it} isNew={s.key === "new"} thumb={it.post_thumb ? thumbs[it.post_thumb] ?? null : null} onOpenPost={onOpenPost} onOpenPerson={onOpenPerson} />

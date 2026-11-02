@@ -65,13 +65,13 @@ const LEVEL_LABELS: Record<string, string> = {
   "all-levels": "All Levels",
 };
 const LEVEL_BADGE_CLS: Record<string, string> = {
-  "beginner": "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
-  "beginner-intermediate": "border-teal-500/40 bg-teal-500/15 text-teal-300",
-  "intermediate": "border-blue-500/40 bg-blue-500/15 text-blue-300",
-  "intermediate-advanced": "border-indigo-500/40 bg-indigo-500/15 text-indigo-300",
-  "advanced": "border-orange-500/40 bg-orange-500/15 text-orange-300",
-  "advanced-elite": "border-purple-500/40 bg-purple-500/15 text-purple-300",
-  "elite": "border-purple-700/50 bg-purple-700/20 text-purple-200",
+  "beginner": "border-success/40 bg-success/15 text-success",
+  "beginner-intermediate": "border-info/40 bg-info/15 text-info",
+  "intermediate": "border-info/40 bg-info/15 text-info",
+  "intermediate-advanced": "border-border bg-muted-foreground/15 text-muted-foreground",
+  "advanced": "border-warning/40 bg-warning/15 text-warning",
+  "advanced-elite": "border-border bg-muted-foreground/15 text-muted-foreground",
+  "elite": "border-border bg-muted-foreground/20 text-muted-foreground",
   "all-levels": "border-border bg-muted/40 text-muted-foreground",
 };
 function tagLookup(it: FinderItem, prefix: string): string | null {
@@ -529,12 +529,12 @@ export function ProgramFinder({ items, loadPayload, renderActions, loading, show
                         </span>
                       )}
                       {showAdminFilters && (it.assignedClientCount ?? 0) > 0 && (
-                        <span className="rounded-full border border-blue-500/40 bg-blue-500/15 px-1.5 py-px text-[10px] font-medium leading-4 text-blue-300">
+                        <span className="rounded-full border border-info/40 bg-info/15 px-1.5 py-px text-[10px] font-medium leading-4 text-info">
                           {it.assignedClientCount} client{it.assignedClientCount === 1 ? "" : "s"}
                         </span>
                       )}
                       {showAdminFilters && it.membershipPublished && (
-                        <span className="rounded-full border border-rose-500/40 bg-rose-500/15 px-1.5 py-px text-[10px] font-medium leading-4 text-rose-300">
+                        <span className="rounded-full border border-destructive/40 bg-destructive/15 px-1.5 py-px text-[10px] font-medium leading-4 text-destructive">
                           Membership
                         </span>
                       )}

@@ -43,9 +43,9 @@ function LoadFailed(ctx: ChunkFallbackContext) {
   return (
     <Screen>
       <CloseButton />
-      <div className="text-[17px] font-black">Couldn't open the camera</div>
+      <div className="text-[17px] font-bold">Couldn't open the camera</div>
       <p className="max-w-[280px] text-[13px] text-white/70">{ctx.failures >= 2 ? "A newer version of the app is ready. Update to keep posting." : "Check your connection and try again."}</p>
-      <button type="button" onClick={action.run} className="h-12 rounded-full bg-primary px-6 text-[15px] font-black text-primary-foreground active:scale-[0.97]">
+      <button type="button" onClick={action.run} className="h-12 rounded-full bg-primary px-6 text-[15px] font-bold text-primary-foreground active:scale-[0.97]">
         {action.label}
       </button>
     </Screen>
@@ -122,12 +122,12 @@ class StudioCrashBoundary extends Component<{ children: ReactNode; onClose: () =
     return (
       <Screen>
         <CloseButton />
-        <div className="text-[17px] font-black">Something went wrong with this post</div>
+        <div className="text-[17px] font-bold">Something went wrong with this post</div>
         <p className="max-w-[280px] text-[13px] text-white/70">Your photo and caption are saved. Try again and pick up where you left off.</p>
         <button
           type="button"
           onClick={() => this.setState((s) => ({ error: null, n: s.n + 1 }))}
-          className="inline-flex h-12 items-center gap-2 rounded-full bg-primary px-6 text-[15px] font-black text-primary-foreground active:scale-[0.97]"
+          className="inline-flex h-12 items-center gap-2 rounded-full bg-primary px-6 text-[15px] font-bold text-primary-foreground active:scale-[0.97]"
         >
           <RefreshCcw className="h-4 w-4" /> Try again
         </button>

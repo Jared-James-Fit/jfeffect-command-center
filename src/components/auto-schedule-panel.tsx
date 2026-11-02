@@ -142,8 +142,8 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
       </div>
 
       {change?.changed && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="flex-1">
             <div className="font-semibold">Client availability changed. Review schedule.</div>
             <div className="text-muted-foreground">
@@ -279,10 +279,10 @@ function PreviewDialog({
         </DialogHeader>
 
         {preview.blockWarnings.length > 0 && (
-          <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+          <div className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
             {preview.blockWarnings.map((w, i) => (
               <div key={i} className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
                 <span>{w}</span>
               </div>
             ))}
@@ -339,7 +339,7 @@ function PreviewDialog({
                       )}
                     </div>
                     {r.warnings.length > 0 && (
-                      <div className="col-span-full text-[11px] text-amber-500">
+                      <div className="col-span-full text-[11px] text-warning">
                         {r.warnings.join(" · ")}
                       </div>
                     )}

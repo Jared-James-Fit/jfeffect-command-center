@@ -492,19 +492,19 @@ function ProfileStatusCard({
   const hasBasic = missing.some((m) => m.section === "basic");
   const hasGoals = missing.some((m) => m.section === "goals");
 
-  const chipClass = "inline-block rounded-full border border-amber-500/40 bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 transition";
+  const chipClass = "inline-block rounded-full border border-warning/40 bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-warning hover:bg-warning/15 transition";
 
   return (
     <Card className={[
       "p-4 sm:p-5 space-y-4",
-      status === "complete" ? "border-emerald-500/30 bg-emerald-500/5" :
-      status === "review" ? "border-amber-500/40 bg-amber-500/10" :
-      "border-amber-500/40 bg-amber-500/10",
+      status === "complete" ? "border-success/30 bg-success/5" :
+      status === "review" ? "border-warning/40 bg-warning/10" :
+      "border-warning/40 bg-warning/10",
     ].join(" ")}>
       <div className="flex items-start gap-3">
-        {status === "complete" && <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500 mt-0.5" />}
-        {status === "review" && <Clock className="h-6 w-6 shrink-0 text-amber-500 mt-0.5" />}
-        {status === "missing" && <AlertTriangle className="h-6 w-6 shrink-0 text-amber-500 mt-0.5" />}
+        {status === "complete" && <CheckCircle2 className="h-6 w-6 shrink-0 text-success mt-0.5" />}
+        {status === "review" && <Clock className="h-6 w-6 shrink-0 text-warning mt-0.5" />}
+        {status === "missing" && <AlertTriangle className="h-6 w-6 shrink-0 text-warning mt-0.5" />}
         <div className="flex-1 min-w-0">
           <div className="font-bold text-base">
             {status === "complete" && "Profile complete — you're all set."}
@@ -529,7 +529,7 @@ function ProfileStatusCard({
         {status !== "complete" && (
           <Badge
             variant="outline"
-            className="border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"
+            className="border-warning/40 text-warning shrink-0"
           >
             Action needed
           </Badge>
@@ -553,7 +553,7 @@ function ProfileStatusCard({
           </ul>
           <div className="flex flex-wrap gap-2 pt-1">
             {!unitsOk && (
-              <Button size="sm" onClick={() => jumpToSection("units")} className="bg-amber-500 hover:bg-amber-600 text-white">
+              <Button size="sm" onClick={() => jumpToSection("units")} className="bg-warning hover:bg-warning text-white">
                 Choose lb or kg
               </Button>
             )}
@@ -561,13 +561,13 @@ function ProfileStatusCard({
               <Button
                 size="sm"
                 onClick={() => jumpToSection("basic-information")}
-                className="bg-amber-500 hover:bg-amber-600 text-white"
+                className="bg-warning hover:bg-warning text-white"
               >
                 Fix basic info
               </Button>
             )}
             {hasGoals && (
-              <Button asChild size="sm" variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
+              <Button asChild size="sm" variant="outline" className="border-warning/40 text-warning">
                 <Link to="/portal/goals-setup">Complete Goals & Training</Link>
               </Button>
             )}
@@ -693,8 +693,8 @@ function GoalsSetupStatusBadge({ clientId }: { clientId: string }) {
     staleTime: 5 * 60_000,
   });
 
-  if (!data) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-amber-500 border-amber-500/30">Not started</Badge>;
-  if (data.completed_at) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-emerald-500 border-emerald-500/30">Complete</Badge>;
-  if (data.main_goal) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-amber-500 border-amber-500/30">In progress</Badge>;
+  if (!data) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-warning border-warning/30">Not started</Badge>;
+  if (data.completed_at) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-success border-success/30">Complete</Badge>;
+  if (data.main_goal) return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-warning border-warning/30">In progress</Badge>;
   return <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Not started</Badge>;
 }

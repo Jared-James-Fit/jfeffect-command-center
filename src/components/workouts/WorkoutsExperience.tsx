@@ -202,7 +202,7 @@ export function WorkoutsExperience({
   const subtitle = headerBlockName ? (
     <span className="inline-flex max-w-full items-center gap-1.5" data-testid="workouts-block">
       {headerBlockName.tag && (
-        <span className="shrink-0 rounded bg-secondary px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <span className="shrink-0 rounded bg-secondary px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {headerBlockName.tag}
         </span>
       )}
@@ -574,7 +574,7 @@ export function WorkoutsExperience({
                     <Link
                       to="/portal/calendar"
                       search={{ date: toLocalISO(selectedDate) } as any}
-                      className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-violet-400 hover:text-violet-300"
+                      className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-muted-foreground hover:text-muted-foreground"
                     >
                       <CalendarIcon className="h-3.5 w-3.5" /> Appointments <ChevronRight className="h-3.5 w-3.5" />
                     </Link>
@@ -778,7 +778,7 @@ function MonthGrid({
             >
               <div className="flex items-center justify-between">
                 <span className={cn(
-                  "text-xs font-black",
+                  "text-xs font-bold",
                   isToday && !isSelected ? "text-primary" : "",
                 )}>
                   {format(d, "d")}
@@ -868,9 +868,9 @@ function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[
   // A session opens its quick view here (details, Change time, Can't make it); an appointment opens the Calendar.
   const [openSession, setOpenSession] = useState<ClientSession | null>(null);
   return (
-    <Card className="border-violet-500/30 px-3.5 pb-1.5 pt-3">
+    <Card className="border-border px-3.5 pb-1.5 pt-3">
       <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-        <h3 className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-violet-400">
+        <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           <CalendarIcon className="h-3.5 w-3.5" />
           {sessions.length === 1 ? "Session with your coach" : "Sessions with your coach"}
         </h3>
@@ -888,7 +888,7 @@ function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[
               accent={FAMILY_ACCENT.people}
               title={it.title}
               sub={[range, KIND_META[it.kind]?.label, placeLabel(it.location)].filter(Boolean).join(" · ")}
-              trailing={it.status === "Completed" ? <span className="shrink-0 text-xs font-semibold text-emerald-500">Done</span> : null}
+              trailing={it.status === "Completed" ? <span className="shrink-0 text-xs font-semibold text-success">Done</span> : null}
               chevron
             />
           );
@@ -1094,7 +1094,7 @@ function SelectedDayCard({
         ...status,
         status: "review_pending" as const,
         label: "Review to finish",
-        tone: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        tone: "border-warning/40 bg-warning/10 text-warning",
       }
     : status;
   // The day is already picked on the strip above and in the line under the
@@ -1110,7 +1110,7 @@ function SelectedDayCard({
   } = needsReviewToFinish
     ? {
         label: "Finish Review",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        tone: "bg-warning text-black hover:bg-warning",
         icon: <MessageSquare className="mr-1 h-4 w-4" />,
         search: { review: 1 },
       }
@@ -1121,7 +1121,7 @@ function SelectedDayCard({
       <Card className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="line-clamp-2 text-lg font-black leading-snug">{title}</div>
+            <div className="line-clamp-2 text-lg font-bold leading-snug">{title}</div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={cn("text-[10px]", visibleStatus.tone)}>{badgeLabel}</Badge>
               {isAtHomeBackupSessionBlock(item.block) && (
@@ -1432,21 +1432,23 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
   search?: Record<string, any>;
   secondary?: { label: string; search?: Record<string, any> };
 } {
+  // Red when there's something to do (start, continue, finish); a quiet grey
+  // to look at one. Status itself is the badge and the ring, not the button.
   if (status === "in_progress") {
-    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+    return { label: "Continue Workout", tone: "bg-primary text-primary-foreground hover:bg-primary/90", icon: <Play className="mr-1 h-4 w-4" /> };
   }
   switch (status) {
     case "review_pending":
       return {
         label: "Finish Review",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
         icon: <MessageSquare className="mr-1 h-4 w-4" />,
         search: { review: 1 },
       };
     case "incomplete":
       return {
         label: "Finish Workout",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
+        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
         icon: <Pencil className="mr-1 h-4 w-4" />,
         search: { edit: 1 },
       };
@@ -1455,14 +1457,14 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
     case "completed_different_day":
       return {
         label: "View Workout",
-        tone: "bg-emerald-600 text-white hover:bg-emerald-500",
+        tone: "bg-secondary text-foreground hover:bg-secondary/80",
         icon: <Pencil className="mr-1 h-4 w-4" />,
         search: { edit: 1 },
       };
     case "missed":
       return {
         label: "View Workout",
-        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
+        tone: "bg-secondary text-foreground hover:bg-secondary/80",
         secondary: { label: "Start Workout", search: { start: 1 } },
       };
     case "today":
@@ -1472,10 +1474,10 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
         icon: <Play className="mr-1 h-4 w-4" />,
       };
     case "upcoming":
+      // Viewing it is how you start it early (same page): one button, not two.
       return {
         label: "View Workout",
-        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary: { label: "Start Early" },
+        tone: "bg-secondary text-foreground hover:bg-secondary/80",
       };
     default:
       return {

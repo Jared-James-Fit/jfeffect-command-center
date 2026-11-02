@@ -70,7 +70,7 @@ function Stat({
     <div
       className={cn(
         "hidden shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold tabular-nums sm:flex",
-        done ? "bg-emerald-500/10 text-emerald-500" : "bg-secondary text-foreground",
+        done ? "bg-success/10 text-success" : "bg-secondary text-foreground",
       )}
       aria-label={`${label} ${value}`}
     >

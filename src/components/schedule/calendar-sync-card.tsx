@@ -142,14 +142,14 @@ export function CalendarSyncCard({
         ? `Sessions and workouts sync to Google Calendar${google.email ? ` (${google.email})` : ""}.${google.lastSyncedAt ? ` Updated ${timeAgo(google.lastSyncedAt)}.` : ""}`
         : `Sessions and workouts show in ${app}. Checked ${timeAgo(status.lastFetchAt)}.`,
       icon: <CheckCircle2 className="h-4 w-4" />,
-      tone: "bg-emerald-500/15 text-emerald-500",
+      tone: "bg-success/15 text-success",
       action: null,
     },
     connecting: {
       title: "Connecting your calendar…",
       message: connectingMessage(started.app),
       icon: <Loader2 className="h-4 w-4 animate-spin" />,
-      tone: "bg-amber-500/15 text-amber-500",
+      tone: "bg-warning/15 text-warning",
       action: "Help",
     },
     stale: {
@@ -158,7 +158,7 @@ export function CalendarSyncCard({
         ? "Google access was removed, so your calendar stopped updating. Connect Google Calendar again."
         : `${app} hasn't checked in since ${status.lastFetchAt ? new Date(status.lastFetchAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "a while"}. Add it again.`,
       icon: <AlertTriangle className="h-4 w-4" />,
-      tone: "bg-amber-500/15 text-amber-500",
+      tone: "bg-warning/15 text-warning",
       action: "Fix",
     },
     off: {
@@ -361,14 +361,14 @@ function CalendarSyncSheet({
           </SheetDescription>
 
           {isPov && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+            <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
               Preview only. The client sets this up from their own phone.
             </p>
           )}
 
           {googleConnected ? (
-            <div className="space-y-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+            <div className="space-y-1.5 rounded-lg border border-success/30 bg-success/10 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-success">
                 <CheckCircle2 className="h-4 w-4 shrink-0" /> Google Calendar connected
               </div>
               <p className="text-xs leading-snug text-muted-foreground">
@@ -376,7 +376,7 @@ function CalendarSyncSheet({
                 {google?.lastSyncedAt ? ` Updated ${timeAgo(google.lastSyncedAt)}.` : ""} Changes show up within about 5 minutes.
               </p>
               {google?.error && (
-                <p className="text-xs leading-snug text-amber-300">The last update didn't fully go through. It tries again every 5 minutes.</p>
+                <p className="text-xs leading-snug text-warning">The last update didn't fully go through. It tries again every 5 minutes.</p>
               )}
               <p className="text-xs leading-snug text-muted-foreground">
                 Your JF Effect sessions, appointments and scheduled workouts are added to a separate "JF Effect" calendar in your
@@ -413,7 +413,7 @@ function CalendarSyncSheet({
             </div>
           ) : (
             synced && (
-              <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">
+              <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
                 <CheckCircle2 className="h-4 w-4 shrink-0" /> Connected to {synced}
               </div>
             )
@@ -423,7 +423,7 @@ function CalendarSyncSheet({
             {choices.map((c, i) => {
               // One red action at a time: the recommended calendar, until they open another one's steps.
               const primary = !synced && !expanded && i === 0;
-              const btnClass = cn("h-12 w-full justify-between text-sm font-bold", primary && "bg-gradient-primary");
+              const btnClass = cn("h-12 w-full justify-between text-sm font-bold", primary && "bg-primary text-primary-foreground");
 
               if (c.how === "connect") {
                 return (
@@ -663,7 +663,7 @@ function GoogleEventsInApp({ shows, isPov, opening, onAllow }: { shows: boolean;
 
   if (!shows || (data && !data.enabled)) {
     return (
-      <div className="space-y-1.5 border-t border-emerald-500/20 pt-2">
+      <div className="space-y-1.5 border-t border-success/20 pt-2">
         <p className="text-xs leading-snug text-muted-foreground">
           <b className="text-foreground">See your Google events here too.</b> Your own Google Calendar events show next to your
           workouts and sessions in JF Effect. Only you see them, and the app never changes them.
@@ -692,7 +692,7 @@ function GoogleEventsInApp({ shows, isPov, opening, onAllow }: { shows: boolean;
   };
 
   return (
-    <div className="space-y-1.5 border-t border-emerald-500/20 pt-2">
+    <div className="space-y-1.5 border-t border-success/20 pt-2">
       <p className="text-xs leading-snug text-muted-foreground">
         <b className="text-foreground">Your Google events show here too</b>, in grey. Only you see them, and changes in Google
         show up within a few minutes. Pick which calendars:

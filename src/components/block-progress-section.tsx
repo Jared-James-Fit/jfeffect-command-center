@@ -137,9 +137,9 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
               variant="outline"
               className={cn(
                 "text-[10px]",
-                f.tone === "warn" && "border-amber-500/40 bg-amber-500/10 text-amber-500",
-                f.tone === "good" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-500",
-                f.tone === "info" && "border-sky-500/40 bg-sky-500/10 text-sky-500",
+                f.tone === "warn" && "border-warning/40 bg-warning/10 text-warning",
+                f.tone === "good" && "border-success/40 bg-success/10 text-success",
+                f.tone === "info" && "border-info/40 bg-info/10 text-info",
               )}
             >
               <FlagIcon className="mr-1 h-2.5 w-2.5" />{f.label}
@@ -257,11 +257,11 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
       {/* PRs */}
       {a.prs.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2"><Trophy className="h-4 w-4 text-amber-500" /><span className="text-sm font-semibold">Block PRs</span></div>
+          <div className="flex items-center gap-2"><Trophy className="h-4 w-4 text-warning" /><span className="text-sm font-semibold">Block PRs</span></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {a.prs.map((pr, i) => (
-              <div key={i} className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs">
-                <div className="text-[10px] uppercase tracking-widest text-amber-600/80">{pr.label}</div>
+              <div key={i} className="rounded-md border border-warning/30 bg-warning/5 p-2 text-xs">
+                <div className="text-[10px] uppercase tracking-widest text-warning/80">{pr.label}</div>
                 <div className="font-bold">{pr.value}</div>
                 <div className="text-[11px] text-muted-foreground truncate">{pr.exercise}</div>
                 {pr.date && <div className="text-[10px] text-muted-foreground">{format(parseISO(pr.date), "MMM d")}</div>}
@@ -279,7 +279,7 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
             {a.insights.map((it, i) => (
               <div key={i} className="rounded-md border border-border bg-secondary/30 p-2 text-xs">
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{it.label}</div>
-                <div className={cn("font-semibold", it.tone === "up" && "text-emerald-500", it.tone === "down" && "text-destructive")}>{it.value}</div>
+                <div className={cn("font-semibold", it.tone === "up" && "text-success", it.tone === "down" && "text-destructive")}>{it.value}</div>
               </div>
             ))}
           </div>

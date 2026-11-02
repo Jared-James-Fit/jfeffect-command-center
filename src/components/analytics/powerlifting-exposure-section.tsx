@@ -247,12 +247,12 @@ export function PowerliftingExposureSection({
   }
 
   const primaryTone = (pct: number) =>
-    pct === 100 ? "text-emerald-500" : pct >= 67 ? "text-amber-500" : "text-amber-500";
+    pct === 100 ? "text-success" : pct >= 67 ? "text-warning" : "text-warning";
 
   return (
     <section aria-label="Powerlifting Exposure" className="space-y-4">
       <div className="flex items-center gap-2">
-        <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex items-center gap-2 text-base font-bold uppercase tracking-wider text-foreground">
           <Target className="h-5 w-5 shrink-0 text-primary" />
           Powerlifting Exposure Analytics
         </h2>
@@ -261,10 +261,10 @@ export function PowerliftingExposureSection({
       {/* Roles-missing banner + family-only summary fallback */}
       {familyOnly && (
         <>
-          <Card className="border-amber-500/40 bg-amber-500/10 p-4">
+          <Card className="border-warning/40 bg-warning/10 p-4">
             <div className="flex items-start gap-2 text-sm">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              <div className="flex-1 text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="flex-1 text-warning">
                 Priority roles (Primary / Secondary / Tertiary / Quaternary) haven’t been
                 assigned for this block yet. Showing squat, bench and deadlift session
                 counts by movement family until roles are set.
@@ -273,7 +273,7 @@ export function PowerliftingExposureSection({
                     {" "}
                     <a
                       href={navigateToBuilderHref}
-                      className="font-semibold underline text-amber-700 dark:text-amber-200"
+                      className="font-semibold underline text-warning"
                     >
                       Assign roles →
                     </a>
@@ -304,7 +304,7 @@ export function PowerliftingExposureSection({
                         {FAMILY_LABEL[fam]}
                       </span>
                     </div>
-                    <div className="mt-1 text-2xl font-black text-foreground">
+                    <div className="mt-1 text-2xl font-bold text-foreground">
                       {s.completed}
                       <span className="text-sm font-semibold text-muted-foreground"> / {s.planned}</span>
                     </div>
@@ -375,19 +375,19 @@ export function PowerliftingExposureSection({
 
       {/* Coach alerts */}
       {admin && alerts.length > 0 && (
-        <Card className="border-amber-500/40 bg-amber-500/10 p-4">
+        <Card className="border-warning/40 bg-warning/10 p-4">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div className="flex-1 space-y-1 text-sm">
               {alerts.map((a, i) => (
-                <div key={i} className="text-amber-800 dark:text-amber-300">
+                <div key={i} className="text-warning">
                   {a.message}
                 </div>
               ))}
               {navigateToBuilderHref && (
                 <a
                   href={navigateToBuilderHref}
-                  className="mt-1 inline-block text-xs font-semibold underline text-amber-700 dark:text-amber-200"
+                  className="mt-1 inline-block text-xs font-semibold underline text-warning"
                 >
                   Review Program Roles →
                 </a>
@@ -461,7 +461,7 @@ export function PowerliftingExposureSection({
                     <div className="text-xs font-semibold uppercase text-muted-foreground">
                       {role}
                     </div>
-                    <div className={`mt-1 text-2xl font-black ${isPrimary && pct < 100 ? primaryTone(pct) : "text-foreground"}`}>
+                    <div className={`mt-1 text-2xl font-bold ${isPrimary && pct < 100 ? primaryTone(pct) : "text-foreground"}`}>
                       {pct}%
                     </div>
                     <div className="text-xs text-muted-foreground">{completed}/{planned}</div>
@@ -595,7 +595,7 @@ export function PowerliftingExposureSection({
                         return (
                           <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-xl">
                             <div className="text-xs font-bold uppercase text-muted-foreground">{d.fullDate}</div>
-                            <div className="mt-1 font-extrabold text-foreground">
+                            <div className="mt-1 font-bold text-foreground">
                               {fmtNum(d.est)} {displayUnit} est 1RM
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -754,7 +754,7 @@ function PlannedVsCompletedTable({
   return (
     <div className="space-y-4">
       {missingSetsRows > 0 && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
           Data quality: {missingSetsRows} SBD row{missingSetsRows === 1 ? "" : "s"} in this range have no prescribed set count and were excluded from the planned total.
         </div>
       )}
@@ -790,11 +790,11 @@ function PlannedVsCompletedTable({
                       <tr key={role} className="border-t border-border/60">
                         <td className="py-1 pr-4">{role}</td>
                         <td className="py-1 pr-4">{pl}</td>
-                        <td className={`py-1 ${isShort ? "text-amber-500" : "text-foreground"}`}>
+                        <td className={`py-1 ${isShort ? "text-warning" : "text-foreground"}`}>
                           <span className="font-bold">{co}</span>
                           <span className="text-muted-foreground"> / {pl}</span>
                           {isShort && (
-                            <Badge variant="outline" className="ml-2 border-amber-500/40 text-amber-500">
+                            <Badge variant="outline" className="ml-2 border-warning/40 text-warning">
                               short
                             </Badge>
                           )}

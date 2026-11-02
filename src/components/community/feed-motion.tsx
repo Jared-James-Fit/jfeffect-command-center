@@ -73,7 +73,7 @@ export function CaughtUp({ action, more }: { action?: ReactNode; more?: ReactNod
       <div className="caught-up-ring grid h-14 w-14 place-items-center rounded-full border-2 border-primary text-primary">
         <Check className="h-7 w-7" strokeWidth={3} />
       </div>
-      <div className="mt-3 text-[15px] font-black">You're all caught up</div>
+      <div className="mt-3 text-[15px] font-bold">You're all caught up</div>
       <p className="mt-0.5 text-[13px] text-muted-foreground">You've seen every new post from the crew.</p>
       {action && <div className="mt-3">{action}</div>}
       {more && <div className={action ? "mt-2.5" : "mt-3"}>{more}</div>}
@@ -119,7 +119,7 @@ export function NewPostsPill({ count, onShow }: { count: number; onShow: () => v
       <button
         type="button"
         onClick={onShow}
-        className="pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground shadow-lg shadow-primary/30 animate-in fade-in slide-in-from-top-2 active:scale-95"
+        className="pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-bold text-primary-foreground shadow-lg shadow-primary/30 animate-in fade-in slide-in-from-top-2 active:scale-95"
       >
         <ArrowUp className="h-4 w-4" strokeWidth={3} /> {count === 1 ? "New post" : `${count} new posts`}
       </button>

@@ -83,7 +83,7 @@ export function NativeFormPreviewDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-4 w-4" /> Preview: {form.title}
-            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600">
+            <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning">
               Preview Mode — nothing is saved
             </Badge>
           </DialogTitle>
@@ -143,7 +143,7 @@ export function NativeFormPreviewDialog({
                 <div className="text-xs text-muted-foreground">
                   Submit is simulated. No record is created.
                 </div>
-                <Button onClick={trySubmit} className="bg-gradient-primary font-bold">
+                <Button onClick={trySubmit} className="bg-primary text-primary-foreground font-semibold">
                   Try Submit
                 </Button>
               </div>
@@ -153,7 +153,7 @@ export function NativeFormPreviewDialog({
                 </div>
               )}
               {missing.length === 0 && Object.keys(values).length > 0 && (
-                <div className="mt-3 rounded border border-emerald-500/40 bg-emerald-500/5 p-2 text-xs text-emerald-700">
+                <div className="mt-3 rounded border border-success/40 bg-success/5 p-2 text-xs text-success">
                   Validation OK — in production this would submit.
                 </div>
               )}

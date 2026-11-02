@@ -45,7 +45,7 @@ export function PostScoreBoard() {
           <BarChart3 className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h2 className="text-[16px] font-black leading-tight">Post scores</h2>
+          <h2 className="text-[16px] font-bold leading-tight">Post scores</h2>
           <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">What keeps the crew interested: every feed post of the last 120 days, scored on reach, engagement and attention against your others.</p>
         </div>
       </div>
@@ -64,14 +64,14 @@ export function PostScoreBoard() {
         <p className="mt-4 text-[13px] text-muted-foreground">No feed posts to score yet.</p>
       ) : (
         <>
-          <h3 className="mt-4 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">By kind of post</h3>
+          <h3 className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">By kind of post</h3>
           <div className="mt-2 space-y-2.5" data-score-kinds>
             {kinds.map((k) => (
               <div key={k.kind_key}>
                 <div className="flex items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{k.label}</span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">{k.n} {k.n === 1 ? "post" : "posts"}</span>
-                  <span className="w-7 shrink-0 text-right text-[13px] font-black tabular-nums">{k.avg}</span>
+                  <span className="w-7 shrink-0 text-right text-[13px] font-bold tabular-nums">{k.avg}</span>
                 </div>
                 <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted">
                   <span className={cn("block h-full rounded-full", TONE[scoreBand({ score: k.avg, early: false }).tone].bar)} style={{ width: `${Math.max(4, (k.avg / maxAvg) * 100)}%` }} />
@@ -80,11 +80,11 @@ export function PostScoreBoard() {
             ))}
           </div>
 
-          <h3 className="mt-5 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">{showAll ? "All posts, best first" : "Best posts"}</h3>
+          <h3 className="mt-5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{showAll ? "All posts, best first" : "Best posts"}</h3>
           <div className="divide-y divide-border/60">{top.map(row)}</div>
           {low.length > 0 && (
             <>
-              <h3 className="mt-4 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Didn't land</h3>
+              <h3 className="mt-4 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Didn't land</h3>
               <div className="divide-y divide-border/60">{low.map(row)}</div>
             </>
           )}

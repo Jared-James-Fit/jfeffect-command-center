@@ -54,7 +54,7 @@ export function WeightUnitCard({
   };
 
   return (
-    <Card className={`space-y-4 border-border bg-card p-5 sm:p-6 ${isConfirmed ? "" : "border-amber-500/50"}`}>
+    <Card className={`space-y-4 border-border bg-card p-5 sm:p-6 ${isConfirmed ? "" : "border-warning/50"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Weight units *</h3>
@@ -63,7 +63,7 @@ export function WeightUnitCard({
           </p>
         </div>
         {!isConfirmed && (
-          <Badge variant="outline" className="shrink-0 border-amber-500/40 text-amber-600 dark:text-amber-400">
+          <Badge variant="outline" className="shrink-0 border-warning/40 text-warning">
             Not chosen yet, using lb
           </Badge>
         )}

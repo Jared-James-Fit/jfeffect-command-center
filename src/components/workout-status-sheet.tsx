@@ -115,8 +115,8 @@ export function WorkoutStatusSheet({
       icon: <Circle className="h-5 w-5" />,
       tone: "text-muted-foreground",
     },
-    { key: "in_progress", label: "In Progress", icon: <Play className="h-5 w-5" />, tone: "text-amber-500" },
-    { key: "completed", label: "Completed", icon: <CheckCircle2 className="h-5 w-5" />, tone: "text-emerald-500" },
+    { key: "in_progress", label: "In Progress", icon: <Play className="h-5 w-5" />, tone: "text-warning" },
+    { key: "completed", label: "Completed", icon: <CheckCircle2 className="h-5 w-5" />, tone: "text-success" },
   ];
 
   const setsPhrase = loggedSets && loggedSets > 0

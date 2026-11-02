@@ -356,12 +356,12 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
 }
 
 export const LABEL_META: Record<IntelLabel, { label: string; cls: string }> = {
-  on_track:       { label: "On Track",        cls: "border-green-500/30 bg-green-500/10 text-green-500" },
-  needs_review:   { label: "Needs Review",    cls: "border-blue-500/30 bg-blue-500/10 text-blue-400" },
-  needs_followup: { label: "Needs Follow-Up", cls: "border-amber-500/30 bg-amber-500/10 text-amber-400" },
-  low_compliance: { label: "Low Compliance",  cls: "border-orange-500/30 bg-orange-500/10 text-orange-400" },
-  pr_hit:         { label: "ATPR Hit",          cls: "border-violet-500/30 bg-violet-500/10 text-violet-400" },
-  pain_flag:      { label: "Pain Flag",       cls: "border-red-500/30 bg-red-500/10 text-red-400" },
+  on_track:       { label: "On Track",        cls: "border-success/30 bg-success/10 text-success" },
+  needs_review:   { label: "Needs Review",    cls: "border-info/30 bg-info/10 text-info" },
+  needs_followup: { label: "Needs Follow-Up", cls: "border-warning/30 bg-warning/10 text-warning" },
+  low_compliance: { label: "Low Compliance",  cls: "border-warning/30 bg-warning/10 text-warning" },
+  pr_hit:         { label: "ATPR Hit",          cls: "border-border bg-muted-foreground/10 text-muted-foreground" },
+  pain_flag:      { label: "Pain Flag",       cls: "border-destructive/30 bg-destructive/10 text-destructive" },
   event_soon:     { label: "Event Soon",      cls: "border-primary/30 bg-primary/10 text-primary" },
   inactive:       { label: "Inactive",        cls: "border-muted-foreground/30 bg-muted text-muted-foreground" },
 };
@@ -447,9 +447,9 @@ export async function setFollowupStatus(id: string, status: FollowupStatus) {
 }
 
 export const PAIN_STATUSES: { value: PainStatus; label: string; cls: string }[] = [
-  { value: "new",       label: "New",          cls: "border-red-500/30 bg-red-500/10 text-red-400" },
-  { value: "reviewed",  label: "Reviewed",     cls: "border-blue-500/30 bg-blue-500/10 text-blue-400" },
-  { value: "followup",  label: "Follow-Up",    cls: "border-amber-500/30 bg-amber-500/10 text-amber-400" },
-  { value: "resolved",  label: "Resolved",     cls: "border-green-500/30 bg-green-500/10 text-green-500" },
+  { value: "new",       label: "New",          cls: "border-destructive/30 bg-destructive/10 text-destructive" },
+  { value: "reviewed",  label: "Reviewed",     cls: "border-info/30 bg-info/10 text-info" },
+  { value: "followup",  label: "Follow-Up",    cls: "border-warning/30 bg-warning/10 text-warning" },
+  { value: "resolved",  label: "Resolved",     cls: "border-success/30 bg-success/10 text-success" },
   { value: "dismissed", label: "Dismissed",    cls: "border-muted-foreground/30 bg-muted text-muted-foreground" },
 ];

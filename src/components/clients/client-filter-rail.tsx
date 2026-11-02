@@ -12,11 +12,11 @@ export function countPillClass(tone: (typeof STATUS_META)[DirectoryFilterKey]["t
     case "danger":
       return "bg-destructive/15 text-destructive";
     case "warn":
-      return "bg-amber-500/15 text-amber-500";
+      return "bg-warning/15 text-warning";
     case "info":
-      return "bg-blue-500/15 text-blue-400";
+      return "bg-info/15 text-info";
     case "ok":
-      return "bg-emerald-500/15 text-emerald-500";
+      return "bg-success/15 text-success";
     default:
       return "bg-muted text-muted-foreground";
   }
@@ -24,9 +24,9 @@ export function countPillClass(tone: (typeof STATUS_META)[DirectoryFilterKey]["t
 
 const DOT: Record<(typeof STATUS_META)[DirectoryFilterKey]["tone"], string> = {
   danger: "bg-destructive",
-  warn: "bg-amber-500",
-  info: "bg-blue-400",
-  ok: "bg-emerald-500",
+  warn: "bg-warning",
+  info: "bg-info",
+  ok: "bg-success",
   neutral: "bg-muted-foreground",
 };
 
@@ -57,7 +57,7 @@ export function ClientFilterRail({
   if (!groups.length) {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="filter-rail-clear">
-        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
+        <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
         Nothing needs your attention right now.
       </p>
     );

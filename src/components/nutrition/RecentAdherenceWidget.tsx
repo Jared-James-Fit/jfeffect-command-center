@@ -34,14 +34,14 @@ export function RecentAdherenceWidget() {
   const TrendIcon = delta == null ? Minus : delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
   const trendColor =
     delta == null ? "text-muted-foreground"
-    : delta > 0 ? "text-emerald-500"
-    : delta < 0 ? "text-rose-500"
+    : delta > 0 ? "text-success"
+    : delta < 0 ? "text-destructive"
     : "text-muted-foreground";
 
   const tone = (pct: number) =>
-    pct >= 85 ? "bg-emerald-500"
-    : pct >= 70 ? "bg-amber-500"
-    : "bg-rose-500";
+    pct >= 85 ? "bg-success"
+    : pct >= 70 ? "bg-warning"
+    : "bg-destructive";
 
   return (
     <Card className="p-4">
@@ -56,7 +56,7 @@ export function RecentAdherenceWidget() {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-black leading-none tabular-nums">{latestPct}%</div>
+          <div className="text-2xl font-bold leading-none tabular-nums">{latestPct}%</div>
           <div className={`mt-1 flex items-center justify-end gap-1 text-[11px] ${trendColor}`}>
             <TrendIcon className="h-3 w-3" />
             <span>

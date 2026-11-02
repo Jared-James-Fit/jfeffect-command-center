@@ -114,7 +114,7 @@ function ClientPurchase() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Payment</div>
-                <div className="text-4xl font-black mt-1">{formatMoney(d.amountPaid, d.currency)}</div>
+                <div className="text-4xl font-bold mt-1">{formatMoney(d.amountPaid, d.currency)}</div>
                 <div className="text-xs text-muted-foreground mt-1">paid of {formatMoney(d.contractTotal, d.currency)}</div>
               </div>
               <Badge variant="outline" className={d.statusTone}>{d.statusLabel}</Badge>
@@ -194,7 +194,7 @@ function ClientPurchase() {
 
         <div className="space-y-4">
           <Card
-            className={`p-5 ${covered ? "border-primary/40 bg-primary/5" : "border-amber-500/40 bg-amber-500/5"}`}
+            className={`p-5 ${covered ? "border-primary/40 bg-primary/5" : "border-warning/40 bg-warning/5"}`}
           >
             <div className="flex items-center gap-2 mb-2">
               <FileSignature className="h-4 w-4" />
@@ -202,7 +202,7 @@ function ClientPurchase() {
             </div>
             {covered ? (
               <>
-                <Badge className="bg-gradient-primary">Signed</Badge>
+                <Badge className="bg-primary text-primary-foreground">Signed</Badge>
                 <p className="text-xs text-muted-foreground mt-2">
                   This purchase is covered by your signed JF Effect Coaching
                   Agreement + Liability Waiver.
@@ -223,7 +223,7 @@ function ClientPurchase() {
               <>
                 <Badge
                   variant="outline"
-                  className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                  className="border-warning/50 text-warning"
                 >
                   Not signed yet
                 </Badge>
@@ -248,7 +248,7 @@ function ClientPurchase() {
                 <Checkbox checked={agree} onCheckedChange={(v) => setAgree(!!v)} className="mt-1" />
                 <span>I understand what is included, what is not included, the payment terms, the service term, and that this purchase is covered by my signed Coaching Agreement.</span>
               </label>
-              <Button disabled={!agree || busy} onClick={accept} className="w-full bg-gradient-primary font-bold uppercase">{busy ? "Recording…" : "Accept terms"}</Button>
+              <Button disabled={!agree || busy} onClick={accept} className="w-full bg-primary text-primary-foreground font-semibold">{busy ? "Recording…" : "Accept terms"}</Button>
             </Card>
           ) : (
             <Card className="border-primary/40 bg-primary/5 p-5 flex items-start gap-3">
@@ -267,7 +267,7 @@ function ClientPurchase() {
                 variant="outline"
                 className={
                   paid || r.payment_status === "Active Subscription"
-                    ? "border-green-500/40 text-green-500 bg-green-500/10"
+                    ? "border-success/40 text-success bg-success/10"
                     : r.payment_status === "Cancelled"
                       ? "border-border text-muted-foreground"
                       : "border-warning/40 text-warning bg-warning/5"
@@ -275,7 +275,7 @@ function ClientPurchase() {
               >
                 {paid ? "Paid · Active" : r.payment_status === "Active Subscription" ? "Active subscription" : r.payment_status === "Cancelled" ? "Cancelled" : "Payment setup needed"}
               </Badge>
-              <Button onClick={() => { void goToStripe(); }} disabled={!accepted} className="w-full bg-gradient-primary font-bold uppercase">
+              <Button onClick={() => { void goToStripe(); }} disabled={!accepted} className="w-full bg-primary text-primary-foreground font-semibold">
                 {paid ? "Manage payment" : "Pay now"} <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
               {!accepted && <p className="text-xs text-muted-foreground">Accept the terms above to enable payment.</p>}

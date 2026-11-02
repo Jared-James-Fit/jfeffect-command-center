@@ -54,10 +54,10 @@ export function SchedulerTab() {
 
   const stateLabel = isEmergency ? "Disabled" : isLive ? "Live" : "Dry Run";
   const stateTone = isEmergency
-    ? "border-rose-500/40 text-rose-300"
+    ? "border-destructive/40 text-destructive"
     : isLive
-      ? "border-amber-500/40 text-amber-300"
-      : "border-emerald-500/40 text-emerald-300";
+      ? "border-warning/40 text-warning"
+      : "border-success/40 text-success";
 
   async function enableReal() {
     try {
@@ -115,22 +115,22 @@ export function SchedulerTab() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       {/* Mode banner */}
-      <Card className={`p-4 border ${isEmergency ? "border-rose-500/50 bg-rose-500/5" : isReal ? "border-amber-500/50 bg-amber-500/5" : "border-emerald-500/40 bg-emerald-500/5"}`}>
+      <Card className={`p-4 border ${isEmergency ? "border-destructive/50 bg-destructive/5" : isReal ? "border-warning/50 bg-warning/5" : "border-success/40 bg-success/5"}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
             {isEmergency ? (
-              <ShieldAlert className="h-6 w-6 text-rose-400 shrink-0" />
+              <ShieldAlert className="h-6 w-6 text-destructive shrink-0" />
             ) : isReal ? (
-              <AlertTriangle className="h-6 w-6 text-amber-400 shrink-0" />
+              <AlertTriangle className="h-6 w-6 text-warning shrink-0" />
             ) : (
-              <ShieldCheck className="h-6 w-6 text-emerald-400 shrink-0" />
+              <ShieldCheck className="h-6 w-6 text-success shrink-0" />
             )}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-bold">Scheduled response worker</h2>
                 <Badge variant="outline" className={stateTone}>{stateLabel}</Badge>
                 {isReal && !isLive && !isEmergency && (
-                  <Badge variant="outline" className="border-amber-500/30 text-amber-300/80">
+                  <Badge variant="outline" className="border-warning/30 text-warning/80">
                     Real mode staged · live kill switch OFF
                   </Badge>
                 )}
@@ -193,7 +193,7 @@ export function SchedulerTab() {
 
       {/* Live kill switch — separate, two-step toggle after real mode is on */}
       {isReal && (
-        <Card className="p-4 space-y-3 border-amber-500/40 bg-amber-500/5">
+        <Card className="p-4 space-y-3 border-warning/40 bg-warning/5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="font-semibold">Live delivery kill switch</div>
@@ -220,7 +220,7 @@ export function SchedulerTab() {
             />
           </div>
           {Array.isArray((s as any).allowed_test_recipients) && (s as any).allowed_test_recipients.length > 0 && (
-            <div className="rounded border border-amber-500/30 bg-background/40 p-2 text-[11px] text-muted-foreground">
+            <div className="rounded border border-warning/30 bg-background/40 p-2 text-[11px] text-muted-foreground">
               Recipient allowlist active — {(s as any).allowed_test_recipients.length} client id(s). Messages to clients outside this list are refused.
             </div>
           )}
@@ -308,7 +308,7 @@ export function SchedulerTab() {
                   <td className="py-1 pr-3 text-right">{r.rows_simulated_failed}</td>
                   <td className="py-1 pr-3 text-right">{r.rows_skipped}</td>
                   <td className="py-1 pr-3 text-right">{r.duplicates_prevented}</td>
-                  <td className="py-1 text-rose-300">{r.error ?? ""}</td>
+                  <td className="py-1 text-destructive">{r.error ?? ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -345,7 +345,7 @@ export function SchedulerTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-400" /> Enable REAL delivery
+              <AlertTriangle className="h-5 w-5 text-warning" /> Enable REAL delivery
             </DialogTitle>
             <DialogDescription>
               Once enabled, the worker will send real in-app messages to real clients at their scheduled time.
@@ -402,9 +402,9 @@ export function SchedulerTab() {
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: "emerald" | "amber" | "rose" }) {
   const toneClass =
-    tone === "emerald" ? "text-emerald-300" :
-    tone === "amber"   ? "text-amber-300" :
-    tone === "rose"    ? "text-rose-300" :
+    tone === "emerald" ? "text-success" :
+    tone === "amber"   ? "text-warning" :
+    tone === "rose"    ? "text-destructive" :
     "text-foreground";
   return (
     <div className="rounded-md border border-border bg-secondary/20 p-2">
@@ -442,7 +442,7 @@ function FailedSchedulesCard({ onRetry }: { onRetry: (id: string) => void | Prom
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <code className="text-[10px] text-muted-foreground">{p.id.slice(0, 8)}</code>
               <span>{p.attempts} attempt{p.attempts === 1 ? "" : "s"}</span>
-              <span className="max-w-[40ch] truncate text-rose-300" title={p.last_error ?? ""}>
+              <span className="max-w-[40ch] truncate text-destructive" title={p.last_error ?? ""}>
                 {p.last_error ?? "—"}
               </span>
               <Button size="sm" variant="outline" onClick={() => onRetry(p.id)}>Retry</Button>

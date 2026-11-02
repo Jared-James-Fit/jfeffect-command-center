@@ -320,7 +320,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
       </div>
       {sorted.length === 0 ? (
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+          <CheckCircle2 className="h-5 w-5 text-success" />
           <div className="min-w-0">
             <div className="text-sm font-semibold">✅ You're all caught up</div>
             <div className="text-xs text-muted-foreground">No forms are due right now.</div>
@@ -388,20 +388,20 @@ function Row({ item, justCompleted }: { item: ActionItem; justCompleted?: boolea
   const Icon = item.icon;
   const toneIcon =
     item.tone === "warning" ? "text-warning"
-    : item.tone === "success" ? "text-emerald-500"
+    : item.tone === "success" ? "text-success"
     : "text-primary";
   const toneChip =
     item.tone === "warning" ? "bg-warning/15 text-warning"
-    : item.tone === "success" ? "bg-emerald-500/15 text-emerald-500"
+    : item.tone === "success" ? "bg-success/15 text-success"
     : "bg-primary/15 text-primary";
 
   const body = (
     <div className={cn(
       "flex min-h-[56px] items-center gap-3 px-4 py-2.5 transition active:bg-secondary/30",
-      justCompleted && "bg-emerald-500/10",
+      justCompleted && "bg-success/10",
     )}>
       {justCompleted ? (
-        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500 animate-in fade-in zoom-in" />
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-success animate-in fade-in zoom-in" />
       ) : (
         <Icon className={cn("h-5 w-5 shrink-0", toneIcon)} />
       )}

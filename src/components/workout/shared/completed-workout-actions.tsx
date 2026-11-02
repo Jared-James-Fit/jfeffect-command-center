@@ -66,15 +66,15 @@ export function CompletedWorkoutActions({
       <Card
         className={
           hasReview
-            ? "flex flex-wrap items-center gap-2 border-emerald-500/30 bg-emerald-500/5 p-3"
-            : "flex flex-wrap items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3"
+            ? "flex flex-wrap items-center gap-2 border-success/30 bg-success/5 p-3"
+            : "flex flex-wrap items-center gap-2 border-warning/30 bg-warning/5 p-3"
         }
       >
         <div
           className={
             hasReview
-              ? "mr-auto text-sm font-bold text-emerald-700 dark:text-emerald-300"
-              : "mr-auto text-sm font-bold text-amber-700 dark:text-amber-300"
+              ? "mr-auto text-sm font-bold text-success"
+              : "mr-auto text-sm font-bold text-warning"
           }
         >
           {hasReview ? "Workout complete" : "Workout logged · review pending"}

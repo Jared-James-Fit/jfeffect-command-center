@@ -79,7 +79,7 @@ function SitemapPage() {
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-5xl space-y-10 px-6 py-12">
         <header className="space-y-2">
-          <h1 className="text-3xl font-black tracking-tight">All Pages</h1>
+          <h1 className="text-3xl font-bold tracking-tight">All Pages</h1>
           <p className="text-sm text-muted-foreground">
             Quick access to every screen visible to your account. Listed pages
             follow your role. Other portals require the matching account type.

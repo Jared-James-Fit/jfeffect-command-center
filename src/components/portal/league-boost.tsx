@@ -17,7 +17,7 @@ export function BoostTeaser({ me }: { me?: LeagueRow }) {
   const done = me?.completed_eligible ?? 0;
   return (
     <div className="rounded-2xl border border-orange-300/60 bg-gradient-to-br from-orange-50 to-amber-50 p-3 text-orange-950 dark:border-orange-400/30 dark:from-orange-950/40 dark:to-amber-950/30 dark:text-orange-50">
-      <div className="text-[11px] font-black uppercase tracking-[0.14em]">🔥 Final Week Boost</div>
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em]">🔥 Final Week Boost</div>
       <div className="mt-1 text-sm font-bold leading-snug">Hit 90%+ of your workouts this month → Match the highest Workout Points</div>
       {me && eligible > 0 && me.boost_status !== "none" && (
         <div className="mt-1 text-xs opacity-80">You so far: {done} / {eligible} workouts</div>
@@ -71,10 +71,10 @@ export function BoostHero({ me, rows }: { me: LeagueRow; rows: LeagueRow[] }) {
         state.tone === "neutral" && "bg-muted/30",
       )}
     >
-      <div className={cn("text-[11px] font-black uppercase tracking-[0.14em]", state.tone === "neutral" ? "text-muted-foreground" : "text-white/85")}>
+      <div className={cn("text-[11px] font-bold uppercase tracking-[0.14em]", state.tone === "neutral" ? "text-muted-foreground" : "text-white/85")}>
         {state.eyebrow}
       </div>
-      <div className={cn("mt-1 font-black leading-tight", state.tone === "neutral" ? "text-sm" : "text-2xl")}>{state.headline}</div>
+      <div className={cn("mt-1 font-bold leading-tight", state.tone === "neutral" ? "text-sm" : "text-2xl")}>{state.headline}</div>
       {state.sub && <div className="mt-0.5 text-sm font-semibold text-white/90">{state.sub}</div>}
 
       {showProgress && (
@@ -91,11 +91,11 @@ export function BoostHero({ me, rows }: { me: LeagueRow; rows: LeagueRow[] }) {
         <div className="mt-3 grid grid-cols-2 gap-2 text-center">
           <div className="rounded-xl bg-white/15 px-2 py-2">
             <div className="text-[10px] font-bold uppercase tracking-wider text-white/80">{me.boost_status === "ready" ? "Match" : "Unlocks"}</div>
-            <div className="text-lg font-black">+{formatLeaguePoints(unlock)}</div>
+            <div className="text-lg font-bold">+{formatLeaguePoints(unlock)}</div>
           </div>
           <div className="rounded-xl bg-white/15 px-2 py-2">
             <div className="text-[10px] font-bold uppercase tracking-wider text-white/80">Projected</div>
-            <div className="text-lg font-black">
+            <div className="text-lg font-bold">
               {formatLeaguePoints(me.projected_total ?? me.total_points)}
               {movesTo != null && <span className="ml-1 text-xs font-bold text-white/85">#{movesTo}</span>}
             </div>
@@ -111,7 +111,7 @@ export function ThreatBanner({ rows, me }: { rows: LeagueRow[]; me?: LeagueRow }
   const n = threatCount(rows, me);
   if (n === 0) return null;
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-amber-400/60 bg-amber-50 px-3 py-2 text-sm font-black text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+    <div className="flex items-center gap-2 rounded-xl border border-amber-400/60 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
       ⚠️ {n} {n === 1 ? "athlete" : "athletes"} can still catch you
     </div>
   );
@@ -124,7 +124,7 @@ export function RowBoost({ row }: { row: LeagueRow }) {
   if (!tag) return null;
   const moving = canStillMove(row);
   return (
-    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] font-black uppercase tracking-wide">
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] font-bold uppercase tracking-wide">
       <span className={row.boost_status === "ready" ? "text-emerald-600" : "text-orange-600"}>{tag}</span>
       {moving && <span className="normal-case text-muted-foreground">Projected: {formatLeaguePoints(row.projected_total)} pts</span>}
     </div>
@@ -162,7 +162,7 @@ export function MonthBreakdown({ me }: { me: LeagueRow }) {
         </li>
       ))}
       {me.match_points > 0 && (
-        <li className="flex justify-between gap-3 rounded-lg bg-orange-500/10 px-2 py-1 font-black text-orange-700 dark:text-orange-300">
+        <li className="flex justify-between gap-3 rounded-lg bg-orange-500/10 px-2 py-1 font-bold text-orange-700 dark:text-orange-300">
           <span>🔥 Workout Points Match <span className="font-semibold opacity-80">· Final Week Boost</span></span>
           <span>+{formatLeaguePoints(me.match_points)}</span>
         </li>

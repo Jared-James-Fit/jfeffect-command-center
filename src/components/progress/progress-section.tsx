@@ -108,7 +108,8 @@ export type ProgressInitialAction =
   | "weight"
   | "bodyweight"
   | "measure"
-  | "history";
+  | "history"
+  | "water";
 
 export function ProgressSection({
   ctx, initialAction, actionOnly = false, onActionClose,
@@ -118,7 +119,7 @@ export function ProgressSection({
   actionOnly?: boolean;
   onActionClose?: () => void;
 }) {
-  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "bodyweight" || initialAction === "weight" ? "bodyweight" : "overview");
+  const [tab, setTab] = useState<string>(initialAction === "history" ? "timeline" : initialAction === "water" ? "water" : initialAction === "bodyweight" || initialAction === "weight" ? "bodyweight" : "overview");
   const [photoDialog, setPhotoDialog] = useState(false);
   const [videoDialog, setVideoDialog] = useState(false);
   const [weightDialog, setWeightDialog] = useState(false);
@@ -134,6 +135,7 @@ export function ProgressSection({
     else if (initialAction === "bodyweight") setTab("bodyweight");
     else if (initialAction === "measure") setMeasureDialog(true);
     else if (initialAction === "history") setTab("timeline");
+    else if (initialAction === "water") setTab("water");
     else if (initialAction === "video") setVideoDialog(true);
     else if (initialAction === "lift") { setTab("videos"); setVideoDialog(true); }
   }, [initialAction]);
@@ -338,11 +340,11 @@ function OverviewTab({
           <div>
             <div className="flex items-end gap-3">
               <div>
-                <p className="text-3xl font-black tabular-nums leading-none">{stats.latest}</p>
+                <p className="text-3xl font-bold tabular-nums leading-none">{stats.latest}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{stats.unit}{stats.avg7 != null ? ` · 7-day avg ${stats.avg7}` : ""}</p>
               </div>
               {stats.count > 1 && (
-                <div className={`ml-auto text-right pb-0.5 ${stats.change < 0 ? "text-emerald-400" : stats.change > 0 ? "text-amber-400" : "text-muted-foreground"}`}>
+                <div className={`ml-auto text-right pb-0.5 ${stats.change < 0 ? "text-success" : stats.change > 0 ? "text-warning" : "text-muted-foreground"}`}>
                   <p className="text-xl font-bold tabular-nums leading-none">{stats.change > 0 ? "+" : ""}{stats.change} {stats.unit}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">from start ({stats.startWeight} {stats.unit})</p>
                 </div>
@@ -1129,7 +1131,7 @@ function AngleUploadCard({
           </div>
         )}
         {existing && existing.upload_status === "ready" && progress == null && (
-          <div className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white shadow">
+          <div className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full bg-success text-white shadow">
             <CheckCircle2 className="h-4 w-4" />
           </div>
         )}

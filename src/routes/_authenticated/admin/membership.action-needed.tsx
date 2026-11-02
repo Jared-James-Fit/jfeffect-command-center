@@ -72,7 +72,7 @@ function ActionNeededPage() {
         <Card key={key} className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-sm font-bold">
-              <AlertCircle className="h-4 w-4 text-amber-300" />{BUCKET_LABELS[key]}
+              <AlertCircle className="h-4 w-4 text-warning" />{BUCKET_LABELS[key]}
             </h3>
             <Badge variant="outline">{list.length}</Badge>
           </div>

@@ -17,10 +17,10 @@ export function WorkoutMealInfo({
     <InfoTip label="What are pre-workout and post-workout meals?" title={X.title} side={side} className={className}>
       <div className="space-y-1.5">
         <p>
-          <span className="font-semibold text-amber-600 dark:text-amber-400">{X.pre.term}</span> = {X.pre.text}
+          <span className="font-semibold text-warning">{X.pre.term}</span> = {X.pre.text}
         </p>
         <p>
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{X.post.term}</span> = {X.post.text}
+          <span className="font-semibold text-success">{X.post.term}</span> = {X.post.text}
         </p>
         <p>{X.move}</p>
         <p className="font-semibold">{X.optional}</p>

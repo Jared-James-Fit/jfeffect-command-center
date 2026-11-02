@@ -58,7 +58,7 @@ export function SuggestedAthletes({ onOpen, context = null, strongOnly = false, 
   return (
     <section data-suggested className={cn("-mx-3 border-y border-border/60 py-3 sm:mx-0 sm:rounded-3xl sm:border", className)}>
       <div className="flex items-center justify-between gap-2 pl-4 pr-2">
-        <h3 className="text-[15px] font-black">Suggested for you</h3>
+        <h3 className="text-[15px] font-bold">Suggested for you</h3>
         <div className="flex items-center">
           {onSeeAll && (
             <button type="button" onClick={onSeeAll} className="px-2 py-1 text-[13px] font-bold text-primary active:opacity-70" data-suggested-all>

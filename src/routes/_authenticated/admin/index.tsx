@@ -2,18 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo, Suspense } from "react";
-import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
-  Users, Calendar, DollarSign, Plus, Video, ShoppingCart,
-  HardDrive, ChefHat, FileText, Megaphone, ClipboardList, Mic, Zap,
-  MessageCircle, MoreHorizontal, Activity, Sparkles, Check, Dumbbell, Trophy, TrendingUp,
+  HardDrive, Activity, Check, Dumbbell, Trophy,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
@@ -25,9 +21,6 @@ import {
 } from "@/lib/dashboard-feed";
 import { DashboardScheduleCard } from "@/components/admin-calendar/dashboard-schedule-card";
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
-const PriceCardPickerDialog = lazyWithRetry(() =>
-  import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
-);
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel } from "@/lib/coach-intel";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
@@ -83,31 +76,6 @@ function DriveSetupBanner() {
   );
 }
 
-function ActionsSheet({ actions, trigger }: { actions: { label: string; to: string; icon: any; search?: any }[]; trigger: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-2xl" data-no-return>
-        <SheetHeader>
-          <SheetTitle>More actions</SheetTitle>
-        </SheetHeader>
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {actions.map((a) => (
-            <Link key={a.label} to={a.to as any} search={a.search} onClick={() => setOpen(false)} className="block">
-              <div className="flex h-full min-h-[80px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 p-2 text-center transition hover:border-primary/50 active:scale-[0.97]">
-                <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
-                  <a.icon className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">{a.label}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Snapshot: the six numbers worth seeing every morning               */
@@ -115,8 +83,8 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
 
 const TILE_TONE: Record<SnapshotTile["tone"], string> = {
   danger: "text-destructive",
-  warn: "text-amber-500",
-  info: "text-sky-500",
+  warn: "text-warning",
+  info: "text-info",
 };
 
 function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: boolean }) {
@@ -129,7 +97,7 @@ function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: bool
             title={t.hint}
             className="flex h-full flex-col justify-between rounded-xl border border-border bg-card px-3 py-2.5 transition hover:border-primary/40 active:scale-[0.97]"
           >
-            <div className={cn("flex items-center gap-1 text-[24px] font-black leading-none tabular-nums", clear ? "text-emerald-500" : TILE_TONE[t.tone])}>
+            <div className={cn("flex items-center gap-1 text-[24px] font-bold leading-none tabular-nums", clear ? "text-success" : TILE_TONE[t.tone])}>
               {loading ? <span className="text-muted-foreground/50">–</span> : clear ? <Check className="h-6 w-6" aria-label="None" /> : t.value}
             </div>
             <div className="mt-1.5 text-[11px] font-semibold leading-tight text-muted-foreground">{t.label}</div>
@@ -156,8 +124,8 @@ function timeOf(iso: string | null) {
 }
 
 const STATUS_CHIP: Record<OverviewSession["status"], { label: string; cls: string }> = {
-  done: { label: "Done", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  training: { label: "Training now", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
+  done: { label: "Done", cls: "bg-success/15 text-success" },
+  training: { label: "Training now", cls: "bg-info/15 text-info" },
   pending: { label: "Not yet", cls: "bg-secondary text-muted-foreground" },
 };
 
@@ -168,7 +136,7 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
   const pct = scheduled.length ? Math.round((done / scheduled.length) * 100) : 0;
   return (
     <Card className="border-border bg-card p-4">
-      <SectionHeader title="Training today" icon={Dumbbell} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
+      <SectionHeader title="Training today" icon={Dumbbell} viewAll={{ to: "/admin/coaching?tab=training-intel", label: "Training intel" }} />
       {loading ? (
         <div className="h-16 animate-pulse rounded-lg bg-secondary/40" />
       ) : scheduled.length === 0 && extra.length === 0 ? (
@@ -178,11 +146,11 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
           {scheduled.length > 0 && (
             <div className="mb-1">
               <div className="flex items-baseline justify-between text-[12px]">
-                <span className="font-semibold"><span className="text-base font-black tabular-nums">{done}</span> of {scheduled.length} done</span>
+                <span className="font-semibold"><span className="text-base font-bold tabular-nums">{done}</span> of {scheduled.length} done</span>
                 <span className="text-muted-foreground">{scheduled.length - done} to go</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-success transition-all" style={{ width: `${pct}%` }} />
               </div>
             </div>
           )}
@@ -235,7 +203,7 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
 }
 
 const TIER_CHIP: Record<OverviewWin["tier"], string> = {
-  atpr: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  atpr: "bg-warning/15 text-warning",
   program: "bg-primary/15 text-primary",
   block: "bg-secondary text-muted-foreground",
 };
@@ -292,7 +260,6 @@ function WinsCard({ wins }: { wins: OverviewWin[] }) {
 }
 
 function AdminDashboard() {
-  const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
   const offlineNoCache = useIsOfflineWithoutCache();
   const listDirectory = useServerFn(listClientsDirectoryFn);
   const liveQueueQuery = {
@@ -359,27 +326,6 @@ function AdminDashboard() {
   const active = directory?.counts?.all ?? rows.length;
   const pulseOnTrack = Math.max(0, active - pulseAtRisk.length - pulseWatch.length);
 
-  /* ---------- Quick actions ---------- */
-  const primaryActions = [
-    { label: "Add Client",  to: "/admin/clients",          icon: Plus },
-    { label: "Message",     to: "/admin/messages",         icon: MessageCircle },
-    { label: "Clients",     to: "/admin/clients",          icon: Users },
-    { label: "Program",     to: "/admin/program-library",  icon: FileText },
-  ];
-  const moreActions = [
-    { label: "Coach Feedback", to: "/admin/lift-videos",   icon: Video },
-    { label: "Forms",          to: "/admin/forms",         icon: ClipboardList },
-    { label: "Tasks",          to: "/admin/content",       icon: ClipboardList, search: { tab: "tasks" } as any },
-    { label: "Payment Link",   to: "/admin/payment-links", icon: DollarSign },
-    { label: "Appointment",    to: "/admin/calendar",      icon: Calendar },
-    { label: "Broadcast",      to: "/admin/broadcasts",    icon: Megaphone },
-    { label: "Recipe",         to: "/admin/recipes",       icon: ChefHat },
-    { label: "Add Product",    to: "/admin/payment-links", icon: ShoppingCart },
-    { label: "Apps & Tools",   to: "/admin/apps",          icon: Sparkles },
-    { label: "My Voice",       to: "/admin/voice",         icon: Mic },
-    { label: "Automations",    to: "/admin/automations",   icon: Zap },
-  ];
-
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
   const todayLabel = format(new Date(), "EEEE d MMM");
@@ -420,45 +366,20 @@ function AdminDashboard() {
         {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
         <WinsCard wins={overview?.wins ?? []} />
 
-        {/* ---------------- QUICK ACTIONS (deliberate moves: no "‹ Today" pill) ---------------- */}
-        <div className="grid grid-cols-5 gap-2" data-no-return>
-          {primaryActions.map((a) => (
-            <Link key={a.label} to={a.to as any} className="block">
-              <div className="flex h-full min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
-                <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
-                  <a.icon className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">{a.label}</div>
-              </div>
-            </Link>
-          ))}
-          <ActionsSheet
-            actions={moreActions}
-            trigger={
-              <button type="button" className="flex h-full min-h-[68px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
-                <div className="grid h-8 w-8 place-items-center rounded-md bg-secondary text-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">More</div>
-              </button>
-            }
-          />
-        </div>
-
         {/* ---------------- CLIENT PULSE ---------------- */}
         <Card className="border-border bg-card p-4">
-          <SectionHeader title="Client pulse · last 14 days" icon={Activity} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
+          <SectionHeader title="Client pulse · last 14 days" icon={Activity} viewAll={{ to: "/admin/coaching?tab=training-intel", label: "Training intel" }} />
           <div className="grid grid-cols-3 divide-x divide-border rounded-lg bg-secondary/20 py-2.5">
             <div className="text-center">
-              <div className="text-xl font-black text-emerald-500">{pulseOnTrack}</div>
+              <div className="text-xl font-bold text-success">{pulseOnTrack}</div>
               <div className="text-[10px] font-semibold text-muted-foreground">On track</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-black text-amber-500">{pulseWatch.length}</div>
+              <div className="text-xl font-bold text-warning">{pulseWatch.length}</div>
               <div className="text-[10px] font-semibold text-muted-foreground">Watch</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-black text-destructive">{pulseAtRisk.length}</div>
+              <div className="text-xl font-bold text-destructive">{pulseAtRisk.length}</div>
               <div className="text-[10px] font-semibold text-muted-foreground">Needs attention</div>
             </div>
           </div>
@@ -488,15 +409,6 @@ function AdminDashboard() {
 
       </div>
 
-      {sellTo ? (
-        <Suspense fallback={null}>
-          <PriceCardPickerDialog
-            open={!!sellTo}
-            fixedClientId={sellTo?.id}
-            onClose={() => setSellTo(null)}
-          />
-        </Suspense>
-      ) : null}
     </>
   );
 }

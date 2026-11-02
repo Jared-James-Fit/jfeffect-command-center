@@ -248,7 +248,7 @@ function Stat({ label, value, tone, icon: Icon, onClick, active }: { label: stri
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className={`mt-1 text-2xl font-black ${tone === "warn" ? "text-warning" : tone === "primary" ? "text-primary" : ""}`}>{value}</div>
+          <div className={`mt-1 text-2xl font-bold ${tone === "warn" ? "text-warning" : tone === "primary" ? "text-primary" : ""}`}>{value}</div>
         </div>
         {Icon && <Icon className="h-5 w-5 text-muted-foreground" />}
       </div>

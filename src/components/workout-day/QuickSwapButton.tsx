@@ -394,7 +394,7 @@ function ExerciseRowCard({
               )}
               {mistakes && (
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Avoid</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-warning">Avoid</div>
                   <div className="whitespace-pre-line text-foreground/90">{mistakes}</div>
                 </div>
               )}
@@ -931,7 +931,7 @@ export function QuickSwapButton({
 
           {mode === "warning" && pending && (
             <div className="mt-4 space-y-3">
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-300">
+              <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-warning">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="text-xs">
                   <strong className="block">Different target</strong>

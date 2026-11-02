@@ -114,7 +114,7 @@ function SettingsPage() {
         <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
           <h3 className="text-xs uppercase tracking-widest text-primary">Admin Access</h3>
           <p className="text-xs text-muted-foreground">First-time setup: promote yourself to admin to unlock the full command center.</p>
-          <ActionButton onClick={promoteSelfToAdmin} jobLabel="Promoting self to admin" className="w-full bg-gradient-primary font-bold uppercase">Make me admin</ActionButton>
+          <ActionButton onClick={promoteSelfToAdmin} jobLabel="Promoting self to admin" className="w-full bg-primary text-primary-foreground font-semibold">Make me admin</ActionButton>
           <div className="pt-4 border-t border-border/50 space-y-2">
             <Label>Promote another user (by email)</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
@@ -127,7 +127,7 @@ function SettingsPage() {
             <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
               <Mail className="h-4 w-4" /> Email Sender — Purchase Confirmations
             </h3>
-            <Badge variant="outline" className={current?.status?.startsWith("Connected") ? "border-primary/40 text-primary" : "border-amber-500/40 text-amber-500"}>
+            <Badge variant="outline" className={current?.status?.startsWith("Connected") ? "border-primary/40 text-primary" : "border-warning/40 text-warning"}>
               {current?.status ?? "Loading…"}
             </Badge>
           </div>
@@ -189,7 +189,7 @@ function SettingsPage() {
           </div>
 
           <div className="flex items-center gap-2 pt-2 border-t border-border/50 flex-wrap">
-            <ActionButton onClick={saveSender} jobLabel="Saving sender settings" className="bg-gradient-primary uppercase font-bold">Save sender settings</ActionButton>
+            <ActionButton onClick={saveSender} jobLabel="Saving sender settings" className="bg-primary text-primary-foreground font-semibold">Save sender settings</ActionButton>
             {current?.provider === "gmail" && (
               <ActionButton variant="outline" asChild>
                 <a href="/admin/apps">Connect Gmail account</a>
@@ -491,9 +491,9 @@ function SignNowIntegrationCard() {
   }
 
   const status = cur.status ?? "Manual Mode Only";
-  const tone = status === "Connected" ? "border-emerald-500/40 text-emerald-500"
+  const tone = status === "Connected" ? "border-success/40 text-success"
     : status === "Error" ? "border-destructive/40 text-destructive"
-    : status === "Manual Mode Only" ? "border-amber-500/40 text-amber-500"
+    : status === "Manual Mode Only" ? "border-warning/40 text-warning"
     : "border-border text-muted-foreground";
 
   return (
@@ -560,13 +560,13 @@ function SignNowIntegrationCard() {
         <div className="md:col-span-2 grid gap-2 sm:grid-cols-2 rounded-md border border-border bg-secondary/30 p-3">
           <div className="flex items-center justify-between gap-2">
             <Label className="text-xs">Access token status</Label>
-            <Badge variant="outline" className={cur.access_token_status === "Valid" ? "border-emerald-500/40 text-emerald-500" : "border-amber-500/40 text-amber-500"}>
+            <Badge variant="outline" className={cur.access_token_status === "Valid" ? "border-success/40 text-success" : "border-warning/40 text-warning"}>
               {cur.access_token_status ?? "Missing"}
             </Badge>
           </div>
           <div className="flex items-center justify-between gap-2">
             <Label className="text-xs">Refresh token status</Label>
-            <Badge variant="outline" className={cur.refresh_token_status === "Valid" ? "border-emerald-500/40 text-emerald-500" : "border-amber-500/40 text-amber-500"}>
+            <Badge variant="outline" className={cur.refresh_token_status === "Valid" ? "border-success/40 text-success" : "border-warning/40 text-warning"}>
               {cur.refresh_token_status ?? "Missing"}
             </Badge>
           </div>
@@ -600,7 +600,7 @@ function SignNowIntegrationCard() {
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2 border-t border-border/50">
-        <ActionButton onClick={save} disabled={busy} className="bg-gradient-primary uppercase font-bold">Save SignNow settings</ActionButton>
+        <ActionButton onClick={save} disabled={busy} className="bg-primary text-primary-foreground font-semibold">Save SignNow settings</ActionButton>
         <ActionButton onClick={test} disabled={busy} variant="outline"><Send className="mr-2 h-4 w-4" />Test connection</ActionButton>
         {cur.signnow_dashboard_url && (
           <ActionButton asChild variant="ghost">

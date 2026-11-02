@@ -62,7 +62,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
       <SheetContent side="bottom" hideCloseButton className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">Edit post</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">Edit post</SheetTitle>
             <SheetDescription className="text-[12px]">{archived ? "It's archived. Changes apply when you restore it." : "Change the photos or the words any time. The workout stays the same."}</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -90,7 +90,7 @@ export function EditPostSheet({ post, onClose }: { post: CommunityPost | null; o
           <AudiencePicker value={visibility} onChange={setVisibility} hideLoads={hideLoads} onHideLoads={setHideLoads} autoStory={!!post && isPulsePost(post)} />
         </div>
         <div className="border-t border-border/60 px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-3">
-          <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-black" disabled={busy || draft.tray.uploading > 0 || att.recorder.recording} onClick={() => void save()}>
+          <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-bold" disabled={busy || draft.tray.uploading > 0 || att.recorder.recording} onClick={() => void save()}>
             {busy ? "Saving…" : draft.tray.uploading > 0 ? "Uploading…" : "Save"}
           </Button>
         </div>

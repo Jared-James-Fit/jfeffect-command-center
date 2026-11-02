@@ -147,7 +147,7 @@ export function ChatVideoTile({
           className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity", ready ? "opacity-100" : "opacity-0")}
         />
       ) : null}
-      {!ready && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted to-secondary/50" aria-hidden="true" />}
+      {!ready && <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />}
       <span className="absolute inset-0 grid place-items-center">
         <span className="grid h-12 w-12 place-items-center rounded-full bg-black/55 text-white ring-1 ring-white/30 backdrop-blur-sm">
           {playable ? <Play className="h-5 w-5 translate-x-[1px] fill-current" /> : <Loader2 className="h-5 w-5 animate-spin" />}

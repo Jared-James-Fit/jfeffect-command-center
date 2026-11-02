@@ -91,7 +91,7 @@ export function NotificationSetupPrompt({ className, problemsOnly }: { className
         <div
           className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-full",
-            active ? "bg-emerald-500/15 text-emerald-500" : "bg-primary/10 text-primary",
+            active ? "bg-success/15 text-success" : "bg-primary/10 text-primary",
           )}
         >
           {icon}

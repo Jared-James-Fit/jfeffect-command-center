@@ -48,7 +48,7 @@ export function TargetsHistorySparkline() {
   const pct = first > 0 ? (delta / first) * 100 : 0;
   const TrendIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
   const trendColor =
-    delta > 0 ? "text-emerald-500" : delta < 0 ? "text-amber-500" : "text-muted-foreground";
+    delta > 0 ? "text-success" : delta < 0 ? "text-warning" : "text-muted-foreground";
 
   const latest = rows[rows.length - 1];
   const latestDate = (() => {
@@ -69,7 +69,7 @@ export function TargetsHistorySparkline() {
           <div className="text-xs uppercase tracking-wide text-muted-foreground">
             Calorie target history
           </div>
-          <div className="mt-0.5 text-lg font-black leading-none">
+          <div className="mt-0.5 text-lg font-bold leading-none">
             {last.toLocaleString()}{" "}
             <span className="text-xs font-normal text-muted-foreground">cal · {latestDate}</span>
           </div>

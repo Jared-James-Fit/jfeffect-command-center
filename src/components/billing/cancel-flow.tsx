@@ -63,8 +63,8 @@ export function CancelFlow({ open, onOpenChange, holdPriceDisplay = "$9/month US
           <>
             <DialogHeader><DialogTitle>We've got options</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <Card className="border-emerald-500/30 bg-emerald-500/5 p-4">
-                <div className="flex items-start gap-3"><Heart className="h-5 w-5 text-emerald-400 mt-0.5" />
+              <Card className="border-success/30 bg-success/5 p-4">
+                <div className="flex items-start gap-3"><Heart className="h-5 w-5 text-success mt-0.5" />
                   <div className="flex-1">
                     <div className="font-semibold">Keep My Membership</div>
                     <div className="text-xs text-muted-foreground">Keep full access to programs, recipes, resources, tracking, events, and member updates.</div>
@@ -72,8 +72,8 @@ export function CancelFlow({ open, onOpenChange, holdPriceDisplay = "$9/month US
                   <Button size="sm" onClick={close}>Keep</Button>
                 </div>
               </Card>
-              <Card className="border-sky-500/30 bg-sky-500/5 p-4">
-                <div className="flex items-start gap-3"><Snowflake className="h-5 w-5 text-sky-400 mt-0.5" />
+              <Card className="border-info/30 bg-info/5 p-4">
+                <div className="flex items-start gap-3"><Snowflake className="h-5 w-5 text-info mt-0.5" />
                   <div className="flex-1">
                     <div className="font-semibold">Freeze Membership for 30 Days</div>
                     <div className="text-xs text-muted-foreground">Pause billing and access for 30 days. Account & history saved. Resumes automatically.</div>
@@ -83,8 +83,8 @@ export function CancelFlow({ open, onOpenChange, holdPriceDisplay = "$9/month US
                   </Button>
                 </div>
               </Card>
-              <Card className="border-violet-500/30 bg-violet-500/5 p-4">
-                <div className="flex items-start gap-3"><Pause className="h-5 w-5 text-violet-400 mt-0.5" />
+              <Card className="border-border bg-muted-foreground/5 p-4">
+                <div className="flex items-start gap-3"><Pause className="h-5 w-5 text-muted-foreground mt-0.5" />
                   <div className="flex-1">
                     <div className="font-semibold">Switch to Hold Plan</div>
                     <div className="text-xs text-muted-foreground">{holdPriceDisplay} to keep your profile, history, and progress. Reactivate anytime.</div>

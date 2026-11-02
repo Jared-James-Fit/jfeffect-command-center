@@ -18,9 +18,9 @@ export const Route = createFileRoute("/_authenticated/portal/support")({ compone
 type Category = "question" | "bug" | "suggestion";
 
 const CAT_META: Record<Category, { label: string; icon: any; tone: string }> = {
-  question: { label: "Question", icon: HelpCircle, tone: "border-blue-500/30 bg-blue-500/10 text-blue-500" },
-  bug: { label: "Bug", icon: Bug, tone: "border-rose-500/30 bg-rose-500/10 text-rose-500" },
-  suggestion: { label: "Suggestion", icon: Lightbulb, tone: "border-amber-500/30 bg-amber-500/10 text-amber-500" },
+  question: { label: "Question", icon: HelpCircle, tone: "border-info/30 bg-info/10 text-info" },
+  bug: { label: "Bug", icon: Bug, tone: "border-destructive/30 bg-destructive/10 text-destructive" },
+  suggestion: { label: "Suggestion", icon: Lightbulb, tone: "border-warning/30 bg-warning/10 text-warning" },
 };
 
 function SupportPage() {
@@ -86,7 +86,7 @@ function SupportPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
-              <h1 className="truncate text-sm font-black sm:text-base">JF Effect Support</h1>
+              <h1 className="truncate text-sm font-bold sm:text-base">JF Effect Support</h1>
               {thread?.status && (
                 <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px] capitalize">
                   {thread.status}
@@ -94,7 +94,7 @@ function SupportPage() {
               )}
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground sm:text-[11px]">
-              <span className={cn("inline-flex shrink-0 items-center gap-1", liveCount > 0 && "text-emerald-500")}>
+              <span className={cn("inline-flex shrink-0 items-center gap-1", liveCount > 0 && "text-success")}>
                 <Radio className={cn("h-2.5 w-2.5", liveCount > 0 && "animate-pulse")} />
                 {liveCount > 0 ? "Team online" : "Replies within 24–48h"}
               </span>

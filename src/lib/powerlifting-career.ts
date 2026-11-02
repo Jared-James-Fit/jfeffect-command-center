@@ -9,10 +9,10 @@ export type MeetLevel = "international" | "national" | "regional" | "provincial"
 
 /** Highest first. Text always names the level, the colour only backs it up. */
 export const LEVELS: Record<MeetLevel, { label: string; rank: number; tone: string }> = {
-  international: { label: "International", rank: 5, tone: "border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-300" },
-  national: { label: "National", rank: 4, tone: "border-amber-500/50 bg-amber-400/15 text-amber-700 dark:text-amber-300" },
-  regional: { label: "Regional", rank: 3, tone: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300" },
-  provincial: { label: "Provincial", rank: 2, tone: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  international: { label: "International", rank: 5, tone: "border-border bg-muted-foreground/15 text-muted-foreground" },
+  national: { label: "National", rank: 4, tone: "border-warning/50 bg-warning/15 text-warning" },
+  regional: { label: "Regional", rank: 3, tone: "border-info/40 bg-info/15 text-info" },
+  provincial: { label: "Provincial", rank: 2, tone: "border-success/40 bg-success/15 text-success" },
   local: { label: "Local", rank: 1, tone: "border-border bg-muted text-muted-foreground" },
 };
 

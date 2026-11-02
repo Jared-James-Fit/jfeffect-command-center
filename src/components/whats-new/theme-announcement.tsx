@@ -150,7 +150,7 @@ export function ThemeAnnouncementDialog({ open, onClose }: { open: boolean; onCl
             <div className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
               <Sparkles className="h-3 w-3" /> New
             </div>
-            <DialogTitle className="text-xl font-black tracking-tight">Dark mode is here</DialogTitle>
+            <DialogTitle className="text-xl font-bold tracking-tight">Dark mode is here</DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
               Tap the <span className="font-semibold text-foreground">sun / moon switch</span> at the top of the
               screen to flip the whole app between light and dark — easier on the eyes for late-night logging.
@@ -199,13 +199,13 @@ function ThemeDemo() {
       {/* Sky: sun sets, moon + stars rise */}
       <Sun
         className={cn(
-          "absolute left-7 top-6 h-9 w-9 fill-amber-300 text-amber-400 transition-all duration-700 ease-out",
+          "absolute left-7 top-6 h-9 w-9 fill-warning text-warning transition-all duration-700 ease-out",
           dark ? "translate-y-10 rotate-90 opacity-0" : "translate-y-0 rotate-0 opacity-100",
         )}
       />
       <Moon
         className={cn(
-          "absolute right-14 top-6 h-8 w-8 fill-indigo-100 text-indigo-100 transition-all duration-700 ease-out",
+          "absolute right-14 top-6 h-8 w-8 fill-muted-foreground text-muted-foreground transition-all duration-700 ease-out",
           dark ? "translate-y-0 opacity-100" : "-translate-y-8 opacity-0",
         )}
       />
@@ -243,8 +243,8 @@ function ThemeDemo() {
               )}
             >
               {dark
-                ? <Moon className="h-2 w-2 fill-indigo-100 text-indigo-100" />
-                : <Sun className="h-2 w-2 fill-amber-400 text-amber-500" />}
+                ? <Moon className="h-2 w-2 fill-muted-foreground text-muted-foreground" />
+                : <Sun className="h-2 w-2 fill-warning text-warning" />}
             </span>
           </span>
         </div>

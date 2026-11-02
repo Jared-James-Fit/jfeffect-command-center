@@ -90,9 +90,9 @@ export const KIND_FAMILY: Record<CalendarKind, KindFamily> = {
   google_event: "google",
 };
 const FAMILY_STYLE: Record<KindFamily, { chip: string; dot: string }> = {
-  training: { chip: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30", dot: "bg-cyan-400" },
-  people: { chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30", dot: "bg-violet-400" },
-  coach: { chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-400" },
+  training: { chip: "bg-info/15 text-info border-info/30", dot: "bg-info" },
+  people: { chip: "bg-muted-foreground/15 text-muted-foreground border-border", dot: "bg-muted-foreground" },
+  coach: { chip: "bg-warning/15 text-warning border-warning/30", dot: "bg-warning" },
   google: { chip: "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/25", dot: "bg-slate-400" },
 };
 const KIND_LABEL: Record<CalendarKind, string> = {

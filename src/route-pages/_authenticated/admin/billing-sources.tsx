@@ -32,18 +32,18 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 const SOURCE_TONE: Record<string, string> = {
-  trainerize_legacy: "bg-amber-500/10 text-amber-700 border-amber-500/30",
-  jfeffect_stripe: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
-  manual_external: "bg-sky-500/10 text-sky-700 border-sky-500/30",
-  complimentary: "bg-purple-500/10 text-purple-700 border-purple-500/30",
+  trainerize_legacy: "bg-warning/10 text-warning border-warning/30",
+  jfeffect_stripe: "bg-success/10 text-success border-success/30",
+  manual_external: "bg-info/10 text-info border-info/30",
+  complimentary: "bg-muted-foreground/10 text-muted-foreground border-border",
   none: "bg-muted text-muted-foreground",
 };
 
 const STATUS_TONE: Record<string, string> = {
-  active: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
-  paused: "bg-amber-500/10 text-amber-700 border-amber-500/30",
-  past_due: "bg-rose-500/10 text-rose-700 border-rose-500/30",
-  ending: "bg-orange-500/10 text-orange-700 border-orange-500/30",
+  active: "bg-success/10 text-success border-success/30",
+  paused: "bg-warning/10 text-warning border-warning/30",
+  past_due: "bg-destructive/10 text-destructive border-destructive/30",
+  ending: "bg-warning/10 text-warning border-warning/30",
   ended: "bg-muted text-muted-foreground",
 };
 
@@ -120,9 +120,9 @@ export function BillingSourcesPage() {
         ))}
       </div>
 
-      <Card className="p-4 border-amber-500/30 bg-amber-50/40 dark:bg-amber-900/10">
+      <Card className="p-4 border-warning/30 bg-warning/40 dark:bg-warning/10">
         <div className="flex items-start gap-3">
-          <ShieldAlert className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+          <ShieldAlert className="h-5 w-5 text-warning mt-0.5 shrink-0" />
           <div className="text-sm">
             <div className="font-medium">Legacy revenue is estimated, not Stripe-verified</div>
             <div className="text-muted-foreground mt-1">
@@ -212,7 +212,7 @@ export function BillingSourcesPage() {
                     <td className="p-3">
                       <BillingSourceBadge source={c.billing_source ?? "none"} />
                       {c.billing_source_locked && (
-                        <div className="text-[10px] text-amber-700 mt-1">Locked</div>
+                        <div className="text-[10px] text-warning mt-1">Locked</div>
                       )}
                     </td>
                     <td className="p-3">

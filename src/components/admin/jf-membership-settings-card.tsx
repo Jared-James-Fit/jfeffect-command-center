@@ -60,18 +60,18 @@ export function JfMembershipSettingsCard() {
   const checkoutEnabled = form.public_checkout_enabled !== false;
 
   return (
-    <Card className="border-emerald-500/30 bg-emerald-500/5 p-6 space-y-3 md:col-span-2">
+    <Card className="border-success/30 bg-success/5 p-6 space-y-3 md:col-span-2">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-emerald-400" />
-        <h3 className="text-xs uppercase tracking-widest text-emerald-300">JF Membership</h3>
+        <Sparkles className="h-4 w-4 text-success" />
+        <h3 className="text-xs uppercase tracking-widest text-success">JF Membership</h3>
       </div>
       <p className="text-xs text-muted-foreground">
         Configure Stripe price IDs (test or live), trial length, and the refund/cancellation policy shown on signup.
       </p>
 
       {stripe && (
-        <div className={`flex items-start gap-2 rounded-md border p-3 text-xs ${stripe.mismatch ? "border-destructive/50 bg-destructive/10 text-destructive-foreground" : "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"}`}>
-          <KeyRound className={`mt-0.5 h-4 w-4 shrink-0 ${stripe.mismatch ? "text-destructive" : "text-emerald-400"}`} />
+        <div className={`flex items-start gap-2 rounded-md border p-3 text-xs ${stripe.mismatch ? "border-destructive/50 bg-destructive/10 text-destructive-foreground" : "border-success/40 bg-success/10 text-success"}`}>
+          <KeyRound className={`mt-0.5 h-4 w-4 shrink-0 ${stripe.mismatch ? "text-destructive" : "text-success"}`} />
           <div className="space-y-1">
             <div className="font-bold">
               Stripe key status — configured mode: <span className="uppercase">{stripe.configured_mode}</span>
@@ -108,8 +108,8 @@ export function JfMembershipSettingsCard() {
       )}
 
       {!fullyConfigured && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div>
             <div className="font-bold">JF Membership pricing is not configured.</div>
             <div className="opacity-90">Add Stripe price IDs before sending the public signup link (/membership). Until then, public checkout will be blocked with a clean error message.</div>
@@ -165,7 +165,7 @@ export function JfMembershipSettingsCard() {
                 key={m}
                 type="button"
                 onClick={() => setForm({ ...form, stripe_mode: m })}
-                className={`rounded-md border px-3 py-1.5 text-xs uppercase tracking-widest ${selectedMode === m ? "border-emerald-500 bg-emerald-500/20 text-emerald-100" : "border-border bg-background/50 text-muted-foreground"}`}
+                className={`rounded-md border px-3 py-1.5 text-xs uppercase tracking-widest ${selectedMode === m ? "border-success bg-success/20 text-success" : "border-border bg-background/50 text-muted-foreground"}`}
               >
                 {m}
               </button>
@@ -232,7 +232,7 @@ function ChecklistItem({ done, children }: { done: boolean; children: React.Reac
   return (
     <li className="flex items-start gap-2">
       {done
-        ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+        ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
         : <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
       <span className={done ? "text-muted-foreground line-through" : ""}>{children}</span>
     </li>

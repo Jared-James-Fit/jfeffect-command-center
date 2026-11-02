@@ -28,7 +28,7 @@ export function PickPlanCard({ clientId }: { clientId: string }) {
           <BookOpen className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-black uppercase tracking-wider text-primary">Start here</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-primary">Start here</div>
           <h3 className="mt-0.5 text-sm font-bold leading-tight">Pick your plan</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Coach-written plans for every goal. Pick one, choose your days, and Week 1 lands on your calendar.

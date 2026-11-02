@@ -816,26 +816,26 @@ function BlockEditor() {
           <span
             className={`font-semibold ${
               scheduleSummary.missingCount > 0 || scheduleSummary.issueCount > 0
-                ? "text-amber-600 dark:text-amber-400"
+                ? "text-warning"
                 : "text-foreground"
             }`}
           >
             {scheduleSummary.scheduledCount}/{scheduleSummary.totalDays}
           </span>
           {scheduleSummary.missingCount > 0 && (
-            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400">
+            <Badge variant="outline" className="border-warning/40 bg-warning/10 text-[10px] text-warning">
               {scheduleSummary.missingCount} missing date{scheduleSummary.missingCount === 1 ? "" : "s"}
             </Badge>
           )}
           {scheduleSummary.issueCount > 0 && (
-            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400">
+            <Badge variant="outline" className="border-warning/40 bg-warning/10 text-[10px] text-warning">
               {scheduleSummary.issueCount} calendar issue{scheduleSummary.issueCount === 1 ? "" : "s"}
             </Badge>
           )}
         </span>
       </div>
       {editingNonActive && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
           You're editing a {String(editingStatus).toLowerCase()} block — this is not {clientName}'s active block yet.
           The active block is "{canonicalActiveBlock!.name}". Nothing here changes what the client trains from until
           this block is scheduled and becomes active. Editing is safe.

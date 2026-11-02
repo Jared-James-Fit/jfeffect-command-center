@@ -56,13 +56,13 @@ export function CardioDashboard({ embedded = false }: { embedded?: boolean } = {
   return (
     <>
       {!embedded && <PageHeader title="Cardio Targets" subtitle="All client cardio targets in one place." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-primary text-primary-foreground font-semibold w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add Cardio
         </Button>
       } />}
       {embedded && (
         <div className="flex justify-end px-3 pt-3 sm:px-6 md:px-8">
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Cardio
           </Button>
         </div>
@@ -201,7 +201,7 @@ function CardioComplianceSection() {
       ) : (
         <ul className="divide-y divide-border">
           {data.map((r: any) => {
-            const tone = r.rate < 0.5 ? "text-destructive" : r.rate < 0.85 ? "text-amber-500" : "text-emerald-500";
+            const tone = r.rate < 0.5 ? "text-destructive" : r.rate < 0.85 ? "text-warning" : "text-success";
             return (
               <li key={r.clientId} className="flex items-center justify-between gap-3 py-2">
                 <ClientNameLink clientId={r.clientId} className="truncate text-sm font-semibold text-primary hover:underline">{r.name}</ClientNameLink>

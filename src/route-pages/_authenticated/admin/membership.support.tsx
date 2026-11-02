@@ -29,9 +29,9 @@ export function SupportInboxRedirect() {
 }
 
 const CAT: Record<string, { icon: any; tone: string; label: string }> = {
-  question: { icon: HelpCircle, tone: "bg-blue-500/15 text-blue-300 border-blue-500/30", label: "Question" },
-  bug: { icon: Bug, tone: "bg-rose-500/15 text-rose-300 border-rose-500/30", label: "Bug" },
-  suggestion: { icon: Lightbulb, tone: "bg-amber-500/15 text-amber-300 border-amber-500/30", label: "Suggestion" },
+  question: { icon: HelpCircle, tone: "bg-info/15 text-info border-info/30", label: "Question" },
+  bug: { icon: Bug, tone: "bg-destructive/15 text-destructive border-destructive/30", label: "Bug" },
+  suggestion: { icon: Lightbulb, tone: "bg-warning/15 text-warning border-warning/30", label: "Suggestion" },
   reply: { icon: HelpCircle, tone: "bg-secondary text-foreground border-border", label: "Reply" },
 };
 
@@ -115,7 +115,7 @@ export function SupportInbox({ embedded = false }: { embedded?: boolean } = {}) 
       )}
       <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="flex items-center gap-2 text-sm">
-          <Radio className={cn("h-4 w-4", liveStatus?.isAvailable ? "text-emerald-400 animate-pulse" : "text-muted-foreground")} />
+          <Radio className={cn("h-4 w-4", liveStatus?.isAvailable ? "text-success animate-pulse" : "text-muted-foreground")} />
           <div>
             <div className="font-semibold">Live Support</div>
             <div className="text-xs text-muted-foreground">

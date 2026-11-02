@@ -87,7 +87,7 @@ export function DailyNutritionPanel() {
   return (
     <div className="grid gap-4 p-4 md:p-6 md:grid-cols-2">
       {pendingTarget && !target && (
-        <Card className="md:col-span-2 border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+        <Card className="md:col-span-2 border-warning/40 bg-warning/5 p-4 text-sm">
           <div className="font-semibold mb-1">Your coach is reviewing your targets</div>
           <div className="text-muted-foreground">
             You'll see your daily macro goals once your coach approves them.

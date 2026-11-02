@@ -351,7 +351,7 @@ function GreetingHeader({ firstName }: { firstName: string }) {
   }, []);
   void now;
   return (
-    <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
+    <h1 className="truncate text-xl font-bold tracking-tight md:text-2xl">
       {greeting()}{firstName ? `, ${firstName}` : ""}
     </h1>
   );

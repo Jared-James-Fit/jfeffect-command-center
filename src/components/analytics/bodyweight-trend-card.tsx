@@ -58,7 +58,7 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
 
   const header = (
     <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-      <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
+      <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-bold uppercase tracking-wider text-foreground">
         <Scale className="h-5 w-5 shrink-0 text-primary" />
         <span className="truncate">Bodyweight</span>
         <InfoTip label="About bodyweight" title="Bodyweight" align="start">
@@ -125,8 +125,8 @@ export function BodyweightTrendCard({ clientId, displayUnit, rangeStart, rangeEn
     rangeChange == null || Math.abs(rangeChange) < 0.05
       ? "text-muted-foreground"
       : rangeChange < 0
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-amber-600 dark:text-amber-400";
+        ? "text-success"
+        : "text-warning";
   const signed = (n: number) => `${n > 0 ? "+" : ""}${fmt1(n)} ${displayUnit}`;
 
   const insight = single
@@ -191,7 +191,7 @@ function Stat({ label, value, sub, valueClass }: { label: string; value: string;
   return (
     <div className="min-w-0 rounded-lg border border-border/70 bg-muted/20 p-2.5">
       <div className="truncate text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={`mt-0.5 truncate text-lg font-black ${valueClass ?? "text-foreground"}`}>{value}</div>
+      <div className={`mt-0.5 truncate text-lg font-bold ${valueClass ?? "text-foreground"}`}>{value}</div>
       {sub && <div className="truncate text-[10px] text-muted-foreground">{sub}</div>}
     </div>
   );

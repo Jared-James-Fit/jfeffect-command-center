@@ -61,27 +61,27 @@ export const SIGNNOW_INTEGRATION_STATUSES = [
 
 export const STATUS_BADGE: Record<string, string> = {
   "Not Sent": "bg-muted text-muted-foreground",
-  Sent: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  Opened: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  "Waiting on Client": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  Signed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  Completed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  Verified: "bg-emerald-600/15 text-emerald-700 dark:text-emerald-300",
-  Declined: "bg-red-500/15 text-red-700 dark:text-red-300",
-  Expired: "bg-red-500/15 text-red-700 dark:text-red-300",
-  Cancelled: "bg-red-500/15 text-red-700 dark:text-red-300",
-  Error: "bg-red-500/15 text-red-700 dark:text-red-300",
-  "Needs Resend": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "Needs Manual Verification": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "Manual Action Needed": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  Sent: "bg-info/15 text-info",
+  Opened: "bg-info/15 text-info",
+  "Waiting on Client": "bg-warning/15 text-warning",
+  Signed: "bg-success/15 text-success",
+  Completed: "bg-success/15 text-success",
+  Verified: "bg-success/15 text-success",
+  Declined: "bg-destructive/15 text-destructive",
+  Expired: "bg-destructive/15 text-destructive",
+  Cancelled: "bg-destructive/15 text-destructive",
+  Error: "bg-destructive/15 text-destructive",
+  "Needs Resend": "bg-warning/15 text-warning",
+  "Needs Manual Verification": "bg-warning/15 text-warning",
+  "Manual Action Needed": "bg-warning/15 text-warning",
 };
 
 export const VERIFICATION_BADGE: Record<string, string> = {
   "Not Verified": "bg-muted text-muted-foreground",
-  "Auto-Matched": "bg-blue-500/15 text-blue-700 dark:text-blue-300",
-  "Manually Verified": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  "Signer Name Mismatch": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  "Needs Review": "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "Auto-Matched": "bg-info/15 text-info",
+  "Manually Verified": "bg-success/15 text-success",
+  "Signer Name Mismatch": "bg-warning/15 text-warning",
+  "Needs Review": "bg-warning/15 text-warning",
 };
 
 export function normalizeName(s: string | null | undefined): string {

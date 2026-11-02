@@ -48,7 +48,7 @@ export function AudiencePicker({
                 on ? (dark ? "bg-white text-black" : "bg-background text-foreground shadow-sm") : dark ? "text-white/70" : "text-muted-foreground",
               )}
             >
-              <Icon className={cn("h-3.5 w-3.5 shrink-0", a.key === "close_friends" && "fill-emerald-500 text-emerald-500")} />
+              <Icon className={cn("h-3.5 w-3.5 shrink-0", a.key === "close_friends" && "fill-success text-success")} />
               <span className="truncate">{a.label}</span>
             </button>
           );

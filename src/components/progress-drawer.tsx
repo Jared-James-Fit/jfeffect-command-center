@@ -66,7 +66,7 @@ export function ProgressDrawer() {
             ) : failed > 0 ? (
               <AlertTriangle className="h-4 w-4 text-destructive" />
             ) : (
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <CheckCircle2 className="h-4 w-4 text-success" />
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -121,7 +121,7 @@ function JobRow({ job }: { job: Job }) {
       : Loader2;
   const tone =
     job.status === "success"
-      ? "text-emerald-500"
+      ? "text-success"
       : job.status === "error"
       ? "text-destructive"
       : "text-primary";
@@ -186,7 +186,7 @@ function JobRow({ job }: { job: Job }) {
                   )}
                 >
                   <CheckCircle2
-                    className={cn("h-3 w-3", s.done ? "text-emerald-500" : "text-muted-foreground/40")}
+                    className={cn("h-3 w-3", s.done ? "text-success" : "text-muted-foreground/40")}
                   />
                   <span className={cn(s.done && "line-through opacity-70")}>{s.label}</span>
                 </li>
@@ -198,7 +198,7 @@ function JobRow({ job }: { job: Job }) {
 
       {job.status === "success" && (
         <div className="flex items-center justify-between gap-2">
-          <div className="text-[11px] text-emerald-600 dark:text-emerald-400">
+          <div className="text-[11px] text-success">
             {job.statusText ?? "Done"}
           </div>
           {job.successAction && (

@@ -55,14 +55,14 @@ function statusToneClass(
     case "Current":
       return "border-primary/50 bg-primary/10 text-primary";
     case "Upcoming":
-      return "border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+      return "border-info/40 bg-info/10 text-info";
     case "Completed":
-      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+      return "border-success/40 bg-success/10 text-success";
     case "Previous":
       return "border-border bg-muted text-muted-foreground";
     case "Draft":
     case "Unscheduled":
-      return "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+      return "border-warning/40 bg-warning/10 text-warning";
     default:
       return "border-border bg-muted text-muted-foreground";
   }
@@ -218,7 +218,7 @@ export function BlockPickerSheet({
         className="flex w-full max-w-[520px] flex-col p-0 sm:max-w-[520px]"
       >
         <SheetHeader className="border-b border-border p-4">
-          <SheetTitle className="text-base font-black uppercase tracking-wider">
+          <SheetTitle className="text-base font-bold uppercase tracking-wider">
             Browse Training Blocks
           </SheetTitle>
           <div className="relative mt-3">
@@ -268,7 +268,7 @@ export function BlockPickerSheet({
             </div>
           ) : isError ? (
             <div className="mx-auto max-w-sm space-y-4 py-10 text-center">
-              <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+              <AlertTriangle className="mx-auto h-8 w-8 text-warning" />
               <p className="text-sm text-foreground">
                 Training blocks could not be loaded.
               </p>
@@ -293,7 +293,7 @@ export function BlockPickerSheet({
             <div className="space-y-6">
               {groups.map((g) => (
                 <section key={g.title}>
-                  <h3 className="mb-2 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                     {g.title}
                   </h3>
                   <ul className="space-y-2">

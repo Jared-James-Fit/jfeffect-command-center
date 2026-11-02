@@ -16,9 +16,9 @@ import type { DailyMetric } from "@/lib/wearables/providers";
 import { cn } from "@/lib/utils";
 
 const RAMP_STYLE = {
-  ramping: "bg-amber-500/15 text-amber-400",
-  steady: "bg-emerald-500/15 text-emerald-400",
-  dropping: "bg-sky-500/15 text-sky-400",
+  ramping: "bg-warning/15 text-warning",
+  steady: "bg-success/15 text-success",
+  dropping: "bg-info/15 text-info",
   unknown: "bg-muted text-muted-foreground",
 } as const;
 const RAMP_LABEL = {

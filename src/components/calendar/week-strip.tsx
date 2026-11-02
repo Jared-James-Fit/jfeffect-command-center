@@ -15,9 +15,9 @@ export function WeekStrip({
   selected,
   onSelect,
   count,
-  dotClass = "bg-violet-400",
+  dotClass = "bg-muted-foreground",
   extraCount,
-  extraDotClass = "bg-sky-400",
+  extraDotClass = "bg-info",
   workoutMark,
 }: {
   today: string;
@@ -93,7 +93,7 @@ export function WeekStrip({
               <span className={cn("text-[10px] font-bold uppercase tracking-wider", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
                 {date.toLocaleDateString(undefined, { weekday: "short" })}
               </span>
-              <span className={cn("text-sm font-black tabular-nums", !isSelected && isToday && "text-primary")}>{date.getDate()}</span>
+              <span className={cn("text-sm font-bold tabular-nums", !isSelected && isToday && "text-primary")}>{date.getDate()}</span>
               <span className="flex h-2.5 items-center gap-0.5" aria-hidden={!wm}>
                 {wm && <WorkoutStatusMark mark={wm} onPrimary={isSelected} />}
                 {dots.map((cls, i) => (

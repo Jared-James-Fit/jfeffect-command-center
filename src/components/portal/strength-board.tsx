@@ -107,14 +107,14 @@ function Headline({ row, mode, unit }: { row: StrengthRow; mode: BoardMode; unit
     return (
       <>
         {formatMultiple(row.bw_multiple)}
-        <span className="ml-0.5 text-[0.6em] font-black text-muted-foreground">BW</span>
+        <span className="ml-0.5 text-[0.6em] font-bold text-muted-foreground">BW</span>
       </>
     );
   }
   return (
     <>
       {formatLoad(row.kg, unit)}
-      {row.reps && row.reps > 1 ? <span className="ml-1 text-[0.7em] font-black text-primary">×{row.reps}</span> : null}
+      {row.reps && row.reps > 1 ? <span className="ml-1 text-[0.7em] font-bold text-primary">×{row.reps}</span> : null}
     </>
   );
 }
@@ -123,7 +123,7 @@ function XBadge({ row, className }: { row: StrengthRow; className?: string }) {
   const x = formatMultiple(row.bw_multiple);
   if (!x) return null;
   return (
-    <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-primary", className)}>
+    <span className={cn("inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-primary", className)}>
       {x} BW
     </span>
   );
@@ -217,15 +217,15 @@ export function StrengthBoardCard() {
       >
         <div className="flex items-start justify-between gap-3 bg-gradient-to-br from-amber-400/15 via-transparent to-transparent px-4 pb-3 pt-4">
           <div className="min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">All-time strength board</div>
-            <div className="mt-0.5 text-lg font-black leading-tight">Hall of Strength</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">All-time strength board</div>
+            <div className="mt-0.5 text-lg font-bold leading-tight">Hall of Strength</div>
             <div className="text-[11px] text-muted-foreground">Every JF Effect athlete · gym + meets</div>
           </div>
           <Trophy className="h-7 w-7 shrink-0 text-amber-400" />
         </div>
         <div className="grid grid-cols-2 border-t">
           <KingTile label="Pound for pound #1" row={p4pKing} loading={isPending}
-            value={p4pKing ? <>{formatMultiple(p4pKing.bw_multiple)}<span className="ml-0.5 text-[10px] font-black text-muted-foreground">BW</span></> : null} />
+            value={p4pKing ? <>{formatMultiple(p4pKing.bw_multiple)}<span className="ml-0.5 text-[10px] font-bold text-muted-foreground">BW</span></> : null} />
           <KingTile label="Heaviest total #1" row={absKing} loading={isPending} className="border-l"
             value={absKing ? formatLoad(absKing.kg, unit) : null} />
         </div>
@@ -400,7 +400,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
                     className={cn("min-w-0 rounded-xl bg-muted/40 px-1.5 py-2 text-center transition-colors active:bg-muted", r.is_me && "bg-primary/10 ring-1 ring-primary/30")}>
                     <div className="text-base leading-none">{MEDAL[place - 1] ?? place}</div>
                     <div className="mt-1 truncate text-xs font-semibold">{r.is_me ? "You" : r.display_name}</div>
-                    <div className="mt-0.5 truncate text-[12px] font-black tabular-nums text-primary">{boardValue(r, mode, unit)}</div>
+                    <div className="mt-0.5 truncate text-[12px] font-bold tabular-nums text-primary">{boardValue(r, mode, unit)}</div>
                     <div className="truncate text-[10px] text-muted-foreground">
                       {r.source === "meet" ? "Meet" : "Training"}{mode === "p4p" ? ` · ${formatLoad(r.kg, unit)}` : ""}
                     </div>
@@ -414,7 +414,7 @@ export function StrengthBoardSlide({ initialMode = "p4p", initialDivision = null
                 {[...rest, ...(meBelow ? [meBelow] : [])].map((r) => (
                   <li key={r.key}>
                     <button type="button" onClick={() => show(r.athlete_id)} className={cn("flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] active:bg-muted", r.is_me && "bg-primary/10")}>
-                      <span className="w-6 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">{rankOf(r, mode, division)}</span>
+                      <span className="w-6 shrink-0 text-center text-[12px] font-bold tabular-nums text-muted-foreground">{rankOf(r, mode, division)}</span>
                       <span className="min-w-0 flex-1 truncate font-semibold">{r.is_me ? "You" : r.display_name}</span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">{r.source === "meet" ? "Meet" : "Training"}</span>
                       <span className="shrink-0 text-[12px] font-bold tabular-nums text-primary">{boardValue(r, mode, unit)}</span>
@@ -445,7 +445,7 @@ function KingTile({ label, row, value, loading, className }: {
 }) {
   return (
     <div className={cn("min-w-0 px-4 py-3", className)}>
-      <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+      <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
         <Crown className="h-3 w-3 text-amber-400" /> {label}
       </div>
       {loading ? (
@@ -455,7 +455,7 @@ function KingTile({ label, row, value, loading, className }: {
           <LifterAvatar row={row} size="h-8 w-8" />
           <div className="min-w-0">
             <div className="truncate text-xs font-bold">{row.display_name}</div>
-            <div className="text-base font-black tabular-nums leading-tight">{value}</div>
+            <div className="text-base font-bold tabular-nums leading-tight">{value}</div>
           </div>
         </div>
       ) : (
@@ -549,7 +549,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
               source === k ? "border-amber-400/70 bg-amber-400/10 shadow-sm" : "bg-card text-muted-foreground")}>
             <Icon className={cn("h-4 w-4 shrink-0", source === k ? "text-amber-500" : "")} />
             <span className="min-w-0">
-              <span className="block text-xs font-black text-foreground">{label}</span>
+              <span className="block text-xs font-bold text-foreground">{label}</span>
               <span className="block truncate text-[10px]">{sub}</span>
             </span>
           </button>
@@ -558,7 +558,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
 
       {source === "meets" && history.athletes > 0 && (
         <div className="rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-400/15 via-transparent to-transparent p-3">
-          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Official competition record</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Official competition record</div>
           <div className="mt-1 grid grid-cols-3 text-center">
             {[
               [history.athletes, "athletes"],
@@ -566,7 +566,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
               [history.since ?? "—", "since"],
             ].map(([n, label]) => (
               <div key={label as string}>
-                <div className="text-xl font-black tabular-nums leading-none">{n}</div>
+                <div className="text-xl font-bold tabular-nums leading-none">{n}</div>
                 <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
               </div>
             ))}
@@ -598,7 +598,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
       <div className="grid grid-cols-4 gap-1.5">
         {BOARD_LIFTS.map((l) => (
           <button key={l.key} type="button" onClick={() => pick(setLift)(l.key)}
-            className={cn("min-h-10 rounded-xl border text-xs font-black transition",
+            className={cn("min-h-10 rounded-xl border text-xs font-bold transition",
               lift === l.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>
             {l.label}
           </button>
@@ -650,7 +650,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
           )}
           {count > TOP && (
             <button type="button" onClick={() => setShowAll((s) => !s)}
-              className="min-h-10 w-full rounded-xl border bg-card text-xs font-black text-primary">
+              className="min-h-10 w-full rounded-xl border bg-card text-xs font-bold text-primary">
               {showAll ? "Show top 10" : `Show all ${count} athletes`}
             </button>
           )}
@@ -665,7 +665,7 @@ export function HallOfStrength({ initialSource = "all", initialMode = "p4p", ini
         : <MeetYouCard me={me} mode={mode} division={division} />)}
 
       <details className="rounded-2xl border bg-muted/20 p-3 text-xs">
-        <summary className="cursor-pointer font-black">How the board works</summary>
+        <summary className="cursor-pointer font-bold">How the board works</summary>
         {source === "all" ? (
           <ul className="mt-2 space-y-1.5 text-muted-foreground">
             <li><b className="text-foreground">Who's on it:</b> everyone JF Effect has coached. Current clients, former clients (ALUMNI) and athletes who competed with us. Anyone without the lifts for a board yet is listed under it in <b className="text-foreground">Not ranked yet</b>, with what's missing.</li>
@@ -726,13 +726,13 @@ function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
       row.is_me && "ring-2 ring-primary",
     )}>
       <Medal className={cn("h-5 w-5", MEDAL[rank - 1])} />
-      <div className="text-[10px] font-black">{rank === 1 ? "1ST" : rank === 2 ? "2ND" : "3RD"}</div>
+      <div className="text-[10px] font-bold">{rank === 1 ? "1ST" : rank === 2 ? "2ND" : "3RD"}</div>
       <LifterAvatar row={row} size={first ? "mt-1 h-14 w-14" : "mt-1 h-11 w-11"} />
       <div className="mt-1 line-clamp-2 w-full break-words text-xs font-bold leading-tight">{row.display_name}</div>
       <NameLine row={row} />
       <AlumniLine row={row} />
       {row.is_coach && <CoachTag className="mt-0.5" />}
-      <div className={cn("mt-0.5 font-black tabular-nums leading-tight", first ? "text-lg" : "text-base")}>
+      <div className={cn("mt-0.5 font-bold tabular-nums leading-tight", first ? "text-lg" : "text-base")}>
         <Headline row={row} mode={mode} unit={unit} />
       </div>
       <div className="mt-1 flex flex-wrap justify-center gap-1">
@@ -749,7 +749,7 @@ function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
         {showSource && <SourceIcon row={row} />}
         {row.meet ? `${row.meet.name} · ${format(new Date(row.lifted_at), "yyyy")}` : `Training · ${format(new Date(row.lifted_at), "MMM yyyy")}`}
       </div>
-      {onOpen && <div className="mt-1 text-[9px] font-black uppercase tracking-wider text-primary">Career ›</div>}
+      {onOpen && <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-primary">Career ›</div>}
     </Tag>
   );
 }
@@ -758,14 +758,14 @@ function PodiumSpot({ row, rank, mode, unit, showSource, tier, onOpen }: {
 function NotRankedYet({ people }: { people: UnrankedPerson[] }) {
   return (
     <details className="group overflow-hidden rounded-2xl border bg-card">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-black [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-bold [&::-webkit-details-marker]:hidden">
         <span className="flex-1">Not ranked yet · {people.length}</span>
         <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
       </summary>
       <ul className="divide-y border-t">
         {people.map((p) => (
           <li key={p.key} className={cn("flex items-center gap-3 px-3 py-2", p.is_me && "bg-primary/5")}>
-            <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground/50">–</span>
+            <span className="w-8 shrink-0 text-center text-sm font-bold text-muted-foreground/50">–</span>
             <Avatar className="h-8 w-8 shrink-0 border border-border opacity-80">
               <AvatarPhoto src={p.avatar_url} alt={p.display_name} />
               <AvatarFallback className="text-xs font-bold">{p.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
@@ -792,7 +792,7 @@ function BoardLine({ row, rank, mode, unit, showSource, tier, onOpen }: {
   return (
     <li className={cn(row.is_me && "bg-primary/5")}>
     <Tag type={onOpen ? "button" : undefined} onClick={onOpen} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left", onOpen && "active:bg-muted")}>
-      <span className="w-8 shrink-0 text-center text-sm font-black text-muted-foreground">#{rank}</span>
+      <span className="w-8 shrink-0 text-center text-sm font-bold text-muted-foreground">#{rank}</span>
       <LifterAvatar row={row} size="h-9 w-9 shrink-0" />
       <div className="min-w-0 flex-1">
         {/* The name gets its own line so it's never squeezed by tags. */}
@@ -813,7 +813,7 @@ function BoardLine({ row, rank, mode, unit, showSource, tier, onOpen }: {
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
-        <div className="text-sm font-black tabular-nums"><Headline row={row} mode={mode} unit={unit} /></div>
+        <div className="text-sm font-bold tabular-nums"><Headline row={row} mode={mode} unit={unit} /></div>
         {mode === "absolute" && <XBadge row={row} />}
         <ClubBadge row={row} />
       </div>
@@ -846,12 +846,12 @@ function YouCard({ me, top, mode, lift, division, unit }: {
 
   return (
     <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-4">
-      <div className="text-[10px] font-black uppercase tracking-widest text-primary">You</div>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-primary">You</div>
       {status.kind === "ranked" && me && (
         <>
           <div className="mt-1 flex items-baseline justify-between gap-3">
-            <div className="text-2xl font-black">#{status.rank}{status.count ? <span className="text-sm font-bold text-muted-foreground"> of {status.count}</span> : null}</div>
-            <div className="text-right text-base font-black tabular-nums"><Headline row={me} mode={mode} unit={unit} /></div>
+            <div className="text-2xl font-bold">#{status.rank}{status.count ? <span className="text-sm font-bold text-muted-foreground"> of {status.count}</span> : null}</div>
+            <div className="text-right text-base font-bold tabular-nums"><Headline row={me} mode={mode} unit={unit} /></div>
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">{subline(me, mode, unit)}</div>
           {gap != null && (
@@ -887,7 +887,7 @@ function MeetYouCard({ me, mode, division }: { me: StrengthRow | null; mode: Boa
   }
   return (
     <div className="rounded-2xl border-2 border-dashed border-amber-400/50 bg-amber-400/5 p-4">
-      <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">You</div>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">You</div>
       {me ? (
         <p className="mt-1 text-sm font-bold">#{rankOf(me, mode, division)} on the official JF Effect competition record. Next meet, move up.</p>
       ) : (
@@ -984,10 +984,10 @@ export function StrengthBoardCoachTools() {
 
   return (
     <div className="space-y-3 rounded-2xl border bg-card p-3">
-      <div className="flex items-center gap-2 text-sm font-black"><ShieldCheck className="h-4 w-4 text-primary" /> Coach tools</div>
+      <div className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-4 w-4 text-primary" /> Coach tools</div>
 
       <div>
-        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Held back for review · {pending.length}</div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Held back for review · {pending.length}</div>
         {isPending ? (
           <div className="py-3 text-center text-xs text-muted-foreground"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></div>
         ) : pending.length === 0 ? (
@@ -1012,7 +1012,7 @@ export function StrengthBoardCoachTools() {
 
       {decided.length > 0 && (
         <div>
-          <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Your decisions</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Your decisions</div>
           <ul className="mt-1 divide-y">
             {decided.map((r) => (
               <ReviewLine key={r.result_id} r={r} unit={unit} busy={busy}
@@ -1026,7 +1026,7 @@ export function StrengthBoardCoachTools() {
 
       {unranked.length > 0 && (
         <div>
-          <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Can't rank yet · {unranked.length}</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Can't rank yet · {unranked.length}</div>
           <ul className="mt-1 space-y-1 text-xs">
             {unranked.map((u) => (
               <li key={u.client_id} className="flex justify-between gap-3">
@@ -1066,7 +1066,7 @@ function ReviewLine({ r, unit, busy, actions, hint }: {
       <div className="mt-1.5 flex flex-wrap gap-2">
         {actions.map((a) => (
           <button key={a.label} type="button" disabled={busy} onClick={a.onClick}
-            className={cn("min-h-9 flex-1 rounded-lg border px-2.5 text-xs font-black disabled:opacity-50",
+            className={cn("min-h-9 flex-1 rounded-lg border px-2.5 text-xs font-bold disabled:opacity-50",
               a.primary ? "basis-full border-primary bg-primary text-primary-foreground" : a.danger ? "border-destructive/40 text-destructive" : "")}>
             {a.label}
           </button>
@@ -1092,7 +1092,7 @@ function RemoveFromBoard({ unit, busy, onRemove }: { unit: WeightUnit; busy: boo
   const [confirm, setConfirm] = useState<string | null>(null);
   return (
     <div>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="text-[11px] font-black text-primary">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="text-[11px] font-bold text-primary">
         {open ? "Hide" : "Remove a lift that's on the board"}
       </button>
       {open && (
@@ -1102,7 +1102,7 @@ function RemoveFromBoard({ unit, busy, onRemove }: { unit: WeightUnit; busy: boo
               <span className="min-w-0 flex-1 truncate"><b>{s.display_name}</b> · {s.lift} {formatLoad(Number(s.load_kg), unit)} ×{s.reps} · {format(new Date(s.lift_day + "T12:00:00"), "MMM d")}</span>
               <button type="button" disabled={busy}
                 onClick={() => (confirm === s.result_id ? (onRemove(s.result_id), setConfirm(null)) : setConfirm(s.result_id))}
-                className="min-h-8 shrink-0 rounded-lg border border-destructive/40 px-2 text-[11px] font-black text-destructive disabled:opacity-50">
+                className="min-h-8 shrink-0 rounded-lg border border-destructive/40 px-2 text-[11px] font-bold text-destructive disabled:opacity-50">
                 {confirm === s.result_id ? "Tap to confirm" : "Remove"}
               </button>
             </li>

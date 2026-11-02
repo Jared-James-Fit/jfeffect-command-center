@@ -141,9 +141,9 @@ const LABELS: Record<MessengerCheckinTaskType, Record<string, string>> = {
 // Form / check-in cards are always blue so "action required" reads differently
 // from coach (red) and client (neutral) bubbles.
 const FORM_CARD =
-  "w-[min(76vw,310px)] max-w-full rounded-2xl border border-blue-200 bg-blue-50 p-3 text-slate-900 shadow-sm dark:border-blue-400/30 dark:bg-blue-950 dark:text-blue-50";
-const FORM_ICON = "bg-blue-600/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300";
-const FORM_MUTED = "text-blue-900/70 dark:text-blue-100/70";
+  "w-[min(76vw,310px)] max-w-full rounded-2xl border border-info/30 bg-info/10 p-3 text-slate-900 shadow-sm dark:bg-info dark:text-info";
+const FORM_ICON = "bg-info/10 text-info dark:bg-info/15";
+const FORM_MUTED = "text-info/70";
 
 function taskQuestions(_taskType: MessengerCheckinTaskType) {
   return WEEKLY;
@@ -191,7 +191,7 @@ export function MessengerCheckinRequestCard({
         <div className="flex items-start gap-3">
           <span className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-full",
-            done ? "bg-emerald-500/10 text-emerald-600" : FORM_ICON,
+            done ? "bg-success/10 text-success" : FORM_ICON,
           )}>
             {done ? <CheckCircle2 className="h-5 w-5" /> : <ClipboardCheck className="h-5 w-5" />}
           </span>
@@ -205,14 +205,14 @@ export function MessengerCheckinRequestCard({
 
         {!isLoading && !done && !superseded && role === "client" && (
           <Button
-            className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
+            className="mt-3 h-10 w-full bg-info font-semibold text-white hover:bg-info"
             onClick={() => setOpen(true)}
           >
             Start check-in <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
         {!isLoading && !done && !superseded && role === "admin" && (
-          <div className="mt-3 rounded-xl bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
+          <div className="mt-3 rounded-xl bg-info/10 px-3 py-2 text-xs font-medium text-info dark:bg-info/15">
             Waiting for client
           </div>
         )}
@@ -220,7 +220,7 @@ export function MessengerCheckinRequestCard({
           <Button
             type="button"
             variant="outline"
-            className="mt-3 h-10 w-full border-emerald-500/25 bg-emerald-500/10 font-semibold text-emerald-700 hover:bg-emerald-500/15 hover:text-emerald-800"
+            className="mt-3 h-10 w-full border-success/25 bg-success/10 font-semibold text-success hover:bg-success/15 hover:text-success"
             onClick={() => setOpen(true)}
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -228,7 +228,7 @@ export function MessengerCheckinRequestCard({
           </Button>
         )}
         {done && role === "client" && (
-          <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
+          <div className="mt-3 rounded-xl bg-success/10 px-3 py-2 text-xs font-medium text-success">
             ✓ Complete
           </div>
         )}
@@ -412,7 +412,7 @@ function CheckinWizard({
 
           <div className="px-5 py-6">
             <div className="min-h-[230px]">
-              <h3 className="text-xl font-black leading-tight">{q.prompt}</h3>
+              <h3 className="text-xl font-bold leading-tight">{q.prompt}</h3>
               {q.helper && <p className="mt-2 text-sm text-muted-foreground">{q.helper}</p>}
 
               {q.type === "rating" && (
@@ -484,7 +484,7 @@ function CheckinWizard({
                               isAllGood && "col-span-2",
                               selected
                                 ? isAllGood
-                                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  ? "border-success bg-success/10 text-success"
                                   : "border-primary bg-primary/10 text-primary"
                                 : "border-border bg-card",
                             )}
@@ -654,7 +654,7 @@ export function MessengerCheckinSubmissionCard({
     return (
       <div className={FORM_CARD}>
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          <CheckCircle2 className="h-5 w-5 text-success" />
           <div>
             <div className="text-sm font-bold">{titleFor(taskType)} sent</div>
             <div className={cn("text-xs", FORM_MUTED)}>Your coach has the full update.</div>
@@ -673,7 +673,7 @@ export function MessengerCheckinSubmissionCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-sm font-bold">
             {titleFor(taskType)} recap
-            {reviewedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-label="Reviewed" /> : null}
+            {reviewedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-label="Reviewed" /> : null}
           </div>
           <div className={cn("text-xs", FORM_MUTED)}>AI-assisted coach summary</div>
         </div>
@@ -786,7 +786,7 @@ export function MessengerCheckinSubmissionCard({
       {/* One-tap close. Replying in the chat also closes it by itself. */}
       {reviewedAt ? (
         <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-          <span className="text-emerald-600">
+          <span className="text-success">
             Reviewed {fmtDateTime(reviewedAt)} · {reviewedViaLabel(reviewedVia as any)}
           </span>
           <button type="button" onClick={() => void reopen()} className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
@@ -872,7 +872,7 @@ export function FormHistoryRow({ p, role }: { p: FormPresentation; role: Role })
         <span
           className={cn(
             "grid h-6 w-6 shrink-0 place-items-center rounded-full",
-            completed ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+            completed ? "bg-success/12 text-success" : "bg-muted text-muted-foreground",
           )}
         >
           {completed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleDashed className="h-3.5 w-3.5" />}
@@ -943,7 +943,7 @@ export function FormHistoryGroup({ group, role }: { group: FormHistoryGroupData;
         <span
           className={cn(
             "grid h-6 w-6 shrink-0 place-items-center rounded-full",
-            group.missed > 0 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+            group.missed > 0 ? "bg-warning/15 text-warning" : "bg-success/12 text-success",
           )}
         >
           {group.missed > 0 ? <CircleDashed className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -955,7 +955,7 @@ export function FormHistoryGroup({ group, role }: { group: FormHistoryGroupData;
           <span className="block truncate text-[11px] leading-tight text-muted-foreground">
             {group.filled} filled
             {group.missed > 0 && (
-              <span className="font-semibold text-amber-600 dark:text-amber-400"> · {group.missed} missed</span>
+              <span className="font-semibold text-warning"> · {group.missed} missed</span>
             )}
           </span>
         </span>
@@ -1101,7 +1101,7 @@ export function FormRequestChatCard({
         <div className="flex items-start gap-3">
           <span className={cn(
             "grid h-9 w-9 shrink-0 place-items-center rounded-full",
-            done ? "bg-emerald-500/10 text-emerald-600" : FORM_ICON,
+            done ? "bg-success/10 text-success" : FORM_ICON,
           )}>
             {done ? <CheckCircle2 className="h-5 w-5" /> : <ClipboardCheck className="h-5 w-5" />}
           </span>
@@ -1119,14 +1119,14 @@ export function FormRequestChatCard({
         {note && !done && <div className={cn("mt-2 text-xs", FORM_MUTED)}>{note}</div>}
         {!isLoading && !done && role === "client" && (
           <Button
-            className="mt-3 h-10 w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
+            className="mt-3 h-10 w-full bg-info font-semibold text-white hover:bg-info"
             onClick={() => setOpen(true)}
           >
             {started ? "Continue" : isNutrition ? "Start nutrition update" : "Start form"} <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
         )}
         {!isLoading && !done && role === "admin" && (
-          <div className="mt-3 rounded-xl bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-700 dark:bg-blue-400/15 dark:text-blue-200">
+          <div className="mt-3 rounded-xl bg-info/10 px-3 py-2 text-xs font-medium text-info dark:bg-info/15">
             {started ? "Client is filling it out" : "Waiting for client"}
           </div>
         )}
@@ -1139,7 +1139,7 @@ export function FormRequestChatCard({
           />
         )}
         {done && role === "client" && (
-          <div className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700">
+          <div className="mt-3 rounded-xl bg-success/10 px-3 py-2 text-xs font-medium text-success">
             ✓ Sent to your coach{isNutrition ? " — your new plan is on the way" : ""}
           </div>
         )}
@@ -1249,7 +1249,7 @@ function SubmittedFormAnswers({
       ) : rows.length === 0 ? (
         <div className={cn("text-xs", FORM_MUTED)}>No answers were filled in.</div>
       ) : (
-        <dl className="divide-y divide-blue-200/70 overflow-hidden rounded-xl bg-white/70 dark:divide-blue-400/15 dark:bg-blue-900/40">
+        <dl className="divide-y divide-info/70 overflow-hidden rounded-xl bg-white/70 dark:divide-info/15 dark:bg-info/40">
           {shown.map((r) => (
             <div key={r.id} className="px-3 py-2">
               <dt className={cn("text-[11px] leading-snug", FORM_MUTED)}>{r.label}</dt>
@@ -1264,7 +1264,7 @@ function SubmittedFormAnswers({
           type="button"
           onClick={() => setShowAll((v) => !v)}
           aria-expanded={showAll}
-          className="flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-600/10 dark:text-blue-200 dark:hover:bg-blue-400/10"
+          className="flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-semibold text-info hover:bg-info/10"
         >
           {showAll ? "Show less" : `Show all ${rows.length} answers`}
           <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
@@ -1275,9 +1275,9 @@ function SubmittedFormAnswers({
         <div
           className={cn(
             "flex items-start gap-2 rounded-xl px-3 py-2 text-xs font-medium",
-            planLine.tone === "busy" && "bg-amber-500/10 text-amber-800 dark:text-amber-200",
-            planLine.tone === "error" && "bg-rose-500/10 text-rose-700 dark:text-rose-200",
-            planLine.tone === "done" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+            planLine.tone === "busy" && "bg-warning/10 text-warning",
+            planLine.tone === "error" && "bg-destructive/10 text-destructive",
+            planLine.tone === "done" && "bg-success/10 text-success",
           )}
         >
           {planLine.tone === "busy" ? (
@@ -1293,7 +1293,7 @@ function SubmittedFormAnswers({
 
       <a
         href={href}
-        className="flex h-10 w-full items-center justify-center rounded-md border border-blue-600/25 bg-white/70 text-sm font-semibold text-blue-700 hover:bg-white dark:border-blue-300/25 dark:bg-blue-900/40 dark:text-blue-100 dark:hover:bg-blue-900/60"
+        className="flex h-10 w-full items-center justify-center rounded-md border border-info/25 bg-white/70 text-sm font-semibold text-info hover:bg-white dark:bg-info/40 dark:hover:bg-info/60"
       >
         {isNutrition ? "Open AI plan" : "Open in their profile"}
         <ChevronRight className="ml-1 h-4 w-4" />

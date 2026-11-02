@@ -270,7 +270,7 @@ export function SbdSplitCard({
         {badCoachMaxes.map((b) => (
           <Callout
             key={b.lift}
-            icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+            icon={<AlertTriangle className="h-4 w-4 text-warning" />}
             tone="focus"
           >
             <b>
@@ -290,13 +290,13 @@ export function SbdSplitCard({
                 Estimated total
               </div>
               <div className="flex flex-wrap items-baseline gap-x-2">
-                <span className="text-3xl font-black tabular-nums">{fmtTotal(split.total)}</span>
+                <span className="text-3xl font-bold tabular-nums">{fmtTotal(split.total)}</span>
                 <span className="text-sm font-semibold text-muted-foreground">{displayUnit}</span>
                 {meetDelta != null && Math.abs(conv(meetDelta)) >= 0.5 && (
                   <span
                     className={cn(
                       "text-xs font-bold tabular-nums",
-                      meetDelta > 0 ? "text-emerald-500" : "text-rose-500",
+                      meetDelta > 0 ? "text-success" : "text-destructive",
                     )}
                   >
                     {meetDelta > 0 ? "▲" : "▼"} {fmtTotal(Math.abs(meetDelta))} vs last meet
@@ -320,7 +320,7 @@ export function SbdSplitCard({
               {split.lifts.map((l) => (
                 <div
                   key={l.lift}
-                  className="flex min-w-0 items-center justify-center text-[11px] font-black text-white"
+                  className="flex min-w-0 items-center justify-center text-[11px] font-bold text-white"
                   style={{ width: `${l.share * 100}%`, background: LIFT_COLORS[l.lift] }}
                 >
                   <span className="truncate px-1">
@@ -347,7 +347,7 @@ export function SbdSplitCard({
                           style={{ background: LIFT_COLORS[l.lift] }}
                         />
                         <span className="text-sm font-bold">{LIFT_LABEL[l.lift]}</span>
-                        <span className="text-sm font-black tabular-nums">
+                        <span className="text-sm font-bold tabular-nums">
                           {fmtLb(l.lb)} {displayUnit}
                         </span>
                       </span>
@@ -355,9 +355,9 @@ export function SbdSplitCard({
                         className={cn(
                           "shrink-0 text-xs font-bold tabular-nums",
                           l.status === "above"
-                            ? "text-emerald-500"
+                            ? "text-success"
                             : l.status === "below"
-                              ? "text-amber-500"
+                              ? "text-warning"
                               : "text-muted-foreground",
                         )}
                       >
@@ -416,7 +416,7 @@ export function SbdSplitCard({
 
             {strongest && focusLift && (
               <div className="space-y-2">
-                <Callout icon={<Trophy className="h-4 w-4 text-emerald-500" />} tone="good">
+                <Callout icon={<Trophy className="h-4 w-4 text-success" />} tone="good">
                   {strongest.status === "above" ? (
                     <>
                       <b>{LIFT_LABEL[strongest.lift]} carries your total</b> at{" "}
@@ -431,7 +431,7 @@ export function SbdSplitCard({
                     </>
                   )}
                 </Callout>
-                <Callout icon={<Target className="h-4 w-4 text-amber-500" />} tone="focus">
+                <Callout icon={<Target className="h-4 w-4 text-warning" />} tone="focus">
                   {focusLift.status === "below" ? (
                     <>
                       <b>{LIFT_LABEL[focusLift.lift]} is your biggest opportunity</b> at{" "}
@@ -480,7 +480,7 @@ export function SbdSplitCard({
                 {notes.map((n) => (
                   <Callout
                     key={n}
-                    icon={<TrendingUp className="h-4 w-4 text-sky-500" />}
+                    icon={<TrendingUp className="h-4 w-4 text-info" />}
                     tone="info"
                   >
                     {n}
@@ -500,7 +500,7 @@ export function SbdSplitCard({
                   <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     {LIFT_LABEL[lift]}
                   </div>
-                  <div className="text-lg font-black tabular-nums">
+                  <div className="text-lg font-bold tabular-nums">
                     {maxes[lift] ? fmtLb(maxes[lift]!.lb) : "—"}
                   </div>
                 </li>
@@ -542,9 +542,9 @@ function Callout({
     <div
       className={cn(
         "flex gap-2.5 rounded-xl border p-3 text-[13px] leading-snug",
-        tone === "good" && "border-emerald-500/30 bg-emerald-500/10",
-        tone === "focus" && "border-amber-500/30 bg-amber-500/10",
-        tone === "info" && "border-sky-500/30 bg-sky-500/10",
+        tone === "good" && "border-success/30 bg-success/10",
+        tone === "focus" && "border-warning/30 bg-warning/10",
+        tone === "info" && "border-info/30 bg-info/10",
       )}
     >
       <span className="mt-0.5 shrink-0">{icon}</span>

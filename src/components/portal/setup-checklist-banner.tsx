@@ -5,12 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, CalendarPlus, Target, FileSignature } from "lucide-react";
+import { CheckCircle2, Circle, ChevronRight, Camera, IdCard, CalendarClock, Target, FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useServerFn } from "@tanstack/react-start";
-import { getMyCalendarSyncStatus } from "@/lib/schedule.functions";
-import { usePovFn } from "@/lib/client-pov-args";
-import { calendarSyncState } from "@/lib/calendar-sync";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
 import { SetupStepSheet, type SetupStepKey } from "@/components/portal/setup-step-sheet";
@@ -40,14 +36,8 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
     },
   });
 
-  const calFn = usePovFn(useServerFn(getMyCalendarSyncStatus));
-  const { data: cal } = useQuery({
-    queryKey: ["my-calendar-sync-setup", clientId],
-    enabled: !!clientId,
-    staleTime: 60_000,
-    queryFn: () => calFn({ data: {} }),
-  });
-  const calendarDone = !!cal?.google?.connected || calendarSyncState({ lastFetchAt: cal?.lastFetchAt }) === "synced";
+  // Calendar sync is optional and has its own card on Home (CalendarSyncCard),
+  // so it isn't a row here too.
 
   const items = useMemo<Item[]>(() => {
     const c = client as any;
@@ -56,7 +46,6 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       { key: "basic_info", label: "Confirm your basic info", description: "Identity, contact, height and emergency contact.", sheet: "basic_info", icon: IdCard, done: !!c && isBasicInfoComplete(c) },
       { key: "training_schedule", label: "Set your training schedule", description: "Choose the exact days your workouts should land.", sheet: "training_schedule", icon: CalendarClock, done: !!c?.training_schedule_completed },
       { key: "goals_setup", label: "Finish Goals & Setup", description: "Goals, availability, experience, equipment, nutrition and injuries — asked once here.", to: "/portal/goals-setup", icon: Target, done: isGoalsSetupComplete(goals ?? null) },
-      { key: "calendar", label: "Sync your calendar", description: "Optional: add your sessions and workouts to Google, Apple or Outlook.", to: "/portal/calendar", search: { sync: 1 }, icon: CalendarPlus, done: calendarDone, optional: true },
     ];
     // The Coaching Agreement is the one mandatory step, so it leads the list. It only
     // appears once its status has loaded and applies to this account.
@@ -71,7 +60,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       });
     }
     return base;
-  }, [client, goals, calendarDone, agreement.state, agreement.canSign, agreement.openSignFlow]);
+  }, [client, goals, agreement.state, agreement.canSign, agreement.openSignFlow]);
 
   // Optional steps (calendar sync) never count toward progress, the next action, or the banner's visibility.
   const required = items.filter((i) => !i.optional);
@@ -84,7 +73,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2"><h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{required.length}</Badge></div>
+            <div className="flex items-center gap-2"><h2 className="text-base font-bold tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{required.length}</Badge></div>
             <p className="text-xs text-muted-foreground sm:text-sm">Each detail has one home, so you won't be asked the same onboarding questions in multiple setup steps.</p>
           </div>
         </div>
@@ -93,7 +82,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
           {items.map((it) => {
             const Icon = it.icon;
             const rowClass = "flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 text-left text-sm transition hover:bg-background " + (it.done ? "opacity-60" : "");
-            const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.optional && <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Optional</Badge>}{it.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}</div><div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</>;
+            const inner = <><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className={"font-semibold " + (it.done ? "line-through" : "")}>{it.label}</span>{it.optional && <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Optional</Badge>}{it.done ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}</div><div className="text-[11px] text-muted-foreground sm:text-xs">{it.description}</div></div>{!it.done && <ChevronRight className="h-4 w-4 text-muted-foreground" />}</>;
             return <li key={it.key}>{it.onClick || it.key === "agreement" ? <button type="button" className={rowClass} onClick={it.onClick} disabled={it.done || !it.onClick}>{inner}</button> : it.sheet ? <button type="button" className={rowClass} onClick={() => setOpenStep(it.sheet!)} disabled={it.done}>{inner}</button> : <Link to={it.to!} search={it.search as any} className={rowClass}>{inner}</Link>}</li>;
           })}
         </ul>

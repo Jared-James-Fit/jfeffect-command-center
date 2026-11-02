@@ -48,7 +48,7 @@ function NutritionDashboard() {
   return (
     <>
       <PageHeader title="Nutrition Targets" subtitle="All client nutrition targets in one place." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add Targets
         </Button>
       } />

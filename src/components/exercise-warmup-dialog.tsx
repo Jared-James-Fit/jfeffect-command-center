@@ -70,7 +70,7 @@ export function ExerciseWarmupDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Flame className="h-4 w-4 text-orange-500" /> Warm-Up — {exercise.name}
+            <Flame className="h-4 w-4 text-warning" /> Warm-Up — {exercise.name}
           </DialogTitle>
           <DialogDescription>
             Powerlifting flag drives auto-detect on the workout warm-up sheet.

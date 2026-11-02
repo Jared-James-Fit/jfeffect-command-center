@@ -88,7 +88,7 @@ export function AgreementReader({
               className={cn(
                 "text-[15px] leading-relaxed text-muted-foreground",
                 i === 0 &&
-                  "rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-foreground",
+                  "rounded-xl border border-warning/40 bg-warning/10 p-3.5 text-foreground",
               )}
             >
               {clause.label && (

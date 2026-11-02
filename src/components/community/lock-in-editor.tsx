@@ -231,7 +231,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
           <button type="button" onClick={() => onOpenChange(false)} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 active:scale-95" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
-          <div className="text-[15px] font-black tracking-wide">Lock in</div>
+          <div className="text-[15px] font-bold tracking-wide">Lock in</div>
           <span className="h-11 w-11" />
         </div>
 
@@ -277,7 +277,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
               type="button"
               aria-pressed={template === t}
               onClick={() => setTemplate(t)}
-              className={cn("h-8 rounded-full px-3.5 text-[12px] font-black transition-colors", template === t ? "bg-white text-black" : "bg-white/10 text-white/75")}
+              className={cn("h-8 rounded-full px-3.5 text-[12px] font-bold transition-colors", template === t ? "bg-white text-black" : "bg-white/10 text-white/75")}
             >
               {TEMPLATE_LABEL[t]}
             </button>
@@ -324,7 +324,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
             }}
           />
           {pointsHint && !posted && (
-            <p className={cn("rounded-xl px-3 py-2 text-[13px]", pointsHint.tone === "earn" ? "bg-white/10 font-black text-white" : "text-white/60")}>
+            <p className={cn("rounded-xl px-3 py-2 text-[13px]", pointsHint.tone === "earn" ? "bg-white/10 font-bold text-white" : "text-white/60")}>
               {pointsHint.text}
             </p>
           )}
@@ -332,7 +332,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
 
         {/* Actions */}
         <div className="grid shrink-0 grid-cols-2 gap-2 px-4 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.9rem)" }}>
-          <Button type="button" disabled={sharing} onClick={() => void shareOut()} className="h-14 rounded-2xl bg-white/10 text-[15px] font-black text-white shadow-lg hover:bg-white/20" aria-label="Save image">
+          <Button type="button" disabled={sharing} onClick={() => void shareOut()} className="h-14 rounded-2xl bg-white/10 text-[15px] font-bold text-white shadow-lg hover:bg-white/20" aria-label="Save image">
             <Download className="mr-2 h-5 w-5" />
             {sharing ? "Preparing…" : "Save"}
           </Button>
@@ -340,7 +340,7 @@ export function LockInEditor({ open, onOpenChange, completionId, ensureStarted, 
             type="button"
             disabled={posting || posted}
             onClick={() => void post()}
-            className={cn("h-14 rounded-2xl text-[15px] font-black shadow-lg", posted ? "bg-emerald-500 text-white disabled:opacity-100" : cn("text-white", SHARE_GRADIENT))}
+            className={cn("h-14 rounded-2xl text-[15px] font-bold shadow-lg", posted ? "bg-success text-white disabled:opacity-100" : cn("text-white", SHARE_GRADIENT))}
           >
             {posted ? <Check className="mr-2 h-5 w-5" /> : <Send className="mr-2 h-5 w-5" />}
             {posting ? "Posting…" : posted ? (visibility === "coach" ? "Sent" : "Posted") : existing ? "Update" : visibility === "private" ? "Save" : visibility === "coach" ? "Send" : "Post"}

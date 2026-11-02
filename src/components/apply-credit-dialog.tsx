@@ -215,7 +215,7 @@ export function ApplyCreditDialog({ open, onOpenChange, clientId, onSaved }: Pro
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving || chosen.length === 0} className="bg-gradient-primary font-bold uppercase">
+          <Button onClick={save} disabled={saving || chosen.length === 0} className="bg-primary text-primary-foreground font-semibold">
             {saving ? "Applying…" : "Apply Credit"}
           </Button>
         </DialogFooter>

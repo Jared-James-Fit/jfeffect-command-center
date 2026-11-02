@@ -120,7 +120,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
 
   const header = (
     <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-      <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
+      <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-bold uppercase tracking-wider text-foreground">
         <Heart className="h-5 w-5 shrink-0 text-primary" />
         <span className="truncate">Cardio</span>
         <InfoTip label="About cardio analytics" title="Cardio" align="start">
@@ -201,7 +201,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                 Minutes vs Target
               </span>
-              <span className="text-sm font-black text-foreground">
+              <span className="text-sm font-bold text-foreground">
                 {summary.completedMinutes} / {summary.prescribedMinutes} min
                 {summary.minutesAdherence != null && (
                   <span className="ml-2 text-xs font-bold text-muted-foreground">
@@ -225,7 +225,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         )}
 
         {summary.skippedSessions > 0 && (
-          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+          <div className="mt-3 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs font-semibold text-warning">
             {summary.skippedSessions} cardio session{summary.skippedSessions === 1 ? "" : "s"} marked as skipped in this range.
           </div>
         )}
@@ -288,7 +288,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                 Low-intensity aerobic work prescribed as Zone 2/LISS.
               </InfoTip>
             </div>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm font-black text-foreground">
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm font-bold text-foreground">
               <span>
                 {summary.zone2.completedSessions} / {summary.zone2.prescribedSessions} sessions
               </span>
@@ -409,7 +409,7 @@ function Cell({
         <span className="truncate">{label}</span>
         {tip}
       </div>
-      <div className={`mt-1 text-xl font-black ${highlight ? "text-primary" : "text-foreground"}`}>{value}</div>
+      <div className={`mt-1 text-xl font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</div>
       {sublabel && <div className="mt-0.5 text-[10px] text-muted-foreground">{sublabel}</div>}
     </div>
   );

@@ -1146,7 +1146,7 @@ function NoteEditor({
           <div className="ml-auto flex items-center">
             <Button
               variant="ghost"
-              className={cn("h-10 gap-1.5 px-2.5 text-sm font-medium", copied && "text-emerald-600 dark:text-emerald-400")}
+              className={cn("h-10 gap-1.5 px-2.5 text-sm font-medium", copied && "text-success")}
               onClick={copy}
               disabled={!note.body && !note.title}
             >

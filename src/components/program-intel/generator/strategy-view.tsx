@@ -21,7 +21,7 @@ function ItemList({ title, items, onChange, testId }: { title: string; items: It
   if (!items.length) return null;
   return (
     <div data-testid={testId}>
-      <div className="mb-1 text-[12px] font-black">{title}</div>
+      <div className="mb-1 text-[12px] font-bold">{title}</div>
       <ul className="space-y-1.5">
         {items.map((it, i) => (
           <li key={i} className="flex items-start gap-1.5 text-[12px]">
@@ -55,7 +55,7 @@ export function StrategySummary({ strategy, compact }: { strategy: Strategy; com
       <ItemList title="C · What gets priority" items={strategy.prioritize} />
       <ItemList title="D · What gets reduced or removed" items={strategy.reduce} />
       <div>
-        <div className="mb-1 text-[12px] font-black">E · How the new program progresses</div>
+        <div className="mb-1 text-[12px] font-bold">E · How the new program progresses</div>
         <div className="space-y-1 text-[12px]">
           <div><b>Model:</b> {strategy.progression.model}</div>
           <div><b>Expected:</b> {strategy.progression.expected}</div>
@@ -64,7 +64,7 @@ export function StrategySummary({ strategy, compact }: { strategy: Strategy; com
         </div>
       </div>
       <div className="rounded-xl bg-secondary/40 p-2.5 text-[12px]">
-        <div className="font-black">Structure: {strategy.structure.weeks} weeks · {strategy.structure.days_per_week} days{strategy.structure.session_minutes ? ` · ~${strategy.structure.session_minutes} min` : ""}</div>
+        <div className="font-bold">Structure: {strategy.structure.weeks} weeks · {strategy.structure.days_per_week} days{strategy.structure.session_minutes ? ` · ~${strategy.structure.session_minutes} min` : ""}</div>
         {strategy.structure.blocks.map((b, i) => (
           <div key={i} className="mt-1"><b>{b.name}</b> ({b.weeks} wk): {b.objective}{b.phases.length ? ` · ${b.phases.map((p) => `W${p.week} ${p.phase}`).join(", ")}` : ""}</div>
         ))}
@@ -82,7 +82,7 @@ export function StrategySummary({ strategy, compact }: { strategy: Strategy; com
         )}
       </div>
       {(strategy.data_limits.length > 0 || strategy.conflicts.length > 0) && (
-        <div className="space-y-1 rounded-xl bg-amber-500/10 p-2.5 text-[12px] text-amber-900 dark:text-amber-100">
+        <div className="space-y-1 rounded-xl bg-warning/10 p-2.5 text-[12px] text-warning">
           {strategy.conflicts.map((c, i) => <div key={`c${i}`}><b>Conflict:</b> {c.description}{c.resolution ? ` → ${c.resolution}` : ""}</div>)}
           {strategy.data_limits.map((d, i) => <div key={`d${i}`}><b>Data limit:</b> {d}</div>)}
         </div>
@@ -101,7 +101,7 @@ export function DecisionCard({ d, on, onToggle, onEdit }: { d: Strategy["decisio
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{d.area || "decision"} · {d.confidence} confidence</span>
         </div>
         {onToggle && (
-          <button type="button" onClick={onToggle} className={cn("inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-bold", on ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-secondary text-muted-foreground")} aria-pressed={on}>
+          <button type="button" onClick={onToggle} className={cn("inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-bold", on ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground")} aria-pressed={on}>
             {on ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} {on ? "Keep" : "Dropped"}
           </button>
         )}
@@ -165,7 +165,7 @@ export function StrategyReview({
         <ItemList title="Edit: reduced or removed" items={reduce} onChange={setReduce} />
       </div>
       <div className="space-y-2">
-        <div className="text-[12px] font-black">Decisions ({kept} of {strategy.decisions.length} kept)</div>
+        <div className="text-[12px] font-bold">Decisions ({kept} of {strategy.decisions.length} kept)</div>
         {strategy.decisions.map((d, i) => (
           <DecisionCard key={i} d={{ ...d, change: texts[i] }} on={on[i]} onToggle={() => setOn(on.map((x, j) => (j === i ? !x : x)))} onEdit={(v) => setTexts(texts.map((x, j) => (j === i ? v : x)))} />
         ))}

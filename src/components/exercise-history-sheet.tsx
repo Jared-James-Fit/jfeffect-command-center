@@ -376,7 +376,7 @@ export function ExerciseHistorySheet({
                     key={s.id}
                     className={cn(
                       "grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] items-center gap-1.5 border-t border-border/60 px-2 py-1.5 text-xs",
-                      s.completed_at && "bg-green-500/5",
+                      s.completed_at && "bg-success/5",
                     )}
                   >
                     <span className="font-mono text-muted-foreground">{i + 1}</span>
@@ -410,7 +410,7 @@ export function ExerciseHistorySheet({
                     <span className="tabular-nums">{s.mean_concentric_velocity_mps != null ? Number(s.mean_concentric_velocity_mps).toFixed(2) : "—"}</span>
                     <span className="text-right">
                       {s.completed_at
-                        ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-green-500" />
+                        ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-success" />
                         : <Circle className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />}
                     </span>
                   </div>

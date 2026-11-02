@@ -129,14 +129,14 @@ export function SetTimerInput({
             "flex w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-medium tabular-nums transition-colors whitespace-nowrap",
             focusMode ? "h-9 text-base" : "h-8",
             isConfirmed && completedSeconds != null
-              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600"
+              ? "border-success/50 bg-success/10 text-success"
               : running
                 ? "border-primary bg-primary/10 text-primary"
                 : paused
-                  ? "border-amber-500/50 bg-amber-500/10 text-amber-600"
+                  ? "border-warning/50 bg-warning/10 text-warning"
                   // Not logged yet: the target, drawn like a placeholder so it
                   // never reads as a time already done.
-                  : "border-dashed border-blue-500/40 bg-transparent text-muted-foreground",
+                  : "border-dashed border-info/40 bg-transparent text-muted-foreground",
             !disabled && "cursor-pointer",
           )}
         >
@@ -161,7 +161,7 @@ export function SetTimerInput({
           <div className="px-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Timer
           </div>
-          <div className="text-center text-2xl font-black tabular-nums">{fmtMMSS(remaining)}</div>
+          <div className="text-center text-2xl font-bold tabular-nums">{fmtMMSS(remaining)}</div>
           <div className="flex items-center gap-1.5">
             {running ? (
               <button

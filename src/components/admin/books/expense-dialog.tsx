@@ -193,8 +193,8 @@ export function ExpenseDialog({
         </DialogHeader>
 
         {ai && (expense?.status === "needs_review" || ai.notes || ai.pst) && (
-          <div className={cn("flex gap-2 rounded-md border p-3 text-sm", expense?.status === "needs_review" ? "border-amber-500/40 bg-amber-500/10" : "bg-muted/40")}>
-            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div className={cn("flex gap-2 rounded-md border p-3 text-sm", expense?.status === "needs_review" ? "border-warning/40 bg-warning/10" : "bg-muted/40")}>
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div className="space-y-1">
               {ai.read === false ? (
                 <p>{ASSISTANT_NAME} couldn't read this one{ai.notes ? ` (${ai.notes})` : ""}. Fill in the details from the receipt.</p>

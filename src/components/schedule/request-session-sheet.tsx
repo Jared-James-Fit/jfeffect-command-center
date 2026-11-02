@@ -137,7 +137,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
             </SheetHeader>
 
             {isPov && (
-              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
                 Preview only. Clients send requests from here; they show up as a card in your chat with them.
               </p>
             )}
@@ -234,7 +234,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
         <div className="border-t border-border bg-background/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto w-full max-w-lg space-y-2">
             <p className="truncate text-center text-xs text-muted-foreground">{summary}</p>
-            <Button className="h-12 w-full bg-gradient-primary font-bold" disabled={busy || isPov || !date || needsNote} onClick={submit}>
+            <Button className="h-12 w-full bg-primary text-primary-foreground font-semibold" disabled={busy || isPov || !date || needsNote} onClick={submit}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send request
             </Button>
           </div>
@@ -281,8 +281,8 @@ export function MySessionRequests({ clientId, isPov = false, children }: { clien
     <section className="space-y-2">
       {/* The section's one action, labelled in words. */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Sessions</h2>
-        <Button size="sm" className="h-9 gap-1.5 bg-gradient-primary font-bold" onClick={() => setOpen(true)}>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sessions</h2>
+        <Button size="sm" className="h-9 gap-1.5 bg-primary text-primary-foreground font-semibold" onClick={() => setOpen(true)}>
           <CalendarPlus className="h-4 w-4" /> Request a session
         </Button>
       </div>
@@ -292,10 +292,10 @@ export function MySessionRequests({ clientId, isPov = false, children }: { clien
         <ul className="space-y-1.5">
           {rows.map((r) => (
             <li key={r.id} className={cn("flex items-center gap-3 rounded-xl border px-3 py-2.5",
-              r.status === "pending" ? "border-primary/40 bg-primary/5" : r.status === "approved" ? "border-emerald-500/30 bg-emerald-500/5" : "border-border")}>
+              r.status === "pending" ? "border-primary/40 bg-primary/5" : r.status === "approved" ? "border-success/30 bg-success/5" : "border-border")}>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{requestTypeLabel(r.request_type)} · {requestWhen(r)}</div>
-                <div className={cn("text-xs", r.status === "approved" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                <div className={cn("text-xs", r.status === "approved" ? "text-success" : "text-muted-foreground")}>
                   {requestStatusLabel(r.status)}{r.status === "declined" && r.decline_reason ? ` · ${r.decline_reason}` : ""}
                 </div>
               </div>

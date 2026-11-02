@@ -66,7 +66,7 @@ export function ClientProfilePictureGate({ children }: { children: ReactNode }) 
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tight">
+            <h2 className="text-lg font-bold tracking-tight">
               {missing ? "Profile picture required" : "Please update your profile picture"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">

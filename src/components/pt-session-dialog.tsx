@@ -455,7 +455,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
         )}
 
         {form.uses_credit !== false && (tracking || hasCredits) && isNewBooking && (
-          <div className={`rounded-md border px-3 py-2 text-sm ${mustConfirmOverbook ? "border-destructive/60 bg-destructive/10" : overbook ? "border-border bg-secondary/30" : remaining - willReserve <= 1 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
+          <div className={`rounded-md border px-3 py-2 text-sm ${mustConfirmOverbook ? "border-destructive/60 bg-destructive/10" : overbook ? "border-border bg-secondary/30" : remaining - willReserve <= 1 ? "border-warning/60 bg-warning/10" : "border-primary/40 bg-primary/10"}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 {mustConfirmOverbook ? <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" /> : <CalendarDays className="h-4 w-4 shrink-0" />}
@@ -753,7 +753,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <Button
             onClick={save}
             disabled={saving || (form.uses_credit !== false && mustConfirmOverbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking}
-            className="bg-gradient-primary font-bold uppercase"
+            className="bg-primary text-primary-foreground font-semibold"
           >
             {saving
               ? "Saving…"

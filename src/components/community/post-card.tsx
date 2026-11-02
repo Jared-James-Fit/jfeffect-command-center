@@ -61,7 +61,7 @@ import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/compo
 /** "● Training now" — a lock-in whose session is still open (and recent). */
 export function TrainingNowPill({ className }: { className?: string }) {
   return (
-    <span className={cn("jf-live-pill inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-white", className)}>
+    <span className={cn("jf-live-pill inline-flex items-center gap-1.5 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white", className)}>
       <LiveDot size={6} tone="white" ring={false} /> Training now
     </span>
   );
@@ -78,9 +78,9 @@ export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?
   const big = size === "detail";
   return (
     <div className={cn("relative overflow-hidden px-5 text-white", big ? "py-8" : "py-6", bg)}>
-      {now ? <TrainingNowPill /> : time ? <span className="text-[10px] font-black uppercase tracking-[0.16em] text-red-400">{time}</span> : null}
+      {now ? <TrainingNowPill /> : time ? <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-destructive">{time}</span> : null}
       <div className={cn("font-display mt-2 uppercase leading-[0.95]", big ? "text-[60px]" : "text-[48px]")}>Locked in</div>
-      <div className="mt-1.5 h-1.5 w-24 rounded-full bg-red-500" />
+      <div className="mt-1.5 h-1.5 w-24 rounded-full bg-destructive" />
       {post.session_title && <div className="mt-3 truncate text-[15px] font-bold text-white/80">{post.session_title}</div>}
       {post.live && <div className="mt-1 text-[12px] text-white/55">Numbers land here when they finish.</div>}
     </div>
@@ -137,7 +137,7 @@ export function AutoPostCaption({ post, clamp, onOpenPerson, className }: { post
         <div className="mt-2.5 flex items-start gap-2.5 rounded-2xl bg-muted/60 px-3 py-2.5" data-recap-improve>
           <Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
           <div className="min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Work on this week</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Work on this week</div>
             <div className="text-[13px] font-semibold leading-snug">{improve.text}</div>
           </div>
         </div>
@@ -310,7 +310,7 @@ export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: Workou
         <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10", style.text)}>
           <style.Icon className="h-4 w-4" />
         </span>
-        <span className={cn("truncate text-[10px] font-black uppercase tracking-[0.16em]", style.text)}>{win.label}</span>
+        <span className={cn("truncate text-[10px] font-bold uppercase tracking-[0.16em]", style.text)}>{win.label}</span>
         <span className="ml-auto min-w-0 truncate text-[11px] font-semibold text-white/50">{workoutHeadline(stats)}</span>
       </div>
       <div className="font-display mt-3 text-[28px] uppercase leading-[1.02]">{win.headline}</div>
@@ -343,7 +343,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
           : "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.45),rgba(127,29,29,0.14)_45%,#0a0a0d_75%)]",
       )}
     >
-      <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/55">
+      <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
         <CheckCircle2 className="h-3 w-3" /> Workout completed
       </span>
       {/* what was trained, then where it sits in the program */}
@@ -353,7 +353,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
         <div className="mt-3">
           <div className="flex min-w-0 items-center gap-2">
             {pr && lift.pr && (
-              <span className="shrink-0 rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2 py-px text-[9px] font-black uppercase tracking-[0.14em] text-[#2b1700]">
+              <span className="shrink-0 rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2 py-px text-[9px] font-bold uppercase tracking-[0.14em] text-[#2b1700]">
                 New {SCOPE_WORD[lift.pr]}
               </span>
             )}
@@ -369,7 +369,7 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
           {nums.map((n) => (
             <div key={n.label} className="min-w-0">
               <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px]" : "text-[24px]")}>{n.value}</div>
-              <div className="mt-1 truncate text-[9px] font-black uppercase tracking-[0.14em] text-white/55">{n.label}</div>
+              <div className="mt-1 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-white/55">{n.label}</div>
             </div>
           ))}
         </div>
@@ -469,7 +469,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         />
         <div className="flex shrink-0 items-center gap-1">
           {post.visibility === "close_friends" ? (
-            <Star className="h-3.5 w-3.5 fill-emerald-500 text-emerald-500" aria-label="Close friends only" />
+            <Star className="h-3.5 w-3.5 fill-success text-success" aria-label="Close friends only" />
           ) : post.visibility !== "community" && (post.visibility !== "followers" || post.is_mine) && (
             // a private account's post looks like any other to its followers (as on Instagram); the author sees the lock
             <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label={post.visibility === "coach" ? "Only the athlete and their coach see this" : post.visibility === "followers" ? "Only your followers see this" : "Only visible to you"} />
@@ -522,13 +522,13 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* With a photo, the numbers sit under it, Strava style */}
       {post.media_type && s && (
         <button type="button" onClick={() => onOpen(post)} className="block w-full px-3.5 pt-3 text-left">
-          <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+          <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
             <CheckCircle2 className="h-3 w-3" /> Workout completed
           </span>
           <div className="mt-1 flex items-center gap-2">
             <h3 className="font-display min-w-0 flex-1 truncate text-[22px] uppercase leading-none">{workoutHeadline(s)}</h3>
             {lift?.pr && (
-              <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-px text-[10px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">{SCOPE_WORD[lift.pr]}</span>
+              <span className="shrink-0 rounded-full bg-warning/15 px-2 py-px text-[10px] font-bold uppercase tracking-wide text-warning">{SCOPE_WORD[lift.pr]}</span>
             )}
           </div>
           {workoutSubtitle(s) && <div className="mt-1 truncate text-[12px] font-semibold text-muted-foreground">{workoutSubtitle(s)}</div>}
@@ -699,7 +699,7 @@ export function ReactionBar({
           <button
             type="button"
             onClick={() => onOpenComments(post)}
-            className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-2 text-[14px] font-black tabular-nums text-muted-foreground hover:bg-muted"
+            className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-2 text-[14px] font-bold tabular-nums text-muted-foreground hover:bg-muted"
             aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
           >
             <MessageCircle className="h-[23px] w-[23px] text-foreground/80" strokeWidth={2} />

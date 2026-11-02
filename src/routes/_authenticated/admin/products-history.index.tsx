@@ -102,7 +102,7 @@ function ProductsHistoryList() {
                         <td className="px-4 py-2">
                           {o.archived
                             ? <Badge variant="outline" className="bg-muted text-muted-foreground">Archived</Badge>
-                            : <Badge variant="outline" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30">Active</Badge>}
+                            : <Badge variant="outline" className="bg-success/15 text-success border-success/30">Active</Badge>}
                         </td>
                       </tr>
                     );

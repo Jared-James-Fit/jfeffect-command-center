@@ -84,13 +84,13 @@ export function NutritionUpdatePanel() {
   const isUpdated = !!lastPub && (!target?.last_updated_date || new Date(lastPub.published_at) > new Date(target.last_updated_date + "T00:00:00") || true);
 
   const STATUS: Record<string, { icon: any; label: string; tone: string; sub: string }> = {
-    up_to_date: { icon: CheckCircle2, label: "Up to date", tone: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300", sub: "Nothing to do right now." },
-    due_soon: { icon: Clock, label: "Due soon", tone: "border-amber-500/40 bg-amber-500/10 text-amber-300", sub: "Your next update is coming up." },
-    due_today: { icon: Clock, label: "Due today", tone: "border-amber-500/50 bg-amber-500/15 text-amber-300", sub: "Submit your update today." },
-    overdue: { icon: AlertTriangle, label: "Overdue", tone: "border-red-500/50 bg-red-500/10 text-red-300", sub: "Please submit your update." },
-    submitted: { icon: Inbox, label: "Submitted — waiting for coach", tone: "border-blue-500/40 bg-blue-500/10 text-blue-300", sub: "Your coach will review and reply." },
-    under_review: { icon: Inbox, label: "Under review", tone: "border-blue-500/40 bg-blue-500/10 text-blue-300", sub: "Coach is working on it." },
-    published: { icon: Sparkles, label: "Updated — review your new plan", tone: "border-violet-500/40 bg-violet-500/10 text-violet-300", sub: "Your targets were just updated." },
+    up_to_date: { icon: CheckCircle2, label: "Up to date", tone: "border-success/40 bg-success/10 text-success", sub: "Nothing to do right now." },
+    due_soon: { icon: Clock, label: "Due soon", tone: "border-warning/40 bg-warning/10 text-warning", sub: "Your next update is coming up." },
+    due_today: { icon: Clock, label: "Due today", tone: "border-warning/50 bg-warning/15 text-warning", sub: "Submit your update today." },
+    overdue: { icon: AlertTriangle, label: "Overdue", tone: "border-destructive/50 bg-destructive/10 text-destructive", sub: "Please submit your update." },
+    submitted: { icon: Inbox, label: "Submitted — waiting for coach", tone: "border-info/40 bg-info/10 text-info", sub: "Your coach will review and reply." },
+    under_review: { icon: Inbox, label: "Under review", tone: "border-info/40 bg-info/10 text-info", sub: "Coach is working on it." },
+    published: { icon: Sparkles, label: "Updated — review your new plan", tone: "border-border bg-muted-foreground/10 text-muted-foreground", sub: "Your targets were just updated." },
     paused: { icon: Clock, label: "Tracking paused", tone: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300", sub: "" },
     not_needed: { icon: CheckCircle2, label: "Not needed right now", tone: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300", sub: "" },
   };
@@ -145,7 +145,7 @@ export function NutritionUpdatePanel() {
           <s.icon className="h-6 w-6 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-black text-lg">{s.label}</h2>
+              <h2 className="font-bold text-lg">{s.label}</h2>
               {target?.next_due_date ? <Badge variant="outline" className="text-[10px]">Next: {new Date(target.next_due_date + "T00:00:00").toLocaleDateString()}</Badge> : null}
               {target?.last_updated_date ? <Badge variant="outline" className="text-[10px]">Last: {new Date(target.last_updated_date + "T00:00:00").toLocaleDateString()}</Badge> : null}
               {target?.update_cadence && target.update_cadence !== "manual" ? <Badge variant="outline" className="text-[10px] capitalize">{target.update_cadence}</Badge> : null}
@@ -153,30 +153,30 @@ export function NutritionUpdatePanel() {
             {s.sub ? <p className="text-sm mt-1 opacity-80">{s.sub}</p> : null}
           </div>
           {nutritionForm ? (
-            <Button asChild size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted}>
+            <Button asChild size="lg" className="font-semibold bg-primary text-primary-foreground hidden sm:inline-flex" disabled={isSubmitted}>
               <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
                 {isSubmitted ? "Waiting…" : "Submit Update"}
               </Link>
             </Button>
           ) : (
-            <Button size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
+            <Button size="lg" className="font-semibold bg-primary text-primary-foreground hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
               {isSubmitted ? "Waiting…" : "Submit Update"}
             </Button>
           )}
         </div>
         {nutritionForm ? (
-          <Button asChild size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted}>
+          <Button asChild size="lg" className="font-semibold bg-primary text-primary-foreground w-full mt-3 sm:hidden" disabled={isSubmitted}>
             <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
               {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
             </Link>
           </Button>
         ) : (
-          <Button size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
+          <Button size="lg" className="font-semibold bg-primary text-primary-foreground w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
             {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
           </Button>
         )}
         {ts === "published" && lastPub?.coach_note ? (
-          <div className="mt-3 rounded border border-violet-500/30 bg-violet-500/5 p-3 text-sm">
+          <div className="mt-3 rounded border border-border bg-muted-foreground/5 p-3 text-sm">
             <div className="text-[10px] uppercase opacity-70 mb-1">Coach note</div>
             <p className="whitespace-pre-wrap">{lastPub.coach_note}</p>
           </div>

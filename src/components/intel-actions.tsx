@@ -47,7 +47,7 @@ export function highlightPainHtml(text: string): React.ReactNode {
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(<mark key={m.index} className="rounded bg-red-500/30 px-0.5 text-red-100">{m[0]}</mark>);
+    parts.push(<mark key={m.index} className="rounded bg-destructive/30 px-0.5 text-destructive">{m[0]}</mark>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
@@ -163,12 +163,12 @@ export function FollowupRow({ f }: { f: Followup }) {
         <div className="font-medium truncate">{f.reason}</div>
         <div className="text-muted-foreground">
           {f.source && <Badge variant="outline" className="mr-1">{f.source}</Badge>}
-          {f.due_date ? <span className={overdue ? "text-red-400 font-bold" : ""}>Due {f.due_date}{overdue && " (overdue)"}</span> : "No due date"}
+          {f.due_date ? <span className={overdue ? "text-destructive font-bold" : ""}>Due {f.due_date}{overdue && " (overdue)"}</span> : "No due date"}
         </div>
         {f.notes && <div className="mt-1 text-muted-foreground line-clamp-2">{f.notes}</div>}
       </div>
       <div className="flex items-center gap-1">
-        <Button size="sm" variant="ghost" onClick={() => update("completed")}><CheckCircle2 className="h-4 w-4 text-green-500" /></Button>
+        <Button size="sm" variant="ghost" onClick={() => update("completed")}><CheckCircle2 className="h-4 w-4 text-success" /></Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button size="sm" variant="ghost"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">

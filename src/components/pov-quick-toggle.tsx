@@ -149,7 +149,7 @@ export function PovQuickToggle({
             className={cn(
               "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
               isMemberView
-                ? "bg-emerald-500 text-white shadow-sm"
+                ? "bg-success text-white shadow-sm"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
@@ -167,14 +167,14 @@ export function PovQuickToggle({
       className={cn(
         "flex items-center justify-between gap-3 border-b px-4 py-2",
         isMemberView
-          ? "border-emerald-500/30 bg-emerald-500/10"
+          ? "border-success/30 bg-success/10"
           : "border-primary/20 bg-primary/5",
         className,
       )}
     >
       <div className="flex items-center gap-2 text-sm font-medium">
-        <ArrowRightLeft className={cn("h-4 w-4", isMemberView ? "text-emerald-600" : "text-primary")} />
-        <span className={cn("min-w-0 truncate", isMemberView ? "text-emerald-900 dark:text-emerald-100" : "text-foreground")}>
+        <ArrowRightLeft className={cn("h-4 w-4", isMemberView ? "text-success" : "text-primary")} />
+        <span className={cn("min-w-0 truncate", isMemberView ? "text-success" : "text-foreground")}>
           {isMemberView ? `Viewing as ${povLabel(pov.persona)}` : "Admin Dashboard"}
         </span>
       </div>
@@ -194,7 +194,7 @@ export function PovQuickToggle({
           variant={isMemberView ? "default" : "ghost"}
           className={cn(
             "h-7 gap-1.5 px-2.5 text-xs",
-            isMemberView && "bg-emerald-600 hover:bg-emerald-700",
+            isMemberView && "bg-success hover:bg-success",
           )}
           onClick={goMember}
           disabled={busy || isMemberView}
@@ -224,7 +224,7 @@ export function PovBanner() {
   };
 
   return (
-    <div className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-amber-900 dark:text-amber-100">
+    <div className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-warning/40 bg-warning/10 px-4 py-2 text-warning">
       <div className="flex items-center gap-2 text-sm font-medium">
         <Eye className="h-4 w-4" />
         Previewing as{" "}

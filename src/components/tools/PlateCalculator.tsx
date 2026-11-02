@@ -69,7 +69,7 @@ export function PlateCalculator() {
             </div>
           )}
           {breakdown.leftover > 0 && (
-            <div className="text-xs text-amber-600">⚠ {breakdown.leftover}{unit} per side can't be matched with available plates.</div>
+            <div className="text-xs text-warning">⚠ {breakdown.leftover}{unit} per side can't be matched with available plates.</div>
           )}
         </div>
       ) : (

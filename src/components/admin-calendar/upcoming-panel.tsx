@@ -218,7 +218,7 @@ export function UpcomingPanel() {
               if (!grouped[b]?.length) return null;
               return (
                 <section key={b} className="space-y-2">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     {BUCKET_LABELS[b]} <span className="ml-1 text-muted-foreground/60">({grouped[b].length})</span>
                   </h3>
                   <div className="space-y-2">
@@ -236,12 +236,12 @@ export function UpcomingPanel() {
 
 function statusBadgeTone(s?: string | null) {
   switch ((s || "").toLowerCase()) {
-    case "completed": return "bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
+    case "completed": return "bg-success/10 text-success border-success/30";
     case "cancelled": return "bg-muted text-muted-foreground border-border";
     case "noshow":
     case "no_show":
-    case "no-show": return "bg-rose-500/10 text-rose-300 border-rose-500/30";
-    case "missed": return "bg-rose-500/10 text-rose-300 border-rose-500/30";
+    case "no-show": return "bg-destructive/10 text-destructive border-destructive/30";
+    case "missed": return "bg-destructive/10 text-destructive border-destructive/30";
     default: return "bg-primary/10 text-primary border-primary/30";
   }
 }
@@ -328,9 +328,9 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
           <div className="flex flex-wrap items-center gap-2 mb-1">
             {row.status && <Badge variant="outline" className={statusBadgeTone(row.status)}>{row.status}</Badge>}
             {row.appointment_type && <Badge variant="outline" className="text-[10px]">{row.appointment_type}</Badge>}
-            {isGoogleOnly && <Badge variant="outline" className="border-blue-500/40 text-blue-300 text-[10px]">Google only</Badge>}
+            {isGoogleOnly && <Badge variant="outline" className="border-info/40 text-info text-[10px]">Google only</Badge>}
             {row.source === "pt_session" && <Badge variant="outline" className="text-[10px]">PT Session</Badge>}
-            {row.sync_state === "synced" && <Badge variant="outline" className="border-emerald-500/30 text-emerald-300 text-[10px]">Synced</Badge>}
+            {row.sync_state === "synced" && <Badge variant="outline" className="border-success/30 text-success text-[10px]">Synced</Badge>}
             {row.client_lead_temperature && (
               <Badge variant="outline" className="text-[10px] uppercase">{row.client_lead_temperature}</Badge>
             )}
@@ -420,8 +420,8 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
 function GcalSyncBadge({ connected }: { connected: boolean }) {
   if (connected) {
     return (
-      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-        <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400" />
+      <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+        <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-success" />
         Connected
       </Badge>
     );
@@ -546,7 +546,7 @@ function ResyncButton({ appointmentId, onSynced }: { appointmentId: string; onSy
   };
 
   return (
-    <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 text-amber-300 hover:bg-amber-500/10" onClick={handleResync} disabled={busy}>
+    <Button size="sm" variant="outline" className="h-7 text-xs border-warning/30 text-warning hover:bg-warning/10" onClick={handleResync} disabled={busy}>
       {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
       {busy ? "Syncing…" : "Re-sync"}
     </Button>

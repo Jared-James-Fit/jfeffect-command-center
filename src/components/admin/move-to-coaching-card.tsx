@@ -27,7 +27,7 @@ export function MoveToCoachingCard({ memberId }: { memberId: string }) {
     return (
       <Card data-move-to-coaching="done" className="flex flex-wrap items-center justify-between gap-3 p-5">
         <div className="flex items-start gap-3">
-          <UserCheck className="mt-0.5 h-5 w-5 text-emerald-500" />
+          <UserCheck className="mt-0.5 h-5 w-5 text-success" />
           <div>
             <div className="font-semibold">Coaching client</div>
             <div className="text-sm text-muted-foreground">Their training history is in the client profile.</div>

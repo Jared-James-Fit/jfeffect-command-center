@@ -140,7 +140,7 @@ export function StartPlanDialog({
               <div className="flex items-baseline justify-between gap-2">
                 <Label className="text-sm font-semibold">Days you train</Label>
                 {perWeek ? (
-                  <span className={cn("text-xs font-semibold tabular-nums", daysReady ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                  <span className={cn("text-xs font-semibold tabular-nums", daysReady ? "text-success" : "text-warning")}>
                     {days.length} of {perWeek}
                   </span>
                 ) : null}
@@ -250,7 +250,7 @@ function DaysNote({
   const base = "mt-2 flex items-start gap-1.5 text-xs leading-snug";
   if (perWeek && short > 0) {
     return (
-      <p className={cn(base, "font-medium text-amber-700 dark:text-amber-400")}>
+      <p className={cn(base, "font-medium text-warning")}>
         <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
         Pick {short} more day{short === 1 ? "" : "s"}. This plan has {perWeek} workouts a week.
       </p>
@@ -258,7 +258,7 @@ function DaysNote({
   }
   if (perWeek && short < 0) {
     return (
-      <p className={cn(base, "font-medium text-amber-700 dark:text-amber-400")}>
+      <p className={cn(base, "font-medium text-warning")}>
         <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
         Take off {-short} day{short === -1 ? "" : "s"}. This plan has {perWeek} workouts a week.
       </p>

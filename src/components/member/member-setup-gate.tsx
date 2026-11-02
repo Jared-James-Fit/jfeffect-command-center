@@ -36,10 +36,10 @@ export function MemberSetupGate() {
     <>
       {!isAllowed && (
         <div className="px-4 pt-4 md:px-6 md:pt-6">
-          <Card className="border-amber-500/40 bg-amber-500/10 p-4">
+          <Card className="border-warning/40 bg-warning/10 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <AlertCircle className="mt-0.5 h-5 w-5 text-amber-500" />
+                <AlertCircle className="mt-0.5 h-5 w-5 text-warning" />
                 <div>
                   <div className="font-semibold">Finish your membership setup</div>
                   <div className="text-sm text-muted-foreground">

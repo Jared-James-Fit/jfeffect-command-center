@@ -379,11 +379,11 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => copy("prompt")}>
-            {copied === "prompt" ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied === "prompt" ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
             Copy ChatGPT prompt
           </Button>
           <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => copy("template")}>
-            {copied === "template" ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied === "template" ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
             Copy format example
           </Button>
         </div>
@@ -421,7 +421,7 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
         <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={pasteFromClipboard}>
           <ClipboardPaste className="h-3.5 w-3.5" /> Paste from clipboard
         </Button>
-        <Button type="button" size="sm" className="bg-gradient-primary font-bold uppercase gap-1" onClick={apply} disabled={!text.trim()}>
+        <Button type="button" size="sm" className="bg-primary text-primary-foreground font-semibold gap-1" onClick={apply} disabled={!text.trim()}>
           <Wand2 className="h-3.5 w-3.5" /> Import into day targets
         </Button>
       </div>

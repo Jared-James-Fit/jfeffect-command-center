@@ -204,13 +204,13 @@ function DictationPanel({
       >
         <span
           className={cn(
-            "absolute inset-0 rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 opacity-25 transition-transform duration-100",
+            "absolute inset-0 rounded-full bg-foreground opacity-25 transition-transform duration-100",
             (listening || speaking) && "animate-pulse",
           )}
           style={{ transform: `scale(${listening ? 1.1 + Math.min(0.3, level * 0.5) : 1.05})` }}
         />
-        {ready && <span className="absolute inset-0 animate-ping rounded-full bg-orange-400/30 [animation-duration:2s]" aria-hidden />}
-        <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-lg">
+        {ready && <span className="absolute inset-0 animate-ping rounded-full bg-warning/30 [animation-duration:2s]" aria-hidden />}
+        <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-foreground text-background shadow-lg">
           {listening ? (
             <span className="flex h-8 items-center gap-[3px]" aria-hidden>
               {bars.map((b, i) => (
@@ -229,7 +229,7 @@ function DictationPanel({
       {listening ? (
         <>
           <p className="flex items-center gap-2 text-sm font-medium">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" aria-hidden />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" aria-hidden />
             Listening {clock(elapsedMs)}
           </p>
           <p className="-mt-2 text-center text-xs text-muted-foreground">
@@ -586,7 +586,7 @@ export function SummerChat({
         <SheetHeader className="border-b pb-3 pr-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
                 <Sparkles className="h-4 w-4" />
               </div>
               <div className="min-w-0">
@@ -739,7 +739,7 @@ export function SummerChat({
                       className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
                       aria-label="Copy"
                     >
-                      {copied === m.id ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied === m.id ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
                     </button>
                   </div>
                 )}

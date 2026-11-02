@@ -68,7 +68,7 @@ export function ChangePasswordCard({ className }: { className?: string }) {
             successLabel="Updated"
             errorToast
             successToast={false}
-            className="bg-gradient-primary uppercase font-bold"
+            className="bg-primary text-primary-foreground font-semibold"
           >
             Update password
           </ActionButton>

@@ -80,8 +80,8 @@ export function ChangeRequestsCard({ clientId, onEdit }: { clientId?: string; on
 
   return (
     <>
-      <Card className="space-y-2 border-amber-500/40 bg-amber-500/5 p-3 sm:p-4">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-300">
+      <Card className="space-y-2 border-warning/40 bg-warning/5 p-3 sm:p-4">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-warning">
           <CalendarClock className="h-4 w-4" /> {total} schedule request{total === 1 ? "" : "s"}
         </div>
         <ul className="divide-y divide-border/60">

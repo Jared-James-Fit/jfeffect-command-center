@@ -533,14 +533,7 @@ export function ClientProfileWorkspace({
                 <Button variant="outline" size="sm" aria-label="More actions"><MoreHorizontal className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">More</span></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Training</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId", params: { clientId: id } })}>
-                  <Dumbbell className="mr-2 h-4 w-4" />Training program
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId/history", params: { clientId: id } })}>
-                  <Calendar className="mr-2 h-4 w-4" />Program history
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {/* Training program and Program history live on the Training tab. */}
                 <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
@@ -682,7 +675,7 @@ export function ClientProfileWorkspace({
                 <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Core coaching details only. Training, nutrition, billing, and documents stay in their dedicated sections.</p>
               </div>
-              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Button size="sm" className="min-h-[44px] bg-primary text-primary-foreground font-semibold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
             </div>
@@ -760,7 +753,7 @@ export function ClientProfileWorkspace({
           </Suspense>
           <PowerlifterSection form={form} set={set} />
           <div className="flex justify-end">
-            <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+            <Button size="sm" className="min-h-[44px] bg-primary text-primary-foreground font-semibold" onClick={save}>
               <Save className="mr-2 h-4 w-4" />Save changes
             </Button>
           </div>
@@ -820,7 +813,7 @@ export function ClientProfileWorkspace({
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  className="bg-gradient-primary font-bold"
+                  className="bg-primary text-primary-foreground font-semibold"
                   onClick={() => setCheckInResponseOpen(true)}
                 >
                   <Send className="mr-1 h-4 w-4" /> Send Check-In Response
@@ -1077,7 +1070,7 @@ export function ClientProfileWorkspace({
             <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
             <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
             <div className="flex justify-end pt-2">
-              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Button size="sm" className="min-h-[44px] bg-primary text-primary-foreground font-semibold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
             </div>
@@ -1194,7 +1187,7 @@ export function ClientProfileWorkspace({
             <Button
               onClick={save}
               disabled={saving}
-              className="min-h-[48px] bg-gradient-primary uppercase font-bold"
+              className="min-h-[48px] bg-primary text-primary-foreground font-semibold"
             >
               <Save className="mr-2 h-4 w-4" />{saving ? "Saving…" : "Save"}
             </Button>
@@ -1401,9 +1394,9 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 function InviteExpiryPanel({ expiresAt, accountCreatedAt }: { expiresAt: string | null; accountCreatedAt: string | null }) {
   if (accountCreatedAt) {
     return (
-      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
-        <div className="text-[10px] uppercase tracking-widest text-emerald-400">Invite Status</div>
-        <div className="mt-1 text-sm font-semibold text-emerald-300">Account created</div>
+      <div className="rounded-lg border border-success/30 bg-success/10 p-4">
+        <div className="text-[10px] uppercase tracking-widest text-success">Invite Status</div>
+        <div className="mt-1 text-sm font-semibold text-success">Account created</div>
         <div className="mt-0.5 text-xs text-muted-foreground">{fmtDate(accountCreatedAt)}</div>
       </div>
     );
@@ -1425,7 +1418,7 @@ function InviteExpiryPanel({ expiresAt, accountCreatedAt }: { expiresAt: string 
   const tone = expired
     ? "border-destructive/40 bg-destructive/10 text-destructive"
     : ms < 6 * 3_600_000
-      ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+      ? "border-warning/40 bg-warning/10 text-warning"
       : "border-primary/30 bg-primary/10 text-primary";
   return (
     <div className={`rounded-lg border p-4 ${tone}`}>
@@ -1620,7 +1613,7 @@ function SetupStatusBanner({
       detail: "The 48-hour window has passed. Send or copy a fresh setup link.",
     },
     account_no_signin: {
-      tone: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+      tone: "border-warning/40 bg-warning/10 text-warning",
       label: "Account created — never signed in",
       pill: "Not signed in yet",
       detail: "Login exists but the client hasn't signed in yet. Send a reset link or set their password manually.",
@@ -1935,36 +1928,9 @@ function ClientOverviewSnapshot({
       </Card>
       )}
 
-      {/* Quick actions — 48–52px buttons (hidden when embedded — Action Center covers this) */}
-      {!embedded && (
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {canPov && (
-          <Button onClick={onPov} className="min-h-[52px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 text-base">
-            <Eye className="mr-3 h-5 w-5" /> Open Client POV
-          </Button>
-        )}
-        <Button onClick={onMessage} variant="outline" className="min-h-[52px] justify-start text-base">
-          <MessageSquare className="mr-3 h-5 w-5" /> Message Client
-        </Button>
-        <Link to="/admin/clients/$id/schedule" params={{ id: clientId }} className="block">
-          <Button variant="outline" className="min-h-[52px] w-full justify-start text-base">
-            <Calendar className="mr-3 h-5 w-5" /> Manage Schedule
-          </Button>
-        </Link>
-        <Button variant="outline" className="min-h-[52px] justify-start text-base" onClick={() => onGoToTab("goals-setup")}>
-          <Target className="mr-3 h-5 w-5" /> View Intake & Goals
-        </Button>
-        <Button variant="outline" className="min-h-[52px] justify-start text-base" onClick={() => onRequestUpdate()}>
-          <BellRing className="mr-3 h-5 w-5" /> {form.info_update_requested ? "Update requested" : "Request Client Update"}
-        </Button>
-        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="block">
-          <Button variant="outline" className="min-h-[52px] w-full justify-start text-base">
-            <Dumbbell className="mr-3 h-5 w-5" /> Assign Program
-          </Button>
-        </Link>
-      </div>
-      )}
-
+      {/* No action grid here: Message and Client POV are in the header, the
+          program and schedule are the Training tab, and intake answers and
+          "Request Client Update" are on the Goals & Setup tab. */}
       <div className={WORKSPACE_GRID_CLASS}>
         <div className="space-y-6 md:col-span-2">
           <AppActivityCard

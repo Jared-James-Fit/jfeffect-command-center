@@ -77,12 +77,12 @@ function CalendarPage() {
       <PageHeader title="Calendar" subtitle="Your sessions, appointments and key dates." />
       <div className="space-y-5 p-4 sm:p-6 md:p-8">
         {isImpersonating && (
-          <Card className="border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
+          <Card className="border-warning/40 bg-warning/10 p-3 text-warning">
             <div className="flex items-start gap-2 text-xs">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <div className="font-bold uppercase tracking-widest">Admin POV — {povClient?.full_name ?? "Client"}</div>
-                <div className="mt-0.5 text-amber-200/80">Showing exactly what this client sees. Change requests are disabled in preview.</div>
+                <div className="mt-0.5 text-warning/80">Showing exactly what this client sees. Change requests are disabled in preview.</div>
               </div>
             </div>
           </Card>
@@ -129,7 +129,7 @@ function CalendarPage() {
               <p className="text-xs text-muted-foreground">Pick a time that works for you.</p>
             </div>
             <a href={client.calendar_link} target="_blank" rel="noreferrer">
-              <Button className="bg-gradient-primary font-bold uppercase">Open booking <ExternalLink className="ml-2 h-4 w-4" /></Button>
+              <Button className="bg-primary text-primary-foreground font-semibold">Open booking <ExternalLink className="ml-2 h-4 w-4" /></Button>
             </a>
           </Card>
         )}
@@ -149,11 +149,11 @@ function TodayWorkoutLink({ item }: { item: CalendarItem | null }) {
       search={href?.search as any}
       className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 transition active:bg-secondary/40"
     >
-      <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-cyan-500/15 text-cyan-400">
+      <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-info/15 text-info">
         <Dumbbell className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+        <span className="block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           {item ? "Today's workout" : "Workouts"}
         </span>
         <span className="block truncate text-sm font-bold">{item ? scheduleTitle(item) : "Your training schedule, day by day"}</span>

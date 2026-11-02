@@ -117,7 +117,7 @@ function CrewRow({ m, today, onOpen }: { m: CommunityMember; today: number; onOp
         </span>
         <span className="block truncate text-[12px] text-muted-foreground">
           {m.live ? (
-            <span className="font-bold text-red-500">Training now</span>
+            <span className="font-bold text-destructive">Training now</span>
           ) : activity ? (
             <span className="font-semibold text-foreground/80">{activity}</span>
           ) : null}

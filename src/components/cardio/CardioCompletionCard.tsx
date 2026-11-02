@@ -229,8 +229,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
 
   return (
     <Card className={`overflow-hidden transition-colors ${
-      isCompleted ? "border-emerald-500/30 bg-emerald-500/5"
-      : isSkipped ? "border-amber-500/30 bg-amber-500/5"
+      isCompleted ? "border-success/30 bg-success/5"
+      : isSkipped ? "border-warning/30 bg-warning/5"
       : "border-border"
     }`}>
       <div className="p-3">
@@ -246,9 +246,9 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
               {isLoading || saving
                 ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 : isCompleted
-                  ? <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  ? <CheckCircle2 className="h-5 w-5 text-success" />
                   : isSkipped
-                    ? <SkipForward className="h-5 w-5 text-amber-500" />
+                    ? <SkipForward className="h-5 w-5 text-warning" />
                     : <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />}
             </button>
           )}
@@ -256,7 +256,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           <div className="min-w-0 flex-1">
             {/* Activity · Mode · status */}
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className={`text-base font-black leading-none ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+              <span className={`text-base font-bold leading-none ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                 {view.activity}
               </span>
               {view.modeLabel && (
@@ -328,7 +328,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             )}
 
             {isCompleted && formatCardioLogLine(completion as any) && (
-              <div className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+              <div className="mt-1 text-xs font-semibold text-success">
                 {formatCardioLogLine(completion as any)}
               </div>
             )}
@@ -341,7 +341,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
             )}
 
             {isCompleted && completion?.notes && (
-              <p className="mt-1 text-xs italic text-emerald-700">"{completion.notes}"</p>
+              <p className="mt-1 text-xs italic text-success">"{completion.notes}"</p>
             )}
           </div>
 

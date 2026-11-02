@@ -311,7 +311,7 @@ export function SwipeBackTip({ onDismiss }: { onDismiss: () => void }) {
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-black leading-tight">Swipe right to go back</div>
+          <div className="text-[13px] font-bold leading-tight">Swipe right to go back</div>
           <div className="text-[12px] leading-tight opacity-75">From anywhere on the screen. Try it</div>
         </div>
         <button type="button" onClick={onDismiss} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-background/15" aria-label="Hide tip">

@@ -85,7 +85,7 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
                       </Badge>
                     )}
                     {callStatus === "booked" && (
-                      <Badge variant="outline" className="text-[10px] text-emerald-400">
+                      <Badge variant="outline" className="text-[10px] text-success">
                         <CalendarCheck2 className="mr-1 h-2.5 w-2.5" /> Booked
                       </Badge>
                     )}
@@ -100,7 +100,7 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
                 </div>
                 <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   {score5 !== null && (
-                    <span className="inline-flex items-center gap-1 font-bold text-amber-400" title={LEAD_SCORE_DISCLAIMER}>
+                    <span className="inline-flex items-center gap-1 font-bold text-warning" title={LEAD_SCORE_DISCLAIMER}>
                       <Star className="h-3 w-3" /> {score5}/5
                     </span>
                   )}
@@ -339,7 +339,7 @@ function LeadScoreCard({ score, scoring }: { score: unknown; scoring: unknown })
     <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
       <div className="mb-1 flex items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Lead Score</span>
-        <span className="inline-flex items-center gap-1 font-bold text-amber-400">
+        <span className="inline-flex items-center gap-1 font-bold text-warning">
           <Star className="h-3 w-3" /> {score5}/5
         </span>
       </div>

@@ -147,7 +147,7 @@ export function IntakeAnswersDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[88vh] max-w-3xl overflow-hidden p-0">
-        <DialogHeader className="border-b border-border bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5">
+        <DialogHeader className="border-b border-border p-5">
           <div className="flex items-start gap-3">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
               <ClipboardList className="h-5 w-5" />
@@ -536,7 +536,7 @@ export function IntakeAnswersBigButton({
       trigger={
         <Button
           variant="outline"
-          className="group flex h-auto w-full items-center gap-4 rounded-xl border-2 border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 text-left hover:border-primary/60 hover:from-primary/15"
+          className="group flex h-auto w-full items-center gap-4 rounded-xl border-2 border-primary/30 p-4 text-left hover:border-primary/60 "
         >
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm transition group-hover:scale-105">
             <ClipboardList className="h-6 w-6" />

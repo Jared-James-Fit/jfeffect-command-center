@@ -47,7 +47,7 @@ export function MediaStrip({ tray, className, label = "Photos & videos" }: { tra
   return (
     <div className={cn("space-y-2", className)} data-media-strip>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
+        <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
         <span className="text-[11px] tabular-nums text-muted-foreground">
           {tray.total}/{MAX_SLIDES} · up to {MAX_SLIDE_VIDEOS} videos{videos ? ` (${videos})` : ""}
         </span>
@@ -67,8 +67,8 @@ export function MediaStrip({ tray, className, label = "Photos & videos" }: { tra
               >
                 {src && <img src={src} alt="" className="h-full w-full object-cover" />}
                 {it.kind === "video" && (it.video ? <Scissors className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow" /> : <Play className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />)}
-                {it.seconds != null && !busy && it.status !== "error" && <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] font-black tabular-nums text-white">{formatClock(it.seconds)}</span>}
-                {i === 0 && <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] font-black text-white">Cover</span>}
+                {it.seconds != null && !busy && it.status !== "error" && <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[9px] font-bold tabular-nums text-white">{formatClock(it.seconds)}</span>}
+                {i === 0 && <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] font-bold text-white">Cover</span>}
                 {busy && (
                   <span className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-black/40">
                     <span className="block h-full rounded-full bg-white transition-[width]" style={{ width: `${Math.max(8, it.progress)}%` }} />
@@ -76,7 +76,7 @@ export function MediaStrip({ tray, className, label = "Photos & videos" }: { tra
                 )}
                 {it.status === "error" && (
                   <span className="absolute inset-0 grid place-items-center bg-black/55">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
+                    <AlertCircle className="h-5 w-5 text-destructive" />
                   </span>
                 )}
               </button>

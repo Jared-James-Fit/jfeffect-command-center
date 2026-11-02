@@ -12,7 +12,7 @@ import { SHORT_DAY } from "@/lib/training-schedule";
 function Row({ label, value, warn }: { label: string; value: React.ReactNode; warn?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border/60 py-2 last:border-b-0">
-      <div className={"text-xs uppercase tracking-wide " + (warn ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground")}>
+      <div className={"text-xs uppercase tracking-wide " + (warn ? "text-warning font-semibold" : "text-muted-foreground")}>
         {label}
       </div>
       <div className="min-w-0 max-w-[60%] text-right text-sm">
@@ -105,9 +105,9 @@ export function GoalsSummaryCard({ clientId }: { clientId: string }) {
 
   if (!row) {
     return (
-      <Card className="border-amber-500/40 bg-amber-500/5 p-4">
+      <Card className="border-warning/40 bg-warning/5 p-4">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTriangle className="h-4 w-4 text-warning" />
           <div className="text-sm font-semibold">Goals & Setup incomplete</div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -130,7 +130,7 @@ export function GoalsSummaryCard({ clientId }: { clientId: string }) {
             <CheckCircle2 className="h-3 w-3" /> Complete
           </Badge>
         ) : (
-          <Badge variant="outline" className="gap-1 border-amber-500/40 text-[10px] text-amber-600 dark:text-amber-400">
+          <Badge variant="outline" className="gap-1 border-warning/40 text-[10px] text-warning">
             <AlertTriangle className="h-3 w-3" /> Incomplete
           </Badge>
         )}

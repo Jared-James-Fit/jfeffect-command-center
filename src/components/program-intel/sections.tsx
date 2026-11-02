@@ -15,12 +15,12 @@ const LIFT_LABEL: Record<Lift, string> = { squat: "Squat", bench: "Bench", deadl
 
 export function KindChip({ kind }: { kind: Finding["kind"] }) {
   const map = {
-    fact: ["Fact", "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"],
-    hypothesis: ["Hypothesis", "bg-amber-500/15 text-amber-700 dark:text-amber-300"],
+    fact: ["Fact", "bg-success/12 text-success"],
+    hypothesis: ["Hypothesis", "bg-warning/15 text-warning"],
     missing: ["Missing", "bg-muted text-muted-foreground"],
   } as const;
   const [label, cls] = map[kind];
-  return <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10px] font-black uppercase tracking-wider", cls)}>{label}</span>;
+  return <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10px] font-bold uppercase tracking-wider", cls)}>{label}</span>;
 }
 
 const AREAS: Array<[Finding["area"], string]> = [
@@ -39,7 +39,7 @@ export function FindingsSummary({ report, savedKeys, onSave, saving }: { report:
         if (!list.length) return null;
         return (
           <section key={area}>
-            <h3 className="mb-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground">{title}</h3>
+            <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
             <Card className="divide-y divide-border/60 p-0">
               {list.map((f) => (
                 <div key={f.id} className="space-y-1 p-3" data-finding={f.id} data-kind={f.kind}>
@@ -48,7 +48,7 @@ export function FindingsSummary({ report, savedKeys, onSave, saving }: { report:
                     <div className="min-w-0 flex-1 text-[13px] font-semibold leading-snug">{f.title}</div>
                     {onSave && f.kind !== "missing" &&
                       (savedKeys.has(f.id) ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-emerald-600"><Check className="h-3 w-3" /> Kept</span>
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-success"><Check className="h-3 w-3" /> Kept</span>
                       ) : (
                         <Button size="sm" variant="ghost" className="-my-1 h-7 shrink-0 px-2 text-[11px]" disabled={saving} onClick={() => onSave(f)} aria-label={`Keep in the athlete's memory: ${f.title}`}>
                           <BookmarkPlus className="mr-1 h-3.5 w-3.5" /> Keep
@@ -80,7 +80,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   return (
     <div className="min-w-0 rounded-xl bg-secondary/50 px-2.5 py-2">
       <div className="truncate text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="truncate text-sm font-black tabular-nums">{value}</div>
+      <div className="truncate text-sm font-bold tabular-nums">{value}</div>
       {sub && <div className="truncate text-[10px] text-muted-foreground">{sub}</div>}
     </div>
   );
@@ -90,7 +90,7 @@ function Change({ pct }: { pct: number | null }) {
   if (pct == null) return <span className="text-muted-foreground">—</span>;
   const Icon = pct >= 2 ? ArrowUpRight : pct <= -2 ? ArrowDownRight : ArrowRight;
   return (
-    <span className={cn("inline-flex items-center gap-0.5 font-bold tabular-nums", pct >= 2 ? "text-emerald-600" : pct <= -2 ? "text-destructive" : "text-muted-foreground")}>
+    <span className={cn("inline-flex items-center gap-0.5 font-bold tabular-nums", pct >= 2 ? "text-success" : pct <= -2 ? "text-destructive" : "text-muted-foreground")}>
       <Icon className="h-3.5 w-3.5" />
       {pct > 0 ? "+" : ""}
       {pct}%
@@ -110,14 +110,14 @@ export function LiftsSection({ report }: { report: IntelReport }) {
           <Card key={l.lift} className="space-y-3 p-3.5">
             <div className="flex items-baseline justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">{LIFT_LABEL[l.lift]}</div>
+                <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{LIFT_LABEL[l.lift]}</div>
                 <div className="truncate text-xs text-muted-foreground">{l.competitionExercise ?? "No competition variation logged"}</div>
               </div>
               <div className="shrink-0 text-right">
-                <div className="text-lg font-black tabular-nums">{kg(l.compTrend.last)}</div>
+                <div className="text-lg font-bold tabular-nums">{kg(l.compTrend.last)}</div>
                 <div className="text-[11px]">
                   e1RM <Change pct={l.compTrend.changePct} />
-                  {l.stalled && <span className="ml-1 rounded bg-amber-500/15 px-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">stalled</span>}
+                  {l.stalled && <span className="ml-1 rounded bg-warning/15 px-1 text-[10px] font-bold text-warning">stalled</span>}
                 </div>
               </div>
             </div>
@@ -183,7 +183,7 @@ export function MusclesSection({ report }: { report: IntelReport }) {
               <b className="text-foreground">{m.avgHardSetsPerWeek ?? "—"}</b>/wk
               {m.firstHalfAvg != null && m.secondHalfAvg != null && <> · {m.firstHalfAvg}→{m.secondHalfAvg}</>}
               {m.frequencyPerWeek != null && <> · {m.frequencyPerWeek}×/wk</>}
-              {m.target && <span className={cn("ml-1 font-bold", m.status === "within" ? "text-emerald-600" : "text-amber-600")}>{m.status}</span>}
+              {m.target && <span className={cn("ml-1 font-bold", m.status === "within" ? "text-success" : "text-warning")}>{m.status}</span>}
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-secondary">
@@ -216,7 +216,7 @@ export function WeeksSection({ report }: { report: IntelReport }) {
               </td>
               <td className="px-2 py-1.5">{w.completedDays + w.partialDays}/{w.dueDays}{w.upcomingDays ? <span className="text-muted-foreground"> +{w.upcomingDays}</span> : null}</td>
               <td className="px-2 py-1.5">{w.workingSetsLogged}/{w.prescribedSetsDue}</td>
-              <td className={cn("px-2 py-1.5 font-bold", (w.setAdherencePct ?? 100) < 75 && "text-amber-600")}>{w.setAdherencePct != null ? `${w.setAdherencePct}%` : "—"}</td>
+              <td className={cn("px-2 py-1.5 font-bold", (w.setAdherencePct ?? 100) < 75 && "text-warning")}>{w.setAdherencePct != null ? `${w.setAdherencePct}%` : "—"}</td>
               <td className="px-2 py-1.5">{w.hardSets}</td>
               <td className="px-2 py-1.5">{w.avgRpe ?? "—"}</td>
               <td className="px-2 py-1.5">{w.avgRpeDelta != null ? `${w.avgRpeDelta > 0 ? "+" : ""}${w.avgRpeDelta}` : "—"}</td>
@@ -243,7 +243,7 @@ export function BlocksSection({ report }: { report: IntelReport }) {
         <Card key={b.blockId} className="space-y-2 p-3.5">
           <div className="flex items-baseline justify-between gap-2">
             <div className="min-w-0">
-              <div className="truncate text-sm font-black">B{b.number} · {b.name}</div>
+              <div className="truncate text-sm font-bold">B{b.number} · {b.name}</div>
               <div className="truncate text-[11px] text-muted-foreground">
                 {b.start ?? "?"} → {b.end ?? "?"} · {b.weeks} wk{b.focus ? ` · ${b.focus}` : ""}
                 {b.hidden ? " · hidden" : ""}
@@ -281,7 +281,7 @@ export function ExercisesSection({ report }: { report: IntelReport }) {
           <div className="min-w-0">
             <div className="truncate font-semibold">
               {e.name}
-              {!e.exerciseId && <span className="ml-1 text-[10px] font-normal text-amber-600">not in library</span>}
+              {!e.exerciseId && <span className="ml-1 text-[10px] font-normal text-warning">not in library</span>}
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {e.exposures}× · {e.workingSetsLogged}/{e.setsPrescribedDue} sets · best {fmtSet(e.bestSet, u)}{e.avgRpe != null ? ` · RPE ${e.avgRpe}` : ""}
@@ -297,7 +297,7 @@ export function ExercisesSection({ report }: { report: IntelReport }) {
             ) : (
               <span className="text-muted-foreground">—</span>
             )}
-            {e.stalled && <div className="font-bold text-amber-600">stalled</div>}
+            {e.stalled && <div className="font-bold text-warning">stalled</div>}
           </div>
         </div>
       ))}
@@ -309,7 +309,7 @@ export function RecoveryCard({ report }: { report: IntelReport }) {
   const r = report.recovery;
   return (
     <Card className="space-y-1 p-3.5 text-xs">
-      <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Recovery (check-outs)</div>
+      <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Recovery (check-outs)</div>
       <div>Session RPE {r.sessionRpeAvg ?? "—"} · rating {r.ratingAvg ?? "—"} · {r.painReports.length} pain report{r.painReports.length === 1 ? "" : "s"}</div>
       {Object.keys(r.fatigue).length > 0 && <div className="text-muted-foreground">Fatigue: {Object.entries(r.fatigue).map(([k, v]) => `${k} ${v}`).join(" · ")}</div>}
       {Object.keys(r.sleep).length > 0 && <div className="text-muted-foreground">Sleep: {Object.entries(r.sleep).map(([k, v]) => `${k} ${v}`).join(" · ")}</div>}

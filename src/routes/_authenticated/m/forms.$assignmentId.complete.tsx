@@ -100,14 +100,14 @@ function FormCompletePage() {
         <Card className="p-6">
           <div className="flex items-start gap-3">
             {isSubmitted ? (
-              <CheckCircle2 className="mt-0.5 h-6 w-6 text-emerald-500" />
+              <CheckCircle2 className="mt-0.5 h-6 w-6 text-success" />
             ) : attempts >= 10 ? (
-              <AlertCircle className="mt-0.5 h-6 w-6 text-amber-500" />
+              <AlertCircle className="mt-0.5 h-6 w-6 text-warning" />
             ) : (
               <Loader2 className="mt-0.5 h-6 w-6 animate-spin text-primary" />
             )}
             <div className="flex-1">
-              <div className="text-lg font-black">
+              <div className="text-lg font-bold">
                 {isSubmitted
                   ? "Check-In Submitted"
                   : attempts >= 10
@@ -136,7 +136,7 @@ function FormCompletePage() {
 
         <div className="flex flex-wrap gap-2">
           {!isSubmitted && attempts >= 10 && (
-            <Button onClick={confirmManually} disabled={confirming} className="bg-gradient-primary font-bold">
+            <Button onClick={confirmManually} disabled={confirming} className="bg-primary text-primary-foreground font-semibold">
               {confirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Confirm Submission
             </Button>

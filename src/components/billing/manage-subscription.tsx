@@ -126,7 +126,7 @@ export function ManageSubscriptionPanel({
   if (error) {
     return (
       <Card className="border-border p-4 text-sm">
-        <div className="text-rose-300">Couldn't load subscription: {(error as any)?.message}</div>
+        <div className="text-destructive">Couldn't load subscription: {(error as any)?.message}</div>
         <Button size="sm" variant="outline" className="mt-2" onClick={() => refetch()}>Retry</Button>
       </Card>
     );
@@ -160,7 +160,7 @@ export function ManageSubscriptionPanel({
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge variant="outline">{displayStatus}</Badge>
             {isScheduled && (
-              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-300">
+              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">
                 <CalendarClock className="mr-1 h-3 w-3" /> Cancels {fmtDate(finalAccessDate)}
               </Badge>
             )}
@@ -242,12 +242,12 @@ export function ManageSubscriptionPanel({
                   </span>
                 </div>
                 {mode !== "undo" && (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-amber-200">
+                  <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-warning">
                     No refund is automatically issued. Past invoices and payment history are preserved.
                   </div>
                 )}
                 {mode === "immediate" && (
-                  <div className="rounded-md border border-rose-500/30 bg-rose-500/10 p-2 text-rose-200">
+                  <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive">
                     The client may lose access to member-only areas immediately.
                   </div>
                 )}

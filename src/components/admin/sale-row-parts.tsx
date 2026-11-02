@@ -16,9 +16,9 @@ export function fmtDate(iso: string | null | undefined): string | null {
 }
 
 export const TONE = {
-  ok: "border-emerald-500/40 text-emerald-500 bg-emerald-500/10",
-  info: "border-blue-500/40 text-blue-500 bg-blue-500/10",
-  warn: "border-amber-500/40 text-amber-500 bg-amber-500/10",
+  ok: "border-success/40 text-success bg-success/10",
+  info: "border-info/40 text-info bg-info/10",
+  warn: "border-warning/40 text-warning bg-warning/10",
   bad: "border-destructive/40 text-destructive bg-destructive/5",
   muted: "border-border text-muted-foreground",
 };
@@ -75,7 +75,7 @@ export function nextPaymentCell(d: PaymentDisplay, raw?: any) {
     const ready = hasPaymentDestination(raw);
     return {
       text: "Awaiting payment",
-      tone: "text-amber-500",
+      tone: "text-warning",
       helper: ready
         ? "Payment link ready — waiting on Stripe confirmation."
         : "Payment link not created. Use Create payment link to retry this sale.",
@@ -85,10 +85,10 @@ export function nextPaymentCell(d: PaymentDisplay, raw?: any) {
   if (r.kind === "none") return { text: "No renewal", tone: "text-muted-foreground", helper: null as string | null };
   if (r.kind === "free") return { text: "No payment", tone: "text-muted-foreground", helper: null };
   if (r.kind === "cancelled") return { text: r.date ? `Ended ${fmtDate(r.date)}` : "Cancelled", tone: "text-muted-foreground", helper: null };
-  if (r.kind === "cancels") return { text: `Cancels on ${r.valueText}`, tone: "text-amber-500", helper: null };
+  if (r.kind === "cancels") return { text: `Cancels on ${r.valueText}`, tone: "text-warning", helper: null };
   if (r.kind === "first_payment") return { text: `First payment ${r.valueText}`, tone: "text-foreground", helper: r.helper };
   if (r.kind === "retry") return { text: `Retry ${r.valueText}`, tone: "text-destructive", helper: null };
   if (r.kind === "past_due") return { text: "Past due", tone: "text-destructive", helper: "No retry date synced." };
-  if (r.kind === "unavailable") return { text: "Next payment unavailable", tone: "text-amber-500", helper: r.helper };
+  if (r.kind === "unavailable") return { text: "Next payment unavailable", tone: "text-warning", helper: r.helper };
   return { text: r.valueText, tone: "text-foreground", helper: null };
 }

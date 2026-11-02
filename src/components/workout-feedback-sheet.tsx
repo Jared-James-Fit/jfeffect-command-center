@@ -175,7 +175,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       >
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
-            <SheetTitle className="text-xl font-black">
+            <SheetTitle className="text-xl font-bold">
               {isEdit ? "Edit workout feedback" : "Workout complete"}
             </SheetTitle>
             <SheetDescription>
@@ -218,7 +218,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                   )}
                 >
                   <span className="text-lg leading-none" aria-hidden>{o.emoji}</span>
-                  <span className="text-base font-black text-foreground">{o.value}</span>
+                  <span className="text-base font-bold text-foreground">{o.value}</span>
                   <span className="text-[10px]">{o.label}</span>
                 </button>
               ))}
@@ -237,7 +237,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                   onClick={() => setRpe(n)}
                   aria-pressed={rpe === n}
                   className={cn(
-                    "h-10 rounded-lg border text-sm font-black transition-colors",
+                    "h-10 rounded-lg border text-sm font-bold transition-colors",
                     rpe === n
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border bg-card text-foreground hover:bg-secondary/40",
@@ -265,7 +265,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                 className={cn(
                   "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
                   pain === false
-                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                    ? "border-success bg-success/15 text-success"
                     : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
                 )}
               >
@@ -278,7 +278,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                 className={cn(
                   "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
                   pain === true
-                    ? "border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    ? "border-warning bg-warning/15 text-warning"
                     : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
                 )}
               >
@@ -287,9 +287,9 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
             </div>
 
             {pain === true && (
-              <div className="mt-3 space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+              <div className="mt-3 space-y-3 rounded-xl border border-warning/30 bg-warning/5 p-3">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  <Label className="text-xs font-bold uppercase tracking-wide text-warning">
                     Pain level
                   </Label>
                   <div className="grid grid-cols-5 gap-1.5">
@@ -300,9 +300,9 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                         onClick={() => setPainLevel(n)}
                         aria-pressed={painLevel === n}
                         className={cn(
-                          "h-9 rounded-lg border text-sm font-black transition-colors",
+                          "h-9 rounded-lg border text-sm font-bold transition-colors",
                           painLevel === n
-                            ? "border-amber-500 bg-amber-500 text-white"
+                            ? "border-warning bg-warning text-white"
                             : "border-border bg-card text-foreground hover:bg-secondary/40",
                         )}
                       >
@@ -313,7 +313,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  <Label className="text-xs font-bold uppercase tracking-wide text-warning">
                     Body area
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
@@ -332,7 +332,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                           className={cn(
                             "rounded-full border px-3 py-1 text-xs font-bold transition-colors",
                             selected
-                              ? "border-amber-500 bg-amber-500/20 text-amber-800 dark:text-amber-200"
+                              ? "border-warning bg-warning/20 text-warning"
                               : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
                           )}
                         >
@@ -344,7 +344,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="pain-note" className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  <Label htmlFor="pain-note" className="text-xs font-bold uppercase tracking-wide text-warning">
                     Anything to add? (optional)
                   </Label>
                   <Input
@@ -394,12 +394,12 @@ export function WorkoutFeedbackReminder({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-left transition-colors hover:bg-amber-500/10"
+      className="w-full rounded-2xl border border-warning/30 bg-warning/5 px-4 py-3 text-left transition-colors hover:bg-warning/10"
     >
       <div className="flex items-center gap-2 text-sm">
-        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+        <AlertTriangle className="h-4 w-4 text-warning" />
         <span className="font-bold text-foreground">Rate this workout</span>
-        <span className="ml-auto text-xs font-bold text-amber-700 dark:text-amber-300">Open →</span>
+        <span className="ml-auto text-xs font-bold text-warning">Open →</span>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">Takes under 10 seconds. Your coach uses it to adjust.</p>
     </button>
@@ -411,18 +411,18 @@ export function WorkoutFeedbackEditButton({ onOpen, locked }: { onOpen: () => vo
     <button
       type="button"
       onClick={onOpen}
-      className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-left transition-colors hover:bg-emerald-500/10"
+      className="w-full rounded-2xl border border-success/30 bg-success/5 px-4 py-3 text-left transition-colors hover:bg-success/10"
     >
       <div className="flex items-center gap-2 text-sm">
         {locked ? (
-          <Lock className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+          <Lock className="h-4 w-4 text-success" />
         ) : (
-          <Pencil className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+          <Pencil className="h-4 w-4 text-success" />
         )}
         <span className="font-bold text-foreground">
           {locked ? "View workout feedback" : "View / edit feedback"}
         </span>
-        <span className="ml-auto text-xs font-bold text-emerald-700 dark:text-emerald-300">Open →</span>
+        <span className="ml-auto text-xs font-bold text-success">Open →</span>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
         {locked

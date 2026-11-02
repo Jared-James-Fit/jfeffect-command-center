@@ -111,7 +111,7 @@ export type PostAttach = ReturnType<typeof usePostAttach>;
 /** GIF and Voice, as two small buttons (the ones already on the post drop out). */
 export function AttachButtons({ a, dark, small, className }: { a: PostAttach; dark?: boolean; small?: boolean; className?: string }) {
   const chip = cn(
-    "inline-flex shrink-0 items-center justify-center gap-1 px-3 text-[13px] font-black active:scale-95 disabled:opacity-40",
+    "inline-flex shrink-0 items-center justify-center gap-1 px-3 text-[13px] font-bold active:scale-95 disabled:opacity-40",
     small ? "h-9 rounded-full" : "h-11 rounded-2xl",
     dark ? "bg-white/10 text-white ring-1 ring-white/15" : "bg-muted text-foreground",
   );

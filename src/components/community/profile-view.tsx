@@ -400,7 +400,7 @@ function BlockButton({ author, blocked, variant = "button", className, onDone }:
         <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:mx-auto sm:max-w-[420px]">
           <div className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
             <UserAvatar src={author.avatar_url} name={author.name} size={64} expandable={false} />
-            <SheetTitle className="mt-3 text-[16px] font-black">{blocked ? `Unblock ${author.name}?` : `Block ${author.name}?`}</SheetTitle>
+            <SheetTitle className="mt-3 text-[16px] font-bold">{blocked ? `Unblock ${author.name}?` : `Block ${author.name}?`}</SheetTitle>
             <SheetDescription className="mt-1 text-[13px] leading-snug">
               {blocked
                 ? "They'll be able to find you, see your posts and message you again, and follows between you work again."

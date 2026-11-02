@@ -192,7 +192,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
             <IdCard className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tight">Let's set up your profile</h2>
+            <h2 className="text-lg font-bold tracking-tight">Let's set up your profile</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Just a few quick details so Coach Jared can build your plan properly. Takes about a minute.
             </p>
@@ -208,7 +208,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
         <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             {missing.length === 0 ? (
-              <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <p className="text-[11px] font-semibold text-success">
                 All required fields complete.
               </p>
             ) : (
@@ -233,7 +233,7 @@ export function ClientBasicInfoGate({ children }: { children: ReactNode }) {
             size="lg"
             disabled={saving || missing.length > 0}
             onClick={save}
-            className="bg-gradient-primary uppercase font-bold"
+            className="bg-primary text-primary-foreground font-semibold"
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
             {saving ? "Saving…" : "Finish setup"}

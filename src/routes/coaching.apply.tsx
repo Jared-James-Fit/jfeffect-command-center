@@ -125,7 +125,7 @@ function SimpleQuickApply() {
               <button
                 type="submit"
                 disabled={!valid || mutation.isPending}
-                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-50 disabled:shadow-none"
+                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-primary text-primary-foreground text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-50 disabled:shadow-none"
               >
                 {mutation.isPending ? <><Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Sending…</> : "Apply for Coaching"}
               </button>
@@ -193,7 +193,7 @@ function PostSubmit({ result }: {
         <Block narrow className="!py-12">
           <div className="mx-auto max-w-xl">
             <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
-              <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
+              <CheckCircle2 className="mx-auto h-14 w-14 text-success" aria-hidden />
               <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Application received.</h1>
               <p className="mt-3 text-sm text-muted-foreground">
                 We've received your application and will reach out shortly.
@@ -215,7 +215,7 @@ function PostSubmit({ result }: {
         <div className="mx-auto max-w-xl">
           {view === "intro" && (
             <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
-              <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
+              <CheckCircle2 className="mx-auto h-14 w-14 text-success" aria-hidden />
               <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">
                 Application received.
               </h1>
@@ -229,7 +229,7 @@ function PostSubmit({ result }: {
                   ["We map your plan together", false],
                 ].map(([label, ok], i) => (
                   <li key={i} className="flex items-center gap-3">
-                    <span className={"grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold " + (ok ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground")}>
+                    <span className={"grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold " + (ok ? "bg-success text-white" : "bg-muted text-muted-foreground")}>
                       {ok ? "✓" : i + 1}
                     </span>
                     <span className={ok ? "text-muted-foreground line-through" : "font-medium"}>{label as string}</span>
@@ -341,7 +341,7 @@ function SlotPicker({
         <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Pick a time</div>
       </div>
 
-      <h2 className="mt-3 text-xl md:text-2xl font-black tracking-tight">Book your coaching call</h2>
+      <h2 className="mt-3 text-xl md:text-2xl font-bold tracking-tight">Book your coaching call</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         <Clock className="mr-1 inline h-3.5 w-3.5" />{duration} min · with {coachName} · times shown in your local time zone ({localTz})
       </p>
@@ -363,7 +363,7 @@ function SlotPicker({
               }
             >
               <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">{d.weekday}</div>
-              <div className="text-base font-black">{d.label}</div>
+              <div className="text-base font-bold">{d.label}</div>
             </button>
           );
         })}
@@ -414,7 +414,7 @@ function SlotPicker({
           size="lg"
           disabled={!chosen || bookMut.isPending}
           onClick={() => chosen && bookMut.mutate(chosen)}
-          className="h-14 w-full text-base font-black"
+          className="h-14 w-full text-base font-bold"
         >
           {bookMut.isPending ? (
             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Booking…</>
@@ -450,7 +450,7 @@ function BookedScreen({
       <Block narrow className="!py-12">
         <div className="mx-auto max-w-xl">
           <Card className="rounded-2xl p-7 text-center shadow-none ring-1 ring-border/70 md:p-9">
-            <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" aria-hidden />
+            <CheckCircle2 className="mx-auto h-14 w-14 text-success" aria-hidden />
             <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.02em] md:text-[34px]">Your call is booked.</h1>
             {firstName && <p className="mt-1 text-sm text-muted-foreground">Thanks, {firstName} — see you then.</p>}
 

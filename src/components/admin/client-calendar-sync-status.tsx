@@ -65,7 +65,7 @@ export function ClientCalendarSyncStatus({ clientId }: { clientId: string }) {
         <span
           className={
             "grid h-9 w-9 shrink-0 place-items-center rounded-full " +
-            (tone === "ok" ? "bg-emerald-500/15 text-emerald-500" : tone === "warn" ? "bg-amber-500/15 text-amber-500" : "bg-muted text-muted-foreground")
+            (tone === "ok" ? "bg-success/15 text-success" : tone === "warn" ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground")
           }
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : tone === "off" ? <CalendarX2 className="h-4 w-4" /> : <CalendarCheck2 className="h-4 w-4" />}

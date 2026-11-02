@@ -13,8 +13,8 @@ const TONE_TO_BUTTON: Record<WorkspaceTone, { variant: "outline" | "default"; ex
   default: { variant: "outline", extra: "" },
   primary: { variant: "default", extra: "" },
   warn: { variant: "outline", extra: "bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25" },
-  rose: { variant: "outline", extra: "bg-rose-500/15 text-rose-300 border border-rose-500/40 hover:bg-rose-500/25" },
-  success: { variant: "outline", extra: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25" },
+  rose: { variant: "outline", extra: "bg-destructive/15 text-destructive border border-destructive/40 hover:bg-destructive/25" },
+  success: { variant: "outline", extra: "bg-success/15 text-success border border-success/40 hover:bg-success/25" },
 };
 
 /**

@@ -39,11 +39,11 @@ export function TopMuscleGroupsCard({
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {items.map((i) => (
-        <Card key={i.label} className="rounded-2xl border-border/60 bg-gradient-to-br from-primary/10 to-transparent p-4">
+        <Card key={i.label} className="rounded-2xl border-border/60 p-4">
           <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             {i.icon} {i.label}
           </div>
-          <div className="mt-2 text-base font-black">{i.title}</div>
+          <div className="mt-2 text-base font-bold">{i.title}</div>
           <div className="mt-1 text-sm font-semibold text-primary">{i.value}</div>
         </Card>
       ))}

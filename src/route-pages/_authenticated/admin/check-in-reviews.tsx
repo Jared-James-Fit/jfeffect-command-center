@@ -65,14 +65,14 @@ export function AdminCheckInReviews({ embedded = false }: { embedded?: boolean }
         title="Check-In Reviews"
         subtitle="Review submitted check-ins and send manual reviews for external (Fillout) check-ins."
         actions={
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Manual Review
           </Button>
         }
       />}
       {embedded && (
         <div className="flex justify-end px-4 pt-4 md:px-6">
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Manual Review
           </Button>
         </div>
@@ -209,8 +209,8 @@ function ManualReviewDetail({ review, onDeleted }: { review: any; onDeleted: () 
       </Card>
 
       {(review.internal_notes || review.external_link) && (
-        <Card className="border-amber-500/20 bg-amber-500/5 p-4">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">Admin-only</div>
+        <Card className="border-warning/20 bg-warning/5 p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-warning">Admin-only</div>
           {review.external_link && (
             <a href={review.external_link} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-primary underline">
               External response link <ExternalLink className="h-3 w-3" />
@@ -358,9 +358,9 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
       </Card>
 
       {recentPrs.length > 0 && (
-        <Card className="border-amber-500/25 bg-amber-500/5 p-3">
+        <Card className="border-warning/25 bg-warning/5 p-3">
           <div className="flex gap-2">
-            <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div className="min-w-0">
               <div className="text-xs font-bold">Training win to acknowledge</div>
               <div className="mt-0.5 text-[11px] text-muted-foreground">
@@ -384,7 +384,7 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
           <Link to="/admin/messages" search={{ clientId: sub.client_id } as any}>
             <Button variant="outline" size="sm"><MessageCircle className="mr-1 h-4 w-4" /> Open Messenger</Button>
           </Link>
-          <Button onClick={handleReply} disabled={!reply.trim() || sending} className="bg-gradient-primary font-bold">
+          <Button onClick={handleReply} disabled={!reply.trim() || sending} className="bg-primary text-primary-foreground font-semibold">
             {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Send Reply
           </Button>
@@ -392,7 +392,7 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
       </Card>
 
       <Card className="border-border bg-card p-4">
-        <div className="mb-3 text-sm font-black">Answers</div>
+        <div className="mb-3 text-sm font-bold">Answers</div>
         {(sub.form_version_number ?? null) !== null && (
           <div className="mb-2 text-[11px] text-muted-foreground">
             Rendered against form version v{sub.form_version_number}.
@@ -410,7 +410,7 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
               <li key={q.id} className="border-b border-border pb-3 last:border-0">
                 <div className="text-xs font-bold text-muted-foreground">
                   {idx + 1}. {q.label}
-                  {q.archived_at && <span className="ml-2 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700">archived</span>}
+                  {q.archived_at && <span className="ml-2 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">archived</span>}
                   <span className="ml-2 text-[10px] uppercase opacity-60">{q.question_type}</span>
                 </div>
                 <div className="mt-1 whitespace-pre-wrap">{val || (qFiles.length ? "" : <span className="text-muted-foreground">—</span>)}</div>

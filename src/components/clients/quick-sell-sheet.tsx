@@ -284,7 +284,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                                   }}
                                 >
                                   {isCopied ? (
-                                    <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />
+                                    <CheckCircle2 className="mr-2 h-4 w-4 text-success" />
                                   ) : (
                                     <Copy className="mr-2 h-4 w-4" />
                                   )}

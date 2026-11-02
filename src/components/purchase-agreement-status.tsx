@@ -17,12 +17,12 @@ export type PurchaseAgreementStatus =
 
 const BADGE: Record<PurchaseAgreementStatus, string> = {
   "Not Required": "bg-muted text-muted-foreground border-border",
-  Missing: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40",
-  "Blocking Start": "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40",
-  "Manual Action Needed": "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40",
-  Sent: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/40",
-  Signed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
-  Verified: "bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/40",
+  Missing: "bg-warning/15 text-warning border-warning/40",
+  "Blocking Start": "bg-destructive/15 text-destructive border-destructive/40",
+  "Manual Action Needed": "bg-warning/15 text-warning border-warning/40",
+  Sent: "bg-info/15 text-info border-info/40",
+  Signed: "bg-success/15 text-success border-success/40",
+  Verified: "bg-success/15 text-success border-success/40",
 };
 
 export function computePurchaseAgreementStatus(opts: {

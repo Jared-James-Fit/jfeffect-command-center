@@ -100,7 +100,7 @@ function ContactProfile() {
                       <div><strong>Current stage:</strong> {c.lifecycle_stage ?? "—"}</div>
                       <div><strong>Has login:</strong> {c.user_id ? "Yes" : "No"}</div>
                       <div><strong>Assigned coach:</strong> {c.coaches?.full_name ?? "—"}</div>
-                      <div className="rounded bg-amber-500/10 p-2 text-xs text-amber-600">
+                      <div className="rounded bg-warning/10 p-2 text-xs text-warning">
                         This moves the contact into active-client reporting. Application and activity history are preserved. No program is auto-assigned.
                       </div>
                     </AlertDialogDescription>
@@ -287,8 +287,8 @@ function ContactProfile() {
                     variant="outline"
                     className={`capitalize ${
                       f.status === "open"
-                        ? "bg-amber-500/15 text-amber-500"
-                        : "bg-emerald-500/15 text-emerald-500"
+                        ? "bg-warning/15 text-warning"
+                        : "bg-success/15 text-success"
                     }`}
                   >
                     {f.status}
@@ -343,9 +343,9 @@ function ContactProfile() {
 function SectionTitle({ children }: any) { return <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{children}</div>; }
 function SummaryCard({ title, tone, children }: { title: string; tone?: "amber" | "emerald" | "sky"; children: React.ReactNode }) {
   const toneCls =
-    tone === "amber" ? "border-amber-500/30 bg-amber-500/5" :
-    tone === "emerald" ? "border-emerald-500/30 bg-emerald-500/5" :
-    tone === "sky" ? "border-sky-500/30 bg-sky-500/5" : "";
+    tone === "amber" ? "border-warning/30 bg-warning/5" :
+    tone === "emerald" ? "border-success/30 bg-success/5" :
+    tone === "sky" ? "border-info/30 bg-info/5" : "";
   return (
     <Card className={`space-y-1 border p-3 ${toneCls}`}>
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{title}</div>

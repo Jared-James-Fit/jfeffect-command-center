@@ -48,14 +48,14 @@ export function AgreementAccountCard({ id }: { id?: string }) {
           <h3 className="text-base font-bold">Coaching Agreement</h3>
         </div>
         {current.state === "signed" && (
-          <Badge variant="outline" className="border-emerald-500/50 text-emerald-600">
+          <Badge variant="outline" className="border-success/50 text-success">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Signed
           </Badge>
         )}
         {current.state === "needs_signature" && (
           <Badge
             variant="outline"
-            className="border-amber-500/60 text-amber-700 dark:text-amber-400"
+            className="border-warning/60 text-warning"
           >
             Action required
           </Badge>

@@ -41,7 +41,7 @@ export function DashboardRefreshIndicator() {
   if (!online) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-500"
+        className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning"
         title="You're offline — showing your last saved dashboard."
       >
         <WifiOff className="h-3 w-3" aria-hidden />
@@ -62,7 +62,7 @@ export function DashboardRefreshIndicator() {
   if (staleWarn) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-500"
+        className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning"
         title="We couldn't refresh just now — showing your last saved data."
       >
         <AlertTriangle className="h-3 w-3" aria-hidden />

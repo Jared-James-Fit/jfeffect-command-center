@@ -29,7 +29,7 @@ function FormRouteError({ error, reset }: { error: Error; reset: () => void }) {
             {error?.message || "Please try again in a moment."}
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={() => reset()} className="bg-gradient-primary font-bold">Try again</Button>
+            <Button onClick={() => reset()} className="bg-primary text-primary-foreground font-semibold">Try again</Button>
             <Button variant="outline" asChild>
               <Link to="/portal/check-ins"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Check-Ins</Link>
             </Button>

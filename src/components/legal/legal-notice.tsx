@@ -36,7 +36,7 @@ export function LegalNotice({
 
   const toneCls =
     tone === "warn"
-      ? "border-amber-500/40 bg-amber-500/5 text-amber-900 dark:text-amber-200"
+      ? "border-warning/40 bg-warning/5 text-black/85 dark:text-white"
       : "border-border bg-muted/30 text-muted-foreground";
 
   return (

@@ -104,7 +104,7 @@ export function WaterTrackerCard({
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
+            <div className="grid h-8 w-8 place-items-center rounded-md bg-info/10 text-info">
               <Droplet className="h-4 w-4" />
             </div>
             <div>
@@ -116,7 +116,7 @@ export function WaterTrackerCard({
           </div>
           <div className="flex items-center gap-1">
             {summary.reached && (
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden />
+              <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />
             )}
             <Badge variant="outline" className="text-[10px]">{sourceBadge}</Badge>
           </div>
@@ -128,7 +128,7 @@ export function WaterTrackerCard({
               {formatWater(summary.total, "L")}
               <span className="text-sm text-muted-foreground"> of {formatWater(target?.active_ml ?? 3000, "L")}</span>\n            </div></div>\n            <div className="text-xs text-muted-foreground">{summary.pct}%</div>
           </div>
-          <Progress value={summary.pct} className="h-2" />\n          {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="w-full text-left text-xs font-medium text-sky-700 dark:text-sky-300">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
+          <Progress value={summary.pct} className="h-2" />\n          {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="w-full text-left text-xs font-medium text-info">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">

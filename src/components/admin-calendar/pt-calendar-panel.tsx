@@ -205,7 +205,7 @@ export function PtCalendarPanel() {
           {s.session_type ? ` · ${s.session_type === "Custom Session" ? s.custom_type || s.session_type : s.session_type}` : ""}
         </div>
         {coachNotes?.get(s.id) && (
-          <div className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-200">
+          <div className="flex items-start gap-1 text-xs text-warning">
             <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
             <span className="break-words">{coachNotes.get(s.id)}</span>
           </div>
@@ -280,7 +280,7 @@ export function PtCalendarPanel() {
   return (
     <>
       <PageHeader title="Sessions" subtitle="Every 1:1 session in one list: book, move, close out." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Quick Book
         </Button>
       } />

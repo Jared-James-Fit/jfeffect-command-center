@@ -135,7 +135,7 @@ export function RestTimerButton({
       className={cn(
         "inline-flex h-10 shrink-0 items-center gap-0 whitespace-nowrap rounded-full border px-1 ring-2 @max-[17rem]:h-9",
         finished
-          ? "border-emerald-500/50 bg-emerald-500/10 ring-emerald-500/10"
+          ? "border-success/50 bg-success/10 ring-success/10"
           : "border-primary/50 bg-primary/15 ring-primary/10",
         className,
       )}

@@ -232,7 +232,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
         </div>
       </div>
 
-      <ActionButton onAction={save} disabled={saving} loadingLabel="Saving…" successLabel="Saved" successToast={false} className="w-full bg-gradient-primary font-bold uppercase btn-press">
+      <ActionButton onAction={save} disabled={saving} loadingLabel="Saving…" successLabel="Saved" successToast={false} className="w-full bg-primary text-primary-foreground font-semibold btn-press">
         Save Bodyweight
       </ActionButton>
 
@@ -279,7 +279,7 @@ export function LogBodyweightCard({ clientId, defaultUnit = "lb" }: Props) {
               <Target className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="truncate text-muted-foreground">No bodyweight goal set yet.</span>
             </div>
-            <Button size="sm" className="h-7 bg-gradient-primary px-2 text-[11px] font-bold uppercase btn-press" onClick={() => setGoalOpen(true)}>
+            <Button size="sm" className="h-7 bg-primary text-primary-foreground px-2 text-[11px] font-semibold btn-press" onClick={() => setGoalOpen(true)}>
               Set Goal
             </Button>
           </div>

@@ -243,8 +243,8 @@ export async function getBroadcastFileSignedUrl(path: string, expiresInSeconds =
 }
 
 export function statusTone(s: BroadcastStatus) {
-  if (s === "Active") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
-  if (s === "Scheduled") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  if (s === "Active") return "bg-success/15 text-success border-success/30";
+  if (s === "Scheduled") return "bg-info/15 text-info border-info/30";
   if (s === "Archived") return "bg-muted text-muted-foreground border-border";
-  return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+  return "bg-warning/15 text-warning border-warning/30";
 }

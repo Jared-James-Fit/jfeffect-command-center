@@ -29,9 +29,9 @@ export function WorkoutProgressRing({
   const dash = (clamped / 100) * c;
   const color =
     status === "completed"
-      ? "text-emerald-500"
+      ? "text-success"
       : status === "in_progress"
-        ? "text-amber-500"
+        ? "text-warning"
         : "text-muted-foreground/50";
   return (
     <div className={cn("inline-flex items-center gap-1.5", className)}>

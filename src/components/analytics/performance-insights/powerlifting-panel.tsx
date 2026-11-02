@@ -44,7 +44,7 @@ export function PowerliftingPanel({
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 {LIFT_EMOJI[l.lift]} {LIFT_LABEL[l.lift]}
               </div>
-              <div className="mt-1 text-2xl font-black">
+              <div className="mt-1 text-2xl font-bold">
                 {l.top_set ? `${conv(l.top_set.load)} ${displayUnit} × ${l.top_set.reps}` : "—"}
               </div>
               <div className="text-[11px] text-muted-foreground">Top set this window</div>

@@ -60,11 +60,11 @@ export function PollCard({ post, onOpenPerson, className }: { post: CommunityPos
                 style={{ width: grown ? `${pct[i]}%` : "0%" }}
               />
             )}
-            <span className={cn("relative flex min-w-0 flex-1 items-center gap-1.5 px-3.5 py-2", showResults && (lead ? "font-black" : "font-semibold"))}>
+            <span className={cn("relative flex min-w-0 flex-1 items-center gap-1.5 px-3.5 py-2", showResults && (lead ? "font-bold" : "font-semibold"))}>
               {mine && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.5} />}
               <span className="min-w-0 break-words">{o.label}</span>
             </span>
-            {showResults && <span className={cn("relative shrink-0 pr-3.5 tabular-nums", lead ? "font-black" : "font-semibold text-muted-foreground")}>{pct[i]}%</span>}
+            {showResults && <span className={cn("relative shrink-0 pr-3.5 tabular-nums", lead ? "font-bold" : "font-semibold text-muted-foreground")}>{pct[i]}%</span>}
           </button>
         );
       })}
@@ -93,7 +93,7 @@ function PollVotersSheet({ poll, open, onClose, onOpenPerson }: { poll: Communit
         <SheetHeader className="sticky top-0 z-10 border-b border-border/70 bg-background px-4 py-3 text-left">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <SheetTitle className="text-base font-black">Who voted</SheetTitle>
+              <SheetTitle className="text-base font-bold">Who voted</SheetTitle>
               <SheetDescription className="text-xs">Only coaches see who voted.</SheetDescription>
             </div>
             <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -107,7 +107,7 @@ function PollVotersSheet({ poll, open, onClose, onOpenPerson }: { poll: Communit
             return (
               <section key={o.id}>
                 <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="min-w-0 text-[14px] font-black">{o.label}</h3>
+                  <h3 className="min-w-0 text-[14px] font-bold">{o.label}</h3>
                   <span className="shrink-0 text-[12px] font-bold tabular-nums text-muted-foreground">
                     {o.votes} · {pct[i]}%
                   </span>

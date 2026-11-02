@@ -109,8 +109,8 @@ function UpgradePage() {
         actions={<Link to="/portal"><Button variant="outline" size="sm"><ArrowLeft className="mr-1 h-3.5 w-3.5" />Back</Button></Link>}
       />
       {native && (
-        <Card className="flex items-start gap-3 border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <Card className="flex items-start gap-3 border-warning/30 bg-warning/10 p-4 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div>
             <div className="font-semibold">Manage your membership on the web</div>
             <div className="text-muted-foreground">
@@ -127,7 +127,7 @@ function UpgradePage() {
             <Card key={o.id} className="flex flex-col p-6">
               {o.member_tier_label && <Badge className="mb-2 w-fit">{o.member_tier_label}</Badge>}
               <div className="text-lg font-bold">{o.name}</div>
-              <div className="mt-1 text-2xl font-extrabold">{formatPrice(o.price_cents, o.currency)}</div>
+              <div className="mt-1 text-2xl font-bold">{formatPrice(o.price_cents, o.currency)}</div>
               {o.payment_structure && <div className="text-xs text-muted-foreground">{o.payment_structure}</div>}
               {o.description && <p className="mt-3 text-sm text-muted-foreground">{o.description}</p>}
               {Array.isArray(o.included_features) && o.included_features.length > 0 && (

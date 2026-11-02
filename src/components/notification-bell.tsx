@@ -793,7 +793,7 @@ export function NotificationBell() {
               <ChevronLeft className="h-4 w-4" />
               <span>Back</span>
             </SheetClose>
-            <div className="min-w-0 flex-1 truncate text-base font-black tracking-tight">
+            <div className="min-w-0 flex-1 truncate text-base font-bold tracking-tight">
               Notifications
             </div>
           </div>

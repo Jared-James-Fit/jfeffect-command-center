@@ -266,11 +266,11 @@ function PeopleSheet({ thread, open, onOpenChange, onInvite }: { thread: CrewThr
             <div className="grid place-items-center p-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : (
             <>
-              <div className="px-4 pb-1 pt-3 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">In the chat · {joined.length}</div>
+              <div className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">In the chat · {joined.length}</div>
               {joined.map(row)}
               {invited.length > 0 && (
                 <>
-                  <div className="px-4 pb-1 pt-4 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Invited · {invited.length}</div>
+                  <div className="px-4 pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Invited · {invited.length}</div>
                   {invited.map(row)}
                 </>
               )}

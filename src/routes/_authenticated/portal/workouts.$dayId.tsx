@@ -46,7 +46,7 @@ function WorkoutDayErrorFallback({ error, reset }: { error: Error; reset: () => 
     <div className="p-6">
       <Card className="space-y-3 p-6">
         <div className="flex items-center gap-2 text-base font-bold">
-          <AlertTriangle className="h-5 w-5 text-amber-500" />
+          <AlertTriangle className="h-5 w-5 text-warning" />
           Something went wrong opening this workout
         </div>
         <div className="text-sm text-muted-foreground">

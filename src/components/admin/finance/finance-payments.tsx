@@ -155,7 +155,7 @@ export function FinancePayments() {
 
       <Section
         title="Money to collect"
-        right={toCollect > 0 ? <span className="font-semibold text-amber-600 tabular-nums dark:text-amber-400">{fmtCad(toCollect)}</span> : undefined}
+        right={toCollect > 0 ? <span className="font-semibold text-warning tabular-nums">{fmtCad(toCollect)}</span> : undefined}
         footer={open.length > COLLECT_PREVIEW
           ? { label: allOpen ? "Show fewer" : `Show all ${open.length}`, onClick: () => setAllOpen((v) => !v) }
           : null}
@@ -173,7 +173,7 @@ export function FinancePayments() {
                 key={a.label}
                 className={cn(
                   "rounded-full border px-2.5 py-1 text-[11px] tabular-nums",
-                  a.warn ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "text-muted-foreground",
+                  a.warn ? "border-warning/40 bg-warning/10 text-warning" : "text-muted-foreground",
                 )}
               >
                 {a.label} <span className="font-semibold text-foreground">{shortCad(a.v)}</span>

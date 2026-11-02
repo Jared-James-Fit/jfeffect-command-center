@@ -30,7 +30,7 @@ export function InstallAppCard({ className, hideWhenDone = false }: { className?
             "flex items-center gap-3 p-4 transition active:scale-[0.99]",
             installed
               ? "border-success/40 bg-success/5 hover:border-success"
-              : "border-primary/30 bg-gradient-to-br from-primary/10 to-card hover:border-primary",
+              : "border-primary/30 bg-card hover:border-primary",
           )}
         >
           <div
@@ -38,7 +38,7 @@ export function InstallAppCard({ className, hideWhenDone = false }: { className?
               "grid h-11 w-11 shrink-0 place-items-center rounded-xl shadow-sm",
               installed
                 ? "bg-success/15 text-success"
-                : "bg-gradient-primary text-primary-foreground",
+                : "bg-primary text-primary-foreground text-primary-foreground",
             )}
           >
             {installed ? <CheckCircle2 className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}

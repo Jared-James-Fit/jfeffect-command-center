@@ -57,7 +57,7 @@ export function PrivateAccountRow() {
       <Sheet open={ask !== null} onOpenChange={(o) => !o && setAsk(null)}>
         <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[420px]">
           <div data-private-confirm className="px-6 pb-3 pt-6 text-center">
-            <SheetTitle className="text-[16px] font-black">{ask ? "Switch to private account?" : "Switch to public account?"}</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">{ask ? "Switch to private account?" : "Switch to public account?"}</SheetTitle>
             <SheetDescription className="mt-2 text-[13px] leading-snug">
               {ask
                 ? `Only followers you approve will see your posts and stories. People who already follow you still will, and so will ${staff === "Your coach" ? "your coach" : "the JF Effect team"}. Your automatic workout stories stay public.`

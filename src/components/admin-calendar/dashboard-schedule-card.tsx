@@ -68,7 +68,7 @@ function readGooglePref() {
 }
 
 const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
-  Completed: { label: "Done", cls: "bg-emerald-500/15 text-emerald-500" },
+  Completed: { label: "Done", cls: "bg-success/15 text-success" },
   Missed: { label: "No-show", cls: "bg-destructive/15 text-destructive" },
   Cancelled: { label: "Cancelled", cls: "bg-secondary text-muted-foreground" },
 };

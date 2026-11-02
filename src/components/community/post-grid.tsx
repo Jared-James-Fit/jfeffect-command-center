@@ -66,7 +66,7 @@ function GridTile({ post: p, thumb, unit, onTap, picked, mark, showAudience }: {
       <PostTileFace post={p} thumb={thumb} unit={unit} />
       {mark === "repost" && <Repeat2 className="absolute right-1.5 top-1.5 h-4 w-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]" strokeWidth={2.6} aria-hidden />}
       {showAudience && (p.visibility === "close_friends" ? (
-        <Star className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 fill-emerald-400 text-emerald-400 drop-shadow" aria-label="Close friends" />
+        <Star className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 fill-success text-success drop-shadow" aria-label="Close friends" />
       ) : p.visibility !== "community" && p.visibility !== "followers" ? (
         <Lock className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" aria-label="Not shared with the crew" />
       ) : null)}

@@ -177,8 +177,8 @@ export function ExerciseBlocksEditor({ open, onOpenChange, rowId, exerciseName }
         ) : (
           <div className="space-y-3">
             {hasUnsupportedBlocks && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-foreground">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-xs text-foreground">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div>
                   <div className="font-semibold">Builder preview only</div>
                   <p className="mt-1 text-muted-foreground">

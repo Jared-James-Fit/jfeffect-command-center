@@ -211,7 +211,7 @@ export function ShareProgramSheet({
               </div>
             )}
             {viewerRole === "admin" && membershipShare && !(linked as any)?.plan && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-[11px] text-amber-700 dark:text-amber-300">
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-[11px] text-warning">
                 <div className="font-semibold">Listing metadata is missing</div>
                 <p className="mt-0.5">
                   This program is live in the Membership Library via a direct share, but has no public title, cover image, or description yet — members will see a bare entry. Open <strong>Manage Publication</strong> to add listing details.

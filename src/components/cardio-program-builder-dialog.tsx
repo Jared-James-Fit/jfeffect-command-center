@@ -266,7 +266,7 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
 
         <DialogFooter className="mt-4">
           <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
-          <ActionButton onClick={save} jobLabel="Saving cardio program" className="bg-gradient-primary font-bold uppercase">
+          <ActionButton onClick={save} jobLabel="Saving cardio program" className="bg-primary text-primary-foreground font-semibold">
             Save & Assign ({rows.length})
           </ActionButton>
         </DialogFooter>

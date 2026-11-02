@@ -123,7 +123,7 @@ function CopyBlock({ title, text, icon, defaultOpen = true }: { title: string; t
       <div className="flex items-center gap-2 px-3 py-2">
         <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           {icon}
-          <span className="truncate text-xs font-black uppercase tracking-widest">{title}</span>
+          <span className="truncate text-xs font-bold uppercase tracking-widest">{title}</span>
           <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open && "rotate-180")} />
         </button>
         <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1.5" onClick={copy}>
@@ -358,10 +358,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     : { label: "AI is building the plan…", tone: "amber" };
   const tones: Record<string, string> = {
     muted: "border-border text-muted-foreground",
-    sky: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    rose: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    sky: "border-info/30 bg-info/10 text-info",
+    amber: "border-warning/30 bg-warning/10 text-warning",
+    emerald: "border-success/30 bg-success/10 text-success",
+    rose: "border-destructive/30 bg-destructive/10 text-destructive",
   };
 
   return (
@@ -369,7 +369,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
               <Sparkles className="h-4 w-4 text-primary" /> Nutrition Plan
             </h3>
             <Badge variant="outline" className={cn("text-[10px]", tones[statusChip.tone])}>{statusChip.label}</Badge>
@@ -435,21 +435,21 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           <Button variant="outline" className="gap-1.5" onClick={() => setManualOpen(true)} title="Build or paste a plan yourself (targets, meals, steps and cardio)">
             <PencilLine className="h-4 w-4" /> Build
           </Button>
-          <Button className="gap-2 bg-gradient-primary font-bold" onClick={() => setSendOpen(true)}>
+          <Button className="gap-2 bg-primary text-primary-foreground font-semibold" onClick={() => setSendOpen(true)}>
             <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "New request" : "Send request"}
           </Button>
         </div>
       </div>
 
       {submitted && !revising && (!plan || plan.status === "generating" || plan.status === "pending") && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+        <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/5 px-3 py-3 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-warning" />
           AI is calculating targets and writing the meal plan. Usually a minute or two, and you can leave this page.
         </div>
       )}
 
       {submitted && plan?.status === "error" && (
-        <div className="flex flex-col gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span>AI couldn't finish: <span className="text-muted-foreground">{plan.error ?? "unknown error"}</span></span>
           <Button size="sm" variant="outline" onClick={regenerate} disabled={regenerating}>
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", regenerating && "animate-spin")} /> Try again
@@ -467,7 +467,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           )}
           <div className="space-y-2 rounded-xl border border-border bg-secondary/20 p-3">
             <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="plan-change" className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
+              <Label htmlFor="plan-change" className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
                 <MessageSquarePlus className="h-4 w-4 text-primary" /> Change something
               </Label>
               {revisions.length > 0 && !revising && (
@@ -478,13 +478,13 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </div>
             {revising ? (
               <div className="flex items-start gap-2 text-sm">
-                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-500" />
+                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-warning" />
                 <span>Updating: <span className="text-muted-foreground">“{plan.revise_instructions}”</span></span>
               </div>
             ) : (
               <>
                 {updateFailed && (
-                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-2.5 py-2 text-xs">
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-2 text-xs">
                     Couldn't apply “{plan.revise_instructions}”: <span className="text-muted-foreground">{plan.error}</span>. The plan is unchanged.{" "}
                     <button type="button" className="font-bold underline" onClick={() => sendChange(plan.revise_instructions ?? "")} disabled={changing}>
                       Try again
@@ -581,7 +581,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </div>
           </div>
           {prefill && !prefill.days.length && (
-            <p className="text-xs text-amber-600">The meal plan didn't parse into days — copy it and paste it into Add Targets, or regenerate.</p>
+            <p className="text-xs text-warning">The meal plan didn't parse into days — copy it and paste it into Add Targets, or regenerate.</p>
           )}
         </div>
       )}
@@ -747,7 +747,7 @@ function PlanPreview({ rows, foods }: { rows: Array<{ label: string; kcal: numbe
     <div className="overflow-x-auto rounded-xl border border-border">
       {foods && foods.total > 0 && (
         <div
-          className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", heavy ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "text-muted-foreground")}
+          className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", heavy ? "bg-warning/10 text-warning" : "text-muted-foreground")}
           title={foods.foods.join(", ")}
         >
           <span className="font-semibold">Grocery list: {foods.total} foods</span>

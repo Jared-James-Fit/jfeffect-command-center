@@ -283,11 +283,11 @@ export function AdminTransactionsPage({ embedded = false }: { embedded?: boolean
           </Card>
           <Card className="p-4">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Paid · {RANGE_LABEL[days] ?? ""}</div>
-            <div className="mt-1 text-2xl font-semibold text-emerald-500">{fmtTotal(totals.paid)}</div>
+            <div className="mt-1 text-2xl font-semibold text-success">{fmtTotal(totals.paid)}</div>
           </Card>
           <Card className="p-4">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Refunded</div>
-            <div className="mt-1 text-2xl font-semibold text-amber-500">{fmtTotal(totals.refunded)}</div>
+            <div className="mt-1 text-2xl font-semibold text-warning">{fmtTotal(totals.refunded)}</div>
           </Card>
           <Card className="p-4">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Stripe-only</div>

@@ -39,11 +39,11 @@ function MuscleCard({ stat, onShare, fmtTon }: { stat: MuscleStat; onShare: () =
     t < -3 ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />;
   const trendClass =
     t == null ? "text-muted-foreground" :
-    t > 3 ? "text-emerald-500" :
-    t < -3 ? "text-rose-500" : "text-muted-foreground";
+    t > 3 ? "text-success" :
+    t < -3 ? "text-destructive" : "text-muted-foreground";
   const trendLabel = t == null ? "—" : `${t > 0 ? "+" : ""}${t}%`;
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-border/60 bg-gradient-to-br from-card to-card/60 p-4">
+    <Card className="relative overflow-hidden rounded-2xl border-border/60 bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-2xl leading-none">{MUSCLE_EMOJI[stat.group]}</div>

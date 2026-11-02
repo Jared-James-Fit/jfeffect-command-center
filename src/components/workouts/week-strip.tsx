@@ -16,13 +16,13 @@ export function statusDotClass(status: WorkoutStatus | "none"): string {
     case "completed_today":
     case "completed_on_scheduled":
     case "completed_different_day":
-      return "bg-emerald-500";
+      return "bg-success";
     case "today": return "bg-primary";
     case "in_progress":
     case "review_pending":
     case "incomplete":
-      return "bg-amber-500";
-    case "missed": return "bg-rose-500";
+      return "bg-warning";
+    case "missed": return "bg-destructive";
     case "upcoming": return "bg-muted-foreground/60";
     case "available":
     case "not_started":
@@ -36,7 +36,7 @@ export function SessionDot({ onPrimary, className }: { onPrimary?: boolean; clas
   return (
     <span
       aria-hidden
-      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-violet-500", onPrimary && "ring-2 ring-primary-foreground", className)}
+      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-muted-foreground", onPrimary && "ring-2 ring-primary-foreground", className)}
     />
   );
 }
@@ -75,7 +75,7 @@ export function WeekStrip({
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-xs font-semibold text-muted-foreground">
-          {trainingWeek && <span className="font-black text-foreground">{trainingWeek} · </span>}
+          {trainingWeek && <span className="font-bold text-foreground">{trainingWeek} · </span>}
           {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
           {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
         </div>
@@ -128,7 +128,7 @@ export function WeekStrip({
                 {format(d, "EEE")}
               </span>
               <span className={cn(
-                "text-base font-black",
+                "text-base font-bold",
                 isSelected ? "" : isToday ? "text-primary" : "",
               )}>
                 {format(d, "d")}

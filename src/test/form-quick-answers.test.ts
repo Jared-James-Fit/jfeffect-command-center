@@ -67,7 +67,7 @@ describe("choices are buttons a thumb can't miss", () => {
     expect(form).toContain("<QuickChips");
     expect(form).toContain('const field = "h-12 rounded-xl px-3.5 text-[16px]";');
     expect(form).toContain('inputMode="decimal"');
-    expect(form).toContain('className="h-14 w-full rounded-2xl bg-gradient-primary text-[16px] font-black"');
+    expect(form).toContain('className="h-14 w-full rounded-2xl bg-primary text-primary-foreground text-[16px] font-semibold"');
     expect(form).toContain('bottom: embedded ? 0 : "calc(var(--bottom-nav-clearance, 0px) + env(safe-area-inset-bottom))"');
     // Submit takes them to what's missing (and a number that's off)
     expect(form).toContain('document.getElementById(`q-${first.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });');

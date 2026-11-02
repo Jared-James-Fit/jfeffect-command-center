@@ -136,8 +136,8 @@ export function FinanceHome() {
       </div>
 
       {toCheck > 0 && (
-        <Link to={"/admin/finance/books" as any} search={{ tab: "expenses", filter: "review" } as any} className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          <Receipt className="h-5 w-5 shrink-0 text-amber-500" />
+        <Link to={"/admin/finance/books" as any} search={{ tab: "expenses", filter: "review" } as any} className="flex items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-3 text-sm">
+          <Receipt className="h-5 w-5 shrink-0 text-warning" />
           <span className="min-w-0 flex-1"><strong>{toCheck} receipt{toCheck === 1 ? "" : "s"} to check.</strong> {ASSISTANT_NAME} couldn't read everything.</span>
           <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </Link>
@@ -151,7 +151,7 @@ export function FinanceHome() {
 
         <Section
           title="Money to collect"
-          right={toCollect > 0 ? <span className="font-semibold text-amber-600 tabular-nums dark:text-amber-400">{fmtCad(toCollect)}</span> : undefined}
+          right={toCollect > 0 ? <span className="font-semibold text-warning tabular-nums">{fmtCad(toCollect)}</span> : undefined}
           footer={open.length > HOME_COLLECT ? { label: `View all ${open.length}`, to: "/admin/finance/payments" } : null}
           flush
         >

@@ -172,7 +172,7 @@ function ClientMessages() {
           />
         </LiveAvatar>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-black tracking-tight">{coachName}</div>
+          <div className="truncate text-sm font-bold tracking-tight">{coachName}</div>
           <div className="truncate text-[11px] text-muted-foreground">
             {coachLive ? (
               <LiveMark className="font-semibold" size={6}>Live in chat</LiveMark>
@@ -186,7 +186,7 @@ function ClientMessages() {
             type="button"
             variant="outline"
             size="icon"
-            className="h-9 w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+            className="h-9 w-9 shrink-0 border-success/40 bg-success/10 text-success hover:bg-success/20"
             title={`Call ${coachName}`}
             onClick={() => setConfirm("call")}
           >
@@ -263,7 +263,7 @@ function ClientMessages() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               For urgent or important matters only
             </AlertDialogTitle>
             <AlertDialogDescription>

@@ -249,7 +249,7 @@ export function ClientActionRequestComposer({
 
         <DialogFooter>
           <ActionButton variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>Cancel</ActionButton>
-          <ActionButton onClick={submit} jobLabel="Sending action request" className="bg-gradient-primary font-bold">
+          <ActionButton onClick={submit} jobLabel="Sending action request" className="bg-primary text-primary-foreground font-semibold">
             <Send className="mr-2 h-4 w-4" />
             Send Request
           </ActionButton>

@@ -20,7 +20,7 @@ type Day = {
 function MacroCell({ label, value, unit }: { label: string; value: number | null; unit?: string }) {
   return (
     <div className="rounded-md border border-border bg-secondary/20 px-3 py-2 text-center">
-      <div className="text-base font-black leading-none">
+      <div className="text-base font-bold leading-none">
         {value ?? "—"}
         {value != null && unit && (
           <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{unit}</span>
@@ -75,7 +75,7 @@ export function AssignedPlanSummary() {
               <ClipboardList className="h-4 w-4" />
             </div>
             <div>
-              <div className="text-sm font-black uppercase tracking-widest">Nutrition Plan</div>
+              <div className="text-sm font-bold uppercase tracking-widest">Nutrition Plan</div>
               <div className="text-[11px] text-muted-foreground">No nutrition plan assigned yet.</div>
             </div>
           </div>
@@ -94,7 +94,7 @@ export function AssignedPlanSummary() {
             <ClipboardList className="h-4 w-4" />
           </div>
           <div className="flex-1">
-            <div className="text-sm font-black uppercase tracking-widest">Your Nutrition Plan</div>
+            <div className="text-sm font-bold uppercase tracking-widest">Your Nutrition Plan</div>
             <div className="text-[11px] text-muted-foreground">
               {[plan.phase, plan.goal, plan.structure].filter(Boolean).join(" · ") || "Assigned by your coach"}
             </div>
@@ -122,7 +122,7 @@ export function AssignedPlanSummary() {
           <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/20 px-3 py-2">
             <Droplets className="h-4 w-4 text-primary" />
             <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Water</div>
-            <div className="ml-auto text-sm font-black">{plan.water}</div>
+            <div className="ml-auto text-sm font-bold">{plan.water}</div>
           </div>
         )}
 

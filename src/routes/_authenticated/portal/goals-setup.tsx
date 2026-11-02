@@ -106,7 +106,7 @@ function PortalGoalsSetupPage() {
 
       {setup?.completed_at && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
           Saved {new Date(setup.completed_at).toLocaleDateString()} — you can update any answer below.
           <Badge variant="secondary" className="ml-auto text-[10px]">Saves on each step</Badge>
         </div>

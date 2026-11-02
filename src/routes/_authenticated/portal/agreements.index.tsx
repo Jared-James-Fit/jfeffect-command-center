@@ -112,7 +112,7 @@ function PortalAgreementsPage() {
                 <h2 className="text-sm font-semibold text-muted-foreground">Needs your signature</h2>
                 {needsAction.map((a) => (
                   <Card key={a.id} className="border-border bg-card p-4 flex items-center gap-3 flex-wrap">
-                    <FileText className="h-5 w-5 text-amber-500" />
+                    <FileText className="h-5 w-5 text-warning" />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{(a as any).custom_title ?? a.agreement_type ?? a.template_name}</p>
                       <p className="text-xs text-muted-foreground">Sent {a.sent_at ? new Date(a.sent_at).toLocaleDateString() : "—"}</p>
@@ -134,7 +134,7 @@ function PortalAgreementsPage() {
                 <h2 className="text-sm font-semibold text-muted-foreground">Completed</h2>
                 {completed.map((a) => (
                   <Card key={a.id} className="border-border bg-card p-4 flex items-center gap-3 flex-wrap">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    <CheckCircle2 className="h-5 w-5 text-success" />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{(a as any).custom_title ?? a.agreement_type ?? a.template_name}</p>
                       <p className="text-xs text-muted-foreground">Signed {a.signed_at ? new Date(a.signed_at).toLocaleDateString() : "—"}</p>

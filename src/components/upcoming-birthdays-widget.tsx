@@ -332,7 +332,7 @@ export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT, hi
                         className={cn(
                           "h-7 gap-1 px-2 text-[11px] font-medium",
                           hasSeen
-                            ? "border-emerald-200 bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15"
+                            ? "border-success/30 bg-success/15 text-success hover:bg-success/15"
                             : "text-muted-foreground",
                         )}
                         title={hasSeen ? (hasDismissed ? "Client saw and dismissed the card" : "Client saw the card") : "Client has not opened the birthday card yet"}

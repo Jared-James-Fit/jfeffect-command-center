@@ -53,7 +53,7 @@ function AppsHub() {
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary font-bold uppercase"><Plus className="mr-2 h-4 w-4" />Add</Button>
+              <Button className="bg-primary text-primary-foreground font-semibold"><Plus className="mr-2 h-4 w-4" />Add</Button>
             </DialogTrigger>
             <NewShortcut onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["shortcuts"] })} />
           </Dialog>
@@ -86,7 +86,7 @@ function AppsHub() {
       </div>
       <div className="grid gap-4 p-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 md:p-8">
         {shortcuts.map((s) => (
-          <Card key={s.id} className="group border-border bg-card p-5 transition hover:border-primary hover:shadow-glow">
+          <Card key={s.id} className="group border-border bg-card p-5 transition hover:border-primary">
             <div className="flex items-start justify-between">
               <div>
                 <div className="font-bold">{s.name}</div>
@@ -125,7 +125,7 @@ function NewShortcut({ onClose, onCreated }: { onClose: () => void; onCreated: (
         <div><Label>Private notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" className="bg-gradient-primary font-bold uppercase">Add</Button>
+          <Button type="submit" className="bg-primary text-primary-foreground font-semibold">Add</Button>
         </DialogFooter>
       </form>
     </DialogContent>

@@ -70,9 +70,9 @@ function NotifPage() {
                   <td className="px-3 py-2 text-xs">{r.mode}</td>
                   <td className="px-3 py-2 text-xs">
                     <Badge variant="outline" className={
-                      r.decision === "sent" ? "border-emerald-500/30 text-emerald-300"
-                      : r.decision === "failed" ? "border-rose-500/30 text-rose-300"
-                      : r.decision === "dry_run" ? "border-amber-500/30 text-amber-300"
+                      r.decision === "sent" ? "border-success/30 text-success"
+                      : r.decision === "failed" ? "border-destructive/30 text-destructive"
+                      : r.decision === "dry_run" ? "border-warning/30 text-warning"
                       : "border-muted text-muted-foreground"
                     }>{r.decision}</Badge>
                   </td>
@@ -91,8 +91,8 @@ function NotifPage() {
 
 const MODES: { value: NotificationMode; label: string; tone: string; desc: string }[] = [
   { value: "dry_run", label: "Dry run", tone: "border-muted text-muted-foreground", desc: "No provider calls. Every attempt is logged as dry_run." },
-  { value: "allowlist", label: "Allowlist", tone: "border-amber-500/30 text-amber-300", desc: "Real sends, but only to allowlisted phones / emails." },
-  { value: "live", label: "Live", tone: "border-emerald-500/30 text-emerald-300", desc: "Real sends to every recipient. Use only after QA." },
+  { value: "allowlist", label: "Allowlist", tone: "border-warning/30 text-warning", desc: "Real sends, but only to allowlisted phones / emails." },
+  { value: "live", label: "Live", tone: "border-success/30 text-success", desc: "Real sends to every recipient. Use only after QA." },
 ];
 
 function NotificationModeCard() {
@@ -186,7 +186,7 @@ function NotificationModeCard() {
           </div>
 
           {mode === "live" && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
+            <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-white">
               Live mode sends real messages to every recipient. Confirm QA in Allowlist mode first.
             </div>
           )}

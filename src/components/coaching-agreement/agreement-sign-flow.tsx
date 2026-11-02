@@ -585,7 +585,7 @@ export function AgreementSignFlow({
   } else if (ctxQuery.isError || !ctx) {
     body = (
       <CenteredNote
-        icon={<AlertTriangle className="h-7 w-7 text-amber-500" />}
+        icon={<AlertTriangle className="h-7 w-7 text-warning" />}
         title="We couldn't open your agreement"
         text={
           (ctxQuery.error as Error | null)?.message ?? "Please check your connection and try again."
@@ -600,7 +600,7 @@ export function AgreementSignFlow({
   } else if (alreadyCurrent) {
     body = (
       <CenteredNote
-        icon={<CheckCircle2 className="h-8 w-8 text-emerald-500" />}
+        icon={<CheckCircle2 className="h-8 w-8 text-success" />}
         title="You're already up to date"
         text="Your Coaching Agreement is signed. You can view your signed copy any time under Account."
         action={
@@ -976,10 +976,10 @@ function SuccessView({
 }) {
   return (
     <div className="mx-auto flex min-h-[70%] max-w-sm flex-col items-center justify-center gap-4 py-12 text-center">
-      <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-500/15">
-        <CheckCircle2 className="h-11 w-11 text-emerald-500" />
+      <div className="grid h-20 w-20 place-items-center rounded-full bg-success/15">
+        <CheckCircle2 className="h-11 w-11 text-success" />
       </div>
-      <h2 className="text-2xl font-black tracking-tight">You're signed.</h2>
+      <h2 className="text-2xl font-bold tracking-tight">You're signed.</h2>
       <p className="text-[15px] leading-snug text-muted-foreground">
         Your signed copy is saved in your account
         {email ? ` and a receipt is on its way to ${email}` : ""}. This agreement now covers every
@@ -1024,7 +1024,7 @@ function ReviewStep({
           Version {content.version} · Effective{" "}
           {formatSignedDate(`${content.effectiveDate}T12:00:00Z`)}
         </p>
-        <h1 className="text-2xl font-black leading-tight tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight">{title}</h1>
         <p className="text-[15px] leading-snug text-muted-foreground">{intro}</p>
         {note && (
           <blockquote className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -1118,7 +1118,7 @@ function DetailsStep({
   return (
     <div className="space-y-5 py-4">
       <div>
-        <h1 className="text-2xl font-black tracking-tight">Confirm your details</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Confirm your details</h1>
         <p className="mt-1 text-[15px] text-muted-foreground">
           These become part of your signed agreement. Anything already on your profile is filled in.
         </p>
@@ -1306,9 +1306,9 @@ function DetailsStep({
       </section>
 
       {minor && (
-        <section className="space-y-4 rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 p-4">
+        <section className="space-y-4 rounded-2xl border-2 border-warning/50 bg-warning/10 p-4">
           <div className="flex items-start gap-3">
-            <UserRound className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <UserRound className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div>
               <h2 className="text-base font-bold">Parent or guardian needed</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -1554,7 +1554,7 @@ function SignStep(props: {
   return (
     <div className="space-y-5 py-4">
       <div>
-        <h1 className="text-2xl font-black tracking-tight">Agree &amp; sign</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Agree &amp; sign</h1>
         <p className="mt-1 text-[15px] text-muted-foreground">
           Confirm the key points, then sign. This is your legally binding signature.
         </p>
@@ -1563,9 +1563,9 @@ function SignStep(props: {
       {props.offline && (
         <div
           id="ag-offline"
-          className="flex items-center gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm"
+          className="flex items-center gap-2.5 rounded-xl border border-warning/50 bg-warning/10 p-3 text-sm"
         >
-          <WifiOff className="h-4 w-4 shrink-0 text-amber-600" />
+          <WifiOff className="h-4 w-4 shrink-0 text-warning" />
           You're offline. Reconnect to sign.
         </div>
       )}
@@ -1696,7 +1696,7 @@ function SignStep(props: {
       </section>
 
       {props.minor && (
-        <section className="space-y-4 rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 p-4">
+        <section className="space-y-4 rounded-2xl border-2 border-warning/50 bg-warning/10 p-4">
           <div>
             <h2 className="text-base font-bold">Parent or guardian signs here</h2>
             <p className="mt-1 text-sm text-muted-foreground">

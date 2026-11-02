@@ -815,7 +815,7 @@ function PeopleFaces({ names, size = 16 }: { names: string[]; size?: number }) {
       {shown.map((n, i) => (
         <span
           key={`${n}-${i}`}
-          className="grid place-items-center rounded-full bg-primary/15 font-black uppercase text-primary ring-2 ring-card"
+          className="grid place-items-center rounded-full bg-primary/15 font-bold uppercase text-primary ring-2 ring-card"
           style={{ width: size, height: size, fontSize: size * 0.5 }}
         >
           {(n === "Me" ? "Me" : firstName(n)).slice(0, n === "Me" ? 2 : 1)}
@@ -995,7 +995,7 @@ function QuadrantPreview({
       aria-label={`${style.title}: ${tasks.length} open. Open the full list.`}
     >
       <div className="flex w-full items-center gap-1.5">
-        <span className="min-w-0 flex-1 truncate text-[13px] font-black tracking-tight md:text-sm" style={{ color: style.color }}>{style.title}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold tracking-tight md:text-sm" style={{ color: style.color }}>{style.title}</span>
         <span
           className="shrink-0 rounded-full border px-1.5 text-[10px] font-bold tabular-nums"
           style={{ borderColor: `${style.color}80`, color: style.color }}
@@ -1061,7 +1061,7 @@ function QuadrantSheet({
             <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 pb-2.5 pt-3">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: style.color }} />
               <div className="min-w-0 flex-1">
-                <SheetTitle className="truncate text-base font-black tracking-tight" style={{ color: style.color }}>
+                <SheetTitle className="truncate text-base font-bold tracking-tight" style={{ color: style.color }}>
                   {style.title} <span className="text-sm font-semibold tabular-nums text-muted-foreground">{tasks.length}</span>
                 </SheetTitle>
                 <SheetDescription className="truncate text-[11px]">

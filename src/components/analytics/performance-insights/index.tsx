@@ -206,7 +206,7 @@ export function PerformanceInsights({
 
   return (
     <div className="space-y-3">
-      <Card className="overflow-hidden rounded-3xl border-border/70 bg-gradient-to-br from-primary/10 via-transparent to-transparent">
+      <Card className="overflow-hidden rounded-3xl border-border/70 ">
         <div className="flex items-center gap-2 p-4">
           <button
             type="button"
@@ -218,7 +218,7 @@ export function PerformanceInsights({
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-black">Performance Insights</div>
+              <div className="text-sm font-bold">Performance Insights</div>
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                 <span>{teaser.tonnage.toLocaleString()} {displayUnit} moved</span>
                 <span>Top: {teaser.topMuscle}</span>

@@ -55,7 +55,7 @@ export function ClientNotesLog({ clientId, limit, onSeeAll }: { clientId: string
       ) : (
         months.map(([month, entries]) => (
           <section key={month}>
-            <h4 className="mb-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">{month}</h4>
+            <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{month}</h4>
             <ul className="space-y-2">
               {entries.map((e) => <NoteRow key={`${e.source}:${e.id}`} e={e} clientId={clientId} />)}
             </ul>
@@ -74,13 +74,13 @@ export function ClientNotesLog({ clientId, limit, onSeeAll }: { clientId: string
 function NoteRow({ e, clientId }: { e: WorkoutNoteEntry; clientId: string }) {
   const when = new Date(e.at);
   return (
-    <li className={cn("rounded-xl border px-3 py-2.5", e.pain ? "border-red-500/30 bg-red-500/[0.05]" : "border-border/70 bg-card")} data-note-row={e.pain ? "pain" : e.source}>
+    <li className={cn("rounded-xl border px-3 py-2.5", e.pain ? "border-destructive/30 bg-destructive/[0.05]" : "border-border/70 bg-card")} data-note-row={e.pain ? "pain" : e.source}>
       <div className="flex items-start gap-2.5">
-        <span className={cn("mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full", e.pain ? "bg-red-500/15 text-red-600 dark:text-red-400" : "bg-muted text-muted-foreground")}>
+        <span className={cn("mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full", e.pain ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground")}>
           {e.pain ? <AlertTriangle className="h-3.5 w-3.5" /> : e.source === "exercise" ? <StickyNote className="h-3.5 w-3.5" /> : <NotebookPen className="h-3.5 w-3.5" />}
         </span>
         <div className="min-w-0 flex-1">
-          {e.pain && <div className="text-[14px] font-black leading-snug">{painLine(e.pain)}</div>}
+          {e.pain && <div className="text-[14px] font-bold leading-snug">{painLine(e.pain)}</div>}
           {e.exercise && <div className="text-[13px] font-bold">{e.exercise}</div>}
           {e.note && <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-snug">“{e.note}”</p>}
           <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
@@ -111,7 +111,7 @@ export function ClientNotesSheet({ clientId, name, onClose }: { clientId: string
       <SheetContent side="bottom" hideCloseButton className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[560px]">
         <SheetHeader className="sticky top-0 z-10 flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 bg-background/95 px-5 pb-3 pt-4 text-left backdrop-blur">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">{name ? `${name.split(" ")[0]}'s notes` : "Workout notes"}</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">{name ? `${name.split(" ")[0]}'s notes` : "Workout notes"}</SheetTitle>
             <SheetDescription className="text-[12px]">Pain, workout and exercise notes they've sent you</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">

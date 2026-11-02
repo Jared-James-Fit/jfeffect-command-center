@@ -57,7 +57,7 @@ function BillingEventsPage() {
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">{r.type}</td>
                   <td className="px-3 py-2 text-xs">
-                    <Badge variant="outline" className={r.livemode ? "border-rose-500/30 text-rose-300" : "border-amber-500/30 text-amber-300"}>
+                    <Badge variant="outline" className={r.livemode ? "border-destructive/30 text-destructive" : "border-warning/30 text-warning"}>
                       {r.livemode === null ? "—" : r.livemode ? "live" : "test"}
                     </Badge>
                   </td>

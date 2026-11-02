@@ -197,16 +197,16 @@ export function deriveWeeklyPurposeLabelByRowId<
 export function purposeLabelBadgeClass(label: string | null | undefined): string {
   const l = (label ?? "").trim();
   if (l === "Assistance") {
-    return "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+    return "border-warning/40 bg-warning/10 text-warning";
   }
   if (l === "Primary") {
-    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400";
+    return "border-info/40 bg-info/10 text-info";
   }
   if (l === "Secondary") {
-    return "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400";
+    return "border-border bg-muted-foreground/10 text-muted-foreground";
   }
   if (["Tertiary", "Quaternary"].includes(l)) {
-    return "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-400";
+    return "border-border bg-muted-foreground/10 text-muted-foreground";
   }
   return "border-muted-foreground/30 bg-muted text-muted-foreground";
 }

@@ -17,7 +17,7 @@ export function RecordPill({ scope, label, className, size = "sm" }: { scope: Re
   const t = TIER[scope];
   const Icon = t.icon;
   return (
-    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full border font-black uppercase tracking-wide",
+    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full border font-bold uppercase tracking-wide",
       size === "md" ? "h-6 px-2.5 text-[11px]" : "h-5 px-2 text-[10px]", t.pill, className)}>
       <Icon className={size === "md" ? "h-3.5 w-3.5" : "h-3 w-3"} />
       {label}
@@ -59,7 +59,7 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
   return (
     <section className={cn("relative overflow-hidden rounded-2xl border-2 p-3.5 shadow-sm animate-in zoom-in-95 fade-in duration-700",
       hasAtpr ? "border-amber-500/50 bg-gradient-to-br from-amber-500/[0.16] via-amber-500/[0.05] to-background" : "border-violet-500/30 bg-gradient-to-br from-violet-500/[0.08] to-background")}>
-      <div className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">New records</div>
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">New records</div>
       <ul className="space-y-2">
         {reps.slice(0, 6).map((r) => {
           const scope = topScope(r)!;
@@ -67,7 +67,7 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
           return (
             <li key={r.set_id} className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-black leading-tight">{r.exercise_name}</div>
+                <div className="truncate text-[13px] font-bold leading-tight">{r.exercise_name}</div>
                 <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">{formatLoad(r.load_kg, unit)} × {r.reps}</div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5">
@@ -81,7 +81,7 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
         {loads.slice(0, 4).map((r) => (
           <li key={`w:${r.set_id}`} className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-black leading-tight">{r.exercise_name}</div>
+              <div className="truncate text-[13px] font-bold leading-tight">{r.exercise_name}</div>
               <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">
                 Heaviest ever · {formatLoad(r.load_kg, unit)} × {r.reps}
               </div>
@@ -92,7 +92,7 @@ export function NewRecordsSection({ records, unit }: { records: WorkoutRecords; 
         {tonLabel && (
           <li className="flex items-start gap-2 border-t border-border/60 pt-2">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-black leading-tight">Workout Tonnage</div>
+              <div className="text-[13px] font-bold leading-tight">Workout Tonnage</div>
               <div className="text-[12px] font-semibold tabular-nums text-muted-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
             </div>
             <RecordPill scope={topScope(records.tonnage)!} label={tonLabel} />
@@ -121,8 +121,8 @@ export function TonnageStat({ records, unit }: { records: WorkoutRecords; unit: 
     <div className="flex items-center gap-3 border-t border-border/70 px-3.5 py-3">
       <Dumbbell className="h-4 w-4 shrink-0 text-primary" />
       <div className="min-w-0 flex-1">
-        <div className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
-        <div className="mt-0.5 truncate text-xl font-black leading-tight tabular-nums text-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
+        <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Total tonnage</div>
+        <div className="mt-0.5 truncate text-xl font-bold leading-tight tabular-nums text-foreground">{formatTonnage(records.tonnage_kg, unit)}</div>
       </div>
       {label && <RecordPill scope={topScope(records.tonnage as TonnageRecord)!} label={label} />}
     </div>
@@ -158,7 +158,7 @@ export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; un
   return (
     <section className="rounded-xl border border-border bg-card p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1">
-        <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Rep records</div>
+        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Rep records</div>
         <div className="text-[10px] text-muted-foreground">ATPR = all-time · Program / Block = current</div>
       </div>
       <div className="grid grid-cols-[auto_1fr_1fr_1fr] gap-x-3 gap-y-1 text-xs">
@@ -168,7 +168,7 @@ export function ExerciseRecordsPanel({ data, unit }: { data: ExerciseRecords; un
         <div className="truncate text-[10px] font-bold uppercase text-sky-600 dark:text-sky-300" title={data.current_block ?? ""}>Block</div>
         {data.rep_bests.map((b) => (
           <div key={b.reps} className="contents">
-            <div className="font-black tabular-nums">{b.reps}</div>
+            <div className="font-bold tabular-nums">{b.reps}</div>
             <div className="font-bold tabular-nums">{b.atpr ? formatLoad(b.atpr.load_kg, unit) : "—"}</div>
             <div className="tabular-nums">{b.program ? formatLoad(b.program.load_kg, unit) : "—"}</div>
             <div className="tabular-nums">{b.block ? formatLoad(b.block.load_kg, unit) : "—"}</div>

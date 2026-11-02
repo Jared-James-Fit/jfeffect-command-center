@@ -17,9 +17,9 @@ export function SaveStatus({ state, savedAt, className, compact, onRetry }: Prop
   const map: Record<SaveState, { icon: any; label: string; tone: string }> = {
     idle: { icon: Pencil, label: "Unsaved changes", tone: "text-muted-foreground" },
     saving: { icon: Loader2, label: "Saving…", tone: "text-muted-foreground" },
-    saved: { icon: Check, label: savedAt ? `Saved ${timeAgo(savedAt)}` : "Saved", tone: "text-green-500" },
+    saved: { icon: Check, label: savedAt ? `Saved ${timeAgo(savedAt)}` : "Saved", tone: "text-success" },
     error: { icon: AlertCircle, label: "Save failed · retrying", tone: "text-destructive" },
-    offline: { icon: CloudOff, label: "Offline — will sync", tone: "text-amber-500" },
+    offline: { icon: CloudOff, label: "Offline — will sync", tone: "text-warning" },
   };
   const cfg = map[state];
   const Icon = cfg.icon;

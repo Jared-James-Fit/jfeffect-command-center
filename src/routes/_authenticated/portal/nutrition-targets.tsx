@@ -213,7 +213,7 @@ function PortalNutrition() {
 
   return (
     <>
-      <PageHeader title="Nutrition" subtitle="Your plan, targets, and recipes — set by your coach." />
+      <PageHeader title="Nutrition" />
 
       <div className="space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-6">
         {/* 1. Which day's plan: a slim switch (date + chips), not a hero; the targets card names the day. */}
@@ -239,7 +239,7 @@ function PortalNutrition() {
                   <Utensils className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
+                  <div className="text-sm font-bold uppercase tracking-widest">Meal Plan</div>
                   <div className="text-[11px] text-muted-foreground">
                     {day.day_label || DAY_TYPE_LABEL[automaticDayType]}
                     {/* When the coach last updated the plan: the same date the coach sees on it. */}
@@ -290,7 +290,7 @@ function PortalNutrition() {
                   <Target className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-black uppercase tracking-widest">Nutrition Targets</div>
+                  <div className="text-sm font-bold uppercase tracking-widest">Nutrition Targets</div>
                   <div className="text-[12px] text-muted-foreground">
                     {planQ.isError ? "We couldn't load your plan right now." : "No nutrition targets assigned yet."}
                   </div>
@@ -305,7 +305,7 @@ function PortalNutrition() {
                     <Target className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="text-sm font-black uppercase tracking-widest">Nutrition Targets</div>
+                    <div className="text-sm font-bold uppercase tracking-widest">Nutrition Targets</div>
                     <div className="text-[11px] text-muted-foreground">
                       {day?.day_label || DAY_TYPE_LABEL[automaticDayType]}
                       {headerLine ? ` · ${headerLine}` : ""}
@@ -335,9 +335,9 @@ function PortalNutrition() {
           <Card className="p-4 md:p-5">
             <div className="mb-2 flex items-center gap-2">
               <ClipboardList className="h-4 w-4 text-primary" />
-              <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Coach Notes</div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Coach Notes</div>
             </div>
-            <div className="whitespace-pre-wrap text-xs">{plan.client_notes}</div>
+            <div className="whitespace-pre-wrap text-sm leading-relaxed">{plan.client_notes}</div>
           </Card>
         )}
 
@@ -349,14 +349,17 @@ function PortalNutrition() {
             tiles={
               <>
                 <LogFoodToolButton />
-                <ToolTile
-                  icon={Download}
-                  title="Meal Plan PDF"
-                  hint={plan ? "Save or print your plan" : "Ready once your coach sends a plan"}
-                  onClick={handleDownload}
-                  disabled={!plan}
-                  busy={downloading}
-                />
+                {/* The Meal Plan card has its own PDF button; this tile is the way in only when that card isn't shown. */}
+                {!(plan && day) && (
+                  <ToolTile
+                    icon={Download}
+                    title="Meal Plan PDF"
+                    hint={plan ? "Save or print your plan" : "Ready once your coach sends a plan"}
+                    onClick={handleDownload}
+                    disabled={!plan}
+                    busy={downloading}
+                  />
+                )}
                 {plan?.pdf_signed_url && (
                   <ToolTile
                     icon={FileText}

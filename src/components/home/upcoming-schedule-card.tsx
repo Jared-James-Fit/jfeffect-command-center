@@ -188,7 +188,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
                     time={item.startsAt ? startLabel(item.startsAt) : null}
                     title={scheduleTitle(item)}
                     quiet={item.kind === "google_event"}
-                    suffix={item.kind === "workout" && item.status === "Completed" ? <span className="font-normal text-emerald-500"> · Done</span> : null}
+                    suffix={item.kind === "workout" && item.status === "Completed" ? <span className="font-normal text-success"> · Done</span> : null}
                   />
                 </RowLink>
               </li>

@@ -28,12 +28,12 @@ function Stat({ label, value, icon: Icon, tone = "default", to }: { label: strin
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-black tracking-tight md:text-3xl">{value}</div>
+          <div className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">{value}</div>
         </div>
         <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${
-          tone === "primary" ? "bg-emerald-500/15 text-emerald-300" :
-          tone === "warn" ? "bg-amber-500/15 text-amber-300" :
-          tone === "rose" ? "bg-rose-500/15 text-rose-300" :
+          tone === "primary" ? "bg-success/15 text-success" :
+          tone === "warn" ? "bg-warning/15 text-warning" :
+          tone === "rose" ? "bg-destructive/15 text-destructive" :
           "bg-secondary text-foreground"
         }`}>
           <Icon className="h-4 w-4" />
@@ -96,7 +96,7 @@ function MembershipDashboard() {
         subtitle="JF Membership signups, subscriptions, setup health & content."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={enterPov} disabled={povBusy} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={enterPov} disabled={povBusy} className="bg-success hover:bg-success">
               <Eye className="mr-2 h-4 w-4" /> Open as test member
             </Button>
             <Link to="/admin/membership/action-needed"><Button variant="outline"><AlertCircle className="mr-2 h-4 w-4" />Action Needed</Button></Link>
@@ -129,7 +129,7 @@ function MembershipDashboard() {
         <Card className="p-4 lg:col-span-2">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-sm font-bold">
-              <AlertTriangle className="h-4 w-4 text-rose-300" />
+              <AlertTriangle className="h-4 w-4 text-destructive" />
               Recently expired members
             </h3>
             <Link to="/admin/membership/action-needed" className="text-xs text-primary hover:underline">View all</Link>
@@ -153,7 +153,7 @@ function MembershipDashboard() {
                     size="sm"
                     onClick={() => onGrant(m.id, m.full_name || m.email)}
                     disabled={grantingId === m.id}
-                    className="shrink-0 bg-emerald-600 hover:bg-emerald-700"
+                    className="shrink-0 bg-success hover:bg-success"
                   >
                     <Gift className="mr-1 h-3.5 w-3.5" />
                     {grantingId === m.id ? "Granting…" : "Grant 7 days"}
@@ -239,7 +239,7 @@ function MembershipDashboard() {
                   <Link to="/admin/members/$memberId" params={{ memberId: m.id }} className="min-w-0 truncate hover:underline">
                     {m.full_name || m.email}
                   </Link>
-                  <span className="shrink-0 text-xs text-amber-300">Trial ends {new Date(m.trial_end_at).toLocaleDateString()}</span>
+                  <span className="shrink-0 text-xs text-warning">Trial ends {new Date(m.trial_end_at).toLocaleDateString()}</span>
                 </li>
               ))}
             </ul>
@@ -253,8 +253,8 @@ function MembershipDashboard() {
 
 function AlertRow({ label, value, icon: Icon, tone = "default", to, isLoading }: { label: string; value: number | string; icon: any; tone?: "default" | "warn" | "rose"; to?: string; isLoading?: boolean }) {
   const dot =
-    tone === "rose" ? "text-rose-300" :
-    tone === "warn" ? "text-amber-300" :
+    tone === "rose" ? "text-destructive" :
+    tone === "warn" ? "text-warning" :
     "text-muted-foreground";
   const row = (
     <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40">
@@ -275,14 +275,14 @@ function QuickCard({
   tone?: "default" | "primary" | "rose" | "warn"; featured?: boolean;
 }) {
   const toneRing =
-    tone === "primary" ? "border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10" :
-    tone === "rose" ? "border-rose-500/40 bg-rose-500/5 hover:bg-rose-500/10" :
-    tone === "warn" ? "border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10" :
+    tone === "primary" ? "border-success/40 bg-success/5 hover:bg-success/10" :
+    tone === "rose" ? "border-destructive/40 bg-destructive/5 hover:bg-destructive/10" :
+    tone === "warn" ? "border-warning/40 bg-warning/5 hover:bg-warning/10" :
     "border-border bg-card hover:bg-muted/40";
   const iconTone =
-    tone === "primary" ? "bg-emerald-500/15 text-emerald-300" :
-    tone === "rose" ? "bg-rose-500/15 text-rose-300" :
-    tone === "warn" ? "bg-amber-500/15 text-amber-300" :
+    tone === "primary" ? "bg-success/15 text-success" :
+    tone === "rose" ? "bg-destructive/15 text-destructive" :
+    tone === "warn" ? "bg-warning/15 text-warning" :
     "bg-secondary text-foreground";
   return (
     <Link to={to as any}>

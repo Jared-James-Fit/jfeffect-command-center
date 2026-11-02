@@ -77,7 +77,7 @@ describe("workout lifecycle status", () => {
 
     expect(status.status).toBe("review_pending");
     expect(status.label).toBe("Completed · Review pending");
-    expect(status.tone).toContain("amber");
+    expect(status.tone).toContain("warning");
   });
 
   it("keeps a finished workout completed even when some logs were missing", () => {
@@ -96,7 +96,7 @@ describe("workout lifecycle status", () => {
 
     expect(status.status).toBe("completed_today");
     expect(status.label).toBe("Completed today");
-    expect(status.tone).toContain("emerald");
+    expect(status.tone).toContain("success");
   });
 
   it("turns green-complete once feedback is present", () => {

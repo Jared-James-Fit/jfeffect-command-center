@@ -252,8 +252,8 @@ export function DocumentFormsPanel({ embedded = false }: { embedded?: boolean } 
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="font-bold truncate">{f.title}</div>
                       <Badge variant="outline" className="text-xs">{f.form_type}{f.custom_type ? `: ${f.custom_type}` : ""}</Badge>
-                      {f.visible_to_client && <Badge variant="outline" className="text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-300">Visible to all clients</Badge>}
-                      {!f.active && <Badge variant="outline" className="text-xs border-amber-500/40 bg-amber-500/10 text-amber-300">Inactive</Badge>}
+                      {f.visible_to_client && <Badge variant="outline" className="text-xs border-success/40 bg-success/10 text-success">Visible to all clients</Badge>}
+                      {!f.active && <Badge variant="outline" className="text-xs border-warning/40 bg-warning/10 text-warning">Inactive</Badge>}
                       {f.archived && <Badge variant="outline" className="text-xs">Archived</Badge>}
                     </div>
                     {f.description && <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>}
@@ -402,8 +402,8 @@ function WebsiteFormsPanel() {
                       className={cn(
                         "text-xs",
                         f.active
-                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                          : "border-amber-500/40 bg-amber-500/10 text-amber-300",
+                          ? "border-success/40 bg-success/10 text-success"
+                          : "border-warning/40 bg-warning/10 text-warning",
                       )}
                     >
                       {f.active ? "Active" : "Inactive"}

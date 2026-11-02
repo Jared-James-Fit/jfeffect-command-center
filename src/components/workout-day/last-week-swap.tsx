@@ -56,7 +56,7 @@ export function LastWeekSwapChip({ swap, unit }: { swap: LastWeekSwap; unit: "kg
           type="button"
           data-testid="last-week-swap"
           aria-label={`Last week this slot was ${swap.name}. Show what you did`}
-          className="inline-flex h-5 min-w-0 max-w-[13rem] items-center gap-1 rounded-full border border-violet-500/35 bg-violet-500/10 px-1.5 text-[11px] font-semibold text-violet-700 transition active:scale-[0.97] dark:text-violet-300"
+          className="inline-flex h-5 min-w-0 max-w-[13rem] items-center gap-1 rounded-full border border-border bg-muted-foreground/10 px-1.5 text-[11px] font-semibold text-muted-foreground transition active:scale-[0.97]"
         >
           <ArrowLeftRight className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span className="shrink-0">Last wk:</span>

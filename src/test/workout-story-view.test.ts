@@ -226,7 +226,7 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
   const day = read("src/components/workout-day/WorkoutDayView.tsx");
   const css = read("src/styles.css");
   it("a finished exercise is green (fills once, \"Done\" pops); the one you're on is the only bar at full strength, and taller", () => {
-    expect(story).toContain('i === index ? (done[i] ? "bg-emerald-500" : "bg-foreground") : "bg-emerald-500/50"');
+    expect(story).toContain('i === index ? (done[i] ? "bg-success" : "bg-foreground") : "bg-success/50"');
     expect(story).toContain('i === index ? "h-1.5" : "h-1"');
     expect(story).toContain('done[i] && justDone?.i === i && "jf-bar-fill"');
     expect(story).toContain('data-testid="story-done"');

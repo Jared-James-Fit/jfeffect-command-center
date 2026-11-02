@@ -71,7 +71,7 @@ export function SmsTemplateField({
         ))}
       </div>
       {unknown.length > 0 && (
-        <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+        <div className="flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-[11px] text-warning">
           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
           <span>
             {unknown.map((u) => `{${u}}`).join(", ")} isn't a tag we know, so it'll be left blank. Use the buttons above.
@@ -82,7 +82,7 @@ export function SmsTemplateField({
         <div className="rounded-xl bg-secondary/40 p-2.5">
           <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             <span>What they'll get</span>
-            <span className={cn(segments > 2 && "text-amber-600")}>
+            <span className={cn(segments > 2 && "text-warning")}>
               {preview.length} chars · {segments} text{segments === 1 ? "" : "s"}
             </span>
           </div>

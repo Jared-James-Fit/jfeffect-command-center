@@ -90,6 +90,10 @@ function groupNavItems(items: NavItem[]) {
     // below for back-compat with any nav source still using the old labels.
     "Finance", // the finance login's own section, always first
     "Overview",
+    // ── Client portal (clientNav / selfServeNav) ──
+    "Training",
+    "Your coach",
+    "Help & updates",
     "Main Menu",
     "Other",
     "Messages",
@@ -474,7 +478,9 @@ export function AppShell({
 
   const activeTo = items.reduce<string | null>((best, item) => {
     const matches =
-      pathname === item.to || pathname.startsWith(item.to + "/");
+      pathname === item.to || pathname.startsWith(item.to + "/") ||
+      // a menu entry whose page lives under another path (Messages → /admin/communication)
+      onPages(item.activeOn, pathname);
     if (!matches) return best;
     if (best === null || item.to.length > best.length) return item.to;
     return best;
@@ -489,6 +495,8 @@ export function AppShell({
   const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
   const barItems = useMemo(() => resolveVisibleBarItems(bottomItems, { more: !moreInHeader }), [bottomItems, moreInHeader]);
+  // More lists what isn't already one tap away on the bar (search still finds it).
+  const barTos = useMemo(() => new Set(barItems.map((i) => i.to)), [barItems]);
   // The tabs people flip between: their code is fetched ahead of the first tap
   // (pages only; bar actions like Search or More aren't routes).
   usePreloadTabs(bottomItems.map((i) => i.to).filter((to) => to.startsWith("/")));
@@ -632,7 +640,7 @@ export function AppShell({
           <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
           {!iconOnly && (
             <div className="leading-tight min-w-0">
-              <div className="text-[13px] font-black tracking-tight">JF EFFECT</div>
+              <div className="text-[13px] font-bold tracking-tight">JF EFFECT</div>
               <div className="truncate text-[9px] uppercase tracking-widest text-muted-foreground">{title}</div>
             </div>
           )}
@@ -775,12 +783,12 @@ export function AppShell({
               <div>
                 {!iconOnly && (
                   <div className="flex items-center justify-between rounded px-2.5 pb-1 pt-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-warning/80">
                       Pinned · {pinCount}/{MAX_PINS}
                     </span>
                   </div>
                 )}
-                {iconOnly && <div className="my-1 mx-2 h-px bg-amber-400/40" />}
+                {iconOnly && <div className="my-1 mx-2 h-px bg-warning/40" />}
                 <ul className="space-y-0.5">
                   {pinnedItems.map((item) => {
                     const active = item.to === activeTo;
@@ -797,7 +805,7 @@ export function AppShell({
                           rowText,
                           active
                             ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-warning/40",
                         )}
                       >
                         <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={iconOnly} /></div>
@@ -820,7 +828,7 @@ export function AppShell({
                               onClick={(e) => handleTogglePin(e, item.to, item.label)}
                               aria-label={`Unpin ${item.label}`}
                               title="Unpin"
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-amber-400 opacity-70 hover:bg-amber-400/10 hover:opacity-100"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-warning opacity-70 hover:bg-warning/10 hover:opacity-100"
                             >
                               <PinOff className="h-3.5 w-3.5" />
                             </button>
@@ -911,7 +919,7 @@ export function AppShell({
                                   className={cn(
                                     "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 transition-opacity",
                                     pinned
-                                      ? "text-amber-400 opacity-70 hover:opacity-100 hover:bg-amber-400/10"
+                                      ? "text-warning opacity-70 hover:opacity-100 hover:bg-warning/10"
                                       : "text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover/navrow:opacity-70 focus:opacity-100",
                                   )}
                                 >
@@ -1042,6 +1050,7 @@ export function AppShell({
         focusSearch={moreSearch}
         title={title}
         grouped={grouped}
+        onBar={barTos}
         activeTo={activeTo}
         pathname={pathname}
         navBadges={navBadges}
@@ -1777,7 +1786,7 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           // Raised centre button (Crew): a Cleo-style disc in the bar. It sits
           // on the same icon line as the other tabs, so its label lines up.
           // Away from Crew it's a quiet raised disc; on Crew it fills with the
-          // brand gradient (red means "you're here", never just "important").
+          // brand red (red means "you're here", never just "important").
           // A gradient ring means there's something new, like a story.
           // 50px disc + 3px cut-out ring = an even 56px, so centring it never
           // lands on a half pixel (iOS rounds those differently frame to frame).
@@ -1795,8 +1804,8 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
                 className={cn(
                   "relative grid h-[50px] w-[50px] place-items-center rounded-full",
                   lit
-                    ? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring inset-ring-white/15 shadow-[0_10px_24px_-8px_color-mix(in_oklab,var(--primary)_75%,transparent)]"
-                    : "bg-gradient-to-b from-secondary to-card text-foreground inset-ring inset-ring-foreground/10 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.55)]",
+                    ? "bg-primary text-primary-foreground inset-ring inset-ring-white/15 shadow-[0_6px_16px_-8px_rgba(0,0,0,0.35)]"
+                    : "bg-secondary text-foreground inset-ring inset-ring-foreground/10 shadow-[0_6px_16px_-8px_rgba(0,0,0,0.35)]",
                 )}
               >
                 <Icon className={cn("h-[26px] w-[26px]", lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none")} />
@@ -1851,8 +1860,8 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
             "transition-[transform,background-color,box-shadow] duration-200 ease-out active:scale-90 motion-reduce:transition-none select-none touch-manipulation [-webkit-touch-callout:none]",
             "after:absolute after:-left-4 after:-top-4 after:bottom-1/2 after:right-1/2 after:content-['']",
             shortcutOn
-              ? "bg-[color-mix(in_oklab,var(--color-amber-500)_22%,var(--card))] text-amber-500 inset-ring inset-ring-amber-500/60 shadow-[0_6px_16px_-6px_color-mix(in_oklab,var(--color-amber-500)_75%,transparent)]"
-              : "bg-card text-amber-500 inset-ring inset-ring-foreground/10 shadow-[0_4px_10px_-3px_rgba(0,0,0,0.5)]",
+              ? "bg-[color-mix(in_oklab,var(--color-amber-500)_22%,var(--card))] text-warning inset-ring inset-ring-amber-500/60 shadow-[0_6px_16px_-6px_color-mix(in_oklab,var(--color-amber-500)_75%,transparent)]"
+              : "bg-card text-warning inset-ring inset-ring-foreground/10 shadow-[0_4px_10px_-3px_rgba(0,0,0,0.5)]",
           )}
         >
           <ShortcutIcon className={cn("h-3.5 w-3.5 stroke-[2.5]", shortcutOn && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none")} />
@@ -2049,7 +2058,7 @@ function ShellBrand({ title, compact }: { title: string; compact?: boolean }) {
       />
       <div className={cn("flex min-w-0 flex-col items-start", compact && "max-[359px]:hidden")}>
         {/* italic letters lean past their box: a little room on the right so the T isn't clipped */}
-        <span className="truncate pr-[3px] text-[19px] font-black uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
+        <span className="truncate pr-[3px] text-[19px] font-bold uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
           JF Effect
         </span>
         {sub && (
@@ -2091,7 +2100,7 @@ export function PageHeader({
     return (
       <div className="border-b border-border/60 bg-background px-4 py-2 md:px-5 xl:px-6 xl:py-3" data-page-header-inline>
         <div className="flex min-h-10 items-center justify-between gap-2">
-          <h1 className="min-w-0 truncate text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
+          <h1 className="min-w-0 truncate text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
           <div className="flex shrink-0 items-center gap-1.5">
             {actions}
             <CommunityNavButton />
@@ -2133,7 +2142,7 @@ export function PageHeader({
             )}
           </div>
         )}
-        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
         {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
       </div>
       {/* Mobile: back button and the actions share ONE compact nav row. No
@@ -2174,9 +2183,11 @@ export function PageHeader({
  * Search always renders a flat result list and short-circuits both views.
  */
 function MobileNavDrawer({
-  open, onOpenChange, title, grouped, activeTo, pathname, navBadges,
+  open, onOpenChange, title, grouped, onBar, activeTo, pathname, navBadges,
   query, setQuery, filteredResults, account, focusSearch = false,
 }: {
+  /** Destinations already on the bottom bar: left out of the root list. */
+  onBar?: Set<string>;
   /** Opened from the top bar's search: the search field takes focus, not the first button. */
   focusSearch?: boolean;
   /** Shown at the top of the root list (client portal: account + appearance). */
@@ -2232,14 +2243,13 @@ function MobileNavDrawer({
                 <button
                   type="button"
                   onClick={() => onOpenChange(false)}
-                  className="inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground shadow-sm ring-offset-background backdrop-blur transition hover:bg-secondary active:bg-secondary/80"
-                  aria-label="Back"
+                  className="inline-flex h-10 min-w-[72px] items-center justify-center gap-1 rounded-full border border-border bg-background/90 px-3 text-sm font-semibold text-foreground ring-offset-background transition hover:bg-secondary active:bg-secondary/80"
+                  aria-label="Close menu"
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                  <span>Back</span>
+                  <span>Done</span>
                 </button>
               )}
-              <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
+              <SheetTitle className="flex-1 truncate text-left text-base font-bold tracking-tight">
                 {submenu ? submenu.label : title}
               </SheetTitle>
             </div>
@@ -2307,6 +2317,7 @@ function MobileNavDrawer({
             {account}
             <MobileRoot
               grouped={grouped}
+              onBar={onBar}
               activeTo={activeTo}
               pathname={pathname}
               navBadges={navBadges}
@@ -2322,21 +2333,27 @@ function MobileNavDrawer({
 }
 
 function MobileRoot({
-  grouped, activeTo, pathname, navBadges, onOpenCategory, onNavigate,
+  grouped, onBar, activeTo, pathname, navBadges, onOpenCategory, onNavigate,
 }: {
   grouped: { label: string | undefined; items: NavItem[] }[];
+  onBar?: Set<string>;
   activeTo: string | null;
   pathname: string;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onOpenCategory: (item: NavItem) => void;
   onNavigate: () => void;
 }) {
+  // A plain page that's already on the bar isn't repeated here; a workspace
+  // row with sub-pages stays (its chevron is the way into them).
+  const shown = grouped
+    .map((g) => ({ ...g, items: g.items.filter((i) => !onBar?.has(i.to) || !!i.children?.length) }))
+    .filter((g) => g.items.length > 0);
   return (
-    <div className="space-y-3">
-      {grouped.map((group) => (
+    <div className="space-y-4">
+      {shown.map((group) => (
         <div key={group.label ?? "default"}>
           {group.label && (
-            <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="px-3 pb-1 pt-1 text-xs font-semibold text-muted-foreground">
               {group.label}
             </div>
           )}

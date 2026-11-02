@@ -47,48 +47,48 @@ function tierFor(score: number): {
 } {
   if (score >= 80) return {
     label: "Ready",
-    labelClass: "text-emerald-600 dark:text-emerald-400",
-    ringClass: "text-emerald-500",
-    ringSoftClass: "text-emerald-500/12",
+    labelClass: "text-success",
+    ringClass: "text-success",
+    ringSoftClass: "text-success/12",
   };
   if (score >= 65) return {
     label: "Good",
-    labelClass: "text-emerald-600 dark:text-emerald-400",
-    ringClass: "text-emerald-500",
-    ringSoftClass: "text-emerald-500/12",
+    labelClass: "text-success",
+    ringClass: "text-success",
+    ringSoftClass: "text-success/12",
   };
   if (score >= 50) return {
     label: "Take It Easy",
-    labelClass: "text-amber-600 dark:text-amber-400",
-    ringClass: "text-amber-500",
-    ringSoftClass: "text-amber-500/12",
+    labelClass: "text-warning",
+    ringClass: "text-warning",
+    ringSoftClass: "text-warning/12",
   };
   return {
     label: "Low",
-    labelClass: "text-rose-600 dark:text-rose-400",
-    ringClass: "text-rose-500",
-    ringSoftClass: "text-rose-500/12",
+    labelClass: "text-destructive",
+    ringClass: "text-destructive",
+    ringSoftClass: "text-destructive/12",
   };
 }
 
 const statusColor: Record<FactorStatus, { ring: string; soft: string; text: string; dot: string }> = {
   good: {
-    ring: "text-emerald-500",
-    soft: "text-emerald-500/12",
-    text: "text-emerald-600 dark:text-emerald-400",
-    dot: "bg-emerald-500",
+    ring: "text-success",
+    soft: "text-success/12",
+    text: "text-success",
+    dot: "bg-success",
   },
   watch: {
-    ring: "text-amber-500",
-    soft: "text-amber-500/12",
-    text: "text-amber-600 dark:text-amber-400",
-    dot: "bg-amber-500",
+    ring: "text-warning",
+    soft: "text-warning/12",
+    text: "text-warning",
+    dot: "bg-warning",
   },
   low: {
-    ring: "text-rose-500",
-    soft: "text-rose-500/12",
-    text: "text-rose-600 dark:text-rose-400",
-    dot: "bg-rose-500",
+    ring: "text-destructive",
+    soft: "text-destructive/12",
+    text: "text-destructive",
+    dot: "bg-destructive",
   },
 };
 
@@ -544,13 +544,13 @@ export function RecoveryPreviewCard({ clientId }: Props) {
               <button
                 type="button"
                 onClick={() => setOpenFactor(bd.limiter!.key)}
-                className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition active:scale-[0.98] dark:text-amber-300"
+                className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-semibold text-warning transition active:scale-[0.98]"
               >
                 <span className="truncate">Limiter: {bd.limiter.label}</span>
                 <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               </button>
             ) : (
-              <div className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+              <div className="mt-2 inline-flex items-center rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success">
                 Nothing holding you back
               </div>
             )}
@@ -608,10 +608,10 @@ function ReadinessRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-black leading-none tabular-nums text-foreground">
+        <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
           {pct}%
         </span>
-        <span className={cn("mt-1 text-[9px] font-black uppercase leading-none tracking-[0.12em]", labelClass)}>
+        <span className={cn("mt-1 text-[9px] font-bold uppercase leading-none tracking-[0.12em]", labelClass)}>
           {label}
         </span>
       </div>
@@ -672,13 +672,13 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
       }
     : statusColor[factor.status];
   const trendClass =
-    factor.trend === "Improving" ? "text-emerald-600 dark:text-emerald-400"
-      : factor.trend === "Dropping" ? "text-rose-600 dark:text-rose-400"
-      : factor.trend === "Rising" ? "text-amber-600 dark:text-amber-400"
+    factor.trend === "Improving" ? "text-success"
+      : factor.trend === "Dropping" ? "text-destructive"
+      : factor.trend === "Rising" ? "text-warning"
       : "text-muted-foreground";
   const impactClass =
-    factor.impact === "Positive" ? "text-emerald-600 dark:text-emerald-400"
-      : factor.impact === "Limiting" ? "text-rose-600 dark:text-rose-400"
+    factor.impact === "Positive" ? "text-success"
+      : factor.impact === "Limiting" ? "text-destructive"
       : "text-muted-foreground";
   return (
     <div className="mx-auto max-w-lg px-5 pb-8 pt-5">
@@ -722,7 +722,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
                     className={cn("stroke-current", colors.ring)} />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-base font-black tabular-nums text-foreground">
+                  <span className="text-base font-bold tabular-nums text-foreground">
                     {factor.isMissing || factor.isBuilding ? "—" : `${pct}`}
                   </span>
                 </div>
@@ -734,7 +734,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Current
           </div>
-          <div className="mt-0.5 truncate text-base font-black text-foreground">
+          <div className="mt-0.5 truncate text-base font-bold text-foreground">
             {factor.currentValue}
           </div>
           <div className={cn("mt-1 flex items-center gap-2 text-xs font-semibold", colors.text)}>

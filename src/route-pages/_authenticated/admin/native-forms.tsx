@@ -121,7 +121,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
               <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
             </Button>
-            <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+            <Button onClick={() => setCreating("native")} className="bg-primary text-primary-foreground font-semibold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
           </div>
         } />
       )}
@@ -130,7 +130,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
           <Button variant="outline" onClick={handleSyncFillout} disabled={syncing}>
             <ExternalLink className="mr-2 h-4 w-4" /> {syncing ? "Syncing…" : "Sync from Fillout"}
           </Button>
-          <Button onClick={() => setCreating("native")} className="bg-gradient-primary font-bold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
+          <Button onClick={() => setCreating("native")} className="bg-primary text-primary-foreground font-semibold"><Plus className="mr-2 h-4 w-4" /> New Form</Button>
         </div>
       )}
       <div className="space-y-3 p-4 md:p-6">
@@ -177,7 +177,7 @@ export function AdminNativeForms({ embedded = false }: { embedded?: boolean } = 
             <button
               type="button"
               onClick={() => setShowArchived((v) => !v)}
-              className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-left text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-left text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
               aria-expanded={showArchived}
             >
               <span>Archived · {archivedForms.length}</span>
@@ -274,10 +274,10 @@ function FormRow({
           <Checkbox checked={selected} onCheckedChange={(checked) => onSelect(checked === true)} aria-label={`Select ${form.title}`} />
           <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="text-base font-black">{form.title}</div>
+            <div className="text-base font-bold">{form.title}</div>
             <Badge variant="outline" className="text-[10px]">{kindLabel}</Badge>
             {isActive ? (
-              <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600">● Active</Badge>
+              <Badge className="border-success/40 bg-success/10 text-success">● Active</Badge>
             ) : form.archived ? (
               <Badge variant="outline">Archived</Badge>
             ) : (
@@ -301,7 +301,7 @@ function FormRow({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                  className="h-7 border-success/40 text-success hover:bg-success/10"
                   onClick={async () => {
                     await upsertForm({ id: form.id, active: true });
                     qc.invalidateQueries({ queryKey: ["nf-forms"] });
@@ -317,7 +317,7 @@ function FormRow({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onSend} className="bg-gradient-primary font-bold">
+          <Button size="sm" onClick={onSend} className="bg-primary text-primary-foreground font-semibold">
             <Send className="mr-1 h-4 w-4" /> Share
           </Button>
           {form.kind === "native" && (
@@ -922,7 +922,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
                 <Eye className="mr-1 h-3.5 w-3.5" /> Preview
               </Button>
               {broadcastOn && (
-                <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
+                <span className="ml-2 rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success">
                   inherited
                 </span>
               )}

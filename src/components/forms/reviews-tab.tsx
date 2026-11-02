@@ -735,7 +735,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
         <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between flex-wrap gap-2">
           <span>Client response (visible to client when sent)</span>
           {isApproved && (
-            <Badge variant="outline" className="text-[10px] border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+            <Badge variant="outline" className="text-[10px] border-success/40 bg-success/10 text-success">
               <CheckCheck className="inline h-3 w-3 mr-1" /> Approved
               {review.approved_at && ` ${formatDistanceToNow(new Date(review.approved_at), { addSuffix: true })}`}
             </Badge>
@@ -783,7 +783,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
           </div>
         </div>
         {!review.client_id && (
-          <div className="mt-2 text-xs text-amber-500">
+          <div className="mt-2 text-xs text-warning">
             <AlertTriangle className="inline h-3.5 w-3.5 mr-1" />
             Map this submission to a client before sending.
           </div>
@@ -799,7 +799,7 @@ function ReviewDetail({ reviewId, coaches, onDeleted }: { reviewId: string; coac
         )}
         {review.sent_at && (
           <div className="mt-2 text-xs text-muted-foreground">
-            <CheckCircle2 className="inline h-3.5 w-3.5 mr-1 text-emerald-500" />
+            <CheckCircle2 className="inline h-3.5 w-3.5 mr-1 text-success" />
             Sent {formatDistanceToNow(new Date(review.sent_at), { addSuffix: true })}
           </div>
         )}
@@ -896,16 +896,16 @@ function DiffView({ from, to, fromLabel, toLabel }: { from: string; to: string; 
   const fromSet = new Set(fromLines);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
-      <div className="border border-border rounded p-2 bg-rose-500/5">
+      <div className="border border-border rounded p-2 bg-destructive/5">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{fromLabel}</div>
         {fromLines.map((l, i) => (
-          <div key={i} className={cn("whitespace-pre-wrap break-words", !toSet.has(l) && l.trim() && "text-rose-300")}>{l || "\u00A0"}</div>
+          <div key={i} className={cn("whitespace-pre-wrap break-words", !toSet.has(l) && l.trim() && "text-destructive")}>{l || "\u00A0"}</div>
         ))}
       </div>
-      <div className="border border-border rounded p-2 bg-emerald-500/5">
+      <div className="border border-border rounded p-2 bg-success/5">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{toLabel}</div>
         {toLines.map((l, i) => (
-          <div key={i} className={cn("whitespace-pre-wrap break-words", !fromSet.has(l) && l.trim() && "text-emerald-300")}>{l || "\u00A0"}</div>
+          <div key={i} className={cn("whitespace-pre-wrap break-words", !fromSet.has(l) && l.trim() && "text-success")}>{l || "\u00A0"}</div>
         ))}
       </div>
     </div>
@@ -935,9 +935,9 @@ function AnalysisView({ output }: { output: any }) {
 function List({ label, items, tone }: { label: string; items: string[]; tone?: "emerald" | "amber" | "rose" }) {
   if (!items?.length) return null;
   const toneClass =
-    tone === "emerald" ? "text-emerald-300"
-    : tone === "amber" ? "text-amber-300"
-    : tone === "rose" ? "text-rose-300"
+    tone === "emerald" ? "text-success"
+    : tone === "amber" ? "text-warning"
+    : tone === "rose" ? "text-destructive"
     : "text-foreground";
   return (
     <div>

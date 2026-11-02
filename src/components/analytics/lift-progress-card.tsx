@@ -489,7 +489,7 @@ export function LiftProgressCard({
                     title={format(new Date(m.date), "MMM d, yyyy")}
                   >
                     <span className="text-[11px] font-bold text-muted-foreground">{m.reps}RM</span>
-                    <span className="text-sm font-black tabular-nums">{fmtLoad(m.load)}</span>
+                    <span className="text-sm font-bold tabular-nums">{fmtLoad(m.load)}</span>
                   </span>
                 ))}
               </div>
@@ -501,14 +501,14 @@ export function LiftProgressCard({
               className={cn(
                 "flex gap-2.5 rounded-xl border p-3 text-xs",
                 effortChange.delta < 0
-                  ? "border-emerald-500/30 bg-emerald-500/10"
-                  : "border-amber-500/30 bg-amber-500/10",
+                  ? "border-success/30 bg-success/10"
+                  : "border-warning/30 bg-warning/10",
               )}
             >
               {effortChange.delta < 0 ? (
-                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-success" />
               ) : (
-                <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               )}
               <p>
                 <span className="font-bold">
@@ -556,7 +556,7 @@ export function LiftProgressCard({
                       className="grid w-full grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left"
                     >
                       <span className="leading-tight">
-                        <span className="block whitespace-nowrap text-sm font-black tabular-nums">
+                        <span className="block whitespace-nowrap text-sm font-bold tabular-nums">
                           {format(parseISO(s.key), "MMM d")}
                         </span>
                         <span className="block text-[11px] text-muted-foreground">
@@ -574,7 +574,7 @@ export function LiftProgressCard({
                       </span>
                       <span className="flex items-center gap-1.5">
                         <span className="text-right leading-tight">
-                          <span className="block text-sm font-black tabular-nums">
+                          <span className="block text-sm font-bold tabular-nums">
                             {fmtLoad(s.e1rm)}
                           </span>
                           <span
@@ -583,8 +583,8 @@ export function LiftProgressCard({
                               delta == null || Math.abs(delta) < 0.05
                                 ? "text-muted-foreground"
                                 : delta > 0
-                                  ? "text-emerald-500"
-                                  : "text-rose-500",
+                                  ? "text-success"
+                                  : "text-destructive",
                             )}
                           >
                             {delta == null || Math.abs(delta) < 0.05
@@ -726,13 +726,13 @@ function SessionReadout({
         </button>
       </div>
       <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-2xl font-black tabular-nums">{main}</span>
+        <span className="text-2xl font-bold tabular-nums">{main}</span>
         <span className="text-xs font-semibold text-muted-foreground">{unit}</span>
         {showDelta && (
           <span
             className={cn(
               "text-xs font-bold tabular-nums",
-              good == null ? "text-muted-foreground" : good ? "text-emerald-500" : "text-rose-500",
+              good == null ? "text-muted-foreground" : good ? "text-success" : "text-destructive",
             )}
           >
             {delta! > 0 ? "▲" : "▼"}{" "}
@@ -776,9 +776,9 @@ function Tile({
       </div>
       <div
         className={cn(
-          "mt-0.5 truncate text-lg font-black tabular-nums",
-          tone === "up" && "text-emerald-500",
-          tone === "down" && "text-rose-500",
+          "mt-0.5 truncate text-lg font-bold tabular-nums",
+          tone === "up" && "text-success",
+          tone === "down" && "text-destructive",
         )}
       >
         {value}
@@ -904,7 +904,7 @@ function useVelocityInsight(
     <div className="rounded-xl border border-border bg-muted/20 p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Velocity readiness
           </div>
           <div className="mt-1 text-sm font-bold text-foreground">
@@ -926,10 +926,10 @@ function useVelocityInsight(
         </div>
         {insight.predicted1rm != null && (
           <div className="shrink-0 text-right">
-            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Velocity 1RM estimate
             </div>
-            <div className="text-lg font-black text-foreground">
+            <div className="text-lg font-bold text-foreground">
               {fmtNum(insight.predicted1rm)} {displayUnit}
             </div>
             <div className="text-[10px] text-muted-foreground">

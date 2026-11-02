@@ -532,7 +532,7 @@ export function BookingTypeEditor({
                   <div
                     className={cn(
                       "flex flex-wrap items-center gap-2 text-[11px]",
-                      otherTz ? "text-amber-500" : "text-muted-foreground",
+                      otherTz ? "text-warning" : "text-muted-foreground",
                     )}
                   >
                     {otherTz ? (
@@ -788,7 +788,7 @@ export function BookingTypeEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold">
+          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground font-semibold">
             {saving ? "Saving…" : isEdit ? "Save" : "Create"}
           </Button>
         </DialogFooter>

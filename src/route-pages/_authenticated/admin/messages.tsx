@@ -65,9 +65,9 @@ type StaffInboxRow = {
 };
 
 const WORKFLOW_STYLE: Record<Exclude<InboxWorkflowState, "archived">, string> = {
-  needs_response: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
-  waiting_on_client: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  done: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  needs_response: "border-warning/40 bg-warning/10 text-warning",
+  waiting_on_client: "border-info/30 bg-info/10 text-info",
+  done: "border-success/30 bg-success/10 text-success",
 };
 
 const WORKFLOW_SHORT: Record<Exclude<InboxWorkflowState, "archived">, string> = {
@@ -80,7 +80,7 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
   if (state === "archived") return null;
   return (
     <span
-      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
+      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-bold uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
       title={WORKFLOW_LABEL[state]}
     >
       {compact ? (
@@ -96,10 +96,10 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
 }
 
 const TAG_TEXT: Record<SignalTag["tone"], string> = {
-  urgent: "text-red-600 dark:text-red-400",
+  urgent: "text-destructive",
   strong: "text-foreground",
-  warn: "text-amber-700 dark:text-amber-400",
-  info: "text-sky-700 dark:text-sky-400",
+  warn: "text-warning",
+  info: "text-info",
   muted: "text-muted-foreground",
 };
 const TAG_ICON: Partial<Record<SignalTag["key"], typeof Check>> = {
@@ -161,9 +161,9 @@ const FILTER_BADGE: Partial<Record<Filter, "urgent" | "warn" | "info">> = {
   Weekly: "info", Nutrition: "info", "To Review": "info", Overdue: "warn", Pain: "urgent", Media: "info", Sessions: "info",
 };
 const BADGE_STYLE = {
-  urgent: "bg-red-500 text-white",
-  warn: "bg-amber-500/25 text-amber-700 dark:text-amber-300",
-  info: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
+  urgent: "bg-destructive text-white",
+  warn: "bg-warning/25 text-warning",
+  info: "bg-info/20 text-info",
 } as const;
 const COUNTED = FILTERS.filter((f) => FILTER_BADGE[f] || ONLY_WHEN_ANY.has(f));
 const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));
@@ -801,7 +801,7 @@ export function MessagesInbox({
           }
         >
           <div className="mb-2 flex items-center gap-2">
-            <h1 className="text-base font-black tracking-tight md:text-lg">Messages</h1>
+            <h1 className="text-base font-bold tracking-tight md:text-lg">Messages</h1>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
               {conversations.length}
             </span>
@@ -867,9 +867,9 @@ export function MessagesInbox({
               className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-[11px] font-semibold text-foreground hover:bg-secondary"
             >
               <span className="min-w-0 truncate">
-                <span className={formFilterSummary.review ? "text-sky-700 dark:text-sky-400" : "text-muted-foreground"}>{formFilterSummary.review} to review</span>
+                <span className={formFilterSummary.review ? "text-info" : "text-muted-foreground"}>{formFilterSummary.review} to review</span>
                 <span className="text-muted-foreground"> · </span>
-                <span className={formFilterSummary.overdue ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}>{formFilterSummary.overdue} overdue</span>
+                <span className={formFilterSummary.overdue ? "text-warning" : "text-muted-foreground"}>{formFilterSummary.overdue} overdue</span>
               </span>
               <span className="shrink-0">Every week in the tracker ›</span>
             </Link>
@@ -896,9 +896,9 @@ export function MessagesInbox({
           {role === "admin" && !search && (
             // Cleo's way in on admin: pinned at the top of the inbox (there is
             // no floating button). Not a client thread: nothing is ever sent.
-            <div className="flex items-stretch border-b border-border/60 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-pink-500/5">
+            <div className="flex items-stretch border-b border-border/60 bg-warning/5">
               <button type="button" onClick={() => openSummer()} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition hover:bg-secondary/40">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
                   <Sparkles className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -913,7 +913,7 @@ export function MessagesInbox({
                 aria-label="Talk to Cleo"
                 title="Talk to Cleo"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background shadow-sm">
                   <Mic className="h-4 w-4" />
                 </span>
               </button>
@@ -1052,7 +1052,7 @@ export function MessagesInbox({
                         title="No reply needed: mark done"
                         onClick={(e) => { e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); }}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); } }}
-                        className="ml-auto hidden h-6 w-6 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600 [@media(hover:hover)]:grid"
+                        className="ml-auto hidden h-6 w-6 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-success/50 hover:text-success [@media(hover:hover)]:grid"
                       >
                         <Check className="h-3.5 w-3.5" />
                       </span>
@@ -1119,7 +1119,7 @@ export function MessagesInbox({
                     aria-label={`Brief: ${selected.full_name ?? "client"}`}
                   >
                     <span className="truncate">{selected.full_name}</span>
-                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-warning" />
                   </button>
                   {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
                     <LiveMark className="shrink-0 text-[11px] font-semibold" size={6}>
@@ -1139,7 +1139,7 @@ export function MessagesInbox({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 shrink-0 gap-1 rounded-full border-emerald-500/40 px-3 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                  className="h-9 shrink-0 gap-1 rounded-full border-success/40 px-3 text-success hover:bg-success/10"
                   onClick={() => void changeWorkflow(selected.id, "done", { undoFrom: "needs_response" })}
                   title="No reply needed — clear it from Needs Response"
                 >
@@ -1161,7 +1161,7 @@ export function MessagesInbox({
                   asChild
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-success/40 bg-success/10 text-success hover:bg-success/20"
                   title={`Call ${selected.full_name ?? "client"} (${(selected as any).phone})`}
                 >
                   <a href={`tel:${String((selected as any).phone).replace(/[^+\d]/g, "")}`} aria-label="Call client">

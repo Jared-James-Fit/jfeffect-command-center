@@ -105,7 +105,7 @@ export function SendPaymentRequestDialog({
               Texts the Stripe payment link directly to the client's phone using your Twilio number.
             </p>
             {!hasPhone && (
-              <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+              <div className="rounded border border-warning/40 bg-warning/10 p-2 text-xs">
                 This client has no phone number on file.
               </div>
             )}

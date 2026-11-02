@@ -73,7 +73,7 @@ describe("Recap: on top in recap week, a big tile under the board after, never d
     // big enough to find: a 56px video-style thumbnail with the play button, your finish under the title
     const tile = recap.slice(recap.indexOf('if (variant === "tile")'));
     expect(tile).toContain('className="grid h-14 w-14 shrink-0 place-items-center rounded-xl shadow-sm"');
-    expect(tile).toContain("text-[15px] font-black");
+    expect(tile).toContain("text-[15px] font-bold");
     expect(tile).toContain("{result}");
     expect(recap).not.toContain("Dismiss recap");
     expect(recap).not.toContain("jf-recap-dismissed");

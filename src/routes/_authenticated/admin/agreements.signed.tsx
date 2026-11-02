@@ -532,7 +532,7 @@ function SignedAgreementsPage() {
                           {g.clientName}
                         </ClientNameLink>
                       ) : (
-                        <span className="flex items-center gap-2 font-semibold text-amber-500">
+                        <span className="flex items-center gap-2 font-semibold text-warning">
                           <LinkIcon className="h-4 w-4" />
                           {g.clientName}
                         </span>

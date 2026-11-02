@@ -275,7 +275,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             )}
           </div>
           {isIncomplete && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="flex-1 space-y-1">
@@ -400,7 +400,7 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
             </div>
           </div>
           {conflict && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="flex-1">

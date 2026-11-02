@@ -238,7 +238,7 @@ export function WorkoutTimerSheet({
     <Sheet open={open} onOpenChange={(v) => (v ? onOpenChange(true) : close(false))}>
       <SheetContent side="bottom" className="h-[100dvh] p-0 sm:h-[90vh]">
         <SheetHeader className="border-b border-border px-4 py-3 text-left">
-          <SheetTitle className="text-base font-black tracking-tight">{exerciseName}</SheetTitle>
+          <SheetTitle className="text-base font-bold tracking-tight">{exerciseName}</SheetTitle>
           <SheetDescription className="flex flex-wrap items-center gap-2 text-xs">
             <span className="font-semibold">Set {setIndex} of {setCount}</span>
             <span className="text-muted-foreground">·</span>
@@ -267,15 +267,15 @@ export function WorkoutTimerSheet({
 
           <div className="flex flex-col items-center gap-2">
             <div className={cn(
-              "select-none font-black tabular-nums leading-none tracking-tight",
-              done ? "text-emerald-500" : "text-foreground",
+              "select-none font-bold tabular-nums leading-none tracking-tight",
+              done ? "text-success" : "text-foreground",
               "text-[26vw] sm:text-[160px]",
             )}
             aria-live="polite">
               {fmtClock(displayMs)}
             </div>
             {done && (
-              <p className="text-sm font-bold uppercase tracking-widest text-emerald-500">Time complete</p>
+              <p className="text-sm font-bold uppercase tracking-widest text-success">Time complete</p>
             )}
             {!done && !isRunning && isCountdown && remainingMs !== totalMs && (
               <p className="text-xs text-muted-foreground">Paused</p>

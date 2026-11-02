@@ -142,7 +142,7 @@ export function RecapPostFooter({
             : "Saved to your profile";
     return (
       <div className="w-full">
-        <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
+        <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] font-bold text-success">
           <Check className="h-3.5 w-3.5" strokeWidth={3} /> {where}
           {justPosted === postId && undoable && (
             <button type="button" onClick={() => undo(postId)} disabled={del.isPending} className="ml-1 rounded-full px-1.5 py-0.5 font-bold text-muted-foreground underline underline-offset-2 active:opacity-60">
@@ -155,7 +155,7 @@ export function RecapPostFooter({
             <Camera className="mr-1.5 h-4 w-4" />
             {existing?.media_path ? "Edit post" : "Add a photo"}
           </Button>
-          <Button type="button" className="h-12 rounded-xl text-sm font-black" onClick={onDone}>
+          <Button type="button" className="h-12 rounded-xl text-sm font-bold" onClick={onDone}>
             Done
           </Button>
         </div>
@@ -171,7 +171,7 @@ export function RecapPostFooter({
           <Camera className="mr-1.5 h-4 w-4" />
           Share
         </Button>
-        <Button type="button" className="h-12 rounded-xl text-sm font-black" onClick={onDone}>
+        <Button type="button" className="h-12 rounded-xl text-sm font-bold" onClick={onDone}>
           Done
         </Button>
       </div>
@@ -197,7 +197,7 @@ export function RecapPostFooter({
           disabled={posting || hiding || isLoading}
           onClick={() => void post()}
         >
-          <span className="inline-flex items-center gap-1 text-sm font-black">
+          <span className="inline-flex items-center gap-1 text-sm font-bold">
             <Flame className="h-4 w-4" /> {posting ? "Sharing…" : "Share to Crew"}
           </span>
           {earn > 0 && <span className="text-[10px] font-bold opacity-90">+{earn} league points</span>}
@@ -238,7 +238,7 @@ function SharePreview({ stats, unit, hideLoads, onPhoto }: { stats: WorkoutShare
         <style.Icon className="h-[18px] w-[18px]" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-[10px] font-black uppercase tracking-[0.16em]", style.text)}>{win ? win.label : "Your workout"}</span>
+        <span className={cn("block truncate text-[10px] font-bold uppercase tracking-[0.16em]", style.text)}>{win ? win.label : "Your workout"}</span>
         {win ? (
           // a long lift name gives way, the numbers never do
           <span className="font-display flex min-w-0 text-[19px] uppercase leading-tight">
@@ -295,7 +295,7 @@ function CaptionSheet({ open, value, onChange, onDone }: { open: boolean; value:
       >
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">Caption</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">Caption</SheetTitle>
             <SheetDescription className="text-[12px]">Goes on your Crew post. Your review and coach note stay private.</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -317,7 +317,7 @@ function CaptionSheet({ open, value, onChange, onDone }: { open: boolean; value:
           <div className="mt-1 text-right text-[11px] text-muted-foreground">{value.length > 0 && `${value.length}/${CAPTION_MAX}`}</div>
         </div>
         <div className="border-t border-border/60 px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-3">
-          <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-black" onClick={onDone}>
+          <Button type="button" className="h-12 w-full rounded-2xl text-[15px] font-bold" onClick={onDone}>
             <Check className="mr-1.5 h-4 w-4" /> Done
           </Button>
         </div>

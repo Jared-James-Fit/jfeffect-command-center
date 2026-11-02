@@ -46,7 +46,7 @@ export function WorkoutListCard({
     ? {
         ...status,
         label: "Review to finish",
-        tone: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        tone: "border-warning/40 bg-warning/10 text-warning",
       }
     : status;
   return (
@@ -125,7 +125,7 @@ export function WorkoutListCard({
           to="/portal/workouts/$dayId"
           params={{ dayId: item.day.id }}
           search={{ review: 1 } as any}
-          className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+          className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-semibold text-warning hover:bg-warning/20"
         >
           <MessageSquare className="h-3 w-3" /> Finish review
         </Link>
@@ -145,8 +145,8 @@ export function WorkoutListCard({
           search={{ review: 1 } as any}
           className={
             hasReview
-              ? "inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
-              : "inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+              ? "inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success hover:bg-success/20"
+              : "inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-semibold text-warning hover:bg-warning/20"
           }
         >
           <MessageSquare className="h-3 w-3" /> {hasReview ? "Edit review" : "Leave review"}

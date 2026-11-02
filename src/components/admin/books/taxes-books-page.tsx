@@ -53,7 +53,7 @@ function Kpi({ label, value, sub, tone, compact }: { label: string; value: strin
   return (
     <Card className={cn("min-w-0", compact ? "p-3 sm:p-4" : "p-4")}>
       <div className="truncate text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 font-semibold tabular-nums", compact ? "text-base sm:text-2xl" : "text-2xl", tone === "good" && "text-emerald-500", tone === "warn" && "text-amber-500", tone === "primary" && "text-primary")}>
+      <div className={cn("mt-1 font-semibold tabular-nums", compact ? "text-base sm:text-2xl" : "text-2xl", tone === "good" && "text-success", tone === "warn" && "text-warning", tone === "primary" && "text-primary")}>
         {value}
       </div>
       {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
@@ -217,7 +217,7 @@ function TaxesBooksPageInner({ initialTab, initialFilter }: { initialTab?: strin
             {snapLabel}
           </Button>
           <Button size="sm" variant="outline" className="h-9" onClick={() => openSummer({ year })}>
-            <Sparkles className="mr-1.5 h-4 w-4 text-amber-500" /> Ask {ASSISTANT_NAME}
+            <Sparkles className="mr-1.5 h-4 w-4 text-warning" /> Ask {ASSISTANT_NAME}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -422,7 +422,7 @@ function OverviewTab({
           <ul className="divide-y">
             {s.issues.map((i) => (
               <li key={i.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                {i.severity === "warn" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" /> : <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+                {i.severity === "warn" ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" /> : <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">{i.title}{i.amountMinor ? <span className="font-normal text-muted-foreground"> · {money(i.amountMinor)}</span> : null}</div>
                   <p className="text-xs text-muted-foreground">{i.detail}</p>
@@ -436,17 +436,17 @@ function OverviewTab({
             ))}
           </ul>
         ) : (
-          <p className="flex items-center gap-2 text-sm text-emerald-600"><CheckCircle2 className="h-4 w-4" /> Books are clean for {s.year}.</p>
+          <p className="flex items-center gap-2 text-sm text-success"><CheckCircle2 className="h-4 w-4" /> Books are clean for {s.year}.</p>
         )}
       </Card>
 
       <Card className="min-w-0 p-4">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-amber-500" /> Tips from your numbers</h3>
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-warning" /> Tips from your numbers</h3>
         {s.tips.length ? (
           <ul className="space-y-3 text-sm">
             {s.tips.map((t) => (
               <li key={t.id}>
-                <div className="font-medium">{t.title}{t.savingsMinor ? <span className="text-emerald-600"> · save ~{money(t.savingsMinor)}</span> : null}</div>
+                <div className="font-medium">{t.title}{t.savingsMinor ? <span className="text-success"> · save ~{money(t.savingsMinor)}</span> : null}</div>
                 <p className="text-xs text-muted-foreground">{t.detail}</p>
               </li>
             ))}
@@ -471,7 +471,7 @@ function MiniStat({ label, value, good }: { label: string; value: string; good?:
   return (
     <div className="min-w-0">
       <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("text-base font-semibold tabular-nums", good && "text-emerald-600 dark:text-emerald-400")}>{value}</div>
+      <div className={cn("text-base font-semibold tabular-nums", good && "text-success")}>{value}</div>
     </div>
   );
 }
@@ -574,7 +574,7 @@ function ExpensesTab({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium">{e.vendor || e.description || "Receipt"}</span>
-                    {e.status === "needs_review" && <Badge variant="outline" className="h-5 border-amber-500/50 px-1.5 text-[10px] text-amber-600">Check</Badge>}
+                    {e.status === "needs_review" && <Badge variant="outline" className="h-5 border-warning/50 px-1.5 text-[10px] text-warning">Check</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {e.expense_date} · {cat.label}{e.vendor && e.description ? ` · ${e.description}` : ""}{Number(e.business_use_pct) < 100 ? ` · ${Number(e.business_use_pct)}% business` : ""}
@@ -744,7 +744,7 @@ function GstTab({ s, payments, onChanged }: { s: BooksSnapshot; payments: TaxPay
               On {money(q.eligibleSalesGrossMinor)} of GST sales (tax in), the Quick Method (3.6% less a 1% credit on the first $30k) would be about{" "}
               <strong className="text-foreground">{money(q.remitMinor)}</strong> vs <strong className="text-foreground">{money(q.regularMinor)}</strong> on the regular method.
             </p>
-            <p className={cn("mt-2 font-medium", q.savingsMinor > 0 ? "text-emerald-600" : "text-muted-foreground")}>
+            <p className={cn("mt-2 font-medium", q.savingsMinor > 0 ? "text-success" : "text-muted-foreground")}>
               {q.savingsMinor > 0 ? `About ${money(q.savingsMinor)} less. Ask your accountant about electing (form GST74).` : "The regular method is cheaper for you right now."}
             </p>
           </Card>
@@ -871,7 +871,7 @@ function SummerSettingsCard({ onSaved }: { onSaved: () => void }) {
     <Card className="max-w-2xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-orange-500 text-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning text-white">
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="min-w-0">

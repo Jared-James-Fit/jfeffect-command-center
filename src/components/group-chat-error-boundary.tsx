@@ -25,7 +25,7 @@ export class GroupChatErrorBoundary extends Component<{ children: ReactNode }, S
     return (
       <div className="grid h-full place-items-center p-6">
         <Card className="max-w-md border-border bg-card p-5 text-sm">
-          <div className="mb-2 flex items-center gap-2 text-amber-600">
+          <div className="mb-2 flex items-center gap-2 text-warning">
             <AlertTriangle className="h-4 w-4" />
             <span className="font-semibold">Group chat couldn't load</span>
           </div>

@@ -18,9 +18,9 @@ type Tone = "danger" | "warn" | "info" | "ok" | "muted";
 
 const ICON_TONE: Record<Tone, string> = {
   danger: "bg-destructive/15 text-destructive",
-  warn: "bg-amber-500/15 text-amber-500",
-  info: "bg-blue-500/15 text-blue-400",
-  ok: "bg-emerald-500/15 text-emerald-500",
+  warn: "bg-warning/15 text-warning",
+  info: "bg-info/15 text-info",
+  ok: "bg-success/15 text-success",
   muted: "bg-muted text-muted-foreground",
 };
 

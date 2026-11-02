@@ -80,7 +80,7 @@ export function TodaysIntakeCard() {
           <UtensilsCrossed className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-black uppercase tracking-widest">Today's Intake</div>
+          <div className="text-sm font-bold uppercase tracking-widest">Today's Intake</div>
           <div className="text-[11px] text-muted-foreground tabular-nums">
             {Math.round(totals.calories)} kcal · {Math.round(totals.protein)}P · {Math.round(totals.carbs)}C ·{" "}
             {Math.round(totals.fat)}F · {meals.length} meal{meals.length === 1 ? "" : "s"}

@@ -28,10 +28,10 @@ import {
 export const ADMIN_AGREEMENT_QUERY_ROOT = "admin-coaching-agreement";
 
 const STATUS_STYLE: Record<RosterStatus, string> = {
-  signed: "border-emerald-500/50 text-emerald-600",
-  never_signed: "border-red-500/50 text-red-600",
-  admin_request: "border-amber-500/60 text-amber-700 dark:text-amber-400",
-  new_version: "border-amber-500/60 text-amber-700 dark:text-amber-400",
+  signed: "border-success/50 text-success",
+  never_signed: "border-destructive/50 text-destructive",
+  admin_request: "border-warning/60 text-warning",
+  new_version: "border-warning/60 text-warning",
   exempt: "border-border text-muted-foreground",
   no_account: "border-border text-muted-foreground",
 };

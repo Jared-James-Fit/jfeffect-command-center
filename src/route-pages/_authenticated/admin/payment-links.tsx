@@ -465,7 +465,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                 <Button variant="outline" onClick={() => setManageMode(true)}>
                   <ListChecks className="mr-2 h-4 w-4" /> Manage products
                 </Button>
-                <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setNewProductOpen(true)}>
+                <Button className="bg-primary text-primary-foreground font-semibold" onClick={() => setNewProductOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" /> New product
                 </Button>
               </>
@@ -482,7 +482,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
               <Button variant="outline" onClick={() => setManageMode(true)}>
                 <ListChecks className="mr-2 h-4 w-4" /> Manage products
               </Button>
-              <Button className="bg-gradient-primary font-bold uppercase tracking-wide" onClick={() => setNewProductOpen(true)}>
+              <Button className="bg-primary text-primary-foreground font-semibold" onClick={() => setNewProductOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" /> New product
               </Button>
             </>
@@ -568,7 +568,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
         ) : (
           <Card className="overflow-hidden border-border bg-card">
             {/* Desktop column headings */}
-            <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_0.9fr_1fr_1fr_0.7fr_auto] items-center gap-3 border-b border-border px-4 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground lg:grid">
+            <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_0.9fr_1fr_1fr_0.7fr_auto] items-center gap-3 border-b border-border px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground lg:grid">
               <span>Product</span><span>Type</span><span>Price</span><span>Billing</span>
               <span>Duration</span><span>Status</span><span className="sr-only">Actions</span>
             </div>
@@ -643,7 +643,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                 const statusBadge = (
                   <Badge
                     variant={status === "Active" ? "default" : "outline"}
-                    className={status === "Active" ? "bg-gradient-primary" : ""}
+                    className={status === "Active" ? "bg-primary text-primary-foreground" : ""}
                   >
                     {status}
                   </Badge>
@@ -656,13 +656,13 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                   <Button
                     size="sm"
                     variant="outline"
-                    className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                    className="border-warning/40 text-warning hover:bg-warning/10"
                     onClick={() => setEditing({ open: true, product: p })}
                   >
                     <AlertTriangle className="mr-1 h-3.5 w-3.5" /> Finish setup
                   </Button>
                 ) : (
-                  <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setAssigning(productToOfferLike(p))}>
+                  <Button size="sm" className="bg-primary text-primary-foreground font-semibold" onClick={() => setAssigning(productToOfferLike(p))}>
                     Assign
                   </Button>
                 );
@@ -715,7 +715,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                           {menu}
                         </div>
                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-black">{formatPrice(p.price_cents, p.currency)}</span>
+                          <span className="text-sm font-bold">{formatPrice(p.price_cents, p.currency)}</span>
                           {statusBadge}
                         </div>
                         <div className="mt-2">{primary}</div>
@@ -969,7 +969,7 @@ function ProductFormDialog({
                 </SelectContent>
               </Select>
               {product && form.currency.toLowerCase() !== (product.currency ?? "").toLowerCase() && (
-                <p className="mt-1 text-[11px] text-amber-600">
+                <p className="mt-1 text-[11px] text-warning">
                   Changing currency will create a new Stripe price in {form.currency} and archive the old one on save.
                 </p>
               )}
@@ -1003,7 +1003,7 @@ function ProductFormDialog({
             <div className="text-xs font-semibold uppercase tracking-widest text-primary">Stripe Checkout Session</div>
 
             {/* Tax notice */}
-            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 flex items-start gap-2">
+            <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-xs text-success flex items-start gap-2">
               <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               <span><strong>Taxes are calculated automatically from the customer's billing address and displayed before payment.</strong> GST/HST is added on top of the entered price. Billing address is required at checkout.</span>
             </div>
@@ -1110,7 +1110,7 @@ function ProductFormDialog({
 
           <div className="md:col-span-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={submitting} className="bg-gradient-primary font-bold uppercase tracking-wide">
+            <Button type="submit" disabled={submitting} className="bg-primary text-primary-foreground font-semibold">
               {submitting ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{form.generateStripeProduct ? "Creating product and payment link…" : "Saving…"}</>
               ) : (

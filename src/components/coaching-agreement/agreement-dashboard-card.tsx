@@ -15,18 +15,18 @@ export function AgreementDashboardCard() {
 
   return (
     <Card
-      className="relative overflow-hidden border-2 border-amber-500/60 bg-amber-500/10 p-4 sm:p-5"
+      className="relative overflow-hidden border-2 border-warning/60 bg-warning/10 p-4 sm:p-5"
       data-testid="agreement-dashboard-card"
     >
       <div className="flex items-start gap-3">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-warning/20 text-warning">
           <FileSignature className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-warning">
             Action required
           </p>
-          <h2 className="text-base font-black leading-tight tracking-tight sm:text-lg">
+          <h2 className="text-base font-bold leading-tight tracking-tight sm:text-lg">
             {prompt.title}
           </h2>
           <p className="mt-1 text-sm leading-snug text-muted-foreground">{prompt.body}</p>

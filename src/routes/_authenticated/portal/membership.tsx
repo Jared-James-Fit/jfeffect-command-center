@@ -15,14 +15,14 @@ import { isNative } from "@/platform";
 export const Route = createFileRoute("/_authenticated/portal/membership")({ component: BillingPage });
 
 const STATUS_TONE: Record<string, string> = {
-  "Trialing": "bg-amber-500/10 text-amber-300 border-amber-500/30",
-  "Active": "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
-  "Active (Cancels at period end)": "bg-amber-500/10 text-amber-300 border-amber-500/30",
-  "Past Due": "bg-rose-500/10 text-rose-300 border-rose-500/30",
-  "Past Due (Access Restricted)": "bg-rose-600/15 text-rose-300 border-rose-500/40",
-  "Payment Failed": "bg-rose-500/10 text-rose-300 border-rose-500/30",
-  "Paused": "bg-sky-500/10 text-sky-300 border-sky-500/30",
-  "Hold Plan": "bg-violet-500/10 text-violet-300 border-violet-500/30",
+  "Trialing": "bg-warning/10 text-warning border-warning/30",
+  "Active": "bg-success/10 text-success border-success/30",
+  "Active (Cancels at period end)": "bg-warning/10 text-warning border-warning/30",
+  "Past Due": "bg-destructive/10 text-destructive border-destructive/30",
+  "Past Due (Access Restricted)": "bg-destructive/15 text-destructive border-destructive/40",
+  "Payment Failed": "bg-destructive/10 text-destructive border-destructive/30",
+  "Paused": "bg-info/10 text-info border-info/30",
+  "Hold Plan": "bg-muted-foreground/10 text-muted-foreground border-border",
   "Cancelled": "bg-zinc-500/10 text-zinc-300 border-zinc-500/30",
   "Expired": "bg-zinc-500/10 text-zinc-300 border-zinc-500/30",
 };
@@ -95,8 +95,8 @@ function BillingPage() {
 
       {/* Native: inform user that billing changes must be done on the web */}
       {native && (
-        <Card className="flex items-start gap-3 border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <Card className="flex items-start gap-3 border-warning/30 bg-warning/10 p-4 text-sm">
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div>
             <div className="font-semibold">Manage billing at jfeffect.com</div>
             <div className="text-muted-foreground text-xs mt-0.5">
@@ -108,7 +108,7 @@ function BillingPage() {
 
       <Card id="billing-status-card" className="p-5 space-y-3 scroll-mt-20">
         {showCrossAccountLock && (
-          <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200 flex gap-2">
+          <div className="rounded border border-warning/30 bg-warning/10 p-3 text-sm text-warning flex gap-2">
             <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
               <div className="font-medium">Manual review required</div>
@@ -117,12 +117,12 @@ function BillingPage() {
           </div>
         )}
         {showSyncWarning && (
-          <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <div className="rounded border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
             We had trouble syncing the latest billing status. Your access is preserved. {m.sync_warning_reason ? `(${m.sync_warning_reason})` : null}
           </div>
         )}
         {inGrace && (
-          <div className="rounded border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200 flex gap-2">
+          <div className="rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive flex gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="font-medium">Payment failed — please update your payment method</div>
@@ -139,7 +139,7 @@ function BillingPage() {
           </div>
         )}
         {accessRestricted && (
-          <div className="rounded border border-rose-600/40 bg-rose-600/15 p-3 text-sm text-rose-200">
+          <div className="rounded border border-destructive/40 bg-destructive/15 p-3 text-sm text-destructive">
             <div className="font-medium">Access restricted</div>
             <div className="text-xs opacity-90">Your grace period ended. Your account, history, and progress are preserved — update your payment method to restore full access.</div>
             {!native && (

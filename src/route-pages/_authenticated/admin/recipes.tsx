@@ -84,14 +84,14 @@ export function AdminRecipes({ embedded = false }: { embedded?: boolean } = {}) 
         title="Recipe Library"
         subtitle="Add, format, and share recipes with clients and members."
         actions={
-          <Button onClick={() => { setEditing(null); setOpen(true); }} className="bg-gradient-primary font-bold">
+          <Button onClick={() => { setEditing(null); setOpen(true); }} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Recipe
           </Button>
         }
       />}
       {embedded && (
         <div className="flex justify-end px-4 pt-4 md:px-6">
-          <Button onClick={() => { setEditing(null); setOpen(true); }} className="bg-gradient-primary font-bold">
+          <Button onClick={() => { setEditing(null); setOpen(true); }} className="bg-primary text-primary-foreground font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Recipe
           </Button>
         </div>

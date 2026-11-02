@@ -206,7 +206,7 @@ function ReviewPage() {
             <label className="flex items-center gap-1"><Switch checked={notifySms} onCheckedChange={setNotifySms} /> SMS</label>
           </div>
 
-          <Button className="w-full font-bold bg-gradient-primary" disabled={publishM.isPending} onClick={() => publishM.mutate()}>
+          <Button className="w-full font-semibold bg-primary text-primary-foreground" disabled={publishM.isPending} onClick={() => publishM.mutate()}>
             {publishM.isPending ? "Publishing…" : "Publish Nutrition Update"}
           </Button>
         </Card>

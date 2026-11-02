@@ -98,7 +98,7 @@ export function TransactionDetailDrawer({
           <div className="flex items-center gap-2">
             <Badge variant="outline" className={statusTone(txn.status)}>{txn.status}</Badge>
             <Badge variant="outline" className="capitalize">{txn.purchase_type ?? txn.source}</Badge>
-            {mode === "test" && <Badge variant="outline" className="border-amber-500/30 text-amber-500">TEST</Badge>}
+            {mode === "test" && <Badge variant="outline" className="border-warning/30 text-warning">TEST</Badge>}
           </div>
           <SheetTitle className="text-xl">{amountFmt}</SheetTitle>
           <SheetDescription>{new Date(txn.occurred_at).toLocaleString()}</SheetDescription>

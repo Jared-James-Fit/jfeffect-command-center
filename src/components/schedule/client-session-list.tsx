@@ -152,7 +152,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                     </div>
                   </div>
                   {s.meet_link && (
-                    <Button asChild className="h-11 w-full bg-gradient-primary font-bold">
+                    <Button asChild className="h-11 w-full bg-primary text-primary-foreground font-semibold">
                       <a href={s.meet_link} target="_blank" rel="noreferrer"><Video className="mr-2 h-4 w-4" /> Join video call</a>
                     </Button>
                   )}
@@ -174,8 +174,8 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                   )}
                   {s.client_visible_notes && s.notes && <p className="text-xs text-foreground/80">{s.notes}</p>}
                   {p ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-                      <span className="text-xs font-semibold text-amber-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+                      <span className="text-xs font-semibold text-warning">
                         {p.kind === "move"
                           ? proposedLabel(p) ? `Move to ${proposedLabel(p)} requested` : "Move requested"
                           : "Cancel requested"} · waiting on your coach
@@ -214,7 +214,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {a.meet_link ? (
-                    <Button asChild className="h-11 bg-gradient-primary">
+                    <Button asChild className="h-11 bg-primary text-primary-foreground">
                       <a href={a.meet_link} target="_blank" rel="noreferrer"><Video className="mr-2 h-4 w-4" /> Join</a>
                     </Button>
                   ) : <span />}

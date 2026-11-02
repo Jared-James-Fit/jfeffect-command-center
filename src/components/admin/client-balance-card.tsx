@@ -103,11 +103,11 @@ export function ClientBalanceCard({ summary, currency = "CAD", onRenew, renewing
         <div className="min-w-0">
           <div className="text-xs uppercase tracking-widest text-muted-foreground">Balance</div>
           {owes ? (
-            <div className="text-3xl font-black tabular-nums text-destructive">Owes {money(summary.owedCents, currency)}</div>
+            <div className="text-3xl font-bold tabular-nums text-destructive">Owes {money(summary.owedCents, currency)}</div>
           ) : summary.waiting.length > 0 ? (
-            <div className="text-3xl font-black text-foreground">Nothing owed yet</div>
+            <div className="text-3xl font-bold text-foreground">Nothing owed yet</div>
           ) : (
-            <div className="flex items-center gap-2 text-3xl font-black text-success">
+            <div className="flex items-center gap-2 text-3xl font-bold text-success">
               <CheckCircle2 className="h-7 w-7" /> All paid up
             </div>
           )}

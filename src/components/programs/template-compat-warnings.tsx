@@ -44,7 +44,7 @@ export function TemplateCompatWarnings({ template, goals }: Props) {
 
   if (notes.length === 0) return null;
   return (
-    <div className="rounded-md border border-blue-500/30 bg-blue-500/5 p-2 text-[11px] text-blue-700 dark:text-blue-300">
+    <div className="rounded-md border border-info/30 bg-info/5 p-2 text-[11px] text-info">
       <div className="flex items-start gap-1.5">
         <Info className="mt-0.5 h-3 w-3 shrink-0" />
         <div className="flex-1 space-y-0.5">
