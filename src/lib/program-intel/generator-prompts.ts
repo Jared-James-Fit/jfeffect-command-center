@@ -12,11 +12,11 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 2;
+export const PIPELINE_PROMPT_VERSION = 3;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
-- Mark each decision "fact" only when it rests on measured records in the brief; otherwise "hypothesis". A pattern seen in one block is not an established response; correlation is not causation.
+- Mark each decision "fact" only when its observation is itself a measurement from the brief (a load, a trend, a count); otherwise "hypothesis". An observation that links a cause (pain during X, stalled because of Y, recurring in sessions with Z) is a hypothesis even when every number in it is measured. A pattern seen in one block is not an established response; correlation is not causation.
 - Where the data is missing (e.g. no RPE logged, no check-outs, no bodyweight), say so in data_limits and lower confidence; never infer effort or fatigue from load alone. Keep programming when other information is enough.`;
 
 const PROGRAMMING_RULES = `Programming rules:

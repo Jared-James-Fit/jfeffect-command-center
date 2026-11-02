@@ -139,7 +139,21 @@ export function loadReferences(r: IntelReport | null): string {
   return out.join("\n") || "- nothing logged";
 }
 
-export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[] }): Brief {
+/** The previous program's first week as it was written: each day's exercises in order, prescription and coach's note (stations, setup). */
+export function programLayout(r: IntelReport | null): string {
+  if (!r || !r.weeks.length) return "- no previous program";
+  const u = r.client.unit;
+  const firstFull = r.weeks.find((w) => w.plannedDays === Math.max(...r.weeks.map((x) => x.plannedDays))) ?? r.weeks[0];
+  return r.days
+    .filter((d) => d.weekKey === firstFull.key)
+    .map((d) => `Day ${d.dayIndex}: ${d.title}\n${d.rows.map((row) => `  - ${row.exercise}${row.role ? ` [${row.role}]` : ""}: ${row.prescribed.sets ?? "?"}×${row.prescribed.reps ?? "?"}${row.prescribed.rpe ? ` @${row.prescribed.rpe}` : ""}${row.prescribed.restSeconds ? `, rest ${row.prescribed.restSeconds}s` : ""}${row.prescribed.loadKg != null ? `, ${kg(row.prescribed.loadKg, u)}` : ""}${row.prescribed.notes ? ` · "${row.prescribed.notes}"` : ""}`).join("\n")}`)
+    .join("\n");
+}
+
+/** The sections the construction stages skip: the set-by-set logs (the strategy already read them; load references and measured exercises stay). */
+export const CONSTRUCT_EXCLUDE = ["log", "earlier"];
+
+export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[]; exclude?: string[] }): Brief {
   const budget = x.budgetChars ?? BRIEF_BUDGET_CHARS;
   const { ctx, prev, history } = intel;
   const sections: Array<BriefSection & { text: string }> = [];
@@ -191,6 +205,7 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
     }
     parts.push(`Exercises in the previous program (measured):\n${prev ? exerciseTable(prev) : "—"}`);
     parts.push(`Load references (latest sets of each exercise):\n${loadReferences(prev)}`);
+    parts.push(`How it was laid out (its first full week, as written):\n${programLayout(prev)}`);
     if (prev && prev.lifts.some((l) => l.exposures.length)) parts.push(`Main lifts:\n${list(prev.lifts.filter((l) => l.exposures.length).map((l) => `${l.lift}: e1RM ${kg(l.compTrend.first, prev.client.unit)} → ${kg(l.compTrend.last, prev.client.unit)} (${l.compTrend.changePct ?? "—"}%), ${l.frequencyPerWeek ?? "?"}×/wk, ${l.setsPerWeek ?? "?"} sets/wk, avg ${l.avgRelativeIntensityPct ?? "—"}% of best e1RM, RPE vs target ${l.avgRpeDelta ?? "—"}, heavy singles ${l.heavySingles}`))}`);
     add("previous", "The previous program: what it tells us", parts.join("\n"));
   } else add("previous", "The previous program", "No previous program with logged training.");
@@ -246,8 +261,9 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
       add("earlier", "Earlier programs: per exercise", `NOTE: ${msg}\n${exerciseSummaryFromDays(earlierDays, history.client.unit)}`, "summary", msg);
     }
   }
-  const text = sections.map((s) => `## ${s.title}\n${s.text}`).join("\n\n");
-  const warnings = sections.filter((s) => s.note).map((s) => s.note as string);
+  const kept = x.exclude?.length ? sections.filter((s) => !x.exclude!.includes(s.key)) : sections;
+  const text = kept.map((s) => `## ${s.title}\n${s.text}`).join("\n\n");
+  const warnings = kept.filter((s) => s.note).map((s) => s.note as string);
   if (text.length > budget) warnings.push(`The brief is ${Math.round(text.length / 1000)}k characters, over the ${Math.round(budget / 1000)}k budget, because the previous program alone is that large; nothing from it was cut.`);
-  return { text, sections: sections.map(({ text: _t, ...s }) => s), warnings, chars: text.length, estTokens: Math.round(text.length / 4) };
+  return { text, sections: kept.map(({ text: _t, ...s }) => s), warnings, chars: text.length, estTokens: Math.round(text.length / 4) };
 }
