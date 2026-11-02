@@ -151,8 +151,8 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   },
   nutrition_targets_updated: {
     to: "client", category: "check_ins",
-    title: () => "New nutrition targets",
-    body: (coach) => `${coach} updated your targets. Tap to see your plan.`,
+    title: () => "Your nutrition plan",
+    body: (coach) => `${coach} sent your updated plan. Tap to see it.`,
     url: () => "/portal/nutrition-targets", rateMinutes: 360,
   },
   // The coach reacted to / commented on a workout the athlete chose to share.

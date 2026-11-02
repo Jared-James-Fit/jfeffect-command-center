@@ -695,6 +695,8 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+          const { postPlanMessage } = await import("@/lib/nutrition-targets/plan-message.server");
+          await postPlanMessage(supabaseAdmin as any, { clientId: p.client_id, actorUserId: actor.userId });
           await notifyAppEvent(supabaseAdmin as any, "nutrition_targets_updated", { clientId: p.client_id, sourceId: `cleo:${targetId}:${now}`, actorUserId: actor.userId });
         } catch (e) {
           console.warn("[cleo] nutrition push failed", e);
