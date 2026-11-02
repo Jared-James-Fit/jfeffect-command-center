@@ -166,7 +166,7 @@ describe("Program Intelligence is for the client's coaches and admins only", () 
   it("the model calls log is readable by the client's coaches only and written only by the worker", () => {
     const v2 = readFileSync("supabase/migrations/20270113090000_program_intel_generator_v2.sql", "utf8");
     expect(v2).toContain("alter table public.program_intel_job_calls enable row level security;");
-    expect(v2).toContain("revoke all on public.program_intel_job_calls from anon;");
+    expect(v2).toContain("revoke all on public.program_intel_job_calls from anon, authenticated;");
     expect(v2).toContain("grant select on public.program_intel_job_calls to authenticated;");
     expect(v2).not.toMatch(/grant (insert|update|delete)[^;]*program_intel_job_calls/);
     expect(v2).toContain("or new.stage is distinct from old.stage or new.progress is distinct from old.progress");

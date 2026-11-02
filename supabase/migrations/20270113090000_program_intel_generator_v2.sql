@@ -68,7 +68,7 @@ create index if not exists program_intel_job_calls_job_idx on public.program_int
 create index if not exists program_intel_job_calls_client_idx on public.program_intel_job_calls (client_id, created_at desc);
 
 alter table public.program_intel_job_calls enable row level security;
-revoke all on public.program_intel_job_calls from anon;
+revoke all on public.program_intel_job_calls from anon, authenticated;
 drop policy if exists "Coaches read program intel job calls" on public.program_intel_job_calls;
 create policy "Coaches read program intel job calls" on public.program_intel_job_calls
   for select to authenticated
