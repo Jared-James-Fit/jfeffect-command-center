@@ -154,7 +154,7 @@ import { formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
-import { Timer } from "lucide-react";
+import { Timer, Heart } from "lucide-react";
 import type { WorkoutContextAdapter } from "@/lib/workout-context";
 import {
   summarizeCompleteness,
@@ -4290,6 +4290,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           Log the load used
         </div>
+      )}
+      {(row as any).cardio_target_id && (
+        // the client's cardio plan, added after the lifting (program_cardio_sync): logging it here is the day's cardio
+        <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400" data-cardio-plan-row>
+          <Heart className="h-3.5 w-3.5 shrink-0" /> Your cardio plan · logging it here checks off today's cardio
+        </p>
       )}
       {row.notes && <ExerciseNotesBlock notes={row.notes} />}
       {/* Logging actions: keep the common actions visible and quiet.

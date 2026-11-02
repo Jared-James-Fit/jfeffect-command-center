@@ -376,10 +376,10 @@ function PortalNutrition() {
           <TodaysIntakeCard />
         </SectionErrorBoundary>
 
-        {/* 6. Prescribed cardio — hidden when nothing is prescribed. */}
+        {/* 6. Today's cardio as one line (it's logged in the workout or on Workouts, never here too). */}
         {clientId && (
           <SectionErrorBoundary label="Cardio">
-            <ClientCardioSection clientId={clientId} hideWhenEmpty />
+            <ClientCardioSection clientId={clientId} hideWhenEmpty variant="line" />
           </SectionErrorBoundary>
         )}
 
