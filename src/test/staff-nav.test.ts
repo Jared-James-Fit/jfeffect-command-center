@@ -146,6 +146,6 @@ describe("one menu row per page", () => {
     const page = read("src/routes/_authenticated/admin/coaching.tsx");
     expect(page).not.toContain("Check-ins (old)");
     expect(page).not.toContain("AdminCheckInReviews");
-    expect(page).toContain('if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", replace: true });');
+    expect(page).toContain('if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", search: { tab: "submissions" } as any, replace: true });');
   });
 });
