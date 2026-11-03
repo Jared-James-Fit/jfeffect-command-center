@@ -26,7 +26,7 @@ type Search = { tab: TabKey | "check-ins"; open?: string };
 
 export const Route = createFileRoute("/_authenticated/admin/coaching")({
   beforeLoad: ({ search }) => {
-    if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", replace: true });
+    if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", search: { tab: "submissions" } as any, replace: true });
   },
   // A link that names a tab opens it; the menu (no tab) always opens Training Intel.
   validateSearch: (raw: Record<string, unknown>): Search => {

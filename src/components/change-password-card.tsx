@@ -8,7 +8,8 @@ import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/action-button";
 
-export function ChangePasswordCard({ className }: { className?: string }) {
+/** `bare`: just the form, for a settings section that already has the title (the client's Account). */
+export function ChangePasswordCard({ className, bare = false }: { className?: string; bare?: boolean }) {
   const { user } = useAuth();
   const [pwd, setPwd] = useState({ current: "", next: "", confirm: "", showCurrent: false, showNext: false });
 
@@ -25,12 +26,15 @@ export function ChangePasswordCard({ className }: { className?: string }) {
     toast.success("Password updated");
   };
 
+  const Shell = bare ? "div" : Card;
   return (
-    <Card className={"border-border bg-card p-6 space-y-4 " + (className ?? "")}>
-      <div className="flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-primary" />
-        <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Change Password</h3>
-      </div>
+    <Shell className={bare ? className : "border-border bg-card p-6 space-y-4 " + (className ?? "")}>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-primary" />
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Change Password</h3>
+        </div>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -74,6 +78,6 @@ export function ChangePasswordCard({ className }: { className?: string }) {
           </ActionButton>
         </div>
       </form>
-    </Card>
+    </Shell>
   );
 }

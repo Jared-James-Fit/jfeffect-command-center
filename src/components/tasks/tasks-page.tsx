@@ -112,8 +112,8 @@ export interface TasksPageProps {
 }
 
 export function TasksPage({
-  title = "Task Manager",
-  subtitle = "Capture fast. Clear fast.",
+  title = "Tasks",
+  subtitle,
   storagePrefix = "jf",
   scope = "admin",
 }: TasksPageProps = {}) {
@@ -419,13 +419,15 @@ export function TasksPage({
 
   const emptyText = search || person !== "all"
     ? "No matching tasks."
-    : board === "mine" ? "Nothing on your list. Type above to add one." : "Nothing on the team board. Type above to add one.";
+    : board === "mine" ? "Nothing on your list." : "Nothing on the team board.";
 
   return (
     <>
       <PageHeader
         title={title}
         subtitle={subtitle}
+        // Phones: search and Select sit on the title's row, not a row of their own above it.
+        actionsInline
         actions={
           <div className="flex items-center gap-1.5">
             <Button
@@ -437,8 +439,9 @@ export function TasksPage({
             </Button>
             {!boardHidden && (
               <Button
-                variant={selectMode ? "default" : "outline"}
+                variant={selectMode ? "secondary" : "outline"}
                 size="sm"
+                className="h-9"
                 onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
               >
                 {selectMode ? "Cancel" : "Select"}
@@ -502,7 +505,8 @@ export function TasksPage({
                 onClick={() => switchBoard(b.key)}
                 className={cn(
                   "flex h-10 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-colors",
-                  active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  // The board you're on reads in neutral, like every in-page switch.
+                  active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -557,14 +561,17 @@ export function TasksPage({
             {/* View switch + count */}
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-border bg-card p-0.5">
-                <Button size="sm" variant={view === "list" ? "default" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => setView("list")}>
-                  <ListChecks className="mr-1 h-3.5 w-3.5" />List
+                <Button size="sm" variant={view === "list" ? "secondary" : "ghost"} className="h-8 gap-1 px-2.5 text-xs" aria-pressed={view === "list"} onClick={() => setView("list")}>
+                  <ListChecks className="h-3.5 w-3.5" />List
                 </Button>
-                <Button size="sm" variant={view === "matrix" ? "default" : "ghost"} className="h-7 px-2.5 text-xs" onClick={() => setView("matrix")}>
-                  <LayoutGrid className="mr-1 h-3.5 w-3.5" />Matrix
+                <Button size="sm" variant={view === "matrix" ? "secondary" : "ghost"} className="h-8 gap-1 px-2.5 text-xs" aria-pressed={view === "matrix"} onClick={() => setView("matrix")}>
+                  <LayoutGrid className="h-3.5 w-3.5" />Matrix
                 </Button>
               </div>
-              <span className="ml-auto text-xs font-semibold text-muted-foreground">{visibleOpen.length} open</span>
+              {/* The board tab already counts what's open; this only says how many a search or filter leaves. */}
+              {(search || person !== "all") && (
+                <span className="ml-auto text-xs font-semibold text-muted-foreground">{visibleOpen.length} open</span>
+              )}
             </div>
 
             {/* Team board: whose tasks */}
@@ -577,8 +584,8 @@ export function TasksPage({
                       key={f.key}
                       onClick={() => setPerson(f.key)}
                       className={cn(
-                        "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
-                        active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                        "h-8 shrink-0 rounded-full border px-3 text-xs font-semibold transition-colors",
+                        active ? "border-foreground/40 bg-secondary text-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
                       )}
                     >
                       {f.label}
@@ -590,7 +597,7 @@ export function TasksPage({
 
             {/* Selection header */}
             {selectMode && (
-              <div className="flex items-center justify-between rounded-lg border border-primary/50 bg-primary/5 px-3 py-1.5">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted px-3 py-1.5">
                 <span className="text-xs font-bold">{effectiveSelected.length} selected</span>
                 <Button
                   variant="ghost" size="sm" className="h-7 px-2 text-xs"
@@ -613,8 +620,8 @@ export function TasksPage({
                       <Card key={q.key} className="overflow-hidden border-border bg-card p-0">
                         <div className="flex items-center gap-2 border-b border-border/70 px-3 py-1.5">
                           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: st.color }} />
-                          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: st.color }}>{st.title}</span>
-                          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">{byQuadrant[q.key].length}</span>
+                          <span className="text-[13px] font-semibold text-foreground">{st.title}</span>
+                          <span className="text-xs font-medium tabular-nums text-muted-foreground">{byQuadrant[q.key].length}</span>
                         </div>
                         <ul className="divide-y divide-border">
                           {byQuadrant[q.key].map((t) => <TaskRowItem key={t.id} task={t} showQuadrant={false} {...rowProps} />)}
@@ -650,7 +657,7 @@ export function TasksPage({
                   onClick={() => setShowCompleted((o) => !o)}
                 >
                   {showCompleted ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  <span className="text-[13px] font-semibold text-muted-foreground">
                     Completed ({visibleDone.length})
                   </span>
                   {showCompleted && (
@@ -815,7 +822,7 @@ function PeopleFaces({ names, size = 16 }: { names: string[]; size?: number }) {
       {shown.map((n, i) => (
         <span
           key={`${n}-${i}`}
-          className="grid place-items-center rounded-full bg-primary/15 font-bold uppercase text-primary ring-2 ring-card"
+          className="grid place-items-center rounded-full bg-muted font-bold uppercase text-foreground ring-2 ring-card"
           style={{ width: size, height: size, fontSize: size * 0.5 }}
         >
           {(n === "Me" ? "Me" : firstName(n)).slice(0, n === "Me" ? 2 : 1)}
@@ -867,7 +874,7 @@ function TaskRowItem({ task, showQuadrant = true, ...p }: { task: TaskRow; showQ
 
   const body = (
     <li
-      className={cn("flex items-start gap-2.5 px-3 py-2", isSelected && "bg-primary/5")}
+      className={cn("flex items-start gap-2.5 px-3 py-2", isSelected && "bg-muted")}
       onClick={p.selectMode ? () => p.toggleSelected(task.id) : undefined}
     >
       <Checkbox
@@ -1301,7 +1308,7 @@ function TaskDetailSheet({
                           onClick={() => onTogglePerson(task, m.user_id)}
                           className={cn(
                             "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
-                            on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
+                            on ? "border-foreground/40 bg-secondary text-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground",
                           )}
                         >
                           {on && <Check className="h-3.5 w-3.5" />}

@@ -112,9 +112,9 @@ export function ProgressSummaryCard({
   type Primary = { label: string; icon: ComponentType<{ className?: string }>; action: "bodyweight" | "photo" | "video" | "measure" };
   const primary: Primary[] = progressHref.kind === "portal"
     ? [
+        // Measurements (2 ever) live on the Progress page, not on Home.
         { label: "Add Photos", icon: Camera, action: "photo" },
         { label: "Add Video", icon: Video, action: "video" },
-        { label: "Measurements", icon: Ruler, action: "measure" },
       ]
     : [
         { label: "Log Weight", icon: Scale, action: "bodyweight" },
@@ -124,7 +124,7 @@ export function ProgressSummaryCard({
       ];
 
   if (progressHref.kind === "portal") {
-    const lastFor: Record<string, string | null> = { photo: latestPhotoAt, video: latestVideoAt, measure: latestMeasAt };
+    const lastFor: Record<string, string | null> = { photo: latestPhotoAt, video: latestVideoAt };
     const lastAny = [latestPhotoAt, latestVideoAt, latestMeasAt, latestBw?.logged_date ?? null]
       .filter((d): d is string => !!d)
       .sort()

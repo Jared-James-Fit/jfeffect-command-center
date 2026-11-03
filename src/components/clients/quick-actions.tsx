@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Dumbbell, Plus, BookOpen, CalendarDays, Apple, HeartPulse,
   MessageSquare, ClipboardCheck, CreditCard, User, Star, Archive,
-  Download, Loader2, ShoppingCart,
+  Download, Loader2, ShoppingCart, Eye,
 } from "lucide-react";
 import { QuickSellSheet } from "./quick-sell-sheet";
 import { ScheduleWorkoutSheet } from "@/components/schedule/ScheduleWorkoutSheet";
@@ -15,6 +15,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { AssignProgramDialog } from "./assign-program-dialog";
+import { blockEnd } from "./clients-status";
+import type { QuickPanelKind } from "./client-quick-sheet";
 import { WorkoutArchiveDialog } from "./workout-archive-dialog";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -90,18 +92,32 @@ function useClientPdfDownloads(r: DirectoryRow) {
   return { workoutPending, mealPending, downloadWorkout, downloadMealPlan };
 }
 
-/** Expanded sectioned "More" menu (three-dot). */
+/**
+ * The Clients list row's ⋯: every action for the client. The row itself shows only View Profile,
+ * so assigning a program, nutrition or cardio and View as client all live here.
+ */
 export function ClientMoreMenu({
   r,
   trigger,
   onArchive,
   tip,
+  onViewAsClient,
+  viewAsBusy,
+  onAssignProgram,
+  onOpenPanel,
 }: {
   r: DirectoryRow;
   trigger: React.ReactNode;
   onArchive?: (r: DirectoryRow) => void;
   /** Optional hover hint for the trigger (needs a surrounding TooltipProvider). */
   tip?: string;
+  /** View as client, for logins allowed to (left out otherwise). */
+  onViewAsClient?: () => void;
+  viewAsBusy?: boolean;
+  /** Opens the row's own Assign program (else the menu opens its own). */
+  onAssignProgram?: () => void;
+  /** Opens nutrition or cardio in place, over the list (else the profile's Nutrition tab). */
+  onOpenPanel?: (kind: QuickPanelKind) => void;
 }) {
   const qc = useQueryClient();
   const isExempt = r.payment_state === "exempt";
@@ -128,6 +144,9 @@ export function ClientMoreMenu({
   const [sellOpen, setSellOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
+  const assignProgram = () => (onAssignProgram ? onAssignProgram() : setAssignOpen(true));
+  // A block that's ended or ending with nothing queued after it.
+  const needsNextBlock = !!r.block_id && !!blockEnd(r.block_end, r.next_block_id)?.needsNext;
   return (
     <>
     <DropdownMenu>
@@ -148,6 +167,11 @@ export function ClientMoreMenu({
             <Star className="h-4 w-4" /> View Profile
           </ClientNameLink>
         </DropdownMenuItem>
+        {onViewAsClient && (
+          <DropdownMenuItem disabled={viewAsBusy} onSelect={() => onViewAsClient()}>
+            {viewAsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />} View as client
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} tab="training" className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> View Schedule
@@ -155,7 +179,7 @@ export function ClientMoreMenu({
         </DropdownMenuItem>
         {r.f_needs_review && (
           <DropdownMenuItem onSelect={() => void markReviewed()}>
-            <ClipboardCheck className="mr-2 h-4 w-4" /> Mark check-in reviewed
+            <ClipboardCheck className="h-4 w-4" /> Mark check-in reviewed
           </DropdownMenuItem>
         )}
 
@@ -163,7 +187,7 @@ export function ClientMoreMenu({
         <DropdownMenuLabel className="text-xs">Training</DropdownMenuLabel>
         {r.block_id && (
           <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setScheduleOpen(true); }}>
-            <Plus className="mr-2 h-4 w-4" /> Schedule Workout
+            <Plus className="h-4 w-4" /> Schedule Workout
           </DropdownMenuItem>
         )}
         {r.block_id ? (
@@ -173,8 +197,13 @@ export function ClientMoreMenu({
             </Link>
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setAssignOpen(true); }}>
-            <Dumbbell className="mr-2 h-4 w-4" /> Assign Program
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); assignProgram(); }}>
+            <Dumbbell className="h-4 w-4" /> Assign Program
+          </DropdownMenuItem>
+        )}
+        {needsNextBlock && (
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); assignProgram(); }}>
+            <Plus className="h-4 w-4" /> Assign Next Block
           </DropdownMenuItem>
         )}
         {r.block_id && (
@@ -190,40 +219,53 @@ export function ClientMoreMenu({
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
-          <Archive className="mr-2 h-4 w-4" /> Workout Archive
+          <Archive className="h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={pdfs.workoutPending}
           onSelect={(e) => { e.preventDefault(); pdfs.downloadWorkout(); }}
         >
           {pdfs.workoutPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="h-4 w-4" />
           )}
           Download Training Report
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Coaching</DropdownMenuLabel>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
-            <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
-          </ClientNameLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
-            <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
-          </ClientNameLink>
-        </DropdownMenuItem>
+        {onOpenPanel ? (
+          <>
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onOpenPanel("nutrition"); }}>
+              <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Assign Nutrition"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onOpenPanel("cardio"); }}>
+              <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Assign Cardio"}
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuItem asChild>
+              <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
+                <Apple className="h-4 w-4" /> {!r.f_missing_nutrition ? "Update Nutrition" : "Add Nutrition"}
+              </ClientNameLink>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <ClientNameLink clientId={r.id} tab="nutrition" className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4" /> {!r.f_missing_cardio ? "Update Cardio" : "Add Cardio"}
+              </ClientNameLink>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem
           disabled={pdfs.mealPending}
           onSelect={(e) => { e.preventDefault(); pdfs.downloadMealPlan(); }}
         >
           {pdfs.mealPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="h-4 w-4" />
           )}
           Download Meal Plan PDF
         </DropdownMenuItem>
@@ -241,7 +283,7 @@ export function ClientMoreMenu({
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs">Billing</DropdownMenuLabel>
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSellOpen(true); }}>
-          <ShoppingCart className="mr-2 h-4 w-4 text-primary" /> Quick Sell / Send Payment Link
+          <ShoppingCart className="h-4 w-4" /> Quick Sell / Send Payment Link
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <ClientNameLink clientId={r.id} tab="billing" className="flex items-center gap-2">
@@ -255,7 +297,7 @@ export function ClientMoreMenu({
         </DropdownMenuItem>
         {(r.payment_state === "not_set_up" || r.payment_state === "pending" || isExempt) && (
           <DropdownMenuItem onSelect={() => void setPaymentExempt(!isExempt)}>
-            <CreditCard className="mr-2 h-4 w-4" />
+            <CreditCard className="h-4 w-4" />
             {isExempt ? "Require payment again" : "Mark: no payment needed"}
           </DropdownMenuItem>
         )}

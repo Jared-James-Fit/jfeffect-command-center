@@ -323,7 +323,6 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
                   </Popover>
                 </div>
                 <p className="text-xs text-muted-foreground">{finishParts.join(" · ")}</p>
-                <p className="text-[10px] text-muted-foreground/80">Whichever comes first.</p>
               </div>
             )}
 

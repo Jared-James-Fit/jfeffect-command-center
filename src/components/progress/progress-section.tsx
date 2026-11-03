@@ -332,7 +332,8 @@ function OverviewTab({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-2">
+      {/* The three adds people use; measurements (rare) are a quiet link further down and the Measure tab. */}
+      <div className="grid grid-cols-3 gap-2">
         <Button variant="outline" className="h-auto min-h-16 min-w-0 flex-col gap-1 whitespace-normal px-1 py-2.5 text-center text-[11px] font-semibold leading-tight" onClick={onLogWeight}>
           <Scale className="h-4 w-4" />
           Log Weight
@@ -345,17 +346,13 @@ function OverviewTab({
           <VideoIcon className="h-4 w-4" />
           Add Video
         </Button>
-        <Button variant="outline" className="h-auto min-h-16 min-w-0 flex-col gap-1 whitespace-normal px-1 py-2.5 text-center text-[11px] font-semibold leading-tight" onClick={onAddMeasurements}>
-          <Ruler className="h-4 w-4" />
-          Add Measurements
-        </Button>
       </div>
 
       {/* Weight — full-width hero card with bigger graph and change from start */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold">Weight</h3>
-          {stats && <button onClick={() => onViewTab("bodyweight")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+          {stats && <button onClick={() => onViewTab("bodyweight")} className="-my-2 inline-flex min-h-10 items-center text-xs font-medium text-muted-foreground hover:text-foreground">View all</button>}
         </div>
         {stats ? (
           <div>
@@ -399,55 +396,55 @@ function OverviewTab({
         )}
       </Card>
 
+      {/* Photos, videos and body composition show once there's something in them:
+          an empty one only repeated the Add tiles above. */}
+      {(photoSubs.length > 0 || videoSubs.length > 0 || measRows.length > 0) && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Photos */}
+        {photoSubs.length > 0 && (
         <Card className="p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Photos</h3>
-            {photoSubs.length > 0 && <button onClick={() => onViewTab("photos")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+            <button onClick={() => onViewTab("photos")} className="-my-2 inline-flex min-h-10 items-center text-xs font-medium text-muted-foreground hover:text-foreground">View all</button>
           </div>
-          {photoSubs.length > 0 ? (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {photoSubs.slice(0, 2).map((sub) => (
-                <button
-                  key={sub.id}
-                  onClick={() => onOpenSubmission(sub.id)}
-                  className="relative aspect-square overflow-hidden rounded bg-muted text-left"
-                >
-                  <LazyMount className="h-full w-full">
-                    <SubmissionThumb sub={sub} />
-                  </LazyMount>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <MiniEmpty body="No photos yet." actionLabel="Add photos" onAction={onAddPhotos} />
-          )}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {photoSubs.slice(0, 2).map((sub) => (
+              <button
+                key={sub.id}
+                onClick={() => onOpenSubmission(sub.id)}
+                className="relative aspect-square overflow-hidden rounded bg-muted text-left"
+              >
+                <LazyMount className="h-full w-full">
+                  <SubmissionThumb sub={sub} />
+                </LazyMount>
+              </button>
+            ))}
+          </div>
         </Card>
+        )}
 
         {/* Videos */}
+        {videoSubs.length > 0 && (
         <Card className="p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Videos</h3>
-            {videoSubs.length > 0 && <button onClick={() => onViewTab("videos")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+            <button onClick={() => onViewTab("videos")} className="-my-2 inline-flex min-h-10 items-center text-xs font-medium text-muted-foreground hover:text-foreground">View all</button>
           </div>
-          {videoSubs.length > 0 ? (
-            <p className="mt-2 text-sm">
-              <span className="font-semibold">{videoSubs.length}</span>{" "}
-              <span className="text-muted-foreground">total · last {fmtDate(videoSubs[0].submission_date)}</span>
-            </p>
-          ) : (
-            <MiniEmpty body="No videos yet." actionLabel="Add video" onAction={onAddVideo} />
-          )}
+          <p className="mt-2 text-sm">
+            <span className="font-semibold">{videoSubs.length}</span>{" "}
+            <span className="text-muted-foreground">total · last {fmtDate(videoSubs[0].submission_date)}</span>
+          </p>
         </Card>
+        )}
 
-        {/* Body Composition — show actual latest measurement values */}
+        {/* Body Composition — the latest measurement values, only once there are some */}
+        {measRows.length > 0 && (
         <Card className="p-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Body Composition</h3>
-            {measRows.length > 0 && <button onClick={() => onViewTab("measurements")} className="text-xs text-primary font-medium hover:underline">View all</button>}
+            <h3 className="text-sm font-semibold">Body composition</h3>
+            <button onClick={() => onViewTab("measurements")} className="-my-2 inline-flex min-h-10 items-center text-xs font-medium text-muted-foreground hover:text-foreground">View all</button>
           </div>
-          {measRows.length > 0 ? (() => {
+          {(() => {
             const latest = measRows[0];
             const unit = latest.unit;
             const keyFields = ["waist", "hips", "chest", "arm_l", "thigh_l"] as const;
@@ -467,15 +464,25 @@ function OverviewTab({
                 </div>
               </div>
             );
-          })() : (
-            <MiniEmpty body="No measurements yet." actionLabel="Add measurements" onAction={onAddMeasurements} />
-          )}
+          })()}
         </Card>
+        )}
       </div>
+      )}
+
+      {measRows.length === 0 && (
+        <button
+          type="button"
+          onClick={onAddMeasurements}
+          className="-my-1 inline-flex min-h-10 items-center gap-1.5 px-1 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+        >
+          <Ruler className="h-4 w-4" aria-hidden /> Add measurements
+        </button>
+      )}
 
       {/* Recent activity list */}
       <Card className="p-3">
-        <h3 className="text-sm font-semibold">Recent Activity</h3>
+        <h3 className="text-sm font-semibold">Recent activity</h3>
         {activities.length > 0 ? (
           <ul className="mt-2 divide-y divide-border/60">
             {activities.map((a) => {
@@ -487,7 +494,7 @@ function OverviewTab({
               return (
                 <li key={`${a.type}-${a.id}`} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Icon className="h-4 w-4 shrink-0 text-primary" />
+                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="truncate">{a.label}</span>
                   </div>
                   <div className="text-xs text-muted-foreground shrink-0">

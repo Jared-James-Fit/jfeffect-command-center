@@ -32,13 +32,13 @@ export function PageSwitcher<K extends string>({ items, value, onChange, label }
               onClick={() => onChange(key)}
               className={cn(
                 "flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-1.5 text-[13px] font-semibold transition-colors sm:text-sm",
-                active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
               )}
             >
               <Icon className={cn("h-4 w-4 shrink-0", items.length > 2 && "hidden sm:block")} />
               <span className="truncate">{text}</span>
               {count != null && (
-                <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", active ? "bg-primary-foreground/20" : "bg-muted")}>{count}</span>
+                <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", active ? "bg-background" : "bg-muted")}>{count}</span>
               )}
             </button>
           );

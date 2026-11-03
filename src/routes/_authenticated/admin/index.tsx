@@ -59,11 +59,12 @@ function DriveSetupBanner() {
   });
   const ready = !!data?.root_folder_id && data?.status === "Ready";
   if (ready) return null;
+  // A setup problem: an amber icon on a plain card, not a tinted box.
   return (
-    <Card className="border-warning/40 bg-warning/5 p-3">
+    <Card className="p-3">
       <div className="flex items-center gap-2">
         <HardDrive className="h-4 w-4 shrink-0 text-warning" />
-        <div className="min-w-0 flex-1 truncate text-xs font-semibold">
+        <div className="min-w-0 flex-1 truncate text-sm font-medium">
           {data?.root_folder_id ? `Google Drive: ${data?.status ?? "Unknown"}` : "Google Drive not configured"}
         </div>
         <Button asChild size="sm" variant="outline" className="h-9 text-xs"><Link to="/admin/settings">Fix</Link></Button>
@@ -91,7 +92,7 @@ function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: bool
   if (loading) {
     return (
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2" aria-busy="true">
-        {tiles.map((t) => <div key={t.key} className="h-[76px] animate-pulse rounded-xl border border-border bg-card" />)}
+        {tiles.map((t) => <div key={t.key} className="h-[68px] animate-pulse rounded-xl border border-border bg-card" />)}
       </div>
     );
   }
@@ -110,11 +111,12 @@ function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: bool
         const inner = (
           <div
             title={t.hint}
-            className="flex h-full min-h-[76px] flex-col justify-between rounded-xl border border-border bg-card px-3 py-2.5 transition hover:border-foreground/30 active:scale-[0.97]"
+            className="flex h-full min-h-[68px] flex-col justify-between rounded-xl border border-border bg-card px-3 py-2.5 transition hover:border-foreground/30 active:scale-[0.97]"
           >
             <div className={cn("text-[24px] font-bold leading-none tabular-nums", TILE_TONE[t.tone])}>{t.value}</div>
-            <div className="mt-1.5 text-[12px] font-semibold leading-tight text-foreground">{t.label}</div>
-            <div className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{t.hint}</div>
+            <div className="mt-1.5 text-[13px] font-semibold leading-tight text-foreground">{t.label}</div>
+            {/* The label says what it is; a second line only when it splits the number ("1 failed · 2 not set up"). */}
+            {t.hint.includes(" · ") && <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{t.hint}</div>}
           </div>
         );
         return t.flag ? (
@@ -136,10 +138,11 @@ function timeOf(iso: string | null) {
   try { return format(parseISO(iso), "h:mm a"); } catch { return null; }
 }
 
+// Done and training now are chips; "not yet" is just quiet text.
 const STATUS_CHIP: Record<OverviewSession["status"], { label: string; cls: string }> = {
-  done: { label: "Done", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  training: { label: "Training now", cls: "bg-foreground/10 text-foreground" },
-  pending: { label: "Not yet", cls: "bg-muted text-muted-foreground" },
+  done: { label: "Done", cls: "rounded-full bg-emerald-500/15 px-2 py-0.5 font-bold text-emerald-600 dark:text-emerald-400" },
+  training: { label: "Training now", cls: "rounded-full bg-foreground/10 px-2 py-0.5 font-bold text-foreground" },
+  pending: { label: "Not yet", cls: "font-medium text-muted-foreground" },
 };
 
 function TrainingTodayCard({ overview, loading }: { overview: Overview | undefined; loading: boolean }) {
@@ -158,9 +161,8 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
         <>
           {scheduled.length > 0 && (
             <div className="mb-1">
-              <div className="flex items-baseline justify-between text-[12px]">
+              <div className="text-[13px]">
                 <span className="font-semibold"><span className="text-base font-bold tabular-nums">{done}</span> of {scheduled.length} done</span>
-                <span className="text-muted-foreground">{scheduled.length - done} to go</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
                 <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
@@ -180,7 +182,7 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
                       <div className="truncate text-xs font-bold">{name}</div>
                       <div className="truncate text-[11px] text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
                     </div>
-                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", chip.cls)}>{chip.label}</span>
+                    <span className={cn("shrink-0 text-[11px]", chip.cls)}>{chip.label}</span>
                   </ClientNameLink>
                 </li>
               );
@@ -201,7 +203,7 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
                           <div className="truncate text-xs font-bold">{name}</div>
                           <div className="truncate text-[11px] text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
                         </div>
-                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CHIP.done.cls)}>Done</span>
+                        <span className={cn("shrink-0 text-[11px]", STATUS_CHIP.done.cls)}>Done</span>
                       </ClientNameLink>
                     </li>
                   );
@@ -341,15 +343,10 @@ function AdminDashboard() {
 
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
-  const todayLabel = format(new Date(), "EEEE d MMM");
-  const openCount = snapshot.reduce((n, t) => n + t.value, 0);
-
   return (
     <>
-      <PageHeader
-        title="Today"
-        subtitle={directoryLoading || openCount === 0 ? todayLabel : `${todayLabel} · tap a number to work through it`}
-      />
+      {/* The date is on the calendar card right under it, so the header is just the title. */}
+      <PageHeader title="Today" />
 
       <div
         onClickCapture={onDashboardClickCapture}

@@ -673,7 +673,7 @@ function NotesPanel({
           className="-ml-1 flex min-w-0 items-center gap-1.5 rounded-md px-1 py-1.5 text-left"
         >
           <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", isCollapsed && "-rotate-90")} />
-          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quick Notes</h2>
+          <h2 className="text-sm font-semibold text-foreground">Quick notes</h2>
           <span className="text-xs font-semibold tabular-nums text-muted-foreground/70">
             {searching ? `${shown.length}/${active.length}` : active.length}
           </span>
@@ -755,10 +755,10 @@ function NotesPanel({
               <button
                 type="button"
                 onClick={addNote}
-                className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-xs text-muted-foreground border border-dashed border-border hover:text-foreground"
+                className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-lg px-1 text-left text-sm text-muted-foreground hover:text-foreground"
               >
                 <SquarePen className="h-4 w-4 shrink-0" />
-                No notes yet. Tap to capture something. Notes save automatically.
+                Add a note
               </button>
             )
           ) : (

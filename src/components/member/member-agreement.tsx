@@ -6,7 +6,6 @@ import { CheckCircle2, ExternalLink, FileSignature, Loader2 } from "lucide-react
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +16,7 @@ import { getMySetupStatus } from "@/lib/member-setup.functions";
 
 const QUERY_ROOT = "membership-agreement";
 
-function useMembershipAgreement() {
+export function useMembershipAgreement() {
   const { user } = useAuth();
   const fetch = useServerFn(getMyMembershipAgreement);
   return useQuery({
@@ -230,30 +229,29 @@ export function MemberAgreementGate() {
   );
 }
 
-/** Account → Agreement for a JF member: signed (with the date) or a button to review and sign. */
+/** Where a member's agreement stands, for the Account row: "Signed" / "Accepted" / "Action required"; null when it doesn't apply. */
+export function membershipAgreementStatus(data: ReturnType<typeof useMembershipAgreement>["data"]): { label: string; needsYou: boolean } | null {
+  if (!data?.applicable) return null;
+  if (data.signedAt) return { label: "Signed", needsYou: false };
+  if (!data.needsSigning && data.acceptedAt) return { label: "Accepted", needsYou: false };
+  if (data.needsSigning) return { label: "Action required", needsYou: true };
+  // applicable but nothing to do (an older version): the row stays, with no status
+  return { label: "", needsYou: false };
+}
+
+/**
+ * Account → Agreement for a JF member: signed (with the date) or a button to
+ * review and sign. A plain block inside its Account section, which carries the
+ * agreement's name and its status (`membershipAgreementStatus`).
+ */
 export function MemberAgreementCard() {
   const { data } = useMembershipAgreement();
   const [open, setOpen] = useState(false);
   if (!data?.applicable) return null;
   const v = data.version;
-  const done = !!data.signedAt || (!data.needsSigning && !!data.acceptedAt);
   return (
-    <Card className="space-y-3 p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <FileSignature className="h-5 w-5 text-primary" />
-          <h3 className="text-base font-bold">{v.title}</h3>
-        </div>
-        {done ? (
-          <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-emerald-500/50 px-2 py-0.5 text-xs font-semibold text-emerald-600">
-            <CheckCircle2 className="h-3.5 w-3.5" /> {data.signedAt ? "Signed" : "Accepted"}
-          </span>
-        ) : data.needsSigning ? (
-          <span className="shrink-0 whitespace-nowrap rounded-full border border-amber-500/60 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
-            Action required
-          </span>
-        ) : null}
-      </div>
+    <div className="space-y-3">
+      <div className="text-sm font-medium">{v.title}</div>
       <p className="text-sm text-muted-foreground">
         {data.signedAt
           ? `You signed version ${v.version_number} on ${fmtDate(data.signedAt)}.`
@@ -270,6 +268,6 @@ export function MemberAgreementCard() {
         </Button>
       </div>
       {data.needsSigning && <MemberAgreementSheet open={open} onOpenChange={setOpen} />}
-    </Card>
+    </div>
   );
 }

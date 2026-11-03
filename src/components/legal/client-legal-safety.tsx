@@ -20,9 +20,10 @@ const OPTIONAL_CONSENTS = [
 
 /**
  * Client-facing Legal & Safety centre. Mounts inside the existing
- * /portal/account screen — does NOT add a sidebar item.
+ * /portal/account screen — does NOT add a sidebar item. `bare`: the Account
+ * section already names it, so no card or title of its own.
  */
-export function ClientLegalSafety() {
+export function ClientLegalSafety({ bare = false }: { bare?: boolean } = {}) {
   const statusFn = useServerFn(listMyLegalStatus);
   const historyFn = useServerFn(listMyAcceptanceHistory);
   const consentsFn = useServerFn(listMyConsents);
@@ -47,12 +48,16 @@ export function ClientLegalSafety() {
     }
   };
 
+  const Shell = bare ? "div" : Card;
   return (
-    <Card id="legal" className="border-border bg-card p-6 space-y-5">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-5 w-5 text-primary" />
-        <h3 className="text-base font-bold">Legal & Safety</h3>
-      </div>
+    // bare: the Account section around it carries the "legal" anchor
+    <Shell id={bare ? undefined : "legal"} className={bare ? "space-y-5" : "border-border bg-card p-6 space-y-5"}>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-primary" />
+          <h3 className="text-base font-bold">Legal & Safety</h3>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">
         Your active agreements, disclaimers, and consents. Required documents must be accepted to use coaching workflows. Optional consents can be withdrawn at any time.
       </p>
@@ -112,7 +117,7 @@ export function ClientLegalSafety() {
           </ul>
         </div>
       )}
-    </Card>
+    </Shell>
   );
 }
 

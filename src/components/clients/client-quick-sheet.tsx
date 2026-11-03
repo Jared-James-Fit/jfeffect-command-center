@@ -25,10 +25,11 @@ type Props = {
   onClose: () => void;
 };
 
+// The title says what it is; the line under it is just whose it is.
 const TITLES: Record<QuickPanelKind, { title: string; description: string }> = {
-  "program-view": { title: "Assigned Program", description: "Open phases, swap blocks, or view what's live." },
-  nutrition: { title: "Nutrition Targets", description: "Add, edit, or review nutrition targets." },
-  cardio: { title: "Cardio Targets", description: "Add, edit, or review cardio targets." },
+  "program-view": { title: "Training schedule", description: "What's live and what's next." },
+  nutrition: { title: "Nutrition", description: "Their nutrition targets." },
+  cardio: { title: "Cardio", description: "Their cardio plan." },
 };
 
 export function ClientQuickSheet({ kind, clientId, clientName, onClose }: Props) {
@@ -42,7 +43,7 @@ export function ClientQuickSheet({ kind, clientId, clientName, onClose }: Props)
           <SheetHeader>
             <SheetTitle>{meta.title}</SheetTitle>
             <SheetDescription>
-              {clientName ? `${meta.description} — ${clientName}` : meta.description}
+              {clientName ?? meta.description}
             </SheetDescription>
           </SheetHeader>
         )}

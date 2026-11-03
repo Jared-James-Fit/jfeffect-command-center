@@ -55,8 +55,20 @@ const CATEGORY_LABELS: Array<{ key: BoolPref; label: string; help: string }> = [
   { key: "coaching_apps", label: "Coaching Applications", help: "Admin only — new applications" },
 ];
 
-/** Settings: in-app sounds toggle + push notification controls. */
-export function PushNotificationCard({ showCoachingApps = false }: { showCoachingApps?: boolean }) {
+/**
+ * Settings: in-app sounds toggle + push notification controls. `bare` (the
+ * client's Account section) drops the cards for plain blocks split by a
+ * hairline; without it (the staff Account page) it's two cards as before.
+ */
+export function PushNotificationCard({ showCoachingApps = false, bare = false }: { showCoachingApps?: boolean; bare?: boolean }) {
+  if (bare) {
+    return (
+      <div className="divide-y divide-border [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+        <AppSoundsCard bare />
+        <PushNotificationControls showCoachingApps={showCoachingApps} bare />
+      </div>
+    );
+  }
   return (
     <>
       <AppSoundsCard />
@@ -65,14 +77,20 @@ export function PushNotificationCard({ showCoachingApps = false }: { showCoachin
   );
 }
 
-function AppSoundsCard() {
+/** A card, or in `bare` mode the same content as a plain block. */
+function Panel({ bare, className, children }: { bare?: boolean; className?: string; children: React.ReactNode }) {
+  if (bare) return <div className={className}>{children}</div>;
+  return <Card className={"border-border bg-card p-5" + (className ? ` ${className}` : "")}>{children}</Card>;
+}
+
+function AppSoundsCard({ bare = false }: { bare?: boolean }) {
   const [on, setOn] = useState(true);
   useEffect(() => {
     setOn(appSoundsEnabled());
     return subscribeAppSounds(setOn);
   }, []);
   return (
-    <Card className="border-border bg-card p-5">
+    <Panel bare={bare}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <Header icon={on ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />} title="In-App Sounds" />
@@ -82,11 +100,11 @@ function AppSoundsCard() {
         </div>
         <Switch checked={on} onCheckedChange={(v) => setAppSoundsEnabled(v)} aria-label="In-app sounds" />
       </div>
-    </Card>
+    </Panel>
   );
 }
 
-function PushNotificationControls({ showCoachingApps = false }: { showCoachingApps?: boolean }) {
+function PushNotificationControls({ showCoachingApps = false, bare = false }: { showCoachingApps?: boolean; bare?: boolean }) {
   const qc = useQueryClient();
   const getPrefs = useServerFn(getNotificationPreferences);
   const updatePrefs = useServerFn(updateNotificationPreferences);
@@ -179,7 +197,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
 
   if (!support.supported && support.reason === "ios_requires_install") {
     return (
-      <Card className="border-border bg-card p-5 space-y-3">
+      <Panel bare={bare} className="space-y-3">
         <Header icon={<Smartphone className="h-4 w-4" />} title="Install JF Effect First" />
         <p className="text-sm text-muted-foreground">
           To receive notifications on iPhone or iPad, open this page in Safari, tap{" "}
@@ -187,37 +205,37 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
           <span className="inline-flex items-center gap-1 align-middle"><Plus className="h-3.5 w-3.5" /> Add to Home Screen</span>.
           Open the installed app and come back here to enable notifications.
         </p>
-      </Card>
+      </Panel>
     );
   }
 
   if (!support.supported) {
     return (
-      <Card className="border-border bg-card p-5 space-y-3">
+      <Panel bare={bare} className="space-y-3">
         <Header icon={<BellOff className="h-4 w-4" />} title="Notifications Not Supported" />
         <p className="text-sm text-muted-foreground">
           This browser doesn't support web push notifications. Try Chrome, Edge, Safari (installed PWA), or Firefox on a recent device.
         </p>
-      </Card>
+      </Panel>
     );
   }
 
   if (permission === "denied") {
     return (
-      <Card className="border-border bg-card p-5 space-y-3">
+      <Panel bare={bare} className="space-y-3">
         <Header icon={<AlertCircle className="h-4 w-4" />} title="Notifications Blocked" />
         <p className="text-sm text-muted-foreground">
           You blocked notifications for this site. To turn them back on, open your browser's site settings
           for this page (the lock icon in the URL bar) and allow Notifications, then return here.
         </p>
-      </Card>
+      </Panel>
     );
   }
 
   const enabledHere = permission === "granted" && hasLocalSub;
 
   return (
-    <Card className="border-border bg-card p-5 space-y-4">
+    <Panel bare={bare} className="space-y-4">
       {!enabledHere ? (
         <>
           <Header icon={<Bell className="h-4 w-4" />} title="Turn On Notifications" />
@@ -291,7 +309,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
         <div className="rounded-md border border-border p-3 space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-sm font-medium"><Moon className="h-3.5 w-3.5 text-primary" /> Quiet Hours</div>
+              <div className="flex items-center gap-1.5 text-sm font-medium"><Moon className="h-3.5 w-3.5 text-muted-foreground" /> Quiet Hours</div>
               <div className="text-xs text-muted-foreground">
                 Non-urgent alerts wait until morning. Messages still arrive — silently.
               </div>
@@ -311,7 +329,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
           )}
         </div>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -338,7 +356,7 @@ function HourSelect({ value, onChange }: { value: number; onChange: (h: number) 
 function Header({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-primary">{icon}</span>
+      <span className="text-muted-foreground">{icon}</span>
       <h3 className="text-sm font-semibold">{title}</h3>
     </div>
   );

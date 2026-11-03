@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 export type TileProps = {
   icon: ComponentType<{ className?: string }>;
   title: string;
-  hint: string;
   onClick?: () => void;
   href?: string;
   disabled?: boolean;
@@ -18,24 +17,24 @@ export type TileProps = {
 };
 
 /**
- * One square-ish tool tile: icon, name, one-line "what it does". Every tool
- * looks the same (neutral icon, no tint): the page's colour is for status.
+ * One compact tool tile: a plain icon over the tool's name, nothing else (the
+ * name says what it does). Two to a row on a phone; every tool looks the same
+ * (neutral icon, no tint): the page's colour is for status.
  */
-export function ToolTile({ icon: Icon, title, hint, onClick, href, disabled, busy }: TileProps) {
+export function ToolTile({ icon: Icon, title, onClick, href, disabled, busy }: TileProps) {
   const className = cn(
-    "flex min-h-[92px] w-full flex-col items-start gap-2 rounded-xl border border-border bg-card p-3 text-left transition hover:bg-muted/50 active:scale-[0.98]",
+    "flex min-h-16 w-full flex-col items-start justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition hover:bg-muted/50 active:scale-[0.98]",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     disabled && "pointer-events-none opacity-50",
   );
   const body = (
     <>
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-foreground">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[13px] font-semibold leading-tight">{title}</span>
-        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{hint}</span>
-      </span>
+      {busy ? (
+        <Loader2 className="h-[18px] w-[18px] animate-spin text-muted-foreground" aria-hidden />
+      ) : (
+        <Icon className="h-[18px] w-[18px] text-muted-foreground" aria-hidden />
+      )}
+      <span className="block min-w-0 text-[13px] font-semibold leading-tight">{title}</span>
     </>
   );
   if (href) {

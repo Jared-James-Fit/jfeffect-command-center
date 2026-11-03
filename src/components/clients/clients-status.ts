@@ -29,7 +29,8 @@ import type { DirectoryFilterKey } from "@/lib/clients-directory-filters";
 export type StatusKey = "all" | DirectoryFilterKey;
 
 /**
- * One plain-English definition per filter. `hint` is the one-line "what this finds" shown in the
+ * One plain-English definition per filter. Tone is the filter's dot: red only for a failing
+ * payment, amber for what needs the coach, green for new clients (as the rows' chips). `hint` is the one-line "what this finds" shown in the
  * filter sheet and under the active filters, so it says what the filter matches, not what to do.
  */
 export const STATUS_META: Record<
@@ -38,8 +39,8 @@ export const STATUS_META: Record<
 > = {
   all:              { label: "All Clients",         icon: Users,           tone: "neutral" },
   // Missing: things the client doesn't have yet
-  no_contract:      { label: "Contract Not Signed", icon: FileSignature,   tone: "danger", hint: "Hasn't signed the Coaching Agreement yet, or needs to sign it again." },
-  no_payment:       { label: "No Payment",          icon: Wallet,          tone: "danger", hint: "No active subscription or paid purchase on file." },
+  no_contract:      { label: "Contract Not Signed", icon: FileSignature,   tone: "warn",   hint: "Hasn't signed the Coaching Agreement yet, or needs to sign it again." },
+  no_payment:       { label: "No Payment",          icon: Wallet,          tone: "warn",   hint: "No active subscription or paid purchase on file." },
   no_program:       { label: "No Program",          icon: Dumbbell,        tone: "warn",   hint: "Nothing running and nothing queued. They need a training block." },
   no_nutrition:     { label: "No Nutrition",        icon: Apple,           tone: "warn",   hint: "No active nutrition plan." },
   no_cardio:        { label: "No Cardio",           icon: HeartPulse,      tone: "warn",   hint: "No active cardio plan." },
@@ -51,7 +52,7 @@ export const STATUS_META: Record<
   inactive:         { label: "Inactive",            icon: Clock,           tone: "warn",   hint: "On a program but hasn't opened the app in 7+ days." },
   program_ending:   { label: "Program Ending",      icon: CalendarClock,   tone: "warn",   hint: "Training block ends within 14 days and no next block is queued." },
   // Account
-  needs_setup:      { label: "Needs Setup",         icon: UserRoundCog,    tone: "info",   hint: "Hasn't signed in to their account yet (invite or password reset still pending)." },
+  needs_setup:      { label: "Needs Setup",         icon: UserRoundCog,    tone: "warn",   hint: "Hasn't signed in to their account yet (invite or password reset still pending)." },
   new_clients:      { label: "New Clients",         icon: UserPlus,        tone: "ok",     hint: "Joined in the last 7 days." },
 };
 

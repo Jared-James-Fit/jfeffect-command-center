@@ -378,8 +378,8 @@ export function GroceryListSheet({
 }
 
 /**
- * The Grocery List's way in: a plain tool row (icon, name, one-line hint)
- * right under the meal plan, the same look as every other nutrition tool.
+ * The Grocery List's way in: a plain tool row (icon, name) right under the
+ * meal plan, the same look as How to weigh your food beside it.
  */
 export function GroceryListEntryCard({
   clientId,
@@ -396,7 +396,6 @@ export function GroceryListEntryCard({
       <ToolRow
         icon={ShoppingCart}
         title="Grocery List"
-        hint="1 or 2 weeks of food, by store aisle"
         onClick={() => setOpen(true)}
         disabled={!clientId}
         className={className}

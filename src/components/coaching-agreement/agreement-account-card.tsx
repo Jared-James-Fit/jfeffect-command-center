@@ -15,9 +15,11 @@ import { agreementPrompt, formatSignedDate } from "./agreement-copy";
 
 /**
  * The client's home for their agreement: status, a button to sign if needed, and
- * their signed copy(ies) to open any time.
+ * their signed copy(ies) to open any time. `bare`: inside a settings section
+ * that already names it and shows its status (the client's Account), so no
+ * card, title or status badge of its own.
  */
-export function AgreementAccountCard({ id }: { id?: string }) {
+export function AgreementAccountCard({ id, bare = false }: { id?: string; bare?: boolean }) {
   const { user } = useAuth();
   const { client: povClient } = useClientImpersonation();
   const { state, needsSignature, canSign, openSignFlow } = useCoachingAgreement();
@@ -36,13 +38,14 @@ export function AgreementAccountCard({ id }: { id?: string }) {
   const prompt = agreementPrompt(state);
   const latest = signatures[0];
 
+  const Shell = bare ? "div" : Card;
   return (
-    <Card
+    <Shell
       id={id}
-      className="space-y-4 border-border bg-card p-5 sm:p-6"
+      className={bare ? "space-y-4" : "space-y-4 border-border bg-card p-5 sm:p-6"}
       data-testid="agreement-account-card"
     >
-      <div className="flex items-start justify-between gap-3">
+      {!bare && <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <FileSignature className="h-5 w-5 text-primary" />
           <h3 className="text-base font-bold">Coaching Agreement</h3>
@@ -61,7 +64,7 @@ export function AgreementAccountCard({ id }: { id?: string }) {
           </Badge>
         )}
         {current.state === "exempt" && <Badge variant="outline">On file</Badge>}
-      </div>
+      </div>}
 
       {current.state === "signed" && (
         <p className="text-sm text-muted-foreground">
@@ -149,6 +152,6 @@ export function AgreementAccountCard({ id }: { id?: string }) {
         open={!!viewing}
         onOpenChange={(o) => !o && setViewing(null)}
       />
-    </Card>
+    </Shell>
   );
 }
