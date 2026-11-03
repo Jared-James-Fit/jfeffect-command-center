@@ -5,37 +5,40 @@ import { upsertApplicantClient, normalizeEmail, normalizePhone } from "./crm.fun
 import { resolveAttribution, DEFAULT_QUICK_APPLY_SOURCE } from "./application-attribution";
 import { toLeadScore5 } from "./lead-score-display";
 import { assertAdminView } from "@/lib/permissions.server";
+import { APPLY_GOALS, APPLY_TIMELINES, OUTCOME_MAX, clip, emailOk, hasContact, instagramHandle, phoneOk } from "./apply-form";
 
 /* ─────────── Quick-Apply Quiz schema (v2) ─────────── */
 
 const HELP_CATEGORIES = ["powerlifting", "fat_loss", "build_muscle", "general_fitness", "other"] as const;
 const START_WINDOWS = ["asap", "this_month", "one_three_months", "exploring"] as const;
 
+/** "@handle", "handle" or a pasted profile link → "@handle" (the same rule the page checks with). */
 export function normalizeInstagramHandle(value: string): string {
-  const handle = value.trim().replace(/^@+/, "");
-  if (!/^[A-Za-z0-9._]{1,30}$/.test(handle)) {
-    throw new Error("Enter a valid Instagram handle, with or without @.");
-  }
-  return `@${handle}`;
+  const handle = instagramHandle(value);
+  if (!handle) throw new Error("Enter a valid Instagram handle, with or without @.");
+  return handle;
 }
 
 export const publicCoachingApplicationSchema = z.object({
   // The public application deliberately collects only lead-stage essentials.
   full_name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(200),
-  phone: z.string().trim().min(5).max(40),
+  phone: z.string().trim().max(40).refine(phoneOk, "Add a phone number with the area code."),
   instagram: z.string().trim().min(1, "Instagram is required").max(80).transform(normalizeInstagramHandle),
   main_goal: z.enum(HELP_CATEGORIES),
-  target_outcome: z.string().trim().min(1).max(250),
+  target_outcome: z.string().trim().min(1).max(OUTCOME_MAX),
   timeline: z.enum(START_WINDOWS),
 
   // Bot trap and automatic attribution only; neither is shown as a prospect question.
+  // Attribution is trimmed, never refused: Instagram's tracking links run long.
   honeypot: z.string().max(0).optional().default(""),
-  source_page: z.string().trim().max(80).optional().default(""),
-  page_url: z.string().trim().max(500).optional().default(""),
-  referrer: z.string().trim().max(500).optional().default(""),
-  form_name: z.string().trim().max(120).optional().default(""),
+  source_page: z.string().optional().default("").transform((v) => clip(v, 80)),
+  page_url: z.string().optional().default("").transform((v) => clip(v, 500)),
+  referrer: z.string().optional().default("").transform((v) => clip(v, 500)),
+  form_name: z.string().optional().default("").transform((v) => clip(v, 120)),
   is_test: z.boolean().optional().default(false),
+  // The unfinished copy saved while they answered, marked done once this is in.
+  draft_id: z.string().uuid().optional(),
 }).refine((d) => !d.honeypot, { message: "Spam detected", path: ["honeypot"] });
 
 type Submission = z.infer<typeof publicCoachingApplicationSchema>;
@@ -188,6 +191,15 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
+
+    // Their unfinished copy is now a real application.
+    if (data.draft_id) {
+      await supabaseAdmin
+        .from("coaching_application_drafts" as any)
+        .update({ submitted_at: new Date().toISOString(), submitted_application_id: inserted.id })
+        .eq("id", data.draft_id)
+        .is("submitted_at", null);
+    }
 
     // CRM activity log (dedup-keyed by application id). The existing database
     // uniqueness guard is a partial index, which PostgreSQL cannot target with
@@ -431,4 +443,120 @@ export const getWebsiteFormStats = createServerFn({ method: "GET" })
       if (p && !s.paths.includes(p)) s.paths.push(p);
     }
     return { stats };
+  });
+
+/* ────────────── unfinished applications ────────────── */
+
+const DraftInput = z.object({
+  draft_id: z.string().uuid(),
+  full_name: z.string().optional().default("").transform((v) => clip(v, 120)),
+  main_goal: z.string().optional().default("").transform((v) => clip(v, 40)),
+  target_outcome: z.string().optional().default("").transform((v) => clip(v, OUTCOME_MAX)),
+  timeline: z.string().optional().default("").transform((v) => clip(v, 40)),
+  email: z.string().optional().default("").transform((v) => clip(v, 200)),
+  phone: z.string().optional().default("").transform((v) => clip(v, 40)),
+  instagram: z.string().optional().default("").transform((v) => clip(v, 120)),
+  /** The question they're on (its key), and how many are answered. */
+  step: z.string().optional().default("").transform((v) => clip(v, 40)),
+  answered: z.number().int().min(0).max(20).optional().default(0),
+  source_page: z.string().optional().default("").transform((v) => clip(v, 80)),
+  page_url: z.string().optional().default("").transform((v) => clip(v, 500)),
+  referrer: z.string().optional().default("").transform((v) => clip(v, 500)),
+  honeypot: z.string().optional().default(""),
+});
+
+/**
+ * Saves what someone has answered so far, once there's a way to reach them
+ * (an email or phone that reads right), so an application that never reaches
+ * Submit (a closed tab, a dropped connection, a phone call mid-form) still
+ * shows the coach who it was. Public; only ever writes its own draft row, and
+ * never touches one that's already been submitted.
+ */
+export const saveApplicationDraft = createServerFn({ method: "POST" })
+  .inputValidator((i: unknown) => DraftInput.parse(i))
+  .handler(async ({ data }) => {
+    if (data.honeypot || !hasContact(data)) return { saved: false };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: existing } = await db
+      .from("coaching_application_drafts")
+      .select("id, submitted_at")
+      .eq("id", data.draft_id)
+      .maybeSingle();
+    if (existing?.submitted_at) return { saved: false };
+    const row = {
+      id: data.draft_id,
+      full_name: data.full_name || null,
+      main_goal: APPLY_GOALS.some((g) => g.v === data.main_goal) ? data.main_goal : null,
+      target_outcome: data.target_outcome || null,
+      timeline: APPLY_TIMELINES.some((t) => t.v === data.timeline) ? data.timeline : null,
+      email: emailOk(data.email) ? data.email.toLowerCase() : null,
+      phone: phoneOk(data.phone) ? data.phone : null,
+      instagram: instagramHandle(data.instagram) ?? null,
+      step: data.step || null,
+      answered: data.answered,
+      source_page: data.source_page || null,
+      page_url: data.page_url || null,
+      referrer: data.referrer || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = existing
+      ? await db.from("coaching_application_drafts").update(row).eq("id", data.draft_id).is("submitted_at", null)
+      : await db.from("coaching_application_drafts").insert(row);
+    if (error) throw new Error(error.message);
+    return { saved: true };
+  });
+
+/**
+ * People who started an application, left a way to reach them and never sent
+ * it, newest first; not ones who finished on another try (same email or phone),
+ * nor ones the coach set aside.
+ */
+export const listApplicationDrafts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdminView(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data, error } = await db
+      .from("coaching_application_drafts")
+      .select("id, full_name, main_goal, target_outcome, timeline, email, phone, instagram, step, answered, source_page, referrer, created_at, updated_at")
+      .is("submitted_at", null)
+      .is("dismissed_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(50);
+    if (error) throw new Error(error.message);
+    const drafts = (data ?? []) as any[];
+    if (!drafts.length) return { drafts: [] };
+    // An application up to an hour before the draft counts too: a last save can land just after Submit.
+    const LEEWAY_MS = 60 * 60_000;
+    const oldest = Math.min(...drafts.map((d) => new Date(d.created_at).getTime()));
+    const { data: apps } = await supabaseAdmin
+      .from("coaching_applications")
+      .select("email, phone, created_at")
+      .gte("created_at", new Date(oldest - LEEWAY_MS).toISOString())
+      .limit(1000);
+    const finished = (d: any) =>
+      ((apps ?? []) as any[]).some(
+        (a) =>
+          new Date(a.created_at).getTime() >= new Date(d.created_at).getTime() - LEEWAY_MS &&
+          ((d.email && normalizeEmail(a.email) === normalizeEmail(d.email)) ||
+            (d.phone && normalizePhone(a.phone) && normalizePhone(a.phone) === normalizePhone(d.phone))),
+      );
+    return { drafts: drafts.filter((d) => !finished(d)) };
+  });
+
+/** Sets an unfinished application aside (followed up, or not a lead). */
+export const dismissApplicationDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as any)
+      .from("coaching_application_drafts")
+      .update({ dismissed_at: new Date().toISOString() })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
