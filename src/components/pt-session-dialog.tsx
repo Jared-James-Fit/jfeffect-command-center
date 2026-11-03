@@ -40,6 +40,7 @@ import {
 } from "@/components/schedule/session-sale-picker";
 import { bookButtonLabel, defaultSaleProduct } from "@/lib/session-sale";
 import { SessionPaymentLine } from "@/components/schedule/session-payment-line";
+import { RepeatDatePicker } from "@/components/schedule/repeat-date-picker";
 
 type Props = {
   open: boolean;
@@ -202,11 +203,16 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     },
   });
 
+  // Every date the repeat lands on, and the ones being booked (the coach can untick any of them).
+  const repeatDates = useMemo(
+    () => (form?._isRecurring ? computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate) : []),
+    [form],
+  );
   const previewDates = useMemo(() => {
     if (!form || !form._isRecurring) return [form?.session_date].filter(Boolean) as string[];
     const skip = new Set<string>(form._skipDates ?? []);
-    return computeRecurringDates(form.session_date, form._weekdays, form._weeks, form._includeStartDate).filter((d) => !skip.has(d));
-  }, [form]);
+    return repeatDates.filter((d) => !skip.has(d));
+  }, [form, repeatDates]);
 
   // Double-booking check: every date this booking would create, or the edited
   // session when its date/time changed. App sessions + Google Calendar.
@@ -336,7 +342,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
     if (!form.title) return toast.error("Title is required");
-    if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
+    if (form._isRecurring && previewDates.length === 0) {
+      return toast.error(repeatDates.length ? "Tick at least one date" : "Pick at least one weekday");
+    }
     if (selling && !saleQuote) return toast.error("Pick a product or type a price, or switch off Charge for it");
     if (mustConfirmOverbook && form.uses_credit !== false && !confirmOverbook) {
       toast.error("No session package yet. Add one from the Sessions tab, or switch on Book anyway.");
@@ -620,19 +628,12 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                       <Switch checked={form._includeStartDate} onCheckedChange={(v) => set("_includeStartDate", v)} />
                     </div>
                   </div>
-                  <div className="rounded-md border border-dashed border-border p-2 text-xs">
-                    <div className="mb-1 font-semibold text-muted-foreground">
-                      Will book {previewDates.length} session{previewDates.length === 1 ? "" : "s"}:
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {previewDates.slice(0, 24).map((d) => (
-                        <span key={d} className="rounded bg-secondary px-1.5 py-0.5">
-                          {new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        </span>
-                      ))}
-                      {previewDates.length > 24 && <span className="text-muted-foreground">+{previewDates.length - 24} more</span>}
-                    </div>
-                  </div>
+                  <RepeatDatePicker
+                    dates={repeatDates}
+                    skipped={form._skipDates ?? []}
+                    clashing={conflictCheck.conflicts.map((c) => c.key)}
+                    onChange={(skip) => set("_skipDates", skip)}
+                  />
                 </>
               )}
             </div>
