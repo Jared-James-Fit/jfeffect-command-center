@@ -21,7 +21,11 @@ import { Card } from "@/components/ui/card";
 import { ClipboardList, Download, FileText, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
-import { getClientWorkouts } from "@/lib/pl-programs";
+import { clientWorkoutsQuery, PAGE_CACHE_MS, PAGE_FRESH_MS, primaryWorkouts } from "@/lib/client-workouts-query";
+import { coachMealPlanQuery, portalNutritionCtxQuery } from "@/lib/portal-page-queries";
+import { useArrivalClass } from "@/hooks/use-arrival";
+import { MealPlanCardSkeleton, TargetsCardSkeleton } from "@/components/nutrition/nutrition-skeleton";
+import { cn } from "@/lib/utils";
 import { resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
 import { usePortalUserId, useClientImpersonation } from "@/lib/client-impersonation";
 import { todayLocalISO } from "@/lib/today";
@@ -73,65 +77,42 @@ function PortalNutrition() {
   const getPlanFn = useServerFn(getCoachAssignedMealPlan);
   const todayISO = todayLocalISO();
 
-  const ctxQ = useQuery({
-    queryKey: ["portal-nutrition-ctx", portalUserId],
-    enabled: !!portalUserId,
-    queryFn: async () => {
-      try {
-        const { data } = await (supabase as any)
-          .from("clients")
-          .select("id, goals, preferred_high_days, committed_training_days")
-          .eq("user_id", portalUserId!)
-          .maybeSingle();
-        return {
-          goals: data?.goals ? [String(data.goals)] : ([] as string[]),
-          clientId: (data?.id as string | undefined) ?? null,
-          preferredHighDays: (data?.preferred_high_days as string[] | null) ?? null,
-          committedTrainingDays: (data?.committed_training_days as string[] | null) ?? null,
-        };
-      } catch (e) {
-        console.error("[portal-nutrition] ctx query failed", e);
-        return { goals: [] as string[], clientId: null as string | null, preferredHighDays: null, committedTrainingDays: null };
-      }
-    },
-    retry: false,
-  });
+  // All three start together: the client row, the coach's plan, and the program
+  // (shared with Workouts and the cardio card, so it's downloaded once and often
+  // already on the phone). Each is kept a day, so the next open paints at once.
+  const ctxQ = useQuery({ ...portalNutritionCtxQuery(portalUserId ?? ""), enabled: !!portalUserId });
 
   const clientId = ctxQ.data?.clientId ?? null;
 
-  // Exact-date overrides + scheduled workouts — the two inputs for auto-detection.
-  const scheduleQ = useQuery({
-    queryKey: ["portal-nutrition-schedule", clientId],
+  // Exact-date overrides + scheduled workouts: the two inputs for auto-detection.
+  const overridesQ = useQuery({
+    queryKey: ["portal-nutrition-overrides", clientId],
     enabled: !!clientId,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const [overridesRes, workouts] = await Promise.all([
-        (supabase.from("nutrition_day_overrides") as any)
-          .select("override_date,day_label")
-          .eq("client_id", clientId!),
-        getClientWorkouts(clientId!),
-      ]);
-      const workoutDates = resolveWorkoutDatesFromItems(
-        workouts as any[],
-        ctxQ.data?.committedTrainingDays ?? null,
-      ).map((w) => w.date);
-      return {
-        overrides: (overridesRes.data ?? []) as { override_date: string; day_label: string }[],
-        workoutDates,
-      };
-    },
+    staleTime: PAGE_FRESH_MS,
+    gcTime: PAGE_CACHE_MS,
+    queryFn: async () =>
+      (((await (supabase.from("nutrition_day_overrides") as any)
+        .select("override_date,day_label")
+        .eq("client_id", clientId!)).data ?? []) as { override_date: string; day_label: string }[]),
   });
+  const workoutsQ = useQuery({ ...clientWorkoutsQuery(clientId ?? ""), enabled: !!clientId });
+  const committedTrainingDays = ctxQ.data?.committedTrainingDays ?? null;
+  const schedule = useMemo(
+    () =>
+      overridesQ.data && workoutsQ.data
+        ? {
+            overrides: overridesQ.data,
+            workoutDates: resolveWorkoutDatesFromItems(primaryWorkouts(workoutsQ.data) as any[], committedTrainingDays).map((w) => w.date),
+          }
+        : null,
+    [overridesQ.data, workoutsQ.data, committedTrainingDays],
+  );
 
   const planQ = useQuery({
-    queryKey: ["portal-coach-meal-plan", portalUserId, impersonatedClient?.user_id ?? null],
+    ...coachMealPlanQuery(portalUserId ?? "", impersonatedClient?.user_id ?? null, getPlanFn as any),
     enabled: !!portalUserId,
-    queryFn: () =>
-      getPlanFn({
-        data: impersonatedClient?.user_id ? { viewAsUserId: impersonatedClient.user_id } : {},
-      }),
-    staleTime: 60_000,
-    retry: false,
   });
+  const planArrived = useArrivalClass(planQ.isLoading);
 
   const plan = (planQ.data ?? null) as any | null;
   const days: any[] = Array.isArray(plan?.days) ? plan.days : [];
@@ -140,12 +121,12 @@ function PortalNutrition() {
     () =>
       resolveClientNutritionDay({
         dateISO: todayISO,
-        overrides: scheduleQ.data?.overrides ?? null,
+        overrides: schedule?.overrides ?? null,
         preferredHighDays: ctxQ.data?.preferredHighDays ?? null,
-        workoutDates: scheduleQ.data?.workoutDates ?? null,
-        scheduleKnown: !!scheduleQ.data,
+        workoutDates: schedule?.workoutDates ?? null,
+        scheduleKnown: !!schedule,
       }),
-    [todayISO, scheduleQ.data, ctxQ.data?.preferredHighDays],
+    [todayISO, schedule, ctxQ.data?.preferredHighDays],
   );
 
   // Today's plan day is the one the coach set for today's kind of day and
@@ -162,7 +143,7 @@ function PortalNutrition() {
   const shownResolution: DayResolution =
     automaticDayType === resolution.dayType
       ? resolution
-      : { ...resolution, dayType: automaticDayType, source: automaticDayType === "training" ? "workout" : "default", suggested: !scheduleQ.data };
+      : { ...resolution, dayType: automaticDayType, source: automaticDayType === "training" ? "workout" : "default", suggested: !schedule };
   const day = selection.selectedPlanDayId
     ? days.find((candidate) => candidate.id === selection.selectedPlanDayId) ?? null
     : null;
@@ -228,9 +209,10 @@ function PortalNutrition() {
 
         {/* 2. Meal Plan first: it's what the client opens Nutrition for. Its PDF
             is the Tools tile (one PDF button on the page, reachable on any day). */}
+        {planQ.isLoading && <MealPlanCardSkeleton />}
         {plan && day && (
           <SectionErrorBoundary label="Meal plan">
-            <Card className="space-y-4 p-4 md:p-5">
+            <Card className={cn("space-y-4 p-4 md:p-5", planArrived)}>
               <div className="flex items-center gap-2">
                 <Utensils className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
@@ -274,7 +256,7 @@ function PortalNutrition() {
         {/* 4. Nutrition Targets for the same day as the meal plan. */}
         <SectionErrorBoundary label="Nutrition targets">
           {planQ.isLoading ? (
-            <Card className="p-5 text-sm text-muted-foreground">Loading your nutrition plan…</Card>
+            <TargetsCardSkeleton />
           ) : planQ.isError || !plan ? (
             <Card className="p-5">
               <div className="flex items-center gap-2">
@@ -288,7 +270,7 @@ function PortalNutrition() {
               </div>
             </Card>
           ) : (
-            <Card className="space-y-4 p-4 md:p-5">
+            <Card className={cn("space-y-4 p-4 md:p-5", planArrived)}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Target className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />

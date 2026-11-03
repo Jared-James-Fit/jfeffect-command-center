@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ToolRow } from "./tool-tile";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { addDays, format } from "date-fns";
@@ -20,7 +20,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
-import { getClientWorkouts } from "@/lib/pl-programs";
+import { clientWorkoutsQuery, primaryWorkouts } from "@/lib/client-workouts-query";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { mondayWeekDates, resolveClientWeekDays, resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
 import { parseLocalDate, toLocalISO, todayLocalISO } from "@/lib/today";
@@ -59,6 +59,7 @@ export function GroceryListSheet({
   coachPreview?: boolean;
 }) {
   const getPlanFn = useServerFn(getCoachAssignedMealPlan);
+  const qc = useQueryClient();
   const [weekOffset, setWeekOffset] = useState<0 | 1>(0);
   const [span, setSpan] = useState<1 | 2>(1);
   const [hideChecked, setHideChecked] = useState(false);
@@ -85,7 +86,8 @@ export function GroceryListSheet({
         (supabase.from("nutrition_day_overrides") as any)
           .select("override_date,day_label")
           .eq("client_id", clientId!),
-        getClientWorkouts(clientId!),
+        // the program the Nutrition page already has (one shared copy, never a second download)
+        qc.fetchQuery(clientWorkoutsQuery(clientId!)).then((items) => primaryWorkouts(items)),
       ]);
       const client = clientRes.data as any;
       const workoutDates = resolveWorkoutDatesFromItems(

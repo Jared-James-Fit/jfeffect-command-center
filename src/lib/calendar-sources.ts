@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getClientWorkouts } from "@/lib/pl-programs";
+import { clientWorkoutsQuery, primaryWorkouts } from "@/lib/client-workouts-query";
 import { resolveWeekDayDates } from "@/lib/workout-today";
 import { listGoogleEventsRange, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 import { getMyGoogleEvents } from "@/lib/schedule.functions";
@@ -285,10 +285,13 @@ export function useClientCalendarSources(
   // Sessions and appointments: shared with the Workouts calendar (same queries, same cache).
   const sessions = useClientSessionItems(clientId);
 
+  // The program, shared with Workouts / Nutrition (one download, kept on the phone a
+  // day); the calendar always asks again on open so a coach's change shows, and
+  // leaves out at-home backup sessions like it always did.
   const workoutsQ = useQuery({
-    queryKey: ["cal-client-workouts", clientId],
+    ...clientWorkoutsQuery(clientId ?? ""),
     enabled,
-    queryFn: () => getClientWorkouts(clientId!),
+    select: primaryWorkouts,
     staleTime: 0,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
@@ -363,7 +366,7 @@ export function useClientCalendarSources(
   useEffect(() => {
     if (!clientId) return;
     const invalidate = () => {
-      void qc.invalidateQueries({ queryKey: ["cal-client-workouts", clientId] });
+      void qc.invalidateQueries({ queryKey: ["my-workouts", clientId] });
     };
     const channel = listenChannel(`cal-workouts:${clientId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "pl_blocks", filter: `client_id=eq.${clientId}` }, invalidate)

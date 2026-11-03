@@ -27,7 +27,10 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getClientWorkouts, getBlockTree } from "@/lib/pl-programs";
+import { getBlockTree } from "@/lib/pl-programs";
+import { clientWorkoutsQuery, PAGE_CACHE_MS } from "@/lib/client-workouts-query";
+import { useArrivalClass } from "@/hooks/use-arrival";
+import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/components/workouts/workouts-skeleton";
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
 import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
@@ -112,14 +115,13 @@ export function WorkoutsExperience({
     queryKey: ["workouts-experience-client", clientId],
     queryFn: async () =>
       (await supabase.from("clients").select("*").eq("id", clientId).maybeSingle()).data,
+    gcTime: PAGE_CACHE_MS,
   });
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ["my-workouts", clientId],
-    queryFn: () => getClientWorkouts(
-      clientId,
-      { includeAtHomeBackupSessions: isAtHomeBackupClient(clientId) },
-    ) as Promise<WorkoutItem[]>,
-  });
+  // The program, shared with Home's calendar, Nutrition and the cardio card, and kept
+  // on the phone a day: opening Workouts paints from it at once and refreshes behind.
+  const { data: rawItems, isLoading } = useQuery(clientWorkoutsQuery(clientId));
+  const items = (rawItems ?? []) as WorkoutItem[];
+  const arrived = useArrivalClass(isLoading);
 
   // --- Build a date → item map from scheduled_date (canonical helper). -----
   const dayItems = useMemo(
@@ -550,13 +552,11 @@ export function WorkoutsExperience({
               )}
             </div>
             {isLoading ? (
-              <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading your schedule…
-              </Card>
+              <ScheduleSkeleton />
             ) : dayItems.length === 0 ? (
               <EmptyState mode={mode} />
             ) : (
-              <>
+              <div className={cn("space-y-4", arrived)}>
                 <CalendarDndProvider dnd={dnd}>
                   {calView === "week" ? (
                     <WeekStrip
@@ -588,15 +588,16 @@ export function WorkoutsExperience({
                   mode={mode}
                   backupEnabled={isAtHomeBackupClient(clientId)}
                 />
-              </>
+              </div>
             )}
           </TabsContent>
 
           <TabsContent value="block" className="space-y-3">
             {isLoading ? (
-              <Card className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading program…
-              </Card>
+              <div className="space-y-3" role="status" aria-label="Loading your program">
+                <WorkoutCardSkeleton />
+                <WorkoutCardSkeleton />
+              </div>
             ) : (
               <BlockViewTab
                 items={primaryDayItems}
@@ -611,7 +612,10 @@ export function WorkoutsExperience({
         </Tabs>
 
         {/* The calendar says what to do today; the roadmap says where it's going and why. */}
-        {!isLoading && (
+        {isLoading ? (
+          <ProgramCardSkeleton />
+        ) : (
+          <div className={arrived}>
           <ProgramRoadmapCard
             roadmap={roadmap}
             selectedBlockId={tab === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
@@ -623,6 +627,7 @@ export function WorkoutsExperience({
             coach={mode === "coach"}
             onSelectProgram={setRoadmapProgramId}
           />
+          </div>
         )}
 
         {mode === "self" && (
