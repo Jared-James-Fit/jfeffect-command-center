@@ -53,6 +53,8 @@ export const LEGACY_WORKSPACE_TABS: Record<string, WorkspaceTab> = {
   "lift-videos": "metrics",
   agreements: "documents",
   forms: "documents",
+  // Check-in pushes and the bell link here; the conversations live on Forms.
+  "check-ins": "documents",
   billing: "purchases",
   profile: "info",
   cardio: "nutrition",

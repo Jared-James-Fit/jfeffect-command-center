@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
-import { ArrowRight, CalendarDays, Dumbbell, TrendingUp, Trophy } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, ChevronDown, ChevronRight, Dumbbell, TrendingUp, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { getClientResults } from "@/lib/pl-programs";
 import { InfoTip } from "@/components/analytics/info-tip";
@@ -16,9 +17,10 @@ import {
 } from "@/lib/month-highlights";
 
 /**
- * "Your Month" — the Workouts-tab analytics card. Four plain-English numbers
- * anyone new to the gym gets at a glance (weight lifted, workouts, PRs, streak)
- * plus a small athlete corner. The deep-dive dashboard stays one tap away.
+ * "Your Month" — the Workouts-tab analytics card: one row of the three numbers
+ * that matter (workouts, PRs, week streak). Weight lifted, the strongest lift
+ * and the most trained muscle fold under "More" (the analytics page reads
+ * them by block, not by month), and the deep-dive dashboard is one tap away.
  */
 export function TrainingAnalyticsPreviewCard({
   clientId,
@@ -50,6 +52,13 @@ export function TrainingAnalyticsPreviewCard({
   const goalPct = h.prevMonthTotalLb > 0 ? Math.min(100, Math.round((h.weightLb / h.prevMonthTotalLb) * 100)) : null;
   const beatLastMonth = h.prevMonthTotalLb > 0 && h.weightLb >= h.prevMonthTotalLb;
   const workoutDelta = h.workouts - h.prevWorkouts;
+  // Workouts against last month to the same day (the tile is only the number).
+  const workoutLine = h.prevWorkouts > 0 && !isLoading
+    ? workoutDelta === 0
+      ? `Workouts: same as ${h.prevMonthLabel}`
+      : `Workouts: ${workoutDelta > 0 ? "+" : ""}${workoutDelta} vs ${h.prevMonthLabel}`
+    : null;
+  const [moreOpen, setMoreOpen] = useState(false);
   const empty = !isLoading && !h.hasData;
   // One line under the number: beaten → say so; otherwise how far along, plus pace.
   const pace = compare
@@ -64,117 +73,113 @@ export function TrainingAnalyticsPreviewCard({
   return (
     <section aria-label={`Your ${h.monthLabel}`}>
       <SectionLabel icon={<CalendarDays className="h-4 w-4 shrink-0" />}>Your {h.monthLabel}</SectionLabel>
-      <Card className="overflow-hidden border-border/60 bg-card p-0 shadow-sm">
-        {empty ? (
-          <div className="p-4 text-center">
-            <Dumbbell className="mx-auto h-6 w-6 text-primary" />
-            <div className="mt-2 text-sm font-bold">Your numbers start with your first workout</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Log your sets and this fills in automatically: total weight lifted, workouts, PRs and your streak.
-            </p>
-          </div>
-        ) : (
-          <div className="p-4">
-            {/* The headline number */}
-            <div className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Total weight lifted
-              <InfoTip label="About total weight lifted" title="Total weight lifted" align="start">
-                Every set's weight × reps, added up for the month. Bodyweight-only sets aren't included.
-              </InfoTip>
+      <Card className="overflow-hidden p-0">
+        <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
+          {empty ? (
+            <div className="p-4 text-center">
+              <Dumbbell className="mx-auto h-6 w-6 text-muted-foreground" />
+              <div className="mt-2 text-sm font-semibold">Your numbers start with your first workout</div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Log your sets and this fills in automatically.
+              </p>
             </div>
-            <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-4xl font-bold leading-none tabular-nums">
-                {isLoading ? "…" : compactWeight(h.weightLb, unit)}
-              </span>
-              <span className="text-base font-bold text-muted-foreground">{unit}</span>
-            </div>
-            {goalPct != null && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={beatLastMonth ? "h-full rounded-full bg-emerald-500" : "h-full rounded-full bg-primary"}
-                  style={{ width: `${Math.max(goalPct, 3)}%` }}
-                />
+          ) : (
+            <>
+              {/* The three numbers that matter, in one row */}
+              <div className="grid grid-cols-3 divide-x divide-border/60 px-2 py-3.5">
+                <Tile label="Workouts" value={isLoading ? "…" : String(h.workouts)} />
+                <Tile label="PRs" value={isLoading ? "…" : String(h.prLifts)} record={h.prLifts > 0} />
+                <Tile label="Week streak" value={isLoading ? "…" : String(h.streakWeeks)} />
               </div>
-            )}
-            {weightLine && (
-              <div
-                className={
-                  "mt-1.5 text-xs " +
-                  (beatLastMonth || (compare && compare.pct >= 0) ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")
-                }
-                data-testid="month-weight-line"
-              >
-                {beatLastMonth && <Trophy className="mr-1 inline h-3.5 w-3.5 -translate-y-px" strokeWidth={2.25} aria-hidden />}
-                {weightLine}
-              </div>
-            )}
 
-            {/* Three simple wins */}
-            <div className="mt-4 grid grid-cols-3 divide-x divide-border/60 border-y border-border/60 py-3">
-              <Tile
-                label="Workouts"
-                value={isLoading ? "…" : String(h.workouts)}
-                caption={
-                  h.prevWorkouts > 0 && !isLoading
-                    ? workoutDelta === 0
-                      ? `same as ${h.prevMonthLabel}`
-                      : `${workoutDelta > 0 ? "+" : ""}${workoutDelta} vs ${h.prevMonthLabel}`
-                    : "this month"
-                }
-                good={workoutDelta > 0}
-              />
-              <Tile
-                label="PRs"
-                value={isLoading ? "…" : String(h.prLifts)}
-                caption="this month"
-                good={h.prLifts > 0}
-              />
-              <Tile
-                label="Streak"
-                value={isLoading ? "…" : String(h.streakWeeks)}
-                caption={h.streakWeeks === 1 ? "week in a row" : "weeks in a row"}
-              />
-            </div>
-
-            {/* Athlete rows */}
-            {(h.topLift || h.topMuscle) && (
-              <div className="mt-3 space-y-2.5">
-                {h.topLift && (
-                  <Row
-                    label="Strongest lift"
-                    tip={
-                      <InfoTip label="About estimated 1-rep max" title="Estimated 1-rep max" align="start">
-                        The heaviest weight you could likely lift for a single rep, calculated from your best sets.
-                        It lets you track strength even when you don't test a true max.
-                      </InfoTip>
-                    }
-                    main={h.topLift.name}
-                    sub={`est. max ${wholeWeight(h.topLift.est1rmLb, unit)} ${unit}`}
-                    badge={
-                      h.topLift.gainLb != null && h.topLift.gainLb >= 1
-                        ? `+${wholeWeight(h.topLift.gainLb, unit)} ${unit} in 30 days`
-                        : null
-                    }
-                  />
+              {/* The rest of the month, one tap away: weight lifted and the athlete rows. */}
+              <CollapsibleContent className="border-t border-border/60 px-4 pb-4 pt-3">
+                <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                  Total weight lifted
+                  <InfoTip label="About total weight lifted" title="Total weight lifted" align="start">
+                    Every set's weight × reps, added up for the month. Bodyweight-only sets aren't included.
+                  </InfoTip>
+                </div>
+                <div className="mt-0.5 flex items-baseline gap-1.5">
+                  <span className="text-3xl font-bold leading-none tabular-nums">
+                    {isLoading ? "…" : compactWeight(h.weightLb, unit)}
+                  </span>
+                  <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
+                </div>
+                {goalPct != null && (
+                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={beatLastMonth ? "h-full rounded-full bg-emerald-500" : "h-full rounded-full bg-muted-foreground/60"}
+                      style={{ width: `${Math.max(goalPct, 3)}%` }}
+                    />
+                  </div>
                 )}
-                {h.topMuscle && (
-                  <Row
-                    label="Most trained this week"
-                    main={h.topMuscle.muscle}
-                    sub={`${h.topMuscle.sets} set${h.topMuscle.sets === 1 ? "" : "s"}`}
-                  />
+                {weightLine && (
+                  <div
+                    className={
+                      "mt-1.5 text-xs " +
+                      (beatLastMonth || (compare && compare.pct >= 0) ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")
+                    }
+                    data-testid="month-weight-line"
+                  >
+                    {beatLastMonth && <Trophy className="mr-1 inline h-3.5 w-3.5 -translate-y-px" strokeWidth={2.25} aria-hidden />}
+                    {weightLine}
+                  </div>
                 )}
-              </div>
-            )}
-          </div>
-        )}
+                {workoutLine && (
+                  <div className={"mt-1 text-xs " + (workoutDelta > 0 ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                    {workoutLine}
+                  </div>
+                )}
 
-        <Link
-          to="/portal/workouts/analytics"
-          className="flex items-center justify-center gap-1.5 border-t border-border/60 py-3 text-sm font-bold text-primary transition active:bg-muted/40"
-        >
-          See all analytics <ArrowRight className="h-4 w-4" />
-        </Link>
+                {(h.topLift || h.topMuscle) && (
+                  <div className="mt-3 space-y-2.5 border-t border-border/60 pt-3">
+                    {h.topLift && (
+                      <Row
+                        label="Strongest lift"
+                        tip={
+                          <InfoTip label="About estimated 1-rep max" title="Estimated 1-rep max" align="start">
+                            The heaviest weight you could likely lift for a single rep, calculated from your best sets.
+                            It lets you track strength even when you don't test a true max.
+                          </InfoTip>
+                        }
+                        main={h.topLift.name}
+                        sub={`est. max ${wholeWeight(h.topLift.est1rmLb, unit)} ${unit}`}
+                        badge={
+                          h.topLift.gainLb != null && h.topLift.gainLb >= 1
+                            ? `+${wholeWeight(h.topLift.gainLb, unit)} ${unit} in 30 days`
+                            : null
+                        }
+                      />
+                    )}
+                    {h.topMuscle && (
+                      <Row
+                        label="Most trained this week"
+                        main={h.topMuscle.muscle}
+                        sub={`${h.topMuscle.sets} set${h.topMuscle.sets === 1 ? "" : "s"}`}
+                      />
+                    )}
+                  </div>
+                )}
+              </CollapsibleContent>
+            </>
+          )}
+
+          <div className="flex items-center justify-between border-t border-border/60">
+            {!empty ? (
+              <CollapsibleTrigger className="inline-flex h-11 items-center gap-1 px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground active:bg-muted/40">
+                {moreOpen ? "Less" : "More"}
+                <ChevronDown className={"h-4 w-4 transition-transform " + (moreOpen ? "rotate-180" : "")} aria-hidden />
+              </CollapsibleTrigger>
+            ) : <span />}
+            <Link
+              to="/portal/workouts/analytics"
+              className="inline-flex h-11 items-center gap-0.5 px-4 text-sm font-semibold text-foreground transition active:bg-muted/40"
+            >
+              See all analytics <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Link>
+          </div>
+        </Collapsible>
       </Card>
     </section>
   );
@@ -183,21 +188,17 @@ export function TrainingAnalyticsPreviewCard({
 function Tile({
   label,
   value,
-  caption,
-  good = false,
+  record = false,
 }: {
   label: string;
   value: string;
-  caption: string;
-  good?: boolean;
+  /** A PR count above zero: amber, the app's colour for records. */
+  record?: boolean;
 }) {
   return (
-    <div className="px-2 text-center first:pl-0 last:pr-0">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-bold leading-none tabular-nums">{value}</div>
-      <div className={"mt-1 text-[11px] leading-tight " + (good ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
-        {caption}
-      </div>
+    <div className="px-2 text-center">
+      <div className={"text-2xl font-bold leading-none tabular-nums " + (record ? "text-amber-600 dark:text-amber-400" : "")}>{value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -218,7 +219,7 @@ function Row({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
           {label}
           {tip}
         </div>

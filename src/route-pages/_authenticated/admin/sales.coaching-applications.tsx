@@ -3,14 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
-import { listCoachingApplications, updateCoachingApplication, exportCoachingApplicationsCsv } from "@/lib/coaching-applications.functions";
+import { listCoachingApplications, updateCoachingApplication, exportCoachingApplicationsCsv, listApplicationDrafts, dismissApplicationDraft } from "@/lib/coaching-applications.functions";
+import { APPLY_GOALS, APPLY_STEPS, APPLY_TIMELINES } from "@/lib/apply-form";
+import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Mail, Phone, ChevronDown, ChevronUp, CalendarCheck2, MessageSquare, Instagram, UserRound, Star, FlaskConical } from "lucide-react";
+import { Mail, Phone, ChevronDown, ChevronUp, CalendarCheck2, MessageSquare, Instagram, UserRound, Star, FlaskConical, X } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { displaySource } from "@/lib/application-attribution";
 import { toLeadScore5, leadScoreReason, LEAD_SCORE_DISCLAIMER } from "@/lib/lead-score-display";
 
@@ -60,6 +63,7 @@ export function ApplicationsInbox({ embedded = false }: { embedded?: boolean } =
           Export CSV
         </Button>
       </div>
+      <UnfinishedApplications />
       <Card className="divide-y divide-border">
         {apps.length === 0 && <div className="p-6 text-sm text-muted-foreground">No applications yet.</div>}
         {apps.map((a: any) => {
@@ -346,5 +350,85 @@ function LeadScoreCard({ score, scoring }: { score: unknown; scoring: unknown })
       <div className="text-foreground/80">{leadScoreReason(scoring)}</div>
       <div className="mt-1 italic text-muted-foreground">{LEAD_SCORE_DISCLAIMER}</div>
     </div>
+  );
+}
+
+const label = (list: readonly { v: string; l: string }[], v: string | null) => list.find((o) => o.v === v)?.l ?? null;
+
+/** Still answering: touched in the last 20 minutes. */
+const STILL_GOING_MS = 20 * 60_000;
+
+/**
+ * People who started an application on the website and left a way to reach
+ * them, but never sent it (saveApplicationDraft). Hidden once they apply, or
+ * once set aside here.
+ */
+function UnfinishedApplications() {
+  const fetchDrafts = useServerFn(listApplicationDrafts);
+  const dismiss = useServerFn(dismissApplicationDraft);
+  const { viewOnly } = useAuth();
+  const { data, refetch } = useQuery({ queryKey: ["coaching-application-drafts"], queryFn: () => fetchDrafts(), refetchInterval: 60_000 });
+  const drafts = (data?.drafts ?? []) as any[];
+  if (!drafts.length) return null;
+  const total = APPLY_STEPS.length;
+  return (
+    <section aria-label="Unfinished applications" className="space-y-2">
+      <div>
+        <h2 className="text-sm font-semibold">Started, didn't finish · {drafts.length}</h2>
+        <p className="text-xs text-muted-foreground">They left a way to reach them but never sent the application. Worth a quick message.</p>
+      </div>
+      <Card className="divide-y divide-border">
+        {drafts.map((d) => {
+          const ig = d.instagram ? String(d.instagram).replace(/^@/, "") : null;
+          const stopped = APPLY_STEPS.find((s) => s.key === d.step);
+          const still = Date.now() - new Date(d.updated_at).getTime() < STILL_GOING_MS;
+          const picked = [label(APPLY_GOALS, d.main_goal), label(APPLY_TIMELINES, d.timeline)].filter(Boolean).join(" · ");
+          return (
+            <div key={d.id} className="flex items-start gap-3 p-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-semibold">{d.full_name || "No name yet"}</span>
+                  <Badge variant="outline" className={still ? "text-[10px] text-emerald-500" : "text-[10px] text-amber-500"}>
+                    {still ? "Filling it in now" : `${d.answered ?? 0} of ${total} answered`}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  {d.email && <a href={`mailto:${d.email}`} className="inline-flex items-center gap-1 text-primary hover:underline"><Mail className="h-3 w-3" />{d.email}</a>}
+                  {d.phone && <a href={`tel:${d.phone}`} className="inline-flex items-center gap-1 text-primary hover:underline"><Phone className="h-3 w-3" />{d.phone}</a>}
+                  {ig && <a href={`https://instagram.com/${ig}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline"><Instagram className="h-3 w-3" />@{ig}</a>}
+                </div>
+                {(picked || d.target_outcome) && (
+                  <p className="text-xs text-muted-foreground">
+                    {picked}{picked && d.target_outcome ? " · " : ""}{d.target_outcome ? `"${String(d.target_outcome).slice(0, 140)}"` : ""}
+                  </p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  {stopped && !still ? `Stopped at "${stopped.question}" · ` : ""}
+                  {formatDistanceToNow(new Date(d.updated_at), { addSuffix: true })}
+                </p>
+              </div>
+              {!viewOnly && (
+                <button
+                  type="button"
+                  aria-label={`Set aside ${d.full_name || "this one"}`}
+                  title="Set aside (followed up, or not a lead)"
+                  onClick={async () => {
+                    try {
+                      await dismiss({ data: { id: d.id } });
+                      void refetch();
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Couldn't set it aside");
+                    }
+                  }}
+                  className="-m-1 rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </Card>
+    </section>
   );
 }

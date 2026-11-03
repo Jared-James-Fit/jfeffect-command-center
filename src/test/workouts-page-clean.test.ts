@@ -8,17 +8,36 @@ describe("Workouts page: one card per section, nothing said twice", () => {
   const readiness = read("src/components/analytics/recovery-preview-card.tsx");
   const month = read("src/components/training-analytics-preview-card.tsx");
 
-  it("readiness is one card: score, today's call, limiter, six factor bars", () => {
+  it("readiness is one compact row that opens the whole picture: score, today's call, limiter, six factor bars", () => {
+    // In the page: one row (the score, the call's first line + limiter, a chevron)…
+    expect(readiness).toContain('data-testid="readiness-row"');
+    expect(readiness).toContain('onClick={() => setView("overview")}');
+    // …and nothing it used to show is lost: it's all in the sheet the row opens.
+    expect(readiness).toContain('<SheetContent side="bottom"');
     expect(readiness).toContain('data-testid="readiness-call"');
     expect(readiness).toContain("<FactorBar key={k}");
+    expect(readiness).toContain("Limiter: {bd.limiter.label}");
+    expect(readiness).toContain("<FactorSheet factor={activeFactor} />");
+    // Back from a factor steps out to the whole picture, not off the sheet.
+    expect(readiness).toContain('setView((v) => (v && v !== "overview" ? "overview" : null))');
+    // No regex lookbehind: older iPhones can't parse it (the whole chunk would fail).
+    expect(readiness).not.toContain("(?<=");
     // Gone: duplicate caption, block avg / trend tiles, biggest-positive pill, six big rings, fake insights.
     for (const gone of ["Estimated Training Readiness", "Current Block Avg", "Biggest Positive", "What's Affecting Today's Readiness", "Personalized Insights", "FactorRing"]) {
       expect(readiness, gone).not.toContain(gone);
     }
   });
 
-  it("the month card is flat: one number, one comparison line, three tiles, two athlete rows", () => {
+  it("the month card is one row of three numbers; weight lifted and the athlete rows fold under More", () => {
+    expect(month).toContain('<Tile label="Workouts"');
+    expect(month).toContain('<Tile label="PRs"');
+    expect(month).toContain('<Tile label="Week streak"');
+    // the analytics page reads by block, so the month's own numbers stay one tap away here
+    expect(month).toContain("<CollapsibleContent");
     expect(month).toContain('data-testid="month-weight-line"');
+    expect(month).toContain('label="Strongest lift"');
+    expect(month).toContain('label="Most trained this week"');
+    expect(month).toContain('to="/portal/workouts/analytics"');
     for (const gone of ["weightComparison", "school bus", "backdrop-blur", "Athlete corner"]) {
       expect(month, gone).not.toContain(gone);
     }

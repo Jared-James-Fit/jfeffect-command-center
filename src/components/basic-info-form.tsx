@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { calcAge, cmToFtIn, ftInToCm } from "@/lib/basic-info";
@@ -205,13 +204,6 @@ export function BasicInfoForm({
         </div>
       </div>
 
-      {showOptional && (
-        <div>
-          <Label>Profile notes <span className="text-muted-foreground">(optional)</span></Label>
-          <Textarea rows={3} value={values.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Contact or profile details you want to keep here." />
-          <p className="mt-1 text-[11px] text-muted-foreground">Training, nutrition, injuries, availability and goals are collected once in Goals &amp; Setup.</p>
-        </div>
-      )}
     </div>
   );
 }

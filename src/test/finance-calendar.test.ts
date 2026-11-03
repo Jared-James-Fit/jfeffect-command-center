@@ -57,7 +57,8 @@ describe("her calendar on the finance home", () => {
   it("the schedule card drops Book and the portal links on a staff home", () => {
     const c = read("src/components/home/upcoming-schedule-card.tsx");
     expect(c).toContain("enabled: !!clientId && links,");
-    expect(c).toMatch(/\{links && \(\s*<AgendaFooter>/);
+    // the footer (Book / Request) only ever shows with links on
+    expect(c).toMatch(/\{links && [^\n]*\(\s*<AgendaFooter>/);
     expect(c).toContain("function itemLink(item: CalendarItem, links: boolean)");
     expect(c).toContain("  if (!links) return null;");
   });

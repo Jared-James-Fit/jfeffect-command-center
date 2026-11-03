@@ -29,39 +29,39 @@ describe("statuses explain themselves on a tap", () => {
     expect(row).not.toContain("cursor-help");
   });
 
-  it.each([
-    "Coaching type",
-    "Assigned coach",
-    "Missed workouts",
-    "Block dates",
-    "Time left in the block",
-    "Block progress",
-    "Next block queued",
-  ])("explains %s", (title) => {
-    expect(row).toContain(`title="${title}"`);
+  it("says the facts (coaching type, coach, last seen) in one plain line, never as chips to tap", () => {
+    expect(row).toContain("const meta = rowMetaLine(r, { showCoach, primary });");
+    expect(row).toContain("data-row-meta>{meta}</div>");
+    // The old fact pills and their explanations are gone.
+    for (const title of ["Coaching type", "Assigned coach", "Calendar sync", "Block dates", "Time left in the block", "Block progress", "Next block queued"]) {
+      expect(row).not.toContain(`title="${title}"`);
+    }
+    // Calendar sync is on the client's Summary, so the list no longer asks for it.
+    expect(page).not.toContain("listClientCalendarSyncKinds");
   });
 
-  it("explains every status chip, the plan pills and the program-end pill", () => {
-    // Priority badges and the contract chip share one renderer, so none can be left out.
-    expect(row).toContain("rowStatusChips(r)");
-    expect(row).toMatch(/title=\{b\.label\}\s+body=\{b\.hint\}\s+next=\{b\.next\}/);
-    // The pills render through StatusTip, with the old tap action now a button inside it.
-    const pill = row.slice(row.indexOf("function StatusPill"), row.indexOf("function AssignmentStatusStrip"));
-    expect(pill).toContain("<StatusTip");
-    expect(pill).toContain("onAction()");
-    expect(row).toContain('title={end.state === "ended" ? "Program has ended" : "No next block queued"}');
+  it("shows one status chip, explained on a tap, and +N for the rest", () => {
+    // Every status comes from one ranked list, so none can be left out of the +N.
+    expect(row).toContain("const { primary, more } = rowStatusSummary(r);");
+    expect(row).toMatch(/title=\{s\.label\}\s+body=\{s\.hint\}\s+next=\{s\.next\}/);
+    expect(row).toContain("<MoreStatuses r={r} statuses={more} />");
+    expect(row).toContain('title="Also needs you"');
+    // "No program" is itself the way to assign one.
+    expect(row).toMatch(/s\.id === "no_program"[\s\S]{0,120}onClick=\{onAssign\}/);
+    // The Assign Program / Nutrition / Cardio pills are gone from the row; they live in ⋯.
+    expect(row).not.toContain("function StatusPill");
+    expect(row).not.toMatch(/Assign (Nutrition|Cardio)/);
+    const menu = read("src/components/clients/quick-actions.tsx");
+    expect(menu).toContain('"Assign Nutrition"');
+    expect(menu).toContain('"Assign Cardio"');
+    expect(menu).toContain("Assign Program");
+    expect(menu).toContain("Assign Next Block");
+    expect(menu).toContain("View as client");
   });
 
-  it("shows when they were last seen once, not twice, and the missed tag only when the status row can't", () => {
-    expect(row).toContain("const seen = lastSeenChip(r)");
-    expect(row).toContain("title={seen.title}");
-    // The old standalone line (and its own grid column) is gone.
-    expect(row).not.toContain('title="Last seen"');
-    expect(row).not.toContain("Never signed in");
+  it("keeps the desktop row's four areas", () => {
     expect(row).toContain("xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto]");
     expect(row).not.toContain("_auto_auto]");
-    expect(row).toContain('badges.some((b) => b.id === "missed")');
-    expect(row).toContain("&& !missedShownAsBadge");
   });
 
   it("has no leftover filter-row code from before the new filters", () => {

@@ -714,7 +714,7 @@ describe("weight units: a setting for clients, a tap on the community card", () 
   it("clients can set their default unit in Account Settings", () => {
     expect(account).toContain("<WeightUnitCard");
     expect(account).toContain("confirmed={!!client?.weight_unit_confirmed_at}");
-    expect(account).toContain('{ id: "units", label: "Units" }');
+    expect(account).toContain('<SettingsSection id="units"');
     expect(unitCard).toContain("saveWeightUnitChoice({ clientId }, next)");
     // the choice is stamped, so an explicit lb stops the "lb or kg?" prompt
     expect(unitPref).toContain("preferred_weight_unit: unit, weight_unit_confirmed_at:");
