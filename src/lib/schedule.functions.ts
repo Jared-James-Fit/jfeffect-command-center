@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { DEFAULT_TZ, wallTimeToUtc } from "@/lib/schedule-time";
+import { DEFAULT_TZ, minutesBetweenHM, wallTimeToUtc } from "@/lib/schedule-time";
+import { clockLabel } from "@/lib/session-requests";
 import { findConflicts, type BusyItem, type SlotConflict } from "@/lib/session-conflicts";
 import { PovInput, canViewClient, isPovRequest, resolvePovClientId } from "@/lib/client-pov.server";
 import { ownOrLinkedClient } from "@/lib/linked-client.server";
@@ -277,6 +278,110 @@ export const withdrawSessionChange = createServerFn({ method: "POST" })
       .select("id");
     if (error) throw new Error(error.message);
     return { ok: !!updated?.length };
+  });
+
+/** "Thu, Nov 5 at 5:30 PM". */
+function sessionWhenText(date: string, time: string): string {
+  return `${new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} at ${clockLabel(time)}`;
+}
+
+/**
+ * The coach answers a client's change request from its card in the chat
+ * (`SessionChangeCard`): Approve moves the session to the exact time the client
+ * asked for, same length, so its credit, Google event and reminders move with it
+ * and the move closes the request (`tg_pt_session_close_change_requests`); Decline
+ * keeps it booked. Either way the client is told in the chat, and a last-minute
+ * move is texted too.
+ */
+export const answerSessionChange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .discriminatedUnion("action", [
+        z.object({ action: z.literal("approve"), requestId: z.string().uuid() }),
+        z.object({ action: z.literal("decline"), requestId: z.string().uuid(), reason: z.string().trim().max(500).optional() }),
+      ])
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await requireStaff(supabase, userId);
+    // RLS: the caller must see this request (an admin, or the client's coach).
+    const { data: visible } = await supabase.from("pt_session_change_requests").select("id").eq("id", data.requestId).maybeSingle();
+    if (!visible) throw new Error("Request not found.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: r } = await db.from("pt_session_change_requests").select("*").eq("id", data.requestId).maybeSingle();
+    if (!r) throw new Error("Request not found.");
+    if (r.status !== "pending") throw new Error(r.status === "withdrawn" ? "They took this request back." : "This request was already answered.");
+    const { data: s } = await db
+      .from("pt_sessions")
+      .select("id, client_id, title, session_type, session_date, start_time, end_time, status, timezone, starts_at")
+      .eq("id", r.pt_session_id)
+      .maybeSingle();
+    if (!s) throw new Error("Session not found.");
+    const title = s.title || s.session_type || "session";
+    const was = sessionWhenText(s.session_date, String(s.start_time));
+    let body: string;
+
+    if (data.action === "approve") {
+      if (r.kind !== "move" || !r.proposed_date || !r.proposed_start) {
+        throw new Error("There's no exact time to approve. Pick one with Other time.");
+      }
+      if (s.status !== "Scheduled") throw new Error("This session isn't booked anymore.");
+      const start = String(r.proposed_start).slice(0, 5);
+      const len = minutesBetweenHM(String(s.start_time).slice(0, 5), String(s.end_time).slice(0, 5));
+      const [h, m] = start.split(":").map(Number);
+      const endMin = h * 60 + m + (len > 0 ? len : 60);
+      if (endMin >= 24 * 60) throw new Error("That would run past midnight. Pick another time with Other time.");
+      const end = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+      if (wallTimeToUtc(r.proposed_date, start, s.timezone || DEFAULT_TZ).getTime() <= Date.now()) {
+        throw new Error("That time has already passed. Pick another with Other time, or decline.");
+      }
+      // Same row, new time: credit, Google and reminders follow by trigger, and the move closes the request.
+      const { data: moved, error } = await db
+        .from("pt_sessions")
+        .update({ session_date: r.proposed_date, start_time: start, end_time: end })
+        .eq("id", s.id)
+        .eq("status", "Scheduled")
+        .select("id");
+      if (error) throw new Error(error.message);
+      if (!moved?.length) throw new Error("This session just changed. Refresh and try again.");
+      await db.from("pt_session_change_requests").update({ resolved_by: userId }).eq("id", r.id).is("resolved_by", null);
+      body = `Approved: your ${title} moves from ${was} to ${sessionWhenText(r.proposed_date, start)}.`;
+      try {
+        const { textSessionChange } = await import("@/lib/pt-session-reminders.server");
+        await textSessionChange(db, s.id, "moved", new Date(), s.starts_at);
+      } catch {
+        /* the chat message is the record; the text is a courtesy */
+      }
+    } else {
+      const reason = data.reason?.trim() || "";
+      const { data: updated, error } = await db
+        .from("pt_session_change_requests")
+        .update({ status: "declined", resolution: reason || "declined", resolved_at: new Date().toISOString(), resolved_by: userId })
+        .eq("id", r.id)
+        .eq("status", "pending")
+        .select("id");
+      if (error) throw new Error(error.message);
+      if (!updated?.length) throw new Error("This request was just answered.");
+      body = `Your ${title} on ${was} stays as booked.${reason ? ` ${reason}` : ""}`;
+    }
+
+    const now = new Date().toISOString();
+    await db.from("messages").insert({
+      client_id: s.client_id,
+      sender_id: userId,
+      sender_role: "admin",
+      body,
+      message_type: "Scheduling",
+      is_automated: true,
+      is_internal_note: false,
+      delivery_status: "sent",
+      sent_at: now,
+      read_by_admin_at: now,
+    });
+    return { ok: true, outcome: data.action === "approve" ? "moved" : "declined" };
   });
 
 // ---- Client calendar feed ----------------------------------------------------
