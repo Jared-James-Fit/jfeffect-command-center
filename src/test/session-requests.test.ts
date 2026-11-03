@@ -101,7 +101,7 @@ describe("session requests", () => {
     expect(creditOutlook({ remaining: 0, packageSize: null, first: "Marc" }).needsConfirm).toBe(true);
     expect(creditOutlook({ remaining: 0, packageSize: 16, first: "" }).text).toBe("No sessions left · it goes on their next 16");
     const dialog = readFileSync("src/components/pt-session-dialog.tsx", "utf8");
-    expect(dialog).toContain("const mustConfirmOverbook = overbook && (outlook?.needsConfirm ?? true);");
+    expect(dialog).toContain("const mustConfirmOverbook = overbook && !selling && (outlook?.needsConfirm ?? true);");
     expect(dialog).not.toContain("tracked as a negative balance");
   });
 

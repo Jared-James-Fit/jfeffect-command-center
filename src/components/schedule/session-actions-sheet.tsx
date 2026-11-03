@@ -27,6 +27,7 @@ import { COACH_NOTE_MAX, creditChipClasses, moveOutcome, sessionCredit, sessionS
 import { todayLocalISO } from "@/lib/today";
 import { COACH_NOTES_KEY, saveCoachNote, useCoachNote } from "@/lib/session-coach-notes";
 import { cn } from "@/lib/utils";
+import { SessionPaymentLine } from "@/components/schedule/session-payment-line";
 
 export type ActionSession = {
   id: string;
@@ -502,6 +503,8 @@ export function SessionActionsSheet({
               </button>
             )
           )}
+
+          {mode === "menu" && <SessionPaymentLine session={session} first={first} />}
 
           {request && mode === "menu" && (
             <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">

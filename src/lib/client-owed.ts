@@ -31,15 +31,20 @@ export function saleOwedCents(sale: Sale): number {
   return Math.round(d.amountOutstanding * 100);
 }
 
-/** The client's most recent session package with a price: what they renew. */
+/**
+ * The client's most recent session package with a price: what they renew. A
+ * single session sold on the side (a drop-in, one extra) doesn't change what a
+ * client on packages renews, so a package of 2+ wins over a later single; a
+ * client who only ever buys singles renews a single.
+ */
 export function latestPackage(sales: Sale[]): { sale: Sale; priceCents: number; size: number } | null {
   const time = (s: Sale) => new Date(s.purchased_at ?? s.created_at ?? 0).getTime() || 0;
-  const latest = sales
+  const priced = sales
     .filter((s) => !s.archived_at && Number(s.sessions_purchased ?? 0) > 0)
     .map((s) => ({ sale: s, priceCents: Math.round(resolvePaymentDisplay(s).contractTotal * 100), size: Number(s.sessions_purchased) }))
     .filter((x) => x.priceCents > 0)
-    .sort((a, b) => time(b.sale) - time(a.sale))[0];
-  return latest ?? null;
+    .sort((a, b) => time(b.sale) - time(a.sale));
+  return priced.find((x) => x.size > 1) ?? priced[0] ?? null;
 }
 
 /** Price of one session on the client's most recent package with a price. */

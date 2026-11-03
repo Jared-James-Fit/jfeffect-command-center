@@ -526,7 +526,7 @@ function AttachmentView({
     );
   }
   if (att.kind === "payment_request") {
-    return <PaymentRequestCard att={att as unknown as SharedAttachment} mine={mine} />;
+    return <PaymentRequestCard att={att as unknown as SharedAttachment} mine={mine} staff={role !== "client"} />;
   }
   if (att.kind === "nutrition_plan") {
     return <NutritionPlanChatCard att={att as unknown as PlanMessageAttachment} staff={role !== "client"} clientId={clientId} />;

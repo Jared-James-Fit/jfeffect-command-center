@@ -262,19 +262,8 @@ const PostPaymentSchema = z.object({
 });
 
 async function buildPaymentAttachment(rec: any, shareUrl: string) {
-  return {
-    type: "link" as const,
-    kind: "payment_request" as const,
-    url: shareUrl,
-    payment_url: shareUrl,
-    name: `Payment: ${rec.offer_name ?? "Coaching"}`,
-    title: rec.offer_name ?? "Coaching",
-    amount_cents: Math.round(Number(rec.full_payable_amount ?? 0) * 100),
-    currency: (rec.currency ?? "USD"),
-    payment_structure: rec.payment_structure ?? undefined,
-    purchase_id: rec.id as string,
-    status: rec.payment_status ?? "Pending",
-  };
+  const { paymentRequestAttachment } = await import("@/lib/payment-request-message");
+  return paymentRequestAttachment(rec, shareUrl);
 }
 
 export const postPaymentRequestInChat = createServerFn({ method: "POST" })
