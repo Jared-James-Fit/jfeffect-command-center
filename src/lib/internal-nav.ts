@@ -28,7 +28,7 @@ import {
   UserCheck, CreditCard, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
-  Link as LinkIcon, Trophy, Tag, ShieldCheck, UsersRound, Contact,
+  Link as LinkIcon, Trophy, ShieldCheck, UsersRound, Contact,
   ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -194,10 +194,6 @@ const REGISTRY: Entry[] = [
   { to: "/admin/billing-sources", label: "Payment Settings", icon: CreditCard, group: "Sales", searchOnly: true,
     visibleTo: ["admin"],
     keywords: ["settings", "stripe", "business", "taxes", "branding", "notifications", "advanced", "developer", "webhooks", "billing events"] },
-  { to: "/admin/content-ideas", label: "Content Ideas", icon: Sparkles, group: "Sales", searchOnly: true,
-    visibleTo: ["admin", "media_manager"], keywords: ["coming soon"] },
-  { to: "/admin/testimonials", label: "Testimonials", icon: Sparkles, group: "Sales", searchOnly: true,
-    visibleTo: ["admin", "media_manager"], keywords: ["transformations", "reviews", "proof", "coming soon"] },
 
   // ── MEMBERSHIP ───────────────────────────────────────────────────────
   // The JF Membership business, in the same menu as everything else: there
@@ -221,13 +217,9 @@ const REGISTRY: Entry[] = [
   // Members write in on Messages → Support.
   { to: "/admin/membership/support", label: "Member Support", icon: MessagesSquare, group: "Membership", searchOnly: true,
     visibleTo: ["admin"], keywords: ["support inbox", "member messages", "help"] },
-  // Pages that only say "coming soon" yet: findable, not in the menu.
-  { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy, group: "Membership", searchOnly: true,
-    visibleTo: ["admin"], keywords: ["coming soon"] },
-  { to: "/admin/membership/welcome-messages", label: "Welcome Messages", icon: Megaphone, group: "Membership", searchOnly: true,
-    visibleTo: ["admin"], keywords: ["announcements", "welcome", "coming soon"] },
-  { to: "/admin/membership/promo-tools", label: "Promo Tools", icon: Tag, group: "Membership", searchOnly: true,
-    visibleTo: ["admin"], keywords: ["promotions", "referral codes", "coming soon"] },
+  // Pages that only say "coming soon" (Content Ideas, Testimonials, Challenges,
+  // Welcome Messages, Promo Tools) are in no menu or search: a dead end isn't
+  // worth finding. Their addresses still open.
   { to: "/admin/membership/sales-page", label: "Sales Page", icon: Sparkles, group: "Membership",
     visibleTo: ["admin"], section: "Sales", keywords: ["sales page", "join page", "landing"] },
   { to: "/admin/membership/signup-link", label: "Signup Link", icon: LinkIcon, group: "Membership",

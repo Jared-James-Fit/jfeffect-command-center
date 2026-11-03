@@ -10,6 +10,7 @@ import { buildHomeAgenda } from "@/lib/home-upcoming";
 import { getWorkoutStatus } from "@/lib/workout-status";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
+import { useEntitlement } from "@/lib/service-tier";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import {
@@ -121,6 +122,9 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
     queryFn: () => typesFn({ data: {} }),
     staleTime: 5 * 60_000,
   });
+  // Asking for a PT session is the coaching layer: the answer lands in the
+  // coach chat, which a JF member doesn't have. Members book instead.
+  const canRequest = useEntitlement("pt_sessions");
   const today = isoToday();
   const [requesting, setRequesting] = useState(false);
   const [openSession, setOpenSession] = useState<ClientSession | null>(null);
@@ -203,7 +207,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
         )}
 
         {/* The action, in words: ask for (or book) a session. Seeing everything is the header's link. */}
-        {links && (
+        {links && (singleBook || (bookable.length > 1 && !pov.viewAsClientId) || canRequest) && (
           <AgendaFooter>
             {singleBook ? (
               <Link
@@ -226,7 +230,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
           </AgendaFooter>
         )}
 
-        {links && (
+        {links && canRequest && (
           <RequestSessionSheet open={requesting} onOpenChange={setRequesting} isPov={!!pov.viewAsClientId} initialDate={today} clientId={clientId} />
         )}
         {links && clientId && (

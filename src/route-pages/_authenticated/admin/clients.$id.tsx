@@ -147,7 +147,6 @@ export function ClientDetailRoute() {
 }
 
 const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Deactivated", "Archived", "High Priority"];
-const PAY_STATUSES = ["Not Sent", "Sent", "Paid", "Failed", "Overdue", "Cancelled", "Refunded"];
 const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
 export function ClientProfileWorkspace({
@@ -685,12 +684,19 @@ export function ClientProfileWorkspace({
                   <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              {/* What a client owes comes from their sales (Billing); the only
+                  thing set here is that they don't pay at all, the same switch
+                  as the Clients list's ⋯ "No payment needed". */}
               <div>
-                <Label>Payment status</Label>
-                <Select value={form.payment_status ?? "Not Sent"} onValueChange={(v) => set("payment_status", v)}>
-                  <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>{PAY_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
+                <Label>Payment</Label>
+                <label htmlFor="payment-exempt" className="flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-lg border border-border px-3">
+                  <span className="text-sm">No payment needed</span>
+                  <Switch
+                    id="payment-exempt"
+                    checked={form.payment_status === "Complimentary"}
+                    onCheckedChange={(v) => set("payment_status", v ? "Complimentary" : "Not Sent")}
+                  />
+                </label>
               </div>
               <div>
                 <Label>Coaching package</Label>
