@@ -52,6 +52,7 @@ export const LEGACY_WORKSPACE_TABS: Record<string, WorkspaceTab> = {
   analytics: "metrics",
   "lift-videos": "metrics",
   agreements: "documents",
+  forms: "documents",
   billing: "purchases",
   profile: "info",
   cardio: "nutrition",

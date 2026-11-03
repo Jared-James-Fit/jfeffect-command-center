@@ -1,12 +1,16 @@
 /**
  * Shared, role-aware internal navigation registry.
  *
- * Trainerize-style IA: a clean primary menu with subpages that expand into a
- * secondary panel. Top-level groups:
+ * One menu row per page. The rows, in order:
  *
- *   MAIN: Overview · Messages · Clients · Payments · Programming ·
- *         Scheduling · Business · Team
- *   OTHER: Add-ons · Settings
+ *   Dashboard · Tasks
+ *   Messages · Clients · Crew · Calendar · Coaching · Sales · Membership · Team
+ *   Settings
+ *
+ * A row with several pages opens a flyout (desktop) or a submenu (phone More).
+ * An old address that only redirects to a tab of a page the menu already
+ * lists stays here as `searchOnly`: out of the menu, still found by More's
+ * search, the sitemap and the floating-bar picker, and it lights its row.
  *
  * No URLs are deleted here — every entry points at an existing route so old
  * bookmarks keep working. The `AppShell` groups by the `group` field on each
@@ -18,16 +22,14 @@
  * guards and database RLS policies for the security boundary.
  */
 import {
-  LayoutDashboard, Users, ClipboardList, Video, Activity, ClipboardCheck,
+  LayoutDashboard, Users, ClipboardList, Activity, ClipboardCheck,
   Dumbbell, Heart, Flame, ChefHat, BookOpen, FileEdit, HelpCircle,
   MessageCircle, Megaphone, LayoutGrid, Phone, Sparkles, MessagesSquare,
-  UserCheck, CreditCard, DollarSign, Ticket, Calendar,
+  UserCheck, CreditCard, Ticket, Calendar,
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, Tag, ShieldCheck, UsersRound, Contact,
-  Home as HomeIcon,
-  ListChecks, Upload, Star, FileText, ExternalLink, Image as ImageIcon,
-  PowerOff, Landmark, Wallet, BadgeCheck,
+  ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -53,50 +55,44 @@ export type WorkspaceKey =
   | "Overview"
   | "Messages"
   | "Clients"
+  | "Crew"
+  | "Calendar"
+  | "Coaching"
+  | "Sales"
   | "Membership"
-  | "Payments"
-  | "Programming"
-  | "Scheduling"
-  | "Business"
   | "Team"
-  | "Add-ons"
   | "Settings";
 
 export const WORKSPACE_ORDER: WorkspaceKey[] = [
-  "Overview", "Messages", "Clients", "Membership", "Payments", "Programming",
-  "Scheduling", "Business", "Team", "Add-ons", "Settings",
+  "Overview", "Messages", "Clients", "Crew", "Calendar", "Coaching", "Sales",
+  "Membership", "Team", "Settings",
 ];
 
 type Entry = NavItem & { visibleTo: StaffRoleTag[] };
 
-/** All workspace items. `group` MUST be a WorkspaceKey so the shell groups it. */
+const COACHING_STAFF: StaffRoleTag[] = ["admin", "coach", "assistant_coach"];
+
+/** All workspace items. `group` MUST be a WorkspaceKey so the shell groups it.
+ *  The first entry a role can see in a group is that row's page. */
 const REGISTRY: Entry[] = [
   // ── OVERVIEW ─────────────────────────────────────────────────────────
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, group: "Overview",
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"] },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks, group: "Overview",
     visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations"] },
-  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Overview",
-    visibleTo: ["admin", "coach", "support"] },
 
   // ── MESSAGES ─────────────────────────────────────────────────────────
+  // One page (Communication): 1:1 Chats · Groups · Support · Broadcasts tabs.
   { to: "/admin/messages", label: "Messages", icon: MessageCircle, group: "Messages",
-    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support"] },
-  { to: "/admin/communication", label: "Communication Hub", icon: MessagesSquare, group: "Messages",
+    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support"],
+    keywords: ["inbox", "chat", "chats", "direct messages", "groups", "group chat"] },
+  { to: "/admin/communication", label: "Communication Hub", icon: MessagesSquare, group: "Messages", searchOnly: true,
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support"],
     keywords: ["inbox", "chat", "direct messages", "group chat", "support inbox"] },
-  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Messages",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/community", label: "Crew", icon: UsersRound, group: "Messages",
-    visibleTo: ["admin", "coach"],
-    keywords: ["crew", "community", "shared workouts", "feed", "photos", "reactions", "coach recognition", "post scores", "insights", "lessons", "birthday posts"] },
-  { to: "/admin/league", label: "League", icon: Trophy, group: "Messages",
-    visibleTo: ["admin", "coach"],
-    keywords: ["league", "leaderboard", "standings", "crew goal", "hall of strength", "final-week boost"] },
-  { to: "/admin/chat-gifs", label: "Chat GIF Library", icon: Sparkles, group: "Messages",
-    visibleTo: ["admin"], section: "Chat Assets" },
-  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Messages",
-    visibleTo: ["admin"], section: "Chat Assets" },
+  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Messages", searchOnly: true,
+    visibleTo: ["admin", "coach", "assistant_coach"], keywords: ["mass message", "announcement", "blast"] },
+  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Messages", searchOnly: true,
+    visibleTo: ["admin", "coach", "support"], keywords: ["support inbox", "help", "alerts", "tickets"] },
 
   // ── CLIENTS ──────────────────────────────────────────────────────────
   { to: "/admin/clients", label: "Clients", icon: Contact, group: "Clients",
@@ -104,19 +100,104 @@ const REGISTRY: Entry[] = [
   { to: "/admin/coaching-agreements", label: "Coaching Agreements", icon: FileSignature, group: "Clients",
     visibleTo: ["admin"],
     keywords: ["agreement", "contract", "waiver", "liability", "signed", "unsigned", "e-sign", "sign", "remind", "resend"] },
-  { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardCheck, group: "Clients",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Clients",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Clients",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/athlete-records", label: "Athlete Records & Rankings", icon: Trophy, group: "Overview",
+
+  // ── CREW ─────────────────────────────────────────────────────────────
+  { to: "/admin/community", label: "Crew", icon: UsersRound, group: "Crew",
+    visibleTo: ["admin", "coach"],
+    keywords: ["crew", "community", "shared workouts", "feed", "photos", "reactions", "coach recognition", "post scores", "insights", "lessons", "birthday posts"] },
+  { to: "/admin/league", label: "League", icon: Trophy, group: "Crew",
+    visibleTo: ["admin", "coach"],
+    keywords: ["league", "leaderboard", "standings", "crew goal", "hall of strength", "final-week boost"] },
+  { to: "/admin/athlete-records", label: "Athlete Records", icon: Trophy, group: "Crew",
     visibleTo: ["admin", "coach"], keywords: ["rankings", "leaderboard", "powerlifting", "dots", "gl points", "squat", "bench", "deadlift", "records", "competition level", "meet results", "athlete profiles"] },
-  { to: "/admin/coaching", label: "Coaching Hub", icon: ClipboardList, group: "Clients",
-    visibleTo: ["admin", "coach", "assistant_coach"], section: "Legacy Hubs",
-    keywords: ["coaching", "check-ins", "training intelligence", "action requests"] },
-  { to: "/admin/agreements", label: "SignNow Agreements (old)", icon: FileSignature, group: "Clients",
-    visibleTo: ["admin", "coach"], section: "Setup" },
+
+  // ── CALENDAR ─────────────────────────────────────────────────────────
+  // One Calendar page with tabs; the old paths redirect into it.
+  { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Calendar",
+    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "media_manager"],
+    keywords: ["calendar", "schedule", "appointments", "upcoming", "book", "booking"] },
+  { to: "/admin/pt-calendar", label: "Sessions", icon: Calendar, group: "Calendar", searchOnly: true,
+    visibleTo: ["admin", "coach"], keywords: ["pt", "personal training", "1:1", "sessions", "pt calendar"] },
+  { to: "/admin/events", label: "Events", icon: Calendar, group: "Calendar", searchOnly: true,
+    visibleTo: ["admin", "coach"] },
+  { to: "/admin/google-calendar", label: "Calendar Setup", icon: LinkIcon, group: "Calendar", searchOnly: true,
+    visibleTo: ["admin", "coach", "sales"], keywords: ["google calendar", "booking links", "sync", "availability"] },
+
+  // ── COACHING ─────────────────────────────────────────────────────────
+  // Three pages: the Coaching hub (Training Intel · Progress · Requests ·
+  // Schedules · Management), Forms (Submissions · Requests · Forms ·
+  // Applications · Agreements) and Programs (Programs · Exercises · Cardio ·
+  // Warm-Ups · Recipes). Every older address lands on one of their tabs.
+  { to: "/admin/coaching", label: "Coaching Hub", icon: ClipboardList, group: "Coaching",
+    visibleTo: COACHING_STAFF,
+    keywords: ["coaching", "training intelligence", "progress", "action requests", "schedules", "management"] },
+  { to: "/admin/forms", label: "Forms", icon: FileEdit, group: "Coaching",
+    visibleTo: ["admin", "coach"],
+    keywords: ["submissions", "check-ins", "check-in reviews", "requests", "form builder", "applications", "agreements"] },
+  { to: "/admin/programming", label: "Programs", icon: BookOpen, group: "Coaching",
+    visibleTo: COACHING_STAFF,
+    keywords: ["programming", "program library", "templates", "exercises", "cardio", "warm-ups", "recipes"] },
+  { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardCheck, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF, keywords: ["weekly check in", "submissions", "reviews"] },
+  { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Coaching", searchOnly: true,
+    visibleTo: ["admin", "coach"] },
+  { to: "/admin/agreements", label: "SignNow Agreements (old)", icon: FileSignature, group: "Coaching", searchOnly: true,
+    visibleTo: ["admin", "coach"] },
+  // A coach finds applications under Forms → Applications; admins also have them under Sales.
+  { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Coaching", searchOnly: true,
+    visibleTo: ["coach"] },
+  { to: "/admin/program-library", label: "Program Library", icon: Library, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/warmup-protocols", label: "Warm-Up Protocols", icon: Flame, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+  { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Coaching", searchOnly: true,
+    visibleTo: COACHING_STAFF },
+
+  // ── SALES ────────────────────────────────────────────────────────────
+  // The Sales page holds Products · Transactions · Taxes & Books · Discount
+  // Codes · Settings; their older addresses stay findable. CRM and
+  // applications are pages of their own.
+  { to: "/admin/sales", label: "Sales", icon: BarChart3, group: "Sales",
+    visibleTo: ["admin", "sales"],
+    keywords: ["payments", "money", "revenue", "products", "transactions", "discount codes", "checkout settings"] },
+  { to: "/admin/crm", label: "CRM Dashboard", icon: UserCheck, group: "Sales",
+    visibleTo: ["admin", "sales"] },
+  { to: "/admin/crm/contacts", label: "Leads & Contacts", icon: Users, group: "Sales",
+    visibleTo: ["admin", "sales"] },
+  { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Sales",
+    visibleTo: ["admin", "sales"] },
+  { to: "/admin/payments", label: "Overview", icon: BarChart3, group: "Sales", searchOnly: true,
+    visibleTo: ["admin", "sales"],
+    keywords: ["overview", "dashboard", "revenue", "mrr", "gross", "net", "sales"] },
+  { to: "/admin/transactions", label: "Transactions", icon: Activity, group: "Sales", searchOnly: true,
+    visibleTo: ["admin", "sales", "support"],
+    keywords: ["transactions", "payments", "purchases", "invoices", "receipts", "refunds", "history", "stripe", "product sales"] },
+  { to: "/admin/sales?tab=taxes", label: "Taxes & Books", icon: Landmark, group: "Sales", searchOnly: true,
+    visibleTo: ["admin"],
+    keywords: ["taxes", "tax", "gst", "hst", "cra", "books", "bookkeeping", "expenses", "receipts", "accountant", "t2125", "year end", "cleo", "assistant"] },
+  { to: "/admin/payment-links", label: "Products", icon: ShoppingBag, group: "Sales", searchOnly: true,
+    visibleTo: ["admin", "sales"],
+    keywords: ["products", "offers", "memberships", "coaching", "programs", "digital products", "merchandise", "checkout links", "payment links", "stripe"] },
+  { to: "/admin/discount-codes", label: "Discount Codes", icon: Ticket, group: "Sales", searchOnly: true,
+    visibleTo: ["admin", "sales"],
+    keywords: ["promo", "discount", "coupon", "codes", "referral", "stripe"] },
+  { to: "/admin/billing-sources", label: "Payment Settings", icon: CreditCard, group: "Sales", searchOnly: true,
+    visibleTo: ["admin"],
+    keywords: ["settings", "stripe", "business", "taxes", "branding", "notifications", "advanced", "developer", "webhooks", "billing events"] },
+  { to: "/admin/content-ideas", label: "Content Ideas", icon: Sparkles, group: "Sales", searchOnly: true,
+    visibleTo: ["admin", "media_manager"], keywords: ["coming soon"] },
+  { to: "/admin/testimonials", label: "Testimonials", icon: Sparkles, group: "Sales", searchOnly: true,
+    visibleTo: ["admin", "media_manager"], keywords: ["transformations", "reviews", "proof", "coming soon"] },
 
   // ── MEMBERSHIP ───────────────────────────────────────────────────────
   // The JF Membership business, in the same menu as everything else: there
@@ -135,22 +216,24 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], keywords: ["plans", "pricing", "membership content"] },
   { to: "/admin/membership/programs", label: "Membership Programs", icon: BookOpen, group: "Membership",
     visibleTo: ["admin"] },
-  { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy, group: "Membership",
-    visibleTo: ["admin"] },
-  { to: "/admin/membership/support", label: "Member Support", icon: MessagesSquare, group: "Membership",
-    visibleTo: ["admin"], keywords: ["support inbox", "member messages", "help"] },
-  { to: "/admin/membership/welcome-messages", label: "Welcome Messages", icon: Megaphone, group: "Membership",
-    visibleTo: ["admin"], keywords: ["announcements", "welcome"] },
   { to: "/admin/membership/sms-email", label: "SMS & Email", icon: MessageCircle, group: "Membership",
     visibleTo: ["admin"] },
+  // Members write in on Messages → Support.
+  { to: "/admin/membership/support", label: "Member Support", icon: MessagesSquare, group: "Membership", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["support inbox", "member messages", "help"] },
+  // Pages that only say "coming soon" yet: findable, not in the menu.
+  { to: "/admin/membership/challenges", label: "Challenges", icon: Trophy, group: "Membership", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["coming soon"] },
+  { to: "/admin/membership/welcome-messages", label: "Welcome Messages", icon: Megaphone, group: "Membership", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["announcements", "welcome", "coming soon"] },
+  { to: "/admin/membership/promo-tools", label: "Promo Tools", icon: Tag, group: "Membership", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["promotions", "referral codes", "coming soon"] },
   { to: "/admin/membership/sales-page", label: "Sales Page", icon: Sparkles, group: "Membership",
     visibleTo: ["admin"], section: "Sales", keywords: ["sales page", "join page", "landing"] },
   { to: "/admin/membership/signup-link", label: "Signup Link", icon: LinkIcon, group: "Membership",
     visibleTo: ["admin"], section: "Sales" },
   { to: "/admin/membership/signup-stats", label: "Signup Stats", icon: BarChart3, group: "Membership",
     visibleTo: ["admin"], section: "Sales", keywords: ["membership analytics", "signups", "conversion"] },
-  { to: "/admin/membership/promo-tools", label: "Promo Tools", icon: Tag, group: "Membership",
-    visibleTo: ["admin"], section: "Sales", keywords: ["promotions", "referral codes"] },
   { to: "/admin/membership/checkout-settings", label: "Checkout Kill-Switch", icon: PowerOff, group: "Membership",
     visibleTo: ["admin"], section: "Sales", keywords: ["kill switch", "pause", "checkout", "disable signups", "join page", "trial settings"] },
   { to: "/admin/membership/stripe-sync", label: "Stripe Sync", icon: RefreshCw, group: "Membership",
@@ -175,114 +258,57 @@ const REGISTRY: Entry[] = [
   { to: "/admin/membership/refund-policy", label: "Refund Policy", icon: FileText, group: "Membership",
     visibleTo: ["admin"], section: "Setup" },
 
-  // ── PAYMENTS ─────────────────────────────────────────────────────────
-  { to: "/admin/payments", label: "Overview", icon: BarChart3, group: "Payments",
-    visibleTo: ["admin", "sales"],
-    keywords: ["overview", "dashboard", "revenue", "mrr", "gross", "net", "sales"] },
-  { to: "/admin/transactions", label: "Transactions", icon: Activity, group: "Payments",
-    visibleTo: ["admin", "sales", "support"],
-    keywords: ["transactions", "payments", "purchases", "invoices", "receipts", "refunds", "history", "stripe", "product sales"] },
-  { to: "/admin/sales?tab=taxes", label: "Taxes & Books", icon: Landmark, group: "Payments",
-    visibleTo: ["admin"],
-    keywords: ["taxes", "tax", "gst", "hst", "cra", "books", "bookkeeping", "expenses", "receipts", "accountant", "t2125", "year end", "cleo", "assistant"] },
-  { to: "/admin/payment-links", label: "Products", icon: ShoppingBag, group: "Payments",
-    visibleTo: ["admin", "sales"],
-    keywords: ["products", "offers", "memberships", "coaching", "programs", "digital products", "merchandise", "checkout links", "payment links", "stripe"] },
-  { to: "/admin/discount-codes", label: "Discount Codes", icon: Ticket, group: "Payments",
-    visibleTo: ["admin", "sales"],
-    keywords: ["promo", "discount", "coupon", "codes", "referral", "stripe"] },
-  { to: "/admin/billing-sources", label: "Settings", icon: CreditCard, group: "Payments",
-    visibleTo: ["admin"],
-    keywords: ["settings", "stripe", "business", "taxes", "branding", "notifications", "advanced", "developer", "webhooks", "billing events"] },
-
-  // ── PROGRAMMING ──────────────────────────────────────────────────────
-  { to: "/admin/programming", label: "Programs", icon: BookOpen, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/program-library", label: "Program Library", icon: Library, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/exercises", label: "Exercise Library", icon: Dumbbell, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"] },
-  { to: "/admin/cardio-targets", label: "Cardio Targets", icon: Heart, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"], section: "Training Tools" },
-  { to: "/admin/warmup-protocols", label: "Warm-Up Protocols", icon: Flame, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"], section: "Training Tools" },
-  { to: "/admin/recipes", label: "Recipe Library", icon: ChefHat, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"], section: "Nutrition" },
-  { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Programming",
-    visibleTo: ["admin", "coach", "assistant_coach"], section: "Forms & Check-Ins" },
-  { to: "/admin/forms", label: "Form Builder", icon: FileEdit, group: "Programming",
-    visibleTo: ["admin", "coach"], section: "Forms & Check-Ins" },
-  { to: "/admin/fillout-submissions", label: "Fillout Submissions", icon: ClipboardList, group: "Programming",
-    visibleTo: ["admin", "coach"], section: "Forms & Check-Ins" },
-
-  // ── SCHEDULING ───────────────────────────────────────────────────────
-  // One Calendar page with tabs; these are shortcuts into it (old paths redirect).
-  { to: "/admin/calendar", label: "Calendar", icon: Calendar, group: "Scheduling",
-    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "media_manager"],
-    keywords: ["calendar", "schedule", "appointments", "upcoming", "book", "booking"] },
-  { to: "/admin/pt-calendar", label: "Sessions", icon: Calendar, group: "Scheduling",
-    visibleTo: ["admin", "coach"], keywords: ["pt", "personal training", "1:1", "sessions", "pt calendar"] },
-  { to: "/admin/events", label: "Events", icon: Calendar, group: "Scheduling",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/google-calendar", label: "Calendar Setup", icon: LinkIcon, group: "Scheduling",
-    visibleTo: ["admin", "coach", "sales"], keywords: ["google calendar", "booking links", "sync", "availability"] },
-
-  // ── BUSINESS ─────────────────────────────────────────────────────────
-  { to: "/admin/crm", label: "CRM Dashboard", icon: UserCheck, group: "Business",
-    visibleTo: ["admin", "sales"] },
-  { to: "/admin/crm/contacts", label: "Leads & Contacts", icon: Users, group: "Business",
-    visibleTo: ["admin", "sales"] },
-  { to: "/admin/sales/coaching-applications", label: "Coaching Applications", icon: ClipboardList, group: "Business",
-    visibleTo: ["admin", "sales", "coach"] },
-  { to: "/admin/content-ideas", label: "Content Ideas", icon: Sparkles, group: "Business",
-    visibleTo: ["admin", "media_manager"] },
-  { to: "/admin/testimonials", label: "Testimonials", icon: Star, group: "Business",
-    visibleTo: ["admin", "media_manager"], keywords: ["transformations", "reviews", "proof"] },
-  { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Business",
-    visibleTo: ["admin"], keywords: ["popup", "modal", "birthday cards", "task popup", "load screen"] },
-  { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Business",
-    visibleTo: ["admin", "operations"], section: "Setup" },
-  { to: "/admin/legal", label: "Legal", icon: FileSignature, group: "Business",
-    visibleTo: ["admin"], section: "Setup" },
-
   // ── TEAM ─────────────────────────────────────────────────────────────
+  // One Team page: People · Staff access · Operations tabs.
   { to: "/admin/team", label: "Team", icon: Users, group: "Team",
+    visibleTo: ["admin", "operations"], keywords: ["people", "coaches", "staff", "operations"] },
+  { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
-  { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team",
+  { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
-  { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team",
+  { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
-
-  // ── ADD-ONS ──────────────────────────────────────────────────────────
-  { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Add-ons",
-    visibleTo: ["admin"] },
-  { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Add-ons",
-    visibleTo: ["admin"] },
-  { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Add-ons",
-    visibleTo: ["admin"] },
 
   // ── SETTINGS ─────────────────────────────────────────────────────────
-  { to: "/admin/settings", label: "App Settings", icon: Settings, group: "Settings",
-    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "staff"] },
+  // Everything you set once lives here (the old Add-ons and the chat media
+  // libraries included), opening on Account, the first tab of the Settings
+  // tab row that holds most of it.
   { to: "/admin/account", label: "Account", icon: UserCog, group: "Settings",
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support", "operations", "staff"] },
-  { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Settings",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/automations", label: "Automations", icon: RefreshCw, group: "Settings",
-    visibleTo: ["admin", "coach"] },
-  { to: "/admin/sops", label: "SOPs", icon: FileText, group: "Settings",
-    visibleTo: ["admin", "operations"] },
-  { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/settings/notifications/coaching-applications", label: "Application Alerts", icon: AlertCircle, group: "Settings",
-    visibleTo: ["admin"] },
-  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Settings",
-    visibleTo: ["admin", "coach"] },
+  { to: "/admin/settings", label: "Workspace", icon: Settings, group: "Settings",
+    visibleTo: ["admin", "coach", "assistant_coach", "sales", "support", "operations", "staff"],
+    keywords: ["app settings", "email sender", "drive", "archive", "signnow"] },
   { to: "/admin/voice", label: "My Voice", icon: Sparkles, group: "Settings",
     visibleTo: ["admin", "coach"] },
+  { to: "/admin/automations", label: "Automations", icon: RefreshCw, group: "Settings",
+    visibleTo: ["admin", "coach"] },
+  { to: "/admin/apps", label: "Integrations", icon: Layers, group: "Settings",
+    visibleTo: ["admin"], keywords: ["add-ons", "apps", "gmail", "google", "stripe"] },
+  { to: "/admin/faqs", label: "FAQ Manager", icon: HelpCircle, group: "Settings",
+    visibleTo: ["admin", "coach"] },
+  { to: "/admin/floating-bar", label: "Floating Bar", icon: LayoutGrid, group: "Settings",
+    visibleTo: ["admin", "coach"] },
+  { to: "/admin/settings/chat", label: "Chat Settings", icon: MessageCircle, group: "Settings",
+    visibleTo: ["admin"], section: "Messaging" },
+  { to: "/admin/chat-gifs", label: "Chat Media", icon: ImageIcon, group: "Settings",
+    visibleTo: ["admin"], section: "Messaging", keywords: ["gif", "gifs", "chat gif library"] },
+  { to: "/admin/chat-sounds", label: "Chat Sound Library", icon: Sparkles, group: "Settings", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["sounds", "chat media"] },
+  { to: "/admin/call-access", label: "Call Access", icon: Phone, group: "Settings",
+    visibleTo: ["admin"], section: "Messaging", keywords: ["add-ons", "calls"] },
+  { to: "/admin/settings/sms", label: "SMS Access", icon: MessageCircle, group: "Settings",
+    visibleTo: ["admin"], section: "Messaging", keywords: ["add-ons", "texts"] },
+  { to: "/admin/popups", label: "Popups", icon: LayoutGrid, group: "Settings",
+    visibleTo: ["admin"], section: "Messaging", keywords: ["popup", "modal", "birthday cards", "task popup", "load screen"] },
+  { to: "/admin/legal", label: "Legal", icon: FileSignature, group: "Settings",
+    visibleTo: ["admin"], section: "Business", keywords: ["terms", "privacy", "policy", "disclaimers"] },
+  { to: "/admin/sops", label: "SOPs", icon: FileText, group: "Settings",
+    visibleTo: ["admin", "operations"], section: "Business" },
+  { to: "/admin/settings/notifications/coaching-applications", label: "Application Alerts", icon: AlertCircle, group: "Settings",
+    visibleTo: ["admin"], section: "Business" },
   // Advanced / technical utilities — surfaced last inside the Settings flyout.
+  { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Settings",
+    visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings",
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings",
@@ -308,7 +334,7 @@ export const STAFF_BAR: NavItem[] = [
 /**
  * The finance login's own section, first in its sidebar: its home and the
  * money pages it works in every day, from the same registry entries as the
- * admin's Payments menu (labels tuned for a bookkeeper). The rest of the admin
+ * admin's Sales menu (labels tuned for a bookkeeper). The rest of the admin
  * nav follows.
  */
 export const FINANCE_HOME: NavItem = { to: "/admin/finance", label: "Home", icon: Wallet, group: "Finance" };
@@ -344,44 +370,44 @@ export function buildFinanceNav(): NavItem[] {
     ...FINANCE_PAGES.flatMap(({ to, label }) => {
       const entry = all.find((e) => e.to === to);
       if (!entry) return [];
-      const { visibleTo: _v, section: _s, ...item } = entry as Entry & { section?: string };
+      // its own section shows them all, wherever the admin menu keeps them
+      const { visibleTo: _v, section: _s, searchOnly: _o, ...item } = entry;
       return [{ ...item, label: label ?? item.label, group: "Finance" } as NavItem];
     }),
   ];
 }
 
 /**
- * Build the sidebar for a given staff role tag.
+ * Every page a staff role tag can reach, flat (`searchOnly` ones included):
+ * the sitemap, the floating-bar picker and the menu below read it.
  * Returns `NavItem[]` (already filtered, already grouped via NavItem.group).
  */
 export function buildInternalNav(roleTag: StaffRoleTag): NavItem[] {
   return REGISTRY.filter((e) => e.visibleTo.includes(roleTag)).map(({ visibleTo: _v, ...item }) => item as NavItem);
 }
 
-/**
- * Trainerize-style collapsed nav. Overview items stay flat; every other
- * workspace is folded into ONE top-level `NavItem` whose `to` is the
- * first (primary) route in that group and whose `children` are the
- * remaining pages, rendered as a hover flyout on desktop and a subpanel
- * on mobile.
- *
- * The primary label is generic ("Messages", "Clients", …) so the sidebar
- * matches the requested IA — the actual first entry's label becomes the
- * first flyout child so nothing is lost.
- */
-const WORKSPACE_LABELS: Partial<Record<WorkspaceKey, { label: string }>> = {
+/** Each workspace row's label (and icon, where its first page's doesn't fit the row). */
+const WORKSPACE_ROWS: Partial<Record<WorkspaceKey, { label: string; icon?: NavItem["icon"] }>> = {
   Messages: { label: "Messages" },
   Clients: { label: "Clients" },
+  Crew: { label: "Crew" },
+  Calendar: { label: "Calendar" },
+  Coaching: { label: "Coaching" },
+  Sales: { label: "Sales" },
   Membership: { label: "Membership" },
-  Payments: { label: "Payments" },
-  Programming: { label: "Programs" },
-  Scheduling: { label: "Scheduling" },
-  Business: { label: "Business" },
   Team: { label: "Team" },
-  "Add-ons": { label: "Add-ons" },
-  Settings: { label: "Settings" },
+  // opens on Account (the tab row's first), drawn as Settings
+  Settings: { label: "Settings", icon: Settings },
 };
 
+/**
+ * The menu: one row per page. Overview items stay flat; every other
+ * workspace is ONE top-level `NavItem` whose `to` is the first page the role
+ * can see in that group and whose `children` are its other pages, shown as a
+ * hover flyout on desktop and a submenu on phones. A workspace with a single
+ * page is a plain row. `searchOnly` children ride along (More's search finds
+ * them, they light the row, their badges count on it) but are never listed.
+ */
 export function buildInternalNavCollapsed(roleTag: StaffRoleTag): NavItem[] {
   const flat = buildInternalNav(roleTag);
   const byGroup = new Map<string, NavItem[]>();
@@ -400,57 +426,48 @@ export function buildInternalNavCollapsed(roleTag: StaffRoleTag): NavItem[] {
   // Remaining workspaces — fold into one row per workspace
   for (const key of WORKSPACE_ORDER) {
     if (key === "Overview") continue;
-    const items = byGroup.get(key);
-    if (!items || items.length === 0) continue;
-    const primary = items[0];
+    const items = byGroup.get(key) ?? [];
+    const primary = items.find((i) => !i.searchOnly);
+    if (!primary) continue;
     // Keep primary at top; among the rest, preserve REGISTRY order but push
     // any child tagged with a `section` to the bottom so the flyout shows
     // frequent / high-priority pages first and setup / diagnostic / advanced
     // pages under a labelled divider.
-    const rest = items
-      .slice(1)
-      .slice()
+    const others = items.filter((i) => i !== primary);
+    const listed = others
+      .filter((i) => !i.searchOnly)
       .sort((a, b) => Number(!!a.section) - Number(!!b.section));
-    const groupBucket: "Main Menu" | "Other" =
-      key === "Add-ons" || key === "Settings" ? "Other" : "Main Menu";
-    // Avoid the "Messages → Messages", "Clients → Clients" duplication in the
-    // desktop flyout / tablet flyout / mobile submenu. Rename the first
-    // child (which IS the primary destination) to something descriptive.
-    const primaryChildLabel = primaryChildAlias(key, primary.label);
+    const unlisted = others.filter((i) => i.searchOnly);
+    const label = WORKSPACE_ROWS[key]?.label ?? primary.label;
+    const children = [
+      // the row's own page leads its flyout, under a name that isn't the row's again
+      ...(listed.length > 0 ? [{ ...primary, label: primaryChildLabel(key, label, primary.label) }] : []),
+      ...listed,
+      ...unlisted,
+    ];
     out.push({
       to: primary.to,
-      label: WORKSPACE_LABELS[key]?.label ?? primary.label,
-      icon: primary.icon,
-      group: groupBucket,
+      label,
+      icon: WORKSPACE_ROWS[key]?.icon ?? primary.icon,
+      group: key === "Settings" ? "Other" : "Main Menu",
       keywords: primary.keywords,
-      children:
-        rest.length > 0
-          ? [{ ...primary, label: primaryChildLabel }, ...rest]
-          : undefined,
+      children: children.length > 0 ? children : undefined,
     });
   }
   return out;
 }
 
 /**
- * Friendlier label for the first child in a folded workspace flyout. The
- * folded builder puts the primary destination first in `children`, but its
- * label is identical to the parent (e.g. "Messages → Messages"), which reads
- * as a duplicate. Return a clearer, workspace-specific alias.
+ * The name of a row's own page at the top of its flyout: its page's label,
+ * unless that only repeats the row's ("Clients → Clients").
  */
-function primaryChildAlias(workspace: string, primaryLabel: string): string {
+function primaryChildLabel(workspace: WorkspaceKey, rowLabel: string, pageLabel: string): string {
+  if (pageLabel !== rowLabel) return pageLabel;
   switch (workspace) {
-    case "Messages": return "Inbox";
     case "Clients": return "All Clients";
-    case "Membership": return "Overview";
-    case "Payments": return "Overview";
-    case "Programming": return "Overview";
-    case "Scheduling": return "Overview";
-    case "Business": return "Overview";
-    case "Team": return "Overview";
-    case "Add-ons": return "Overview";
-    case "Settings": return "Overview";
-    default: return primaryLabel;
+    case "Crew": return "Feed";
+    case "Sales": return "Sales & payments";
+    default: return "Overview";
   }
 }
 

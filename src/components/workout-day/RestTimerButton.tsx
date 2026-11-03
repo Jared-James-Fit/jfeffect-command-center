@@ -113,7 +113,7 @@ export function RestTimerButton({
         title={clock ? `${auto ? "Auto rest" : "Rest"} ${clock} — tap to start` : "No rest set"}
         aria-label={clock ? `Start ${clock} ${auto ? "auto " : ""}rest timer` : "Rest timer unavailable"}
         className={cn(
-          "inline-flex h-10 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-primary/25 bg-primary/10 pl-1.5 pr-3 text-xs font-semibold tabular-nums text-foreground transition hover:bg-primary/15 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 @max-[17rem]:h-9 @max-[17rem]:pl-2 @max-[17rem]:pr-2.5",
+          "inline-flex h-10 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border border-border bg-background pl-1.5 pr-3 text-xs font-semibold tabular-nums text-foreground transition hover:bg-muted active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 @max-[17rem]:h-9 @max-[17rem]:pl-2 @max-[17rem]:pr-2.5",
           className,
         )}
       >

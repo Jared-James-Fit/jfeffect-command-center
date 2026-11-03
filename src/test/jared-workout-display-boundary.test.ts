@@ -22,6 +22,10 @@ describe("Jared workout display boundary", () => {
     expect(source).toContain('if (status === "in_progress")');
     expect(source).toContain('case "missed":');
     expect(source).toContain('label: "View Workout"');
-    expect(source).toContain('secondary: { label: "Start Workout", search: { start: 1 } }');
+    // A missed workout leads with Start (one main button; View went to the same page).
+    const cta = source.slice(source.indexOf("function primaryCtaFor("));
+    const missed = cta.slice(cta.indexOf('case "missed":'), cta.indexOf('case "today":'));
+    expect(missed).toContain('label: "Start Workout"');
+    expect(missed).not.toContain("View Workout");
   });
 });

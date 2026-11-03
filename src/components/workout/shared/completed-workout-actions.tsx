@@ -1,18 +1,19 @@
 /**
- * Shared post-completion action bar. Renders on completed workouts for
- * both coaching clients and membership users:
- *   - "View / Edit Log" → scrolls back to the log (which IS the page body).
- *   - "View / Edit Review" → opens the shared `WorkoutReviewEditor`,
+ * The finished workout's one card, at the top of the log: its status
+ * (Completed, or completed with the review still to do), how long it took, the
+ * review button and View score. The log itself is the page under it.
+ *   - "Finish review" / "Edit review" → opens the shared `WorkoutReviewEditor`,
  *     prefilled with the existing review when one exists.
+ *   - "View score" → the recap, once the review is in.
  *
  * `ctx` is the same discriminated context used by `submitOrEditReview`,
  * so the editor writes to the correct backing table (pl_workout_feedback
  * for clients, member_workout_reviews for members).
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MessageSquare, Pencil } from "lucide-react";
+import { CheckCircle2, MessageSquare, Pencil, Trophy } from "lucide-react";
 import {
   WorkoutReviewEditor,
   type ReviewInitial,
@@ -37,6 +38,12 @@ type Props = {
    */
   autoOpenReview?: boolean;
   onAutoOpenReviewConsumed?: () => void;
+  /** Opens the score / recap; shown once the review is in. */
+  onOpenScore?: () => void;
+  /** e.g. "1h 5m", after the status. */
+  meta?: string | null;
+  /** More of the same card under the status row (the session time line). */
+  children?: ReactNode;
 };
 
 export function CompletedWorkoutActions({
@@ -49,6 +56,9 @@ export function CompletedWorkoutActions({
   actAsClientId,
   autoOpenReview,
   onAutoOpenReviewConsumed,
+  onOpenScore,
+  meta,
+  children,
 }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const hasReview = !!initialReview?.submittedAt;
@@ -63,40 +73,44 @@ export function CompletedWorkoutActions({
 
   return (
     <>
-      <Card
-        className={
-          hasReview
-            ? "flex flex-wrap items-center gap-2 border-emerald-500/30 bg-emerald-500/5 p-3"
-            : "flex flex-wrap items-center gap-2 border-amber-500/30 bg-amber-500/5 p-3"
-        }
-      >
-        <div
-          className={
-            hasReview
-              ? "mr-auto text-sm font-bold text-emerald-700 dark:text-emerald-300"
-              : "mr-auto text-sm font-bold text-amber-700 dark:text-amber-300"
-          }
-        >
-          {hasReview ? "Workout complete" : "Workout logged · review pending"}
+      <Card className="space-y-2.5 p-3" data-testid="completed-workout-card">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-auto flex min-w-0 items-center gap-2 text-sm font-semibold">
+            {hasReview ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
+            ) : (
+              <MessageSquare className="h-4 w-4 shrink-0 text-warning" aria-hidden />
+            )}
+            <span>{hasReview ? "Completed" : "Completed · review pending"}</span>
+            {meta ? <span className="font-normal tabular-nums text-muted-foreground">· {meta}</span> : null}
+          </div>
+          <div className="flex items-center gap-2">
+            {hasReview && onOpenScore && (
+              <Button variant="outline" onClick={onOpenScore} className="h-10">
+                <Trophy className="h-4 w-4" />
+                View score
+              </Button>
+            )}
+            <Button
+              variant={hasReview ? "ghost" : "default"}
+              onClick={() => setReviewOpen(true)}
+              className={hasReview ? "h-10 text-muted-foreground" : "h-10"}
+            >
+              {hasReview ? (
+                <>
+                  <Pencil className="h-4 w-4" />
+                  Edit review
+                </>
+              ) : (
+                <>
+                  <MessageSquare className="h-4 w-4" />
+                  Finish review
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-        <Button
-          variant={hasReview ? "outline" : "default"}
-          size="sm"
-          onClick={() => setReviewOpen(true)}
-          className="h-9 gap-1.5"
-        >
-          {hasReview ? (
-            <>
-              <Pencil className="h-4 w-4" />
-              Edit Review
-            </>
-          ) : (
-            <>
-              <MessageSquare className="h-4 w-4" />
-              Finish Review
-            </>
-          )}
-        </Button>
+        {children}
       </Card>
       <WorkoutReviewEditor
         open={reviewOpen}

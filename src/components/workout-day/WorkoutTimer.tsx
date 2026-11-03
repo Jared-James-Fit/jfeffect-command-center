@@ -392,6 +392,7 @@ export function WorkoutTimer({
   readonly,
   className,
   onSessionChange,
+  variant = "badge",
 }: {
   dayId: string;
   completedAt?: string | null;
@@ -399,6 +400,11 @@ export function WorkoutTimer({
   readonly?: boolean;
   className?: string;
   onSessionChange?: (s: WorkoutSession | null) => void;
+  /**
+   * "inline": plain text that takes its colour from where it sits (the
+   * logger's progress pill), and nothing at all until the clock runs.
+   */
+  variant?: "badge" | "inline";
 }) {
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -460,6 +466,7 @@ export function WorkoutTimer({
   }
 
   const abandoned = session ? isSessionAbandoned(session, now) : false;
+  if (variant === "inline" && (!session || abandoned)) return null;
 
   // ── Abandoned guard: never silently report a 19-hour workout. ──
   if (session && abandoned) {
@@ -506,12 +513,14 @@ export function WorkoutTimer({
     <span className={cn("inline-flex items-center gap-1", className)}>
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-bold tabular-nums",
-          stopped || paused ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary",
+          variant === "inline"
+            ? "inline-flex items-center gap-1 tabular-nums"
+            : "inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-bold tabular-nums",
+          variant === "inline" ? null : stopped || paused ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary",
         )}
         aria-label={`${stopped ? "Stopped" : paused ? "Paused" : "Workout session"} ${formatElapsed(elapsed)}`}
       >
-        <Clock className="h-3.5 w-3.5" />
+        <Clock className={variant === "inline" ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden />
         {stopped ? `Stopped · ${formatElapsed(elapsed)}` : paused ? `Paused · ${formatElapsed(elapsed)}` : formatElapsed(elapsed)}
       </span>
       {!readonly && !stopped && (

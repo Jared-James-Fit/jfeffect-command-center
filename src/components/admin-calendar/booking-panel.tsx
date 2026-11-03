@@ -21,7 +21,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -195,16 +194,14 @@ export function AdminBookingPanel() {
 
   return (
     <>
-      <PageHeader
-        title="Booking"
-        subtitle="Book a client in a tap, or send a link so people book themselves from your open hours."
-        actions={
-          <Button size="sm" className="bg-primary font-semibold" onClick={() => openNew(null)}>
+      {/* No second title: the Calendar page's Booking tab already names it. */}
+      <div className="space-y-4 p-3 sm:p-6 md:p-8">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 text-[13px] text-muted-foreground">Book a client in a tap, or send a link so people book themselves from your open hours.</p>
+          <Button size="sm" className="h-10 shrink-0" onClick={() => openNew(null)}>
             <Plus className="mr-1.5 h-4 w-4" /> New type
           </Button>
-        }
-      />
-      <div className="space-y-4 p-3 sm:p-6 md:p-8">
+        </div>
         {/* What keeps it from double-booking */}
         <button
           type="button"

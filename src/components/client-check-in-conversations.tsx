@@ -25,11 +25,11 @@ export function ClientCheckInConversations({
     <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-In Conversations</h3>
+          <h3 className="text-base font-semibold">Check-in conversations</h3>
           <p className="text-xs text-muted-foreground mt-1">Past responses + ongoing chats with this client.</p>
         </div>
-        <Button size="sm" className="bg-primary font-semibold" onClick={onCompose}>
-          <Send className="mr-1 h-4 w-4" /> New Check-In Response
+        <Button size="sm" onClick={onCompose}>
+          <Send className="mr-1 h-4 w-4" /> New check-in response
         </Button>
       </div>
 
@@ -39,7 +39,7 @@ export function ClientCheckInConversations({
         <div className="rounded-xl border border-dashed border-border p-6 text-center">
           <MessageCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground/60" />
           <div className="text-sm font-bold">No check-in responses yet</div>
-          <p className="mt-1 text-xs text-muted-foreground">Tap “New Check-In Response” to send your first one. The client can reply back like a text chat.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Tap “New check-in response” to send your first one. The client can reply back like a text chat.</p>
         </div>
       ) : (
         <ul className="space-y-2">

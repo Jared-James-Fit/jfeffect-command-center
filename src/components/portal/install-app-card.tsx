@@ -25,26 +25,17 @@ export function InstallAppCard({ className, hideWhenDone = false }: { className?
         className={cn("block w-full text-left", className)}
         aria-label={installed ? "JF Effect Installed" : "Install JF Effect on Your Phone"}
       >
-        <Card
-          className={cn(
-            "flex items-center gap-3 p-4 transition active:scale-[0.99]",
-            installed
-              ? "border-success/40 bg-success/5 hover:border-success"
-              : "border-primary/30 bg-gradient-to-br from-primary/10 to-card hover:border-primary",
-          )}
-        >
+        <Card className="flex items-center gap-3 p-4 transition hover:bg-muted/40 active:scale-[0.99]">
           <div
             className={cn(
-              "grid h-11 w-11 shrink-0 place-items-center rounded-xl shadow-sm",
-              installed
-                ? "bg-success/15 text-success"
-                : "bg-primary text-primary-foreground",
+              "grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted",
+              installed ? "text-success" : "text-foreground",
             )}
           >
             {installed ? <CheckCircle2 className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold">
+            <div className="text-sm font-semibold">
               {installed ? "JF Effect Installed" : "Install JF Effect on Your Phone"}
             </div>
             <div className="mt-0.5 text-xs text-muted-foreground">

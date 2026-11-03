@@ -21,7 +21,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Phone, MessageSquare, AlertTriangle, Mail, ChevronLeft } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Phone, MessageSquare, AlertTriangle, Mail, ChevronLeft, MoreHorizontal } from "lucide-react";
 import { formatDistanceToNowStrict, isToday, format } from "date-fns";
 import { UserAvatar } from "@/components/user-avatar";
 import { markRead, markUnread } from "@/lib/messages";
@@ -159,7 +165,7 @@ function ClientMessages() {
       <header
         className="flex items-center gap-2.5 border-b border-border bg-card/80 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-card/60 md:px-6"
       >
-        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 md:hidden" onClick={onBack} aria-label="All chats">
+        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0 md:hidden" onClick={onBack} aria-label="All chats">
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <LiveAvatar live={coachLive} size={40} tag={false}>
@@ -181,41 +187,43 @@ function ClientMessages() {
             )}
           </div>
         </div>
+        {/* Call stays one tap (urgent only, behind its own confirm); Text and
+            Mark as unread are rarer, so they share one ⋯. All neutral: the chat
+            is the main thing on this screen. */}
         {callEnabled && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
-            title={`Call ${coachName}`}
-            onClick={() => setConfirm("call")}
-          >
-            <Phone className="h-4 w-4" />
-          </Button>
-        )}
-        {smsEnabled && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-            title={`Text ${coachName}`}
-            onClick={() => setConfirm("sms")}
-          >
-            <MessageSquare className="h-4 w-4" />
-          </Button>
-        )}
-        {client?.id && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0"
-            title="Mark conversation as unread"
-            onClick={markCoachUnread}
+            className="h-10 w-10 shrink-0"
+            title={`Call ${coachName}`}
+            aria-label={`Call ${coachName}`}
+            onClick={() => setConfirm("call")}
           >
-            <Mail className="h-4 w-4" />
+            <Phone className="h-5 w-5" />
           </Button>
+        )}
+        {(smsEnabled || client?.id) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="h-10 w-10 shrink-0" aria-label="More options">
+                <MoreHorizontal className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {smsEnabled && (
+                // after the menu has closed, so the confirm takes focus cleanly
+                <DropdownMenuItem className="min-h-10" onSelect={() => window.setTimeout(() => setConfirm("sms"), 0)}>
+                  <MessageSquare className="mr-2 h-4 w-4" /> Text {coachName}
+                </DropdownMenuItem>
+              )}
+              {client?.id && (
+                <DropdownMenuItem className="min-h-10" onSelect={() => void markCoachUnread()}>
+                  <Mail className="mr-2 h-4 w-4" /> Mark as unread
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </header>
         {!client ? (
@@ -263,7 +271,7 @@ function ClientMessages() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               For urgent or important matters only
             </AlertDialogTitle>
             <AlertDialogDescription>

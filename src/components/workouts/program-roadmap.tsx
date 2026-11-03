@@ -193,7 +193,7 @@ export function ProgramRoadmapCard({
             </div>
           )}
           {meet ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-bold text-primary" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-foreground" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
               <Flag className="h-3 w-3" /> {meetText(meet.daysOut)}
             </span>
           ) : roadmap.end && !allDone ? (
@@ -229,7 +229,7 @@ export function ProgramRoadmapCard({
         <div className="border-t border-border/60 px-4 py-3.5" data-roadmap-now>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-primary">
+              <div className="text-xs font-semibold text-muted-foreground">
                 {blocks.length > 1 ? `Block ${currentIdx + 1} of ${blocks.length}` : "This block"}
                 {current.status === "upcoming" ? " · starts soon" : ""}
               </div>

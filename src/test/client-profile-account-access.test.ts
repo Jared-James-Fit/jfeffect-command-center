@@ -33,15 +33,27 @@ describe("client profile shell cleanup", () => {
     expect(SHELL).not.toMatch(/<TrainingPhasesPanel|<ImportantDatesPanel|<AssignedProgramsCard|<TrainingProgramHub/);
   });
 
-  it("surfaces Account & Access inside Summary without duplicating last sign-in", () => {
-    const cardIdx = SHELL.indexOf("Account &amp; Access");
+  it("puts login problems and missing fields in Summary's one Missing list, without duplicating last sign-in", () => {
+    const cardIdx = SHELL.indexOf('data-testid="client-missing-card"');
     expect(cardIdx).toBeGreaterThan(-1);
-    const card = SHELL.slice(cardIdx, cardIdx + 1600);
+    const card = SHELL.slice(cardIdx, cardIdx + 3200);
+    expect(card).toContain('data-testid="account-access-card"');
     expect(card).toContain("Account created");
     expect(card).toContain("Invite status");
     expect(card).toContain("Manage access");
+    expect(card).toContain("{missing.map((m) => (");
     expect(card).not.toContain("Last signed in");
+    // shown only when something is missing
+    expect(SHELL).toContain("{(missing.length > 0 || loginIssue) && (");
     expect(SHELL).toContain("<AppActivityCard");
+  });
+
+  it("Summary doesn't repeat the header: no identity card, quick-action grid or Personal Snapshot", () => {
+    const summary = SHELL.slice(SHELL.indexOf("function ClientOverviewSnapshot("), SHELL.indexOf("function FoldedSection("));
+    expect(summary).not.toContain("Open Client POV");
+    expect(summary).not.toContain("Manage Schedule");
+    expect(summary).not.toContain("Personal Snapshot");
+    expect(summary).not.toContain("Add phase");
   });
 });
 

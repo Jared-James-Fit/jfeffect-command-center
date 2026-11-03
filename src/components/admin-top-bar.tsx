@@ -1,11 +1,12 @@
 import { useRouterState } from "@tanstack/react-router";
-import { Eye, Search } from "lucide-react";
+import { Eye } from "lucide-react";
 import { KeyboardShortcutsButton } from "@/components/keyboard-shortcuts";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Slim desktop strip above admin and coach pages: search, keyboard shortcuts
- * and "View as client". There is no Coaching / Membership switch any more:
+ * Slim desktop strip above admin and coach pages: keyboard shortcuts and
+ * "View as client". Search is the sidebar's "Search everything…" (⌘K), the
+ * one search on desktop. There is no Coaching / Membership switch any more:
  * membership is a section of the one admin menu, and member, client and team
  * accounts are all opened (and viewed as) from the Clients page.
  *
@@ -26,16 +27,6 @@ export function AdminTopBar() {
 
   return (
     <div className="sticky top-0 z-40 hidden items-center justify-end gap-2 border-b border-border bg-background/90 px-6 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:flex">
-      <button
-        type="button"
-        onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
-        className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-        aria-label="Open global search"
-      >
-        <Search className="h-3.5 w-3.5" />
-        <span>Search…</span>
-        <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[9px] text-muted-foreground">⌘K</kbd>
-      </button>
       <KeyboardShortcutsButton />
       {canClientPov && (
         <button
@@ -43,11 +34,11 @@ export function AdminTopBar() {
           onClick={() => {
             try { window.dispatchEvent(new CustomEvent("open-client-pov-picker")); } catch {}
           }}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-warning hover:bg-warning/10"
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted"
           aria-label="View as client"
           title="View as client"
         >
-          <Eye className="h-3.5 w-3.5" /> View as client
+          <Eye className="h-3.5 w-3.5 text-muted-foreground" /> View as client
         </button>
       )}
     </div>

@@ -3,7 +3,6 @@ import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
-import { coachingAdminNav, coachNav } from "@/lib/admin-nav";
 import { FINANCE_BAR, STAFF_BAR, buildFinanceNav, buildInternalNav, buildInternalNavCollapsed, resolveStaffRoleTag } from "@/lib/internal-nav";
 import { AdminTopBar } from "@/components/admin-top-bar";
 import { TaskPopupGate } from "@/components/tasks/task-popup-gate";
@@ -30,13 +29,12 @@ function AdminLayout() {
   }, [role, loading, navigate]);
 
   const isCoach = role === "coach";
-  // Build the sidebar from the shared role-aware internal-nav registry.
-  // Falls back to the legacy per-role registries if the role isn't yet
-  // mapped (defensive — keeps existing behaviour for unknown future roles).
+  // One menu for every staff role, from the shared role-aware internal-nav
+  // registry (this layout only renders for admins and coaches).
   // Membership is a section of this one menu; there is no separate mode.
-  const roleTag = resolveStaffRoleTag(role);
+  const roleTag = resolveStaffRoleTag(role) ?? (isCoach ? "coach" : "admin");
   const isOwner = useIsBusinessOwner();
-  const fullNav = roleTag ? buildInternalNavCollapsed(roleTag) : (isCoach ? coachNav : coachingAdminNav);
+  const fullNav = buildInternalNavCollapsed(roleTag);
   // Owner-only pages (Taxes & Books) stay out of other admins' menus. The
   // finance login keeps them, with its money pages first and the whole admin
   // menu after.
@@ -60,7 +58,7 @@ function AdminLayout() {
       // against the collapsed nav alone dropped slots whose route is folded
       // into a workspace group (the real cause of the "5th slot won't save").
       const source = withBarActionItems(
-        mergeNavSources(nav, roleTag ? buildInternalNav(roleTag) : []),
+        mergeNavSources(nav, buildInternalNav(roleTag)),
       );
       const resolved = resolveLayout(customLayout, source);
       if (resolved.length) return resolved;

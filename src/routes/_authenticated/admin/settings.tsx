@@ -26,7 +26,9 @@ import { SettingsTabs } from "@/components/settings/settings-tabs";
 export const Route = createFileRoute("/_authenticated/admin/settings")({ component: SettingsPage });
 
 function SettingsPage() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  // Already an admin: no "Make me admin", and no second copy of the Account tab's profile.
+  const isAdmin = role === "admin";
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
@@ -107,27 +109,35 @@ function SettingsPage() {
     <>
       <SettingsTabs />
       <PageHeader title="Workspace Settings" subtitle="Email sender, integrations, archive, and access." />
-      <div className="grid gap-6 p-6 md:grid-cols-2 md:p-8">
-        <AccountProfileSettings title="Your Profile" roleLabel="Admin / Owner" />
+      <div className="grid gap-4 p-4 md:grid-cols-2 md:gap-6 md:p-8">
+        {!isAdmin && <AccountProfileSettings title="Your Profile" roleLabel="Coach" />}
         <JfMembershipSettingsCard />
 
-        <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
-          <h3 className="text-xs uppercase tracking-widest text-primary">Admin Access</h3>
-          <p className="text-xs text-muted-foreground">First-time setup: promote yourself to admin to unlock the full command center.</p>
-          <ActionButton onClick={promoteSelfToAdmin} jobLabel="Promoting self to admin" className="w-full bg-primary font-semibold">Make me admin</ActionButton>
-          <div className="pt-4 border-t border-border/50 space-y-2">
-            <Label>Promote another user (by email)</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" />
-            <ActionButton variant="outline" onClick={inviteAsAdmin} jobLabel="Promoting user to admin" className="w-full">Promote to admin</ActionButton>
+        <Card className={isAdmin ? "space-y-3 p-5 md:col-span-2" : "space-y-3 p-5"}>
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Admin access
+          </h3>
+          {!isAdmin && (
+            <>
+              <p className="text-xs text-muted-foreground">First-time setup: promote yourself to admin to unlock the full command center.</p>
+              <ActionButton onClick={promoteSelfToAdmin} jobLabel="Promoting self to admin" className="w-full font-semibold">Make me admin</ActionButton>
+            </>
+          )}
+          <div className={isAdmin ? "space-y-2" : "space-y-2 border-t border-border/50 pt-4"}>
+            <Label htmlFor="promote-admin-email">Promote another user (by email)</Label>
+            <div className={isAdmin ? "flex flex-col gap-2 sm:flex-row" : "space-y-2"}>
+              <Input id="promote-admin-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" className={isAdmin ? "sm:flex-1" : undefined} />
+              <ActionButton variant="outline" onClick={inviteAsAdmin} jobLabel="Promoting user to admin" className={isAdmin ? "w-full sm:w-auto" : "w-full"}>Promote to admin</ActionButton>
+            </div>
           </div>
         </Card>
 
-        <Card className="border-border bg-card p-6 space-y-4 md:col-span-2">
+        <Card className="space-y-4 p-5 md:col-span-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-              <Mail className="h-4 w-4" /> Email Sender — Purchase Confirmations
+            <h3 className="flex items-center gap-2 text-base font-semibold">
+              <Mail className="h-4 w-4 text-muted-foreground" /> Email sender for purchase confirmations
             </h3>
-            <Badge variant="outline" className={current?.status?.startsWith("Connected") ? "border-primary/40 text-primary" : "border-amber-500/40 text-amber-500"}>
+            <Badge variant="outline" className={current?.status?.startsWith("Connected") ? "border-success/40 text-success" : "border-warning/40 text-warning"}>
               {current?.status ?? "Loading…"}
             </Badge>
           </div>
@@ -189,7 +199,7 @@ function SettingsPage() {
           </div>
 
           <div className="flex items-center gap-2 pt-2 border-t border-border/50 flex-wrap">
-            <ActionButton onClick={saveSender} jobLabel="Saving sender settings" className="bg-primary font-semibold">Save sender settings</ActionButton>
+            <ActionButton onClick={saveSender} jobLabel="Saving sender settings" className="font-semibold">Save sender settings</ActionButton>
             {current?.provider === "gmail" && (
               <ActionButton variant="outline" asChild>
                 <a href="/admin/apps">Connect Gmail account</a>
@@ -201,7 +211,7 @@ function SettingsPage() {
             <Label>Test email recipient</Label>
             <div className="flex gap-2 flex-wrap">
               <Input className="flex-1 min-w-[200px]" type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="you@example.com" />
-              <ActionButton onClick={sendTest} jobLabel="Sending test email" variant="outline"><Send className="mr-2 h-4 w-4" />Send test email</ActionButton>
+              <ActionButton onClick={sendTest} jobLabel="Sending test email" variant="outline" icon={<Send className="h-4 w-4" />}>Send test email</ActionButton>
             </div>
             {current?.last_test_at && (
               <p className="text-xs text-muted-foreground">
@@ -268,8 +278,8 @@ function DriveIntegrationCard() {
     <Card className="border-border bg-card p-5 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-primary" />
-          <h2 className="text-base font-bold">Google Drive (media storage)</h2>
+          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold">Google Drive (media storage)</h2>
         </div>
         <Badge variant="outline">{(drive as any)?.status ?? "Not Connected"}</Badge>
       </div>
@@ -378,8 +388,8 @@ function ArchiveSettingsCard() {
     <Card className="border-border bg-card p-5 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-primary" />
-          <h2 className="text-base font-bold">Media Auto-Archive to Drive</h2>
+          <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold">Media auto-archive to Drive</h2>
         </div>
         <Badge variant={cur.auto_archive_enabled ? "default" : "outline"}>
           {cur.auto_archive_enabled ? "Enabled" : "Disabled"}
@@ -500,8 +510,8 @@ function SignNowIntegrationCard() {
     <Card className="border-border bg-card p-5 space-y-3 md:col-span-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-primary" />
-          <h2 className="text-base font-bold">SignNow Integration</h2>
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold">SignNow integration</h2>
         </div>
         <Badge variant="outline" className={tone}>{status}</Badge>
       </div>
@@ -538,7 +548,7 @@ function SignNowIntegrationCard() {
         </div>
 
         <div className="md:col-span-2 pt-2 border-t border-border/50">
-          <h4 className="text-xs uppercase tracking-widest text-muted-foreground mb-2">OAuth / API credentials</h4>
+          <h4 className="mb-2 text-sm font-semibold">OAuth / API credentials</h4>
           <p className="text-[11px] text-muted-foreground mb-3">
             Non-secret values live here. Secrets (<code>SIGNNOW_CLIENT_SECRET</code>, <code>SIGNNOW_USERNAME</code>, <code>SIGNNOW_PASSWORD</code>, or a static <code>SIGNNOW_API_TOKEN</code>) must be added via the Lovable Cloud Secrets manager — never paste them into a database field.
           </p>
@@ -600,8 +610,8 @@ function SignNowIntegrationCard() {
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2 border-t border-border/50">
-        <ActionButton onClick={save} disabled={busy} className="bg-primary font-semibold">Save SignNow settings</ActionButton>
-        <ActionButton onClick={test} disabled={busy} variant="outline"><Send className="mr-2 h-4 w-4" />Test connection</ActionButton>
+        <ActionButton onClick={save} disabled={busy} className="font-semibold">Save SignNow settings</ActionButton>
+        <ActionButton onClick={test} disabled={busy} variant="outline" icon={<Send className="h-4 w-4" />}>Test connection</ActionButton>
         {cur.signnow_dashboard_url && (
           <ActionButton asChild variant="ghost">
             <a href={cur.signnow_dashboard_url} target="_blank" rel="noreferrer">Open SignNow <ExternalLink className="ml-1 h-3 w-3" /></a>

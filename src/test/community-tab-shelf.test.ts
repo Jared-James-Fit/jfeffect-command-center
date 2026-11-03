@@ -28,7 +28,7 @@ describe("client tab bar: Crew in the centre", () => {
     expect(visible[4].to).toBe(MORE_BAR_TO);
   });
 
-  it("the client top bar: search and light / dark on the left, More on the right (account and appearance also at the top of More)", () => {
+  it("the client top bar: search and light / dark on the left, More on the right (the account at the top of More; light / dark only in the bar)", () => {
     expect(portal).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn={CREW_OWN_BAR}>');
     // Crew draws its own bar, so the shell's steps aside there (one bar, not two) and its ☰ opens More by event
     expect(portal).toContain('const CREW_OWN_BAR = ["/portal/community"] as const;');
@@ -41,7 +41,8 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("focusSearch={moreSearch}");
     expect(shell).toContain("searchRef.current.focus();");
     expect(shell).toContain("{!simpleHeader && (");
-    expect(shell).toContain('<span className="text-[15px] font-semibold">Appearance</span>');
+    expect(shell).not.toContain('<span className="text-[15px] font-semibold">Appearance</span>');
+    expect(shell).toContain("Photo, email, sign out");
     expect(shell).toContain('<Button variant="ghost" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-full px-0">');
     // the JF Effect mark sits in the middle of the bar, Crew's look, on every shell page
     expect(shell).toContain('className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"');

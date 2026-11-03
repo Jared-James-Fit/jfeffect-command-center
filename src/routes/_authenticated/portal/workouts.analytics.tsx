@@ -6,7 +6,6 @@ import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { PageHeader } from "@/components/app-shell";
-import { ArrowLeft } from "lucide-react";
 import {
   exactBlockFilter,
   defaultAnalyticsFilter,
@@ -91,7 +90,13 @@ function PortalAnalytics() {
 
   return (
     <>
-      <PageHeader title="Training Analytics" subtitle={client?.full_name ?? ""} />
+      {/* the same header (and back) as every other client page that opens from a tab */}
+      <PageHeader
+        title="Training Analytics"
+        subtitle="Your lifts, volume and PRs over time."
+        backTo="/portal/workouts"
+        backLabel="Workouts"
+      />
       <div className="p-4 pb-10 md:p-8">
         {client?.id ? (
           <ClientAnalyticsDashboard
@@ -99,21 +104,12 @@ function PortalAnalytics() {
             preferredUnit={preferredUnit}
             initialFilter={initialFilter}
             onFilterChange={handleFilterChange}
-            headerLeadingNode={
-              <Link
-                to="/portal/workouts"
-                className="inline-flex min-w-0 items-center truncate text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ArrowLeft className="mr-1 h-4 w-4 shrink-0" />
-                <span className="truncate">Back to workouts</span>
-              </Link>
-            }
             viewAllPRsNode={
               <Link
                 to="/portal/workouts/prs"
-                className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+                className="inline-flex min-h-10 items-center text-xs font-semibold text-muted-foreground hover:text-foreground"
               >
-                View All
+                View all
               </Link>
             }
           />

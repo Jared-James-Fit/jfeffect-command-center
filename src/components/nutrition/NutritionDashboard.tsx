@@ -132,16 +132,17 @@ function SuggestedTargetsSection({
   if (!hasSuggestion) {
     return (
       <>
-        <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-primary">Suggested Nutrition Targets</div>
-          <div className="mt-1 text-base font-bold leading-tight">Get your daily calories and macros</div>
-          <p className="mt-1 text-xs text-muted-foreground">
+        <Card className="p-4">
+          {/* "suggested", never a coach's targets: the label stays (a member sets these themselves) */}
+          <div className="text-xs text-muted-foreground">Suggested Nutrition Targets</div>
+          <div className="mt-0.5 text-base font-semibold leading-tight">Get your daily calories and macros</div>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             Six quick answers about you and your goal. We fill in what we already know.
           </p>
           <Button onClick={() => setOpen(true)} className="mt-3 h-11 w-full font-bold">
             <Calculator className="mr-2 h-4 w-4" /> Get my targets
           </Button>
-          <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
             These are general educational estimates, not medical advice.
           </p>
         </Card>

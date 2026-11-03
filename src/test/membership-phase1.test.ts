@@ -95,7 +95,10 @@ describe("the app keeps the coach's layer to coaching clients", () => {
     const home = read("src/routes/_authenticated/portal/index.tsx");
     expect(home).toContain("const coaching = !isSelfServe && !tierLoading;");
     expect(home).toContain("if (!client?.id || !coaching) return;");
-    expect(home).toMatch(/\{coaching && \(\s*<SectionErrorBoundary label="Coaching agreement">/);
+    // the agreement card is the setup checklist's stand-in, and the checklist is coaching-only
+    expect(home).toMatch(/\{client\?\.id && portalUserId && coaching && \(\s*<SectionErrorBoundary label="Setup checklist">/);
+    expect(home.match(/<AgreementDashboardCard/g)?.length).toBe(1);
+    expect(home.indexOf("<AgreementDashboardCard")).toBeGreaterThan(home.indexOf('<SectionErrorBoundary label="Setup checklist">'));
   });
 
   it("server-side too: no check-ins, no coaching agreement, out of coach intel / billing / agreement roster", () => {

@@ -207,7 +207,7 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
     return (
       <Card className="p-4 space-y-1">
         <div className="flex items-center gap-2">
-          <Watch className="h-4 w-4 text-primary" />
+          <Watch className="h-5 w-5 shrink-0 text-muted-foreground" />
           <h3 className="font-semibold">Devices &amp; recovery</h3>
         </div>
         <p className="text-sm text-muted-foreground">
@@ -231,9 +231,9 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
 
   return (
     <Card className="p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <Watch className="h-4 w-4 text-primary" />
-        <h3 className="font-semibold">Devices &amp; recovery</h3>
+      <div className="flex min-h-10 items-center gap-2">
+        <Watch className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <h3 className="text-base font-semibold">Devices &amp; recovery</h3>
         {sourceLabel && <span className="text-xs text-muted-foreground">via {sourceLabel}</span>}
         {recovery && (
           <span

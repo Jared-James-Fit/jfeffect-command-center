@@ -103,18 +103,18 @@ export function ClientQuickLinksCard({
   return (
     <Card className="border-border bg-card p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Client Quick Links</h3>
+        <h3 className="text-base font-semibold">Quick links</h3>
       </div>
 
       {/* Main Drive folder block */}
-      <div className="rounded-lg border-2 border-primary/40 bg-gradient-to-br from-primary/10 to-primary/0 p-4 space-y-3">
+      <div className="rounded-xl border border-border p-4 space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="rounded-md bg-primary/15 p-2"><FolderOpen className="h-6 w-6 text-primary" /></div>
+            <div className="rounded-md bg-muted p-2 text-foreground"><FolderOpen className="h-5 w-5" /></div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold">Client Google Drive Folder</span>
-                <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px]">Main Drive Folder</Badge>
+                <span className="font-semibold">Google Drive folder</span>
+                <Badge variant="outline" className="text-[10px]">Main folder</Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">All client files: lift videos, progress photos, agreements, programs.</p>
             </div>
@@ -132,7 +132,7 @@ export function ClientQuickLinksCard({
         ) : driveFolderLink ? (
           <div className="flex flex-wrap gap-2">
             <a href={driveFolderLink} target="_blank" rel="noreferrer">
-              <Button size="sm" className="bg-primary font-semibold"><ExternalLink className="mr-1 h-4 w-4" /> Open Drive Folder</Button>
+              <Button size="sm" variant="outline"><ExternalLink className="mr-1 h-4 w-4" /> Open Drive folder</Button>
             </a>
             <Button size="sm" variant="outline" onClick={() => copyLink(driveFolderLink)}><Copy className="mr-1 h-4 w-4" /> Copy Link</Button>
             <Button size="sm" variant="outline" onClick={() => { setDraftDrive(driveFolderLink); setEditingDrive(true); }}><Pencil className="mr-1 h-4 w-4" /> Edit</Button>
@@ -140,8 +140,8 @@ export function ClientQuickLinksCard({
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground italic">No Google Drive folder linked yet.</p>
-            <Button size="sm" onClick={() => { setDraftDrive(""); setEditingDrive(true); }} className="bg-primary font-semibold">
-              <Plus className="mr-1 h-4 w-4" /> Add Drive Folder
+            <Button size="sm" variant="outline" onClick={() => { setDraftDrive(""); setEditingDrive(true); }}>
+              <Plus className="mr-1 h-4 w-4" /> Add Drive folder
             </Button>
           </div>
         )}
@@ -150,7 +150,7 @@ export function ClientQuickLinksCard({
       {/* Other quick links */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h4 className="text-[11px] uppercase tracking-widest text-muted-foreground">Other Quick Links</h4>
+          <h4 className="text-sm font-semibold">Other links</h4>
           <Button size="sm" variant="outline" onClick={() => setLinkDialog({ open: true, initial: null })}>
             <Plus className="mr-1 h-4 w-4" /> Add Link
           </Button>

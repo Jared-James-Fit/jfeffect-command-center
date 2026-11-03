@@ -106,10 +106,12 @@ describe("Home schedule card: today in full, then what's coming", () => {
     expect(src).toContain("workoutContext(item.raw)");
     expect(src).toContain("workoutAction(item.raw)");
   });
-  it("says what each action does in words: no bare + or Schedule button", () => {
+  it("says what each action does in words: no bare + or Schedule button; the calendar is the header's one link", () => {
     expect(src).not.toContain('aria-label="Book or request a session"');
     expect(src).toContain("Request a session");
-    expect(src).toContain("Open calendar");
+    // no second "Open calendar" at the foot: the header (and each day) opens it
+    expect(src).not.toContain("Open calendar");
+    expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');
   });
   it("reads as a calendar: date tile + Calendar header and this week's days, each opening the Calendar page", () => {
     expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');

@@ -1,21 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { format, parseISO } from "date-fns";
 import { Ticket } from "lucide-react";
+import { Card } from "@/components/ui/card";
 
 type Props = {
   clientId: string | null | undefined;
-  nextAppointmentAt?: string | null;
 };
 
 /**
- * Compact "Sessions" card for the client dashboard.
- * Shows: package name · sessions remaining · next appointment.
- * Hidden when the client has no active session packages.
- * Monetary value is only rendered when `show_value_to_client` is true.
+ * Compact "Sessions" card for the client dashboard: the package and its
+ * credits (purchased · scheduled · used · available). The next session is
+ * the calendar card's, right above it, so it isn't repeated here, and the
+ * calendar is that card's one link. Hidden when the client has no active
+ * session packages. Monetary value is only rendered when
+ * `show_value_to_client` is true.
  */
-export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
+export function SessionsCard({ clientId }: Props) {
   const { data: balance } = useQuery<any[]>({
     queryKey: ["my-session-balance", clientId],
     enabled: !!clientId,
@@ -27,27 +27,6 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
   });
 
   const active = (balance ?? [])[0];
-  const today = new Date().toISOString().slice(0, 10);
-
-  // Next booked PT session (client-visible only)
-  const { data: nextSession } = useQuery<any | null>({
-    queryKey: ["my-next-pt-session", clientId],
-    enabled: !!clientId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("pt_sessions")
-        .select("title, session_date, start_time, end_time, location")
-        .eq("client_id", clientId!)
-        .eq("status", "Scheduled")
-        .eq("visible_to_client", true)
-        .gte("session_date", today)
-        .order("session_date", { ascending: true })
-        .order("start_time", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      return data ?? null;
-    },
-  });
 
   // Look up the show_value flag for this purchase
   const { data: purchase } = useQuery<{ show_value_to_client: boolean; full_payable_amount: number | null; currency: string | null } | null>({
@@ -65,40 +44,26 @@ export function SessionsCard({ clientId, nextAppointmentAt }: Props) {
 
   if (!active) return null;
 
-  const nextLine = nextSession
-    ? `Next: ${new Date(nextSession.session_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}, ${fmtTime(nextSession.start_time)}${nextSession.location ? ` · ${nextSession.location}` : ""}`
-    : nextAppointmentAt
-      ? `Next: ${format(parseISO(nextAppointmentAt), "EEE MMM d, h:mm a")}`
-      : "No upcoming sessions";
-
   return (
-    <Link to="/portal/calendar" className="block">
-      <div className="rounded-2xl border border-border bg-card p-4 hover:bg-accent/40 transition">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2 text-primary"><Ticket className="h-4 w-4" /></div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold">{active.offer_name || "Session package"}</div>
-            <div className="text-xs text-muted-foreground">
-              {active.granted} purchased
-              {Number(active.reserved ?? 0) > 0 ? <> · {active.reserved} scheduled</> : null}
-              {" · "}{active.used} used · <strong className="text-foreground">{active.remaining} available</strong>
-              {purchase?.show_value_to_client && purchase.full_payable_amount
-                ? ` · ${(purchase.currency || "CAD")} ${Number(purchase.full_payable_amount).toLocaleString()}`
-                : ""}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {nextLine}
-            </div>
-          </div>
+    <Card className="flex items-center gap-3 p-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground" aria-hidden>
+        <Ticket className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold">{active.offer_name || "Session package"}</div>
+        <div className="text-xs text-muted-foreground">
+          {active.granted} purchased
+          {Number(active.reserved ?? 0) > 0 ? <> · {active.reserved} scheduled</> : null}
+          {" · "}{active.used} used
+          {purchase?.show_value_to_client && purchase.full_payable_amount
+            ? ` · ${(purchase.currency || "CAD")} ${Number(purchase.full_payable_amount).toLocaleString()}`
+            : ""}
         </div>
       </div>
-    </Link>
+      <div className="shrink-0 text-right">
+        <div className="text-lg font-semibold leading-none tabular-nums">{active.remaining}</div>
+        <div className="mt-0.5 text-[11px] text-muted-foreground">available</div>
+      </div>
+    </Card>
   );
-}
-
-function fmtTime(t: string): string {
-  const [h, m] = t.split(":");
-  const d = new Date();
-  d.setHours(Number(h), Number(m), 0, 0);
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }

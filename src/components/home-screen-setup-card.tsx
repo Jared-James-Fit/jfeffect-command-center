@@ -6,6 +6,7 @@ import { Smartphone, Share, Plus, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 
 const VIDEO_URL = "https://vimeo.com/1200330134";
 const VIDEO_EMBED = "https://player.vimeo.com/video/1200330134?title=0&byline=0&portrait=0&badge=0&dnt=1";
@@ -28,6 +29,31 @@ function isStandalone(): boolean {
   // @ts-ignore
   if (window.navigator.standalone) return true;
   return window.matchMedia?.("(display-mode: standalone)").matches ?? false;
+}
+
+/**
+ * What Home keeps of the old "Add to your home screen" card: nothing on screen
+ * (the install popup, HomeScreenSetupGate, and InstallAppCard ask for it), only
+ * the bookkeeping the coach reads. Opening the installed app (or the iPhone app)
+ * marks `home_screen_setup_status` complete, which is the "Installed" badge on
+ * the client's profile.
+ */
+export function HomeScreenSetupTracker({ clientId, status }: { clientId: string; status: string | null | undefined }) {
+  const qc = useQueryClient();
+  // a coach previewing the client is on their own phone, not the client's
+  const viewingAs = useViewingAsClient();
+  useEffect(() => {
+    if (status === "complete" || viewingAs) return;
+    const native = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+    if (!isStandalone() && !native) return;
+    void (async () => {
+      const { error } = await (supabase.from("clients") as any)
+        .update({ home_screen_setup_status: "complete", home_screen_setup_completed_at: new Date().toISOString() })
+        .eq("id", clientId);
+      if (!error) qc.invalidateQueries({ queryKey: ["my-client"] });
+    })();
+  }, [clientId, status, viewingAs, qc]);
+  return null;
 }
 
 type Props = {

@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { ToolRow } from "./tool-tile";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -376,7 +377,10 @@ export function GroceryListSheet({
   );
 }
 
-/** Prominent entry point card shown next to Meal Plan. */
+/**
+ * The Grocery List's way in: a plain tool row (icon, name, one-line hint)
+ * right under the meal plan, the same look as every other nutrition tool.
+ */
 export function GroceryListEntryCard({
   clientId,
   viewAsUserId,
@@ -388,17 +392,15 @@ export function GroceryListEntryCard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 md:p-5", className)}>
-      <button type="button" onClick={() => setOpen(true)} disabled={!clientId} className="flex w-full items-center gap-3 text-left">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-          <ShoppingCart className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">Grocery List</div>
-          <div className="text-[12px] text-muted-foreground">1 or 2 weeks of food from your plan · sorted by store aisle</div>
-        </div>
-        <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">Open</span>
-      </button>
+    <>
+      <ToolRow
+        icon={ShoppingCart}
+        title="Grocery List"
+        hint="1 or 2 weeks of food, by store aisle"
+        onClick={() => setOpen(true)}
+        disabled={!clientId}
+        className={className}
+      />
       {open && (
         <GroceryListSheet
           open={open}
@@ -407,6 +409,6 @@ export function GroceryListEntryCard({
           viewAsUserId={viewAsUserId}
         />
       )}
-    </div>
+    </>
   );
 }

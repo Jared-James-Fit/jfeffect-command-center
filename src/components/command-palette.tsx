@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/command";
 import {
   Users, UserCog, IdCard, BookOpen, Dumbbell, Library, ChefHat,
-  Megaphone, ShoppingBag, Clock, History, X, Sparkles, ArrowRight,
+  Megaphone, ShoppingBag, Clock, History, X, ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import { globalSearchFn, type GlobalSearchHit } from "@/lib/global-search.functions";
@@ -21,7 +21,6 @@ import {
   getRecentQueries, pushRecentQuery, clearRecentQueries,
   type RecentPick,
 } from "@/lib/command-palette-history";
-import { cn } from "@/lib/utils";
 
 const KIND_META: Record<GlobalSearchHit["kind"], { heading: string; icon: LucideIcon }> = {
   client: { heading: "Clients", icon: Users },
@@ -277,7 +276,7 @@ export function CommandPalette({
                   value={`${kind}-${hit.id}-${hit.label}-${hit.sub ?? ""}-${debounced}`}
                   onSelect={() => pickServer(hit)}
                 >
-                  <Icon className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                  <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">
                       <Highlighted text={hit.label} query={debounced} />
@@ -316,23 +315,15 @@ export function CommandPalette({
                   value={value}
                   onSelect={() => pickRoute(e)}
                 >
-                  <Icon className={cn(
-                    "mr-2 h-4 w-4 shrink-0",
-                    e.isAction ? "text-emerald-500" : "text-primary",
-                  )} />
+                  <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold">
                         <Highlighted text={e.label} ranges={e._ranges} query={debounced} />
                       </span>
                       {e.isAction && (
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-600">
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           Action
-                        </span>
-                      )}
-                      {e.hidden && !e.isAction && (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Hidden
                         </span>
                       )}
                     </div>
@@ -394,14 +385,14 @@ function QuickActionsGroup({ role, limit, onPick }: {
             value={`qa-${a.id}-${a.label}`}
             onSelect={() => onPick(a)}
           >
-            <Icon className="mr-2 h-4 w-4 shrink-0 text-emerald-500" />
+            <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{a.label}</div>
               {a.parent && (
                 <div className="truncate text-[11px] text-muted-foreground">{a.parent}</div>
               )}
             </div>
-            <Sparkles className="ml-2 h-3.5 w-3.5 shrink-0 text-emerald-500/60" />
+            <ArrowRight className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
           </CommandItem>
         );
       })}

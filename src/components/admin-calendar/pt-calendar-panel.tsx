@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -279,12 +278,14 @@ export function PtCalendarPanel() {
 
   return (
     <>
-      <PageHeader title="Sessions" subtitle="Every 1:1 session in one list: book, move, close out." actions={
-        <Button size="sm" className="bg-primary font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Quick Book
-        </Button>
-      } />
+      {/* No second title: the Calendar page's Sessions tab already names it. */}
       <div className="p-3 sm:p-6 md:p-8 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 text-[13px] text-muted-foreground">Every 1:1 session in one list: book, move, close out.</p>
+          <Button size="sm" className="h-10 shrink-0" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Quick book
+          </Button>
+        </div>
         <>
             <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
               <TabsList className="flex w-full flex-wrap h-auto gap-1 sm:w-max">

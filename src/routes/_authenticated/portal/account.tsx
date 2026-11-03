@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, CreditCard, Settings, Trash2, CheckCircle2, AlertTriangle, Clock, Briefcase, Calendar } from "lucide-react";
+import { ShieldAlert, CreditCard, Settings, Trash2, CheckCircle2, AlertTriangle, Briefcase } from "lucide-react";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isNative } from "@/platform";
 import { toast } from "sonner";
@@ -245,26 +245,22 @@ function AccountPage() {
           </nav>
         </div>
 
-        {/* ── Profile Status ── */}
-        <div className="md:col-span-3">
-          <ProfileStatusCard
-            client={client}
-            goalsStatus={goalsStatus}
-            infoUpdateRequested={!!form?.info_update_requested}
-          />
+        {/* ── Profile status: only while something's missing ── */}
+        <div className="empty:hidden md:col-span-3">
+          <ProfileStatusCard client={client} goalsStatus={goalsStatus} />
         </div>
 
         {form.info_update_requested && (
-          <Card className="border-warning/40 bg-warning/10 p-4 md:col-span-3">
+          <Card className="border-warning/40 p-4 md:col-span-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <ShieldAlert className="h-5 w-5 shrink-0 text-warning" />
                 <div className="min-w-0">
-                  <div className="font-bold">Your coach asked you to review your account info</div>
+                  <div className="text-base font-semibold">Your coach asked you to review your account info</div>
                   <div className="text-xs text-muted-foreground">Fix anything that's out of date below, then confirm.</div>
                 </div>
               </div>
-              <Button size="sm" className="shrink-0" onClick={() => void flushNow()}>
+              <Button className="h-10 shrink-0" onClick={() => void flushNow()}>
                 <CheckCircle2 className="mr-1.5 h-4 w-4" />Everything's correct
               </Button>
             </div>
@@ -274,7 +270,7 @@ function AccountPage() {
         <SectionErrorBoundary label="Basic Information" className="md:col-span-2">
           <Card id="basic-information" className="border-border bg-card p-4 sm:p-6 md:col-span-2 space-y-4 scroll-mt-32">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Basic Information</h3>
+              <h3 className="text-base font-semibold">Basic information</h3>
               <SavedIndicator state={saveState} />
             </div>
             <BasicInfoForm
@@ -292,7 +288,7 @@ function AccountPage() {
 
         <SectionErrorBoundary label="Profile Picture">
           <Card id="profile-picture" className="border-border bg-card p-4 sm:p-6 space-y-3 scroll-mt-32">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Profile Picture</h3>
+            <h3 className="text-base font-semibold">Profile picture</h3>
             <ProfilePictureCapture
               mode="client"
               userId={portalUserId ?? user.id}
@@ -328,7 +324,7 @@ function AccountPage() {
           <Card className="border-border bg-card p-4 sm:p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Goals &amp; Training Setup</h3>
+                <h3 className="text-base font-semibold">Goals &amp; training setup</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Your training goals, experience level, equipment, nutrition preferences, and coaching setup.
                 </p>
@@ -337,7 +333,7 @@ function AccountPage() {
                 <GoalsSetupStatusBadge clientId={(client as any).id} />
               )}
             </div>
-            <Button asChild className="w-full sm:w-auto" size="lg">
+            <Button asChild variant="outline" className="h-11 w-full sm:w-auto">
               <Link to="/portal/goals-setup">View &amp; update Goals &amp; Setup</Link>
             </Button>
           </Card>
@@ -383,7 +379,7 @@ function AccountPage() {
         <SectionErrorBoundary label="Social Media" className="md:col-span-3">
           <Card id="social-media" className="border-border bg-card p-4 sm:p-6 md:col-span-3 space-y-4 scroll-mt-32">
             <div>
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Social Media (optional)</h3>
+              <h3 className="text-base font-semibold">Social media <span className="font-normal text-muted-foreground">(optional)</span></h3>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Add just your username/handle — no full URLs needed. Leave any field blank to skip.
               </p>
@@ -421,8 +417,8 @@ function AccountPage() {
         <div id="delete-account" className="md:col-span-3 scroll-mt-32">
           <Card className="border-destructive/30 bg-card p-4 sm:p-6 space-y-3">
             <div className="flex items-center gap-2">
-              <Trash2 className="h-4 w-4 text-destructive" />
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Delete Account</h3>
+              <Trash2 className="h-5 w-5 text-destructive" />
+              <h3 className="text-base font-semibold">Delete account</h3>
             </div>
             <p className="text-sm text-muted-foreground">
               Permanently delete your JF Effect account and all associated data. This action cannot be undone.
@@ -438,31 +434,24 @@ function AccountPage() {
 
 }
 
+/**
+ * What's still missing from the profile, each item a tap to its field. Nothing
+ * once it's complete (no standing "all set" banner), and never the coach's
+ * review request: that has its own card above with "Everything's correct".
+ */
 function ProfileStatusCard({
   client,
   goalsStatus,
-  infoUpdateRequested,
 }: {
   client: any;
   goalsStatus: { completed_at: string | null; main_goal: string | null } | null | undefined;
-  infoUpdateRequested: boolean;
 }) {
   if (!client) return null;
 
-  const basicOk = isBasicInfoComplete(client);
   const goalsOk = !!(goalsStatus?.completed_at || goalsStatus?.main_goal);
   const unitsOk = !!client.weight_unit_confirmed_at;
   const photoOk = !!client.profile_picture_url && !client.profile_picture_needs_update;
   const scheduleOk = !!client.training_schedule_completed;
-
-  let status: "complete" | "missing" | "review";
-  if (infoUpdateRequested) {
-    status = "review";
-  } else if (!basicOk || !goalsOk || !unitsOk || !photoOk || !scheduleOk) {
-    status = "missing";
-  } else {
-    status = "complete";
-  }
 
   // Build a granular, plain-English list of every missing field so the
   // client sees exactly what to fix instead of a vague "Information Missing".
@@ -482,6 +471,10 @@ function ProfileStatusCard({
   if (!isFilled(client.timezone)) missing.push({ key: "timezone", label: "Timezone", section: "basic" });
   if (!isFilled(client.emergency_contact_name)) missing.push({ key: "ec_name", label: "Emergency contact name", section: "basic" });
   if (!isFilled(client.emergency_contact_phone)) missing.push({ key: "ec_phone", label: "Emergency contact phone", section: "basic" });
+  // anything else isBasicInfoComplete checks still reads as "basic info"
+  if (!isBasicInfoComplete(client) && !missing.some((m) => m.section === "basic")) {
+    missing.push({ key: "basic", label: "Basic info", section: "basic" });
+  }
 
   if (!photoOk) missing.push({ key: "photo", label: "Profile photo", section: "profile-picture" });
   if (!unitsOk) missing.push({ key: "units", label: "Weight units (lb or kg)", section: "units" });
@@ -489,91 +482,34 @@ function ProfileStatusCard({
 
   if (!goalsOk) missing.push({ key: "goals", label: "Goals & Training setup", section: "goals" });
 
-  const hasBasic = missing.some((m) => m.section === "basic");
-  const hasGoals = missing.some((m) => m.section === "goals");
+  if (missing.length === 0) return null;
 
-  const chipClass = "inline-block rounded-full border border-amber-500/40 bg-background/60 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 transition";
+  const chipClass = "inline-flex min-h-9 items-center rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:bg-muted";
 
   return (
-    <Card className={[
-      "p-4 sm:p-5 space-y-4",
-      status === "complete" ? "border-emerald-500/30 bg-emerald-500/5" :
-      status === "review" ? "border-amber-500/40 bg-amber-500/10" :
-      "border-amber-500/40 bg-amber-500/10",
-    ].join(" ")}>
+    <Card className="space-y-3 border-warning/40 p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        {status === "complete" && <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500 mt-0.5" />}
-        {status === "review" && <Clock className="h-6 w-6 shrink-0 text-amber-500 mt-0.5" />}
-        {status === "missing" && <AlertTriangle className="h-6 w-6 shrink-0 text-amber-500 mt-0.5" />}
-        <div className="flex-1 min-w-0">
-          <div className="font-bold text-base">
-            {status === "complete" && "Profile complete — you're all set."}
-            {status === "review" && "Coach asked you to review your info"}
-            {status === "missing" && (
-              missing.length === 1
-                ? "1 thing to finish on your profile"
-                : `${missing.length} things to finish on your profile`
-            )}
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold">
+            {missing.length === 1 ? "1 thing to finish on your profile" : `${missing.length} things to finish on your profile`}
           </div>
-          {status === "missing" && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Tap any item below to jump straight to the field that needs to be filled in.
-            </p>
-          )}
-          {status === "review" && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Fix anything that's out of date below, then tap "Everything's correct".
-            </p>
-          )}
+          <p className="mt-0.5 text-xs text-muted-foreground">Tap one to jump straight to it.</p>
         </div>
-        {status !== "complete" && (
-          <Badge
-            variant="outline"
-            className="border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0"
-          >
-            Action needed
-          </Badge>
-        )}
       </div>
-
-      {status === "missing" && missing.length > 0 && (
-        <>
-          <ul className="flex flex-wrap gap-1.5">
-            {missing.map((m) => (
-              <li key={m.key}>
-                {m.section === "goals" ? (
-                  <Link to="/portal/goals-setup" className={chipClass}>{m.label}</Link>
-                ) : (
-                  <button type="button" onClick={() => jumpToSection(m.section === "basic" ? "basic-information" : m.section)} className={chipClass}>
-                    {m.label}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {!unitsOk && (
-              <Button size="sm" onClick={() => jumpToSection("units")} className="bg-amber-500 hover:bg-amber-600 text-white">
-                Choose lb or kg
-              </Button>
+      <ul className="flex flex-wrap gap-1.5">
+        {missing.map((m) => (
+          <li key={m.key}>
+            {m.section === "goals" ? (
+              <Link to="/portal/goals-setup" className={chipClass}>{m.label}</Link>
+            ) : (
+              <button type="button" onClick={() => jumpToSection(m.section === "basic" ? "basic-information" : m.section)} className={chipClass}>
+                {m.label}
+              </button>
             )}
-            {hasBasic && (
-              <Button
-                size="sm"
-                onClick={() => jumpToSection("basic-information")}
-                className="bg-amber-500 hover:bg-amber-600 text-white"
-              >
-                Fix basic info
-              </Button>
-            )}
-            {hasGoals && (
-              <Button asChild size="sm" variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
-                <Link to="/portal/goals-setup">Complete Goals & Training</Link>
-              </Button>
-            )}
-          </div>
-        </>
-      )}
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }
@@ -590,15 +526,15 @@ function CoachingSetupSection({ client, coach }: { client: any; coach: any }) {
   if (rows.length === 0) return null;
 
   return (
-    <Card className="p-6 space-y-4">
+    <Card className="p-4 sm:p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Briefcase className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+        <Briefcase className="h-5 w-5 text-muted-foreground" />
+        <h3 className="text-base font-semibold">Coaching setup</h3>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {rows.map(({ label, value }) => (
           <div key={label}>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+            <div className="text-xs text-muted-foreground">{label}</div>
             <div className="mt-0.5 text-sm font-medium">{value}</div>
           </div>
         ))}
@@ -645,10 +581,10 @@ function BillingSection({ clientId }: { clientId?: string }) {
   const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString() : "—";
 
   return (
-    <Card className="border-border bg-card p-6 space-y-4">
+    <Card className="border-border bg-card p-4 sm:p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <CreditCard className="h-4 w-4 text-primary" />
-        <h2 className="text-xs uppercase tracking-widest text-muted-foreground">Billing &amp; Subscription</h2>
+        <CreditCard className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-base font-semibold">Billing &amp; subscription</h2>
       </div>
       {primaryPurchase ? (
         <>

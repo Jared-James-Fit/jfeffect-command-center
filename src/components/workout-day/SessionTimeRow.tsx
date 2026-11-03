@@ -21,6 +21,7 @@ export function SessionTimeRow({
   clientId,
   workoutTitle,
   className,
+  inCard = false,
 }: {
   completion: {
     id: string;
@@ -33,6 +34,9 @@ export function SessionTimeRow({
   clientId: string;
   workoutTitle?: string | null;
   className?: string;
+  /** Inside the finished-workout card: a plain line under a divider (the
+   *  "When did you train?" prompt keeps its amber box). */
+  inCard?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const { data: timezone = DEFAULT_TRAINING_TZ } = useQuery({
@@ -65,7 +69,9 @@ export function SessionTimeRow({
           "flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition-colors",
           suspect
             ? "border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/15 dark:text-amber-200"
-            : "border-border bg-card text-foreground hover:bg-secondary/60",
+            : inCard
+              ? "min-h-10 rounded-none border-x-0 border-b-0 border-t-border px-0 pb-0 pt-2.5 text-foreground"
+              : "border-border bg-card text-foreground hover:bg-secondary/60",
           className,
         )}
       >
@@ -77,7 +83,7 @@ export function SessionTimeRow({
             </>
           ) : (
             <>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Session </span>
+              <span className="text-muted-foreground">Session </span>
               <b className="tabular-nums">
                 {formatClockAt(timing.start, timezone)}
                 {end ? ` → ${formatClockAt(end, timezone)}` : ""}

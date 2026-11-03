@@ -8,7 +8,6 @@ import { markAppointmentStatus, cancelAppointment } from "@/lib/appointments.fun
 import { assignGoogleEventToClient, getGoogleConnectionStatus } from "@/lib/google-cal.functions";
 import { resyncAppointmentToGoogle } from "@/lib/appointments.functions";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -132,19 +131,17 @@ export function UpcomingPanel() {
 
   return (
     <>
-      <PageHeader
-        title="Upcoming"
-        subtitle="Unified view of appointments, PT sessions, and Google Calendar events."
-        actions={
-          <div className="flex items-center gap-2">
+      {/* No second title: the Calendar page's Upcoming tab already names it. */}
+      <div className="p-3 sm:p-6 md:p-8 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 text-[13px] text-muted-foreground">Appointments, PT sessions and Google Calendar events in one list.</p>
+          <div className="flex shrink-0 items-center gap-2">
             <GcalSyncBadge connected={!!gcalStatus?.connected} />
-            <Button size="sm" variant="outline" onClick={handleRefresh} disabled={isFetching}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+            <Button size="sm" variant="outline" className="h-10" onClick={handleRefresh} disabled={isFetching} aria-label="Refresh">
+              <RefreshCw className={`h-4 w-4 sm:mr-2 ${isFetching ? "animate-spin" : ""}`} /><span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
-        }
-      />
-      <div className="p-3 sm:p-6 md:p-8 space-y-4">
+        </div>
         {/* Filters */}
         <Card className="border-border bg-card p-3 md:p-4 space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -420,7 +417,7 @@ function UpcomingRow({ row, onChanged }: { row: UnifiedRow; onChanged: () => voi
 function GcalSyncBadge({ connected }: { connected: boolean }) {
   if (connected) {
     return (
-      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+      <Badge variant="outline" className="border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
         <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400" />
         Connected
       </Badge>

@@ -70,9 +70,14 @@ describe("one way to each action", () => {
     expect(sheet).toContain("Reset this workout?");
     expect(sheet).not.toContain("will not delete your logs");
   });
-  it("the workout card's ⋯ menu doesn't repeat the card's Change status / Reschedule buttons", () => {
+  it("the workout card has each action once: Change status / Reschedule / Edit live in its ⋯, not as buttons too", () => {
     expect(card).not.toContain("Reschedule workout");
-    expect(card).not.toContain('<CircleDot className="mr-2 h-4 w-4" /> Change status');
+    expect(card.split('<CircleDot className="mr-2 h-4 w-4" /> Change status')).toHaveLength(2);
+    expect(card.split('<Move className="mr-2 h-4 w-4" /> Reschedule')).toHaveLength(2);
+    expect(card.split('<Pencil className="mr-2 h-4 w-4" /> Edit workout')).toHaveLength(2);
+    expect(card).not.toContain("onClick={() => setStatusOpen(true)}");
+    expect(card).not.toContain("onClick={() => setMoveOpen(true)}");
+    expect(card).not.toContain("onClick={() => setEditOpen(true)}");
     expect(card).toContain("Reset workout");
     expect(card).not.toContain('.from("pl_row_results")\n        .delete()');
   });

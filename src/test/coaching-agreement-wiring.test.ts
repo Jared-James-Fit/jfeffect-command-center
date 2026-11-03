@@ -53,14 +53,22 @@ describe("client side wiring", () => {
     expect(src).toMatch(/enabled: !!user\?\.id && !neverAsked/);
   });
 
-  it("shows the dashboard card above the setup checklist, behind its own error boundary", () => {
+  it("asks for the agreement once on Home: the checklist leads with it, else the dashboard card (behind its own error boundary)", () => {
     const src = read("src/routes/_authenticated/portal/index.tsx");
     const card = src.indexOf("<AgreementDashboardCard");
     expect(card).toBeGreaterThan(-1);
-    expect(card).toBeLessThan(src.indexOf("<SetupChecklistBanner"));
+    // the card is the checklist's stand-in, never shown beside it
+    const checklist = src.indexOf("<SetupChecklistBanner");
+    expect(checklist).toBeGreaterThan(-1);
+    expect(src.slice(checklist, card)).toContain("whenHidden={");
     expect(src.slice(src.lastIndexOf("<SectionErrorBoundary", card), card)).toContain(
       "Coaching agreement",
     );
+    const banner = read("src/components/portal/setup-checklist-banner.tsx");
+    // only the agreement left (or nothing): the card takes the checklist's place
+    expect(banner).toContain('open.every((i) => i.key === "agreement")) return <>{whenHidden}</>;');
+    // the checklist's agreement row keeps the card's words (a new version, the coach's note)
+    expect(banner).toContain("agreementPrompt(agreement.state)");
   });
 
   it("lets clients open the signed agreement from their account", () => {
@@ -107,6 +115,9 @@ describe("admin wiring", () => {
     const panel = src.indexOf("<ClientAgreementPanel");
     expect(panel).toBeGreaterThan(-1);
     expect(panel).toBeLessThan(src.indexOf("<AgreementStatusPanel"));
+    // the hand-set record and SignNow fold away under it, only when the client has something in them
+    expect(src).toContain('<FoldedSection title="Older agreements"');
+    expect(src).toContain("if (signNowCount === 0 && !handSet) return null;");
   });
 
   it("shows the client's real agreement status on purchases", () => {

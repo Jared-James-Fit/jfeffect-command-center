@@ -13,7 +13,10 @@ describe("workout mobile navigation and recap UX", () => {
   });
 
   it("keeps completed detail state completed even when logging metadata is partial", () => {
-    expect(dayView).toContain('{reviewSubmitted ? "Completed" : "Completed · Review pending"}');
+    // One finished-workout card (status, review, View score) at the top of the log.
+    const finished = readFileSync("src/components/workout/shared/completed-workout-actions.tsx", "utf8");
+    expect(finished).toContain('{hasReview ? "Completed" : "Completed · review pending"}');
+    expect(finished).not.toContain('? "Incomplete"');
     expect(dayView).not.toContain('? "Incomplete"');
   });
 

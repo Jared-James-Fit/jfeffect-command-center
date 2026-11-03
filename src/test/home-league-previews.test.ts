@@ -47,8 +47,14 @@ describe("Home: today, then Bodyweight, Water and Progress as their own cards", 
     // each card loads on its own as you get near it
     expect(home.match(/<DeferRender placeholderHeight="h-(80|72)">/g)?.length).toBe(3);
   });
-  it("setup cards only while something's left to do", () => {
+  it("setup cards only while something's left to do, each asked once", () => {
     expect(home).toContain("<NotificationSetupPrompt problemsOnly />");
-    expect(home).toContain("<CalendarSyncCard hideWhenDone />");
+    // calendar sync is the setup checklist's optional step and the Calendar page's card, not a third Home card
+    expect(home).not.toContain("<CalendarSyncCard");
+    expect(readFileSync("src/components/portal/setup-checklist-banner.tsx", "utf8")).toContain('key: "calendar", label: "Sync your calendar"');
+    expect(readFileSync("src/routes/_authenticated/portal/calendar.tsx", "utf8")).toContain("<CalendarSyncCard");
+    // installing is the launch popup's and InstallAppCard's; Home only records it for the coach
+    expect(home).not.toContain("<HomeScreenSetupCard");
+    expect(home).toContain("<HomeScreenSetupTracker");
   });
 });
