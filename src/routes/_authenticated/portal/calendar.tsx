@@ -15,6 +15,7 @@ import { ClientSessionSheet } from "@/components/schedule/client-session-sheet";
 import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { ClientBookCard } from "@/components/schedule/client-book-card";
 import { MySessionRequests } from "@/components/schedule/request-session-sheet";
+import { useEntitlement } from "@/lib/service-tier";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { useServerFn } from "@tanstack/react-start";
@@ -48,6 +49,7 @@ function CalendarPage() {
   const portalUserId = usePortalUserId();
   const { sync, date } = Route.useSearch();
   const { isImpersonating, client: povClient } = useClientImpersonation();
+  const canRequest = useEntitlement("pt_sessions");
   const { data: client } = useQuery({
     queryKey: ["my-client", portalUserId],
     enabled: !!portalUserId,
@@ -109,12 +111,13 @@ function CalendarPage() {
           />
         </section>
 
-        {/* Sessions: request (always), book (when the coach opened booking), what's pending and booked. */}
-        {client?.id && (
+        {/* Sessions: request (coaching clients), book (when the coach opened booking), what's pending and booked.
+            A JF member only books: a request's answer goes to the coach chat they don't have. */}
+        {client?.id && (canRequest ? (
           <MySessionRequests clientId={client.id} isPov={isImpersonating}>
             <ClientBookCard />
           </MySessionRequests>
-        )}
+        ) : <ClientBookCard />)}
         {client?.id && <ClientSessionList clientId={client.id} />}
 
         {client?.id && <CalendarSyncCard autoOpen={sync === 1 && !isImpersonating} />}

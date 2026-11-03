@@ -92,10 +92,12 @@ describe("one menu row per page", () => {
     ]);
     const all = admin.flatMap((i) => [i, ...(i.children ?? [])]);
     const listedTos = admin.flatMap((i) => [i.to, ...listed(i).map((c) => (c as { to: string }).to)]);
-    // "Coming soon" stubs never show in the menu
-    for (const stub of ["/admin/content-ideas", "/admin/testimonials", "/admin/membership/challenges", "/admin/membership/welcome-messages"]) {
-      expect(all.some((i) => i.to === stub)).toBe(true);
+    // "Coming soon" stubs are in no menu, search or palette
+    const palette = read("src/lib/admin-route-registry.ts");
+    for (const stub of ["/admin/content-ideas", "/admin/testimonials", "/admin/membership/challenges", "/admin/membership/welcome-messages", "/admin/membership/promo-tools"]) {
+      expect(all.some((i) => i.to === stub)).toBe(false);
       expect(listedTos).not.toContain(stub);
+      expect(palette).not.toContain(`to: "${stub}"`);
     }
     const shell = read("src/components/app-shell.tsx");
     expect(shell).toContain("return (item.children ?? []).filter((c) => !c.searchOnly);");
@@ -136,7 +138,14 @@ describe("one menu row per page", () => {
   it("the Coaching hub opens on Training Intel; a named tab still wins", () => {
     const page = read("src/routes/_authenticated/admin/coaching.tsx");
     expect(page).toContain('const DEFAULT_TAB: TabKey = "training-intel";');
-    expect(page).toContain("return { tab: isTab(t) ? t : DEFAULT_TAB, open };");
+    expect(page).toContain('return { tab: t === "check-ins" ? "check-ins" : isTab(t) ? t : DEFAULT_TAB, open };');
     expect(read("src/lib/internal-nav.ts")).not.toContain("Legacy Hubs");
+  });
+
+  it("the old check-in queue is gone from the hub, and its links open Forms", () => {
+    const page = read("src/routes/_authenticated/admin/coaching.tsx");
+    expect(page).not.toContain("Check-ins (old)");
+    expect(page).not.toContain("AdminCheckInReviews");
+    expect(page).toContain('if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", replace: true });');
   });
 });

@@ -1,35 +1,38 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
-import { AdminCheckInReviews } from "@/route-pages/_authenticated/admin/check-in-reviews";
 import { TrainingIntelPage } from "@/route-pages/_authenticated/admin/training-intelligence";
 import { AdminClientActionRequests } from "@/route-pages/_authenticated/admin/client-action-requests";
 import { ProgressReviewQueue } from "@/components/progress/progress-review-queue";
 import { AdminCoachingSchedules } from "@/components/admin/coaching-schedules";
 import { CoachingManagementBoard } from "@/components/admin/coaching-management-board";
 
-type TabKey = "management" | "check-ins" | "progress" | "training-intel" | "requests" | "schedules";
+type TabKey = "management" | "progress" | "training-intel" | "requests" | "schedules";
 // Training Intel first and the default. Check-ins are reviewed in Forms →
-// Submissions now; the old queue stays reachable as the last tab.
+// Submissions; the old queue (unused since August) is gone, its old links open
+// Forms, and a client's manual reviews stay on their Forms tab.
 const TABS: { value: TabKey; label: string }[] = [
   { value: "training-intel", label: "Training Intel" },
   { value: "progress", label: "Progress" },
   { value: "requests", label: "Requests" },
   { value: "schedules", label: "Schedules" },
   { value: "management", label: "Management" },
-  { value: "check-ins", label: "Check-ins (old)" },
 ];
 const DEFAULT_TAB: TabKey = "training-intel";
 const isTab = (v: unknown): v is TabKey => typeof v === "string" && TABS.some((t) => t.value === v);
 
-type Search = { tab: TabKey; open?: string };
+// "check-ins" is only the old tab's address: beforeLoad sends it to Forms.
+type Search = { tab: TabKey | "check-ins"; open?: string };
 
 export const Route = createFileRoute("/_authenticated/admin/coaching")({
+  beforeLoad: ({ search }) => {
+    if (search.tab === "check-ins") throw redirect({ to: "/admin/forms", replace: true });
+  },
   // A link that names a tab opens it; the menu (no tab) always opens Training Intel.
   validateSearch: (raw: Record<string, unknown>): Search => {
     const t = raw?.tab;
     const open = typeof raw?.open === "string" ? (raw.open as string) : undefined;
-    return { tab: isTab(t) ? t : DEFAULT_TAB, open };
+    return { tab: t === "check-ins" ? "check-ins" : isTab(t) ? t : DEFAULT_TAB, open };
   },
   component: CoachingWorkspace,
 });
@@ -56,7 +59,6 @@ function CoachingWorkspace() {
       </div>
       <div>
         {tab === "management" && <CoachingManagementBoard />}
-        {tab === "check-ins" && <AdminCheckInReviews embedded />}
         {tab === "progress" && <ProgressReviewQueue />}
         {tab === "training-intel" && <TrainingIntelPage embedded />}
         {tab === "requests" && <AdminClientActionRequests embedded />}

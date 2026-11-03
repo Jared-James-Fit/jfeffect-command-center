@@ -69,3 +69,15 @@ describe("coach chat header", () => {
     expect(page).not.toContain("border-primary/40 bg-primary/10 text-primary");
   });
 });
+
+describe("asking for a PT session is the coaching layer", () => {
+  it("Home's calendar card and the Calendar page offer Request a session only with pt_sessions; members book", () => {
+    const card = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
+    expect(card).toContain('const canRequest = useEntitlement("pt_sessions");');
+    expect(card).toContain("{links && (singleBook || (bookable.length > 1 && !pov.viewAsClientId) || canRequest) && (");
+    expect(card).toContain("{links && canRequest && (");
+    const cal = readFileSync("src/routes/_authenticated/portal/calendar.tsx", "utf8");
+    expect(cal).toContain('const canRequest = useEntitlement("pt_sessions");');
+    expect(cal).toContain(") : <ClientBookCard />)}");
+  });
+});

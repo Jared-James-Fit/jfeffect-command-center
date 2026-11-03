@@ -46,6 +46,9 @@ describe("client workspace tabs", () => {
   it("redirects merged tabs to where their content lives now", () => {
     expect(LEGACY_WORKSPACE_TABS["program-setup"]).toBe("training");
     expect(LEGACY_WORKSPACE_TABS.analytics).toBe("metrics");
+    // a check-in push (?tab=check-ins) and old ?tab=forms links open the Forms tab
+    expect(LEGACY_WORKSPACE_TABS["check-ins"]).toBe("documents");
+    expect(LEGACY_WORKSPACE_TABS.forms).toBe("documents");
     expect(LEGACY_WORKSPACE_TABS["lift-videos"]).toBe("metrics");
     expect(LEGACY_WORKSPACE_TABS.agreements).toBe("documents");
     expect(LEGACY_WORKSPACE_TABS.billing).toBe("purchases");
