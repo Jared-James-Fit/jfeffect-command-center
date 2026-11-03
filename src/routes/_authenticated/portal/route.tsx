@@ -17,7 +17,8 @@ import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
 import { LeagueRecapGate } from "@/components/portal/league-recap";
 import { WeightUnitPrompt } from "@/components/portal/weight-unit-prompt";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { useWarmClientPages } from "@/lib/portal-page-queries";
 import { useCommunityActivity } from "@/lib/community.queries";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
@@ -26,7 +27,10 @@ function PortalLayout() {
   useActivityHeartbeat();
   const { isImpersonating } = useClientImpersonation();
   // Coaching client or JF member: one portal, the coach's screens only for coaching.
-  const { isSelfServe } = useServiceTier();
+  const { isSelfServe, loading: tierLoading } = useServiceTier();
+  // Workouts and Nutrition open from the cache: their data is fetched once the app has painted.
+  const portalUserId = usePortalUserId();
+  useWarmClientPages({ portalUserId, enabled: !isImpersonating && !tierLoading, nutrition: !isSelfServe });
   // No community for this account (not an active client): no centre button.
   const { data: community } = useCommunityActivity(true);
   const bottomNav = useMemo(() => {

@@ -25,8 +25,7 @@ import { Loader2, Heart, Check, ChevronRight } from "lucide-react";
 import { cardioStatus } from "@/lib/cardio-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { CardioCompletionCard } from "./CardioCompletionCard";
-import { getClientWorkouts } from "@/lib/pl-programs";
-import { isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import { clientWorkoutsQuery, primaryWorkouts } from "@/lib/client-workouts-query";
 import type { WorkoutItem } from "@/lib/workout-today";
 import { mondayWeekDates, resolveClientWeekDays, resolveWorkoutDatesFromItems } from "@/lib/resolved-client-days";
 import { parseLocalDate, todayLocalISO, toLocalISO } from "@/lib/today";
@@ -81,11 +80,7 @@ export function ClientCardioSection({
           .eq("client_id", clientId),
         // The Workouts screen's own list (same key and loader): a cached copy is
         // reused instead of re-running the whole program chain for every date.
-        qc.fetchQuery({
-          queryKey: ["my-workouts", clientId],
-          queryFn: () => getClientWorkouts(clientId, { includeAtHomeBackupSessions: isAtHomeBackupClient(clientId) }) as Promise<WorkoutItem[]>,
-          staleTime: 60_000,
-        }).then((items) => items.filter((it) => !isAtHomeBackupSessionBlock(it.block))),
+        qc.fetchQuery(clientWorkoutsQuery(clientId)).then((items) => primaryWorkouts(items as WorkoutItem[])),
       ]);
       if (targetsRes.error) throw targetsRes.error;
       const targetDate = parseLocalDate(dateStr) ?? new Date();
