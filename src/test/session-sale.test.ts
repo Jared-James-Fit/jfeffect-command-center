@@ -145,6 +145,14 @@ describe("the sale's plumbing", () => {
     const line = read("src/components/schedule/session-payment-line.tsx");
     expect(line).toContain('rpc("pt_session_sale_id"');
     expect(read("src/components/schedule/session-actions-sheet.tsx")).toContain("<SessionPaymentLine session={session} first={first} />");
+    // Charge for it shows on every new booking that uses a credit, even before a client is picked (the calendar)
+    const dialog = read("src/components/pt-session-dialog.tsx");
+    expect(dialog).toContain('{isNewBooking && form.uses_credit !== false && form.status === "Scheduled" && (\n            <div className="md:col-span-2">\n              <SessionSalePicker');
+    // a session can be booked (and charged) straight from the coach's chat with the client
+    const plus = read("src/components/composer-plus-menu.tsx");
+    expect(plus).toContain('label: "Book Session"');
+    expect(plus).toContain("const canBook = isAdmin && surface === \"dm\" && !!defaultClientId;");
+    expect(read("src/components/messages/book-session-from-chat.tsx")).toContain("clientId={clientId} clients={client ? [client] : []}");
     // and when an already-booked session is opened to edit (Manage Session)
     expect(read("src/components/pt-session-dialog.tsx")).toContain("<SessionPaymentLine session={form} first=");
   });

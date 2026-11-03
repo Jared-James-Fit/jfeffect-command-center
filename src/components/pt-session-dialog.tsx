@@ -659,7 +659,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
           )}
 
-          {isNewBooking && form.uses_credit !== false && form.status === "Scheduled" && !!form.client_id && (
+          {isNewBooking && form.uses_credit !== false && form.status === "Scheduled" && (
             <div className="md:col-span-2">
               <SessionSalePicker
                 value={sale}
