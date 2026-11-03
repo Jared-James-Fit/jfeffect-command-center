@@ -1,9 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/app-shell";
+import { portalWorkoutsClientQuery } from "@/lib/portal-page-queries";
+import { WorkoutsBodySkeleton } from "@/components/workouts/workouts-skeleton";
 import { WorkoutsExperience } from "@/components/workouts/WorkoutsExperience";
 import { WorkoutArchiveSection } from "@/components/workout-archive-section";
 
@@ -26,42 +26,20 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
 function WorkoutsPage() {
   const portalUserId = usePortalUserId();
   const { open } = Route.useSearch();
-  // Resolve the client row first (fast single-row lookup) and render the
-  // workouts shell as soon as it's known. The heavier workout-schedule
-  // queries fire in parallel from <WorkoutsExperience />, so the page no
-  // longer blocks on the full ~6-query getClientWorkouts() chain before
-  // showing anything. This is the difference between an instant paint and
-  // a multi-second blank/loading state on mobile.
+  // The client row (one small read, kept on the phone a day and warmed when the
+  // app opens: useWarmClientPages) opens the program; until it's known the page
+  // keeps its title and shows the schedule's own shape, never a spinner.
   const { data: client, isLoading } = useQuery({
-    queryKey: ["portal-workouts-client", portalUserId],
+    ...portalWorkoutsClientQuery(portalUserId ?? ""),
     enabled: !!portalUserId,
-    staleTime: 60_000,
-    queryFn: async () =>
-      (
-        await supabase
-          .from("clients")
-          .select("id, full_name")
-          .eq("user_id", portalUserId!)
-          .maybeSingle()
-      ).data,
   });
 
   if (isLoading || !client) {
     return (
-      <div className="space-y-4 p-4 md:p-6" aria-busy="true" aria-live="polite">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-4 w-64" />
-        <div className="grid gap-3 md:grid-cols-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} className="space-y-3 p-4">
-              <Skeleton className="h-5 w-2/3" />
-              <Skeleton className="h-4 w-1/3" />
-              <Skeleton className="h-20 w-full" />
-            </Card>
-          ))}
-        </div>
-        <span className="sr-only">Loading workouts…</span>
-      </div>
+      <>
+        <PageHeader title="Workouts" />
+        <WorkoutsBodySkeleton />
+      </>
     );
   }
 
