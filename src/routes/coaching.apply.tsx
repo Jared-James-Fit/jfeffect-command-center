@@ -9,19 +9,22 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { submitCoachingApplication } from "@/lib/coaching-applications.functions";
+import { saveApplicationDraft, submitCoachingApplication } from "@/lib/coaching-applications.functions";
+import {
+  APPLY_STEPS, EMPTY_ANSWERS, OUTCOME_MAX, answeredCount, clip, firstUnanswered, hasContact, stepError,
+  type ApplyAnswers,
+} from "@/lib/apply-form";
 import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/coaching/apply")({
-  component: SimpleQuickApply,
+  component: QuestionFlow,
   head: () => ({
     meta: [
-      { title: "Apply for JF Effect Coaching — 30–60 seconds" },
+      { title: "Apply for JF Effect Coaching: 7 quick questions" },
       { name: "description", content: "Tell us who you are, what you want, and when you want to start." },
       { property: "og:title", content: "Apply for JF Effect Coaching" },
       { property: "og:description", content: "Tell us who you are, what you want, and when you want to start." },
@@ -29,146 +32,353 @@ export const Route = createFileRoute("/coaching/apply")({
   }),
 });
 
-/* ────────────────── data ────────────────── */
+/* ────────────────── one question at a time ────────────────── */
 
-const SIMPLE_GOALS = [
-  { v: "powerlifting", l: "Powerlifting" },
-  { v: "fat_loss", l: "Fat Loss" },
-  { v: "build_muscle", l: "Build Muscle" },
-  { v: "general_fitness", l: "General Fitness" },
-  { v: "other", l: "Other" },
-] as const;
-const SIMPLE_TIMELINES = [
-  { v: "asap", l: "ASAP" },
-  { v: "this_month", l: "This Month" },
-  { v: "one_three_months", l: "Next 1–3 Months" },
-  { v: "exploring", l: "Just Exploring" },
-] as const;
+/** Answers so far stay on this phone, so a reload or a dropped Instagram browser picks up where they were. */
+const STORE_KEY = "jf_apply_v2";
+const STORE_MAX_AGE = 7 * 24 * 60 * 60_000;
+type SavedApply = { draftId: string; answers: ApplyAnswers; step: number; at: number };
 
-type SimpleFormState = {
-  full_name: string; email: string; phone: string; instagram: string;
-  main_goal: string; target_outcome: string; timeline: string;
-  honeypot: string; source_page: string;
-};
-const EMPTY_SIMPLE_FORM: SimpleFormState = {
-  full_name: "", email: "", phone: "", instagram: "", main_goal: "", target_outcome: "", timeline: "", honeypot: "", source_page: "",
-};
+function loadSavedApply(): SavedApply | null {
+  try {
+    const raw = window.localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as SavedApply;
+    if (!saved?.draftId || Date.now() - Number(saved.at) > STORE_MAX_AGE) return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+function storeApply(saved: SavedApply) {
+  try { window.localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch { /* private mode: answers just aren't kept */ }
+}
+function clearStoredApply() {
+  try { window.localStorage.removeItem(STORE_KEY); } catch { /* nothing kept */ }
+}
+function newDraftId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+    (Number(c) ^ (Math.random() * 16) >> (Number(c) / 4)).toString(16),
+  );
+}
 
-function SimpleQuickApply() {
+const DRAFT_SAVE_MS = 1200;
+
+/**
+ * The application, one question per screen: a progress bar and "Question N of 7" on top, a big
+ * field or tap-to-pick answers, and Next. Next always works: when an answer won't do, it says
+ * exactly what to fix (never a greyed-out button). Once there's an email or phone, what they've
+ * answered is saved as an unfinished application, so the coach sees who it was even if Submit
+ * never happens.
+ */
+function QuestionFlow() {
   const submit = useServerFn(submitCoachingApplication);
-  const [form, setForm] = useState<SimpleFormState>(EMPTY_SIMPLE_FORM);
+  const saveDraft = useServerFn(saveApplicationDraft);
+  const [answers, setAnswers] = useState<ApplyAnswers>(EMPTY_ANSWERS);
+  const [step, setStep] = useState(0);
+  const [dir, setDir] = useState<1 | -1>(1);
+  const [error, setError] = useState<string | null>(null);
+  const [shake, setShake] = useState(0);
+  const [honeypot, setHoneypot] = useState("");
   const [result, setResult] = useState<Awaited<ReturnType<typeof submit>> | null>(null);
-  const set = <K extends keyof SimpleFormState>(key: K, value: SimpleFormState[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const draftId = useRef("");
+  const sourcePage = useRef("coaching_apply");
+  const ready = useRef(false);
+  const moved = useRef(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
+  const total = APPLY_STEPS.length;
+  const current = APPLY_STEPS[step]!;
+  const value = answers[current.key];
+  const last = step === total - 1;
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    set("source_page", params.get("from") || "coaching_apply");
-  }, []);
+    const saved = loadSavedApply();
+    draftId.current = saved?.draftId ?? newDraftId();
+    if (saved) {
+      setAnswers({ ...EMPTY_ANSWERS, ...saved.answers });
+      setStep(Math.max(0, Math.min(total - 1, Number(saved.step) || 0)));
+    }
+    sourcePage.current = clip(new URLSearchParams(window.location.search).get("from") || "coaching_apply", 80);
+    ready.current = true;
+  }, [total]);
 
-  const checks: Array<[string, boolean]> = [
-    ["name", form.full_name.trim().length >= 2],
-    ["email", /.+@.+\..+/.test(form.email.trim())],
-    ["phone", /^[\d\s+\-()]{7,}$/.test(form.phone.trim())],
-    ["Instagram", /^@?[A-Za-z0-9._]{1,30}$/.test(form.instagram.trim())],
-    ["goal", !!form.main_goal],
-    ["result", form.target_outcome.trim().length > 0],
-    ["start date", !!form.timeline],
-  ];
-  const missing = checks.filter(([, ok]) => !ok).map(([label]) => label);
-  const done = checks.length - missing.length;
-  const valid = checks.every(([, ok]) => ok);
+  useEffect(() => {
+    if (!ready.current || result) return;
+    storeApply({ draftId: draftId.current, answers, step, at: Date.now() });
+  }, [answers, step, result]);
+
+  // Saved as an unfinished application a beat after they stop typing, once we can reach them.
+  useEffect(() => {
+    if (!ready.current || result || !hasContact(answers)) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      draftTimer.current = null;
+      void saveDraft({
+        data: {
+          draft_id: draftId.current,
+          ...answers,
+          step: APPLY_STEPS[step]?.key ?? "",
+          answered: answeredCount(answers),
+          source_page: sourcePage.current,
+          page_url: clip(window.location.href, 500),
+          referrer: clip(document.referrer, 500),
+          honeypot,
+        },
+      }).catch(() => { /* best effort: the real application is what counts */ });
+    }, DRAFT_SAVE_MS);
+    return () => {
+      if (draftTimer.current) clearTimeout(draftTimer.current);
+    };
+  }, [answers, step, result, honeypot, saveDraft]);
+
+  // The field takes focus when a new question comes up (not on the first one, so the page opens calm).
+  useEffect(() => {
+    if (!moved.current) return;
+    fieldRef.current?.focus({ preventScroll: true });
+  }, [step]);
 
   const mutation = useMutation({
-    mutationFn: () => submit({ data: {
-      ...form,
-      page_url: typeof window !== "undefined" ? window.location.href : "",
-      referrer: typeof document !== "undefined" ? document.referrer : "",
-      form_name: "Public Coaching Application",
-    } }),
-    onSuccess: (next) => { setResult(next); window.scrollTo({ top: 0, behavior: "smooth" }); },
-    onError: (error: any) => toast.error(error?.message ?? "Could not submit your application. Please try again."),
+    mutationFn: () =>
+      submit({
+        data: {
+          ...answers,
+          honeypot,
+          source_page: sourcePage.current,
+          page_url: clip(window.location.href, 500),
+          referrer: clip(document.referrer, 500),
+          form_name: "Public Coaching Application",
+          draft_id: draftId.current || undefined,
+        },
+      }),
+    onSuccess: (next) => {
+      clearStoredApply();
+      setResult(next);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: (e: any) => {
+      setError(
+        typeof navigator !== "undefined" && navigator.onLine === false
+          ? "You're offline. Your answers are saved: tap Send again once you're back online."
+          : "That didn't send. Your answers are saved: tap Send again.",
+      );
+      setShake((n) => n + 1);
+      console.warn("[apply] submit failed", e?.message ?? e);
+    },
   });
 
   if (result) return <PostSubmit result={result} />;
 
-  const fieldCls = "h-12 rounded-xl bg-background text-[17px] md:text-[17px]";
+  const fail = (message: string) => {
+    setError(message);
+    setShake((n) => n + 1);
+    fieldRef.current?.focus({ preventScroll: true });
+  };
+  const goTo = (i: number, d: 1 | -1) => {
+    moved.current = true;
+    setDir(d);
+    setError(null);
+    setStep(i);
+  };
+  const next = () => {
+    const problem = stepError(current.key, value);
+    if (problem) return fail(problem);
+    if (!last) return goTo(step + 1, 1);
+    // Everything is checked again before sending (answers can come back from an older visit).
+    const missing = firstUnanswered(answers);
+    if (missing >= 0) {
+      goTo(missing, -1);
+      setError(stepError(APPLY_STEPS[missing]!.key, answers[APPLY_STEPS[missing]!.key]));
+      return;
+    }
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    setError(null);
+    mutation.mutate();
+  };
+  const back = () => step > 0 && goTo(step - 1, -1);
+  const set = (v: string) => {
+    setAnswers((a) => ({ ...a, [current.key]: v }));
+    if (error) setError(null);
+  };
+  const choose = (v: string) => {
+    setAnswers((a) => ({ ...a, [current.key]: v }));
+    setError(null);
+    // A tap is the answer: on to the next question once the pick has shown.
+    window.setTimeout(() => goTo(Math.min(step + 1, total - 1), 1), 180);
+  };
+
+  const pct = Math.round(((step + 1) / total) * 100);
+  const fieldCls = "h-14 rounded-2xl bg-background px-4 text-[18px] md:text-[18px]";
+  const contactStep = current.key === "email" || current.key === "phone" || current.key === "instagram";
 
   return (
     <SalesPageShell>
-      <Block narrow className="!py-8 md:!py-12">
-        <div className="jf-auth-rise">
-          <div className="mb-6 text-center">
-            <p className="text-[13px] font-semibold text-primary">JF Effect Coaching</p>
-            <h1 className="mt-1.5 text-[32px] font-semibold leading-tight tracking-[-0.02em] md:text-[40px]">Apply for Coaching</h1>
-            <p className="mx-auto mt-2 max-w-sm text-[16px] leading-relaxed text-muted-foreground">
-              A few quick details so we know what you need and how to reach you. No payment to apply.
+      <Block narrow className="!py-6 md:!py-10">
+        <div className="mx-auto max-w-md">
+          {/* Where they are: back, "Question N of 7", and the bar. */}
+          <div className="flex h-10 items-center justify-between">
+            <button
+              type="button"
+              onClick={back}
+              disabled={step === 0 || mutation.isPending}
+              aria-label="Previous question"
+              className="-ml-2 inline-flex h-10 items-center gap-1 rounded-full px-2 text-[15px] font-medium text-muted-foreground transition hover:text-foreground disabled:invisible"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden /> Back
+            </button>
+            <p className="text-[13px] font-semibold tabular-nums text-muted-foreground" aria-live="polite">
+              Question {step + 1} of {total}
             </p>
+            <span className="w-16" aria-hidden />
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Application progress"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={step + 1}
+            className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
+          >
+            <div className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${pct}%` }} />
           </div>
 
-          <form
-            className="space-y-6 rounded-2xl bg-card p-5 ring-1 ring-border/70 md:p-7"
-            onSubmit={(event) => { event.preventDefault(); if (valid) mutation.mutate(); }}
-          >
-            <div className="space-y-4">
-              <div className="space-y-1.5"><Label htmlFor="full_name" className="text-[14px]">Full name</Label><Input id="full_name" required autoComplete="name" className={fieldCls} value={form.full_name} onChange={(e) => set("full_name", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="email" className="text-[14px]">Email</Label><Input id="email" type="email" inputMode="email" required autoComplete="email" autoCapitalize="none" className={fieldCls} value={form.email} onChange={(e) => set("email", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="phone" className="text-[14px]">Phone number</Label><Input id="phone" type="tel" inputMode="tel" required autoComplete="tel" className={fieldCls} value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="instagram" className="text-[14px]">Instagram</Label><Input id="instagram" required autoComplete="off" autoCapitalize="none" autoCorrect="off" placeholder="@username" className={fieldCls} value={form.instagram} onChange={(e) => set("instagram", e.target.value)} /><p className="text-[13px] text-muted-foreground">Your @username. We may reach out there too.</p></div>
-            </div>
-            <ChoiceGrid label="What do you want help with?" options={SIMPLE_GOALS} value={form.main_goal} onChange={(value) => set("main_goal", value)} />
-            <div className="space-y-1.5"><Label htmlFor="target_outcome" className="text-[15px] font-medium">What result are you after?</Label><Textarea id="target_outcome" required rows={3} maxLength={250} placeholder="Tell me the main result you want." value={form.target_outcome} onChange={(e) => set("target_outcome", e.target.value)} className="resize-none rounded-xl bg-background text-[17px] md:text-[17px]" /><p className="text-right text-[12px] tabular-nums text-muted-foreground">{form.target_outcome.length}/250</p></div>
-            <ChoiceGrid label="When do you want to start?" options={SIMPLE_TIMELINES} value={form.timeline} onChange={(value) => set("timeline", value)} />
-            <input aria-hidden="true" tabIndex={-1} className="hidden" value={form.honeypot} onChange={(e) => set("honeypot", e.target.value)} />
-
-            <div className="space-y-3">
-              <button
-                type="submit"
-                disabled={!valid || mutation.isPending}
-                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-50 disabled:shadow-none"
-              >
-                {mutation.isPending ? <><Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Sending…</> : "Apply for Coaching"}
-              </button>
-              <p className="text-center text-[13px] text-muted-foreground" aria-live="polite">
-                {valid
-                  ? "Next you'll pick a time for a quick call."
-                  : `${done} of ${checks.length} done · still needed: ${missing.join(", ")}`}
+          {step === 0 && (
+            <div className="mt-7">
+              <p className="text-[13px] font-semibold text-primary">JF Effect Coaching</p>
+              <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
+                {total} quick questions, about a minute. No payment to apply.
               </p>
             </div>
+          )}
+
+          <form
+            key={step}
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              next();
+            }}
+            className={cn(
+              "animate-in fade-in duration-300 motion-reduce:animate-none",
+              step === 0 ? "mt-5" : "mt-8",
+              dir === 1 ? "slide-in-from-right-2" : "slide-in-from-left-2",
+            )}
+          >
+            <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] md:text-[30px]">
+              <label htmlFor={`apply-${current.key}`}>{current.question}</label>
+            </h1>
+            {current.hint && <p className="mt-1.5 text-[15px] text-muted-foreground">{current.hint}</p>}
+
+            <div key={shake} className={cn("mt-5", shake > 0 && error && "jf-auth-shake")}>
+              {current.kind === "choice" ? (
+                <div role="radiogroup" aria-labelledby={`apply-${current.key}`} className="grid gap-2.5">
+                  {current.options!.map((o) => {
+                    const on = value === o.v;
+                    return (
+                      <button
+                        key={o.v}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => choose(o.v)}
+                        className={cn(
+                          "flex min-h-[56px] w-full items-center justify-between rounded-2xl px-5 text-left text-[17px] font-medium transition active:scale-[0.99]",
+                          on ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/60 ring-1 ring-border/70 hover:bg-muted",
+                        )}
+                      >
+                        {o.l}
+                        {on && <CheckCircle2 className="h-5 w-5" aria-hidden />}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : current.kind === "long" ? (
+                <>
+                  <Textarea
+                    id={`apply-${current.key}`}
+                    ref={(el) => { fieldRef.current = el; }}
+                    rows={3}
+                    maxLength={OUTCOME_MAX}
+                    enterKeyHint="next"
+                    placeholder={current.placeholder}
+                    value={value}
+                    aria-invalid={!!error}
+                    onChange={(e) => set(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        next();
+                      }
+                    }}
+                    className="resize-none rounded-2xl bg-background px-4 py-3 text-[18px] md:text-[18px]"
+                  />
+                  <p className="mt-1 text-right text-[12px] tabular-nums text-muted-foreground">{value.length}/{OUTCOME_MAX}</p>
+                </>
+              ) : (
+                <Input
+                  id={`apply-${current.key}`}
+                  ref={(el) => { fieldRef.current = el; }}
+                  type={current.kind === "email" ? "email" : current.kind === "tel" ? "tel" : "text"}
+                  inputMode={current.kind === "email" ? "email" : current.kind === "tel" ? "tel" : "text"}
+                  autoComplete={current.key === "full_name" ? "name" : current.kind === "email" ? "email" : current.kind === "tel" ? "tel" : "off"}
+                  autoCapitalize={current.key === "full_name" ? "words" : "none"}
+                  autoCorrect={current.key === "full_name" ? "on" : "off"}
+                  spellCheck={false}
+                  enterKeyHint={last ? "send" : "next"}
+                  placeholder={current.placeholder}
+                  value={value}
+                  aria-invalid={!!error}
+                  onChange={(e) => set(e.target.value)}
+                  className={fieldCls}
+                />
+              )}
+            </div>
+
+            {error && (
+              <p role="alert" className="mt-2.5 text-[14px] font-medium text-destructive">
+                {error}
+              </p>
+            )}
+
+            {/* Choices move on by themselves; Next is still there after Back, once one is picked. */}
+            {(current.kind !== "choice" || value) && (
+              <button
+                type="submit"
+                disabled={mutation.isPending}
+                className="mt-6 flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-60"
+              >
+                {mutation.isPending ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Sending…</>
+                ) : last ? (
+                  "Send application"
+                ) : (
+                  "Next"
+                )}
+              </button>
+            )}
+            {contactStep && (
+              <p className="mt-3 text-center text-[13px] text-muted-foreground">Only used to reach you about coaching.</p>
+            )}
+            {last && !mutation.isPending && (
+              <p className="mt-2 text-center text-[13px] text-muted-foreground">Next you'll pick a time for a quick call.</p>
+            )}
           </form>
+
+          <input
+            aria-hidden="true"
+            tabIndex={-1}
+            autoComplete="off"
+            className="hidden"
+            value={honeypot}
+            onChange={(e) => setHoneypot(e.target.value)}
+          />
         </div>
       </Block>
     </SalesPageShell>
   );
 }
-
-function ChoiceGrid<T extends string>({ label, options, value, onChange }: { label: string; options: readonly { v: T; l: string }[]; value: string; onChange: (value: string) => void }) {
-  return (
-    <fieldset className="space-y-2">
-      <legend className="text-[15px] font-medium leading-none">{label}</legend>
-      <div className="grid grid-cols-2 gap-2">
-        {options.map((option) => {
-          const active = value === option.v;
-          return (
-            <button
-              key={option.v}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(option.v)}
-              className={cn(
-                "min-h-[52px] rounded-xl px-4 py-3 text-left text-[16px] font-medium transition active:scale-[0.985]",
-                active ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/60 ring-1 ring-border/70 hover:bg-muted",
-              )}
-            >
-              {option.l}
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
-  );
-}
-
 
 /* ────────────────── post-submit success + booking ────────────────── */
 
