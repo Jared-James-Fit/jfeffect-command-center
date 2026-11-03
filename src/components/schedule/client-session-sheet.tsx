@@ -170,14 +170,18 @@ export function ClientSessionSheet({
         },
       });
       if (!res.alreadyPending) {
-        // The coach's chat gets it in words too; the request itself is on their calendar with Approve.
+        // The coach's chat gets it as a card they answer in one tap (Approve / Decline / Other time).
         const body = kind === "move"
           ? `Can I move my ${title} on ${when} to ${summaryDate(newDate)} at ${summaryTime(newStart)}?`
             + (others.trim() ? ` Other times that work: ${others.trim()}.` : "")
             + (reasonText ? ` Reason: ${reasonText}` : "")
           : `I can't make my ${title} on ${when}.${reasonText ? ` Reason: ${reasonText}` : ""}`;
         try {
-          await sendMessage({ clientId, senderId: user.id, senderRole: "client", body, messageType: "Scheduling" });
+          // The words are the preview (inbox, push); the coach answers from the card.
+          await sendMessage({
+            clientId, senderId: user.id, senderRole: "client", body, messageType: "Scheduling",
+            attachments: [{ type: "file", url: "", kind: "session_change", change_request_id: res.requestId }],
+          });
         } catch {
           /* the request is saved and waiting on the coach's calendar */
         }
