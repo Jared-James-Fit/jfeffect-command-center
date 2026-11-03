@@ -152,7 +152,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                     </div>
                   </div>
                   {s.meet_link && (
-                    <Button asChild className="h-11 w-full bg-gradient-primary font-bold">
+                    <Button asChild className="h-11 w-full bg-primary font-semibold">
                       <a href={s.meet_link} target="_blank" rel="noreferrer"><Video className="mr-2 h-4 w-4" /> Join video call</a>
                     </Button>
                   )}
@@ -214,7 +214,7 @@ export function ClientSessionList({ clientId }: { clientId: string }) {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {a.meet_link ? (
-                    <Button asChild className="h-11 bg-gradient-primary">
+                    <Button asChild className="h-11 bg-primary">
                       <a href={a.meet_link} target="_blank" rel="noreferrer"><Video className="mr-2 h-4 w-4" /> Join</a>
                     </Button>
                   ) : <span />}

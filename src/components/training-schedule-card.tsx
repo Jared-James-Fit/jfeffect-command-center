@@ -180,7 +180,7 @@ export function TrainingScheduleCard({ client, editable = true, compact = false,
             <Button size="sm" variant="ghost" onClick={() => { reset(); setEditing(false); onDone?.(); }}>
               <X className="mr-1 h-3.5 w-3.5" /> Cancel
             </Button>
-            <Button size="sm" onClick={save} disabled={saving || !dayCountValid} className="bg-gradient-primary font-bold uppercase">
+            <Button size="sm" onClick={save} disabled={saving || !dayCountValid} className="bg-primary font-semibold">
               <Save className="mr-1 h-3.5 w-3.5" /> {saving ? "Saving…" : "Save"}
             </Button>
           </div>

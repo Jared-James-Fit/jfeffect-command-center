@@ -91,7 +91,7 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
   return (
     <div className="min-w-0 rounded-lg border border-border bg-secondary/20 px-3 py-2">
       <div className="truncate text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`text-lg font-black tabular-nums ${toneCls}`}>{value}</div>
+      <div className={`text-lg font-bold tabular-nums ${toneCls}`}>{value}</div>
     </div>
   );
 }
@@ -230,7 +230,7 @@ export function ClientSessionsPanel({
           <h3 className="flex min-w-0 items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
             <CalendarDays className="h-4 w-4 shrink-0" /> <span className="truncate">Sessions</span>
           </h3>
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setBookOpen(true); }}>
+          <Button size="sm" className="bg-primary font-semibold" onClick={() => { setEditing(null); setBookOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Book Session
           </Button>
         </div>

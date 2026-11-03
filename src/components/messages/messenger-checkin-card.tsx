@@ -412,7 +412,7 @@ function CheckinWizard({
 
           <div className="px-5 py-6">
             <div className="min-h-[230px]">
-              <h3 className="text-xl font-black leading-tight">{q.prompt}</h3>
+              <h3 className="text-xl font-bold leading-tight">{q.prompt}</h3>
               {q.helper && <p className="mt-2 text-sm text-muted-foreground">{q.helper}</p>}
 
               {q.type === "rating" && (

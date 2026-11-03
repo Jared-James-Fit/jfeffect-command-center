@@ -166,7 +166,7 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
 
       <Button
         onClick={openSheet}
-        className="mt-4 h-12 w-full bg-gradient-primary text-sm font-bold uppercase"
+        className="mt-4 h-12 w-full bg-primary text-sm font-semibold"
       >
         <Plus className="mr-1.5 h-4 w-4" />
         {hasData ? "Log Weight" : "Log First Weight"}
@@ -229,7 +229,7 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
               loadingLabel="Saving…"
               successLabel="Saved"
               successToast={false}
-              className="h-12 w-full bg-gradient-primary font-bold uppercase"
+              className="h-12 w-full bg-primary font-semibold"
             >
               Save Bodyweight
             </ActionButton>

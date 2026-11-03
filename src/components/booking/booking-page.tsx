@@ -285,7 +285,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
           {page.hostName}
         </span>
       </div>
-      <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{page.name}</h1>
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{page.name}</h1>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <Clock className="h-4 w-4" /> {page.durationMin} min
@@ -328,7 +328,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               <CheckCircle2 className="h-8 w-8 text-emerald-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight">You're booked</h1>
+              <h1 className="text-2xl font-bold tracking-tight">You're booked</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {result.kind === "session"
                   ? "It's in your JF Effect app, with a reminder text the evening before."
@@ -360,7 +360,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               </p>
             )}
             {result.meetLink && (
-              <Button asChild className="h-12 w-full max-w-sm bg-gradient-primary font-bold">
+              <Button asChild className="h-12 w-full max-w-sm bg-primary font-semibold">
                 <a href={result.meetLink} target="_blank" rel="noreferrer">
                   <Video className="mr-2 h-4 w-4" /> Video call link
                 </a>
@@ -432,7 +432,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               <ArrowLeft className="h-3.5 w-3.5" /> Change time
             </button>
             <div className="rounded-xl border border-primary/40 bg-primary/10 p-4">
-              <div className="text-lg font-black">
+              <div className="text-lg font-bold">
                 {longDay(localDateISO(new Date(slot.start), tz))}
               </div>
               <div className="text-sm font-semibold text-foreground/90">
@@ -501,7 +501,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
               </div>
             )}
             <Button
-              className="h-12 w-full bg-gradient-primary text-base font-black"
+              className="h-12 w-full bg-primary text-base font-semibold"
               disabled={!valid || book.isPending}
               onClick={() => book.mutate()}
             >
@@ -617,7 +617,7 @@ export function BookingPage({ slug, prefill }: { slug: string; prefill: Prefill 
                       className={cn(
                         "mx-auto grid aspect-square w-full max-w-11 place-items-center rounded-full text-sm tabular-nums transition",
                         selected
-                          ? "bg-primary font-black text-primary-foreground"
+                          ? "bg-primary font-bold text-primary-foreground"
                           : open
                             ? "bg-primary/15 font-bold text-primary hover:bg-primary/25"
                             : "text-muted-foreground/45",

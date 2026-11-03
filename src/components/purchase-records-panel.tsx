@@ -343,7 +343,7 @@ export function PurchaseRecordsPanel({ clientId }: { clientId: string }) {
         <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
           <ShoppingBag className="h-4 w-4" />Purchases & Payment Setup Requests
         </h3>
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setPicker(true)}>
+        <Button size="sm" className="bg-primary font-semibold" onClick={() => setPicker(true)}>
           <Plus className="mr-1.5 h-3 w-3" />Send payment setup request
         </Button>
       </div>

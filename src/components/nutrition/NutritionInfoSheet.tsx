@@ -27,7 +27,7 @@ export function NutritionInfoSheet({
         <div className="mx-auto max-w-lg px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
           {/* the app's sheet header: the title beside the sheet's own Back pill */}
           <SheetHeader className="space-y-0">
-            <SheetTitle className="flex items-center gap-2 text-lg font-black">
+            <SheetTitle className="flex items-center gap-2 text-lg font-bold">
               <Icon className="h-5 w-5 text-primary" aria-hidden />
               {title}
             </SheetTitle>

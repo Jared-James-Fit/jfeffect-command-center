@@ -79,7 +79,7 @@ export function LockInBar({
             <Check className="h-4 w-4" strokeWidth={3} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-black">{existing?.locked_in_at ? `Locked in${time ? ` · ${time}` : ""}` : "Posted"}</span>
+            <span className="block text-[13px] font-bold">{existing?.locked_in_at ? `Locked in${time ? ` · ${time}` : ""}` : "Posted"}</span>
             <span className="block truncate text-[11px] text-muted-foreground">{existing?.visibility === "private" ? "Only you can see it" : existing?.visibility === "coach" ? "Only your coach sees it" : existing?.visibility === "close_friends" ? "Only your Close friends see it" : "Your numbers land on it when you finish"}</span>
           </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -90,10 +90,10 @@ export function LockInBar({
             <Camera className="h-5 w-5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-black leading-tight">Lock in</span>
+            <span className="block text-[14px] font-bold leading-tight">Lock in</span>
             <span className="block truncate text-[12px] text-muted-foreground">Show the crew you showed up</span>
           </span>
-          <span className={cn("shrink-0 rounded-full px-3 py-1.5 text-[12px] font-black text-white", LOCK_GRADIENT)}>📸 Snap</span>
+          <span className={cn("shrink-0 rounded-full px-3 py-1.5 text-[12px] font-bold text-white", LOCK_GRADIENT)}>📸 Snap</span>
         </button>
       )}
 

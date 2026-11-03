@@ -86,7 +86,7 @@ export function LoadSuggestionCard({
       <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-base font-black tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
+          <span className="text-base font-bold tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
           <span className="truncate text-[11px] font-medium text-muted-foreground">
             {plan.reps} @ RPE {fmtNum(plan.rpe)}
           </span>
@@ -254,7 +254,7 @@ export function LoadSuggestionsDone({
         {read && <> · today ran <span className="font-semibold text-foreground">{read}</span></>}
         {next && (
           <span className="block" data-testid="load-next-time">
-            Next time: <span className="text-sm font-black tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
+            Next time: <span className="text-sm font-bold tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
             {plan && <> for {plan.reps} @ RPE {fmtNum(plan.rpe)}</>}
           </span>
         )}

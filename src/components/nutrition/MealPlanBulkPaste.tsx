@@ -372,7 +372,7 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <div>
-            <div className="text-sm font-bold uppercase tracking-wide">Quick paste meal plan</div>
+            <div className="text-sm font-semibold">Quick paste meal plan</div>
             <div className="text-[11px] text-muted-foreground">Paste a full plan and we'll auto-split it into days with macros.</div>
             {source && <div className="mt-1 text-[11px] text-foreground/80">{source}</div>}
           </div>
@@ -421,7 +421,7 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
         <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={pasteFromClipboard}>
           <ClipboardPaste className="h-3.5 w-3.5" /> Paste from clipboard
         </Button>
-        <Button type="button" size="sm" className="bg-gradient-primary font-bold uppercase gap-1" onClick={apply} disabled={!text.trim()}>
+        <Button type="button" size="sm" className="bg-primary font-semibold gap-1" onClick={apply} disabled={!text.trim()}>
           <Wand2 className="h-3.5 w-3.5" /> Import into day targets
         </Button>
       </div>

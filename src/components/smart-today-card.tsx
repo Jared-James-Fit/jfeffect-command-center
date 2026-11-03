@@ -68,7 +68,7 @@ function SmartTodayCardInner({ state, clientId }: { state: TodayState; clientId:
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
               view.statusPillClass ?? "bg-primary text-primary-foreground",
             )}
           >
@@ -84,17 +84,17 @@ function SmartTodayCardInner({ state, clientId }: { state: TodayState; clientId:
 
         {/* Block title — the big screenshot moment */}
         {blockName ? (
-          <div className="text-[11px] font-black uppercase tracking-[0.22em] text-primary/90">
+          <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary/90">
             {blockName}
           </div>
         ) : null}
 
         {/* Day title — primary headline */}
-        <h2 className="text-3xl font-black leading-[1.05] tracking-tight text-white md:text-4xl">
+        <h2 className="text-3xl font-bold leading-[1.05] tracking-tight text-white md:text-4xl">
           {dayTitle ?? view.title}
         </h2>
         {dayFocus && (
-          <div className="text-sm font-semibold uppercase tracking-wide text-white/60">
+          <div className="text-sm font-semibold text-white/60">
             {dayFocus}
           </div>
         )}

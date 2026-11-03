@@ -76,7 +76,7 @@ export function StickerEditorSheet({
       <SheetContent side="bottom" hideCloseButton className="max-h-[88dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]" data-sticker-editor>
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">{title}</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">{title}</SheetTitle>
             <SheetDescription className="text-[12px]">Shows on your story. Answers are one tap and only you see who answered.</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -100,14 +100,14 @@ export function StickerEditorSheet({
                 data-sticker-type={t.type}
               >
                 <t.Icon className="h-5 w-5" />
-                <span className="text-[13px] font-black">{t.label}</span>
+                <span className="text-[13px] font-bold">{t.label}</span>
                 <span className="text-[10px] leading-tight">{t.hint}</span>
               </button>
             ))}
           </div>
 
           <label className="block">
-            <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">{type === "question" ? "Ask the crew" : "Question"}</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{type === "question" ? "Ask the crew" : "Question"}</span>
             <input
               value={q}
               maxLength={STICKER_Q_MAX}
@@ -155,7 +155,7 @@ export function StickerEditorSheet({
 
           {type === "slider" && (
             <div>
-              <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">Emoji</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Emoji</span>
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {EMOJIS.map((e) => (
                   <button
@@ -180,7 +180,7 @@ export function StickerEditorSheet({
                 Remove
               </button>
             )}
-            <button type="button" disabled={saving} onClick={save} className="ml-auto h-11 rounded-full bg-primary px-6 text-[14px] font-black text-primary-foreground disabled:opacity-50" data-sticker-save>
+            <button type="button" disabled={saving} onClick={save} className="ml-auto h-11 rounded-full bg-primary px-6 text-[14px] font-bold text-primary-foreground disabled:opacity-50" data-sticker-save>
               {saving ? "Saving…" : "Save sticker"}
             </button>
           </div>

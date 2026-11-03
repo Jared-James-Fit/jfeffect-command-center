@@ -79,7 +79,7 @@ export function PurchasesPage({ embedded = false }: { embedded?: boolean } = {})
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm">{r.currency ?? "USD"} {Number(r.full_payable_amount ?? 0).toLocaleString()}</span>
-                      <Badge variant={r.payment_status === "Paid" ? "default" : "outline"} className={r.payment_status === "Paid" ? "bg-gradient-primary" : ""}>{r.payment_status}</Badge>
+                      <Badge variant={r.payment_status === "Paid" ? "default" : "outline"} className={r.payment_status === "Paid" ? "bg-primary" : ""}>{r.payment_status}</Badge>
                       <Badge variant="outline" className={r.terms_accepted ? "border-primary/40 text-primary" : "text-muted-foreground"}>{r.terms_accepted ? "Accepted" : "Not accepted"}</Badge>
                       <Badge variant="outline" className={r.agreement_signed_at_purchase ? "border-primary/40 text-primary" : "border-destructive/40 text-destructive"}>{r.agreement_signed_at_purchase ? "Agreement ✓" : "No agreement"}</Badge>
                     </div>

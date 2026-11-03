@@ -36,13 +36,13 @@ export function ContextInspector({ open, onOpenChange, job }: { open: boolean; o
         ) : (
           <div className="mt-3 space-y-4 text-[12px]">
             <section>
-              <div className="font-black">Model</div>
+              <div className="font-bold">Model</div>
               <div className="text-muted-foreground">
                 {c.model?.primary} (falls back to {c.model?.fallback}) · temperature {c.model?.temperature} · {Math.round((c.model?.timeout_ms ?? 0) / 1000)}s per call · prompts v{c.prompt_version}
               </div>
             </section>
             <section>
-              <div className="font-black">Records</div>
+              <div className="font-bold">Records</div>
               <div className="text-muted-foreground">
                 Fingerprint {c.data_hash}
                 {c.records_changed === true ? " · the records changed after you opened the page (new logs were included)" : c.records_changed === false ? " · same records you saw" : ""}
@@ -54,7 +54,7 @@ export function ContextInspector({ open, onOpenChange, job }: { open: boolean; o
               {c.quality_summary && <div className="text-muted-foreground">Data quality: {c.quality_summary}</div>}
             </section>
             <section>
-              <div className="font-black">Brief ({k(c.brief?.chars)} characters, ~{k(c.brief?.est_tokens)} tokens)</div>
+              <div className="font-bold">Brief ({k(c.brief?.chars)} characters, ~{k(c.brief?.est_tokens)} tokens)</div>
               <table className="mt-1 w-full">
                 <tbody>
                   {(c.brief?.sections ?? []).map((s: any) => (
@@ -81,11 +81,11 @@ export function ContextInspector({ open, onOpenChange, job }: { open: boolean; o
               {showBrief && <pre className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/50 p-2 text-[10px] leading-snug">{c.brief_text}</pre>}
             </section>
             <section>
-              <div className="font-black">Setup used</div>
+              <div className="font-bold">Setup used</div>
               <div className="text-muted-foreground">{(c.edited ?? []).length ? `You changed: ${c.edited.join(", ")}` : "Recommended setup, unchanged"}{(c.conflicts ?? []).length ? ` · ${c.conflicts.length} conflict${c.conflicts.length === 1 ? "" : "s"} sent to the AI` : ""}</div>
             </section>
             <section>
-              <div className="font-black">Model calls</div>
+              <div className="font-bold">Model calls</div>
               {calls.isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

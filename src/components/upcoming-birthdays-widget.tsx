@@ -248,7 +248,7 @@ export function UpcomingBirthdaysWidget({ windowDays = UPCOMING_DAYS_DEFAULT, hi
   return (
     <Card className="border-border bg-card p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Cake className="h-4 w-4" /> Upcoming Birthdays
         </h2>
         <span className="text-xs text-muted-foreground">

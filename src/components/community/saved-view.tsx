@@ -152,7 +152,7 @@ function SavedGrid({ album, name, unit, onOpenPost, onBack }: { album: SavedAlbu
         <button type="button" onClick={selecting ? stopSelecting : onBack} className="-ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-full active:bg-muted" aria-label={selecting ? "Stop selecting" : "Back to Saved"}>
           <ChevronLeft className="h-6 w-6" />
         </button>
-        <h3 className="min-w-0 flex-1 truncate text-[17px] font-black">{selecting ? (ids.length ? `${ids.length} selected` : "Select posts") : name}</h3>
+        <h3 className="min-w-0 flex-1 truncate text-[17px] font-bold">{selecting ? (ids.length ? `${ids.length} selected` : "Select posts") : name}</h3>
         {!selecting && posts.length > 0 && (
           <button type="button" onClick={() => setSelecting(true)} className="h-9 shrink-0 rounded-full px-3 text-[13px] font-bold text-primary active:bg-muted" data-select-posts>
             Select
@@ -230,7 +230,7 @@ function NameAlbumSheet({ open, onOpenChange, postIds, onCreated }: { open: bool
             create.mutate({ name: n, postIds }, { onError: fail, onSuccess: (a) => { onOpenChange(false); onCreated?.(a); } });
           }}
         >
-          <SheetTitle className="text-[16px] font-black">New album</SheetTitle>
+          <SheetTitle className="text-[16px] font-bold">New album</SheetTitle>
           <SheetDescription className="mt-0.5 text-[12px] text-muted-foreground">Only you can see it.</SheetDescription>
           <input
             autoFocus
@@ -265,7 +265,7 @@ function MoveToAlbumSheet({ postIds, open, onOpenChange, onDone }: { postIds: st
         <SheetContent side="bottom" hideCloseButton className={SHEET} data-move-to-album>
           <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
           <div className="flex items-center justify-between px-5 pb-2 pt-3">
-            <SheetTitle className="text-[16px] font-black">Add {postIds.length} to…</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">Add {postIds.length} to…</SheetTitle>
             <button type="button" onClick={() => setNaming(true)} className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-[13px] font-bold text-primary active:bg-muted">
               <Plus className="h-4 w-4" /> New album
             </button>
@@ -329,7 +329,7 @@ function AlbumMenuSheet({ album, open, onOpenChange, onDeleted }: { album: Saved
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideCloseButton className={SHEET} style={KEYBOARD_SAFE} data-album-options>
         <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-muted-foreground/30" aria-hidden />
-        <SheetTitle className="truncate px-5 pt-3 text-[16px] font-black">{mode === "delete" ? `Delete ${album.name}?` : album.name}</SheetTitle>
+        <SheetTitle className="truncate px-5 pt-3 text-[16px] font-bold">{mode === "delete" ? `Delete ${album.name}?` : album.name}</SheetTitle>
         <SheetDescription className="px-5 pb-2 text-[12px] text-muted-foreground">
           {mode === "delete" ? "The album goes. Its posts stay in Saved." : `${album.count} ${album.count === 1 ? "post" : "posts"} · only you can see it`}
         </SheetDescription>
@@ -400,7 +400,7 @@ function AddFromSavedSheet({ album, unit, open, onOpenChange }: { album: SavedAl
         <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-muted-foreground/30" aria-hidden />
         <div className="flex shrink-0 items-center justify-between gap-2 px-5 pb-2 pt-3">
           <div className="min-w-0">
-            <SheetTitle className="truncate text-[16px] font-black">Add to {album.name}</SheetTitle>
+            <SheetTitle className="truncate text-[16px] font-bold">Add to {album.name}</SheetTitle>
             <SheetDescription className="text-[12px] text-muted-foreground">{ids.length ? `${ids.length} selected` : "Tap the posts to add"}</SheetDescription>
           </div>
           <button

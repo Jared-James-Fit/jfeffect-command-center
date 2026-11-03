@@ -33,7 +33,7 @@ export function ClientTrainingIntelCard({ clientId }: { clientId: string }) {
   return (
     <Card className="p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
           <Activity className="h-4 w-4" /> Training Intelligence
         </h3>
         <div className="flex flex-wrap items-center gap-2">

@@ -102,7 +102,7 @@ export function HomeWaterCard({ userId, currentUserId, surface }: Props) {
 
       <div className="mt-3 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-2xl font-black tabular-nums">
+          <div className="text-2xl font-bold tabular-nums">
             {formatWater(summary.total, "L")}
             <span className="ml-1 text-sm font-medium text-muted-foreground">/ {formatWater(targetMl, "L")}</span>
           </div>

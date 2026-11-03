@@ -306,7 +306,7 @@ function WorkoutPeekBody({
               onSelect={(d) => { if (d) { setSelected(toLocalISO(d)); setView("week"); } }}
               modifiers={modifiers}
               modifiersClassNames={{
-                done: "font-black text-emerald-500 underline decoration-emerald-500 decoration-2 underline-offset-4",
+                done: "font-bold text-emerald-500 underline decoration-emerald-500 decoration-2 underline-offset-4",
                 missed: "font-bold text-rose-500 underline decoration-rose-500 decoration-2 underline-offset-4",
                 planned: "font-bold underline decoration-muted-foreground/60 decoration-2 underline-offset-4",
               }}

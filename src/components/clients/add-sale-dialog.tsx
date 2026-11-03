@@ -637,7 +637,7 @@ export function AddSaleDialog({
           <div className={`flex items-center justify-end gap-2 ${SALE_DIALOG_FOOTER_CLASS}`}>
             <Button variant="ghost" onClick={close}>Cancel</Button>
             {tab === "custom" && (
-              <Button onClick={buildCustom} disabled={creating} className="bg-gradient-primary font-bold uppercase">
+              <Button onClick={buildCustom} disabled={creating} className="bg-primary font-semibold">
                 {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Continue
               </Button>

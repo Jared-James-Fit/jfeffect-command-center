@@ -52,7 +52,7 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
     return (
       <section aria-label="Recovery">
         <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-          <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
+          <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-foreground">
             <Sparkles className="h-5 w-5 shrink-0 text-primary" />
             <span className="truncate">Recovery</span>
             <InfoTip label="About recovery score" title="Recovery" align="start">
@@ -83,7 +83,7 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
   return (
     <section aria-label="Recovery">
       <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:justify-between">
-        <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-foreground">
           <Sparkles className="h-5 w-5 shrink-0 text-primary" />
           <span className="truncate">Recovery</span>
             <InfoTip label="About recovery score" title="Recovery" align="start">
@@ -99,7 +99,7 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Avg recovery</div>
             <div className="mt-0.5 flex items-baseline gap-2">
-              <span className="text-4xl font-black text-foreground">{data.curAvg}</span>
+              <span className="text-4xl font-bold text-foreground">{data.curAvg}</span>
               <span className="text-sm font-semibold text-muted-foreground">/100</span>
             </div>
             <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -114,7 +114,7 @@ export function RecoverySummaryCard({ clientId, rangeStart, rangeEnd, rangeLabel
           {data.prevAvg != null && (
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-right">
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Prev</div>
-              <div className="mt-0.5 text-xl font-black text-foreground">{data.prevAvg}</div>
+              <div className="mt-0.5 text-xl font-bold text-foreground">{data.prevAvg}</div>
               {trend && (
                 <div className={`mt-1 inline-flex items-center gap-1 text-[11px] font-bold ${trendClass}`}>
                   {trendIcon} {trend}

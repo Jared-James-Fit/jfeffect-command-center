@@ -77,8 +77,12 @@
   /* JF EFFECT — Premium Light Theme (default) */
   --radius: 0.5rem;
 
+  /* Design system: black, white and neutral greys (one hue, 280, in both
+     themes), JF Effect red as the one accent, and colour beyond that only
+     for meaning (status, alerts, performance). Hover is neutral, never red;
+     the accent is solid (no gradients or glow). */
   /* Backgrounds — soft off-white, not pure white */
-  --background: oklch(0.975 0.003 80);             /* #F8F9FB soft off-white */
+  --background: oklch(0.975 0.002 280);            /* soft neutral off-white */
   --foreground: oklch(0.12 0.01 280);              /* #111111 near-black */
 
   /* Cards — pure white with subtle shadow */
@@ -90,15 +94,15 @@
   /* Brand — JF Effect red, unchanged */
   --primary: oklch(0.62 0.22 25);
   --primary-foreground: oklch(0.98 0.005 280);
-  --primary-glow: oklch(0.70 0.23 28);
+  --primary-glow: var(--primary);                  /* solid: no two-tone brand gradients */
 
   /* Surfaces */
-  --secondary: oklch(0.96 0.004 80);               /* #F3F4F6 light grey */
+  --secondary: oklch(0.955 0.003 280);             /* neutral light grey */
   --secondary-foreground: oklch(0.12 0.01 280);
-  --muted: oklch(0.96 0.004 80);
-  --muted-foreground: oklch(0.45 0.01 280);        /* #6B7280 medium grey */
-  --accent: oklch(0.95 0.01 25);                   /* light red tint */
-  --accent-foreground: oklch(0.30 0.18 25);
+  --muted: oklch(0.955 0.003 280);
+  --muted-foreground: oklch(0.47 0.008 280);       /* medium grey */
+  --accent: oklch(0.94 0.003 280);                 /* neutral hover, never a red tint */
+  --accent-foreground: oklch(0.12 0.01 280);
 
   /* Status */
   --destructive: oklch(0.55 0.22 25);              /* red, visible on white */
@@ -107,8 +111,8 @@
   --warning: oklch(0.65 0.15 75);                  /* amber, visible on white */
 
   /* Borders & inputs */
-  --border: oklch(0.90 0.005 80);                  /* #E5E7EB subtle light grey */
-  --input: oklch(0.97 0.003 80);                   /* near-white input bg */
+  --border: oklch(0.905 0.004 280);                /* subtle light grey */
+  --input: oklch(0.97 0.002 280);                  /* near-white input bg */
   /* Focus ring: blue so focused inputs don't look like errors */
   --ring: oklch(0.55 0.18 250);                    /* #3B82F6 blue */
 
@@ -120,33 +124,33 @@
   --chart-5: oklch(0.60 0.14 320);
 
   /* Sidebar — slightly darker than page bg */
-  --sidebar: oklch(0.97 0.003 80);                 /* #F3F4F6 */
+  --sidebar: oklch(0.97 0.002 280);
   --sidebar-foreground: oklch(0.12 0.01 280);
   --sidebar-primary: oklch(0.62 0.22 25);
   --sidebar-primary-foreground: oklch(0.98 0.005 280);
-  --sidebar-accent: oklch(0.93 0.008 25);
-  --sidebar-accent-foreground: oklch(0.30 0.18 25);
-  --sidebar-border: oklch(0.90 0.005 80);
+  --sidebar-accent: oklch(0.93 0.003 280);
+  --sidebar-accent-foreground: oklch(0.12 0.01 280);
+  --sidebar-border: oklch(0.905 0.004 280);
   --sidebar-ring: oklch(0.62 0.22 25);
 
   /* Gradients & shadows */
-  --gradient-primary: linear-gradient(135deg, var(--primary), var(--primary-glow));
-  --gradient-dark: linear-gradient(180deg, oklch(0.975 0.003 80), oklch(0.96 0.004 80));
-  --shadow-glow: 0 0 40px -8px color-mix(in oklab, var(--primary) 35%, transparent);
+  --gradient-primary: linear-gradient(var(--primary), var(--primary));
+  --gradient-dark: linear-gradient(var(--background), var(--background));
+  --shadow-glow: 0 1px 2px 0 oklch(0 0 0 / 0.08);
   --shadow-card: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
 
   /* Analytics */
   --analytics-blue: oklch(0.62 0.22 25);
-  --analytics-blue-glow: oklch(0.70 0.23 28);
-  --gradient-analytics-blue: linear-gradient(135deg, var(--analytics-blue), var(--analytics-blue-glow));
-  --shadow-analytics-blue: 0 0 40px -8px color-mix(in oklab, var(--analytics-blue) 35%, transparent);
+  --analytics-blue-glow: var(--analytics-blue);
+  --gradient-analytics-blue: linear-gradient(var(--analytics-blue), var(--analytics-blue));
+  --shadow-analytics-blue: 0 1px 2px 0 oklch(0 0 0 / 0.08);
 
   /* Workout builder surface stack — light mode tuned */
-  --builder-canvas: oklch(0.945 0.005 80);         /* warm neutral, one step under page bg */
+  --builder-canvas: oklch(0.945 0.003 280);        /* neutral, one step under page bg */
   --builder-card: oklch(1 0 0);                    /* pure white card */
-  --builder-card-border: oklch(0.885 0.006 80);    /* card outline */
-  --builder-card-border-strong: oklch(0.82 0.008 80); /* hover/focus border */
-  --builder-inset: oklch(0.97 0.003 80);           /* inset surface */
+  --builder-card-border: oklch(0.885 0.004 280);   /* card outline */
+  --builder-card-border-strong: oklch(0.82 0.005 280); /* hover/focus border */
+  --builder-inset: oklch(0.97 0.002 280);          /* inset surface */
   --shadow-builder-card: 0 1px 2px 0 oklch(0 0 0 / 0.05), 0 4px 12px -4px oklch(0 0 0 / 0.10);
 
   color-scheme: light;
@@ -205,7 +209,7 @@
 
   h1, h2, h3, h4 {
     letter-spacing: -0.02em;
-    font-weight: 800;
+    font-weight: 700;
   }
 }
 
@@ -251,20 +255,20 @@
    Primary stays JF Effect red.
    ============================================================ */
 .theme-light {
-  --background: oklch(0.99 0.003 80);
+  --background: oklch(0.99 0.002 280);
   --foreground: oklch(0.18 0.01 280);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.01 280);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.01 280);
-  --secondary: oklch(0.96 0.005 80);
+  --secondary: oklch(0.955 0.003 280);
   --secondary-foreground: oklch(0.18 0.01 280);
-  --muted: oklch(0.96 0.005 80);
+  --muted: oklch(0.955 0.003 280);
   --muted-foreground: oklch(0.45 0.01 280);
-  --accent: oklch(0.95 0.01 25);
-  --accent-foreground: oklch(0.30 0.18 25);
-  --border: oklch(0.90 0.005 80);
-  --input: oklch(0.93 0.005 80);
+  --accent: oklch(0.94 0.003 280);
+  --accent-foreground: oklch(0.18 0.01 280);
+  --border: oklch(0.905 0.004 280);
+  --input: oklch(0.93 0.003 280);
   --ring: oklch(0.62 0.22 25);
   background-color: var(--background);
   color: var(--foreground);

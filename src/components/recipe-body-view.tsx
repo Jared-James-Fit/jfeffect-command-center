@@ -30,7 +30,7 @@ export function RecipeBodyView({ body, videoUrl }: { body: string; videoUrl?: st
           const ListTag = s.ordered ? "ol" : "ul";
           return (
             <div key={i} className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-primary">{s.label}</h3>
+              <h3 className="text-sm font-semibold text-primary">{s.label}</h3>
               <ListTag className={s.ordered ? "ml-5 list-decimal space-y-1.5 text-sm leading-relaxed" : "ml-5 list-disc space-y-1.5 text-sm leading-relaxed"}>
                 {s.items.map((item, idx) => (
                   <li key={idx}>{item}</li>
@@ -42,7 +42,7 @@ export function RecipeBodyView({ body, videoUrl }: { body: string; videoUrl?: st
         if (s.kind === "macros") {
           return (
             <div key={i} className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-primary">{s.label}</h3>
+              <h3 className="text-sm font-semibold text-primary">{s.label}</h3>
               <div className="flex flex-wrap gap-2">
                 {s.macros.map((m) => (
                   <Badge key={m.key} variant="outline" className="px-3 py-1.5 text-xs">
@@ -57,7 +57,7 @@ export function RecipeBodyView({ body, videoUrl }: { body: string; videoUrl?: st
         return (
           <div key={i} className="space-y-1">
             {s.label && (
-              <h3 className="text-sm font-bold uppercase tracking-wide text-primary">{s.label}</h3>
+              <h3 className="text-sm font-semibold text-primary">{s.label}</h3>
             )}
             <p className="whitespace-pre-wrap text-sm leading-relaxed">{s.text}</p>
           </div>

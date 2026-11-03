@@ -267,7 +267,7 @@ export function WeightLiftedCard({
       <section aria-label="Weight Lifted">
         <div className="mb-3 flex items-center gap-2">
           <Dumbbell className="h-5 w-5 text-primary" />
-          <h2 className="text-base font-black uppercase tracking-wider">Weight Lifted</h2>
+          <h2 className="text-base font-semibold">Weight Lifted</h2>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -329,7 +329,7 @@ export function WeightLiftedCard({
     <section aria-label="Weight Lifted">
       <div className="mb-3 flex items-center gap-2">
         <Dumbbell className="h-5 w-5 text-primary" />
-        <h2 className="text-base font-black uppercase tracking-wider">Weight Lifted</h2>
+        <h2 className="text-base font-semibold">Weight Lifted</h2>
         <InfoTip label="About weight lifted" title="Weight Lifted" align="start">
           What it means: volume load — sets × reps × weight — from logged sets.
           Quick-log sessions without set data use the session total instead.
@@ -358,7 +358,7 @@ export function WeightLiftedCard({
                 <Icon className="h-4 w-4 text-primary" />
                 <span className="text-[10px] font-bold uppercase tracking-widest">{t.label}</span>
               </div>
-              <div className="mt-2 text-xl font-black tabular-nums leading-tight sm:text-2xl">
+              <div className="mt-2 text-xl font-bold tabular-nums leading-tight sm:text-2xl">
                 {t.value}
               </div>
               {t.sublabel && (

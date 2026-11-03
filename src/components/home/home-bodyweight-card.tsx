@@ -179,7 +179,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
       <Button
         data-log-bw-trigger
         onClick={() => { setDate(todayLocalISO()); setOpen(true); }}
-        className="mt-4 h-12 w-full bg-gradient-primary text-sm font-bold uppercase"
+        className="mt-4 h-12 w-full bg-primary text-sm font-semibold"
       >
         <Plus className="mr-1.5 h-4 w-4" />
         {hasData ? "Log Weight" : "Log First Weight"}
@@ -240,7 +240,7 @@ export function HomeBodyweightCard({ userId, defaultUnit = "lb" }: Props) {
                 You already logged a weight for this date. Saving will update it.
               </div>
             ) : null}
-            <Button onClick={save} disabled={saving || !val} className="h-12 w-full bg-gradient-primary font-bold uppercase">
+            <Button onClick={save} disabled={saving || !val} className="h-12 w-full bg-primary font-semibold">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Bodyweight"}
             </Button>
           </div>

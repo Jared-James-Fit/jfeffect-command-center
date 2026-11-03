@@ -114,7 +114,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
     <>
       <Card className="border-primary/30 bg-primary/5 p-5">
         <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground shadow-glow">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
             <Smartphone className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
@@ -153,12 +153,12 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {canInstall && (
-                <Button size="sm" onClick={triggerInstall} className="bg-gradient-primary uppercase text-xs font-bold">
+                <Button size="sm" onClick={triggerInstall} className="bg-primary text-xs font-semibold">
                   Install App
                 </Button>
               )}
               {isIOS && (
-                <Button size="sm" onClick={() => setShowSteps(true)} className="bg-gradient-primary uppercase text-xs font-bold">
+                <Button size="sm" onClick={() => setShowSteps(true)} className="bg-primary text-xs font-semibold">
                   Show Steps
                 </Button>
               )}
@@ -202,7 +202,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
             </li>
           </ol>
           <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-            <Button size="sm" onClick={async () => { setShowSteps(false); await markDone(); }} className="bg-gradient-primary uppercase text-xs font-bold">
+            <Button size="sm" onClick={async () => { setShowSteps(false); await markDone(); }} className="bg-primary text-xs font-semibold">
               Mark as Done
             </Button>
           </div>

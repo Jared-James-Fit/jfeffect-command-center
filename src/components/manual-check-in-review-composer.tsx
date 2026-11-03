@@ -184,7 +184,7 @@ export function ManualCheckInReviewComposer({
 
         <DialogFooter>
           <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
-          <ActionButton onClick={submit} disabled={!message.trim() || !clientId} className="bg-gradient-primary font-bold">
+          <ActionButton onClick={submit} disabled={!message.trim() || !clientId} className="bg-primary font-semibold">
             <Send className="mr-2 h-4 w-4" />
             Send to Client
           </ActionButton>

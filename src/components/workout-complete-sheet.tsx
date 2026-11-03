@@ -75,7 +75,7 @@ export function WorkoutCompleteSheet({
       >
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
-            <SheetTitle className="text-xl font-black">Workout Complete</SheetTitle>
+            <SheetTitle className="text-xl font-bold">Workout Complete</SheetTitle>
             <SheetDescription>Quick rating — takes 5 seconds.</SheetDescription>
           </SheetHeader>
         </div>
@@ -98,7 +98,7 @@ export function WorkoutCompleteSheet({
                       : "border-border bg-card text-muted-foreground hover:bg-secondary/40",
                   )}
                 >
-                  <span className="text-lg font-black text-foreground">{n}</span>
+                  <span className="text-lg font-bold text-foreground">{n}</span>
                   <span className="text-[10px] font-bold uppercase tracking-wide">
                     {RATING_LABELS[n - 1]}
                   </span>

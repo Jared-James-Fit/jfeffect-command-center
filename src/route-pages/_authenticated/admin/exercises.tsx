@@ -427,7 +427,7 @@ function EditExerciseDialog({
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button onClick={save} disabled={busy} className="bg-gradient-primary font-bold uppercase">{busy ? "Saving…" : "Save"}</Button>
+        <Button onClick={save} disabled={busy} className="bg-primary font-semibold">{busy ? "Saving…" : "Save"}</Button>
       </DialogFooter>
     </DialogContent>
   );

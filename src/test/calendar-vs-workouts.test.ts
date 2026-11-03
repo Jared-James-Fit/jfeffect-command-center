@@ -41,8 +41,8 @@ describe("Calendar = appointments and the way in to today's workout; Workouts = 
     expect(exp).toContain('<CalendarIcon className="h-3.5 w-3.5" /> Schedule');
     expect(exp).toContain('const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });');
     expect(exp).toContain('case "upcoming": return "Upcoming";');
-    expect(exp).toContain('<div className="line-clamp-2 text-lg font-black leading-snug">{title}</div>');
+    expect(exp).toContain('<div className="line-clamp-2 text-lg font-bold leading-snug">{title}</div>');
     const strip = read("src/components/workouts/week-strip.tsx");
-    expect(strip).toContain("{trainingWeek && <span className=\"font-black text-foreground\">{trainingWeek} · </span>}");
+    expect(strip).toContain("{trainingWeek && <span className=\"font-bold text-foreground\">{trainingWeek} · </span>}");
   });
 });

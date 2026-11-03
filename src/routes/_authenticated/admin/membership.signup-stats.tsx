@@ -13,7 +13,7 @@ function Tile({ label, value }: { label: string; value: number | string }) {
   return (
     <Card className="p-4">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="mt-1 text-3xl font-black">{value}</div>
+      <div className="mt-1 text-3xl font-bold">{value}</div>
     </Card>
   );
 }

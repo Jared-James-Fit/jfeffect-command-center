@@ -125,14 +125,14 @@ export function ClientQuickLinksCard({
           <div className="space-y-2">
             <Input value={draftDrive} onChange={(e) => setDraftDrive(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" autoFocus />
             <div className="flex gap-2">
-              <Button size="sm" onClick={saveDrive} className="bg-gradient-primary uppercase font-bold">Save</Button>
+              <Button size="sm" onClick={saveDrive} className="bg-primary font-semibold">Save</Button>
               <Button size="sm" variant="ghost" onClick={() => { setEditingDrive(false); setDraftDrive(driveFolderLink ?? ""); }}>Cancel</Button>
             </div>
           </div>
         ) : driveFolderLink ? (
           <div className="flex flex-wrap gap-2">
             <a href={driveFolderLink} target="_blank" rel="noreferrer">
-              <Button size="sm" className="bg-gradient-primary uppercase font-bold"><ExternalLink className="mr-1 h-4 w-4" /> Open Drive Folder</Button>
+              <Button size="sm" className="bg-primary font-semibold"><ExternalLink className="mr-1 h-4 w-4" /> Open Drive Folder</Button>
             </a>
             <Button size="sm" variant="outline" onClick={() => copyLink(driveFolderLink)}><Copy className="mr-1 h-4 w-4" /> Copy Link</Button>
             <Button size="sm" variant="outline" onClick={() => { setDraftDrive(driveFolderLink); setEditingDrive(true); }}><Pencil className="mr-1 h-4 w-4" /> Edit</Button>
@@ -140,7 +140,7 @@ export function ClientQuickLinksCard({
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground italic">No Google Drive folder linked yet.</p>
-            <Button size="sm" onClick={() => { setDraftDrive(""); setEditingDrive(true); }} className="bg-gradient-primary uppercase font-bold">
+            <Button size="sm" onClick={() => { setDraftDrive(""); setEditingDrive(true); }} className="bg-primary font-semibold">
               <Plus className="mr-1 h-4 w-4" /> Add Drive Folder
             </Button>
           </div>
@@ -281,7 +281,7 @@ function QuickLinkDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary uppercase font-bold">{saving ? "Saving…" : "Save"}</Button>
+          <Button onClick={save} disabled={saving} className="bg-primary font-semibold">{saving ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

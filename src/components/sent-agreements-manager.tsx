@@ -222,7 +222,7 @@ export function SentAgreementsManager() {
         <Card className="border-amber-500/40 bg-amber-500/5 p-5 space-y-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <h2 className="text-sm font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
+            <h2 className="text-sm font-semibold text-amber-700 dark:text-amber-300">
               Agreements Needing Attention ({attention.length})
             </h2>
           </div>
@@ -236,7 +236,7 @@ export function SentAgreementsManager() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <Inbox className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            <h2 className="text-sm font-semibold text-muted-foreground">
               Sent / Pending Agreements
             </h2>
             <Badge variant="outline" className="text-[10px]">{filtered.length}</Badge>

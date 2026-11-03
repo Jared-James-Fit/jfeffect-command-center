@@ -59,7 +59,7 @@ export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
             <SheetHeader className="shrink-0 border-b border-border/70 px-4 py-3 text-left">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <SheetTitle className="text-base font-black">Comments</SheetTitle>
+                  <SheetTitle className="text-base font-bold">Comments</SheetTitle>
                   <SheetDescription className="text-xs">Quick encouragement. Coaching questions belong in Messages.</SheetDescription>
                 </div>
                 <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -375,7 +375,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
           <button
             type="button"
             onClick={() => setGifOpen(true)}
-            className="-ml-1 grid h-11 w-9 shrink-0 place-items-center rounded-full text-[11px] font-black tracking-tight text-muted-foreground hover:bg-muted"
+            className="-ml-1 grid h-11 w-9 shrink-0 place-items-center rounded-full text-[11px] font-bold tracking-tight text-muted-foreground hover:bg-muted"
             aria-label="Add a GIF"
           >
             <span className="rounded-[5px] border-[1.5px] border-current px-1 leading-[14px]">GIF</span>
@@ -892,7 +892,7 @@ function ShareCommentSheet({ c, onClose, postAuthor }: { c: CommunityComment | n
             <SheetHeader className="border-b border-border/70 px-4 py-3 text-left">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <SheetTitle className="text-base font-black">Share as a post</SheetTitle>
+                  <SheetTitle className="text-base font-bold">Share as a post</SheetTitle>
                   <SheetDescription className="text-xs">It goes on the feed for the whole community.</SheetDescription>
                 </div>
                 <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">

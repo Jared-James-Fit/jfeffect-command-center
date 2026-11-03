@@ -43,7 +43,7 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWork
         aria-label="Client workspace"
         className="overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]"
       >
-        <div className="flex min-w-max items-center gap-1 rounded-xl border border-border bg-card/80 p-1 shadow-sm">
+        <div className="flex min-w-max items-center gap-1 rounded-xl border border-border bg-card/80 p-1">
           {CLIENT_WORKSPACE_PRIMARY_TABS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.value;
@@ -55,7 +55,7 @@ export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWork
                 className={[
                   "inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                 ].join(" ")}
                 aria-current={isActive ? "page" : undefined}

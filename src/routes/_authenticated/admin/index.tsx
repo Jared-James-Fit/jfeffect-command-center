@@ -129,7 +129,7 @@ function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: bool
             title={t.hint}
             className="flex h-full flex-col justify-between rounded-xl border border-border bg-card px-3 py-2.5 transition hover:border-primary/40 active:scale-[0.97]"
           >
-            <div className={cn("flex items-center gap-1 text-[24px] font-black leading-none tabular-nums", clear ? "text-emerald-500" : TILE_TONE[t.tone])}>
+            <div className={cn("flex items-center gap-1 text-[24px] font-bold leading-none tabular-nums", clear ? "text-emerald-500" : TILE_TONE[t.tone])}>
               {loading ? <span className="text-muted-foreground/50">–</span> : clear ? <Check className="h-6 w-6" aria-label="None" /> : t.value}
             </div>
             <div className="mt-1.5 text-[11px] font-semibold leading-tight text-muted-foreground">{t.label}</div>
@@ -178,7 +178,7 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
           {scheduled.length > 0 && (
             <div className="mb-1">
               <div className="flex items-baseline justify-between text-[12px]">
-                <span className="font-semibold"><span className="text-base font-black tabular-nums">{done}</span> of {scheduled.length} done</span>
+                <span className="font-semibold"><span className="text-base font-bold tabular-nums">{done}</span> of {scheduled.length} done</span>
                 <span className="text-muted-foreground">{scheduled.length - done} to go</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
@@ -450,15 +450,15 @@ function AdminDashboard() {
           <SectionHeader title="Client pulse · last 14 days" icon={Activity} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
           <div className="grid grid-cols-3 divide-x divide-border rounded-lg bg-secondary/20 py-2.5">
             <div className="text-center">
-              <div className="text-xl font-black text-emerald-500">{pulseOnTrack}</div>
+              <div className="text-xl font-bold text-emerald-500">{pulseOnTrack}</div>
               <div className="text-[10px] font-semibold text-muted-foreground">On track</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-black text-amber-500">{pulseWatch.length}</div>
+              <div className="text-xl font-bold text-amber-500">{pulseWatch.length}</div>
               <div className="text-[10px] font-semibold text-muted-foreground">Watch</div>
             </div>
             <div className="text-center">
-              <div className="text-xl font-black text-destructive">{pulseAtRisk.length}</div>
+              <div className="text-xl font-bold text-destructive">{pulseAtRisk.length}</div>
               <div className="text-[10px] font-semibold text-muted-foreground">Needs attention</div>
             </div>
           </div>

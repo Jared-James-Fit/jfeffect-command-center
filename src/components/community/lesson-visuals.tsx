@@ -190,7 +190,7 @@ function TruthCard({ belief, truth }: { belief: string; truth: string }) {
       </p>
       <span className="my-3.5 block h-px w-full" style={{ background: C.line }} aria-hidden />
       <span className={KICKER} style={{ color: C.accent }}>The truth</span>
-      <p className="mt-2 text-balance text-[22px] font-black leading-[1.12] tracking-[-0.01em]" style={{ color: C.ink }}>
+      <p className="mt-2 text-balance text-[22px] font-bold leading-[1.12] tracking-[-0.01em]" style={{ color: C.ink }}>
         {truth}
       </p>
     </div>

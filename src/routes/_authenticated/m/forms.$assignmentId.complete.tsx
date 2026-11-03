@@ -107,7 +107,7 @@ function FormCompletePage() {
               <Loader2 className="mt-0.5 h-6 w-6 animate-spin text-primary" />
             )}
             <div className="flex-1">
-              <div className="text-lg font-black">
+              <div className="text-lg font-bold">
                 {isSubmitted
                   ? "Check-In Submitted"
                   : attempts >= 10
@@ -136,7 +136,7 @@ function FormCompletePage() {
 
         <div className="flex flex-wrap gap-2">
           {!isSubmitted && attempts >= 10 && (
-            <Button onClick={confirmManually} disabled={confirming} className="bg-gradient-primary font-bold">
+            <Button onClick={confirmManually} disabled={confirming} className="bg-primary font-semibold">
               {confirming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Confirm Submission
             </Button>

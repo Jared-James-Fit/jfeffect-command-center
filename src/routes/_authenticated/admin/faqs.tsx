@@ -105,10 +105,10 @@ function CategoryEditor({ category, title }: { category: string; title: string }
     <Card className="border-border bg-card p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-black">{title}</h2>
+          <h2 className="text-lg font-bold">{title}</h2>
           <p className="text-xs text-muted-foreground">Shown at the top of the client's matching section. Paste questions and answers below.</p>
         </div>
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={addOne}>
+        <Button size="sm" className="bg-primary font-semibold" onClick={addOne}>
           <Plus className="mr-1 h-4 w-4" /> Add FAQ
         </Button>
       </div>
@@ -238,7 +238,7 @@ function FaqRow({ faq, isTrainingHelp, onChanged, onUp, onDown }: { faq: any; is
       )}
       {dirty && (
         <div className="flex justify-end">
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={save} disabled={saving}>
+          <Button size="sm" className="bg-primary font-semibold" onClick={save} disabled={saving}>
             <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save"}
           </Button>
         </div>

@@ -24,7 +24,7 @@ export function SalesHero({
               <Sparkles className="h-3 w-3" />{eyebrow}
             </div>
           )}
-          <h1 className="mt-4 text-4xl font-black tracking-tight md:text-6xl">{headline}</h1>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight md:text-6xl">{headline}</h1>
           <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">{sub}</p>
           <div className="mt-6 flex flex-wrap gap-2">
             {primary}

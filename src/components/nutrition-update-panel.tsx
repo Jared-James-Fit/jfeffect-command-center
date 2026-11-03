@@ -145,7 +145,7 @@ export function NutritionUpdatePanel() {
           <s.icon className="h-6 w-6 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-black text-lg">{s.label}</h2>
+              <h2 className="font-bold text-lg">{s.label}</h2>
               {target?.next_due_date ? <Badge variant="outline" className="text-[10px]">Next: {new Date(target.next_due_date + "T00:00:00").toLocaleDateString()}</Badge> : null}
               {target?.last_updated_date ? <Badge variant="outline" className="text-[10px]">Last: {new Date(target.last_updated_date + "T00:00:00").toLocaleDateString()}</Badge> : null}
               {target?.update_cadence && target.update_cadence !== "manual" ? <Badge variant="outline" className="text-[10px] capitalize">{target.update_cadence}</Badge> : null}
@@ -153,25 +153,25 @@ export function NutritionUpdatePanel() {
             {s.sub ? <p className="text-sm mt-1 opacity-80">{s.sub}</p> : null}
           </div>
           {nutritionForm ? (
-            <Button asChild size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted}>
+            <Button asChild size="lg" className="font-semibold bg-primary hidden sm:inline-flex" disabled={isSubmitted}>
               <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
                 {isSubmitted ? "Waiting…" : "Submit Update"}
               </Link>
             </Button>
           ) : (
-            <Button size="lg" className="font-black bg-gradient-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
+            <Button size="lg" className="font-semibold bg-primary hidden sm:inline-flex" disabled={isSubmitted} onClick={() => setOpen(true)}>
               {isSubmitted ? "Waiting…" : "Submit Update"}
             </Button>
           )}
         </div>
         {nutritionForm ? (
-          <Button asChild size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted}>
+          <Button asChild size="lg" className="font-semibold bg-primary w-full mt-3 sm:hidden" disabled={isSubmitted}>
             <Link to="/portal/check-ins/$formId" params={{ formId: nutritionForm.id }}>
               {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
             </Link>
           </Button>
         ) : (
-          <Button size="lg" className="font-black bg-gradient-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
+          <Button size="lg" className="font-semibold bg-primary w-full mt-3 sm:hidden" disabled={isSubmitted} onClick={() => setOpen(true)}>
             {isSubmitted ? "Waiting on coach…" : "Submit Nutrition Update"}
           </Button>
         )}

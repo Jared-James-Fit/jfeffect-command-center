@@ -204,7 +204,7 @@ function Library() {
               <section className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Top Picks for You</h2>
+                  <h2 className="text-sm font-semibold text-muted-foreground">Top Picks for You</h2>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {topPicks.map(({ program, facets }) => card(program as LibraryPlan, facets))}
@@ -300,7 +300,7 @@ function GroupedSection({
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{label}</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">{label}</h2>
         {items.length > 6 && (
           <button type="button" onClick={() => setShowAll((s) => !s)} className="text-xs font-medium text-primary hover:underline">
             {showAll ? "Show less" : `View all (${items.length})`}

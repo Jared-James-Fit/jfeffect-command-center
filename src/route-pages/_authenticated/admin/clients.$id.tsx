@@ -679,10 +679,10 @@ export function ClientProfileWorkspace({
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground">Coaching Setup</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Core coaching details only. Training, nutrition, billing, and documents stay in their dedicated sections.</p>
               </div>
-              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Button size="sm" className="min-h-[44px] bg-primary font-semibold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
             </div>
@@ -760,7 +760,7 @@ export function ClientProfileWorkspace({
           </Suspense>
           <PowerlifterSection form={form} set={set} />
           <div className="flex justify-end">
-            <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+            <Button size="sm" className="min-h-[44px] bg-primary font-semibold" onClick={save}>
               <Save className="mr-2 h-4 w-4" />Save changes
             </Button>
           </div>
@@ -820,7 +820,7 @@ export function ClientProfileWorkspace({
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  className="bg-gradient-primary font-bold"
+                  className="bg-primary font-semibold"
                   onClick={() => setCheckInResponseOpen(true)}
                 >
                   <Send className="mr-1 h-4 w-4" /> Send Check-In Response
@@ -934,7 +934,7 @@ export function ClientProfileWorkspace({
           <div className="md:col-span-2 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card/60 px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Information</h2>
+                <h2 className="text-sm font-semibold text-muted-foreground">Personal Information</h2>
                 <p className="text-xs text-muted-foreground">Edit each section independently — each card saves on its own.</p>
               </div>
               {form.info_update_requested ? (
@@ -1019,7 +1019,7 @@ export function ClientProfileWorkspace({
           </Card>
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Communication Preferences</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Communication Preferences</h3>
             <p className="text-xs text-muted-foreground">In-app call and SMS access for this client. Save is applied immediately.</p>
             <div className="grid gap-3 md:grid-cols-2">
               <CommsToggleRow
@@ -1071,13 +1071,13 @@ export function ClientProfileWorkspace({
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Social Media</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground">Social Media</h3>
               <SocialIcons client={form} size="xs" />
             </div>
             <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
             <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
             <div className="flex justify-end pt-2">
-              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Button size="sm" className="min-h-[44px] bg-primary font-semibold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
             </div>
@@ -1087,7 +1087,7 @@ export function ClientProfileWorkspace({
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Login & Access</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Login & Access</h3>
             <Badge variant="outline">{describeAccountAccess(form).statusLabel}</Badge>
           </div>
           <div className="grid gap-5 md:grid-cols-3">
@@ -1194,7 +1194,7 @@ export function ClientProfileWorkspace({
             <Button
               onClick={save}
               disabled={saving}
-              className="min-h-[48px] bg-gradient-primary uppercase font-bold"
+              className="min-h-[48px] bg-primary font-semibold"
             >
               <Save className="mr-2 h-4 w-4" />{saving ? "Saving…" : "Save"}
             </Button>
@@ -1981,7 +1981,7 @@ function ClientOverviewSnapshot({
           {/* Profile completion */}
           <Card className="border-border bg-card p-6 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Profile Completion</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground">Profile Completion</h3>
               <span className={["text-xl font-bold", pct === 100 ? "text-success" : pct >= 70 ? "text-primary" : "text-warning"].join(" ")}>{pct}%</span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
@@ -2023,7 +2023,7 @@ function ClientOverviewSnapshot({
                 data-testid="account-access-card"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
                     Account &amp; Access
                   </h3>
                   <Badge
@@ -2059,7 +2059,7 @@ function ClientOverviewSnapshot({
           {/* Personal snapshot, read-only */}
           <Card className="border-border bg-card p-6 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Snapshot</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground">Personal Snapshot</h3>
               <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={() => onGoToTab("info")}>
                 Edit →
               </Button>
@@ -2131,7 +2131,7 @@ function StartingMaxesCard({ form, onEdit }: { form: any; onEdit?: () => void })
   return (
     <Card className="border-border bg-card p-6 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+        <h3 className="text-sm font-semibold text-muted-foreground">
           Starting Maxes {known ? "(1RM)" : "(5RM)"}
         </h3>
         {onEdit && (

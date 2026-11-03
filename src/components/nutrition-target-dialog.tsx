@@ -551,7 +551,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold uppercase">{saving ? "Saving…" : "Save"}</Button>
+          <Button onClick={save} disabled={saving} className="bg-primary font-semibold">{saving ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -572,7 +572,7 @@ function DayCardio({ draft, onChange, willSync }: { draft?: CardioDraft; onChang
     <div className="rounded-md border border-border bg-card/60 px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <Switch checked={on} onCheckedChange={(v) => onChange({ enabled: v })} aria-label="Cardio on this day" />
-        <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Cardio</span>
+        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Cardio</span>
         {draft?.fromAi && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">AI</span>}
         <span className="text-[11px] text-muted-foreground">
           {on ? draft?.cardio_type : "None on this day"}

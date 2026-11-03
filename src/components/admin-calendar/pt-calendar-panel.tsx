@@ -280,7 +280,7 @@ export function PtCalendarPanel() {
   return (
     <>
       <PageHeader title="Sessions" subtitle="Every 1:1 session in one list: book, move, close out." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-primary font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Quick Book
         </Button>
       } />

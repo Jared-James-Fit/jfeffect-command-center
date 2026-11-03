@@ -51,7 +51,7 @@ export function WorkoutArchiveSection({ clientId, mode }: { clientId: string; mo
       >
         <div className="flex items-center gap-2">
           <Archive className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Workout Archive</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground">Workout Archive</h3>
           <Badge variant="outline" className="text-[10px]">{sorted.length}</Badge>
         </div>
         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />

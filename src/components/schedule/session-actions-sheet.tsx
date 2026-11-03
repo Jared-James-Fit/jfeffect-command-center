@@ -518,7 +518,7 @@ export function SessionActionsSheet({
               {request.kind === "move" ? (
                 proposed ? (
                   <div className="grid grid-cols-2 gap-2">
-                    <Button className="col-span-2 h-12 bg-gradient-primary font-bold" onClick={approveProposed}>
+                    <Button className="col-span-2 h-12 bg-primary font-semibold" onClick={approveProposed}>
                       <CheckCircle2 className="mr-2 h-4 w-4" /> Approve {whenLabel(proposed.date, proposed.start)}
                     </Button>
                     <Button variant="outline" className="h-11" onClick={() => { setApproving(false); setMode("move"); }}>
@@ -528,7 +528,7 @@ export function SessionActionsSheet({
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
-                    <Button className="h-11 bg-gradient-primary font-bold" onClick={() => setMode("move")}>
+                    <Button className="h-11 bg-primary font-semibold" onClick={() => setMode("move")}>
                       <CalendarClock className="mr-2 h-4 w-4" /> Pick new time
                     </Button>
                     <Button variant="outline" className="h-11" onClick={() => setMode("decline")}>Decline</Button>
@@ -536,7 +536,7 @@ export function SessionActionsSheet({
                 )
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="h-11 bg-gradient-primary font-bold" onClick={() => pick("bank")}>
+                  <Button className="h-11 bg-primary font-semibold" onClick={() => pick("bank")}>
                     <PiggyBank className="mr-2 h-4 w-4" /> Bank it
                   </Button>
                   <Button variant="outline" className="h-11" onClick={() => pick("use")}>
@@ -553,7 +553,7 @@ export function SessionActionsSheet({
               {/* Mid-session: straight into the client's workout for that day, as they see it. */}
               {pov.canPov && (
                 <Button
-                  className="h-12 w-full bg-gradient-primary font-bold"
+                  className="h-12 w-full bg-primary font-semibold"
                   disabled={pov.busy}
                   onClick={() => pov.enter(session.client_id, { to: `/portal/workouts?open=${session.session_date}`, fallbackName: name })}
                 >
@@ -624,7 +624,7 @@ export function SessionActionsSheet({
               {canMove && <NoteField value={noteDraft} onChange={setNoteDraft} label="Why (optional)" placeholder="e.g. moved to Sunday, I volunteered Tuesday" />}
               {canMove && <p className="text-xs text-muted-foreground">{moveOutcome(date, today, usesCredit)}</p>}
               <Button
-                className="h-12 w-full bg-gradient-primary font-bold"
+                className="h-12 w-full bg-primary font-semibold"
                 disabled={busy || !canMove || (target === "Scheduled" && (blocked || conflictCheck.checking))}
                 onClick={doMove}
               >

@@ -65,14 +65,14 @@ export function AdminCheckInReviews({ embedded = false }: { embedded?: boolean }
         title="Check-In Reviews"
         subtitle="Review submitted check-ins and send manual reviews for external (Fillout) check-ins."
         actions={
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Manual Review
           </Button>
         }
       />}
       {embedded && (
         <div className="flex justify-end px-4 pt-4 md:px-6">
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Manual Review
           </Button>
         </div>
@@ -384,7 +384,7 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
           <Link to="/admin/messages" search={{ clientId: sub.client_id } as any}>
             <Button variant="outline" size="sm"><MessageCircle className="mr-1 h-4 w-4" /> Open Messenger</Button>
           </Link>
-          <Button onClick={handleReply} disabled={!reply.trim() || sending} className="bg-gradient-primary font-bold">
+          <Button onClick={handleReply} disabled={!reply.trim() || sending} className="bg-primary font-semibold">
             {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Send Reply
           </Button>
@@ -392,7 +392,7 @@ function SubmissionDetail({ submissionId }: { submissionId: string }) {
       </Card>
 
       <Card className="border-border bg-card p-4">
-        <div className="mb-3 text-sm font-black">Answers</div>
+        <div className="mb-3 text-sm font-bold">Answers</div>
         {(sub.form_version_number ?? null) !== null && (
           <div className="mb-2 text-[11px] text-muted-foreground">
             Rendered against form version v{sub.form_version_number}.

@@ -110,7 +110,7 @@ export function PromoCodesPage({ embedded = false }: { embedded?: boolean } = {}
       <div className="flex items-center justify-between gap-2">
         <div>
           {!embedded && (
-            <h1 className="text-2xl font-black flex items-center gap-2">
+            <h1 className="text-2xl font-bold flex items-center gap-2">
               <Ticket className="h-5 w-5" /> Promo Codes
             </h1>
           )}

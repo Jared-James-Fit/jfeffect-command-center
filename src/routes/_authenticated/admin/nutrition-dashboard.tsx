@@ -102,7 +102,7 @@ function NutritionDashboard() {
                 <span className="text-xs uppercase tracking-wide text-muted-foreground">{t.label}</span>
                 <t.icon className={`h-4 w-4 ${t.tone}`} />
               </div>
-              <div className="mt-1 text-2xl font-black">{t.value}</div>
+              <div className="mt-1 text-2xl font-bold">{t.value}</div>
             </button>
           ))}
         </div>

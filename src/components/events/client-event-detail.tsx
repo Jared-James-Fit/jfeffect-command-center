@@ -34,7 +34,7 @@ export function ClientEventDetail({
               <Badge className={importanceBadgeClass(event.importance)}>{event.importance}</Badge>
               {event.status === "Completed" && <Badge variant="secondary">Completed</Badge>}
             </div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">{event.name}</h1>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{event.name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatEventWhen(event)}</span>
               {event.end_time && <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" />until {event.end_time.slice(0,5)}</span>}

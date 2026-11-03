@@ -488,7 +488,7 @@ export function WorkoutTimer({
           <button
             type="button"
             onClick={() => sync(beginWorkoutSession(dayId))}
-            className="inline-flex h-7 min-h-[28px] items-center gap-1 rounded-md bg-primary/10 px-2 text-[11px] font-black uppercase tracking-wide text-primary"
+            className="inline-flex h-7 min-h-[28px] items-center gap-1 rounded-md bg-primary/10 px-2 text-[11px] font-bold uppercase tracking-wide text-primary"
             aria-label="Start workout session"
           >
             <Play className="h-3 w-3" /> Start
@@ -506,7 +506,7 @@ export function WorkoutTimer({
     <span className={cn("inline-flex items-center gap-1", className)}>
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-black tabular-nums",
+          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-bold tabular-nums",
           stopped || paused ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary",
         )}
         aria-label={`${stopped ? "Stopped" : paused ? "Paused" : "Workout session"} ${formatElapsed(elapsed)}`}

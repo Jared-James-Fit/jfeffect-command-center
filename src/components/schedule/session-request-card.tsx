@@ -316,7 +316,7 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
         <div className="space-y-1.5 pt-1">
           <div className="grid grid-cols-2 gap-2">
             <Button size="sm"
-              className={cn("h-9 font-bold", clashes.length || blockedByPackage ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-gradient-primary")}
+              className={cn("h-9 font-bold", clashes.length || blockedByPackage ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-primary")}
               disabled={busy || (oneTap && (needsTime || !end || checking))}
               onClick={approve}>
               {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : !(clashes.length || blockedByPackage) && <Check className="mr-1 h-4 w-4" />}

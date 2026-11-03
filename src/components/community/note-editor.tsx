@@ -81,7 +81,7 @@ export function NoteEditor({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !saving && close()}>
       <DialogContent className="max-w-[520px] rounded-3xl" showBackButton={false} onOpenAutoFocus={(e) => e.preventDefault()}>
-        <DialogTitle className="text-base font-black">{title}</DialogTitle>
+        <DialogTitle className="text-base font-bold">{title}</DialogTitle>
         <DialogDescription className="sr-only">Write the post text.</DialogDescription>
         {quote && (
           <figure className="border-l-[3px] border-primary pl-3">
@@ -123,7 +123,7 @@ export function NoteEditor({
           (poll ? (
             <div data-poll-editor className="space-y-2 rounded-2xl border border-border p-3">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Poll</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Poll</span>
                 <button type="button" onClick={() => setPoll(null)} className="text-[12px] font-bold text-muted-foreground active:opacity-60">
                   Remove poll
                 </button>

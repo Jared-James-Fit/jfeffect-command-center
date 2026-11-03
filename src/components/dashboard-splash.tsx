@@ -62,7 +62,7 @@ export function DashboardSplash({ title = "Loading your dashboard…", onRetry }
         />
 
         <div className="flex flex-col items-center gap-2">
-          <span className="text-sm font-black tracking-[0.24em] uppercase">JF Effect</span>
+          <span className="text-sm font-bold tracking-[0.24em] uppercase">JF Effect</span>
           <h1 className="text-base font-semibold text-foreground">{title}</h1>
         </div>
 

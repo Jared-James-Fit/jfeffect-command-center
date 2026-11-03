@@ -106,7 +106,7 @@ export default function CookbookContent({ viewer }: { viewer: CookbookViewer }) 
       )}
 
       <div>
-        <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           How do you want to make it?
         </div>
         <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">

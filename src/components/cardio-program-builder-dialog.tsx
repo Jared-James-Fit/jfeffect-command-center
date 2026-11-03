@@ -161,7 +161,7 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
 
         <div className="mt-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Cardio Rows</h4>
+            <h4 className="text-sm font-semibold text-muted-foreground">Cardio Rows</h4>
             <ActionButton size="sm" variant="outline" onClick={() => addRow()}><Plus className="mr-1 h-4 w-4" /> Add row</ActionButton>
           </div>
 
@@ -266,7 +266,7 @@ export function CardioProgramBuilderDialog({ open, onOpenChange, clientId, clien
 
         <DialogFooter className="mt-4">
           <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
-          <ActionButton onClick={save} jobLabel="Saving cardio program" className="bg-gradient-primary font-bold uppercase">
+          <ActionButton onClick={save} jobLabel="Saving cardio program" className="bg-primary font-semibold">
             Save & Assign ({rows.length})
           </ActionButton>
         </DialogFooter>

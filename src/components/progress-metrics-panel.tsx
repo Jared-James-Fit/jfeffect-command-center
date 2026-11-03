@@ -90,7 +90,7 @@ export function ProgressMetricsPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Scale className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
           </div>
           <div className="flex items-center gap-2">
             <Select value={unit} onValueChange={(v) => setUnit(v as WeightUnit)}>
@@ -106,7 +106,7 @@ export function ProgressMetricsPanel({
               </Button>
             )}
             {canEdit && (
-              <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setDialogOpen(true); }}>
+              <Button size="sm" className="bg-primary font-semibold" onClick={() => { setEditing(null); setDialogOpen(true); }}>
                 <Plus className="mr-1 h-4 w-4" /> Add entry
               </Button>
             )}
@@ -237,7 +237,7 @@ function Tile({ label, value, hint, tone }: { label: string; value: string; hint
   return (
     <div className="rounded-md border border-border bg-secondary/30 p-3">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`mt-1 flex items-center gap-1 text-lg font-black ${toneClass}`}>
+      <div className={`mt-1 flex items-center gap-1 text-lg font-bold ${toneClass}`}>
         {Icon && <Icon className="h-4 w-4" />} {value}
       </div>
       {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}

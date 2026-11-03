@@ -632,7 +632,7 @@ export function AppShell({
           <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
           {!iconOnly && (
             <div className="leading-tight min-w-0">
-              <div className="text-[13px] font-black tracking-tight">JF EFFECT</div>
+              <div className="text-[13px] font-bold tracking-tight">JF EFFECT</div>
               <div className="truncate text-[9px] uppercase tracking-widest text-muted-foreground">{title}</div>
             </div>
           )}
@@ -2049,7 +2049,7 @@ function ShellBrand({ title, compact }: { title: string; compact?: boolean }) {
       />
       <div className={cn("flex min-w-0 flex-col items-start", compact && "max-[359px]:hidden")}>
         {/* italic letters lean past their box: a little room on the right so the T isn't clipped */}
-        <span className="truncate pr-[3px] text-[19px] font-black uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
+        <span className="truncate pr-[3px] text-[19px] font-bold uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
           JF Effect
         </span>
         {sub && (
@@ -2091,7 +2091,7 @@ export function PageHeader({
     return (
       <div className="border-b border-border/60 bg-background px-4 py-2 md:px-5 xl:px-6 xl:py-3" data-page-header-inline>
         <div className="flex min-h-10 items-center justify-between gap-2">
-          <h1 className="min-w-0 truncate text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
+          <h1 className="min-w-0 truncate text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
           <div className="flex shrink-0 items-center gap-1.5">
             {actions}
             <CommunityNavButton />
@@ -2133,7 +2133,7 @@ export function PageHeader({
             )}
           </div>
         )}
-        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
         {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
       </div>
       {/* Mobile: back button and the actions share ONE compact nav row. No
@@ -2239,7 +2239,7 @@ function MobileNavDrawer({
                   <span>Back</span>
                 </button>
               )}
-              <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
+              <SheetTitle className="flex-1 truncate text-left text-base font-bold tracking-tight">
                 {submenu ? submenu.label : title}
               </SheetTitle>
             </div>

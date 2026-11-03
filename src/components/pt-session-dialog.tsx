@@ -753,7 +753,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <Button
             onClick={save}
             disabled={saving || (form.uses_credit !== false && mustConfirmOverbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking}
-            className="bg-gradient-primary font-bold uppercase"
+            className="bg-primary font-semibold"
           >
             {saving
               ? "Saving…"

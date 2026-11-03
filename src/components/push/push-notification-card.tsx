@@ -224,7 +224,7 @@ function PushNotificationControls({ showCoachingApps = false }: { showCoachingAp
           <p className="text-sm text-muted-foreground">
             Get workout updates, coach messages, check-in reminders, and billing alerts on your phone.
           </p>
-          <Button onClick={onEnable} disabled={busy === "enable"} className="bg-gradient-primary font-bold uppercase">
+          <Button onClick={onEnable} disabled={busy === "enable"} className="bg-primary font-semibold">
             {busy === "enable" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
             Enable Notifications
           </Button>
@@ -339,7 +339,7 @@ function Header({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-primary">{icon}</span>
-      <h3 className="text-sm font-semibold uppercase tracking-wider">{title}</h3>
+      <h3 className="text-sm font-semibold">{title}</h3>
     </div>
   );
 }

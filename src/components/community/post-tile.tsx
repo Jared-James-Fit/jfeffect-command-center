@@ -62,14 +62,14 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
       ) : post.kind === "note" && !large ? (
         <GridCard tone="note" mark={post.poll ? <TileMark>Poll</TileMark> : null}>
           {lessonTitle(post) ? (
-            <span className="line-clamp-5 text-balance text-[13px] font-black leading-tight">{lessonTitle(post)}</span>
+            <span className="line-clamp-5 text-balance text-[13px] font-bold leading-tight">{lessonTitle(post)}</span>
           ) : (
             <span className="line-clamp-6 text-balance text-[11.5px] font-medium leading-snug">{post.quote ? `“${post.quote}”` : post.caption || (shared ? `“${shared.body || "📷"}”` : "")}</span>
           )}
         </GridCard>
       ) : post.kind === "note" ? (
         <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] text-left", pad, bottom)}>
-          <span className={cn("font-black uppercase tracking-[0.14em] text-primary", large ? "text-[10px]" : "text-[8px]")}>{post.poll ? "Poll" : "Note"}</span>
+          <span className={cn("font-bold uppercase tracking-[0.14em] text-primary", large ? "text-[10px]" : "text-[8px]")}>{post.poll ? "Poll" : "Note"}</span>
           <span className={cn("font-semibold leading-snug", large ? "line-clamp-4 text-[15px]" : cn("text-[11px]", footer ? "line-clamp-4" : "line-clamp-5"))}>
             {post.quote ? `“${post.quote}”` : post.caption || (shared ? `“${shared.body || "📷"}”` : "")}
           </span>
@@ -91,7 +91,7 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
       ) : (
         // a reopened workout without a photo: its words, else the session
         <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)] text-left text-white", pad, bottom)}>
-          <span className={cn("font-black uppercase tracking-[0.14em] text-red-400", large ? "text-[10px]" : "text-[8px]")}>Workout</span>
+          <span className={cn("font-bold uppercase tracking-[0.14em] text-red-400", large ? "text-[10px]" : "text-[8px]")}>Workout</span>
           <span className={cn("font-semibold leading-snug", large ? "line-clamp-4 text-[15px]" : cn("text-[11px]", footer ? "line-clamp-4" : "line-clamp-5"))}>
             {post.caption || <span className={cn("font-display uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{post.session_title ?? "Session"}</span>}
           </span>
@@ -155,7 +155,7 @@ function GridCard({ tone, mark, children }: { tone: keyof typeof CARD_BG; mark?:
 /** What a card is, in its corner: a small pill (PR, Poll). */
 function TileMark({ children, tone = "red" }: { children: React.ReactNode; tone?: "red" | "gold" }) {
   return (
-    <span className={cn("rounded-full px-1.5 text-[8px] font-black uppercase leading-[14px] tracking-[0.08em]", tone === "gold" ? "bg-amber-400 text-[#2b1700]" : "bg-primary/90 text-primary-foreground")}>{children}</span>
+    <span className={cn("rounded-full px-1.5 text-[8px] font-bold uppercase leading-[14px] tracking-[0.08em]", tone === "gold" ? "bg-amber-400 text-[#2b1700]" : "bg-primary/90 text-primary-foreground")}>{children}</span>
   );
 }
 
@@ -172,9 +172,9 @@ function WorkoutTile({ stats, unit, pad, bottom, large }: { stats: WorkoutShareS
     );
   return (
     <div className={cn("flex h-full w-full flex-col justify-between text-white", pad, bottom, pr ? "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)]" : "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)]")}>
-      {pr ? <span className={cn("w-max rounded-full bg-amber-400 font-black uppercase text-[#2b1700]", large ? "px-2 py-px text-[10px]" : "px-1.5 text-[8px]")}>PR</span> : <span />}
+      {pr ? <span className={cn("w-max rounded-full bg-amber-400 font-bold uppercase text-[#2b1700]", large ? "px-2 py-px text-[10px]" : "px-1.5 text-[8px]")}>PR</span> : <span />}
       <div>
-        {large && <div className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/55">Workout completed</div>}
+        {large && <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">Workout completed</div>}
         <div className={cn("font-display line-clamp-2 uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{workoutHeadline(stats)}</div>
         {large && workoutSubtitle(stats) && <div className="mt-0.5 truncate text-[11px] font-semibold text-white/60">{workoutSubtitle(stats)}</div>}
         {lift && <div className={cn("font-display mt-0.5 uppercase", large ? "text-[19px]" : "text-[13px]", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</div>}

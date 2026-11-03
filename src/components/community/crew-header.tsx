@@ -140,7 +140,7 @@ export function CrewBrand({ following, canFilter, onFilter, onTop }: {
       <span
         className={cn(
           "truncate pr-[3px] leading-[1.1]",
-          following ? "text-[18px] font-extrabold tracking-[-0.02em] max-[359px]:text-[16px]" : "text-[19px] font-black uppercase italic tracking-[-0.035em] max-[359px]:text-[16px]",
+          following ? "text-[18px] font-extrabold tracking-[-0.02em] max-[359px]:text-[16px]" : "text-[19px] font-bold uppercase italic tracking-[-0.035em] max-[359px]:text-[16px]",
         )}
         data-crew-brand-name
       >

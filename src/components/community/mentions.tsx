@@ -142,7 +142,7 @@ export function CollaboratorsSheet({
         <SheetHeader className="border-b border-border/70 px-4 py-3 text-left">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <SheetTitle className="text-base font-black">On this post</SheetTitle>
+              <SheetTitle className="text-base font-bold">On this post</SheetTitle>
               <SheetDescription className="text-xs">It shows on each of their profiles.</SheetDescription>
             </div>
             <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">

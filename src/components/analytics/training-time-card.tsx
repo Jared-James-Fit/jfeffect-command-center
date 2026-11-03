@@ -307,9 +307,9 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-[92px] shrink-0">
-                        <div className="flex items-center gap-1 text-sm font-black text-foreground">
+                        <div className="flex items-center gap-1 text-sm font-bold text-foreground">
                           {w.label}
-                          {isBest && <span className="rounded bg-emerald-600 px-1 text-[9px] font-black uppercase text-white">Best</span>}
+                          {isBest && <span className="rounded bg-emerald-600 px-1 text-[9px] font-bold uppercase text-white">Best</span>}
                         </div>
                         <div className="text-[10px] text-muted-foreground">{w.range}</div>
                       </div>
@@ -319,7 +319,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                           style={{ width: `${(w.sessions / maxWindow) * 100}%`, background: ANALYTICS_COLORS.blue }}
                         />
                       </div>
-                      <div className="w-8 shrink-0 text-right text-sm font-black tabular-nums text-foreground">{w.sessions}</div>
+                      <div className="w-8 shrink-0 text-right text-sm font-bold tabular-nums text-foreground">{w.sessions}</div>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-0 text-[11px] text-muted-foreground sm:pl-[100px]">
                       <span>
@@ -393,7 +393,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">
                       {s.start.toLocaleDateString("en-US", { weekday: "short", timeZone: timezone })}
                     </div>
-                    <div className="text-sm font-black tabular-nums text-foreground">
+                    <div className="text-sm font-bold tabular-nums text-foreground">
                       {s.start.toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: timezone })}
                     </div>
                   </div>
@@ -456,7 +456,7 @@ export function TrainingTimeCard({ clientId, rangeStart, rangeEnd, rangeLabel, n
 
 function SubHeading({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <h3 className={cn("mb-2 text-[11px] font-black uppercase tracking-widest text-muted-foreground", className)}>
+    <h3 className={cn("mb-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground", className)}>
       {children}
     </h3>
   );
@@ -469,7 +469,7 @@ function Kpi({ icon, color, label, value, sub }: { icon: ReactNode; color: strin
         <span style={{ color }}>{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1 truncate text-lg font-black tracking-tight text-foreground">{value}</div>
+      <div className="mt-1 truncate text-lg font-bold tracking-tight text-foreground">{value}</div>
       <div className="truncate text-[11px] text-muted-foreground">{sub}</div>
     </div>
   );
@@ -631,7 +631,7 @@ function SessionDetailSheet({
     <Sheet open onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl pb-safe">
         <SheetHeader className="border-b border-border pb-3 text-left">
-          <SheetTitle className="text-base font-black">{s.title || "Workout"}</SheetTitle>
+          <SheetTitle className="text-base font-bold">{s.title || "Workout"}</SheetTitle>
           <div className="text-xs text-muted-foreground">
             {dateLabel}
             {slot && !suspect ? ` · ${slot.label}` : ""}
@@ -732,7 +732,7 @@ function Stat({ label, value, highlight = false }: { label: string; value: strin
   return (
     <div className={cn("rounded-lg border p-2.5", highlight ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-muted/30")}>
       <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("mt-0.5 truncate text-sm font-black tabular-nums", highlight ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>{value}</div>
+      <div className={cn("mt-0.5 truncate text-sm font-bold tabular-nums", highlight ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>{value}</div>
     </div>
   );
 }

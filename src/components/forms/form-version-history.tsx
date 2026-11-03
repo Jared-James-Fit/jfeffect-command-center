@@ -63,7 +63,7 @@ export function FormVersionHistory({ formId }: { formId: string }) {
           onChange={(e) => setReason(e.target.value)}
         />
         <div className="mt-2 flex justify-end">
-          <Button onClick={publish} disabled={busy} className="bg-gradient-primary font-bold">
+          <Button onClick={publish} disabled={busy} className="bg-primary font-semibold">
             <Rocket className="mr-1 h-4 w-4" /> Publish version
           </Button>
         </div>

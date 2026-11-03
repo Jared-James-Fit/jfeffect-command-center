@@ -218,7 +218,7 @@ export function UpcomingPanel() {
               if (!grouped[b]?.length) return null;
               return (
                 <section key={b} className="space-y-2">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     {BUCKET_LABELS[b]} <span className="ml-1 text-muted-foreground/60">({grouped[b].length})</span>
                   </h3>
                   <div className="space-y-2">

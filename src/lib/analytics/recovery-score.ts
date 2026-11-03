@@ -242,8 +242,8 @@ export function recoveryTrendLabel(current: number | null, previous: number | nu
 /**
  * Fetch per-session recovery scores for a client over a date range.
  * Sources (merged, deduped by scheduled_workout_id/day):
- *   - member_workout_reviews (richest signal when present)
  *   - pl_day_completions (session_rating) + pl_row_results (avg RPE/RIR)
+ *   - pl_workout_feedback (the review answers: sleep, recovery, pain, session RPE)
  *
  * Requires a Supabase client so this stays framework-agnostic.
  */
@@ -259,16 +259,10 @@ export async function fetchRecoveryScoreSeries(
     return Number.isFinite(n) ? n : null;
   };
 
-  // 1) Reviews (may be empty for most projects)
-  let reviewsQ = supabase
-    .from("member_workout_reviews")
-    .select(
-      "overall_rating, session_rpe, strength_feel, fatigue_feel, pain, recovery_today, sleep_bucket, review_submitted_at, member_plan_enrollments!inner(client_id)",
-    )
-    .eq("member_plan_enrollments.client_id", clientId)
-    .gte("review_submitted_at", sinceIso);
-  if (untilIso) reviewsQ = reviewsQ.lte("review_submitted_at", untilIso);
-  const { data: reviews } = await reviewsQ;
+  // 1) Old member reviews (member_workout_reviews) are read-only history keyed
+  // by enrollment with no client_id, so the join this used never matched (a 400
+  // on every load). Nothing is asked for; feedback below carries the reviews.
+  const reviews: any[] = [];
 
   // 2) Completions
   let compQ = supabase

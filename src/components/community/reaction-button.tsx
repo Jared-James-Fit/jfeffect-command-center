@@ -90,7 +90,7 @@ export function ReactionButton({ post, onReact, size = "md", align = "left" }: {
             <Heart className={cn(sm ? "h-[21px] w-[21px]" : "h-[26px] w-[26px]", "text-foreground/80")} strokeWidth={2} />
           )}
         </span>
-        {total > 0 && <span className={cn(sm ? "text-[12px]" : "text-[14px]", "font-black tabular-nums", mine ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
+        {total > 0 && <span className={cn(sm ? "text-[12px]" : "text-[14px]", "font-bold tabular-nums", mine ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
       </button>
       {open && <ReactionPicker current={mine} align={align} onPick={(k) => choose(k === mine ? null : k)} onClose={() => setOpen(false)} />}
     </div>

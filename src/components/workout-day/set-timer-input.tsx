@@ -161,7 +161,7 @@ export function SetTimerInput({
           <div className="px-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Timer
           </div>
-          <div className="text-center text-2xl font-black tabular-nums">{fmtMMSS(remaining)}</div>
+          <div className="text-center text-2xl font-bold tabular-nums">{fmtMMSS(remaining)}</div>
           <div className="flex items-center gap-1.5">
             {running ? (
               <button

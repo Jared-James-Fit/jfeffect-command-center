@@ -26,7 +26,7 @@ export function ClientFormSheet({
         style={{ paddingTop: "calc(max(env(safe-area-inset-top) - 5vh, 0px) + 4rem)" }}
       >
         <SheetHeader className="mb-3 min-h-0 pl-0 text-left">
-          <SheetTitle className="text-base font-black uppercase tracking-widest">
+          <SheetTitle className="text-base font-semibold">
             {title || "Form"}
           </SheetTitle>
         </SheetHeader>

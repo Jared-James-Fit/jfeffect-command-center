@@ -117,7 +117,7 @@ export function DiscountCodesPage({ embedded = false }: { embedded?: boolean } =
     <div className={embedded ? "mx-auto max-w-7xl space-y-4 p-4 md:p-6" : "mx-auto max-w-7xl space-y-4 p-4 md:p-6"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         {!embedded && (
-          <h1 className="text-2xl font-black flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
             <Ticket className="h-5 w-5" /> Discount Codes
           </h1>
         )}
@@ -389,7 +389,7 @@ function DiscountCodeForm({
 
         <div className="space-y-6">
           <section className="space-y-3">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Basic information</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Basic information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label>Internal name *</Label>
@@ -433,7 +433,7 @@ function DiscountCodeForm({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Discount</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Discount</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label>Type</Label>
@@ -471,7 +471,7 @@ function DiscountCodeForm({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Eligibility</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Eligibility</h3>
             <div className="flex items-center gap-3">
               <Switch checked={form.applies_to_all_products} onCheckedChange={(v) => set("applies_to_all_products", v)} />
               <Label>Applies to all products (otherwise, list product IDs below)</Label>
@@ -531,7 +531,7 @@ function DiscountCodeForm({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Pairing</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Pairing</h3>
             <div className="flex items-center gap-2">
               <Switch checked={form.pairing_allowed} onCheckedChange={(v) => set("pairing_allowed", v)} />
               <Label>Allow pairing with another code</Label>

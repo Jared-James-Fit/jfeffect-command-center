@@ -550,7 +550,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
         )}
         <DialogFooter>
           <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
-          <ActionButton disabled={!clientId} onClick={submit} className="bg-gradient-primary font-bold uppercase">
+          <ActionButton disabled={!clientId} onClick={submit} className="bg-primary font-semibold">
             {MODE_COPY[mode].button}
           </ActionButton>
         </DialogFooter>

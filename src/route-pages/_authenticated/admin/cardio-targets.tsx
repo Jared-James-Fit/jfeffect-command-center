@@ -56,13 +56,13 @@ export function CardioDashboard({ embedded = false }: { embedded?: boolean } = {
   return (
     <>
       {!embedded && <PageHeader title="Cardio Targets" subtitle="All client cardio targets in one place." actions={
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" className="bg-primary font-semibold w-full sm:w-auto" onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Add Cardio
         </Button>
       } />}
       {embedded && (
         <div className="flex justify-end px-3 pt-3 sm:px-6 md:px-8">
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Button size="sm" className="bg-primary font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add Cardio
           </Button>
         </div>
@@ -190,7 +190,7 @@ function CardioComplianceSection() {
     <Card className="border-border bg-card p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wide">Recent Compliance</h3>
+          <h3 className="text-sm font-semibold">Recent Compliance</h3>
           <p className="text-xs text-muted-foreground">Last 7 days · lowest compliance first · top 20</p>
         </div>
       </div>

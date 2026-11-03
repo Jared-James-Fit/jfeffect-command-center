@@ -86,7 +86,7 @@ export function WorkspaceIdentityHeader({
           )}
           {primaryAction}
           {isDirty && onSave && (
-            <Button size="sm" className="bg-gradient-primary uppercase font-bold" onClick={() => onSave()} disabled={saving}>
+            <Button size="sm" className="bg-primary font-semibold" onClick={() => onSave()} disabled={saving}>
               <Save className="mr-2 h-4 w-4" />Save
             </Button>
           )}

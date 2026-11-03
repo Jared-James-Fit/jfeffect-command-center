@@ -251,7 +251,7 @@ export function PhaseDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button className="bg-gradient-primary font-bold uppercase" onClick={save}>Save phase</Button>
+          <Button className="bg-primary font-semibold" onClick={save}>Save phase</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

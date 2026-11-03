@@ -50,7 +50,7 @@ export function StaffLeagueBoard() {
           </span>
         </span>
         {isFinalWeek() && (
-          <span className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+          <span className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
             <Zap className="h-3 w-3" /> Final week
           </span>
         )}
@@ -65,7 +65,7 @@ export function StaffLeagueBoard() {
             const place = Number(r.rank);
             return (
               <li key={r.client_id} className="flex items-center gap-2.5 px-3 py-2 text-[13px]">
-                <span className="w-7 shrink-0 text-center text-[12px] font-black tabular-nums text-muted-foreground">
+                <span className="w-7 shrink-0 text-center text-[12px] font-bold tabular-nums text-muted-foreground">
                   {place === 1 ? "🥇" : place === 2 ? "🥈" : place === 3 ? "🥉" : place}
                 </span>
                 <span className="min-w-0 flex-1 truncate font-semibold">{r.display_name}</span>

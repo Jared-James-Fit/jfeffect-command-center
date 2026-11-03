@@ -178,7 +178,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={onSave} disabled={save.isPending} className="bg-gradient-primary font-bold uppercase btn-press">
+            <Button onClick={onSave} disabled={save.isPending} className="bg-primary font-semibold btn-press">
               {save.isPending ? "Saving…" : "Save goal"}
             </Button>
             {goal && (
@@ -225,7 +225,7 @@ export function BodyweightGoalCard({ clientId, goal, series, displayUnit, canEdi
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                 <div
-                  className="h-full rounded-full bg-gradient-primary transition-[width] duration-500"
+                  className="h-full rounded-full bg-primary transition-[width] duration-500"
                   style={{ width: `${Math.round(progress.ratio * 100)}%` }}
                 />
               </div>

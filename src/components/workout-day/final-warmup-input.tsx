@@ -416,7 +416,7 @@ function WarmupForm({
               Today: {target!.reps} {target!.reps === 1 ? "rep" : "reps"} @ RPE {fmt(target!.rpe)}
             </div>
             <div className="truncate">
-              <span className="text-base font-black tabular-nums text-foreground" data-testid="warmup-target">
+              <span className="text-base font-bold tabular-nums text-foreground" data-testid="warmup-target">
                 {hint ? `${fmt(hint.target)} ${unit}` : "—"}
               </span>
               {range && <span className="ml-1 text-[11px] tabular-nums text-muted-foreground">({range})</span>}

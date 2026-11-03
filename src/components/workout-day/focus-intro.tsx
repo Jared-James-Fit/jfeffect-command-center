@@ -101,7 +101,7 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
       <FocusIntroAnimation />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-primary-foreground">New</span>
+          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-primary-foreground">New</span>
           <span className="text-sm font-bold text-foreground">Focus</span>
         </div>
         <p className="mt-1 text-[13px] leading-snug text-muted-foreground">

@@ -176,7 +176,7 @@ function prTag(n: number): string {
 function PrTag({ prs }: { prs: number }) {
   if (prs <= 0) return null;
   return (
-    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-background bg-primary px-1.5 text-[9px] font-black leading-[14px] text-primary-foreground tabular-nums" data-story-pr>
+    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-background bg-primary px-1.5 text-[9px] font-bold leading-[14px] text-primary-foreground tabular-nums" data-story-pr>
       {prTag(prs)}
     </span>
   );
@@ -945,7 +945,7 @@ function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "l
     const style = WIN_STYLE[win.kind];
     return (
       <div className={cn("flex min-h-0 flex-1 flex-col px-7", place, style.tint)} style={layout.style} data-story-frame="win">
-        <span className={cn("inline-flex items-center gap-1.5 text-[13px] font-black uppercase tracking-[0.16em]", style.text)}>
+        <span className={cn("inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.16em]", style.text)}>
           <style.Icon className="h-5 w-5" /> {win.label}
         </span>
         <span className="font-display mt-3 block text-[52px] uppercase leading-[0.95]">{win.headline}</span>
@@ -1161,7 +1161,7 @@ function StoryBar({ post, viewerIsStaff, onOpen, onComposing, onShare }: { post:
                 aria-label={`Message ${post.author.name}`}
               />
               {typing ? (
-                <button type="button" onMouseDown={keepFocus} onClick={() => void deliver(text)} disabled={send.isPending} className="h-10 shrink-0 rounded-full px-3 text-[15px] font-black active:scale-95 disabled:opacity-50" data-story-send>
+                <button type="button" onMouseDown={keepFocus} onClick={() => void deliver(text)} disabled={send.isPending} className="h-10 shrink-0 rounded-full px-3 text-[15px] font-bold active:scale-95 disabled:opacity-50" data-story-send>
                   Send
                 </button>
               ) : (
@@ -1283,7 +1283,7 @@ function StoryEndCard({
               <Check className="h-3.5 w-3.5" strokeWidth={3.5} />
             </span>
           </div>
-          <h2 className="mt-4 text-[26px] font-black leading-tight">You're all caught up</h2>
+          <h2 className="mt-4 text-[26px] font-bold leading-tight">You're all caught up</h2>
           {end.moments > 0 && (
             <p className="mt-1 text-[14px] text-white/65">
               {end.moments} {end.moments === 1 ? "moment" : "moments"} from {namesLine(end.people)}
@@ -1294,7 +1294,7 @@ function StoryEndCard({
         {/* more stories you didn't get to this time */}
         {end.stillNew.length > 0 && (
           <section className="mt-7" data-story-end-more>
-            <h3 className="text-[12px] font-black uppercase tracking-[0.14em] text-white/55">Still new</h3>
+            <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/55">Still new</h3>
             <div className="-mx-5 mt-2.5 flex gap-3 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {end.stillNew.map((j) => {
                 const g = groups[j];
@@ -1316,7 +1316,7 @@ function StoryEndCard({
         {/* the ones you watched but didn't celebrate: one tap each */}
         {end.celebrate.length > 0 && (
           <section className="mt-7" data-story-end-love>
-            <h3 className="text-[12px] font-black uppercase tracking-[0.14em] text-white/55">Give them some love</h3>
+            <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/55">Give them some love</h3>
             <ul className="mt-1.5">
               {end.celebrate.map((id) => {
                 const p = live(id);
@@ -1329,7 +1329,7 @@ function StoryEndCard({
         {/* yours: how it's doing */}
         {mine && (
           <section className="mt-7">
-            <h3 className="text-[12px] font-black uppercase tracking-[0.14em] text-white/55">Your story</h3>
+            <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/55">Your story</h3>
             <button type="button" onClick={() => onOpenPost(mine.id)} className="mt-2 flex w-full items-center gap-3 rounded-2xl bg-white/[0.07] px-3.5 py-3 text-left active:bg-white/10" data-story-end-mine>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-bold">{momentLine(mine)}</span>
@@ -1361,7 +1361,7 @@ function StoryEndCard({
       <div className="space-y-2.5 px-5 pt-2" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}>
         {!mine && addYours}
         {end.feedNew.length > 0 ? (
-          <button type="button" onClick={() => onJumpTo(end.feedNew[0].id)} className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-[15px] font-black text-black active:scale-[0.98]" data-story-end-feed>
+          <button type="button" onClick={() => onJumpTo(end.feedNew[0].id)} className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-[15px] font-bold text-black active:scale-[0.98]" data-story-end-feed>
             <span className="flex -space-x-1.5">
               {feedFaces.map((a) => (
                 <span key={a.user_id} className="rounded-full ring-2 ring-white">
@@ -1373,7 +1373,7 @@ function StoryEndCard({
             <ChevronRight className="h-4 w-4" />
           </button>
         ) : (
-          <button type="button" onClick={onClose} className="h-12 w-full rounded-2xl bg-white/15 text-[15px] font-black active:scale-[0.98]">
+          <button type="button" onClick={onClose} className="h-12 w-full rounded-2xl bg-white/15 text-[15px] font-bold active:scale-[0.98]">
             Back to the feed
           </button>
         )}

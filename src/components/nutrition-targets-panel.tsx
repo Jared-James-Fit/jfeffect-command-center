@@ -138,7 +138,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
           >
             <ShoppingCart className="mr-2 h-4 w-4" /> Preview Grocery List
           </Button>
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Button size="sm" className="bg-primary font-semibold" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" /> Add plan
           </Button>
         </div>
@@ -221,7 +221,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
                 className="flex w-full items-center justify-between px-3 py-2.5 text-left"
                 aria-expanded={showPrevious}
               >
-                <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                   <History className="h-4 w-4" /> Previous plans · {previous.length}
                 </span>
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition", showPrevious && "rotate-180")} />

@@ -81,7 +81,7 @@ export function LeagueBoostAdmin() {
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="font-black">🔥 Final Week Boost — {label}</div>
+          <div className="font-bold">🔥 Final Week Boost — {label}</div>
           <div className="text-xs text-muted-foreground">
             90%+ of prescribed workouts → workout points matched to the highest legitimate total
             {ceiling > 0 && <> (currently <b>{formatLeaguePoints(ceiling)}</b>)</>}. Min 6 prescribed, prorated for new clients.
@@ -109,10 +109,10 @@ export function LeagueBoostAdmin() {
                 <div key={r.client_id} className="rounded-xl border">
                   <button type="button" onClick={() => setOpen(open === r.client_id ? null : r.client_id)} className="w-full p-3 text-left">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="w-8 text-xs font-black text-muted-foreground">{r.rank ? `#${r.rank}` : "—"}</span>
+                      <span className="w-8 text-xs font-bold text-muted-foreground">{r.rank ? `#${r.rank}` : "—"}</span>
                       <span className="min-w-0 flex-1 truncate font-bold">{r.display_name}</span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black uppercase", st.cls)}>{st.label}</span>
-                      <span className="text-sm font-black">{formatLeaguePoints(r.total_points)} pts</span>
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", st.cls)}>{st.label}</span>
+                      <span className="text-sm font-bold">{formatLeaguePoints(r.total_points)} pts</span>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
                       <Stat k="Prescribed" v={String(r.eligible_workouts)} />
@@ -181,7 +181,7 @@ function SessionLedger({ clientId, month, locked }: { clientId: string; month: s
             <span className="block truncate font-semibold">{s.title ?? "Workout"}</span>
             {(s.note || s.excuse_reason) && <span className="block text-muted-foreground">{s.note}{s.excuse_reason ? ` — ${s.excuse_reason}` : ""}</span>}
           </span>
-          <span className={cn("shrink-0 font-black", s.done ? "text-emerald-600" : s.counted && !s.excused_at ? "text-destructive" : "text-muted-foreground")}>
+          <span className={cn("shrink-0 font-bold", s.done ? "text-emerald-600" : s.counted && !s.excused_at ? "text-destructive" : "text-muted-foreground")}>
             {s.done ? "Done" : s.excused_at ? "Excused" : s.counted ? "Missed/Open" : "Not counted"}
           </span>
           {!locked && s.counted && !s.done && (

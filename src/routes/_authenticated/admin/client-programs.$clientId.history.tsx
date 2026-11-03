@@ -86,7 +86,7 @@ function HistoryPage() {
 
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Exercise Set History</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">Exercise Set History</h2>
             <div className="relative w-full sm:w-64">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -131,12 +131,12 @@ function HistoryPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Compare Progress</h2>
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Compare Progress</h2>
           <ProgressComparison clientId={clientId} />
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Completed Preps</h2>
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Completed Preps</h2>
           {preps.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No completed preps yet.</Card> : (
             <div className="grid gap-2 md:grid-cols-2">
               {preps.map((p: any) => (
@@ -156,7 +156,7 @@ function HistoryPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Completed Blocks</h2>
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Completed Blocks</h2>
           {blocks.length === 0 ? <Card className="p-6 text-sm text-muted-foreground">No completed blocks yet.</Card> : (
             <div className="grid gap-2">
               {blocks.map((b: any) => (
@@ -294,7 +294,7 @@ function WorkoutFeedbackSection({
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Workout Feedback</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Recent Workout Feedback</h2>
         {rows.length > 0 && (
           <span className="text-xs text-muted-foreground">
             {rows.filter((r: any) => !r.reviewed_at).length} new

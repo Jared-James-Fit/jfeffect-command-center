@@ -108,7 +108,7 @@ export function WeeklyHoursEditor({
                     : `${short}: unavailable, tap to turn on`
                 }
                 className={cn(
-                  "h-10 w-11 shrink-0 rounded-md text-[11px] font-black uppercase tracking-wider transition",
+                  "h-10 w-11 shrink-0 rounded-md text-[11px] font-bold uppercase tracking-wider transition",
                   on
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary/50 text-muted-foreground",

@@ -210,9 +210,9 @@ export function PriceCardPickerDialog({ open, onClose, fixedClientId }: { open: 
                         <div className="font-bold truncate">{p.name}</div>
                         <div className="text-xs text-muted-foreground truncate">{p.product_type ?? "Custom Offer"}</div>
                       </div>
-                      <Badge variant={status === "Active" ? "default" : "outline"} className={status === "Active" ? "bg-gradient-primary" : ""}>{status}</Badge>
+                      <Badge variant={status === "Active" ? "default" : "outline"} className={status === "Active" ? "bg-primary" : ""}>{status}</Badge>
                     </div>
-                    <div className="text-lg font-black">{formatPrice(p.price_cents, p.currency)}</div>
+                    <div className="text-lg font-bold">{formatPrice(p.price_cents, p.currency)}</div>
                     <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
                       {p.payment_structure && <span className="rounded border border-border px-1.5 py-0.5">{p.payment_structure}</span>}
                       {term && <span className="rounded border border-border px-1.5 py-0.5">{term}</span>}
@@ -220,7 +220,7 @@ export function PriceCardPickerDialog({ open, onClose, fixedClientId }: { open: 
                     <div className="flex gap-2 pt-1">
                       <Button
                         size="sm"
-                        className="bg-gradient-primary font-bold uppercase flex-1"
+                        className="bg-primary font-semibold flex-1"
                         disabled={status === "Archived"}
                         onClick={() => setAssigning(productToOfferLike(p))}
                       >

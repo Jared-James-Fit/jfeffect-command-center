@@ -125,7 +125,7 @@ function SimpleQuickApply() {
               <button
                 type="submit"
                 disabled={!valid || mutation.isPending}
-                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-50 disabled:shadow-none"
+                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-primary text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] disabled:opacity-50 disabled:shadow-none"
               >
                 {mutation.isPending ? <><Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Sending…</> : "Apply for Coaching"}
               </button>
@@ -341,7 +341,7 @@ function SlotPicker({
         <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Pick a time</div>
       </div>
 
-      <h2 className="mt-3 text-xl md:text-2xl font-black tracking-tight">Book your coaching call</h2>
+      <h2 className="mt-3 text-xl md:text-2xl font-bold tracking-tight">Book your coaching call</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         <Clock className="mr-1 inline h-3.5 w-3.5" />{duration} min · with {coachName} · times shown in your local time zone ({localTz})
       </p>
@@ -363,7 +363,7 @@ function SlotPicker({
               }
             >
               <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">{d.weekday}</div>
-              <div className="text-base font-black">{d.label}</div>
+              <div className="text-base font-bold">{d.label}</div>
             </button>
           );
         })}
@@ -414,7 +414,7 @@ function SlotPicker({
           size="lg"
           disabled={!chosen || bookMut.isPending}
           onClick={() => chosen && bookMut.mutate(chosen)}
-          className="h-14 w-full text-base font-black"
+          className="h-14 w-full text-base font-bold"
         >
           {bookMut.isPending ? (
             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Booking…</>

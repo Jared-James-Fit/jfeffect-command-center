@@ -84,7 +84,7 @@ export function SetupChecklistBanner({ clientId, userId }: Props) {
       <Card className="relative overflow-hidden border-primary/30 bg-primary/5 p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2"><h2 className="text-base font-black tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{required.length}</Badge></div>
+            <div className="flex items-center gap-2"><h2 className="text-base font-bold tracking-tight sm:text-lg">Complete your setup</h2><Badge variant="secondary" className="text-[10px]">{done}/{required.length}</Badge></div>
             <p className="text-xs text-muted-foreground sm:text-sm">Each detail has one home, so you won't be asked the same onboarding questions in multiple setup steps.</p>
           </div>
         </div>

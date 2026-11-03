@@ -36,7 +36,7 @@ export function OutcomesCard({ clientId, outcomes, recordedKeys }: { clientId: s
                   <div className="flex items-start gap-1.5">
                     <KindChip kind={i.kind} />
                     <span className="font-semibold">{i.title}</span>
-                    {i.verdict ? <span className={cn("ml-auto shrink-0 text-[10px] font-black uppercase", VERDICT[i.verdict])}>{i.verdict}</span> : null}
+                    {i.verdict ? <span className={cn("ml-auto shrink-0 text-[10px] font-bold uppercase", VERDICT[i.verdict])}>{i.verdict}</span> : null}
                   </div>
                   {i.detail ? <div className="text-[11px] text-muted-foreground">{i.detail}</div> : null}
                   {o.finished && (

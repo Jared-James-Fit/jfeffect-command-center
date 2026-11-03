@@ -172,7 +172,7 @@ function ClientMessages() {
           />
         </LiveAvatar>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-black tracking-tight">{coachName}</div>
+          <div className="truncate text-sm font-bold tracking-tight">{coachName}</div>
           <div className="truncate text-[11px] text-muted-foreground">
             {coachLive ? (
               <LiveMark className="font-semibold" size={6}>Live in chat</LiveMark>

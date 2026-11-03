@@ -86,7 +86,7 @@ function SupportPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
-              <h1 className="truncate text-sm font-black sm:text-base">JF Effect Support</h1>
+              <h1 className="truncate text-sm font-bold sm:text-base">JF Effect Support</h1>
               {thread?.status && (
                 <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px] capitalize">
                   {thread.status}

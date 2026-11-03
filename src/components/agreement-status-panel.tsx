@@ -64,7 +64,7 @@ export function AgreementStatusPanel({ client }: { client: any }) {
         <div className="md:col-span-2"><Label>Signature platform link (SignNow, etc.)</Label><Input value={f.agreement_signature_platform_link ?? ""} onChange={(e) => setF({ ...f, agreement_signature_platform_link: e.target.value })} /></div>
       </div>
       <div className="flex gap-2">
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={save}>Save agreement</Button>
+        <Button size="sm" className="bg-primary font-semibold" onClick={save}>Save agreement</Button>
         {f.agreement_link && <a href={f.agreement_link} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Open <ExternalLink className="ml-1.5 h-3 w-3" /></Button></a>}
       </div>
     </Card>

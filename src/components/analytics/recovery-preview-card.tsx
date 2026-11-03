@@ -121,15 +121,11 @@ export function RecoveryPreviewCard({ clientId }: Props) {
         since180.toISOString(),
       );
       seriesP.catch(() => {}); // still thrown where it's awaited below
-      // Reviews for sleep / recovery-feel / pain samples
-      const reviewsP = Promise.resolve((supabase as any)
-        .from("member_workout_reviews")
-        .select(
-          "review_submitted_at, sleep_bucket, recovery_today, pain, member_plan_enrollments!inner(client_id)",
-        )
-        .eq("member_plan_enrollments.client_id", clientId)
-        .gte("review_submitted_at", since180.toISOString())
-        .order("review_submitted_at", { ascending: true }));
+      // The old member reviews (member_workout_reviews) are read-only history
+      // keyed by enrollment, with no client_id: the join this used never
+      // matched (a 400 on every load), so it isn't asked for. Reviews come
+      // from pl_workout_feedback below.
+      const reviewsP = Promise.resolve({ data: [] as any[] });
       // Feedback for sleep buckets (keyed via completion→client_id already scoped)
       const feedbackP = Promise.resolve((supabase as any)
         .from("pl_workout_feedback")
@@ -608,10 +604,10 @@ function ReadinessRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-black leading-none tabular-nums text-foreground">
+        <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
           {pct}%
         </span>
-        <span className={cn("mt-1 text-[9px] font-black uppercase leading-none tracking-[0.12em]", labelClass)}>
+        <span className={cn("mt-1 text-[9px] font-bold uppercase leading-none tracking-[0.12em]", labelClass)}>
           {label}
         </span>
       </div>
@@ -722,7 +718,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
                     className={cn("stroke-current", colors.ring)} />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-base font-black tabular-nums text-foreground">
+                  <span className="text-base font-bold tabular-nums text-foreground">
                     {factor.isMissing || factor.isBuilding ? "—" : `${pct}`}
                   </span>
                 </div>
@@ -734,7 +730,7 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
           <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Current
           </div>
-          <div className="mt-0.5 truncate text-base font-black text-foreground">
+          <div className="mt-0.5 truncate text-base font-bold text-foreground">
             {factor.currentValue}
           </div>
           <div className={cn("mt-1 flex items-center gap-2 text-xs font-semibold", colors.text)}>

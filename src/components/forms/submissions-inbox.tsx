@@ -164,7 +164,7 @@ export function SubmissionsInbox() {
         <div className="space-y-4">
           {groups.map((g) => (
             <section key={g.label} aria-label={g.label}>
-              <h3 className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground backdrop-blur">
+              <h3 className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground backdrop-blur">
                 {g.label} <span className="font-semibold">· {g.rows.length}</span>
               </h3>
               <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">

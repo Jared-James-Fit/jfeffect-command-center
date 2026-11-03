@@ -42,7 +42,7 @@ export function StorySticker({ post, onComposing, onOpenPerson, onReply, classNa
       data-story-interactive
       data-story-sticker={s.type}
     >
-      <p className="text-center text-[17px] font-black leading-snug">{s.q}</p>
+      <p className="text-center text-[17px] font-bold leading-snug">{s.q}</p>
       {s.type === "poll" ? (
         <PollSticker post={post} s={s} />
       ) : s.type === "slider" ? (
@@ -119,7 +119,7 @@ function PollSticker({ post, s }: { post: CommunityPost; s: Extract<PostSticker,
             )}
             <span className={cn("relative min-w-0 truncate", shown ? "flex-1 pl-3.5" : "px-3")}>{o.label}</span>
             {shown && (
-              <span className="relative flex shrink-0 items-center gap-1 pr-3.5 text-[14px] font-black">
+              <span className="relative flex shrink-0 items-center gap-1 pr-3.5 text-[14px] font-bold">
                 {mine && <Check className="h-4 w-4 text-primary" />}
                 {pct[i]}%
               </span>
@@ -280,7 +280,7 @@ function QuestionSticker({ post, first, onComposing }: { post: CommunityPost; fi
         <button type="button" onClick={() => { setOpen(false); onComposing?.(false); }} className="h-9 rounded-full px-3 text-[13px] font-bold text-black/50">
           Cancel
         </button>
-        <button type="button" disabled={!text.trim() || answer.isPending} onClick={submit} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-black text-primary-foreground disabled:opacity-40" data-sticker-send>
+        <button type="button" disabled={!text.trim() || answer.isPending} onClick={submit} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-[13px] font-bold text-primary-foreground disabled:opacity-40" data-sticker-send>
           <Send className="h-3.5 w-3.5" /> Send
         </button>
       </div>
@@ -327,7 +327,7 @@ export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson, onRe
       <SheetContent side="bottom" hideCloseButton className="max-h-[80dvh] gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="truncate text-[16px] font-black">{question ? "Responses" : sticker.q}</SheetTitle>
+            <SheetTitle className="truncate text-[16px] font-bold">{question ? "Responses" : sticker.q}</SheetTitle>
             <SheetDescription className="truncate text-[12px]">
               {question
                 ? `${sticker.q} · only you see who sent them`
@@ -362,7 +362,7 @@ export function StickerAnswersSheet({ open, onClose, sticker, onOpenPerson, onRe
                         type="button"
                         onClick={() => onReply(a)}
                         className={cn(
-                          "mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-black active:scale-95",
+                          "mt-2.5 inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold active:scale-95",
                           answered ? "bg-muted text-foreground" : "bg-primary text-primary-foreground",
                         )}
                         data-sticker-reply
@@ -418,7 +418,7 @@ function PollTally({ sticker, answers, row }: { sticker: Extract<PostSticker, { 
             <div className="relative mx-2 flex h-10 items-center overflow-hidden rounded-xl bg-muted">
               <span className="absolute inset-y-0 left-0 bg-primary/15" style={{ width: `${pct[i]}%` }} aria-hidden />
               <span className="relative min-w-0 flex-1 truncate pl-3 text-[14px] font-bold">{o.label}</span>
-              <span className="relative shrink-0 pr-3 text-[13px] font-black tabular-nums">
+              <span className="relative shrink-0 pr-3 text-[13px] font-bold tabular-nums">
                 {pct[i]}% · {o.votes}
               </span>
             </div>
@@ -434,7 +434,7 @@ function PollTally({ sticker, answers, row }: { sticker: Extract<PostSticker, { 
 export function StickerPreview({ sticker, className }: { sticker: StickerSpec; className?: string }) {
   return (
     <div className={cn("mx-auto w-[min(84%,320px)] rounded-[22px] bg-white px-4 pb-3.5 pt-3.5 text-black shadow-[0_12px_40px_rgba(0,0,0,0.45)]", className)} aria-hidden data-sticker-preview={sticker.type}>
-      <p className="text-center text-[17px] font-black leading-snug">{sticker.q}</p>
+      <p className="text-center text-[17px] font-bold leading-snug">{sticker.q}</p>
       {sticker.type === "poll" ? (
         <div className="mt-3 space-y-2">
           {sticker.options.map((o, i) => (

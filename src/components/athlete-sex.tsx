@@ -95,7 +95,7 @@ export function SexPromptCard({
           <UserRound className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <div className="text-sm font-black">Quick one: what's your sex?</div>
+          <div className="text-sm font-bold">Quick one: what's your sex?</div>
           <p className="text-xs text-muted-foreground">{SEX_REASON}</p>
         </div>
       </div>

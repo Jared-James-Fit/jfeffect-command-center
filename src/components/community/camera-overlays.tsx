@@ -7,7 +7,7 @@ export function CameraChip({ icon, title, sub, onPress, tone = "default" }: { ic
     <>
       <span className="text-[18px] leading-none">{icon}</span>
       <span className="min-w-0 text-left">
-        <span className="block truncate text-[13px] font-black leading-tight">{title}</span>
+        <span className="block truncate text-[13px] font-bold leading-tight">{title}</span>
         {sub && <span className="block truncate text-[11px] font-semibold leading-tight text-white/65">{sub}</span>}
       </span>
       {onPress && <ChevronDown className="h-4 w-4 shrink-0 text-white/70" />}

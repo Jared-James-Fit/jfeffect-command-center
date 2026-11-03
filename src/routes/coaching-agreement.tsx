@@ -48,7 +48,7 @@ function PublicCoachingAgreement() {
           <p className="text-xs font-bold uppercase tracking-wider text-primary">
             Version {c.version} · Effective {formatSignedDate(`${c.effectiveDate}T12:00:00Z`)}
           </p>
-          <h1 className="text-3xl font-black leading-tight tracking-tight">{c.title}</h1>
+          <h1 className="text-3xl font-bold leading-tight tracking-tight">{c.title}</h1>
           <p className="text-[15px] text-muted-foreground">{c.subtitle}</p>
         </header>
 

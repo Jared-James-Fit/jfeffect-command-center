@@ -175,7 +175,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
       >
         <div className="px-5 pt-5">
           <SheetHeader className="space-y-1 text-left">
-            <SheetTitle className="text-xl font-black">
+            <SheetTitle className="text-xl font-bold">
               {isEdit ? "Edit workout feedback" : "Workout complete"}
             </SheetTitle>
             <SheetDescription>
@@ -218,7 +218,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                   )}
                 >
                   <span className="text-lg leading-none" aria-hidden>{o.emoji}</span>
-                  <span className="text-base font-black text-foreground">{o.value}</span>
+                  <span className="text-base font-bold text-foreground">{o.value}</span>
                   <span className="text-[10px]">{o.label}</span>
                 </button>
               ))}
@@ -237,7 +237,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                   onClick={() => setRpe(n)}
                   aria-pressed={rpe === n}
                   className={cn(
-                    "h-10 rounded-lg border text-sm font-black transition-colors",
+                    "h-10 rounded-lg border text-sm font-bold transition-colors",
                     rpe === n
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-border bg-card text-foreground hover:bg-secondary/40",
@@ -300,7 +300,7 @@ export function WorkoutFeedbackSheet({ open, onOpenChange, completionId, clientI
                         onClick={() => setPainLevel(n)}
                         aria-pressed={painLevel === n}
                         className={cn(
-                          "h-9 rounded-lg border text-sm font-black transition-colors",
+                          "h-9 rounded-lg border text-sm font-bold transition-colors",
                           painLevel === n
                             ? "border-amber-500 bg-amber-500 text-white"
                             : "border-border bg-card text-foreground hover:bg-secondary/40",

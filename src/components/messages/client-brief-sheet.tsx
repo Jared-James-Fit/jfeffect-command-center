@@ -89,7 +89,7 @@ export function ClientBriefSheet({
         <div className="flex items-center gap-3 border-b border-border px-4 pb-3 pt-3">
           <UserAvatar src={client.profile_picture_url ?? null} name={client.full_name ?? "Client"} size={44} ring expandable={false} />
           <div className="min-w-0 flex-1">
-            <SheetTitle className="truncate text-base font-black tracking-tight">{client.full_name}</SheetTitle>
+            <SheetTitle className="truncate text-base font-bold tracking-tight">{client.full_name}</SheetTitle>
             <SheetDescription className="truncate text-xs text-muted-foreground">
               {count ? `${count} thing${count === 1 ? "" : "s"} waiting on you` : "Nothing waiting on you"}
               {client.last_active_at ? ` · in the app ${ago(client.last_active_at)}` : ""}

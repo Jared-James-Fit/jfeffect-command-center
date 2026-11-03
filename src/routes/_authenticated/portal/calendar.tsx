@@ -129,7 +129,7 @@ function CalendarPage() {
               <p className="text-xs text-muted-foreground">Pick a time that works for you.</p>
             </div>
             <a href={client.calendar_link} target="_blank" rel="noreferrer">
-              <Button className="bg-gradient-primary font-bold uppercase">Open booking <ExternalLink className="ml-2 h-4 w-4" /></Button>
+              <Button className="bg-primary font-semibold">Open booking <ExternalLink className="ml-2 h-4 w-4" /></Button>
             </a>
           </Card>
         )}
@@ -153,7 +153,7 @@ function TodayWorkoutLink({ item }: { item: CalendarItem | null }) {
         <Dumbbell className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+        <span className="block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
           {item ? "Today's workout" : "Workouts"}
         </span>
         <span className="block truncate text-sm font-bold">{item ? scheduleTitle(item) : "Your training schedule, day by day"}</span>

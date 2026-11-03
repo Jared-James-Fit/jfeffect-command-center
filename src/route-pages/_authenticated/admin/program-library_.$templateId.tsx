@@ -1719,7 +1719,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
                 )}
               >
                 <Plus className="h-6 w-6" />
-                <span className="text-sm font-bold uppercase tracking-wide">Add Week</span>
+                <span className="text-sm font-semibold">Add Week</span>
               </button>
               {/* Trailing spacer so the last week / Add Week tile can snap to the left edge */}
               <div aria-hidden className="shrink-0 w-[80vw]" />
@@ -1817,7 +1817,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
               {/* Derived Day label + optional coach subtitle. Reordering
                   updates the visible number automatically. */}
               <div className="min-w-0 flex-1">
-                <div className={cn("font-black leading-none tracking-tight", compact ? "text-sm" : "text-lg")}>
+                <div className={cn("font-bold leading-none tracking-tight", compact ? "text-sm" : "text-lg")}>
                   {dayLabel}
                 </div>
                 <Input

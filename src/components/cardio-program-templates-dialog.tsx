@@ -148,7 +148,7 @@ export function CardioProgramTemplatesDialog({ open, onOpenChange, clientId }: P
 
         <DialogFooter>
           <ActionButton variant="outline" onClick={() => onOpenChange(false)}>Cancel</ActionButton>
-          <ActionButton onClick={assign} jobLabel="Assigning cardio program" className="bg-gradient-primary font-bold uppercase">
+          <ActionButton onClick={assign} jobLabel="Assigning cardio program" className="bg-primary font-semibold">
             Assign to Client
           </ActionButton>
         </DialogFooter>

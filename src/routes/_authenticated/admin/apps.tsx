@@ -53,7 +53,7 @@ function AppsHub() {
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary font-bold uppercase"><Plus className="mr-2 h-4 w-4" />Add</Button>
+              <Button className="bg-primary font-semibold"><Plus className="mr-2 h-4 w-4" />Add</Button>
             </DialogTrigger>
             <NewShortcut onClose={() => setOpen(false)} onCreated={() => qc.invalidateQueries({ queryKey: ["shortcuts"] })} />
           </Dialog>
@@ -125,7 +125,7 @@ function NewShortcut({ onClose, onCreated }: { onClose: () => void; onCreated: (
         <div><Label>Private notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" className="bg-gradient-primary font-bold uppercase">Add</Button>
+          <Button type="submit" className="bg-primary font-semibold">Add</Button>
         </DialogFooter>
       </form>
     </DialogContent>

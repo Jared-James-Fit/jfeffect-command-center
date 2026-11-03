@@ -56,7 +56,7 @@ export function DayChips({ value, onChange, count = 14, label = "Day" }: {
             className={cn("flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-lg border transition active:scale-[0.97]",
               on ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
             <span className={cn("text-[10px] font-bold uppercase", on ? "text-primary-foreground/85" : "text-muted-foreground")}>{d.top}</span>
-            <span className="text-base font-black tabular-nums">{d.day}</span>
+            <span className="text-base font-bold tabular-nums">{d.day}</span>
           </button>
         );
       })}

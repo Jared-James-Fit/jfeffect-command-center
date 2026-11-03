@@ -193,7 +193,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
             <Badge variant="destructive">Text fingerprint mismatch</Badge>
           )}
         </div>
-        <h1 className="text-2xl font-black leading-tight tracking-tight">{content.title}</h1>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight">{content.title}</h1>
         <p className="text-sm text-muted-foreground">{content.subtitle}</p>
         <p className="text-sm text-muted-foreground">
           Signed by <span className="font-semibold text-foreground">{record.typedName}</span> on{" "}
@@ -202,7 +202,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
       </section>
 
       <section className="break-inside-avoid rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h2 className="text-sm font-semibold text-muted-foreground">
           Client details at signing
         </h2>
         <dl className="mt-2 divide-y divide-border/60">
@@ -228,7 +228,7 @@ function RecordBody({ record, content }: { record: AgreementRecord; content: Agr
       </section>
 
       <section className="break-inside-avoid rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h2 className="text-sm font-semibold text-muted-foreground">
           Confirmations
         </h2>
         <ul className="mt-3 space-y-3">

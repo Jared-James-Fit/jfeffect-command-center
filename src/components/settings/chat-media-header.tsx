@@ -12,7 +12,7 @@ export function ChatMediaHeader({ active }: { active: "gifs" | "sounds" }) {
     <>
       <SettingsTabs />
       <div className="px-4 pt-4 sm:px-6">
-        <h1 className="text-lg font-black tracking-tight">Chat media</h1>
+        <h1 className="text-lg font-bold tracking-tight">Chat media</h1>
         <p className="text-xs text-muted-foreground">The GIFs and sounds clients and coaches can send in chat. Add, edit or turn any off anytime.</p>
         <div className="mt-3 flex gap-1.5">
           <Link to="/admin/chat-gifs" replace className={pill(active === "gifs")}>GIFs</Link>

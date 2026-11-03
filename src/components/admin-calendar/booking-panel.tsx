@@ -199,7 +199,7 @@ export function AdminBookingPanel() {
         title="Booking"
         subtitle="Book a client in a tap, or send a link so people book themselves from your open hours."
         actions={
-          <Button size="sm" className="bg-gradient-primary font-bold" onClick={() => openNew(null)}>
+          <Button size="sm" className="bg-primary font-semibold" onClick={() => openNew(null)}>
             <Plus className="mr-1.5 h-4 w-4" /> New type
           </Button>
         }
@@ -324,7 +324,7 @@ export function AdminBookingPanel() {
                       {online ? (
                         <Button
                           size="sm"
-                          className="h-9 bg-gradient-primary font-bold"
+                          className="h-9 bg-primary font-semibold"
                           onClick={() => setShare({ name: t.name, slug: t.slug! })}
                         >
                           <Send className="mr-1.5 h-3.5 w-3.5" /> Send link

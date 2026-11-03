@@ -363,7 +363,7 @@ export function SignupJf({ floatingHeader = false }: { floatingHeader?: boolean 
       <Section className="!pt-4">
         <div ref={formRef} id="cta" />
         <Card className="mx-auto max-w-xl p-4 md:p-8">
-          <h2 className="text-2xl font-black tracking-tight">Create your account</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Create your account</h2>
           <p className="mt-1 text-sm text-foreground">
             $0 today. After your {trialDays}-day trial, your membership renews automatically at {settings?.monthly_price_display ?? "$29 USD/month"} plus applicable taxes until cancelled.
           </p>
@@ -716,7 +716,7 @@ function ProgramLibraryShowcase({ categories, programCount }: { categories: Libr
                 <div className="grid h-10 w-10 place-items-center rounded-xl border border-primary/35 bg-primary/15 text-primary">
                   <Icon className="h-5 w-5" />
                 </div>
-                <div className="text-base font-black tracking-tight">{c.name}</div>
+                <div className="text-base font-bold tracking-tight">{c.name}</div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {c.subtypes.map((s) => (
@@ -738,7 +738,7 @@ function WhyStickSection() {
     <Section>
       <div className="mx-auto max-w-3xl text-center">
         <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary">Why it works</div>
-        <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
+        <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
           Progress that compounds.
         </h2>
         <p className="mt-5 text-base text-muted-foreground md:text-lg">

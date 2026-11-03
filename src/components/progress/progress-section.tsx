@@ -338,7 +338,7 @@ function OverviewTab({
           <div>
             <div className="flex items-end gap-3">
               <div>
-                <p className="text-3xl font-black tabular-nums leading-none">{stats.latest}</p>
+                <p className="text-3xl font-bold tabular-nums leading-none">{stats.latest}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{stats.unit}{stats.avg7 != null ? ` · 7-day avg ${stats.avg7}` : ""}</p>
               </div>
               {stats.count > 1 && (

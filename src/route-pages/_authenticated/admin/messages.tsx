@@ -80,7 +80,7 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
   if (state === "archived") return null;
   return (
     <span
-      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
+      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-bold uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
       title={WORKFLOW_LABEL[state]}
     >
       {compact ? (
@@ -801,7 +801,7 @@ export function MessagesInbox({
           }
         >
           <div className="mb-2 flex items-center gap-2">
-            <h1 className="text-base font-black tracking-tight md:text-lg">Messages</h1>
+            <h1 className="text-base font-bold tracking-tight md:text-lg">Messages</h1>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
               {conversations.length}
             </span>

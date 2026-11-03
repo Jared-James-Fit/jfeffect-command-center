@@ -120,7 +120,7 @@ export function ClientCheckInsList() {
           <Card className="border-border bg-card p-5">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <div className="text-lg font-black">Check-In Responses</div>
+                <div className="text-lg font-bold">Check-In Responses</div>
                 <div className="text-xs text-muted-foreground">Coach Jared's responses. Reply anytime — it's a chat.</div>
               </div>
               <Badge variant="outline">{manualReviews.length}</Badge>
@@ -157,7 +157,7 @@ export function ClientCheckInsList() {
                       <ClipboardCheck className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="text-lg font-black">{f.title}</div>
+                      <div className="text-lg font-bold">{f.title}</div>
                       {f.description && (
                         <p className="mt-1 text-sm text-muted-foreground">{f.description}</p>
                       )}
@@ -175,7 +175,7 @@ export function ClientCheckInsList() {
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {f.kind === "external" ? (
                     f.external_url ? (
-                      <Button asChild className="bg-gradient-primary font-bold">
+                      <Button asChild className="bg-primary font-semibold">
                         <a
                           href={
                             (f as any).requires_client_identity === false
@@ -210,7 +210,7 @@ export function ClientCheckInsList() {
                       onClick={() =>
                         navigate({ to: "/portal/check-ins/$formId", params: { formId: f.id } })
                       }
-                      className="bg-gradient-primary font-bold"
+                      className="bg-primary font-semibold"
                     >
                       {status === "in_progress"
                         ? "Continue"

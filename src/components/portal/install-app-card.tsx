@@ -38,7 +38,7 @@ export function InstallAppCard({ className, hideWhenDone = false }: { className?
               "grid h-11 w-11 shrink-0 place-items-center rounded-xl shadow-sm",
               installed
                 ? "bg-success/15 text-success"
-                : "bg-gradient-primary text-primary-foreground",
+                : "bg-primary text-primary-foreground",
             )}
           >
             {installed ? <CheckCircle2 className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}

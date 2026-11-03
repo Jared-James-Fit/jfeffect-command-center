@@ -104,7 +104,7 @@ export function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       {!embedded && (
         <header>
-          <h1 className="text-2xl font-black tracking-tight md:text-3xl">Staff access</h1>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Staff access</h1>
         </header>
       )}
 

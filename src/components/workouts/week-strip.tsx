@@ -75,7 +75,7 @@ export function WeekStrip({
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-xs font-semibold text-muted-foreground">
-          {trainingWeek && <span className="font-black text-foreground">{trainingWeek} · </span>}
+          {trainingWeek && <span className="font-bold text-foreground">{trainingWeek} · </span>}
           {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
           {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
         </div>
@@ -128,7 +128,7 @@ export function WeekStrip({
                 {format(d, "EEE")}
               </span>
               <span className={cn(
-                "text-base font-black",
+                "text-base font-bold",
                 isSelected ? "" : isToday ? "text-primary" : "",
               )}>
                 {format(d, "d")}

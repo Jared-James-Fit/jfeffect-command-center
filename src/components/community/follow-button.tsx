@@ -75,7 +75,7 @@ export function FollowButton({ userId, name, avatarUrl, isPrivate, size = "md", 
           <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[420px]" onClick={(e) => e.stopPropagation()}>
             <div data-unfollow-confirm className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
               <UserAvatar src={avatarUrl ?? null} name={name ?? ""} size={72} expandable={false} />
-              <SheetTitle className="mt-3 text-[16px] font-black">Unfollow{name ? ` ${name}` : ""}?</SheetTitle>
+              <SheetTitle className="mt-3 text-[16px] font-bold">Unfollow{name ? ` ${name}` : ""}?</SheetTitle>
               <SheetDescription className="mt-1 text-[13px] leading-snug">
                 Their account is private. If you change your mind, you'll have to request to follow{name ? ` ${name}` : " them"} again.
               </SheetDescription>
@@ -178,7 +178,7 @@ export function FollowCounts({ userId, name, isMe, canSee, followers, following,
       onClick={() => setOpen(kind)}
       className="inline-flex items-baseline gap-1 text-[13px] disabled:cursor-default"
     >
-      <span className="font-black tabular-nums">{n}</span>
+      <span className="font-bold tabular-nums">{n}</span>
       <span className="text-muted-foreground">{n === 1 ? one : many}</span>
     </button>
   );
@@ -197,7 +197,7 @@ function SheetTop({ title, sub }: { title: string; sub?: string }) {
   return (
     <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 px-5 pb-1 pt-4 text-left">
       <div className="min-w-0">
-        <SheetTitle className="text-[16px] font-black">{title}</SheetTitle>
+        <SheetTitle className="text-[16px] font-bold">{title}</SheetTitle>
         <SheetDescription className={cn("text-[12px]", !sub && "sr-only")}>{sub ?? title}</SheetDescription>
       </div>
       <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -278,7 +278,7 @@ function FollowListSheet({ userId, name, isMe, counts, kind, onKind, onOpen }: {
         <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 pb-safe-bottom sm:mx-auto sm:max-w-[420px]">
           <div data-remove-follower-confirm className="flex flex-col items-center px-6 pb-3 pt-6 text-center">
             <UserAvatar src={removing?.avatar_url ?? null} name={removing?.name ?? ""} size={72} expandable={false} />
-            <SheetTitle className="mt-3 text-[16px] font-black">Remove follower?</SheetTitle>
+            <SheetTitle className="mt-3 text-[16px] font-bold">Remove follower?</SheetTitle>
             <SheetDescription className="mt-1 text-[13px] leading-snug">
               We won't tell {removing?.name ?? "them"} they were removed from your followers.
             </SheetDescription>

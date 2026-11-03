@@ -167,10 +167,10 @@ function CallAccessPage() {
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Active clients</div><div className="text-2xl font-black">{stats.total}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Access enabled</div><div className="text-2xl font-black text-emerald-600">{stats.enabled}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Callable now</div><div className="text-2xl font-black">{stats.callable}</div></Card>
-        <Card className="p-3"><div className="text-xs text-muted-foreground">Missing phone</div><div className="text-2xl font-black text-amber-600">{stats.noPhone}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Active clients</div><div className="text-2xl font-bold">{stats.total}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Access enabled</div><div className="text-2xl font-bold text-emerald-600">{stats.enabled}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Callable now</div><div className="text-2xl font-bold">{stats.callable}</div></Card>
+        <Card className="p-3"><div className="text-xs text-muted-foreground">Missing phone</div><div className="text-2xl font-bold text-amber-600">{stats.noPhone}</div></Card>
       </div>
 
       <Tabs defaultValue="clients" className="space-y-4">
