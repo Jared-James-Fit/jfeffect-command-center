@@ -39,6 +39,7 @@ import {
   EMPTY_SALE, SessionSalePicker, quoteFor, runSessionSale, useSaleProducts, useSellSessions, type SaleDraft,
 } from "@/components/schedule/session-sale-picker";
 import { bookButtonLabel, defaultSaleProduct } from "@/lib/session-sale";
+import { SessionPaymentLine } from "@/components/schedule/session-payment-line";
 
 type Props = {
   open: boolean;
@@ -466,6 +467,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
               {clientName}{clientName ? " · " : ""}{dateLabel} · {fmtTimeRange(form.start_time, form.end_time)}
               {form.location ? ` · ${form.location}` : ""}
             </div>
+            <SessionPaymentLine session={form} first={clientFirst || clientName.split(" ")[0]} />
             {form.booking_card_id && (
               <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 <Badge variant="outline" className="gap-1 border-border bg-card text-muted-foreground">

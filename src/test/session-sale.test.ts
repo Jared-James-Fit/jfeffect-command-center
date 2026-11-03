@@ -145,5 +145,7 @@ describe("the sale's plumbing", () => {
     const line = read("src/components/schedule/session-payment-line.tsx");
     expect(line).toContain('rpc("pt_session_sale_id"');
     expect(read("src/components/schedule/session-actions-sheet.tsx")).toContain("<SessionPaymentLine session={session} first={first} />");
+    // and when an already-booked session is opened to edit (Manage Session)
+    expect(read("src/components/pt-session-dialog.tsx")).toContain("<SessionPaymentLine session={form} first=");
   });
 });
