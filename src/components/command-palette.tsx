@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
+import { DialogTitle } from "@/components/ui/dialog";
 import {
   Users, UserCog, IdCard, BookOpen, Dumbbell, Library, ChefHat,
   Megaphone, ShoppingBag, Clock, History, X, ArrowRight,
@@ -164,13 +165,24 @@ export function CommandPalette({
     filteredRegistry.length > 0 || serverHits.length > 0;
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput
-        autoFocus
-        value={query}
-        onValueChange={setQuery}
-        placeholder="Search clients, programs, pages, tools, settings…"
-      />
+    // its own Cancel beside the field, not the dialogs' floating Back (which sat on top of the field)
+    <CommandDialog open={open} onOpenChange={onOpenChange} showBackButton={false}>
+      <DialogTitle className="sr-only">Search everything</DialogTitle>
+      <div className="flex items-center border-b border-border [&_[cmdk-input-wrapper]]:min-w-0 [&_[cmdk-input-wrapper]]:flex-1 [&_[cmdk-input-wrapper]]:border-0">
+        <CommandInput
+          autoFocus
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search clients, programs, pages, tools, settings…"
+        />
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="mr-1.5 h-10 shrink-0 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          Cancel
+        </button>
+      </div>
       <CommandList className="max-h-[70vh]">
         {/* Empty-state surfaces */}
         {!debounced && (
