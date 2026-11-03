@@ -210,14 +210,14 @@ export function SessionChangeCard({ requestId, staff, clientId }: { requestId: s
               <div className="grid grid-cols-2 gap-2">
                 {proposed ? (
                   <Button size="sm"
-                    className={cn("h-9 font-bold", clashes.length ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-gradient-primary")}
+                    className={cn("h-9 font-semibold", clashes.length ? "bg-amber-600 text-white hover:bg-amber-600/90" : "bg-primary")}
                     disabled={busy || !session || !end || conflict.checking}
                     onClick={() => run("approve")}>
                     {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : !clashes.length && <Check className="mr-1 h-4 w-4" />}
                     {clashes.length ? "Approve anyway" : "Approve"}
                   </Button>
                 ) : (
-                  <Button size="sm" className="h-9 bg-gradient-primary font-bold" disabled={!session} onClick={() => setSheet("move")}>
+                  <Button size="sm" className="h-9 bg-primary font-semibold" disabled={!session} onClick={() => setSheet("move")}>
                     <CalendarClock className="mr-1 h-4 w-4" /> Pick a time
                   </Button>
                 )}
@@ -234,7 +234,7 @@ export function SessionChangeCard({ requestId, staff, clientId }: { requestId: s
             </>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" className="h-9 bg-gradient-primary font-bold" disabled={!session} onClick={() => setSheet("menu")}>
+              <Button size="sm" className="h-9 bg-primary font-semibold" disabled={!session} onClick={() => setSheet("menu")}>
                 Bank or count
               </Button>
               <Button size="sm" variant="outline" className="h-9" disabled={busy} onClick={() => setDeclining(true)}>
