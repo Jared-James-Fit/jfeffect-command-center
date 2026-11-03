@@ -65,7 +65,7 @@ describe("membership is a section of the admin menu, not a separate mode", () =>
 });
 
 describe("one menu row per page", () => {
-  const listed = (i: { children?: { searchOnly?: boolean }[] }) => (i.children ?? []).filter((c) => !c.searchOnly);
+  const listed = <C extends { searchOnly?: boolean }>(i: { children?: C[] }): C[] => (i.children ?? []).filter((c) => !c.searchOnly);
 
   it("admins and coaches get short menus: a row per page, a flyout only where a row has pages of its own", () => {
     expect(buildInternalNavCollapsed("admin").map((i) => i.label)).toEqual([
