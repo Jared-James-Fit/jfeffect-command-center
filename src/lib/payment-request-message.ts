@@ -53,6 +53,30 @@ export function buildPaymentRequestMessage(i: PaymentRequestMessageInput): strin
   return lines.join("\n");
 }
 
+/** The payment card a payment request carries in the chat (PaymentRequestCard reads its sale live). */
+export function paymentRequestAttachment(rec: {
+  id: string;
+  offer_name?: string | null;
+  full_payable_amount?: number | string | null;
+  currency?: string | null;
+  payment_structure?: string | null;
+  payment_status?: string | null;
+}, shareUrl: string) {
+  return {
+    type: "link" as const,
+    kind: "payment_request" as const,
+    url: shareUrl,
+    payment_url: shareUrl,
+    name: `Payment: ${rec.offer_name ?? "Coaching"}`,
+    title: rec.offer_name ?? "Coaching",
+    amount_cents: Math.round(Number(rec.full_payable_amount ?? 0) * 100),
+    currency: rec.currency ?? "USD",
+    payment_structure: rec.payment_structure ?? undefined,
+    purchase_id: rec.id,
+    status: rec.payment_status ?? "Pending",
+  };
+}
+
 /**
  * Client-side: post the auto message for a just-assigned product and push
  * the client. Never throws — the sale/link must not fail because of chat.

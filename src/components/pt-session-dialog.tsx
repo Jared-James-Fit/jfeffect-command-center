@@ -35,6 +35,10 @@ import { addDaysISO, deviceTodayISO } from "@/lib/schedule-time";
 import { ConflictNotice, useConflictCheck } from "@/components/schedule/use-conflict-check";
 import { useCreditOutlook } from "@/components/schedule/use-credit-outlook";
 import { kickGoogleSync, dayLabel } from "@/components/schedule/session-actions-sheet";
+import {
+  EMPTY_SALE, SessionSalePicker, quoteFor, runSessionSale, useSaleProducts, useSellSessions, type SaleDraft,
+} from "@/components/schedule/session-sale-picker";
+import { bookButtonLabel, defaultSaleProduct } from "@/lib/session-sale";
 
 type Props = {
   open: boolean;
@@ -90,6 +94,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const [conflictOverride, setConflictOverride] = useState(false);
   // Once the coach flips "uses a session" by hand, changing the type leaves it alone.
   const [creditTouched, setCreditTouched] = useState(false);
+  // Charging for the booking (a product or a typed price, paid by a link in their chat).
+  const [sale, setSale] = useState<SaleDraft>(EMPTY_SALE);
+  const sellFn = useSellSessions();
 
   // Booking cards (templates) — used for the picker step and the edit-mode
   // template badge.
@@ -151,6 +158,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     setTemplateEditOpen(false);
     setConflictOverride(false);
     setCreditTouched(false);
+    setSale(EMPTY_SALE);
     if (initial) {
       setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
       return;
@@ -229,6 +237,16 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     first: (clients.find((c) => c.id === form?.client_id)?.full_name ?? "").split(" ")[0],
     enabled: open && !!form && !form.id,
   });
+  const { data: saleProducts = [], isLoading: saleProductsLoading } = useSaleProducts(open && !!form && !form.id && !!form.client_id);
+  // A client with no package at all (a drop-in) is charged for the booking by default: the
+  // single-session product, else the smallest pack. Anyone else books on their package.
+  const noPackage = !!outlook?.needsConfirm;
+  useEffect(() => {
+    if (!open || !form || form.id || sale.touched) return;
+    const on = noPackage && form.uses_credit !== false;
+    const productId = sale.productId ?? defaultSaleProduct(saleProducts)?.id ?? null;
+    if (on !== sale.on || productId !== sale.productId) setSale((s) => ({ ...s, on, productId }));
+  }, [open, form?.id, form?.uses_credit, noPackage, saleProducts, sale.touched, sale.on, sale.productId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!form) {
     // Card picker step (booking mode only).
@@ -299,7 +317,11 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const bookingCount = isNewBooking ? previewDates.length : 0;
   const willReserve = (tracking || hasCredits) && isNewBooking && form.status === "Scheduled" ? bookingCount : 0;
   const overbook = willReserve > remaining;
-  const mustConfirmOverbook = overbook && (outlook?.needsConfirm ?? true);
+  const clientFirst = (selectedClient?.full_name ?? "").split(" ")[0];
+  // Selling it: the sale holds the credit, so there's nothing to overbook.
+  const selling = isNewBooking && form.uses_credit !== false && form.status === "Scheduled" && sale.on;
+  const saleQuote = selling ? quoteFor(sale, Math.max(previewDates.length, 1), saleProducts, form.title) : null;
+  const mustConfirmOverbook = overbook && !selling && (outlook?.needsConfirm ?? true);
 
   const impact = form.id ? creditImpact(form.status, events) : null;
   const clientName = selectedClient?.full_name ?? form.clients?.full_name ?? "";
@@ -314,6 +336,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (!form.client_id) return toast.error("Pick a client first");
     if (!form.title) return toast.error("Title is required");
     if (form._isRecurring && previewDates.length === 0) return toast.error("Pick at least one weekday");
+    if (selling && !saleQuote) return toast.error("Pick a product or type a price, or switch off Charge for it");
     if (mustConfirmOverbook && form.uses_credit !== false && !confirmOverbook) {
       toast.error("No session package yet. Add one from the Sessions tab, or switch on Book anyway.");
       return;
@@ -360,15 +383,23 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       createdIds = ((created ?? []) as Array<{ id: string }>).map((r) => r.id);
     }
 
+    if (error) {
+      setSaving(false);
+      return toast.error(error.message);
+    }
+    // Booked first, then sold: the booking stands whatever happens to the sale.
+    if (selling && createdIds.length) {
+      await runSessionSale(sellFn as any, qc, { clientId: form.client_id, sessionIds: createdIds, draft: sale, first: clientFirst });
+    } else {
+      toast.success(
+        form.id
+          ? "Session updated"
+          : previewDates.length > 1
+            ? `Booked ${previewDates.length} sessions`
+            : "Session booked",
+      );
+    }
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(
-      form.id
-        ? "Session updated"
-        : previewDates.length > 1
-          ? `Booked ${previewDates.length} sessions`
-          : "Session booked",
-    );
     invalidatePtSessionCaches(qc, form.client_id);
     kickGoogleSync();
     if (!form.id && createdIds.length && onBooked) {
@@ -454,7 +485,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           </div>
         )}
 
-        {form.uses_credit !== false && (tracking || hasCredits) && isNewBooking && (
+        {form.uses_credit !== false && (tracking || hasCredits) && isNewBooking && !selling && (
           <div className={`rounded-md border px-3 py-2 text-sm ${mustConfirmOverbook ? "border-destructive/60 bg-destructive/10" : overbook ? "border-border bg-secondary/30" : remaining - willReserve <= 1 ? "border-amber-500/60 bg-amber-500/10" : "border-primary/40 bg-primary/10"}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -626,6 +657,21 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
           )}
 
+          {isNewBooking && form.uses_credit !== false && form.status === "Scheduled" && !!form.client_id && (
+            <div className="md:col-span-2">
+              <SessionSalePicker
+                value={sale}
+                onChange={setSale}
+                products={saleProducts}
+                loading={saleProductsLoading}
+                count={Math.max(previewDates.length, 1)}
+                first={clientFirst}
+                title={form.title}
+                hint={outlook ? (noPackage ? "No package: without a sale it shows as owed." : `${outlook.text}. Or sell it.`) : undefined}
+              />
+            </div>
+          )}
+
           <div className="md:col-span-2">
             <Label>Notes</Label>
             <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
@@ -752,16 +798,18 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button
             onClick={save}
-            disabled={saving || (form.uses_credit !== false && mustConfirmOverbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking}
+            disabled={saving || (form.uses_credit !== false && mustConfirmOverbook && !confirmOverbook) || conflictBlocked || conflictCheck.checking || (selling && !saleQuote)}
             className="bg-primary font-semibold"
           >
             {saving
-              ? "Saving…"
+              ? selling ? "Booking and making the link…" : "Saving…"
               : form.id
                 ? "Save Changes"
-                : previewDates.length > 1
-                  ? `Book ${previewDates.length} Sessions`
-                  : "Book Session"}
+                : selling
+                  ? bookButtonLabel(saleQuote, { count: previewDates.length, send: sale.send })
+                  : previewDates.length > 1
+                    ? `Book ${previewDates.length} Sessions`
+                    : "Book Session"}
           </Button>
         </DialogFooter>
       </DialogContent>

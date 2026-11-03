@@ -42,7 +42,7 @@ export async function resolveShareLinkForPurchase(
   const { data: purchase, error } = await supabase
     .from("purchase_records")
     .select(
-      "id, client_id, offer_id, offer_name, payment_status, stripe_payment_link, stripe_checkout_session_id, stripe_subscription_id, stripe_price_id, last_payment_update_at",
+      "id, client_id, offer_id, offer_name, payment_status, stripe_payment_link, stripe_checkout_session_id, stripe_subscription_id, stripe_price_id, last_payment_update_at, offer_snapshot",
     )
     .eq("id", purchaseRecordId)
     .single();
@@ -62,15 +62,23 @@ export async function resolveShareLinkForPurchase(
   }
   if (!allowed) throw new Error("Forbidden");
 
-  // Reusable Stripe Payment Link stored on the linked coaching product.
+  // Reusable Stripe Payment Link stored on the linked coaching product. It's for
+  // that product at its own price: a sale at another price (a typed amount, a
+  // single session sold for several bookings) or one sold with a booking (its
+  // credit is held on this exact sale) gets its own checkout, so the payment
+  // lands on this sale and is for its amount.
   let productPaymentLinkUrl: string | null = null;
+  let clientSpecific = (purchase as any).offer_snapshot?.source === "booking";
   if (purchase.offer_id) {
     const { data: product } = await supabase
       .from("coaching_products")
-      .select("payment_link_url")
+      .select("payment_link_url, stripe_price_id")
       .eq("id", purchase.offer_id)
       .maybeSingle();
-    productPaymentLinkUrl = product?.payment_link_url ?? null;
+    if (purchase.stripe_price_id && product?.stripe_price_id && purchase.stripe_price_id !== product.stripe_price_id) {
+      clientSpecific = true;
+    }
+    productPaymentLinkUrl = clientSpecific ? null : product?.payment_link_url ?? null;
   }
 
   // Outstanding hosted invoice (subscriptions past due / open invoices).
@@ -130,7 +138,7 @@ export async function resolveShareLinkForPurchase(
     // Assignments carry client-specific metadata (purchase_record_id) so the
     // webhook can match the exact row; a reusable link is only correct when the
     // product itself exposes one and no client-specific session is already live.
-    requiresClientSpecificCheckout: false,
+    requiresClientSpecificCheckout: clientSpecific,
   });
 
   if (strategy.kind === "none") {
