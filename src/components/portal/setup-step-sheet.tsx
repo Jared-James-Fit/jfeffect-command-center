@@ -37,7 +37,7 @@ export function SetupStepSheet({ step, clientId, userId, client, onOpenChange }:
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto rounded-t-2xl p-0">
         <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 pt-5 pb-3 backdrop-blur">
           <SheetHeader className="text-left">
-            <SheetTitle className="text-lg font-black">{title}</SheetTitle>
+            <SheetTitle className="text-lg font-bold">{title}</SheetTitle>
             <SheetDescription className="text-xs">{description}</SheetDescription>
           </SheetHeader>
         </div>

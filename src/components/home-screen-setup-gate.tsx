@@ -144,7 +144,7 @@ export function HomeScreenSetupGate() {
             <Button variant="ghost" size="sm" onClick={() => upsertDismissal("remind")}>
               Remind Me Later
             </Button>
-            <Button size="sm" onClick={() => upsertDismissal("done")} className="bg-gradient-primary font-bold">
+            <Button size="sm" onClick={() => upsertDismissal("done")} className="bg-primary font-semibold">
               <CheckCircle2 className="mr-1 h-4 w-4" /> Mark as Done
             </Button>
           </DialogFooter>

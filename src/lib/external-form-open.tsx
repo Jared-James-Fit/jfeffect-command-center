@@ -109,14 +109,14 @@ export function useExternalFormOpener() {
     <Dialog open={!!fallback} onOpenChange={(v) => { if (!v) setFallback(null); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-base font-black uppercase tracking-widest">
+          <DialogTitle className="text-base font-semibold">
             {fallback?.title ?? "Form"}
           </DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           Your browser blocked the new tab. Tap below to open the form.
         </p>
-        <Button asChild className="w-full bg-gradient-primary font-bold">
+        <Button asChild className="w-full bg-primary font-semibold">
           <a href={fallback?.url} target="_blank" rel="noopener noreferrer" onClick={() => setFallback(null)}>
             <ExternalLink className="mr-1.5 h-4 w-4" /> Open form
           </a>

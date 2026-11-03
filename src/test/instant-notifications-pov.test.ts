@@ -29,9 +29,10 @@ describe("messages client POV shortcuts", () => {
   const banner = readFileSync("src/components/client-pov-banner.tsx", "utf8");
   const picker = readFileSync("src/components/client-pov-quick-picker.tsx", "utf8");
 
-  it("offers one-tap profile and POV actions for the selected client", () => {
+  it("offers the profile (their photo) and View as client (the thread's ⋯) for the selected client", () => {
     expect(messages).toContain("useClientImpersonation");
-    expect(messages).toContain("enterSelectedClientPov");
+    expect(messages).toContain("<DropdownMenuItem onClick={enterSelectedClientPov}");
+    expect(messages).not.toContain("border-warning/40 bg-warning/10");
     expect(messages).toContain('title="Open client profile"');
     expect(messages).toContain('title="View client POV"');
     expect(messages).toContain("id, user_id, full_name");

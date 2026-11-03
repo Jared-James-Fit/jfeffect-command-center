@@ -13,7 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, DollarSign, LayoutDashboard, IdCard, Target, Phone, Calendar } from "lucide-react";
+import { ExternalLink, Save, Trash2, Mail, Archive, KeyRound, Copy, CheckCircle2, AlertCircle, BellRing, Tag, Dumbbell, MessageSquare, Link2, MoreHorizontal, Phone, Calendar, ChevronDown } from "lucide-react";
+import { adminClientAgreementDetail } from "@/lib/coaching-agreement.functions";
+import { ADMIN_AGREEMENT_QUERY_ROOT } from "@/components/coaching-agreement/admin-agreement-parts";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ShareBookingSheet } from "@/components/booking/share-booking-sheet";
 import { useBookingTypes } from "@/components/booking/use-booking-types";
@@ -24,7 +26,6 @@ import { inviteClient, deleteClient, getSetupLink, getPasswordResetLink, sendPas
 import { sendAuthLinkBySms } from "@/lib/sms-links.functions";
 import { deactivateClient, reactivateClient, DEACTIVATION_REASONS } from "@/lib/client-deactivation.functions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { calcAge, formatHeight } from "@/lib/basic-info";
 import { Switch } from "@/components/ui/switch";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -49,12 +50,8 @@ import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
 import { ActionButton } from "@/components/action-button";
 import { IntakeAnswersBigButton } from "@/components/clients/intake-answers-dialog";
-import { UserAvatar } from "@/components/user-avatar";
 import { describeAccountAccess } from "@/lib/client-account-access";
-import {
-  WorkspaceIdentityHeader,
-  WorkspaceSnapshotField,
-} from "@/components/workspace";
+import { WorkspaceIdentityHeader } from "@/components/workspace";
 import {
   IdentityCard,
   ContactCard,
@@ -506,13 +503,15 @@ export function ClientProfileWorkspace({
               variant="outline"
               size="sm"
               onClick={openMessages}
+              aria-label="Message"
             >
-              <MessageSquare className="mr-2 h-4 w-4" />Message
+              <MessageSquare className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Message</span>
             </Button>
             {canPov && (
               <Button
+                variant="outline"
                 size="sm"
-                className="bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+                aria-label="View as client"
                 onClick={() => {
                   if (!form.user_id) {
                     toast.error("Client has no account yet — send a setup link first.");
@@ -525,7 +524,7 @@ export function ClientProfileWorkspace({
                   navigate({ to: CLIENT_VIEW_HOME });
                 }}
               >
-                <Eye className="mr-2 h-4 w-4" />Client POV
+                <Eye className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">View as client</span>
               </Button>
             )}
             <DropdownMenu>
@@ -655,22 +654,7 @@ export function ClientProfileWorkspace({
           <ClientOverviewSnapshot
             form={form}
             clientId={id}
-            canPov={canPov}
-            embedded={embedded}
-            onMessage={openMessages}
-            onPov={() => {
-              if (!form.user_id) {
-                toast.error("Client has no account yet — send a setup link first.");
-                return;
-              }
-              impersonation.start(
-                { id, user_id: form.user_id, full_name: form.full_name },
-                typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
-              );
-              navigate({ to: CLIENT_VIEW_HOME });
-            }}
             onSendSetup={sendSetup}
-            onRequestUpdate={requestUpdate}
             onGoToTab={(t: TabValue) => setTab(t)}
           />
         </TabsContent>
@@ -679,10 +663,10 @@ export function ClientProfileWorkspace({
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Coaching Setup</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground">Coaching Setup</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Core coaching details only. Training, nutrition, billing, and documents stay in their dedicated sections.</p>
               </div>
-              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Button size="sm" className="min-h-[44px] bg-primary font-semibold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
             </div>
@@ -724,10 +708,7 @@ export function ClientProfileWorkspace({
                 <Label>Renewal date</Label>
                 <Input className="min-h-[44px]" type="date" value={form.renewal_date ?? ""} onChange={(e) => set("renewal_date", e.target.value || null)} />
               </div>
-              <div className="sm:col-span-2">
-                <Label>Instagram</Label>
-                <Input className="min-h-[44px]" value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} />
-              </div>
+              {/* Instagram is edited once, with the other handles: Client details → Social media. */}
             </div>
           </Card>
 
@@ -760,7 +741,7 @@ export function ClientProfileWorkspace({
           </Suspense>
           <PowerlifterSection form={form} set={set} />
           <div className="flex justify-end">
-            <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+            <Button size="sm" className="min-h-[44px] bg-primary font-semibold" onClick={save}>
               <Save className="mr-2 h-4 w-4" />Save changes
             </Button>
           </div>
@@ -814,19 +795,11 @@ export function ClientProfileWorkspace({
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Check-Ins & Forms</h3>
+                <h3 className="text-base font-semibold">Check-ins &amp; forms</h3>
                 <p className="text-xs text-muted-foreground mt-1">Assign this client to forms from the unified form builder.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  className="bg-gradient-primary font-bold"
-                  onClick={() => setCheckInResponseOpen(true)}
-                >
-                  <Send className="mr-1 h-4 w-4" /> Send Check-In Response
-                </Button>
-                <Link to="/admin/native-forms"><Button variant="outline" size="sm">Manage forms</Button></Link>
-              </div>
+              {/* A check-in response is written from Check-in conversations, just below. */}
+              <Button asChild variant="outline" size="sm"><Link to="/admin/native-forms">Manage forms</Link></Button>
             </div>
             <ClientNativeFormsAssignment clientId={id} />
             <div className="grid gap-3 md:grid-cols-2">
@@ -862,29 +835,40 @@ export function ClientProfileWorkspace({
 
           <ClientCheckInConversations clientId={id} onCompose={() => setCheckInResponseOpen(true)} />
 
-          <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
-            <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Linked Resources & Uploads</h3>
-            <p className="text-xs text-muted-foreground">Attach Google Sheets, Drive folders, PDFs, and external links. Save to apply.</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div><Label>Program sheet (Google Sheets)</Label><Input value={form.program_sheet_link ?? ""} onChange={(e) => set("program_sheet_link", e.target.value)} placeholder="https://sheets.google.com/…" /></div>
-              <div><Label>Drive folder</Label><Input value={form.drive_folder_link ?? ""} onChange={(e) => set("drive_folder_link", e.target.value)} placeholder="https://drive.google.com/…" /></div>
-              <div><Label>Agreement / contract</Label><Input value={form.agreement_link ?? ""} onChange={(e) => set("agreement_link", e.target.value)} /></div>
-              <div><Label>Calendar / booking link</Label><Input value={form.calendar_link ?? ""} onChange={(e) => set("calendar_link", e.target.value)} /></div>
-              <div><Label>Stripe payment link</Label><Input value={form.stripe_link ?? ""} onChange={(e) => set("stripe_link", e.target.value)} /></div>
-            </div>
-            <div className="flex flex-wrap gap-1.5 pt-2">
-              {links.filter(([, v]) => v).map(([n, v]) => (
-                <a key={n} href={v as string} target="_blank" rel="noreferrer">
-                  <Badge variant="outline" className="cursor-pointer hover:border-primary">{n} <ExternalLink className="ml-1 h-3 w-3" /></Badge>
-                </a>
-              ))}
-            </div>
-          </Card>
-          <Suspense fallback={<TabFallback />}>
-            <ClientAgreementPanel clientId={id} clientName={form?.full_name} />
-            <AgreementStatusPanel client={form} />
-            <AgreementsPanel clientId={id} clientName={form?.full_name} />
-          </Suspense>
+          {/* The in-app Coaching Agreement first; SignNow and the hand-set record fold away under it. */}
+          <div className="md:col-span-3">
+            <Suspense fallback={<TabFallback />}>
+              <ClientAgreementPanel clientId={id} clientName={form?.full_name} />
+            </Suspense>
+          </div>
+          <OlderAgreements clientId={id} client={form} />
+          {/* The Drive folder is edited in Quick links above; these older links keep their fields here, folded. */}
+          <FoldedSection
+            title="Linked resources"
+            hint={(() => {
+              const n = links.filter(([name, v]) => name !== "Drive Folder" && v).length;
+              return n ? `${n} saved · program sheet, agreement, booking and Stripe links` : "Program sheet, agreement, booking and Stripe links";
+            })()}
+          >
+            <Card className="border-border bg-card p-6 space-y-3">
+              <p className="text-xs text-muted-foreground">Use the Save button at the top of the page to apply changes.</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div><Label>Program sheet (Google Sheets)</Label><Input value={form.program_sheet_link ?? ""} onChange={(e) => set("program_sheet_link", e.target.value)} placeholder="https://sheets.google.com/…" /></div>
+                <div><Label>Agreement / contract</Label><Input value={form.agreement_link ?? ""} onChange={(e) => set("agreement_link", e.target.value)} /></div>
+                <div><Label>Calendar / booking link</Label><Input value={form.calendar_link ?? ""} onChange={(e) => set("calendar_link", e.target.value)} /></div>
+                <div><Label>Stripe payment link</Label><Input value={form.stripe_link ?? ""} onChange={(e) => set("stripe_link", e.target.value)} /></div>
+              </div>
+              {links.some(([name, v]) => name !== "Drive Folder" && v) && (
+                <div className="flex flex-wrap gap-1.5 pt-2">
+                  {links.filter(([name, v]) => name !== "Drive Folder" && v).map(([n, v]) => (
+                    <a key={n} href={v as string} target="_blank" rel="noreferrer">
+                      <Badge variant="outline" className="cursor-pointer hover:border-foreground/40">{n} <ExternalLink className="ml-1 h-3 w-3" /></Badge>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </FoldedSection>
         </TabsContent>
 
         {/*
@@ -923,8 +907,8 @@ export function ClientProfileWorkspace({
               <div><Label>Lifestyle notes</Label><Textarea rows={3} value={form.lifestyle_notes ?? ""} onChange={(e) => set("lifestyle_notes", e.target.value)} /></div>
             </div>
           </Card>
-          <Card className="border-primary/30 bg-primary/5 p-6 space-y-3">
-            <h3 className="text-xs uppercase tracking-widest text-primary">Private Coach Notes</h3>
+          <Card className="border-border bg-card p-6 space-y-3">
+            <h3 className="text-sm font-semibold">Private coach notes</h3>
             <p className="text-xs text-muted-foreground">Only visible to admin.</p>
             <Textarea rows={12} value={form.coach_notes ?? ""} onChange={(e) => set("coach_notes", e.target.value)} placeholder="Internal notes the client never sees…" />
           </Card>
@@ -934,7 +918,7 @@ export function ClientProfileWorkspace({
           <div className="md:col-span-2 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card/60 px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Information</h2>
+                <h2 className="text-sm font-semibold text-muted-foreground">Personal Information</h2>
                 <p className="text-xs text-muted-foreground">Edit each section independently — each card saves on its own.</p>
               </div>
               {form.info_update_requested ? (
@@ -1019,7 +1003,7 @@ export function ClientProfileWorkspace({
           </Card>
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Communication Preferences</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Communication Preferences</h3>
             <p className="text-xs text-muted-foreground">In-app call and SMS access for this client. Save is applied immediately.</p>
             <div className="grid gap-3 md:grid-cols-2">
               <CommsToggleRow
@@ -1071,13 +1055,13 @@ export function ClientProfileWorkspace({
 
           <Card className="border-border bg-card p-6 md:col-span-3 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Social Media</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground">Social Media</h3>
               <SocialIcons client={form} size="xs" />
             </div>
             <p className="text-[11px] text-muted-foreground">Usernames/handles only — the app auto-links where possible.</p>
             <SocialHandlesEditor values={form} onChange={(k, v) => set(k, v)} />
             <div className="flex justify-end pt-2">
-              <Button size="sm" className="min-h-[44px] bg-gradient-primary uppercase font-bold" onClick={save}>
+              <Button size="sm" className="min-h-[44px] bg-primary font-semibold" onClick={save}>
                 <Save className="mr-2 h-4 w-4" />Save
               </Button>
             </div>
@@ -1087,7 +1071,7 @@ export function ClientProfileWorkspace({
         <TabsContent value="account" className={WORKSPACE_GRID_CLASS}>
         <Card className="border-border bg-card p-6 md:col-span-3 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Login & Access</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">Login & Access</h3>
             <Badge variant="outline">{describeAccountAccess(form).statusLabel}</Badge>
           </div>
           <div className="grid gap-5 md:grid-cols-3">
@@ -1194,7 +1178,7 @@ export function ClientProfileWorkspace({
             <Button
               onClick={save}
               disabled={saving}
-              className="min-h-[48px] bg-gradient-primary uppercase font-bold"
+              className="min-h-[48px] bg-primary font-semibold"
             >
               <Save className="mr-2 h-4 w-4" />{saving ? "Saving…" : "Save"}
             </Button>
@@ -1812,11 +1796,13 @@ function EmbeddedIdentityHeader({
       primaryAction={
         canPov ? (
           <Button
+            variant="outline"
             size="sm"
             onClick={onPov}
-            className="hidden sm:inline-flex bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25"
+            className="hidden sm:inline-flex"
+            aria-label="View as client (POV)"
           >
-            <Eye className="mr-2 h-4 w-4" />POV
+            <Eye className="mr-2 h-4 w-4" />View as client
           </Button>
         ) : null
       }
@@ -1838,16 +1824,11 @@ function CommsToggleRow({ title, description, checked, onChange }: { title: stri
 }
 
 function ClientOverviewSnapshot({
-  form, clientId, canPov, embedded = false, onMessage, onPov, onSendSetup, onRequestUpdate, onGoToTab,
+  form, clientId, onSendSetup, onGoToTab,
 }: {
   form: any;
   clientId: string;
-  canPov: boolean;
-  embedded?: boolean;
-  onMessage: () => void;
-  onPov: () => void;
   onSendSetup: () => unknown | Promise<unknown>;
-  onRequestUpdate: () => unknown | Promise<unknown>;
   onGoToTab: (t: TabValue) => void;
 }) {
   // A live sale can legitimately satisfy "package" / "start date" — the
@@ -1889,82 +1870,22 @@ function ClientOverviewSnapshot({
     },
     { key: "user_id", label: "Login account", jumpTo: "account", populated: !!form.user_id },
   ];
-  const populated = critical.filter((c) => c.populated).length;
-  const pct = Math.round((populated / critical.length) * 100);
-  const missing = critical.filter((c) => !c.populated);
-
-  const initials = (form.full_name ?? "?").split(" ").map((s: string) => s[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  const missing = critical.filter((c) => !c.populated && c.key !== "user_id");
+  // Login problems (no account yet, invite expired, never signed in, portal
+  // off) sit in the same list as the missing fields: one short "Missing" card,
+  // shown only when something is. The details live on Login & access.
+  const access = describeAccountAccess(form);
+  const loginIssue = !form.user_id || access.needsAttention;
 
   return (
     <div className="md:col-span-3 space-y-6">
       <ClientCalendarSyncStatus clientId={clientId} />
-      {/* Header card: identity + key facts (hidden when embedded — sticky header covers this) */}
-      {!embedded && (
-      <Card className="border-border bg-card p-5 md:p-6">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start">
-          <div className="flex items-center gap-4">
-            <UserAvatar
-              src={form.profile_picture_url}
-              name={form.full_name}
-              size={80}
-              ring
-              className="rounded-2xl"
-            />
-            <div className="min-w-0">
-              <div className="text-xl font-bold leading-tight truncate">{form.full_name ?? "Unnamed client"}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {form.status && <Badge variant="outline" className="text-[11px]">{form.status}</Badge>}
-                {form.coaching_package && <Badge variant="outline" className="text-[11px]">{form.coaching_package}</Badge>}
-                {form.is_powerlifter && <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />}
-              </div>
-            </div>
-          </div>
-          <div className="grid flex-1 grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-3">
-            <SnapshotField label="Email" value={form.email} fallbackAction={form.email ? null : { label: "Add email", onClick: () => onGoToTab("info") }} />
-            <SnapshotField label="Phone" value={form.phone} fallbackAction={form.phone ? null : { label: "Add phone", onClick: () => onGoToTab("info") }} />
-            <SnapshotField label="Assigned coach" value={form.assigned_coach_name ?? (form.assigned_coach_id ? "Assigned" : null)} fallbackAction={form.assigned_coach_id ? null : { label: "Assign coach", onClick: () => onGoToTab("coaching") }} />
-            <SnapshotField
-              label="Coaching package"
-              value={form.coaching_package ?? (liveSale ? `${liveSale.offer_name} (from sale)` : null)}
-              fallbackAction={form.coaching_package || liveSale ? null : { label: "Add package", onClick: () => onGoToTab("coaching") }}
-            />
-            <SnapshotField label="Program phase" value={form.program_phase} fallbackAction={form.program_phase ? null : { label: "Add phase", onClick: () => onGoToTab("coaching") }} />
-            <SnapshotField label="Login" value={form.user_id ? "Account active" : "Needs setup"} fallbackAction={{ label: "Manage access", onClick: () => onGoToTab("account") }} />
-          </div>
-        </div>
-      </Card>
-      )}
-
-      {/* Quick actions — 48–52px buttons (hidden when embedded — Action Center covers this) */}
-      {!embedded && (
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {canPov && (
-          <Button onClick={onPov} className="min-h-[52px] justify-start bg-warning/15 text-warning border border-warning/40 hover:bg-warning/25 text-base">
-            <Eye className="mr-3 h-5 w-5" /> Open Client POV
-          </Button>
-        )}
-        <Button onClick={onMessage} variant="outline" className="min-h-[52px] justify-start text-base">
-          <MessageSquare className="mr-3 h-5 w-5" /> Message Client
-        </Button>
-        <Link to="/admin/clients/$id/schedule" params={{ id: clientId }} className="block">
-          <Button variant="outline" className="min-h-[52px] w-full justify-start text-base">
-            <Calendar className="mr-3 h-5 w-5" /> Manage Schedule
-          </Button>
-        </Link>
-        <Button variant="outline" className="min-h-[52px] justify-start text-base" onClick={() => onGoToTab("goals-setup")}>
-          <Target className="mr-3 h-5 w-5" /> View Intake & Goals
-        </Button>
-        <Button variant="outline" className="min-h-[52px] justify-start text-base" onClick={() => onRequestUpdate()}>
-          <BellRing className="mr-3 h-5 w-5" /> {form.info_update_requested ? "Update requested" : "Request Client Update"}
-        </Button>
-        <Link to="/admin/client-programs/$clientId" params={{ clientId }} className="block">
-          <Button variant="outline" className="min-h-[52px] w-full justify-start text-base">
-            <Dumbbell className="mr-3 h-5 w-5" /> Assign Program
-          </Button>
-        </Link>
-      </div>
-      )}
-
+      {/*
+        No identity card or quick-action grid here: the page header already
+        shows who this is and holds Message, View as client and ⋯ (program,
+        booking, lifecycle); Training, Goals & intake and the update request
+        are tabs. Personal details are on Client details.
+      */}
       <div className={WORKSPACE_GRID_CLASS}>
         <div className="space-y-6 md:col-span-2">
           <AppActivityCard
@@ -1975,130 +1896,128 @@ function ClientOverviewSnapshot({
             complianceStatus={form.compliance_status}
             homeScreenStatus={form.home_screen_setup_status}
           />
-
         </div>
-        <div className="space-y-6">
-          {/* Profile completion */}
-          <Card className="border-border bg-card p-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Profile Completion</h3>
-              <span className={["text-xl font-bold", pct === 100 ? "text-success" : pct >= 70 ? "text-primary" : "text-warning"].join(" ")}>{pct}%</span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-              <div className={["h-full transition-all", pct === 100 ? "bg-success" : pct >= 70 ? "bg-primary" : "bg-warning"].join(" ")} style={{ width: `${pct}%` }} />
-            </div>
-            {missing.length > 0 ? (
-              <div className="space-y-1.5 pt-1">
-                <div className="text-xs font-semibold text-muted-foreground">Missing information</div>
-                <div className="grid gap-1.5">
-                  {missing.map((m) => (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => m.key === "user_id" ? onSendSetup() : onGoToTab(m.jumpTo)}
-                      className="flex min-h-[44px] items-center justify-between gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-sm hover:border-primary/40 hover:bg-secondary/60"
-                    >
-                      <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-warning" />{m.label}</span>
-                      <span className="text-xs font-semibold text-primary">{m.key === "user_id" ? "Send setup" : "Add"} →</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-success">All critical fields complete.</p>
-            )}
-          </Card>
-
-          {/* Account & Access — consolidated from the removed top-level
-              "Account Setup" card. Quiet when healthy; never repeats the
-              "Last signed in" value shown in App Activity. */}
-          {(() => {
-            const access = describeAccountAccess(form);
-            return (
-              <Card
-                className={[
-                  "border-border bg-card p-6 space-y-3",
-                  access.needsAttention ? "border-warning/40 bg-warning/5" : "",
-                ].join(" ")}
-                data-testid="account-access-card"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-                    Account &amp; Access
-                  </h3>
-                  <Badge
-                    variant="outline"
-                    className={access.needsAttention ? "border-warning/40 text-warning bg-warning/10 text-[11px]" : "text-[11px]"}
-                  >
-                    {access.statusLabel}
-                  </Badge>
-                </div>
-                <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-                  <dt className="text-muted-foreground">Account created</dt>
-                  <dd className="font-medium">{fmtDate(access.accountCreatedAt)}</dd>
-                  <dt className="text-muted-foreground">Invite status</dt>
-                  <dd className="font-medium">{access.inviteStatusLabel}</dd>
-                </dl>
-                {access.stage !== "live" && form.email && (
-                  <ActionButton className="min-h-[44px] w-full" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
-                    {form.invite_sent_at || form.invite_last_resent_at ? "Resend setup email" : "Email setup link"}
-                  </ActionButton>
+        {(missing.length > 0 || loginIssue) && (
+          <div className="space-y-6">
+            <Card className="border-border bg-card p-5 space-y-3" data-testid="client-missing-card">
+              <h3 className="text-base font-semibold">Missing</h3>
+              <ul className="divide-y divide-border">
+                {loginIssue && (
+                  <li className="space-y-2 py-2.5 first:pt-0" data-testid="account-access-card">
+                    <div className="flex items-center gap-2 text-sm">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
+                      <span className="min-w-0">Login: {access.statusLabel}</span>
+                    </div>
+                    <p className="pl-6 text-xs text-muted-foreground">
+                      Invite status: {access.inviteStatusLabel}
+                      {access.accountCreatedAt ? ` · Account created ${fmtDate(access.accountCreatedAt)}` : ""}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pl-6">
+                      {access.stage !== "live" && form.email && (
+                        <ActionButton variant="outline" size="sm" className="min-h-10" onAction={onSendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                          {form.invite_sent_at || form.invite_last_resent_at ? "Resend setup email" : "Email setup link"}
+                        </ActionButton>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-10 text-muted-foreground hover:text-foreground"
+                        onClick={() => onGoToTab("account")}
+                      >
+                        {access.stage === "live" ? "Manage access" : "Text, copy or reset link"} <span aria-hidden>›</span>
+                      </Button>
+                    </div>
+                  </li>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-[40px] w-full justify-between text-primary"
-                  onClick={() => onGoToTab("account")}
-                >
-                  {access.stage === "live" ? "Manage access" : "Text, copy or reset link"} <span aria-hidden>→</span>
-                </Button>
-              </Card>
-            );
-          })()}
-
-          {/* Personal snapshot, read-only */}
-          <Card className="border-border bg-card p-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Personal Snapshot</h3>
-              <Button variant="ghost" size="sm" className="min-h-[40px] text-primary" onClick={() => onGoToTab("info")}>
-                Edit →
-              </Button>
-            </div>
-            <dl className="grid grid-cols-2 gap-y-1.5 text-xs">
-              {form.preferred_name && (<><dt className="text-muted-foreground">Preferred name</dt><dd className="font-medium">{form.preferred_name}</dd></>)}
-              <dt className="text-muted-foreground">Date of birth</dt>
-              <dd className="font-medium">{form.date_of_birth ? new Date(form.date_of_birth + "T00:00:00").toLocaleDateString() : "—"}</dd>
-              <dt className="text-muted-foreground">Age</dt>
-              <dd className="font-medium">{calcAge(form.date_of_birth) ?? "—"}</dd>
-              <dt className="text-muted-foreground">Height</dt>
-              <dd className="font-medium">{formatHeight(form.height_cm, (form.preferred_height_unit as any) ?? "imperial")}</dd>
-              <dt className="text-muted-foreground">Time zone</dt>
-              <dd className="font-medium">{form.timezone ?? "—"}</dd>
-              <dt className="text-muted-foreground">Mailing address</dt>
-              <dd className="font-medium truncate">
-                {[form.address, form.city, form.province, form.postal_code, form.country].filter(Boolean).join(", ") || "—"}
-              </dd>
-              {(form.emergency_contact_name || form.emergency_contact_phone) && (
-                <>
-                  <dt className="text-muted-foreground">Emergency contact</dt>
-                  <dd className="font-medium">
-                    {form.emergency_contact_name ?? "—"}
-                    {form.emergency_contact_phone ? ` · ${form.emergency_contact_phone}` : ""}
-                  </dd>
-                </>
-              )}
-            </dl>
-          </Card>
-
-        </div>
+                {missing.map((m) => (
+                  <li key={m.key}>
+                    <button
+                      type="button"
+                      onClick={() => onGoToTab(m.jumpTo)}
+                      className="flex min-h-[44px] w-full items-center justify-between gap-2 py-2 text-left text-sm hover:text-foreground"
+                    >
+                      <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 shrink-0 text-warning" />{m.label}</span>
+                      <span className="text-xs font-semibold text-muted-foreground">Add ›</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Snapshot field — thin re-export of the shared workspace primitive so the
-// coaching snapshot and the membership snapshot render identical rows.
-const SnapshotField = WorkspaceSnapshotField;
+/**
+ * A section that stays one row until it's opened. Its content only mounts when
+ * open, so a folded panel costs nothing (no queries, no lazy chunk).
+ */
+function FoldedSection({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="group md:col-span-3"
+      open={open}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">{title}</span>
+          {hint && <span className="block truncate text-xs text-muted-foreground">{hint}</span>}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      {open && <div className="mt-3 grid gap-4">{children}</div>}
+    </details>
+  );
+}
+
+/**
+ * The agreement records from before in-app signing: the hand-set record
+ * (signed toggle, date, version, links) and SignNow. Folded under the in-app
+ * panel, and only there when this client has something in either: a SignNow
+ * agreement, or a hand-set record the in-app signature didn't write (in-app
+ * signing stamps the same columns, so a client who signed in the app has
+ * nothing older to show). SignNow stays fully usable from its own page.
+ */
+function OlderAgreements({ clientId, client }: { clientId: string; client: any }) {
+  const detailFn = useServerFn(adminClientAgreementDetail);
+  const { data: detail, isSuccess: detailReady } = useQuery({
+    queryKey: [ADMIN_AGREEMENT_QUERY_ROOT, "detail", clientId],
+    queryFn: () => detailFn({ data: { clientId } }),
+    staleTime: 15_000,
+  });
+  const { data: signNowCount = 0 } = useQuery({
+    queryKey: ["client-agreements-count", clientId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("agreements")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 60_000,
+  });
+  const signedInApp = ((detail as any)?.signatures?.length ?? 0) > 0;
+  const status = String(client?.agreement_status ?? "Not Sent");
+  const handSet =
+    !!client?.agreement_link ||
+    !!client?.agreement_signature_platform_link ||
+    (detailReady && !signedInApp && (!!client?.agreement_signed || !!client?.agreement_signed_date || !!client?.agreement_version || status !== "Not Sent"));
+  if (signNowCount === 0 && !handSet) return null;
+  const parts = [handSet && "hand-set record", signNowCount > 0 && `${signNowCount} SignNow`].filter(Boolean).join(" · ");
+  return (
+    <FoldedSection title="Older agreements" hint={`From before in-app signing: ${parts}`}>
+      <Suspense fallback={<TabFallback />}>
+        <AgreementStatusPanel client={client} />
+        <AgreementsPanel clientId={clientId} clientName={client?.full_name} />
+      </Suspense>
+    </FoldedSection>
+  );
+}
 
 function StartingMaxesCard({ form, onEdit }: { form: any; onEdit?: () => void }) {
   const unit = form.intake_lift_unit === "kg" ? "kg" : "lb";
@@ -2131,7 +2050,7 @@ function StartingMaxesCard({ form, onEdit }: { form: any; onEdit?: () => void })
   return (
     <Card className="border-border bg-card p-6 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+        <h3 className="text-sm font-semibold text-muted-foreground">
           Starting Maxes {known ? "(1RM)" : "(5RM)"}
         </h3>
         {onEdit && (

@@ -94,14 +94,14 @@ export function WorkoutSummaryDialog({ open, onOpenChange, rows, results, feedba
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md p-0 overflow-hidden">
-        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent px-6 pt-6 pb-4">
+        <div className="px-6 pt-6 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/20 text-primary">
               <Trophy className="h-6 w-6" />
             </div>
             <div className="flex-1">
               <DialogHeader className="space-y-0">
-                <DialogTitle className="text-2xl font-black leading-tight">{headline}</DialogTitle>
+                <DialogTitle className="text-2xl font-bold leading-tight">{headline}</DialogTitle>
                 <DialogDescription className="text-xs">
                   Workout complete · summary below
                 </DialogDescription>
@@ -115,7 +115,7 @@ export function WorkoutSummaryDialog({ open, onOpenChange, rows, results, feedba
           <div className="rounded-2xl border border-border bg-card p-4 text-center">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workout score</div>
             <div className="mt-1 flex items-baseline justify-center gap-1">
-              <span className="text-5xl font-black text-primary">{stats.completionPct}</span>
+              <span className="text-5xl font-bold text-primary">{stats.completionPct}</span>
               <span className="text-xl font-bold text-muted-foreground">%</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
@@ -163,7 +163,7 @@ function StatTile({ icon, label, value, subValue, muted }: { icon: React.ReactNo
         {icon}
         {label}
       </div>
-      <div className={`mt-1 text-lg font-black leading-tight ${muted ? "text-muted-foreground" : "text-foreground"}`}>{value}</div>
+      <div className={`mt-1 text-lg font-bold leading-tight ${muted ? "text-muted-foreground" : "text-foreground"}`}>{value}</div>
       {subValue && <div className="text-[10px] text-muted-foreground">{subValue}</div>}
     </div>
   );

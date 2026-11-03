@@ -350,8 +350,9 @@ describe("community is easy to find without taking over", () => {
   const shell = read("src/components/app-shell.tsx");
   const home = read("src/routes/_authenticated/portal/index.tsx");
   const entry = read("src/components/community/community-entry.tsx");
-  it("has a header nudge for coaches; clients reach it from the centre tab (Home shows Rankings, not the feed)", () => {
-    expect(shell).toContain("<CommunityNavButton />");
+  it("coaches see Crew's count on its menu row and bar tab, not a pill in every page header; clients reach it from the centre tab (Home shows Rankings, not the feed)", () => {
+    expect(shell).not.toContain("<CommunityNavButton />");
+    expect(read("src/hooks/use-client-nav-badges.ts")).toContain('map["/admin/community"] = { count: community.unseen };');
     expect(home).not.toContain("<CommunityHomeStrip />");
   });
   it("is always on Home (clients live there), with + Post one tap away and an invite instead of an empty widget", () => {

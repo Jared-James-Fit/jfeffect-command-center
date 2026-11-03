@@ -41,7 +41,7 @@ export function UpcomingAppointmentsCard({ mode, limit = 5, hideWhenEmpty = fals
   return (
     <Card className="border-border bg-card p-4 md:p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
           <CalendarIcon className="h-4 w-4 text-primary" /> Upcoming Appointments
         </h2>
         <Link to={mode === "admin" ? "/admin/calendar" : "/portal/calendar"} search={mode === "admin" ? ({ tab: "upcoming" } as any) : undefined}>

@@ -23,6 +23,7 @@ import {
   effectiveRestSeconds,
   resolveCategory,
   purposeLabelBadgeClass,
+  purposeLabelText,
   type ExerciseMeta,
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
@@ -2562,6 +2563,20 @@ function WorkoutDay({
               >
                 <WorkoutProgressRing pct={progressPct} status={progressStatus} size={16} strokeWidth={3} />
                 {progressPct}% · {statusSummary.exercisesDone}/{statusSummary.exercisesTotal}
+                {/* Workout time: the live clock rides in the same pill once the
+                    workout has started (nothing until then), not a card of its own. */}
+                {statusBarVisible && !completion?.completed_at && (
+                  <span className="inline-flex items-center gap-1.5" aria-label="Workout time">
+                    <span aria-hidden>·</span>
+                    <WorkoutTimer
+                      dayId={dayId}
+                      completedAt={null}
+                      savedDurationMin={null}
+                      readonly
+                      variant="inline"
+                    />
+                  </span>
+                )}
               </button>
             )}
           </>
@@ -2578,11 +2593,8 @@ function WorkoutDay({
           ].filter(Boolean).join(" · ");
           return [sub, context].filter(Boolean).join(" · ");
         })()}
-        actions={
-          !readonly ? (
-            <WorkoutTopMenu />
-          ) : undefined
-        }
+        /* No header "?": Training help is in every exercise card's ⋯ (Focus
+           has it too), the same sheet. */
       />
       <div className="px-3 pt-1.5 space-y-2 md:p-8 md:space-y-4 pb-[calc(var(--bottom-nav-clearance,96px)+env(safe-area-inset-bottom)+32px)] md:pb-8">
 
@@ -2592,54 +2604,61 @@ function WorkoutDay({
           pageRoute={`/portal/workouts/${dayId}`}
         />
 
-        {statusBarVisible && !completion?.completed_at && (
-          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Workout time
-            </div>
-            <WorkoutTimer
-              dayId={dayId}
-              completedAt={null}
-              savedDurationMin={null}
-              readonly
-            />
-          </div>
-        )}
-
-        {/* Completed state: slim badge + recap. The live wall-clock tracker
-            appears above after the first meaningful logging action and keeps
-            counting across PWA navigation and app switching. */}
-        {completion?.completed_at && statusSummary.setsDone > 0 && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge
-              variant="outline"
-              className={
-                reviewSubmitted
-                  ? "border-green-500/30 bg-green-500/10 text-green-500"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-              }
-            >
-              <CheckCircle2 className="mr-1 h-3 w-3" />
-              {reviewSubmitted ? "Completed" : "Completed · Review pending"}
-              {/* Client workouts show length on the Session time row below. */}
-              {!isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
-                ? ` · ${formatDurationMin(completion.actual_duration_min)}`
-                : ""}
-            </Badge>
-            {reviewSubmitted && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 border-primary/40 bg-primary/10 px-2.5 text-xs font-bold text-primary hover:bg-primary/20"
-                onClick={openRecapSummary}
-              >
-                <Trophy className="h-3.5 w-3.5" /> View Score
-              </Button>
+        {/* A finished workout: one card at the top with its status, the
+            review and View score (never a badge here and a second "completed"
+            bar under the log). */}
+        {completion?.completed_at && client?.id && (
+          <CompletedWorkoutActions
+            ctx={{ kind: "client", dayId, scheduledWorkoutId }}
+            hasCoach
+            actAsClientId={isImpersonating ? client.id : null}
+            initialReview={
+              existingReview
+                ? {
+                    overallRating: existingReview.overall_rating ?? null,
+                    sessionRpe: existingReview.session_rpe ?? null,
+                    pain: existingReview.pain ?? false,
+                    painLevel: existingReview.pain_level ?? null,
+                    painArea: existingReview.pain_area ?? null,
+                    painNote: existingReview.pain_note ?? null,
+                    clientNote: existingReview.client_note ?? null,
+                    strengthFeel: existingReview.strength_feel ?? null,
+                    fatigueFeel: existingReview.fatigue_feel ?? null,
+                    hitTarget: existingReview.hit_target ?? null,
+                    recoveryToday: existingReview.recovery_today ?? null,
+                    sleepBucket: existingReview.sleep_bucket ?? null,
+                    sleepNotes: existingReview.sleep_notes ?? null,
+                    reviewVersion: existingReview.review_version ?? null,
+                    editCount: existingReview.review_edit_count ?? 0,
+                    submittedAt:
+                      existingReview.review_submitted_at ??
+                      existingReview.created_at ??
+                      null,
+                  }
+                : null
+            }
+            onReviewSaved={() => {
+              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] });
+              qc.invalidateQueries({ queryKey: ["my-workouts", client.id] });
+            }}
+            onViewScore={(rating) => {
+              setLastSessionRating(rating);
+              openRecapSummary();
+            }}
+            autoOpenReview={autoOpenReviewAfterFinish}
+            onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
+            onOpenScore={openRecapSummary}
+            meta={
+              /* Client workouts show their length on the Session time line below. */
+              !isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
+                ? formatDurationMin(completion.actual_duration_min)
+                : null
+            }
+          >
+            {completion?.id && isClientWorkout && (
+              <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} inCard />
             )}
-          </div>
-        )}
-        {completion?.completed_at && completion?.id && isClientWorkout && client?.id && (
-          <SessionTimeRow completion={completion as any} clientId={client.id} workoutTitle={day?.title ?? null} />
+          </CompletedWorkoutActions>
         )}
         {/* Compact Warm-Up launcher. Rescheduling lives on the outside
             workout card / Schedule Manager, not inside the logger. */}
@@ -2652,7 +2671,7 @@ function WorkoutDay({
               warmupMode={(day as any).warmup_mode}
               dayProtocolId={(day as any).warmup_protocol_id}
               exerciseRows={rows as any[]}
-              className="h-7 min-h-0 px-2.5 text-xs"
+              className="h-10 rounded-full px-3.5 text-[13px]"
             />
             {/* List or Focus (one exercise at a time, full screen), saved on the account. */}
             {rowsLoaded && (rows as any[]).length > 0 && (
@@ -2834,7 +2853,7 @@ function WorkoutDay({
           <Card className="p-4">
             {autoFinishReady ? (
               <Button
-                className="w-full bg-amber-500 text-black hover:bg-amber-400"
+                className="h-11 w-full"
                 onClick={() => setQuickFinishReviewOpen(true)}
               >
                 <MessageCircle className="mr-2 h-4 w-4" />
@@ -2858,48 +2877,6 @@ function WorkoutDay({
           </Card>
         )}
 
-        {completion?.completed_at && client?.id && (
-          <CompletedWorkoutActions
-            ctx={{ kind: "client", dayId, scheduledWorkoutId }}
-            hasCoach
-            actAsClientId={isImpersonating ? client.id : null}
-            initialReview={
-              existingReview
-                ? {
-                    overallRating: existingReview.overall_rating ?? null,
-                    sessionRpe: existingReview.session_rpe ?? null,
-                    pain: existingReview.pain ?? false,
-                    painLevel: existingReview.pain_level ?? null,
-                    painArea: existingReview.pain_area ?? null,
-                    painNote: existingReview.pain_note ?? null,
-                    clientNote: existingReview.client_note ?? null,
-                    strengthFeel: existingReview.strength_feel ?? null,
-                    fatigueFeel: existingReview.fatigue_feel ?? null,
-                    hitTarget: existingReview.hit_target ?? null,
-                    recoveryToday: existingReview.recovery_today ?? null,
-                    sleepBucket: existingReview.sleep_bucket ?? null,
-                    sleepNotes: existingReview.sleep_notes ?? null,
-                    reviewVersion: existingReview.review_version ?? null,
-                    editCount: existingReview.review_edit_count ?? 0,
-                    submittedAt:
-                      existingReview.review_submitted_at ??
-                      existingReview.created_at ??
-                      null,
-                  }
-                : null
-            }
-            onReviewSaved={() => {
-              qc.invalidateQueries({ queryKey: ["pl-workout-feedback", dayId, client.id] });
-              qc.invalidateQueries({ queryKey: ["my-workouts", client.id] });
-            }}
-            onViewScore={(rating) => {
-              setLastSessionRating(rating);
-              openRecapSummary();
-            }}
-            autoOpenReview={autoOpenReviewAfterFinish}
-            onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
-          />
-        )}
         {children}
       </div>
 
@@ -3255,12 +3232,12 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   }
   const body = (
     <>
-      <span className="text-[10px] font-bold uppercase tracking-wide text-sky-700/80 dark:text-sky-300/80">Last time</span>
+      <span className="text-muted-foreground">Last time</span>
       <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
-      {when && <span className="text-[10px] text-sky-700/70 dark:text-sky-300/70">· {when}</span>}
+      {when && <span className="text-muted-foreground">· {when}</span>}
     </>
   );
-  const chip = "inline-flex max-w-full items-center gap-[3px] rounded-md border border-sky-500/30 bg-sky-500/10 px-1.5 py-1 text-[11px] font-medium text-sky-900 dark:text-sky-100";
+  const chip = "inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground";
   if (!onOpen) {
     return <div className={cn(chip, className)} title="Your top set the last time you trained this exercise">{body}</div>;
   }
@@ -3270,10 +3247,10 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
       onClick={onOpen}
       data-testid="last-time-history"
       aria-label={`Last time: ${loadStr}${repsStr}${when ? `, ${when}` : ""}. Open history`}
-      className={cn(chip, "h-7 transition hover:bg-sky-500/15 active:scale-[0.97]", className)}
+      className={cn(chip, "h-8 transition hover:bg-muted active:scale-[0.97]", className)}
     >
       {body}
-      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-sky-700/70 dark:text-sky-300/70" aria-hidden="true" />
+      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }
@@ -4184,7 +4161,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {/* Row 1 — name + unit toggle */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
-          {position != null && <ExerciseOrderBadge position={position} family={family} className="mt-px" />}
+          {position != null && <ExerciseOrderBadge position={position} family={family} tone="neutral" className="mt-px" />}
           <div className="min-w-0 flex-1 text-base font-bold leading-snug break-words">{name}</div>
         </div>
         {/* No weight to log (a walk, a plank): no kg / lb switch either. */}
@@ -4196,12 +4173,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       </div>
       {/* Row 2 — badges */}
       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-bold uppercase tracking-wider", purposeLabelBadgeClass(purposeLabel))}>
-          {purposeLabel || category}
+        <Badge variant="outline" className={cn("h-5 px-1.5 text-[11px] font-medium", purposeLabelBadgeClass(purposeLabel))}>
+          {purposeLabelText(purposeLabel || category)}
         </Badge>
         {lastWeekSwap && <LastWeekSwapChip swap={lastWeekSwap} unit={activeUnit} />}
         {hasNote && (
-          <span title="You saved a note for this exercise" className="inline-flex h-4 items-center gap-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
+          <span title="You saved a note for this exercise" className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
             <StickyNote className="h-2.5 w-2.5" /> Note
           </span>
         )}
@@ -4240,7 +4217,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 exerciseName={name}
                 displayUnit={activeUnit}
                 currentDayIndex={dayIndex}
-                className="w-auto h-7 rounded-full px-2.5 text-xs"
+                className="w-auto h-8 rounded-full px-2.5 text-xs"
               />
             ) : null}
           />
@@ -4676,46 +4653,32 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             />
           );
         })}
+        {/* One tap adds a working set; a warm-up is its own small "+ Warm-up"
+            beside it (only where warm-ups can be logged). */}
         {!readonly && adapter?.kind !== "member" && (
-          <div className="flex justify-center border-t border-builder-card-border bg-background/80 py-1.5">
-            {warmupAllowed ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
-                    aria-label={`Add set to ${name}`}
-                  >
-                    <span className="mr-1 text-base font-medium leading-none">+</span>
-                    Add set
-                  </Button>
-                </DropdownMenuTrigger>
-                {/* Don't hand focus back to "Add set" on close — the warm-up form's
-                    weight field takes it so the keyboard is ready to type. */}
-                <DropdownMenuContent align="center" className="w-56 rounded-xl p-1.5" onCloseAutoFocus={(e) => e.preventDefault()}>
-                  <DropdownMenuItem onSelect={() => void addSet()} disabled={setCount >= 20} className="rounded-lg">
-                    Working set
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setWarmupForm("new")} disabled={warmupAtLimit} className="rounded-lg">
-                    Warm-up set
-                    <span className="ml-auto text-[10px] text-muted-foreground">{workedToday ? "rough 1RM" : "sharpens suggestion"}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
+          <div className="flex items-center justify-center gap-1 border-t border-builder-card-border bg-background/80 py-1">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10 rounded-full px-4 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => void addSet()}
+              disabled={setCount >= 20}
+              aria-label={`Add set to ${name}`}
+            >
+              <span className="text-base font-medium leading-none" aria-hidden>+</span>
+              Add set
+            </Button>
+            {warmupAllowed && (
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-8 rounded-full px-3 text-[11px] font-semibold text-muted-foreground"
-                onClick={() => void addSet()}
-                disabled={setCount >= 20}
-                aria-label={`Add set to ${name}`}
+                className="h-10 rounded-full px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setWarmupForm("new")}
+                disabled={warmupAtLimit}
+                aria-label={`Add warm-up set to ${name}`}
+                title={workedToday ? "A warm-up still gives a rough 1RM" : "A warm-up sharpens today's suggestion"}
               >
-                <span className="mr-1 text-base font-medium leading-none">+</span>
-                Add set
+                + Warm-up
               </Button>
             )}
           </div>
@@ -4840,7 +4803,7 @@ function ExerciseNotesSheet({ open, onOpenChange, clientId, dayId, dayTitle, row
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" hideCloseButton className="keyboard-aware-bottom-sheet h-[88vh] overflow-y-auto p-0 sm:max-w-xl sm:mx-auto sm:rounded-t-2xl">
         <SheetHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-5 py-3 text-left">
-          <SheetTitle className="text-base font-black">{exerciseName}</SheetTitle>
+          <SheetTitle className="text-base font-bold">{exerciseName}</SheetTitle>
           <SheetDescription className="text-xs">{dayTitle} · Exercise notes</SheetDescription>
         </SheetHeader>
         <div className="px-5 py-4 space-y-4 pb-32">
@@ -6214,7 +6177,11 @@ function SetRow({
           aria-label={`Set ${setIndex} calories (optional)`}
           disabled={readonly}
           data-set-calories
-          className={cn("h-8 px-1.5 text-center text-sm tabular-nums placeholder:text-muted-foreground/60", focusMode && "h-10 text-base")}
+          className={cn(
+            "px-1.5 text-center tabular-nums placeholder:text-muted-foreground/60",
+            // the same height as the set's other boxes: 44px on a phone
+            focusMode ? "h-12 text-lg sm:h-10 sm:text-base" : "h-11 text-base sm:h-8 sm:text-sm",
+          )}
         />
       )}
       {/* Fast tap RPE/RIR selector — half-step smart chips from the prescription */}
@@ -6236,7 +6203,10 @@ function SetRow({
           placeholder="m/s"
           aria-label={`Set ${setIndex} average concentric velocity in metres per second; for multi-rep sets enter the final rep`}
           disabled={readonly}
-          className={cn("h-8 px-1.5 text-center text-xs tabular-nums", focusMode && "h-10 text-sm")}
+          className={cn(
+            "px-1.5 text-center tabular-nums",
+            focusMode ? "h-12 text-base sm:h-10 sm:text-sm" : "h-11 text-sm sm:h-8 sm:text-xs",
+          )}
         />
       )}
       {!hideWeight && (
@@ -6421,7 +6391,7 @@ function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "
           {label}
         </span>
       )}
-      <div className={cn("inline-flex items-center overflow-hidden rounded-md border border-border bg-secondary/40", compact ? "text-[11px]" : "text-xs")}
+      <div className={cn("inline-flex items-center gap-0.5 overflow-hidden rounded-lg bg-muted p-0.5", compact ? "text-[11px]" : "text-xs")}
            role="group"
            aria-label={label ?? "Unit toggle"}>
       {(["kg", "lb"] as const).map((u) => (
@@ -6431,9 +6401,9 @@ function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "
           onClick={() => unit !== u && onChange(u)}
           aria-pressed={unit === u}
           className={cn(
-            "font-bold uppercase tracking-wider transition-colors",
+            "rounded-md font-semibold uppercase transition-colors",
             compact ? "px-2 py-1 min-w-[34px]" : "px-3 py-1.5",
-            unit === u ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+            unit === u ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
           )}
         >
           {u}
@@ -6574,26 +6544,6 @@ function WorkoutLoadFailureCard({
 /* -------------------------------------------------------------------------- */
 /* Compact top-of-page summary + overflow menu                                 */
 /* -------------------------------------------------------------------------- */
-
-function WorkoutTopMenu() {
-  // One tap to help. (Undo moved onto the unit-switch confirmation toast —
-  // the only action it ever reversed.)
-  const [helpOpen, setHelpOpen] = useState(false);
-  return (
-    <>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-9 w-9 text-muted-foreground hover:text-foreground"
-        aria-label="Help with logging"
-        onClick={() => setHelpOpen(true)}
-      >
-        <HelpCircle className="h-5 w-5" />
-      </Button>
-      <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
-    </>
-  );
-}
 
 /**
  * Scroll to the exercise card for `rowId` once it renders (rows load async) and

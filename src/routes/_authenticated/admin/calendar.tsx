@@ -20,7 +20,6 @@ const LEGACY_TABS: Record<string, TabValue> = {
   "booking-cards": "booking",
   availability: "booking",
 };
-const LS_KEY = "admin.calendar.lastTab";
 
 function normalizeTab(v: unknown): TabValue | undefined {
   if (typeof v !== "string") return undefined;
@@ -50,15 +49,8 @@ function AdminCalendarShell() {
   const search = useSearch({ from: "/_authenticated/admin/calendar" });
   const navigate = useNavigate({ from: "/admin/calendar" });
 
-  // Resolve active tab: URL > localStorage > default
-  let active: TabValue = "board";
-  if (search.tab) {
-    active = search.tab;
-  } else if (typeof window !== "undefined") {
-    let stored: string | null = null;
-    try { stored = window.localStorage.getItem(LS_KEY); } catch { /* storage blocked */ }
-    active = normalizeTab(stored) ?? "board";
-  }
+  // The tab the link asks for, else the calendar board: never whichever tab was used last.
+  const active: TabValue = search.tab ?? "board";
 
   // Sync URL when missing/invalid tab so refresh + back/forward work cleanly
   useEffect(() => {
@@ -66,11 +58,6 @@ function AdminCalendarShell() {
       navigate({ search: (prev: any) => ({ ...prev, tab: active }), replace: true });
     }
   }, [active, search.tab, navigate]);
-
-  // Persist last tab
-  useEffect(() => {
-    try { window.localStorage.setItem(LS_KEY, active); } catch { /* storage blocked */ }
-  }, [active]);
 
   function setTab(t: string) {
     if (!(TAB_VALUES as readonly string[]).includes(t)) return;

@@ -1049,7 +1049,7 @@ export function StickerLayer({
           />
         ))}
         {dragging != null && guides.angle && (
-          <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-[#ffd400] px-2 py-0.5 text-[11px] font-black text-black">Straight</div>
+          <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-[#ffd400] px-2 py-0.5 text-[11px] font-bold text-black">Straight</div>
         )}
         {dragging != null && (
           <div className={cn("pointer-events-none absolute bottom-6 left-1/2 grid h-14 w-14 -translate-x-1/2 place-items-center rounded-full border-2 transition-all", overTrash ? "scale-125 border-red-500 bg-red-500 text-white" : "border-white/70 bg-black/50 text-white")}>
@@ -1072,7 +1072,7 @@ export function StickerLayer({
                 onPointerDown={(e) => e.preventDefault()}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setEditing({ ...editing, style: nextTextStyle(editing.style) })}
-                className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-black"
+                className="h-10 rounded-full bg-white/15 px-4 text-[13px] font-bold"
                 aria-label="Text style"
               >
                 Aa · {TEXT_STYLES[editing.style]}
@@ -1088,7 +1088,7 @@ export function StickerLayer({
                 {editing.align === "left" ? <TextAlignStart className="h-5 w-5" /> : editing.align === "right" ? <TextAlignEnd className="h-5 w-5" /> : <TextAlignCenter className="h-5 w-5" />}
               </button>
             </div>
-            <button type="button" onClick={saveText} className="inline-flex h-10 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-black text-black">
+            <button type="button" onClick={saveText} className="inline-flex h-10 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-bold text-black">
               <Check className="h-4 w-4" /> Done
             </button>
           </div>
@@ -1202,7 +1202,7 @@ export function StickerLayer({
                     data-tray-interactive-type={t.type}
                   >
                     <span className="text-[20px] leading-none">{t.icon}</span>
-                    <span className="text-[12px] font-black uppercase tracking-[0.04em]">{t.label}</span>
+                    <span className="text-[12px] font-bold uppercase tracking-[0.04em]">{t.label}</span>
                   </button>
                 ))}
               </div>

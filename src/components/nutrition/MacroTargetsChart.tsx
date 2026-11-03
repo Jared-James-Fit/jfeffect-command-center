@@ -81,7 +81,7 @@ export function MacroTargetsChart({
               : "Calorie target"
           }
         >
-          <div className="text-[28px] font-black leading-none tracking-tight tabular-nums">
+          <div className="text-[28px] font-bold leading-none tracking-tight tabular-nums">
             {centerKcal != null ? formatKcal(centerKcal) : "—"}
           </div>
           <div className="mt-1 text-xs font-medium text-muted-foreground">kcal</div>
@@ -100,7 +100,7 @@ export function MacroTargetsChart({
                   <span>{r.label}</span>
                   {r.pct != null && <span className="tabular-nums">{r.pct}%</span>}
                 </div>
-                <div className="text-xl font-black leading-tight tabular-nums">
+                <div className="text-xl font-bold leading-tight tabular-nums">
                   {r.grams ?? "—"}
                   {r.grams != null && (
                     <span className="ml-0.5 text-sm font-semibold text-muted-foreground">g</span>
@@ -115,11 +115,13 @@ export function MacroTargetsChart({
       {extras.length > 0 && (
         <div
           className={cn(
-            "grid divide-x divide-border overflow-hidden rounded-xl border border-border bg-secondary/30",
+            // hairlines from the gap, so 3 items (Fibre, Water, Steps) read as a clean grid, the odd one full width
+            "grid gap-px overflow-hidden rounded-xl border border-border bg-border",
             extras.length > 1 ? "grid-cols-2" : "grid-cols-1",
           )}
         >
-          {extras.map((x) => {
+          {extras.map((x, i) => {
+            const span = extras.length > 1 && extras.length % 2 === 1 && i === extras.length - 1 ? "col-span-2" : "";
             const body = (
               <>
                 <span className="min-w-0">
@@ -143,12 +145,12 @@ export function MacroTargetsChart({
                 key={x.label}
                 type="button"
                 onClick={x.onClick}
-                className="flex items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-secondary"
+                className={cn("flex items-center justify-between gap-2 bg-card px-4 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-muted", span)}
               >
                 {body}
               </button>
             ) : (
-              <div key={x.label} className="flex items-center justify-between gap-2 px-4 py-3">
+              <div key={x.label} className={cn("flex items-center justify-between gap-2 bg-card px-4 py-3", span)}>
                 {body}
               </div>
             );

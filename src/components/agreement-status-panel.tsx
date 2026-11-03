@@ -39,10 +39,10 @@ export function AgreementStatusPanel({ client }: { client: any }) {
   return (
     <Card className="border-border bg-card p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <FileSignature className="h-4 w-4" /> Agreement record (manual override)
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <FileSignature className="h-4 w-4 text-muted-foreground" /> Agreement record (set by hand)
         </h3>
-        <Badge variant="outline" className={f.agreement_signed ? "border-primary/40 text-primary" : "border-destructive/40 text-destructive"}>
+        <Badge variant="outline" className={f.agreement_signed ? "border-success/40 text-success" : "border-destructive/40 text-destructive"}>
           {f.agreement_signed ? "Signed" : "Not on file"}
         </Badge>
       </div>
@@ -64,7 +64,7 @@ export function AgreementStatusPanel({ client }: { client: any }) {
         <div className="md:col-span-2"><Label>Signature platform link (SignNow, etc.)</Label><Input value={f.agreement_signature_platform_link ?? ""} onChange={(e) => setF({ ...f, agreement_signature_platform_link: e.target.value })} /></div>
       </div>
       <div className="flex gap-2">
-        <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={save}>Save agreement</Button>
+        <Button size="sm" onClick={save}>Save agreement</Button>
         {f.agreement_link && <a href={f.agreement_link} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Open <ExternalLink className="ml-1.5 h-3 w-3" /></Button></a>}
       </div>
     </Card>

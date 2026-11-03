@@ -136,7 +136,7 @@ export function ClientWorkoutPeek({ clientId, clientName }: { clientId: string; 
         className="flex w-full shrink-0 items-center gap-2 border-b border-border bg-card/60 px-3 py-1.5 text-left text-xs transition hover:bg-secondary/60 active:bg-secondary sm:px-4"
         aria-label={`Open ${clientName ?? "client"}'s workouts`}
       >
-        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
           <Dumbbell className="h-3.5 w-3.5" />
         </span>
         {last ? (
@@ -306,7 +306,7 @@ function WorkoutPeekBody({
               onSelect={(d) => { if (d) { setSelected(toLocalISO(d)); setView("week"); } }}
               modifiers={modifiers}
               modifiersClassNames={{
-                done: "font-black text-emerald-500 underline decoration-emerald-500 decoration-2 underline-offset-4",
+                done: "font-bold text-emerald-500 underline decoration-emerald-500 decoration-2 underline-offset-4",
                 missed: "font-bold text-rose-500 underline decoration-rose-500 decoration-2 underline-offset-4",
                 planned: "font-bold underline decoration-muted-foreground/60 decoration-2 underline-offset-4",
               }}

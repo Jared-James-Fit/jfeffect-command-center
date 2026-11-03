@@ -56,7 +56,7 @@ export function RecentAdherenceWidget() {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-black leading-none tabular-nums">{latestPct}%</div>
+          <div className="text-2xl font-bold leading-none tabular-nums">{latestPct}%</div>
           <div className={`mt-1 flex items-center justify-end gap-1 text-[11px] ${trendColor}`}>
             <TrendIcon className="h-3 w-3" />
             <span>

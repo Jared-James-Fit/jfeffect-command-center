@@ -16,7 +16,7 @@ import { KindChip } from "../sections";
 export function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">{children}</h2>
+      <h2 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{children}</h2>
       {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
     </div>
   );
@@ -124,7 +124,7 @@ export function DataQualityCard({ intel }: { intel: GeneratorIntel }) {
                 {q.definitions.map((d) => (
                   <tr key={d.key} className="border-t border-border/40 align-top">
                     <td className="py-1 pr-2 font-semibold">{d.label}</td>
-                    <td className="py-1 pr-2 text-right font-black tabular-nums">{d.value}</td>
+                    <td className="py-1 pr-2 text-right font-bold tabular-nums">{d.value}</td>
                     <td className="py-1 text-[11px] text-muted-foreground">{d.definition}</td>
                   </tr>
                 ))}
@@ -148,7 +148,7 @@ export function DataQualityCard({ intel }: { intel: GeneratorIntel }) {
               {q.confidence.map((c) => (
                 <li key={c.topic}>
                   <span className="font-semibold">{c.topic}: </span>
-                  <span className={cn("font-black uppercase", LEVEL_TEXT[c.level])}>{c.level}</span>
+                  <span className={cn("font-bold uppercase", LEVEL_TEXT[c.level])}>{c.level}</span>
                   <span className="text-muted-foreground"> · {c.why}</span>
                   {c.instead ? <div className="text-[11px] text-muted-foreground">Instead: {c.instead}</div> : null}
                 </li>
@@ -198,7 +198,7 @@ export function PatternsCard({ intel }: { intel: GeneratorIntel }) {
           {list.map((p) => (
             <li key={p.id}>
               <div className="flex items-start gap-1.5">
-                <span className={cn("shrink-0 rounded-full px-2 py-px text-[10px] font-black uppercase tracking-wider", LEVEL_CHIP[p.level])}>{p.level}</span>
+                <span className={cn("shrink-0 rounded-full px-2 py-px text-[10px] font-bold uppercase tracking-wider", LEVEL_CHIP[p.level])}>{p.level}</span>
                 <span className="font-semibold">{p.statement}</span>
               </div>
               {p.caveat ? <div className="mt-0.5 text-[11px] text-muted-foreground">{p.caveat}</div> : null}

@@ -131,7 +131,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     catch (e: any) { toast.error(e?.message ?? "Failed"); }
   };
 
-  const addSale = <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setPicker(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add sale</Button>;
+  const addSale = <Button size="sm" className="bg-primary font-semibold" onClick={() => setPicker(true)}><Plus className="mr-1.5 h-3.5 w-3.5" />Add sale</Button>;
   const close = (o: boolean) => { if (!o) setDialog(null); };
 
   return (

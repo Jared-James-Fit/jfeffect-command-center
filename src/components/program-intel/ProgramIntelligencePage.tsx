@@ -231,7 +231,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
                   [c.setsWithRpePct != null ? `${c.setsWithRpePct}%` : "—", "RPE logged"],
                 ].map(([v, l]) => (
                   <div key={l} className="rounded-xl bg-secondary/50 px-1 py-1.5">
-                    <div className="text-sm font-black tabular-nums">{v}</div>
+                    <div className="text-sm font-bold tabular-nums">{v}</div>
                     <div className="text-[10px] text-muted-foreground">{l}</div>
                   </div>
                 ))}

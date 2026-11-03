@@ -423,7 +423,7 @@ function CalendarSyncSheet({
             {choices.map((c, i) => {
               // One red action at a time: the recommended calendar, until they open another one's steps.
               const primary = !synced && !expanded && i === 0;
-              const btnClass = cn("h-12 w-full justify-between text-sm font-bold", primary && "bg-gradient-primary");
+              const btnClass = cn("h-12 w-full justify-between text-sm font-bold", primary && "bg-primary");
 
               if (c.how === "connect") {
                 return (

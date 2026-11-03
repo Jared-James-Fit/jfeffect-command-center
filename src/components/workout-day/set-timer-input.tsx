@@ -127,7 +127,8 @@ export function SetTimerInput({
           title="Timer"
           className={cn(
             "flex w-full items-center justify-center gap-1 rounded-md border px-2 text-sm font-medium tabular-nums transition-colors whitespace-nowrap",
-            focusMode ? "h-9 text-base" : "h-8",
+            // the set's other boxes are 44px on a phone; the timer matches them
+            focusMode ? "h-12 text-base sm:h-10" : "h-11 sm:h-8",
             isConfirmed && completedSeconds != null
               ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600"
               : running
@@ -161,7 +162,7 @@ export function SetTimerInput({
           <div className="px-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Timer
           </div>
-          <div className="text-center text-2xl font-black tabular-nums">{fmtMMSS(remaining)}</div>
+          <div className="text-center text-2xl font-bold tabular-nums">{fmtMMSS(remaining)}</div>
           <div className="flex items-center gap-1.5">
             {running ? (
               <button

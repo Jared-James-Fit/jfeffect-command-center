@@ -16,11 +16,13 @@ describe("‹ Today pill", () => {
     expect(withinReturnScope("/admin/programming", "/admin/clients")).toBe(false);
   });
 
-  it("dashboard quick looks arm it; quick actions and the More sheet don't", () => {
+  it("dashboard quick looks arm it; there's no quick-action grid or More sheet (each action lives on its own page)", () => {
     const src = readFileSync("src/routes/_authenticated/admin/index.tsx", "utf8");
     expect(src).toMatch(/onClickCapture=\{onDashboardClickCapture\}/);
-    expect(src).toMatch(/className="grid grid-cols-5 gap-2" data-no-return/);
-    expect(src).toMatch(/<SheetContent side="bottom" className="rounded-t-2xl" data-no-return>/);
+    expect(src).not.toContain("ActionsSheet");
+    expect(src).not.toContain("primaryActions");
+    // Add client stays one tap away in the Clients page header.
+    expect(readFileSync("src/routes/_authenticated/admin/clients.index.tsx", "utf8")).toContain("<AddClientDialog");
     expect(readFileSync("src/routes/_authenticated/admin/route.tsx", "utf8")).toMatch(/<ReturnToDashboardPill \/>/);
   });
 });

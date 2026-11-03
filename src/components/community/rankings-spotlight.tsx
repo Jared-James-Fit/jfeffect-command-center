@@ -229,7 +229,7 @@ export function RankingsSpotlight({ onOpen, under, underView }: {
           <div className="min-w-0 pr-9">
             <div className="flex min-w-0 items-center gap-1.5">
               <Icon className={cn("h-4 w-4 shrink-0", text)} aria-hidden />
-              <span className="truncate text-[15px] font-black leading-5 tracking-tight">{slide.title}</span>
+              <span className="truncate text-[15px] font-bold leading-5 tracking-tight">{slide.title}</span>
             </div>
             <div className="truncate pl-[22px] text-[11px] font-semibold leading-4 text-muted-foreground">{slide.sub}</div>
           </div>
@@ -293,7 +293,7 @@ function Step({ person, place }: { person: SpotlightPerson | undefined; place: n
             {first && <Crown className="absolute -top-3.5 left-1/2 h-4 w-4 -translate-x-1/2 fill-amber-400 text-amber-500" aria-hidden />}
           </span>
           <span className={cn("mt-1.5 w-full truncate text-center text-[12px] font-bold leading-4", person.me && "text-primary")}>{person.me ? "You" : person.name}</span>
-          <span className="w-full truncate text-center text-[11px] font-black tabular-nums leading-4 text-muted-foreground">{person.value}</span>
+          <span className="w-full truncate text-center text-[11px] font-bold tabular-nums leading-4 text-muted-foreground">{person.value}</span>
         </>
       ) : (
         <span className="h-10" />

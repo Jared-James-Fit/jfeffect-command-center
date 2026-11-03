@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { PageHeader } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
@@ -36,8 +36,6 @@ const MOVED_TO_SETTINGS: Record<string, string> = {
   "media-libraries": "/admin/chat-gifs",
 };
 
-const LAST_TAB_KEY = "jf-admin-communication-last-tab";
-
 function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
@@ -50,12 +48,7 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
     const client = typeof raw?.client === "string" ? (raw.client as string) : undefined;
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
     if (isTab(t)) return { tab: t, client, sub };
-    if (typeof t === "undefined" && typeof window !== "undefined") {
-      try {
-        const stored = window.localStorage.getItem(LAST_TAB_KEY);
-        if (isTab(stored)) return { tab: stored, client, sub };
-      } catch {}
-    }
+    // No ?tab= opens Chats, never whichever tab was used last.
     return { tab: "messages", client, sub };
   },
   beforeLoad: ({ location }) => {
@@ -98,10 +91,6 @@ function CommunicationWorkspace() {
     updateTabFade();
     window.addEventListener("resize", updateTabFade);
     return () => window.removeEventListener("resize", updateTabFade);
-  }, [tab]);
-
-  useMemo(() => {
-    try { window.localStorage.setItem(LAST_TAB_KEY, tab); } catch {}
   }, [tab]);
 
   useEffect(() => {

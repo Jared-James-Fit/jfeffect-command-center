@@ -166,7 +166,7 @@ export function SendPasswordResetDialog({
           <Button
             onClick={submit}
             disabled={busy || !targetUserId || (channel === "email" && !hasEmail) || (channel === "sms" && !hasPhone) || (channel === "both" && (!hasEmail || !hasPhone))}
-            className="bg-gradient-primary"
+            className="bg-primary"
           >
             {busy ? "Sending…" : "Send Reset"}
           </Button>

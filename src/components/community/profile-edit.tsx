@@ -99,7 +99,7 @@ export function ProfileEditSheet({ open, onOpenChange, userId, bio: bioNow, isCo
               <X className="h-4 w-4" />
             </SheetClose>
             <div className="min-w-0 flex-1 text-center">
-              <SheetTitle className="text-[16px] font-black">Edit profile</SheetTitle>
+              <SheetTitle className="text-[16px] font-bold">Edit profile</SheetTitle>
               <SheetDescription className="sr-only">Your username, bio, training, gym and privacy</SheetDescription>
             </div>
             <Button type="button" size="sm" className="h-9 rounded-full px-4 font-bold" disabled={!dirty || usernameBlocking || saving} onClick={() => void save()} data-profile-save>

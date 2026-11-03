@@ -50,7 +50,7 @@ export function CommunityNavButton({ className }: { className?: string }) {
   const n = data.unseen;
   return (
     // Phones have the Crew button in the bar with the same count.
-    <Link to="/admin/community" aria-label={`Community, ${n} new`} className={cn("hidden h-9 shrink-0 md:inline-flex items-center gap-1 rounded-full px-3 text-[12px] font-black text-white shadow-sm", NEW_GRADIENT, className)}>
+    <Link to="/admin/community" aria-label={`Community, ${n} new`} className={cn("hidden h-9 shrink-0 md:inline-flex items-center gap-1 rounded-full px-3 text-[12px] font-bold text-white shadow-sm", NEW_GRADIENT, className)}>
       <Flame className="h-3.5 w-3.5" /> {n > 9 ? "9+" : n} new
     </Link>
   );
@@ -104,7 +104,7 @@ export function CommunityHomeStrip() {
     <section data-crew-feed className="rounded-2xl border border-border/80 bg-card pb-3 pt-3">
       <div className="flex items-center justify-between gap-2 px-3.5">
         <Link to="/portal/community" hash="feed" className="-my-1 flex min-w-0 items-center gap-1.5 whitespace-nowrap py-1">
-          <span className="text-[16px] font-black tracking-tight">Feed</span>
+          <span className="text-[16px] font-bold tracking-tight">Feed</span>
           {/* Who showed up today beats "N new": it's the nudge to go train. */}
           {lockedToday > 0 ? (
             <span className="truncate rounded-full bg-red-500/15 px-1.5 py-px text-[10px] font-bold text-red-600 dark:text-red-400">🔒 {lockedToday} locked in today</span>
@@ -119,7 +119,7 @@ export function CommunityHomeStrip() {
       <div className="mt-2.5 flex h-[180px] snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain px-[9%] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {shown.length === 0 && (
           <div className="flex h-full w-[82%] shrink-0 snap-center snap-always flex-col justify-center rounded-[20px] border border-dashed border-border bg-muted/30 p-4">
-            <div className="text-[15px] font-black leading-tight">Be the first to share this week</div>
+            <div className="text-[15px] font-bold leading-tight">Be the first to share this week</div>
             <div className="mt-1 text-[12.5px] leading-snug text-muted-foreground">Post a session for the crew. Your coach sees every one.</div>
           </div>
         )}
@@ -220,7 +220,7 @@ function SeeMoreCard({ posts, shown, more, onOpen }: { posts: CommunityPost[]; s
           ))}
         </span>
       )}
-      <span className="text-[14px] font-black leading-tight">{more > 0 ? `${more} more in the feed` : "Open the feed"}</span>
+      <span className="text-[14px] font-bold leading-tight">{more > 0 ? `${more} more in the feed` : "Open the feed"}</span>
       <span className="text-[11.5px] leading-snug text-muted-foreground">React, comment, see every set</span>
       <span className="grid h-9 w-9 place-items-center rounded-full bg-foreground text-background">
         <ArrowRight className="h-4 w-4" />
@@ -249,7 +249,7 @@ export function CoachPostRow({ post, unit }: { post: CommunityPost; unit: "kg" |
         aria-pressed={given}
         aria-label={given ? "Remove props" : `Give ${post.author.name} props`}
         className={cn(
-          "flex h-10 shrink-0 items-center gap-1 rounded-full px-3 text-[13px] font-black transition active:scale-90",
+          "flex h-10 shrink-0 items-center gap-1 rounded-full px-3 text-[13px] font-bold transition active:scale-90",
           given ? "bg-orange-500/15 text-orange-600 dark:text-orange-400" : "border border-border text-foreground",
         )}
       >

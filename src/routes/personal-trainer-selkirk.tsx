@@ -176,7 +176,7 @@ function SelkirkPage() {
             <div className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               <MapPin className="h-3 w-3" /> Selkirk, Manitoba · Iron Image Gym
             </div>
-            <h1 className="mt-5 text-4xl font-black tracking-tight md:text-6xl">
+            <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-6xl">
               New to the gym? Start here.
             </h1>
             <p className="mt-5 text-base text-muted-foreground md:text-xl">
@@ -209,7 +209,7 @@ function SelkirkPage() {
       {/* SECTION 2 — Nervous */}
       <Reveal stagger={1}><Section>
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-black tracking-tight md:text-4xl">Nervous About The Gym?</h2>
+          <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Nervous About The Gym?</h2>
         </div>
         <div className="mx-auto mt-8 max-w-2xl space-y-4 text-base leading-relaxed text-muted-foreground md:text-lg">
           <p className="font-semibold text-foreground">You're not the only one.</p>
@@ -256,7 +256,7 @@ function SelkirkPage() {
             { t: "Leave with a plan", b: "You'll know exactly what to do next." },
           ].map((s, i) => (
             <Card key={s.t} className="p-5">
-              <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary text-sm font-black">
+              <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary text-sm font-bold">
                 {i + 1}
               </div>
               <div className="mt-3 text-sm font-bold">{s.t}</div>
@@ -311,8 +311,8 @@ function SelkirkPage() {
       <Reveal stagger={4}><Section>
         <div className="mx-auto max-w-2xl rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-8 text-center md:p-12">
           <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">Personal Training Pricing</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">Simple.</h2>
-          <div className="mt-5 text-5xl font-black md:text-6xl">
+          <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-5xl">Simple.</h2>
+          <div className="mt-5 text-5xl font-bold md:text-6xl">
             $100<span className="text-base font-semibold text-muted-foreground"> / session</span>
           </div>
           <p className="mt-3 text-sm text-muted-foreground md:text-base">
@@ -397,7 +397,7 @@ function SelkirkPage() {
       {/* FINAL CTA */}
       <Reveal stagger={4}><Section className="!pt-6">
         <div className="mx-auto max-w-3xl rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-8 text-center md:p-12">
-          <h2 className="text-3xl font-black tracking-tight md:text-5xl">Ready To Feel Comfortable In The Gym?</h2>
+          <h2 className="text-3xl font-bold tracking-tight md:text-5xl">Ready To Feel Comfortable In The Gym?</h2>
           <p className="mt-4 text-base text-muted-foreground md:text-lg">
             You don't need to be in shape to start. You just need a plan.
           </p>

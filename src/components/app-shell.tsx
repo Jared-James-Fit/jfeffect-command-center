@@ -3,11 +3,10 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
-  LogOut, ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal, Menu,
+  ChevronLeft, ChevronRight, ChevronDown, Search, Settings as SettingsIcon, ArrowLeft, MoreHorizontal, Menu,
   ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard, Pin, PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CommunityNavButton } from "@/components/community/community-entry";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
@@ -61,6 +60,12 @@ export interface NavItem {
    * does not affect routing or permissions.
    */
   section?: string;
+  /**
+   * A child that's an old address of a tab its row's page already has: never
+   * listed (flyouts, More's rows), but More's search finds it, it lights its
+   * row and its badge counts on the row. One menu entry per page.
+   */
+  searchOnly?: boolean;
   /** The bar's raised centre button (the client portal's Community). */
   featured?: boolean;
   /** More pages (and their sub-pages) that light this bar tab, e.g. Money on Payments. */
@@ -71,6 +76,11 @@ export interface NavItem {
    * hash starts with `hash`; the centre button stays quiet then.
    */
   shortcut?: { to: string; hash: string; label: string; icon: React.ComponentType<{ className?: string }> };
+}
+
+/** The children a row lists in its flyout / submenu (never the search-only ones). */
+function listedChildren(item: NavItem): NavItem[] {
+  return (item.children ?? []).filter((c) => !c.searchOnly);
 }
 
 function groupNavItems(items: NavItem[]) {
@@ -472,13 +482,20 @@ export function AppShell({
     },
   });
 
-  const activeTo = items.reduce<string | null>((best, item) => {
-    const matches =
-      pathname === item.to || pathname.startsWith(item.to + "/");
-    if (!matches) return best;
-    if (best === null || item.to.length > best.length) return item.to;
-    return best;
-  }, null);
+  // The row you're on: the deepest page that matches, its own or one of its
+  // children's (a tab's old address included), so exactly one row lights.
+  // An app's home (/admin, /portal) only lights on itself, never under every page.
+  const activeTo = useMemo(() => {
+    let best: { row: string; len: number } | null = null;
+    for (const item of items) {
+      for (const to of [item.to, ...(item.children ?? []).map((c) => c.to)]) {
+        const home = to.split("/").filter(Boolean).length <= 1;
+        const hit = pathname === to || (!home && pathname.startsWith(to + "/"));
+        if (hit && (!best || to.length > best.len)) best = { row: item.to, len: to.length };
+      }
+    }
+    return best?.row ?? null;
+  }, [items, pathname]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -489,6 +506,8 @@ export function AppShell({
   const allGroupLabels = useMemo(() => grouped.map((g) => g.label).filter(Boolean) as string[], [grouped]);
   const bottomItems = customBottomItems ?? items.slice(0, 5);
   const barItems = useMemo(() => resolveVisibleBarItems(bottomItems, { more: !moreInHeader }), [bottomItems, moreInHeader]);
+  // More lists what isn't already a tab under your thumb (its search still finds those)
+  const barPages = useMemo(() => new Set(barItems.map((i) => i.to)), [barItems]);
   // The tabs people flip between: their code is fetched ahead of the first tap
   // (pages only; bar actions like Search or More aren't routes).
   usePreloadTabs(bottomItems.map((i) => i.to).filter((to) => to.startsWith("/")));
@@ -518,6 +537,8 @@ export function AppShell({
   const navByTo = useMemo(() => {
     const m = new Map<string, NavItem>();
     for (const it of items) m.set(it.to, it);
+    // a pin of a page that's now inside a row (or an old address of a tab) still resolves
+    for (const it of items) for (const c of it.children ?? []) if (!m.has(c.to)) m.set(c.to, c);
     return m;
   }, [items]);
   const pinnedItems = useMemo(
@@ -589,6 +610,13 @@ export function AppShell({
     const q = moreQuery.trim().toLowerCase();
     if (!q) return null;
     const results: { item: NavItem; group: string }[] = [];
+    // one result per page (a row and the first page of its flyout are the same page)
+    const seen = new Set<string>();
+    const add = (item: NavItem, group: string) => {
+      if (seen.has(item.to)) return;
+      seen.add(item.to);
+      results.push({ item, group });
+    };
     for (const g of grouped) {
       for (const it of g.items) {
         const hay = [
@@ -598,17 +626,13 @@ export function AppShell({
         ]
           .join(" ")
           .toLowerCase();
-        if (hay.includes(q)) {
-          results.push({ item: it, group: g.label ?? "" });
-        }
-        // Also search flyout children so mobile users can find secondary pages
+        if (hay.includes(q)) add(it, g.label ?? "");
+        // Also search flyout children (the unlisted old addresses too) so phones find every page
         for (const c of it.children ?? []) {
           const chay = [c.label, it.label, g.label ?? "", ...(c.keywords ?? [])]
             .join(" ")
             .toLowerCase();
-          if (chay.includes(q)) {
-            results.push({ item: c, group: `${g.label ?? ""} · ${it.label}` });
-          }
+          if (chay.includes(q)) add(c, `${g.label ?? ""} · ${it.label}`);
         }
       }
     }
@@ -632,13 +656,13 @@ export function AppShell({
           <img src="/logo.png" alt="JF Effect" className="h-8 w-8 rounded-md object-cover" />
           {!iconOnly && (
             <div className="leading-tight min-w-0">
-              <div className="text-[13px] font-black tracking-tight">JF EFFECT</div>
+              <div className="text-[13px] font-bold tracking-tight">JF EFFECT</div>
               <div className="truncate text-[9px] uppercase tracking-widest text-muted-foreground">{title}</div>
             </div>
           )}
         </div>
 
-        {/* Account / Sign out / Density (moved up from footer) */}
+        {/* Account (its menu holds photo, settings and Sign out) and the sidebar width */}
         <div className={cn("border-b border-sidebar-border", iconOnly ? "p-1.5" : "p-2")}>
           {iconOnly ? (
             <div className="flex flex-col items-center gap-1">
@@ -654,18 +678,6 @@ export function AppShell({
                   </button>
                 }
               />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleSignOut}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
-                    aria-label="Sign out"
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Sign out</TooltipContent>
-              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -719,31 +731,19 @@ export function AppShell({
                   {effectiveMode === "expanded" ? "Collapse to icons" : "Expand sidebar"}
                 </TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleSignOut}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
-                    aria-label="Sign out"
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Sign out</TooltipContent>
-              </Tooltip>
             </div>
           )}
         </div>
 
-        {/* Workout library quick search / Cmd+K trigger */}
+        {/* The one search on desktop (⌘K): pages, clients, programs, settings */}
         <div className={cn("border-b border-sidebar-border", iconOnly ? "p-1.5" : "p-2")}>
           {iconOnly ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setPaletteOpen(true)}
-                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-primary ring-1 ring-primary/40 hover:bg-primary/10"
-                  aria-label="Search workout library"
+                  className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground ring-1 ring-border hover:bg-sidebar-accent hover:text-foreground"
+                  aria-label="Search everything"
                 >
                   <Search className="h-4 w-4" />
                 </button>
@@ -757,11 +757,12 @@ export function AppShell({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPaletteOpen(true)}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-2.5 py-2 text-left text-xs font-semibold text-foreground shadow-sm hover:bg-primary/10"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                aria-label="Search everything"
               >
-                <Search className="h-3.5 w-3.5 text-primary" />
-                <span className="flex-1 truncate">Search everything…</span>
-                <kbd className="rounded border border-primary/40 bg-card px-1 py-0.5 text-[9px] font-mono text-primary">⌘K</kbd>
+                <Search className="h-3.5 w-3.5" />
+                <span className="flex-1 truncate">Search…</span>
+                <kbd className="rounded border border-border bg-background px-1 py-0.5 text-[9px] font-mono text-muted-foreground">⌘K</kbd>
               </button>
               <ThemeToggle />
             </div>
@@ -775,12 +776,12 @@ export function AppShell({
               <div>
                 {!iconOnly && (
                   <div className="flex items-center justify-between rounded px-2.5 pb-1 pt-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Pinned · {pinCount}/{MAX_PINS}
                     </span>
                   </div>
                 )}
-                {iconOnly && <div className="my-1 mx-2 h-px bg-amber-400/40" />}
+                {iconOnly && <div className="my-1 mx-2 h-px bg-sidebar-border/60" />}
                 <ul className="space-y-0.5">
                   {pinnedItems.map((item) => {
                     const active = item.to === activeTo;
@@ -797,10 +798,10 @@ export function AppShell({
                           rowText,
                           active
                             ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-amber-400/40",
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                         )}
                       >
-                        <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={navBadges[item.to]} isCollapsed={iconOnly} /></div>
+                        <div className="relative"><Icon className="h-4 w-4 shrink-0" />{iconOnly && <SidebarBadge badge={navBadges[item.to]} isCollapsed />}</div>
                         {!iconOnly && <span className="truncate flex-1">{item.label}</span>}
                         {!iconOnly && <SidebarBadge badge={navBadges[item.to]} isCollapsed={false} />}
                       </Link>
@@ -810,7 +811,7 @@ export function AppShell({
                         {iconOnly ? (
                           <Tooltip>
                             <TooltipTrigger asChild>{link}</TooltipTrigger>
-                            <TooltipContent side="right">📌 {item.label}</TooltipContent>
+                            <TooltipContent side="right">{item.label} (pinned)</TooltipContent>
                           </Tooltip>
                         ) : (
                           <div className="relative group/pinrow">
@@ -820,7 +821,7 @@ export function AppShell({
                               onClick={(e) => handleTogglePin(e, item.to, item.label)}
                               aria-label={`Unpin ${item.label}`}
                               title="Unpin"
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-amber-400 opacity-70 hover:bg-amber-400/10 hover:opacity-100"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover/pinrow:opacity-70 focus:opacity-100"
                             >
                               <PinOff className="h-3.5 w-3.5" />
                             </button>
@@ -851,9 +852,7 @@ export function AppShell({
                         const active = item.to === activeTo;
                         const Icon = item.icon;
                         const pinned = isPinned(item.to);
-                          const childActive = !!item.children?.some(
-                            (c) => pathname === c.to || pathname.startsWith(c.to + "/"),
-                          );
+                          const hasFlyout = listedChildren(item).length > 0;
                           const groupBadge = navBadgeFor(item, navBadges);
                         const link = (
                           <Link
@@ -865,29 +864,30 @@ export function AppShell({
                               "sidebar-nav-row group/row flex w-full items-center min-w-0 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
                               rowPadding,
                               rowText,
-                                active || childActive
+                                active
                                 ? "bg-primary/15 text-primary font-semibold border-l-2 border-primary"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground border-l-2 border-transparent",
                             )}
                           >
-                              <div className="relative"><Icon className="h-4 w-4 shrink-0" /><SidebarBadge badge={groupBadge} isCollapsed={iconOnly} /></div>
+                              {/* the count sits at the row's end; the icon rail has no room for it, so a dot there */}
+                              <div className="relative"><Icon className="h-4 w-4 shrink-0" />{iconOnly && <SidebarBadge badge={groupBadge} isCollapsed />}</div>
                             {!iconOnly && <span className="truncate flex-1">{item.label}</span>}
                               {!iconOnly && <SidebarBadge badge={groupBadge} isCollapsed={false} />}
-                              {!iconOnly && item.children && (
+                              {!iconOnly && hasFlyout && (
                                 <ChevronRight className="ml-1 h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
                               )}
                           </Link>
                         );
                         return (
                           <li key={item.to}>
-                              {item.children && isTablet ? (
+                              {hasFlyout && isTablet ? (
                                 <TabletFlyoutRow
                                   item={item}
                                   pathname={pathname}
                                   navBadges={navBadges}
                                   trigger={link}
                                 />
-                              ) : item.children && !isTablet ? (
+                              ) : hasFlyout && !isTablet ? (
                                 <SidebarFlyoutRow
                                   item={item}
                                   pathname={pathname}
@@ -911,7 +911,7 @@ export function AppShell({
                                   className={cn(
                                     "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 transition-opacity",
                                     pinned
-                                      ? "text-amber-400 opacity-70 hover:opacity-100 hover:bg-amber-400/10"
+                                      ? "text-muted-foreground opacity-70 hover:bg-sidebar-accent hover:text-foreground hover:opacity-100"
                                       : "text-muted-foreground opacity-0 hover:bg-sidebar-accent hover:text-foreground group-hover/navrow:opacity-70 focus:opacity-100",
                                   )}
                                 >
@@ -1048,6 +1048,7 @@ export function AppShell({
         query={moreQuery}
         setQuery={setMoreQuery}
         filteredResults={moreFiltered}
+        onBar={barPages}
         account={
           simpleHeader ? (
             <div className="mb-2 space-y-1 border-b border-border px-1 pb-2">
@@ -1069,10 +1070,7 @@ export function AppShell({
                   </button>
                 }
               />
-              <div className="flex min-h-[52px] items-center justify-between gap-3 px-2">
-                <span className="text-[15px] font-semibold">Appearance</span>
-                <ThemeToggle />
-              </div>
+              {/* no Appearance row: light / dark is the switch in the top bar */}
             </div>
           ) : null
         }
@@ -1303,8 +1301,10 @@ function navBadgeFor(item: NavItem, navBadges: Record<string, { count?: number; 
   if (!item.children) return navBadges[item.to];
   let count = 0;
   let dot = false;
-  for (const c of item.children) {
-    const b = navBadges[c.to];
+  // the row's own page (a row with nothing listed has no child for it) and every child, once each
+  const tos = new Set([item.to, ...item.children.map((c) => c.to)]);
+  for (const to of tos) {
+    const b = navBadges[to];
     if (!b) continue;
     if (b.count) count += b.count;
     if (b.dot) dot = true;
@@ -1399,7 +1399,7 @@ function SidebarFlyoutRow({
           {item.label}
         </div>
         {(() => {
-          const kids = item.children ?? [];
+          const kids = listedChildren(item);
           const primary = kids.filter((c) => !c.section);
           const sections: { label: string; items: NavItem[] }[] = [];
           for (const c of kids) {
@@ -1465,7 +1465,7 @@ function TabletFlyoutRow({
 }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [pathname]);
-  const kids = item.children ?? [];
+  const kids = listedChildren(item);
   const primary = kids.filter((c) => !c.section);
   const sections: { label: string; items: NavItem[] }[] = [];
   for (const c of kids) {
@@ -2049,7 +2049,7 @@ function ShellBrand({ title, compact }: { title: string; compact?: boolean }) {
       />
       <div className={cn("flex min-w-0 flex-col items-start", compact && "max-[359px]:hidden")}>
         {/* italic letters lean past their box: a little room on the right so the T isn't clipped */}
-        <span className="truncate pr-[3px] text-[19px] font-black uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
+        <span className="truncate pr-[3px] text-[19px] font-bold uppercase italic leading-[1.1] tracking-[-0.035em] max-[359px]:text-[16px]">
           JF Effect
         </span>
         {sub && (
@@ -2091,10 +2091,9 @@ export function PageHeader({
     return (
       <div className="border-b border-border/60 bg-background px-4 py-2 md:px-5 xl:px-6 xl:py-3" data-page-header-inline>
         <div className="flex min-h-10 items-center justify-between gap-2">
-          <h1 className="min-w-0 truncate text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
+          <h1 className="min-w-0 truncate text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl">{title}</h1>
           <div className="flex shrink-0 items-center gap-1.5">
             {actions}
-            <CommunityNavButton />
           </div>
         </div>
         {subtitle ? <p className="text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
@@ -2133,7 +2132,7 @@ export function PageHeader({
             )}
           </div>
         )}
-        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-black leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl break-words">{title}</h1>
         {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm break-words">{subtitle}</p> : null}
       </div>
       {/* Mobile: back button and the actions share ONE compact nav row. No
@@ -2152,9 +2151,9 @@ export function PageHeader({
             <span>{backLabel || "Back"}</span>
           </button>
         ) : <span className="md:hidden" />}
+        {/* No Crew "N new" pill here: Crew's count is on its own menu row and bar tab. */}
         <div className="flex flex-wrap items-center justify-end gap-2">
           {actions}
-          <CommunityNavButton />
         </div>
       </div>
     </div>
@@ -2175,11 +2174,13 @@ export function PageHeader({
  */
 function MobileNavDrawer({
   open, onOpenChange, title, grouped, activeTo, pathname, navBadges,
-  query, setQuery, filteredResults, account, focusSearch = false,
+  query, setQuery, filteredResults, account, focusSearch = false, onBar,
 }: {
+  /** Pages with a tab in the bottom bar (their rows are left out; search still finds them). */
+  onBar?: ReadonlySet<string>;
   /** Opened from the top bar's search: the search field takes focus, not the first button. */
   focusSearch?: boolean;
-  /** Shown at the top of the root list (client portal: account + appearance). */
+  /** Shown at the top of the root list (client portal: the account row). */
   account?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -2239,7 +2240,7 @@ function MobileNavDrawer({
                   <span>Back</span>
                 </button>
               )}
-              <SheetTitle className="flex-1 truncate text-left text-base font-black tracking-tight">
+              <SheetTitle className="flex-1 truncate text-left text-base font-bold tracking-tight">
                 {submenu ? submenu.label : title}
               </SheetTitle>
             </div>
@@ -2312,6 +2313,7 @@ function MobileNavDrawer({
               navBadges={navBadges}
               onOpenCategory={setSubmenu}
               onNavigate={close}
+              onBar={onBar}
             />
             </>
           )}
@@ -2322,7 +2324,7 @@ function MobileNavDrawer({
 }
 
 function MobileRoot({
-  grouped, activeTo, pathname, navBadges, onOpenCategory, onNavigate,
+  grouped, activeTo, pathname, navBadges, onOpenCategory, onNavigate, onBar,
 }: {
   grouped: { label: string | undefined; items: NavItem[] }[];
   activeTo: string | null;
@@ -2330,10 +2332,16 @@ function MobileRoot({
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onOpenCategory: (item: NavItem) => void;
   onNavigate: () => void;
+  /** Pages the bottom bar already has a tab for: no row of their own here (More's search still finds them). */
+  onBar?: ReadonlySet<string>;
 }) {
+  // a row that only repeats a tab under your thumb is left out; one with pages of its own stays
+  const shown = grouped
+    .map((g) => ({ ...g, items: g.items.filter((i) => !(onBar?.has(i.to) && listedChildren(i).length === 0)) }))
+    .filter((g) => g.items.length > 0);
   return (
     <div className="space-y-3">
-      {grouped.map((group) => (
+      {shown.map((group) => (
         <div key={group.label ?? "default"}>
           {group.label && (
             <div className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -2344,7 +2352,7 @@ function MobileRoot({
             {group.items.map((item) => {
               const Icon = item.icon;
               const active = item.to === activeTo;
-              const hasChildren = !!item.children && item.children.length > 0;
+              const hasChildren = listedChildren(item).length > 0;
               const b = navBadgeFor(item, navBadges);
               return (
                 <li key={item.to} className="relative flex items-stretch">
@@ -2398,7 +2406,7 @@ function MobileSubmenu({
   pathname: string;
   onNavigate: () => void;
 }) {
-  const kids = parent.children ?? [];
+  const kids = listedChildren(parent);
   const primary = kids.filter((c) => !c.section);
   const sections: { label: string; items: NavItem[] }[] = [];
   for (const c of kids) {

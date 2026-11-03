@@ -26,7 +26,7 @@ export function AgreementDashboardCard() {
           <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
             Action required
           </p>
-          <h2 className="text-base font-black leading-tight tracking-tight sm:text-lg">
+          <h2 className="text-base font-bold leading-tight tracking-tight sm:text-lg">
             {prompt.title}
           </h2>
           <p className="mt-1 text-sm leading-snug text-muted-foreground">{prompt.body}</p>

@@ -22,18 +22,18 @@ export function PickPlanCard({ clientId }: { clientId: string }) {
   });
   if (isLoading || (programs ?? 0) > 0) return null;
   return (
-    <Card className="rounded-xl border-primary/30 bg-primary/5 p-4">
+    <Card className="p-4">
       <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted text-foreground">
           <BookOpen className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-black uppercase tracking-wider text-primary">Start here</div>
-          <h3 className="mt-0.5 text-sm font-bold leading-tight">Pick your plan</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <h3 className="text-base font-semibold leading-tight">Pick your plan</h3>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             Coach-written plans for every goal. Pick one, choose your days, and Week 1 lands on your calendar.
           </p>
-          <Button asChild size="sm" className="mt-2">
+          {/* a member with no plan: this is Home's one red action */}
+          <Button asChild className="mt-3 h-10">
             <Link to="/portal/plans">
               Browse plans <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>

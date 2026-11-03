@@ -1,33 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
-import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo, Suspense } from "react";
-import { lazyWithRetry } from "@/lib/lazy-chunk";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  Users, Calendar, DollarSign, Plus, Video, ShoppingCart,
-  HardDrive, ChefHat, FileText, Megaphone, ClipboardList, Mic, Zap,
-  MessageCircle, MoreHorizontal, Activity, Sparkles, Check, Dumbbell, Trophy, TrendingUp,
-} from "lucide-react";
+import { HardDrive, Activity, Check, ChevronRight, Dumbbell, Trophy } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import {
-  buildSnapshot, waitingOnMe, groupWins, winLine, revenueDelta, formatMoney, TIER_LABEL,
+  buildSnapshot, waitingOnMe, groupWins, winLine, TIER_LABEL,
   type InboxRow, type SnapshotTile, type Overview, type OverviewSession, type OverviewWin,
 } from "@/lib/dashboard-feed";
 import { DashboardScheduleCard } from "@/components/admin-calendar/dashboard-schedule-card";
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
-const PriceCardPickerDialog = lazyWithRetry(() =>
-  import("@/components/price-card-picker-dialog").then((m) => ({ default: m.PriceCardPickerDialog })),
-);
 import { UserAvatar } from "@/components/user-avatar";
 import { getCoachIntel } from "@/lib/coach-intel";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
@@ -50,7 +39,7 @@ function SectionHeader({ title, icon: Icon, viewAll }: { title: string; icon?: a
         {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}{title}
       </h2>
       {viewAll && (
-        <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="shrink-0 text-[11px] font-semibold text-primary hover:underline">
+        <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="shrink-0 text-[12px] font-semibold text-muted-foreground hover:text-foreground">
           {viewAll.label ?? "View all"} →
         </Link>
       )}
@@ -77,35 +66,9 @@ function DriveSetupBanner() {
         <div className="min-w-0 flex-1 truncate text-xs font-semibold">
           {data?.root_folder_id ? `Google Drive: ${data?.status ?? "Unknown"}` : "Google Drive not configured"}
         </div>
-        <Link to="/admin/settings"><Button size="sm" variant="outline" className="h-7 text-xs">Fix</Button></Link>
+        <Button asChild size="sm" variant="outline" className="h-9 text-xs"><Link to="/admin/settings">Fix</Link></Button>
       </div>
     </Card>
-  );
-}
-
-function ActionsSheet({ actions, trigger }: { actions: { label: string; to: string; icon: any; search?: any }[]; trigger: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-2xl" data-no-return>
-        <SheetHeader>
-          <SheetTitle>More actions</SheetTitle>
-        </SheetHeader>
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {actions.map((a) => (
-            <Link key={a.label} to={a.to as any} search={a.search} onClick={() => setOpen(false)} className="block">
-              <div className="flex h-full min-h-[80px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 p-2 text-center transition hover:border-primary/50 active:scale-[0.97]">
-                <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/15 text-primary">
-                  <a.icon className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">{a.label}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }
 
@@ -113,27 +76,45 @@ function ActionsSheet({ actions, trigger }: { actions: { label: string; to: stri
 /* Snapshot: the six numbers worth seeing every morning               */
 /* ------------------------------------------------------------------ */
 
+// Colour only where it means something: red = failing, amber = needs you.
 const TILE_TONE: Record<SnapshotTile["tone"], string> = {
   danger: "text-destructive",
-  warn: "text-amber-500",
-  info: "text-sky-500",
+  warn: "text-amber-600 dark:text-amber-500",
+  info: "text-foreground",
 };
 
+/**
+ * Only the numbers that have something in them: a zero is nothing to do, so it
+ * isn't a tile. With every number at zero the grid is one calm line.
+ */
 function SnapshotGrid({ tiles, loading }: { tiles: SnapshotTile[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2" aria-busy="true">
+        {tiles.map((t) => <div key={t.key} className="h-[76px] animate-pulse rounded-xl border border-border bg-card" />)}
+      </div>
+    );
+  }
+  const open = tiles.filter((t) => t.value > 0);
+  if (open.length === 0) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground" data-dashboard-caught-up>
+        <Check className="h-4 w-4 shrink-0 text-success" aria-hidden />
+        <span><span className="font-semibold text-foreground">All caught up.</span> No replies, check-ins, payments, agreements or programs waiting on you.</span>
+      </div>
+    );
+  }
   return (
-    <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
-      {tiles.map((t) => {
-        const clear = !loading && t.value === 0;
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2">
+      {open.map((t) => {
         const inner = (
           <div
             title={t.hint}
-            className="flex h-full flex-col justify-between rounded-xl border border-border bg-card px-3 py-2.5 transition hover:border-primary/40 active:scale-[0.97]"
+            className="flex h-full min-h-[76px] flex-col justify-between rounded-xl border border-border bg-card px-3 py-2.5 transition hover:border-foreground/30 active:scale-[0.97]"
           >
-            <div className={cn("flex items-center gap-1 text-[24px] font-black leading-none tabular-nums", clear ? "text-emerald-500" : TILE_TONE[t.tone])}>
-              {loading ? <span className="text-muted-foreground/50">–</span> : clear ? <Check className="h-6 w-6" aria-label="None" /> : t.value}
-            </div>
-            <div className="mt-1.5 text-[11px] font-semibold leading-tight text-muted-foreground">{t.label}</div>
-            <div className="mt-0.5 hidden line-clamp-1 text-[10px] text-muted-foreground/80 md:block">{clear ? "All clear" : t.hint}</div>
+            <div className={cn("text-[24px] font-bold leading-none tabular-nums", TILE_TONE[t.tone])}>{t.value}</div>
+            <div className="mt-1.5 text-[12px] font-semibold leading-tight text-foreground">{t.label}</div>
+            <div className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">{t.hint}</div>
           </div>
         );
         return t.flag ? (
@@ -157,8 +138,8 @@ function timeOf(iso: string | null) {
 
 const STATUS_CHIP: Record<OverviewSession["status"], { label: string; cls: string }> = {
   done: { label: "Done", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  training: { label: "Training now", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
-  pending: { label: "Not yet", cls: "bg-secondary text-muted-foreground" },
+  training: { label: "Training now", cls: "bg-foreground/10 text-foreground" },
+  pending: { label: "Not yet", cls: "bg-muted text-muted-foreground" },
 };
 
 function TrainingTodayCard({ overview, loading }: { overview: Overview | undefined; loading: boolean }) {
@@ -170,15 +151,15 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
     <Card className="border-border bg-card p-4">
       <SectionHeader title="Training today" icon={Dumbbell} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
       {loading ? (
-        <div className="h-16 animate-pulse rounded-lg bg-secondary/40" />
+        <div className="h-16 animate-pulse rounded-lg bg-muted" />
       ) : scheduled.length === 0 && extra.length === 0 ? (
-        <p className="rounded-lg bg-secondary/30 px-3 py-3 text-sm text-muted-foreground">No sessions scheduled today.</p>
+        <p className="py-1 text-sm text-muted-foreground">No workouts scheduled today.</p>
       ) : (
         <>
           {scheduled.length > 0 && (
             <div className="mb-1">
               <div className="flex items-baseline justify-between text-[12px]">
-                <span className="font-semibold"><span className="text-base font-black tabular-nums">{done}</span> of {scheduled.length} done</span>
+                <span className="font-semibold"><span className="text-base font-bold tabular-nums">{done}</span> of {scheduled.length} done</span>
                 <span className="text-muted-foreground">{scheduled.length - done} to go</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
@@ -234,10 +215,11 @@ function TrainingTodayCard({ overview, loading }: { overview: Overview | undefin
   );
 }
 
+// The label says which record it is; the chip stays neutral.
 const TIER_CHIP: Record<OverviewWin["tier"], string> = {
-  atpr: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  program: "bg-primary/15 text-primary",
-  block: "bg-secondary text-muted-foreground",
+  atpr: "bg-foreground/10 text-foreground",
+  program: "bg-muted text-foreground",
+  block: "bg-muted text-muted-foreground",
 };
 
 function WinsCard({ wins }: { wins: OverviewWin[] }) {
@@ -269,7 +251,7 @@ function WinsCard({ wins }: { wins: OverviewWin[] }) {
               <Link
                 to="/admin/messages"
                 search={{ client: g.client_id } as any}
-                className="inline-flex h-8 shrink-0 items-center rounded-full bg-primary/15 px-3 text-[11px] font-semibold text-primary transition hover:bg-primary/25 active:scale-95"
+                className="inline-flex h-9 shrink-0 items-center rounded-lg border border-border px-3 text-[12px] font-semibold text-foreground transition hover:bg-muted active:scale-95"
                 aria-label={`Message ${first}`}
               >
                 Send props
@@ -282,7 +264,7 @@ function WinsCard({ wins }: { wins: OverviewWin[] }) {
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="mt-2 w-full rounded-lg border border-border py-2 text-[12px] font-semibold text-primary hover:bg-secondary/50"
+          className="mt-2 min-h-10 w-full rounded-lg border border-border py-2 text-[12px] font-semibold text-foreground hover:bg-muted"
         >
           {showAll ? "Show less" : `Show ${groups.length - 4} more`}
         </button>
@@ -292,7 +274,6 @@ function WinsCard({ wins }: { wins: OverviewWin[] }) {
 }
 
 function AdminDashboard() {
-  const [sellTo, setSellTo] = useState<{ id: string; name: string } | null>(null);
   const offlineNoCache = useIsOfflineWithoutCache();
   const listDirectory = useServerFn(listClientsDirectoryFn);
   const liveQueueQuery = {
@@ -356,29 +337,7 @@ function AdminDashboard() {
   const pulseWatch = activeIntel.filter((x: any) =>
     !pulseAtRisk.includes(x) && x.compliance_pct != null && x.assigned > 0 && x.compliance_pct < 80
   );
-  const active = directory?.counts?.all ?? rows.length;
-  const pulseOnTrack = Math.max(0, active - pulseAtRisk.length - pulseWatch.length);
-
-  /* ---------- Quick actions ---------- */
-  const primaryActions = [
-    { label: "Add Client",  to: "/admin/clients",          icon: Plus },
-    { label: "Message",     to: "/admin/messages",         icon: MessageCircle },
-    { label: "Clients",     to: "/admin/clients",          icon: Users },
-    { label: "Program",     to: "/admin/program-library",  icon: FileText },
-  ];
-  const moreActions = [
-    { label: "Coach Feedback", to: "/admin/lift-videos",   icon: Video },
-    { label: "Forms",          to: "/admin/forms",         icon: ClipboardList },
-    { label: "Tasks",          to: "/admin/content",       icon: ClipboardList, search: { tab: "tasks" } as any },
-    { label: "Payment Link",   to: "/admin/payment-links", icon: DollarSign },
-    { label: "Appointment",    to: "/admin/calendar",      icon: Calendar },
-    { label: "Broadcast",      to: "/admin/broadcasts",    icon: Megaphone },
-    { label: "Recipe",         to: "/admin/recipes",       icon: ChefHat },
-    { label: "Add Product",    to: "/admin/payment-links", icon: ShoppingCart },
-    { label: "Apps & Tools",   to: "/admin/apps",          icon: Sparkles },
-    { label: "My Voice",       to: "/admin/voice",         icon: Mic },
-    { label: "Automations",    to: "/admin/automations",   icon: Zap },
-  ];
+  const pulseRows = [...pulseAtRisk, ...pulseWatch];
 
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
@@ -389,7 +348,7 @@ function AdminDashboard() {
     <>
       <PageHeader
         title="Today"
-        subtitle={directoryLoading ? todayLabel : openCount === 0 ? `${todayLabel} · you're all caught up` : `${todayLabel} · tap a number to work through it`}
+        subtitle={directoryLoading || openCount === 0 ? todayLabel : `${todayLabel} · tap a number to work through it`}
       />
 
       <div
@@ -406,11 +365,6 @@ function AdminDashboard() {
         <DriveSetupBanner />
         <NotificationSetupPrompt problemsOnly />
 
-        {/* ---------------- BIRTHDAY POSTS: only a draft that needs you (the rest is in Community > Birthdays) ---------------- */}
-        <SectionErrorBoundary label="Birthday posts">
-          <BirthdayPostsCard actionableOnly />
-        </SectionErrorBoundary>
-
         {/* ---------------- SNAPSHOT: tap any number to open that list in Clients / Messages ---------------- */}
         <SnapshotGrid tiles={snapshot} loading={directoryLoading} />
 
@@ -420,83 +374,33 @@ function AdminDashboard() {
         {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
         <WinsCard wins={overview?.wins ?? []} />
 
-        {/* ---------------- QUICK ACTIONS (deliberate moves: no "‹ Today" pill) ---------------- */}
-        <div className="grid grid-cols-5 gap-2" data-no-return>
-          {primaryActions.map((a) => (
-            <Link key={a.label} to={a.to as any} className="block">
-              <div className="flex h-full min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
-                <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
-                  <a.icon className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">{a.label}</div>
-              </div>
-            </Link>
-          ))}
-          <ActionsSheet
-            actions={moreActions}
-            trigger={
-              <button type="button" className="flex h-full min-h-[68px] w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-center transition hover:border-primary/50 active:scale-[0.96]">
-                <div className="grid h-8 w-8 place-items-center rounded-md bg-secondary text-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </div>
-                <div className="text-[11px] font-bold leading-tight">More</div>
-              </button>
-            }
-          />
-        </div>
-
-        {/* ---------------- CLIENT PULSE ---------------- */}
-        <Card className="border-border bg-card p-4">
-          <SectionHeader title="Client pulse · last 14 days" icon={Activity} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
-          <div className="grid grid-cols-3 divide-x divide-border rounded-lg bg-secondary/20 py-2.5">
-            <div className="text-center">
-              <div className="text-xl font-black text-emerald-500">{pulseOnTrack}</div>
-              <div className="text-[10px] font-semibold text-muted-foreground">On track</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-black text-amber-500">{pulseWatch.length}</div>
-              <div className="text-[10px] font-semibold text-muted-foreground">Watch</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-black text-destructive">{pulseAtRisk.length}</div>
-              <div className="text-[10px] font-semibold text-muted-foreground">Needs attention</div>
-            </div>
-          </div>
-          {(pulseAtRisk.length > 0 || pulseWatch.length > 0) && (
-            <ul className="mt-2 divide-y divide-border">
-              {[...pulseAtRisk, ...pulseWatch].slice(0, 4).map((x: any) => {
+        {/* ---------------- TRAINING TO CHECK: only who needs a look (pain, low adherence, gone quiet) ---------------- */}
+        {pulseRows.length > 0 && (
+          <Card className="border-border bg-card p-4">
+            <SectionHeader title="Training to check · last 14 days" icon={Activity} />
+            <ul className="divide-y divide-border">
+              {pulseRows.slice(0, 4).map((x: any) => {
                 const pain = (x.pain_flags ?? []).some((p: any) => p.status === "new" || p.status === "followup");
                 const reason = pain ? "Pain/discomfort reported" :
                   (x.labels ?? []).includes("inactive") ? "Inactive" :
                   x.compliance_pct != null ? `${x.compliance_pct}% of workouts done (${x.completed}/${x.assigned})` : "Needs review";
                 return (
                   <li key={x.client_id}>
-                    <ClientNameLink clientId={x.client_id} tab="training" className="flex items-center gap-2.5 py-2">
+                    <ClientNameLink clientId={x.client_id} tab="training" className="flex min-h-11 items-center gap-2.5 py-2">
                       <UserAvatar src={x.profile_picture_url ?? undefined} name={x.full_name ?? "Client"} size={30} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-bold">{x.full_name}</div>
-                        <div className="truncate text-[11px] text-muted-foreground">{reason}</div>
+                        <div className={cn("truncate text-[11px]", pain ? "text-destructive" : "text-muted-foreground")}>{reason}</div>
                       </div>
-                      <span className="text-[11px] font-semibold text-primary">Open</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                     </ClientNameLink>
                   </li>
                 );
               })}
             </ul>
-          )}
-        </Card>
-
+          </Card>
+        )}
       </div>
-
-      {sellTo ? (
-        <Suspense fallback={null}>
-          <PriceCardPickerDialog
-            open={!!sellTo}
-            fixedClientId={sellTo?.id}
-            onClose={() => setSellTo(null)}
-          />
-        </Suspense>
-      ) : null}
     </>
   );
 }

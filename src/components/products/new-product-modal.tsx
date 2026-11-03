@@ -1279,7 +1279,7 @@ export default function NewProductModal({
             type="button"
             onClick={handleSave}
             disabled={submitting}
-            className="bg-gradient-primary font-bold uppercase tracking-wide"
+            className="bg-primary font-semibold"
           >
             {submitting ? (
               <>

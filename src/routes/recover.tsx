@@ -42,7 +42,7 @@ function RecoverPage() {
       <div className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
         <div className="mb-6 flex items-center gap-3">
           <img src="/logo.png" alt="JF Effect" className="h-11 w-11 rounded-xl shadow-glow" />
-          <span className="text-lg font-black tracking-tight">JF EFFECT</span>
+          <span className="text-lg font-bold tracking-tight">JF EFFECT</span>
         </div>
 
         <div className="w-full max-w-sm">
@@ -50,7 +50,7 @@ function RecoverPage() {
             {!done ? (
               <>
                 <div className="text-center">
-                  <h1 className="text-xl font-black tracking-tight">Recover Your Account</h1>
+                  <h1 className="text-xl font-bold tracking-tight">Recover Your Account</h1>
                   <p className="mt-2 text-sm text-muted-foreground">
                     Enter the email address or mobile number on your account and we'll
                     send recovery instructions.
@@ -82,7 +82,7 @@ function RecoverPage() {
                   <Button
                     type="submit"
                     disabled={busy || identifier.trim().length < 3}
-                    className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                    className="w-full bg-primary py-6 text-sm font-semibold"
                   >
                     {busy ? "Sending…" : "Send Recovery Instructions"}
                   </Button>
@@ -96,11 +96,11 @@ function RecoverPage() {
               </>
             ) : (
               <div className="space-y-4 text-center">
-                <h2 className="text-xl font-black tracking-tight">Check your inbox</h2>
+                <h2 className="text-xl font-bold tracking-tight">Check your inbox</h2>
                 <p className="text-sm text-muted-foreground">{NEUTRAL_RESPONSE_MESSAGE}</p>
                 <Button
                   onClick={() => navigate({ to: "/auth" })}
-                  className="w-full bg-gradient-primary py-6 text-sm font-bold uppercase tracking-[0.15em] shadow-glow"
+                  className="w-full bg-primary py-6 text-sm font-semibold"
                 >
                   Back to login
                 </Button>

@@ -217,7 +217,7 @@ function CoachDetailPage() {
         <Card className="p-5">
           <h3 className="text-xs uppercase tracking-widest text-muted-foreground">Workload</h3>
           <div className="mt-3 flex gap-4">
-            <div><div className="text-2xl font-black">{assigned.length}</div><div className="text-xs uppercase text-muted-foreground">Clients</div></div>
+            <div><div className="text-2xl font-bold">{assigned.length}</div><div className="text-xs uppercase text-muted-foreground">Clients</div></div>
           </div>
         </Card>
       </div>

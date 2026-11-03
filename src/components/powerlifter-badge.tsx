@@ -28,7 +28,7 @@ export function PowerlifterBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 font-semibold uppercase tracking-wider text-primary",
+        "inline-flex items-center gap-1 rounded-full border border-border bg-muted font-medium text-foreground",
         sizing,
         className,
       )}

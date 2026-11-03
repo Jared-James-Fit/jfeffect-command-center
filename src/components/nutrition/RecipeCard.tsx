@@ -72,7 +72,7 @@ export function RecipeCard({
         )}
 
         <div className="relative mt-1 flex items-center justify-between rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-primary">
-          <span className="text-[11px] font-black uppercase tracking-widest">View Recipe</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest">View Recipe</span>
           <ChevronRight className="h-4 w-4" />
         </div>
       </Card>

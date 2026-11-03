@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, ChevronUp, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
  * The Focus intro: a small card under the List / Focus switch that shows what
@@ -95,35 +96,28 @@ export function FocusIntro({ onTry, onDismiss }: { onTry: () => void; onDismiss:
     <div
       data-testid="focus-intro"
       role="region"
-      aria-label="New: Focus"
-      className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/[0.13] via-card to-card p-3.5 animate-in fade-in-0 slide-in-from-top-2 duration-500"
+      aria-label="Focus"
+      className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5 animate-in fade-in-0 slide-in-from-top-2 duration-500"
     >
       <FocusIntroAnimation />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-primary-foreground">New</span>
-          <span className="text-sm font-bold text-foreground">Focus</span>
-        </div>
-        <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
+        <div className="text-base font-semibold text-foreground">Focus</div>
+        <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
           One exercise at a time, full screen. Log your sets, then swipe up for the next one.
         </p>
         <div className="mt-2.5 flex items-center gap-1.5">
-          <button
-            type="button"
-            data-testid="focus-intro-try"
-            onClick={onTry}
-            className="h-9 rounded-full bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm shadow-primary/25 transition active:scale-95"
-          >
+          <Button type="button" data-testid="focus-intro-try" onClick={onTry} className="h-10 rounded-full px-4">
             Try Focus
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             data-testid="focus-intro-dismiss"
             onClick={onDismiss}
-            className="h-9 rounded-full px-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground active:scale-95"
+            className="h-10 rounded-full px-3 text-muted-foreground"
           >
             Not now
-          </button>
+          </Button>
         </div>
       </div>
     </div>

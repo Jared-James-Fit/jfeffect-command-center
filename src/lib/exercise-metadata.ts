@@ -193,22 +193,25 @@ export function deriveWeeklyPurposeLabelByRowId<
   return byRowId;
 }
 
-/** Badge color class for a purpose label. */
-export function purposeLabelBadgeClass(label: string | null | undefined): string {
+/**
+ * Badge class for a purpose label: neutral for every label. The purpose is
+ * read from its words; colour on an exercise card belongs to the movement
+ * family stripe (and status), not a second colour code.
+ */
+export function purposeLabelBadgeClass(_label?: string | null): string {
+  return "border-border bg-muted text-muted-foreground";
+}
+
+/**
+ * A purpose label as shown on a badge, in sentence case: "Warm-Up" → "Warm-up",
+ * "competition" → "Competition". Later words lose a leading capital only when
+ * they're plain Title Case, so a coach's "Back-Off AMRAP" keeps its acronym.
+ */
+export function purposeLabelText(label: string | null | undefined): string {
   const l = (label ?? "").trim();
-  if (l === "Assistance") {
-    return "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400";
-  }
-  if (l === "Primary") {
-    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400";
-  }
-  if (l === "Secondary") {
-    return "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400";
-  }
-  if (["Tertiary", "Quaternary"].includes(l)) {
-    return "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-400";
-  }
-  return "border-muted-foreground/30 bg-muted text-muted-foreground";
+  if (!l) return "";
+  const rest = l.slice(1).replace(/([\s-])([A-Z])([a-z]+)\b/g, (_m, sep: string, first: string, tail: string) => `${sep}${first.toLowerCase()}${tail}`);
+  return l.charAt(0).toUpperCase() + rest;
 }
 
 /** Suggested purpose-label options shown in the manual override picker. */

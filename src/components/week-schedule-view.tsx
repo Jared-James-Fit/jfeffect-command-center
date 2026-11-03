@@ -267,7 +267,7 @@ export function WeekScheduleView({
       {todaysCell && (
         <Card className="border-primary/40 bg-primary/5 p-3">
           <div className="flex items-start gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/20 text-primary font-black">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/20 text-primary font-bold">
               {format(parseISO(todaysCell.dateISO), "d")}
             </div>
             <div className="min-w-0 flex-1">
@@ -337,7 +337,7 @@ function DayCard({
           <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
             {SHORT_DAY[cell.weekday]}
           </div>
-          <div className="text-sm font-black">{format(parseISO(cell.dateISO), "MMM d")}</div>
+          <div className="text-sm font-bold">{format(parseISO(cell.dateISO), "MMM d")}</div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           {cell.isToday && <Badge className="bg-primary text-primary-foreground text-[10px]">Today</Badge>}

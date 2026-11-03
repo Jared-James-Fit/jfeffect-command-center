@@ -79,7 +79,7 @@ function Body({ postId, unit, viewerIsStaff, onClose, onOpenAuthor }: { postId: 
         <button type="button" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full hover:bg-muted" aria-label="Back">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="text-[15px] font-black">{post?.kind === "note" ? "Post" : "Workout"}</div>
+        <div className="text-[15px] font-bold">{post?.kind === "note" ? "Post" : "Workout"}</div>
         {post && <PostActions post={post} viewerIsStaff={viewerIsStaff} onGone={onClose} unit={unit} className="ml-auto grid h-11 w-11 place-items-center rounded-full text-muted-foreground hover:bg-muted" />}
       </header>
 
@@ -210,7 +210,7 @@ function Detail({
           {tiles.map((t) => (
             <div key={t.label} className="rounded-2xl border border-border/70 bg-card px-3 py-2.5">
               <div className={cn("font-display truncate uppercase leading-none", t.value.length > 7 ? "text-[19px]" : "text-[24px]", t.gold && "text-amber-600 dark:text-amber-400")}>{t.value}</div>
-              <div className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">{t.label}</div>
+              <div className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{t.label}</div>
             </div>
           ))}
         </div>
@@ -218,11 +218,11 @@ function Detail({
 
       {post.exercises.length > 0 && (
         <section className="px-4 pt-5">
-          <div className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">The work</div>
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">The work</div>
           <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
             {post.exercises.map((e, i) => (
               <div key={`${e.name}-${i}`} className="flex items-center gap-3 px-3.5 py-3">
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-black text-muted-foreground">{i + 1}</div>
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">{i + 1}</div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14px] font-bold">{e.name}</div>
                   <div className="text-[11px] text-muted-foreground">
@@ -231,7 +231,7 @@ function Detail({
                 </div>
                 <div className="text-right">
                   <div className={cn("font-display text-[19px] uppercase leading-none", e.pr && "text-amber-600 dark:text-amber-400")}>{formatExerciseBest(e, unit)}</div>
-                  {e.pr && <div className="mt-1 text-[9px] font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">{SCOPE_WORD[e.pr]}</div>}
+                  {e.pr && <div className="mt-1 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{SCOPE_WORD[e.pr]}</div>}
                 </div>
               </div>
             ))}
@@ -255,7 +255,7 @@ function Detail({
       </div>
 
       <section className="border-t border-border/60">
-        <div className="px-4 pt-3 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Comments</div>
+        <div className="px-4 pt-3 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Comments</div>
         <CommentThread post={post} viewerIsStaff={viewerIsStaff} inline onOpenAuthor={onOpenAuthor} />
       </section>
     </div>

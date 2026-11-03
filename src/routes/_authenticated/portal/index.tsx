@@ -1,6 +1,5 @@
-import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { HomeSectionLabel } from "@/components/portal/home-section-label";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +8,7 @@ import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goa
 import type { TrainingPhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
-import { HomeScreenSetupCard } from "@/components/home-screen-setup-card";
+import { HomeScreenSetupTracker } from "@/components/home-screen-setup-card";
 import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
@@ -26,7 +25,6 @@ import { LevelCelebrations } from "@/components/portal/athlete-level-card";
 import { MissingBodyweightPrompt } from "@/components/portal/missing-bodyweight-prompt";
 import { SexPromptCard } from "@/components/athlete-sex";
 import { useEffect, useState } from "react";
-import { listMyPortalAppointments } from "@/lib/appointments.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { setClientTimeZone, bootstrapClientOccurrences } from "@/lib/action-centre.functions";
 import { ensureDueMessengerCheckins } from "@/lib/messenger-checkins.functions";
@@ -36,13 +34,22 @@ import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/po
 import { DeferRender } from "@/components/defer-render";
 import { logPerf } from "@/lib/perf-timing";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
-import { CalendarSyncCard } from "@/components/schedule/calendar-sync-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { GoalsSetupFlow } from "@/components/client-goals/GoalsSetupFlow";
 import { Target } from "lucide-react";
 import { useServiceTier } from "@/lib/service-tier";
 
 export const Route = createFileRoute("/_authenticated/portal/")({ component: PortalHome });
+
+/** Clients the Goals & Setup prompt already opened for in this app launch (module state: a reload starts over). */
+const goalsPromptShownFor = new Set<string>();
+
+/** No popup, sheet or drawer open, so a new one never stacks on another. */
+function uiIsClear() {
+  return !document.querySelector(
+    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-vaul-drawer][data-state="open"]',
+  );
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -156,27 +163,30 @@ function PortalHome() {
   });
 
   const [goalsSetupPromptOpen, setGoalsSetupPromptOpen] = useState(false);
-  const [goalsSetupPromptDismissed, setGoalsSetupPromptDismissed] = useState(false);
 
-  // Prompt incomplete clients once per app load. Closing only dismisses this
-  // session; it never marks Goals & Setup complete, so it returns next load/login.
+  // Prompt incomplete clients once per app launch (not on every visit to Home),
+  // and only once nothing else is open: it waits for any other popup or sheet to
+  // close first. Closing never marks Goals & Setup complete, so it comes back on
+  // the next launch; the setup checklist keeps its row in between.
+  const goalsIncomplete = goalsSetup !== undefined && !isGoalsSetupComplete(goalsSetup ?? null);
+  const promptClientId = client?.id ?? null;
   useEffect(() => {
-    if (!client?.id || !coaching || goalsSetup === undefined || goalsSetupPromptDismissed) return;
-    if (!isGoalsSetupComplete(goalsSetup ?? null)) setGoalsSetupPromptOpen(true);
-  }, [client?.id, coaching, goalsSetup, goalsSetupPromptDismissed]);
+    if (!promptClientId || !coaching || !goalsIncomplete || goalsPromptShownFor.has(promptClientId)) return;
+    let stopped = false;
+    let timer = 0;
+    const tick = () => {
+      if (stopped || goalsPromptShownFor.has(promptClientId)) return;
+      if (uiIsClear()) {
+        goalsPromptShownFor.add(promptClientId);
+        setGoalsSetupPromptOpen(true);
+        return;
+      }
+      timer = window.setTimeout(tick, 1200);
+    };
+    timer = window.setTimeout(tick, 1500);
+    return () => { stopped = true; window.clearTimeout(timer); };
+  }, [promptClientId, coaching, goalsIncomplete]);
 
-  // Compact upcoming appointment (single, only if within ~14 days).
-  const fetchPortalAppointments = usePovFn(useServerFn(listMyPortalAppointments));
-  const povKey = usePovArgs().viewAsClientId ?? null;
-  const { data: appts = [] } = useQuery({
-    queryKey: ["portal-next-appointment", povKey],
-    queryFn: async () => {
-      const res: any = await fetchPortalAppointments();
-      return (res?.upcoming ?? []) as any[];
-    },
-  });
-  useEffect(() => { if (appts) logPerf("card:appointments loaded"); }, [appts]);
-  const nextAppointment: any = (appts as any[])[0] ?? null;
 
   // Only derive the name from the loaded client record. Falling back to the
   // email username mid-load caused a visible "jaredm…" → "Jared" flash.
@@ -197,14 +207,11 @@ function PortalHome() {
       {client?.id && coaching && (
         <Dialog
           open={goalsSetupPromptOpen && !isGoalsSetupComplete(goalsSetup ?? null)}
-          onOpenChange={(open) => {
-            setGoalsSetupPromptOpen(open);
-            if (!open && !isGoalsSetupComplete(goalsSetup ?? null)) setGoalsSetupPromptDismissed(true);
-          }}
+          onOpenChange={setGoalsSetupPromptOpen}
         >
           <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-4 sm:p-6">
             <DialogHeader className="text-left">
-              <div className="mb-2 grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
+              <div className="mb-2 grid h-10 w-10 place-items-center rounded-full bg-muted text-foreground">
                 <Target className="h-5 w-5" />
               </div>
               <DialogTitle>Finish your Goals & Setup</DialogTitle>
@@ -217,13 +224,9 @@ function PortalHome() {
         </Dialog>
       )}
       {client?.id && portalUserId && <MissingBodyweightPrompt userId={portalUserId} />}
-      {client?.id && (
-        <HomeScreenSetupCard
-          clientId={client.id}
-          status={(client as any).home_screen_setup_status}
-          remindAfter={(client as any).home_screen_setup_remind_after}
-        />
-      )}
+      {/* Installing the app is asked by the launch popup (HomeScreenSetupGate) and
+          InstallAppCard below; this only records it for the coach once it's done. */}
+      {client?.id && <HomeScreenSetupTracker clientId={client.id} status={(client as any).home_screen_setup_status} />}
 
       <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pb-safe-bottom pt-3 md:max-w-5xl md:px-8 md:pt-6 animate-fade-in">
         {/* Home is two sections: Today (what to do) and Progress (what to log).
@@ -232,6 +235,7 @@ function PortalHome() {
         {/* ── Today ───────────────────────────────────────────── */}
         <section className="space-y-3" aria-label="Today">
           <GreetingHeader firstName={firstName} />
+          {/* only says something when it matters: offline, or a refresh that failed */}
           <DashboardRefreshIndicator />
 
           {/* the week strip and the selected day's workout / sessions (full calendar one tap away) */}
@@ -248,15 +252,21 @@ function PortalHome() {
 
           {clientSettled && !client ? <NoProfileCard /> : null}
 
-          {/* Needs-you items: each hides itself once it's done. */}
-          {coaching && (
-            <SectionErrorBoundary label="Coaching agreement">
-              <AgreementDashboardCard />
-            </SectionErrorBoundary>
-          )}
+          {/* Needs-you items: each hides itself once it's done. The setup checklist
+              is the one onboarding card (agreement, photo, info, schedule, Goals &
+              Setup, calendar sync); once only the agreement is left, or a new
+              version needs signing, the agreement card takes its place. */}
           {client?.id && portalUserId && coaching && (
             <SectionErrorBoundary label="Setup checklist">
-              <SetupChecklistBanner clientId={client.id} userId={portalUserId ?? ""} />
+              <SetupChecklistBanner
+                clientId={client.id}
+                userId={portalUserId ?? ""}
+                whenHidden={
+                  <SectionErrorBoundary label="Coaching agreement">
+                    <AgreementDashboardCard />
+                  </SectionErrorBoundary>
+                }
+              />
             </SectionErrorBoundary>
           )}
           {client?.id && (
@@ -265,10 +275,11 @@ function PortalHome() {
             </SectionErrorBoundary>
           )}
 
-          {/* PT package (only with an active one) and events (only when there's one coming) */}
+          {/* PT package credits (only with an active one; the next session is in the
+              calendar card above) and events (only when there's one coming) */}
           {client?.id && coaching && (
             <SectionErrorBoundary label="Sessions">
-              <SessionsCard clientId={client.id} nextAppointmentAt={nextAppointment?.starts_at ?? null} />
+              <SessionsCard clientId={client.id} />
             </SectionErrorBoundary>
           )}
           <DeferRender placeholderHeight="h-0">
@@ -321,13 +332,13 @@ function PortalHome() {
         {/* New-milestone reveals pop here, on the way in */}
         {client?.id && <LevelCelebrations clientId={client.id} />}
 
-        {/* Setup: install, notifications, calendar. Each one only while it still
-            needs doing; nothing once it's done (Account and Schedule keep theirs). */}
+        {/* Setup: install and notifications, each only while it still needs doing
+            (Account keeps both). Calendar sync is the setup checklist's optional
+            step and the Calendar page's own card, so it isn't asked a third time. */}
         {client && (
           <div className="space-y-3">
             <InstallAppCard hideWhenDone />
             <NotificationSetupPrompt problemsOnly />
-            <CalendarSyncCard hideWhenDone />
           </div>
         )}
 
@@ -351,7 +362,7 @@ function GreetingHeader({ firstName }: { firstName: string }) {
   }, []);
   void now;
   return (
-    <h1 className="truncate text-xl font-black tracking-tight md:text-2xl">
+    <h1 className="truncate text-xl font-bold tracking-tight md:text-2xl">
       {greeting()}{firstName ? `, ${firstName}` : ""}
     </h1>
   );

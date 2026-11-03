@@ -81,7 +81,7 @@ export function PredictedWindowCard({ clientId, currentBlockId }: Props) {
   return (
     <section aria-label="Predicted best window">
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           <Target className="h-5 w-5 text-primary" />
           Best Performance Window
         </h2>
@@ -90,10 +90,10 @@ export function PredictedWindowCard({ clientId, currentBlockId }: Props) {
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4">
           <div className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Week</span>
-            <span className="text-2xl font-black leading-none">{data.week}</span>
+            <span className="text-2xl font-bold leading-none">{data.week}</span>
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-black text-foreground">Predicted peak week</div>
+            <div className="text-sm font-bold text-foreground">Predicted peak week</div>
             <div className="text-xs text-muted-foreground">{data.rationale}</div>
             <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
               {data.confidence} confidence

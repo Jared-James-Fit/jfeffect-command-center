@@ -31,7 +31,7 @@ export function AtHomeBackupAdminPanel({ clientId }: { clientId: string }) {
 
   return (
     <section>
-      <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
         <Home className="h-3.5 w-3.5" /> At-Home Backup
       </h2>
       <Card className="space-y-4 p-4">

@@ -223,7 +223,7 @@ export function ExerciseLibraryControlCenter({
         <SummaryChip label="Missing video" value={summary.missingVideo + summary.brokenVideo} tone="warn" onClick={() => setFilter("novideo")} active={filter === "novideo"} />
         <SummaryChip label="Need attention" value={summary.needsAttention} tone="alert" onClick={() => setFilter("attention")} active={filter === "attention"} />
         <div className="hidden sm:ml-auto sm:block">
-          <Button type="button" onClick={actions.onAdd} className="bg-gradient-primary font-bold uppercase tracking-wide">
+          <Button type="button" onClick={actions.onAdd} className="bg-primary font-semibold">
             <Plus className="mr-1.5 h-4 w-4" /> Add exercise
           </Button>
         </div>
@@ -247,7 +247,7 @@ export function ExerciseLibraryControlCenter({
             </button>
           )}
         </div>
-          <Button type="button" onClick={actions.onAdd} aria-label="Add exercise" className="h-11 w-11 shrink-0 bg-gradient-primary p-0 sm:hidden">
+          <Button type="button" onClick={actions.onAdd} aria-label="Add exercise" className="h-11 w-11 shrink-0 bg-primary p-0 sm:hidden">
             <Plus className="h-5 w-5" />
           </Button>
         </div>
@@ -307,7 +307,7 @@ export function ExerciseLibraryControlCenter({
         </div>
       ) : view === "list" ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-3 border-b bg-muted/40 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground lg:grid">
+          <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-3 border-b bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:grid">
             <span>Canonical exercise</span><span>Family</span><span>Primary muscles</span><span className="w-28 text-right">Used in</span>
           </div>
           <ul className="divide-y divide-border">
@@ -322,7 +322,7 @@ export function ExerciseLibraryControlCenter({
               <section key={fam} className="overflow-hidden rounded-xl border border-border bg-card">
                 <header className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
                   <Layers className="h-3.5 w-3.5 text-primary" />
-                  <h3 className="text-xs font-black uppercase tracking-wider">{fam}</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider">{fam}</h3>
                   <span className="text-[11px] text-muted-foreground">{list.length} variation{list.length === 1 ? "" : "s"} · {withVideo}/{list.length} with video</span>
                 </header>
                 <ul className="divide-y divide-border">
@@ -361,7 +361,7 @@ function SummaryChip({ label, value, tone, onClick, active }: {
     <button type="button" onClick={onClick}
       className={cn("flex min-h-12 min-w-0 flex-col items-start justify-center rounded-xl border px-2 py-1 text-left transition-colors sm:min-h-10 sm:flex-row sm:items-baseline sm:gap-1.5 sm:px-3",
         active ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-accent/50")}>
-      <span className={cn("text-base font-black leading-tight tabular-nums sm:text-lg",
+      <span className={cn("text-base font-bold leading-tight tabular-nums sm:text-lg",
         tone === "good" && "text-emerald-600 dark:text-emerald-400",
         tone === "warn" && value > 0 && "text-amber-600 dark:text-amber-400",
         tone === "alert" && value > 0 && "text-destructive")}>{value.toLocaleString()}</span>
@@ -375,7 +375,7 @@ function SummaryChip({ label, value, tone, onClick, active }: {
 function Pill({ children, tone = "neutral", onClick, title }: {
   children: React.ReactNode; tone?: "neutral" | "good" | "warn" | "alert" | "primary" | "muted"; onClick?: () => void; title?: string;
 }) {
-  const cls = cn("inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[10px] font-black uppercase tracking-wide",
+  const cls = cn("inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[10px] font-bold uppercase tracking-wide",
     tone === "good" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
     tone === "warn" && "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
     tone === "alert" && "bg-destructive/10 text-destructive",
@@ -684,7 +684,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <div>
       <div className="mb-1.5">
-        <div className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{title}</div>
+        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{title}</div>
         {hint && <div className="text-[11px] text-muted-foreground/80">{hint}</div>}
       </div>
       {children}
@@ -797,13 +797,13 @@ function DuplicateReviewDialog({ a, b, usage, isAdmin, onDone }: {
               <div className="text-[11px] text-muted-foreground">
                 {e.exercise_family || "No family"} · {muscleLabels(e.muscle_groups).join(", ") || "no muscles"} · {usage.get(e.id)?.active_clients ?? 0} active clients · {usage.get(e.id)?.logged_sets ?? 0} logged sets
               </div>
-              <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-primary">{keepId === e.id ? "Keep — canonical" : "Becomes an alias"}</div>
+              <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-primary">{keepId === e.id ? "Keep — canonical" : "Becomes an alias"}</div>
             </div>
           </label>
         ))}
       </div>
       <div className="rounded-xl bg-muted/50 p-3 text-xs">
-        <div className="mb-1 font-black uppercase tracking-wider text-muted-foreground">What “Make alias” will do</div>
+        <div className="mb-1 font-bold uppercase tracking-wider text-muted-foreground">What “Make alias” will do</div>
         {isPending ? <div className="text-muted-foreground">Checking usage…</div>
           : error ? <div className="text-destructive">{(error as Error).message}</div>
           : pv && (
@@ -819,7 +819,7 @@ function DuplicateReviewDialog({ a, b, usage, isAdmin, onDone }: {
       <DialogFooter className="gap-2 sm:gap-2">
         <Button type="button" variant="ghost" onClick={keepSeparate} disabled={busy}>Keep separate</Button>
         {isAdmin
-          ? <Button type="button" onClick={makeAlias} disabled={busy || isPending || !!error} className="bg-gradient-primary font-bold">Make alias</Button>
+          ? <Button type="button" onClick={makeAlias} disabled={busy || isPending || !!error} className="bg-primary font-semibold">Make alias</Button>
           : <span className="text-xs text-muted-foreground">Only admins can merge.</span>}
       </DialogFooter>
     </DialogContent>

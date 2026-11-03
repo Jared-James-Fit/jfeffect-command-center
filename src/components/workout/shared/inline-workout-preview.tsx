@@ -5,7 +5,7 @@ import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
 import { Check, Circle, CircleDot, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { derivePurposeLabels, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
+import { derivePurposeLabels, purposeLabelBadgeClass, purposeLabelText } from "@/lib/exercise-metadata";
 import { computeWorkoutProgress } from "@/lib/workout-progress";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
@@ -272,7 +272,7 @@ export function InlineWorkoutPreview({
         const isComplete = loggedCount >= prescribedSets;
         const isPartial = loggedCount > 0 && !isComplete;
         const label = purposeLabels[i];
-        const chip = label && label.trim() ? { label: label.toUpperCase(), tone: purposeLabelBadgeClass(label) } : null;
+        const chip = label && label.trim() ? { label: purposeLabelText(label), tone: purposeLabelBadgeClass(label) } : null;
         const name = displayExerciseName(row);
         const family = resolveMovementFamily(row.exercises, row.movement_family);
         const prescribed = prescribedLine(row);
@@ -299,14 +299,14 @@ export function InlineWorkoutPreview({
                 {chip && (
                   <span
                     className={cn(
-                      "rounded-sm border px-1 py-px text-[9px] font-bold tracking-wider",
+                      "rounded-sm border px-1 py-px text-[10px] font-medium",
                       chip.tone,
                     )}
                   >
                     {chip.label}
                   </span>
                 )}
-                <ExerciseOrderBadge position={i + 1} family={family} size="sm" />
+                <ExerciseOrderBadge position={i + 1} family={family} size="sm" tone="neutral" />
                 <span className="truncate text-[13px] font-semibold">{name}</span>
               </div>
               {prescribed && (
@@ -314,7 +314,7 @@ export function InlineWorkoutPreview({
               )}
               {loggedCount > 0 && (
                 <div className="mt-1 space-y-0.5">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                  <div className="text-[11px] font-medium text-muted-foreground">
                     {loggedCount} of {prescribedSets} sets completed
                   </div>
                   {results.slice(0, maxSetsShown).map((s, idx) => (

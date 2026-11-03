@@ -174,7 +174,9 @@ function ClientsDirectoryPage() {
     <>
       <PageHeader
         title={kind === "members" ? "Members" : kind === "team" ? "Team" : "Clients"}
-        subtitle={kind === "clients" && counts ? `${counts.all} active` : undefined}
+        // The count is said once: on the Clients / Members / Team switcher for
+        // admins, here for coaches (who don't get the switcher).
+        subtitle={!isAdmin && counts ? `${counts.all} active` : undefined}
         actions={
           isAdmin && !viewOnly && kind === "clients" ? (
             <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>

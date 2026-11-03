@@ -41,7 +41,7 @@ export function CalculatorTool({ unit, state: s, press }: { unit: WarmupUnit; st
     <div data-testid="calc-tool">
       <div className="mb-2 rounded-xl border border-border bg-background px-3 py-1.5 text-right" aria-live="polite">
         <div className="h-4 truncate text-[11px] tabular-nums text-muted-foreground" data-testid="calc-note">{s.note}</div>
-        <div className="truncate text-3xl font-black tabular-nums text-foreground" data-testid="calc-display">{s.display}</div>
+        <div className="truncate text-3xl font-bold tabular-nums text-foreground" data-testid="calc-display">{s.display}</div>
       </div>
       <div className="grid grid-cols-4 gap-1.5">
         <button type="button" className={fn} onClick={key({ type: "clear" })}>C</button>
@@ -124,7 +124,7 @@ export function E1rmTool({ picks, defaultUnit }: { picks: E1rmPick[]; defaultUni
                 )}
               >
                 <span className="truncate">{p.name}</span>
-                <span className="shrink-0 font-black tabular-nums">{fmt(p.e1rm)} {p.unit}</span>
+                <span className="shrink-0 font-bold tabular-nums">{fmt(p.e1rm)} {p.unit}</span>
               </button>
             ))}
           </div>
@@ -173,7 +173,7 @@ export function E1rmTool({ picks, defaultUnit }: { picks: E1rmPick[]; defaultUni
         <span className="text-xs text-muted-foreground">Rough 1RM</span>
         {max != null ? (
           <span className="text-right">
-            <span className="text-2xl font-black tabular-nums text-foreground" data-testid="e1rm-result">≈ {fmt(max)} {unit}</span>
+            <span className="text-2xl font-bold tabular-nums text-foreground" data-testid="e1rm-result">≈ {fmt(max)} {unit}</span>
             <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">{fmt(other!)} {unit === "kg" ? "lb" : "kg"}</span>
           </span>
         ) : (

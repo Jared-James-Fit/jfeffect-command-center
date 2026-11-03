@@ -80,7 +80,7 @@ export function LiveAvatar({
         <span
           aria-label="Live"
           className={cn(
-            "jf-live-pill absolute left-1/2 -translate-x-1/2 rounded-[5px] font-black uppercase leading-none tracking-wide text-white ring-2 ring-background",
+            "jf-live-pill absolute left-1/2 -translate-x-1/2 rounded-[5px] font-bold uppercase leading-none tracking-wide text-white ring-2 ring-background",
             tone === "red" ? "bg-red-500" : "bg-emerald-500",
             size >= 56 ? "-bottom-1.5 px-1.5 py-[3px] text-[9px]" : "-bottom-1 px-1 py-[2px] text-[8px]",
           )}
@@ -96,7 +96,7 @@ export function LiveAvatar({
 /** A red pill for something happening now ("Live", "Training now"), glowing, with its dot breathing. */
 export function LivePill({ children = "Live", className }: { children?: ReactNode; className?: string }) {
   return (
-    <span className={cn("jf-live-pill inline-flex items-center gap-1 rounded-[5px] bg-red-500 px-1 text-[9px] font-black uppercase leading-[14px] tracking-wide text-white", className)}>
+    <span className={cn("jf-live-pill inline-flex items-center gap-1 rounded-[5px] bg-red-500 px-1 text-[9px] font-bold uppercase leading-[14px] tracking-wide text-white", className)}>
       <LiveDot size={5} tone="white" ring={false} />
       {children}
     </span>

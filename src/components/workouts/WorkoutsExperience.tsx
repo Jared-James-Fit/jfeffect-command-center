@@ -202,7 +202,7 @@ export function WorkoutsExperience({
   const subtitle = headerBlockName ? (
     <span className="inline-flex max-w-full items-center gap-1.5" data-testid="workouts-block">
       {headerBlockName.tag && (
-        <span className="shrink-0 rounded bg-secondary px-1.5 py-px text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <span className="shrink-0 rounded bg-secondary px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {headerBlockName.tag}
         </span>
       )}
@@ -515,29 +515,26 @@ export function WorkoutsExperience({
             <div className="flex items-center justify-between gap-2">
               {client ? <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" /> : <span />}
               {!isLoading && dayItems.length > 0 && (
-                <div className="inline-flex shrink-0 rounded-full border bg-card p-0.5 text-[12px]">
-                  <button
-                    type="button"
-                    onClick={() => setCalView("week")}
-                    className={cn(
-                      "h-7 rounded-full px-3 font-bold",
-                      calView === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
-                    )}
-                    aria-pressed={calView === "week"}
-                  >
-                    Week
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalView("month")}
-                    className={cn(
-                      "h-7 rounded-full px-3 font-bold",
-                      calView === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary",
-                    )}
-                    aria-pressed={calView === "month"}
-                  >
-                    Month
-                  </button>
+                <div className="inline-flex shrink-0 rounded-full bg-muted px-0.5 text-[13px]" role="group" aria-label="Calendar view">
+                  {(["week", "month"] as const).map((v) => (
+                    // The whole 40px is the tap target; the pill inside is what shows.
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setCalView(v)}
+                      className="group inline-flex h-10 items-center px-0.5 focus-visible:outline-none"
+                      aria-pressed={calView === v}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex h-8 items-center rounded-full px-3 font-semibold transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                          calView === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground group-hover:text-foreground",
+                        )}
+                      >
+                        {v === "week" ? "Week" : "Month"}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
@@ -716,7 +713,7 @@ function MonthGrid({
           type="button"
           onClick={() => onSelectDate(addMonths(selectedDate, -1))}
           aria-label="Previous month"
-          className="rounded p-1 hover:bg-secondary"
+          className="-my-1 grid h-10 w-10 place-items-center rounded-lg hover:bg-secondary"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -727,7 +724,7 @@ function MonthGrid({
           type="button"
           onClick={() => onSelectDate(addMonths(selectedDate, 1))}
           aria-label="Next month"
-          className="rounded p-1 hover:bg-secondary"
+          className="-my-1 grid h-10 w-10 place-items-center rounded-lg hover:bg-secondary"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -778,7 +775,7 @@ function MonthGrid({
             >
               <div className="flex items-center justify-between">
                 <span className={cn(
-                  "text-xs font-black",
+                  "text-xs font-bold",
                   isToday && !isSelected ? "text-primary" : "",
                 )}>
                   {format(d, "d")}
@@ -868,10 +865,11 @@ function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[
   // A session opens its quick view here (details, Change time, Can't make it); an appointment opens the Calendar.
   const [openSession, setOpenSession] = useState<ClientSession | null>(null);
   return (
-    <Card className="border-violet-500/30 px-3.5 pb-1.5 pt-3">
+    <Card className="px-3.5 pb-1.5 pt-3">
       <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-        <h3 className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-violet-400">
-          <CalendarIcon className="h-3.5 w-3.5" />
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          {/* violet = sessions with the coach, as on the week strip's dot */}
+          <CalendarIcon className="h-4 w-4 text-violet-500" />
           {sessions.length === 1 ? "Session with your coach" : "Sessions with your coach"}
         </h3>
         <Link to="/portal/calendar" search={{ date: day } as any} className="inline-flex shrink-0 items-center text-xs font-semibold text-muted-foreground hover:text-foreground">
@@ -1063,7 +1061,11 @@ function SelectedDayCard({
   // Always offered: typed-but-unchecked sets and warm-ups don't show up as
   // started/logged, and hiding Reset on a 0% workout made it look missing.
   const canReset = canChangeWorkoutStatus;
-  const hasMenuActions = canChangeWorkoutStatus || isCompleted
+  // The card shows one main button (+ Preview); Reschedule, Change status and
+  // Edit live in its ⋯ with the rest, once each.
+  const canReschedule = !readonly;
+  const canEditHere = canEditWorkout && !!item?.day?.id;
+  const hasMenuActions = canReschedule || canEditHere || canChangeWorkoutStatus || isCompleted
     || (canManageBackupLifecycle && (backupState?.lifecycle === "in_progress" || backupState?.lifecycle === "empty"));
 
   if (!item) {
@@ -1101,17 +1103,10 @@ function SelectedDayCard({
   // title, so the title drops its "Monday — " and the badge its weekday.
   const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });
   const badgeLabel = dayCardStatusLabel(visibleStatus.status, visibleStatus.label);
-  const cta: {
-    label: string;
-    tone: string;
-    icon?: React.ReactNode;
-    search?: Record<string, any>;
-    secondary?: { label: string; search?: Record<string, any> };
-  } = needsReviewToFinish
+  const cta: WorkoutCta = needsReviewToFinish
     ? {
         label: "Finish Review",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
-        icon: <MessageSquare className="mr-1 h-4 w-4" />,
+        icon: <MessageSquare className="h-4 w-4" />,
         search: { review: 1 },
       }
     : primaryCtaFor(item, status.status);
@@ -1121,7 +1116,7 @@ function SelectedDayCard({
       <Card className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="line-clamp-2 text-lg font-black leading-snug">{title}</div>
+            <div className="line-clamp-2 text-lg font-bold leading-snug">{title}</div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={cn("text-[10px]", visibleStatus.tone)}>{badgeLabel}</Badge>
               {isAtHomeBackupSessionBlock(item.block) && (
@@ -1159,14 +1154,14 @@ function SelectedDayCard({
               })()}
             </div>
           </div>
-          {!readonly && hasMenuActions && (
+          {hasMenuActions && (!readonly || canEditHere) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="Workout actions">
-                  <MoreVertical className="h-4 w-4" />
+                <Button size="icon" variant="ghost" className="-mr-2 -mt-1.5 h-10 w-10 shrink-0 text-muted-foreground" aria-label="Workout actions">
+                  <MoreVertical className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="min-w-[13rem]">
                 {canManageBackupLifecycle && backupState?.lifecycle === "in_progress" && (
                   <DropdownMenuItem asChild>
                     <Link
@@ -1200,7 +1195,22 @@ function SelectedDayCard({
                     <RotateCcw className="mr-2 h-4 w-4" /> Cancel Backup
                   </DropdownMenuItem>
                 )}
-                {isCompleted && (
+                {canReschedule && (
+                  <DropdownMenuItem onSelect={() => setMoveOpen(true)}>
+                    <Move className="mr-2 h-4 w-4" /> Reschedule
+                  </DropdownMenuItem>
+                )}
+                {canChangeWorkoutStatus && (
+                  <DropdownMenuItem onSelect={() => setStatusOpen(true)}>
+                    <CircleDot className="mr-2 h-4 w-4" /> Change status
+                  </DropdownMenuItem>
+                )}
+                {canEditHere && (
+                  <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit workout
+                  </DropdownMenuItem>
+                )}
+                {isCompleted && !readonly && (
                   <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
                     {hasReview ? (
                       <><MessageSquare className="mr-2 h-4 w-4" /> View workout review</>
@@ -1209,7 +1219,7 @@ function SelectedDayCard({
                     )}
                   </DropdownMenuItem>
                 )}
-                {isCompleted && (
+                {isCompleted && !readonly && (
                   <DropdownMenuItem asChild>
                     <Link
                       to="/portal/workouts/$dayId"
@@ -1226,20 +1236,25 @@ function SelectedDayCard({
                   </DropdownMenuItem>
                 )}
                 {canReset && (
+                  <>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onSelect={() => setResetOpen(true)}
                     className="text-destructive focus:text-destructive"
                   >
                     <RotateCcw className="mr-2 h-4 w-4" /> Reset workout
                   </DropdownMenuItem>
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button asChild size="lg" className={cn("font-bold", cta.tone)}>
+        {/* One main button, then Preview (the workout's exercises right here,
+            without opening it). Everything else is in the ⋯ above. */}
+        <div className="mt-4 flex items-center gap-2">
+          <Button asChild size="lg" variant={cta.variant ?? "default"} className="min-w-0 flex-1 px-5 sm:flex-none">
             <Link
               to="/portal/workouts/$dayId"
               params={{ dayId: item.day.id }}
@@ -1248,53 +1263,16 @@ function SelectedDayCard({
               {cta.icon} {cta.label}
             </Link>
           </Button>
-          {canChangeWorkoutStatus && (
-            <Button size="sm" variant="outline" onClick={() => setStatusOpen(true)}>
-              <CircleDot className="mr-1 h-3.5 w-3.5" /> Change status
-            </Button>
-          )}
-          {cta.secondary && (
-            cta.secondary.label === "Reschedule" ? (
-              <Button size="sm" variant="outline" onClick={() => setMoveOpen(true)}>
-                {cta.secondary.label}
-              </Button>
-            ) : (
-              <Button asChild size="sm" variant="outline">
-                <Link
-                  to="/portal/workouts/$dayId"
-                  params={{ dayId: item.day.id }}
-                  search={{ ...(cta.secondary.search as any), ...(item.scheduledWorkoutId ? { instance: item.scheduledWorkoutId } : {}) } as any}
-                >
-                  {cta.secondary.label}
-                </Link>
-              </Button>
-            )
-          )}
-          {!readonly && cta.secondary?.label !== "Reschedule" && (
-            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setMoveOpen(true)}>
-              <Move className="mr-1 h-3.5 w-3.5" /> Reschedule
-            </Button>
-          )}
           <Button
-            size="sm"
+            size="lg"
             variant="ghost"
-            className="text-muted-foreground"
+            className="shrink-0 px-3 text-muted-foreground"
             onClick={() => toggleInlineOpen()}
             aria-expanded={inlineOpen}
           >
-            <ChevronDown className={cn("mr-1 h-3.5 w-3.5 transition-transform", inlineOpen && "rotate-180")} />
-            {inlineOpen ? "Hide Preview" : "Preview Workout"}
+            <ChevronDown className={cn("h-4 w-4 transition-transform", inlineOpen && "rotate-180")} />
+            {inlineOpen ? "Hide preview" : "Preview"}
           </Button>
-          {canEditWorkout && item.day?.id && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={() => setEditOpen(true)}
-            >
-              <Pencil className="mr-1 h-3.5 w-3.5" /> Edit Workout
-            </Button>
-          )}
         </div>
         {inlineOpen && item.day?.id && (
           <div className="mt-3">
@@ -1425,29 +1403,34 @@ function SelectedDayCard({
   );
 }
 
-function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
+/**
+ * The day card's one main button. Every workout opens the same logger page, so
+ * a missed or upcoming workout has one button, never "View" beside "Start"
+ * (they went to the same place). Primary (brand) for something to do; a
+ * finished workout's View is an outline button, its status says it's done.
+ */
+type WorkoutCta = {
   label: string;
-  tone: string;
   icon?: React.ReactNode;
   search?: Record<string, any>;
-  secondary?: { label: string; search?: Record<string, any> };
-} {
+  variant?: "default" | "outline";
+};
+
+function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): WorkoutCta {
   if (status === "in_progress") {
-    return { label: "Continue Workout", tone: "bg-amber-500 text-black hover:bg-amber-400", icon: <Play className="mr-1 h-4 w-4" /> };
+    return { label: "Continue Workout", icon: <Play className="h-4 w-4" /> };
   }
   switch (status) {
     case "review_pending":
       return {
         label: "Finish Review",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
-        icon: <MessageSquare className="mr-1 h-4 w-4" />,
+        icon: <MessageSquare className="h-4 w-4" />,
         search: { review: 1 },
       };
     case "incomplete":
       return {
         label: "Finish Workout",
-        tone: "bg-amber-500 text-black hover:bg-amber-400",
-        icon: <Pencil className="mr-1 h-4 w-4" />,
+        icon: <Pencil className="h-4 w-4" />,
         search: { edit: 1 },
       };
     case "completed_today":
@@ -1455,33 +1438,24 @@ function primaryCtaFor(item: WorkoutItem, status: WorkoutStatus): {
     case "completed_different_day":
       return {
         label: "View Workout",
-        tone: "bg-emerald-600 text-white hover:bg-emerald-500",
-        icon: <Pencil className="mr-1 h-4 w-4" />,
+        variant: "outline",
         search: { edit: 1 },
       };
     case "missed":
+      // Missed: training it now is the point, so Start is the main button.
       return {
-        label: "View Workout",
-        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary: { label: "Start Workout", search: { start: 1 } },
+        label: "Start Workout",
+        icon: <Play className="h-4 w-4" />,
       };
     case "today":
       return {
         label: "Start Workout",
-        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
-        icon: <Play className="mr-1 h-4 w-4" />,
+        icon: <Play className="h-4 w-4" />,
       };
     case "upcoming":
-      return {
-        label: "View Workout",
-        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary: { label: "Start Early" },
-      };
+      return { label: "View Workout" };
     default:
-      return {
-        label: "Start Workout",
-        tone: "bg-primary text-primary-foreground hover:bg-primary/90",
-      };
+      return { label: "Start Workout" };
   }
 }
 
@@ -1548,7 +1522,7 @@ function DayPreviewSheet({
         </div>
         {exercises.length > 0 && (
           <div className="mt-4">
-            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Main exercises</div>
+            <div className="text-xs font-medium text-muted-foreground">Main exercises</div>
             <ul className="mt-2 space-y-1 text-sm">
               {exercises.map((e: any) => (
                 <li key={e.id} className="truncate">{e.name}</li>
@@ -1557,7 +1531,7 @@ function DayPreviewSheet({
           </div>
         )}
         <SheetFooter className="mt-4 sm:justify-start">
-          <Button asChild size="lg" className={cn("font-bold", cta.tone)} onClick={() => onOpenChange(false)}>
+          <Button asChild size="lg" variant={cta.variant ?? "default"} onClick={() => onOpenChange(false)}>
             <Link
               to="/portal/workouts/$dayId"
               params={{ dayId: item.day.id }}

@@ -380,14 +380,14 @@ function MealCard({
 
       {water && water.amount > 0 && (
         <div
-          className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-[13px] text-sky-700 dark:text-sky-300"
+          className="mt-2 flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-[13px] text-muted-foreground"
           data-meal-water
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Droplets aria-hidden className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">Water with this meal</span>
           </span>
-          <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums">
+          <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums text-foreground">
             {formatMealWater(water.amount, water.unit)}
           </span>
         </div>

@@ -979,7 +979,7 @@ function SuccessView({
       <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-500/15">
         <CheckCircle2 className="h-11 w-11 text-emerald-500" />
       </div>
-      <h2 className="text-2xl font-black tracking-tight">You're signed.</h2>
+      <h2 className="text-2xl font-bold tracking-tight">You're signed.</h2>
       <p className="text-[15px] leading-snug text-muted-foreground">
         Your signed copy is saved in your account
         {email ? ` and a receipt is on its way to ${email}` : ""}. This agreement now covers every
@@ -1024,7 +1024,7 @@ function ReviewStep({
           Version {content.version} · Effective{" "}
           {formatSignedDate(`${content.effectiveDate}T12:00:00Z`)}
         </p>
-        <h1 className="text-2xl font-black leading-tight tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight">{title}</h1>
         <p className="text-[15px] leading-snug text-muted-foreground">{intro}</p>
         {note && (
           <blockquote className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -1118,7 +1118,7 @@ function DetailsStep({
   return (
     <div className="space-y-5 py-4">
       <div>
-        <h1 className="text-2xl font-black tracking-tight">Confirm your details</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Confirm your details</h1>
         <p className="mt-1 text-[15px] text-muted-foreground">
           These become part of your signed agreement. Anything already on your profile is filled in.
         </p>
@@ -1128,7 +1128,7 @@ function DetailsStep({
       </div>
 
       <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">You</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">You</h2>
         <Field label="Email" htmlFor="ag-email" hint="From your account.">
           <Input id="ag-email" className={inputClass} value={email} disabled readOnly />
         </Field>
@@ -1168,7 +1168,7 @@ function DetailsStep({
       </section>
 
       <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h2 className="text-sm font-semibold text-muted-foreground">
           Address
         </h2>
         <Field
@@ -1239,7 +1239,7 @@ function DetailsStep({
       </section>
 
       <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h2 className="text-sm font-semibold text-muted-foreground">
           Emergency contacts
         </h2>
         <p className="-mt-2 text-xs text-muted-foreground">
@@ -1554,7 +1554,7 @@ function SignStep(props: {
   return (
     <div className="space-y-5 py-4">
       <div>
-        <h1 className="text-2xl font-black tracking-tight">Agree &amp; sign</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Agree &amp; sign</h1>
         <p className="mt-1 text-[15px] text-muted-foreground">
           Confirm the key points, then sign. This is your legally binding signature.
         </p>
@@ -1572,7 +1572,7 @@ function SignStep(props: {
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+          <h2 className="text-sm font-semibold text-muted-foreground">
             Your permissions (optional)
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -1603,7 +1603,7 @@ function SignStep(props: {
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+          <h2 className="text-sm font-semibold text-muted-foreground">
             Confirm the key points
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -1634,7 +1634,7 @@ function SignStep(props: {
       </section>
 
       <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h2 className="text-sm font-semibold text-muted-foreground">
           {props.minor ? "Your name" : "Sign"}
         </h2>
         <div className="space-y-1.5">

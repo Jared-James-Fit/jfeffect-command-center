@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarPlus, ChevronRight } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
 import { listMyBookingTypes } from "@/lib/booking.functions";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_FAMILY, KIND_META, placeLabel, scheduleTitle, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { RequestSessionSheet } from "@/components/schedule/request-session-sheet";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import {
-  ActionPill, AGENDA_ACTION, AGENDA_LINK, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
+  ActionPill, AGENDA_ACTION, AGENDA_ROW, AgendaCard, AgendaEmpty, AgendaFooter, AgendaHeader, AgendaLoading, AgendaToday, AgendaWeek,
   AgendaNext, AgendaNextRow, AgendaRow, FAMILY_ACCENT, hasEnded, NowLine, nowLineIndex, shortDay, startLabel, useNow,
 } from "@/components/schedule/agenda";
 /** Rows in "coming up" on Home; the rest is on the Calendar page. */
@@ -102,8 +102,9 @@ function RowLink({ item, links, className, children }: { item: CalendarItem; lin
  * week's days with a dot per appointment (each opens the Calendar page
  * there), today as a short agenda (today's workout says its week and offers
  * Start / Continue / Done), the next few appointments one line each, then
- * "Request a session" (or Book) and "Open calendar". The workout schedule
- * day by day is on Workouts.
+ * "Request a session" (or Book). The full calendar is the header's one link
+ * (and each day of the week), never a second calendar link at the foot.
+ * The workout schedule day by day is on Workouts.
  */
 export function UpcomingScheduleCard({ clientId, links = true }: {
   clientId: string | null | undefined;
@@ -201,7 +202,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
           </div>
         )}
 
-        {/* Actions, in words: ask for a session, or see everything. */}
+        {/* The action, in words: ask for (or book) a session. Seeing everything is the header's link. */}
         {links && (
           <AgendaFooter>
             {singleBook ? (
@@ -222,10 +223,6 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
                 <CalendarPlus className="h-4 w-4" /> Request a session
               </button>
             )}
-            <Link to="/portal/calendar" className={AGENDA_LINK}>
-              Open calendar
-              <ChevronRight className="h-4 w-4" />
-            </Link>
           </AgendaFooter>
         )}
 

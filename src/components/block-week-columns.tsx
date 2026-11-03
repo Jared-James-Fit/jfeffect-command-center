@@ -88,7 +88,7 @@ export function BlockWeekColumns({
                 )}
               >
                 <div className="flex w-full items-center justify-between gap-1">
-                  <span className="text-[11px] font-black uppercase tracking-wider">
+                  <span className="text-[11px] font-bold uppercase tracking-wider">
                     Week {week?.week_index ?? "—"}
                   </span>
                   {now && (

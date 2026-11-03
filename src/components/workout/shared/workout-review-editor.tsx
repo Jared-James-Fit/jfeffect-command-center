@@ -305,7 +305,7 @@ export function WorkoutReviewEditor({
           style={{ paddingTop: "max(calc(env(safe-area-inset-top) - 8svh), 0px)" }}
         >
           <SheetHeader className="min-h-0 space-y-0.5 px-5 pb-3 pt-4 text-left">
-            <SheetTitle className="text-lg font-black leading-tight">
+            <SheetTitle className="text-lg font-bold leading-tight">
               {isEdit ? "Edit your review" : "How'd it go?"}
             </SheetTitle>
             <SheetDescription className="text-xs">

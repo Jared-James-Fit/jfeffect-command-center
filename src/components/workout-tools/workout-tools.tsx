@@ -525,7 +525,7 @@ function TallyPanel({
         >
           <Minus className="h-5 w-5" />
         </Button>
-        <div aria-live="polite" className="text-4xl font-black tabular-nums">
+        <div aria-live="polite" className="text-4xl font-bold tabular-nums">
           {value}
         </div>
         <Button
@@ -574,7 +574,7 @@ function StopwatchPanel({
   const elapsed = stopwatchElapsedMs(value);
   return (
     <PanelShell>
-      <div aria-live="polite" className="text-center text-4xl font-black tabular-nums">
+      <div aria-live="polite" className="text-center text-4xl font-bold tabular-nums">
         {formatClock(elapsed)}
       </div>
       <div className="flex flex-wrap justify-center gap-2">
@@ -627,7 +627,7 @@ function TimerPanel({
     <PanelShell>
       <div
         aria-live="polite"
-        className={cn("text-center text-4xl font-black tabular-nums", done && "text-primary")}
+        className={cn("text-center text-4xl font-bold tabular-nums", done && "text-primary")}
       >
         {done ? "Done" : formatClock(remaining)}
       </div>

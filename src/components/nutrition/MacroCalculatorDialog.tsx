@@ -418,7 +418,7 @@ export function MacroCalculatorDialog({
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     {viewer === "member" ? "Your daily target" : "Estimated daily target"}
                   </div>
-                  <div className="text-3xl font-black leading-none tabular-nums">
+                  <div className="text-3xl font-bold leading-none tabular-nums">
                     {computed.result.calories.toLocaleString()}
                     <span className="ml-1 text-sm font-semibold text-muted-foreground">kcal</span>
                   </div>
@@ -430,7 +430,7 @@ export function MacroCalculatorDialog({
                     { l: "Fat", v: computed.result.fat_g },
                   ].map((m) => (
                     <div key={m.l}>
-                      <div className="text-base font-black leading-none tabular-nums">{m.v}g</div>
+                      <div className="text-base font-bold leading-none tabular-nums">{m.v}g</div>
                       <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{m.l}</div>
                     </div>
                   ))}
@@ -474,11 +474,11 @@ function Step({ n, title, subtitle, children }: { n: number; title: string; subt
   return (
     <section>
       <div className="mb-3 flex items-baseline gap-2">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-black text-primary-foreground">
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
           {n}
         </span>
         <div>
-          <h3 className="text-sm font-black">{title}</h3>
+          <h3 className="text-sm font-bold">{title}</h3>
           {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
         </div>
       </div>

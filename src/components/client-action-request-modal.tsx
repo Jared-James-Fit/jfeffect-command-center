@@ -146,7 +146,7 @@ export function ClientActionRequestModal({ clientId }: { clientId: string | null
 
         <DialogFooter className="flex-row gap-2 sm:justify-end">
           <Button variant="outline" size="sm" onClick={handleLater}>View Later</Button>
-          <Button size="sm" onClick={handleComplete} className="bg-gradient-primary font-bold">
+          <Button size="sm" onClick={handleComplete} className="bg-primary font-semibold">
             <CheckCircle2 className="mr-1 h-4 w-4" /> Mark complete
           </Button>
         </DialogFooter>

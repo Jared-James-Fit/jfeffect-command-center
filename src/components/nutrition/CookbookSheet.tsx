@@ -9,30 +9,32 @@
 
 import { Suspense, useState } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ToolRow, ToolTile } from "./tool-tile";
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { BookOpen, ChefHat, ChevronLeft, Loader2 } from "lucide-react";
 
 export type CookbookViewer = "member" | "client";
 
-/** Small entry card shown on the Nutrition page. Loads nothing by itself. */
+/**
+ * The Cookbook as a plain tool row (the member's Nutrition page). Loads nothing
+ * by itself. "Open Cookbook" is the label the Try it Thursday post names.
+ */
 export function CookbookEntryCard({ viewer }: { viewer: CookbookViewer }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Card className="flex flex-wrap items-center gap-3 border-primary/30 bg-gradient-to-br from-primary/10 to-card p-4 md:p-5">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-          <BookOpen className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-black uppercase tracking-widest">Cookbook</div>
-          <div className="text-[12px] text-muted-foreground">Easy meals: air fryer, microwave, no-cook &amp; store-bought</div>
-        </div>
-        <Button className="w-full font-bold sm:w-auto" onClick={() => setOpen(true)}>
-          Open Cookbook
-        </Button>
-      </Card>
+      <ToolRow icon={BookOpen} title="Open Cookbook" hint="Easy meals: air fryer, microwave, no-cook & store-bought" onClick={() => setOpen(true)} />
+      {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} />}
+    </>
+  );
+}
+
+/** The Cookbook as one of Nutrition Tools' tiles (the client's Nutrition page). */
+export function CookbookToolTile({ viewer }: { viewer: CookbookViewer }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <ToolTile icon={BookOpen} title="Open Cookbook" hint="Easy meals, no-cook & store-bought" onClick={() => setOpen(true)} />
       {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} />}
     </>
   );

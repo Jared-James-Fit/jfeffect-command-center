@@ -112,7 +112,7 @@ export function BirthdayPostsCard({ actionableOnly = false }: { actionableOnly?:
               <div className={cn("truncate text-[12px]", b.status === "ready" ? "font-semibold text-primary" : "text-muted-foreground")}>{statusLine(b)}</div>
             </div>
             {b.status === "ready" ? (
-              <span className="shrink-0 rounded-full bg-primary px-3.5 py-1.5 text-[12px] font-black text-primary-foreground">Review</span>
+              <span className="shrink-0 rounded-full bg-primary px-3.5 py-1.5 text-[12px] font-bold text-primary-foreground">Review</span>
             ) : (
               <>
                 <span className="flex shrink-0 items-center gap-1 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -126,7 +126,7 @@ export function BirthdayPostsCard({ actionableOnly = false }: { actionableOnly?:
       </div>
       {!actionableOnly && next.length > 0 && (
         <div className={cn(items.length > 0 && "mt-2 border-t border-border/70 pt-2")}>
-          <div className="pb-1 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Coming up</div>
+          <div className="pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Coming up</div>
           <div className="divide-y divide-border/70">
             {next.map((n) => {
               const busy = draftNow.isPending && draftNow.variables === n.client_id;
@@ -234,7 +234,7 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
               <SheetClose className="absolute right-4 top-3.5 grid h-9 w-9 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
                 <X className="h-4 w-4" />
               </SheetClose>
-              <SheetTitle className="text-[17px] font-black">🎂 {name}'s birthday post</SheetTitle>
+              <SheetTitle className="text-[17px] font-bold">🎂 {name}'s birthday post</SheetTitle>
               <SheetDescription className="text-[12px]">
                 {post.status === "posted"
                   ? "Posted, and your message went to them."
@@ -249,7 +249,7 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
             <div className="space-y-4 px-5 py-4">
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Community post</span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Community post</span>
                   {post.status !== "posted" && (
                     <button
                       type="button"
@@ -269,7 +269,7 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
               </div>
 
               <div>
-                <div className="mb-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-muted-foreground">Message to {name}</div>
+                <div className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Message to {name}</div>
                 <div className="rounded-2xl bg-muted/60 p-3">
                   <GrowText value={dm} onChange={setDm} max={1000} label={`Message to ${name}`} className="text-[15px] leading-snug" />
                   <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-border/70 bg-background px-3 py-2">
@@ -290,14 +290,14 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
             <div className="sticky bottom-0 space-y-2 border-t border-border/60 bg-background px-5 pb-[max(env(safe-area-inset-bottom),16px)] pt-3">
               {post.status === "posted" ? (
                 post.post_id && (
-                  <Link to="/admin/community" hash={`post=${post.post_id}`} className="flex h-12 w-full items-center justify-center rounded-2xl bg-primary text-[15px] font-black text-primary-foreground">
+                  <Link to="/admin/community" hash={`post=${post.post_id}`} className="flex h-12 w-full items-center justify-center rounded-2xl bg-primary text-[15px] font-bold text-primary-foreground">
                     View the post
                   </Link>
                 )
               ) : post.status === "scheduled" ? (
                 <>
                   {edited && (
-                    <button type="button" disabled={busy} onClick={() => void run("approve", "Saved")} className="h-12 w-full rounded-2xl bg-primary text-[15px] font-black text-primary-foreground disabled:opacity-60">
+                    <button type="button" disabled={busy} onClick={() => void run("approve", "Saved")} className="h-12 w-full rounded-2xl bg-primary text-[15px] font-bold text-primary-foreground disabled:opacity-60">
                       {draft.tray.uploading > 0 ? "Uploading…" : act.isPending ? "Saving…" : "Save changes"}
                     </button>
                   )}
@@ -316,7 +316,7 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
                     type="button"
                     disabled={busy || !body.trim() || !dm.trim()}
                     onClick={() => void run(due ? "post_now" : "approve", due ? `Posted. ${name} got your message` : `Scheduled for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`)}
-                    className="h-12 w-full rounded-2xl bg-primary text-[15px] font-black text-primary-foreground shadow-lg shadow-primary/20 disabled:opacity-60"
+                    className="h-12 w-full rounded-2xl bg-primary text-[15px] font-bold text-primary-foreground shadow-lg shadow-primary/20 disabled:opacity-60"
                   >
                     {draft.tray.uploading > 0 ? "Uploading…" : act.isPending ? "Saving…" : due ? `Post & message ${name}` : `Approve for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`}
                   </button>

@@ -290,7 +290,7 @@ export function SbdSplitCard({
                 Estimated total
               </div>
               <div className="flex flex-wrap items-baseline gap-x-2">
-                <span className="text-3xl font-black tabular-nums">{fmtTotal(split.total)}</span>
+                <span className="text-3xl font-bold tabular-nums">{fmtTotal(split.total)}</span>
                 <span className="text-sm font-semibold text-muted-foreground">{displayUnit}</span>
                 {meetDelta != null && Math.abs(conv(meetDelta)) >= 0.5 && (
                   <span
@@ -320,7 +320,7 @@ export function SbdSplitCard({
               {split.lifts.map((l) => (
                 <div
                   key={l.lift}
-                  className="flex min-w-0 items-center justify-center text-[11px] font-black text-white"
+                  className="flex min-w-0 items-center justify-center text-[11px] font-bold text-white"
                   style={{ width: `${l.share * 100}%`, background: LIFT_COLORS[l.lift] }}
                 >
                   <span className="truncate px-1">
@@ -347,7 +347,7 @@ export function SbdSplitCard({
                           style={{ background: LIFT_COLORS[l.lift] }}
                         />
                         <span className="text-sm font-bold">{LIFT_LABEL[l.lift]}</span>
-                        <span className="text-sm font-black tabular-nums">
+                        <span className="text-sm font-bold tabular-nums">
                           {fmtLb(l.lb)} {displayUnit}
                         </span>
                       </span>
@@ -500,7 +500,7 @@ export function SbdSplitCard({
                   <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     {LIFT_LABEL[lift]}
                   </div>
-                  <div className="text-lg font-black tabular-nums">
+                  <div className="text-lg font-bold tabular-nums">
                     {maxes[lift] ? fmtLb(maxes[lift]!.lb) : "—"}
                   </div>
                 </li>

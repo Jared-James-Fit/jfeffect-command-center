@@ -252,7 +252,7 @@ export function PowerliftingExposureSection({
   return (
     <section aria-label="Powerlifting Exposure" className="space-y-4">
       <div className="flex items-center gap-2">
-        <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           <Target className="h-5 w-5 shrink-0 text-primary" />
           Powerlifting Exposure Analytics
         </h2>
@@ -304,7 +304,7 @@ export function PowerliftingExposureSection({
                         {FAMILY_LABEL[fam]}
                       </span>
                     </div>
-                    <div className="mt-1 text-2xl font-black text-foreground">
+                    <div className="mt-1 text-2xl font-bold text-foreground">
                       {s.completed}
                       <span className="text-sm font-semibold text-muted-foreground"> / {s.planned}</span>
                     </div>
@@ -461,7 +461,7 @@ export function PowerliftingExposureSection({
                     <div className="text-xs font-semibold uppercase text-muted-foreground">
                       {role}
                     </div>
-                    <div className={`mt-1 text-2xl font-black ${isPrimary && pct < 100 ? primaryTone(pct) : "text-foreground"}`}>
+                    <div className={`mt-1 text-2xl font-bold ${isPrimary && pct < 100 ? primaryTone(pct) : "text-foreground"}`}>
                       {pct}%
                     </div>
                     <div className="text-xs text-muted-foreground">{completed}/{planned}</div>

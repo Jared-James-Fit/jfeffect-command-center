@@ -278,7 +278,7 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
 
   return (
     <section className="overflow-hidden rounded-2xl border border-primary/25 bg-card" data-crew-needs-you>
-      <div className="flex items-center gap-1.5 px-4 pt-3 text-[10px] font-black uppercase tracking-[0.14em] text-primary">
+      <div className="flex items-center gap-1.5 px-4 pt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
         <Flame className="h-3.5 w-3.5" /> Needs you
       </div>
       <div className="divide-y divide-border/60">
@@ -368,7 +368,7 @@ function WeekCard() {
   return (
     <section className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-crew-week>
       <div className="px-4 pb-3 pt-3">
-        <div className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Last 7 days · clients only</div>
+        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Last 7 days · clients only</div>
         <div className="mt-2 grid grid-cols-4 gap-2">
           {stats.map((s) => (
             <div key={s.label} className="min-w-0">
@@ -430,7 +430,7 @@ function Row({ icon, title, sub, hot, open, tag, onClick }: { icon: ReactNode; t
     <button type="button" onClick={onClick} className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2.5 text-left active:bg-muted/60" aria-expanded={open}>
       {body}
       {tag ? (
-        <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[12px] font-black text-primary-foreground">{tag}</span>
+        <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[12px] font-bold text-primary-foreground">{tag}</span>
       ) : open === undefined ? (
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       ) : (

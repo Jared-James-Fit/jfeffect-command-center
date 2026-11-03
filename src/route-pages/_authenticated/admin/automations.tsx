@@ -134,7 +134,7 @@ export function AutomationsHub() {
       <SettingsTabs />
       <div className="mx-auto max-w-3xl space-y-6 p-4 pb-32 md:p-6">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-black tracking-tight"><Zap className="h-5 w-5 text-primary" />Automations</h1>
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight"><Zap className="h-5 w-5 text-primary" />Automations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Everything the app sends on its own. Flip a switch to stop one. Tap it to change what it says.
           </p>

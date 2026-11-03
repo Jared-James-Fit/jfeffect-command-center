@@ -223,7 +223,7 @@ function SelkirkApply() {
           <div className="mx-auto max-w-xl">
             <Card className="p-8 text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" />
-              <h1 className="mt-3 text-2xl md:text-3xl font-black tracking-tight">Application received.</h1>
+              <h1 className="mt-3 text-2xl md:text-3xl font-bold tracking-tight">Application received.</h1>
               <p className="mt-3 text-sm text-muted-foreground">
                 Thanks{form.first_name ? `, ${form.first_name}` : ""}. We'll reach out shortly to book your free consultation at Iron Image Gym in Selkirk.
               </p>
@@ -264,7 +264,7 @@ function SelkirkApply() {
           )}
 
           <Card className="mt-4 p-5 md:p-6">
-            <h1 className="text-xl md:text-2xl font-black tracking-tight">{cur.title}</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">{cur.title}</h1>
             {cur.sub && <p className="mt-1 text-sm text-muted-foreground">{cur.sub}</p>}
             <div className="mt-5">{cur.body}</div>
 

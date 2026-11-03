@@ -1,8 +1,9 @@
 /**
  * Compact "Today's Intake" card. Only renders when the client actually uses
- * food logging today; otherwise the section is hidden and logging stays
- * reachable from Nutrition Tools. Read/writes only existing food-log data via
- * the untouched DailyNutritionPanel.
+ * food logging today; otherwise the section is hidden. Log Food itself is the
+ * Nutrition Tools tile (one way in); this card is today's totals, and tapping
+ * it opens the same food log. Read/writes only existing food-log data via the
+ * untouched DailyNutritionPanel.
  */
 
 import { Suspense, useState } from "react";
@@ -11,11 +12,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Loader2, UtensilsCrossed } from "lucide-react";
+import { ChevronRight, Loader2, UtensilsCrossed } from "lucide-react";
 import { getNutritionDashboard } from "@/lib/nutrition-dashboard.functions";
-import { ToolTile } from "./NutritionToolsCard";
+import { ToolTile } from "./tool-tile";
 
 const Panel = lazyWithRetry(() => import("./DailyNutritionPanelLazy"));
 
@@ -74,22 +74,25 @@ export function TodaysIntakeCard() {
   );
 
   return (
-    <Card className="p-4 md:p-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+    <Card className="p-0">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open today's food log"
+        className="flex w-full items-center gap-3 rounded-2xl p-4 text-left transition hover:bg-muted/40 active:bg-muted/60 md:p-5"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-foreground" aria-hidden>
           <UtensilsCrossed className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-black uppercase tracking-widest">Today's Intake</div>
-          <div className="text-[11px] text-muted-foreground tabular-nums">
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Today's intake</span>
+          <span className="block text-xs text-muted-foreground tabular-nums">
             {Math.round(totals.calories)} kcal · {Math.round(totals.protein)}P · {Math.round(totals.carbs)}C ·{" "}
             {Math.round(totals.fat)}F · {meals.length} meal{meals.length === 1 ? "" : "s"}
-          </div>
-        </div>
-        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setOpen(true)}>
-          Log Food
-        </Button>
-      </div>
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
       <LogSheet open={open} onOpenChange={setOpen} />
     </Card>
   );
@@ -105,7 +108,6 @@ export function LogFoodToolButton() {
         title="Log Food"
         hint="Track what you ate today"
         onClick={() => setOpen(true)}
-        accent
       />
       <LogSheet open={open} onOpenChange={setOpen} />
     </>

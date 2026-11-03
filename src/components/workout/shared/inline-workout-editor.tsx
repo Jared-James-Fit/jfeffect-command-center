@@ -447,7 +447,7 @@ export function InlineWorkoutEditor({
 
             {/* Day details */}
             <div className="space-y-3 rounded-lg border border-border/60 p-3">
-              <div className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Workout details
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -477,7 +477,7 @@ export function InlineWorkoutEditor({
 
             {/* Exercise rows */}
             <div className="space-y-2">
-              <div className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Exercises ({rows.length})
               </div>
               {rows.map((r, i) => (

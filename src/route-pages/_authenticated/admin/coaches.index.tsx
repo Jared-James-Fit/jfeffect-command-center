@@ -148,7 +148,7 @@ export function CoachesPage({ embedded = false }: { embedded?: boolean } = {}) {
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary"><Plus className="mr-2 h-4 w-4" />Add coach</Button>
+              <Button className="bg-primary"><Plus className="mr-2 h-4 w-4" />Add coach</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add a new coach</DialogTitle></DialogHeader>
@@ -164,7 +164,7 @@ export function CoachesPage({ embedded = false }: { embedded?: boolean } = {}) {
               </p>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button disabled={creating} onClick={createCoach} className="bg-gradient-primary">
+                <Button disabled={creating} onClick={createCoach} className="bg-primary">
                   {creating ? "Creating…" : "Create & invite"}
                 </Button>
               </DialogFooter>
@@ -186,7 +186,7 @@ export function CoachesPage({ embedded = false }: { embedded?: boolean } = {}) {
           return (
             <Card key={c.id} className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
               <div className="flex items-start gap-4">
-                <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-primary text-sm font-black text-primary-foreground">
+                <div className="grid h-12 w-12 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                   {c.full_name?.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase()}
                 </div>
                 <div>
@@ -200,15 +200,15 @@ export function CoachesPage({ embedded = false }: { embedded?: boolean } = {}) {
               </div>
               <div className="flex flex-wrap items-center gap-4 text-xs">
                 <div className="text-center">
-                  <div className="text-lg font-black">{w.total}</div>
+                  <div className="text-lg font-bold">{w.total}</div>
                   <div className="uppercase tracking-wider text-muted-foreground">Clients</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-black text-success">{w.active}</div>
+                  <div className="text-lg font-bold text-success">{w.active}</div>
                   <div className="uppercase tracking-wider text-muted-foreground">Active</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-black text-warning">{w.attention}</div>
+                  <div className="text-lg font-bold text-warning">{w.attention}</div>
                   <div className="uppercase tracking-wider text-muted-foreground">Attention</div>
                 </div>
                 <div className="flex gap-2">

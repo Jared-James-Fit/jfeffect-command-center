@@ -43,7 +43,7 @@ export function TopMuscleGroupsCard({
           <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             {i.icon} {i.label}
           </div>
-          <div className="mt-2 text-base font-black">{i.title}</div>
+          <div className="mt-2 text-base font-bold">{i.title}</div>
           <div className="mt-1 text-sm font-semibold text-primary">{i.value}</div>
         </Card>
       ))}

@@ -104,7 +104,7 @@ export function WaterTrackerCard({
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400">
+            <div className="grid h-8 w-8 place-items-center rounded-md bg-muted text-foreground">
               <Droplet className="h-4 w-4" />
             </div>
             <div>
@@ -124,11 +124,17 @@ export function WaterTrackerCard({
 
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-2">
-            <div><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Drank today</div><div className="text-2xl font-bold tabular-nums">
-              {formatWater(summary.total, "L")}
-              <span className="text-sm text-muted-foreground"> of {formatWater(target?.active_ml ?? 3000, "L")}</span>\n            </div></div>\n            <div className="text-xs text-muted-foreground">{summary.pct}%</div>
+            <div>
+              <div className="text-xs text-muted-foreground">Drank today</div>
+              <div className="text-2xl font-bold tabular-nums">
+                {formatWater(summary.total, "L")}
+                <span className="text-sm text-muted-foreground"> of {formatWater(target?.active_ml ?? 3000, "L")}</span>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">{summary.pct}%</div>
           </div>
-          <Progress value={summary.pct} className="h-2" />\n          {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="w-full text-left text-xs font-medium text-sky-700 dark:text-sky-300">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
+          <Progress value={summary.pct} className="h-2" />
+          {entries.length > 0 && <button type="button" onClick={() => setHistoryOpen(true)} className="min-h-10 w-full text-left text-xs font-medium text-muted-foreground hover:text-foreground">Today: {entries.length} {entries.length === 1 ? "drink" : "drinks"} logged · View times & history ›</button>}
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">

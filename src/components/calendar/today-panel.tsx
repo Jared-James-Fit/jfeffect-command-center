@@ -143,7 +143,7 @@ export function ClientTodayPanel({
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Today</h3>
+        <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Today</h3>
         <Badge variant="outline" className="text-[10px]">{tiles.length}</Badge>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -181,7 +181,7 @@ function Tile({ spec }: { spec: TileSpec }) {
     <Card className={cn("group flex h-full flex-col gap-2 border bg-card p-3 transition-colors", tone.border)}>
       <div className="flex items-center gap-2">
         <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-md", tone.iconBg)}>{spec.icon}</span>
-        <span className={cn("text-[10px] font-black uppercase tracking-widest", tone.eyebrow)}>{spec.eyebrow}</span>
+        <span className={cn("text-[10px] font-bold uppercase tracking-widest", tone.eyebrow)}>{spec.eyebrow}</span>
       </div>
       <div className="text-sm font-semibold leading-tight">{spec.title}</div>
       {spec.meta && <div className="text-xs text-muted-foreground">{spec.meta}</div>}

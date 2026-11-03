@@ -10,7 +10,7 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
         <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
           Two products, one system
         </div>
-        <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">
+        <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
           Which option is right for you?
         </h2>
         <p className="mt-3 text-sm text-muted-foreground md:text-base">
@@ -72,7 +72,7 @@ function OfferCard({
       <div className={`text-[11px] font-bold uppercase tracking-widest ${highlighted ? "text-primary" : "text-muted-foreground"}`}>
         {eyebrow}
       </div>
-      <div className="mt-1 text-xl font-black tracking-tight md:text-2xl">{title}</div>
+      <div className="mt-1 text-xl font-bold tracking-tight md:text-2xl">{title}</div>
       <ul className="mt-4 space-y-2 text-sm">
         {bullets.map((b) => (
           <li key={b} className="flex items-start gap-2">

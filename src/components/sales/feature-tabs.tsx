@@ -99,7 +99,7 @@ export function FeatureTabs() {
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
             <current.Icon className="h-3 w-3" /> {current.label}
           </div>
-          <h3 className="mt-3 text-2xl font-black tracking-tight md:text-3xl">{current.title}</h3>
+          <h3 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">{current.title}</h3>
           <p className="mt-3 text-sm text-muted-foreground md:text-base">{current.copy}</p>
           <ul className="mt-5 space-y-2 text-sm">
             {current.bullets.map((b) => (
@@ -155,7 +155,7 @@ function PreviewBody({ tab }: { tab: TabKey }) {
     return (
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card/70 p-4">
         <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Bench Press</div>
-        <div className="mt-1 text-xl font-black">Set 3 of 4</div>
+        <div className="mt-1 text-xl font-bold">Set 3 of 4</div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           {["Reps · 6", "Load · 205", "RPE · 8"].map((x) => (
             <div key={x} className="rounded-lg border border-border bg-background/50 py-2 text-xs font-semibold">{x}</div>
@@ -169,7 +169,7 @@ function PreviewBody({ tab }: { tab: TabKey }) {
     return (
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card/70 p-4">
         <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Weekly volume</div>
-        <div className="mt-1 text-2xl font-black">28,420 lb</div>
+        <div className="mt-1 text-2xl font-bold">28,420 lb</div>
         <div className="mt-3 flex h-24 items-end gap-1.5">
           {[40, 52, 48, 60, 58, 72, 68, 80, 76, 88, 84, 92].map((h, i) => (
             <div key={i} className="flex-1 rounded-sm bg-gradient-to-t from-primary/30 to-primary" style={{ height: `${h}%` }} />

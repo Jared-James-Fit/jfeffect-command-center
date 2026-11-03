@@ -72,7 +72,7 @@ export function CoachFeedbackCard({ clientId }: { clientId?: string | null }) {
             <MessageSquareQuote className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-black uppercase tracking-widest">Coach Feedback</div>
+            <div className="text-sm font-semibold">Coach Feedback</div>
             {latest ? (
               <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                 {latest.form_title} · {fmt(latest.created_at)} — tap to view
@@ -88,7 +88,7 @@ export function CoachFeedbackCard({ clientId }: { clientId?: string | null }) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl p-4 pt-16 md:p-6 md:pt-16">
           <SheetHeader className="mb-3 text-left">
-            <SheetTitle className="text-base font-black uppercase tracking-widest">
+            <SheetTitle className="text-base font-semibold">
               Coach Feedback
             </SheetTitle>
           </SheetHeader>

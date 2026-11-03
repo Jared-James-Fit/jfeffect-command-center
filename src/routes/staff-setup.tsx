@@ -65,7 +65,7 @@ function StaffSetupPage() {
       <Card className="w-full max-w-md space-y-5 p-6">
         {(!token || (invite && !invite.valid)) && (
           <div className="space-y-2">
-            <h1 className="text-xl font-black">This link doesn't work</h1>
+            <h1 className="text-xl font-bold">This link doesn't work</h1>
             <p className="text-sm text-muted-foreground">{invite && !invite.valid ? invite.reason : "The setup link is missing. Open it again from your message."}</p>
           </div>
         )}
@@ -85,7 +85,7 @@ function StaffSetupPage() {
           <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <div className="space-y-1">
               <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{invite.roleLabel}</div>
-              <h1 className="text-2xl font-black">{invite.firstName ? `Welcome, ${invite.firstName}` : "Welcome to the team"}</h1>
+              <h1 className="text-2xl font-bold">{invite.firstName ? `Welcome, ${invite.firstName}` : "Welcome to the team"}</h1>
               {invite.welcome && <p className="text-sm text-muted-foreground">{invite.welcome}</p>}
             </div>
 

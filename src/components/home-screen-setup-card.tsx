@@ -6,6 +6,7 @@ import { Smartphone, Share, Plus, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useViewingAsClient } from "@/lib/client-impersonation";
 
 const VIDEO_URL = "https://vimeo.com/1200330134";
 const VIDEO_EMBED = "https://player.vimeo.com/video/1200330134?title=0&byline=0&portrait=0&badge=0&dnt=1";
@@ -28,6 +29,31 @@ function isStandalone(): boolean {
   // @ts-ignore
   if (window.navigator.standalone) return true;
   return window.matchMedia?.("(display-mode: standalone)").matches ?? false;
+}
+
+/**
+ * What Home keeps of the old "Add to your home screen" card: nothing on screen
+ * (the install popup, HomeScreenSetupGate, and InstallAppCard ask for it), only
+ * the bookkeeping the coach reads. Opening the installed app (or the iPhone app)
+ * marks `home_screen_setup_status` complete, which is the "Installed" badge on
+ * the client's profile.
+ */
+export function HomeScreenSetupTracker({ clientId, status }: { clientId: string; status: string | null | undefined }) {
+  const qc = useQueryClient();
+  // a coach previewing the client is on their own phone, not the client's
+  const viewingAs = useViewingAsClient();
+  useEffect(() => {
+    if (status === "complete" || viewingAs) return;
+    const native = typeof window !== "undefined" && !!(window as any).Capacitor?.isNativePlatform?.();
+    if (!isStandalone() && !native) return;
+    void (async () => {
+      const { error } = await (supabase.from("clients") as any)
+        .update({ home_screen_setup_status: "complete", home_screen_setup_completed_at: new Date().toISOString() })
+        .eq("id", clientId);
+      if (!error) qc.invalidateQueries({ queryKey: ["my-client"] });
+    })();
+  }, [clientId, status, viewingAs, qc]);
+  return null;
 }
 
 type Props = {
@@ -114,7 +140,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
     <>
       <Card className="border-primary/30 bg-primary/5 p-5">
         <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground shadow-glow">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
             <Smartphone className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
@@ -153,12 +179,12 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {canInstall && (
-                <Button size="sm" onClick={triggerInstall} className="bg-gradient-primary uppercase text-xs font-bold">
+                <Button size="sm" onClick={triggerInstall} className="bg-primary text-xs font-semibold">
                   Install App
                 </Button>
               )}
               {isIOS && (
-                <Button size="sm" onClick={() => setShowSteps(true)} className="bg-gradient-primary uppercase text-xs font-bold">
+                <Button size="sm" onClick={() => setShowSteps(true)} className="bg-primary text-xs font-semibold">
                   Show Steps
                 </Button>
               )}
@@ -202,7 +228,7 @@ export function HomeScreenSetupCard({ clientId, status, remindAfter }: Props) {
             </li>
           </ol>
           <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-            <Button size="sm" onClick={async () => { setShowSteps(false); await markDone(); }} className="bg-gradient-primary uppercase text-xs font-bold">
+            <Button size="sm" onClick={async () => { setShowSteps(false); await markDone(); }} className="bg-primary text-xs font-semibold">
               Mark as Done
             </Button>
           </div>

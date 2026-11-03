@@ -113,7 +113,7 @@ export function CoachNutritionOverrideCard({ userId }: Props) {
           <p className="text-xs text-muted-foreground">
             No app-side macro targets set yet. You can enter coach-set numbers below.
           </p>
-          <Button size="sm" className="bg-gradient-primary font-bold uppercase" onClick={() => setEditing(true)}>
+          <Button size="sm" className="bg-primary font-semibold" onClick={() => setEditing(true)}>
             Set Coach Targets
           </Button>
         </>
@@ -169,7 +169,7 @@ export function CoachNutritionOverrideCard({ userId }: Props) {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              className="min-h-[44px] bg-gradient-primary font-bold uppercase"
+              className="min-h-[44px] bg-primary font-semibold"
               onClick={() => save.mutate()}
               disabled={save.isPending || !calories || !protein || !carbs || !fat}
             >

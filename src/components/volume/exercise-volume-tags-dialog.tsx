@@ -222,7 +222,7 @@ export function ExerciseVolumeTagsDialog({ exercise, onClose, onSaved }: Props) 
         <Button
           onClick={save}
           disabled={busy}
-          className="bg-gradient-primary font-bold uppercase"
+          className="bg-primary font-semibold"
         >
           {busy ? "Saving…" : "Save tags"}
         </Button>

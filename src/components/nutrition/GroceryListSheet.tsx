@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { ToolRow } from "./tool-tile";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -195,7 +196,7 @@ export function GroceryListSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="h-[92vh] overflow-y-auto p-0">
         <SheetHeader className="space-y-1 border-b border-border px-4 pb-3 pt-16 text-left">
-          <SheetTitle className="text-lg font-black">
+          <SheetTitle className="text-lg font-bold">
             🛒 {span === 2 ? "2 weeks" : "1 week"} of groceries
           </SheetTitle>
           <SheetDescription className="text-xs">
@@ -241,7 +242,7 @@ export function GroceryListSheet({
             </div>
           ) : !hasPlan ? (
             <div className="rounded-lg border border-border bg-secondary/20 p-6 text-center">
-              <div className="text-sm font-black">No grocery list yet</div>
+              <div className="text-sm font-bold">No grocery list yet</div>
               <div className="mt-1 text-xs text-muted-foreground">
                 Your grocery list will appear when your coach assigns a meal plan.
               </div>
@@ -324,7 +325,7 @@ export function GroceryListSheet({
                   if (visible.length === 0) return null;
                   return (
                     <div key={group.aisle} className="space-y-2">
-                      <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                         <span aria-hidden>{STORE_AISLE_EMOJI[group.aisle]}</span> {group.aisle}
                       </div>
                       <ul className="space-y-1.5">
@@ -347,7 +348,7 @@ export function GroceryListSheet({
                                   <span className={cn("block break-words text-sm font-bold capitalize", isChecked && "line-through")}>
                                     {item.name}
                                   </span>
-                                  <span className="block text-sm font-black text-primary">{item.buy}</span>
+                                  <span className="block text-sm font-bold text-primary">{item.buy}</span>
                                   {item.detail && <span className="block text-[11px] text-muted-foreground">{item.detail}</span>}
                                   {item.tip && !isChecked && (
                                     <span className="mt-0.5 block text-[11px] italic text-muted-foreground/90">💡 {item.tip}</span>
@@ -364,7 +365,7 @@ export function GroceryListSheet({
               </div>
 
               <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                <div className="mb-1 font-black uppercase tracking-widest text-foreground">🇨🇦 Save money</div>
+                <div className="mb-1 font-bold uppercase tracking-widest text-foreground">🇨🇦 Save money</div>
                 No Frills, Food Basics, FreshCo and Walmart are cheapest for staples. Costco wins on chicken, eggs, rice and whey.
                 Buy family packs and freeze what you won't eat in 3 days. Frozen fruit and veg are just as good as fresh.
               </div>
@@ -376,7 +377,10 @@ export function GroceryListSheet({
   );
 }
 
-/** Prominent entry point card shown next to Meal Plan. */
+/**
+ * The Grocery List's way in: a plain tool row (icon, name, one-line hint)
+ * right under the meal plan, the same look as every other nutrition tool.
+ */
 export function GroceryListEntryCard({
   clientId,
   viewAsUserId,
@@ -388,17 +392,15 @@ export function GroceryListEntryCard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 md:p-5", className)}>
-      <button type="button" onClick={() => setOpen(true)} disabled={!clientId} className="flex w-full items-center gap-3 text-left">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-          <ShoppingCart className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-black uppercase tracking-widest">Grocery List</div>
-          <div className="text-[12px] text-muted-foreground">1 or 2 weeks of food from your plan · sorted by store aisle</div>
-        </div>
-        <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-black text-primary-foreground">Open</span>
-      </button>
+    <>
+      <ToolRow
+        icon={ShoppingCart}
+        title="Grocery List"
+        hint="1 or 2 weeks of food, by store aisle"
+        onClick={() => setOpen(true)}
+        disabled={!clientId}
+        className={className}
+      />
       {open && (
         <GroceryListSheet
           open={open}
@@ -407,6 +409,6 @@ export function GroceryListEntryCard({
           viewAsUserId={viewAsUserId}
         />
       )}
-    </div>
+    </>
   );
 }

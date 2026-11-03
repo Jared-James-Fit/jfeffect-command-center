@@ -83,7 +83,7 @@ export function TrainingAnalyticsPreviewCard({
               </InfoTip>
             </div>
             <div className="mt-0.5 flex items-baseline gap-1.5">
-              <span className="text-4xl font-black leading-none tabular-nums">
+              <span className="text-4xl font-bold leading-none tabular-nums">
                 {isLoading ? "…" : compactWeight(h.weightLb, unit)}
               </span>
               <span className="text-base font-bold text-muted-foreground">{unit}</span>
@@ -194,7 +194,7 @@ function Tile({
   return (
     <div className="px-2 text-center first:pl-0 last:pr-0">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-black leading-none tabular-nums">{value}</div>
+      <div className="mt-1 text-2xl font-bold leading-none tabular-nums">{value}</div>
       <div className={"mt-1 text-[11px] leading-tight " + (good ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
         {caption}
       </div>

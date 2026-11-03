@@ -587,7 +587,7 @@ export function CardioApplyDefaultsDialog({
             onClick={apply}
             jobLabel="Applying default cardio"
             disabled={!isValid || saving}
-            className="bg-gradient-primary font-bold uppercase"
+            className="bg-primary font-semibold"
           >
             {isValid
               ? `Apply (${totalDays}/7 days)`
@@ -656,7 +656,7 @@ function WeeklyPreview({
               className={`rounded border p-1 text-center transition-colors ${tone}`}
               title={`${d} · ${label}${sub ? " · " + sub : ""}`}
             >
-              <div className="text-[9px] font-black uppercase tracking-widest">{SHORT_DAY[d]}</div>
+              <div className="text-[9px] font-bold uppercase tracking-widest">{SHORT_DAY[d]}</div>
               <div className="text-[9px] font-bold leading-tight">{label}</div>
               {sub && <div className="truncate text-[8px] opacity-80">{sub}</div>}
             </li>

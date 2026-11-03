@@ -100,7 +100,7 @@ export function SectionTitle({ eyebrow, title, sub }: { eyebrow?: string; title:
   return (
     <div className="mx-auto max-w-2xl text-center mb-8">
       {eyebrow && <div className="text-xs font-bold uppercase tracking-widest text-primary mb-2">{eyebrow}</div>}
-      <h2 className="text-2xl md:text-4xl font-black tracking-tight">{title}</h2>
+      <h2 className="text-2xl md:text-4xl font-bold tracking-tight">{title}</h2>
       {sub && <p className="mt-2 text-sm md:text-base text-muted-foreground">{sub}</p>}
     </div>
   );

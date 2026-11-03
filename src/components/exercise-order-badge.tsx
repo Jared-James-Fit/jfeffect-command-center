@@ -7,19 +7,25 @@ import {
 } from "@/lib/exercise-family";
 
 /**
- * The workout-position number on an exercise card, filled with the exercise's
- * family colour. `position` is always derived from the CURRENT order (index + 1),
- * never stored, so reordering or deleting renumbers every card automatically.
+ * The workout-position number on an exercise card. `position` is always
+ * derived from the CURRENT order (index + 1), never stored, so reordering or
+ * deleting renumbers every card automatically.
+ *
+ * `tone`: "family" fills it with the exercise's family colour (the coach's
+ * builder); "neutral" is a plain grey number for the athlete's screens, where
+ * the card's family stripe already carries the colour.
  */
 export function ExerciseOrderBadge({
   position,
   family,
   size = "md",
+  tone = "family",
   className,
 }: {
   position: number;
   family: MovementFamily;
   size?: "sm" | "md";
+  tone?: "family" | "neutral";
   className?: string;
 }) {
   const style = movementFamilyStyle(family);
@@ -31,9 +37,10 @@ export function ExerciseOrderBadge({
       aria-label={`Exercise ${position}, ${MOVEMENT_FAMILY_LABEL[family]}`}
       title={`Exercise ${position} · ${MOVEMENT_FAMILY_LABEL[family]} (${MOVEMENT_FAMILY_COLOR_NAME[family]})`}
       className={cn(
-        "inline-flex shrink-0 select-none items-center justify-center rounded-md border font-black tabular-nums leading-none shadow-sm",
+        "inline-flex shrink-0 select-none items-center justify-center rounded-md border font-bold tabular-nums leading-none",
+        tone === "family" && "shadow-sm",
         size === "md" ? "h-7 min-w-7 px-1.5 text-sm" : "h-5 min-w-5 px-1 text-[11px]",
-        style.badge,
+        tone === "neutral" ? "border-transparent bg-muted text-muted-foreground" : style.badge,
         className,
       )}
     >

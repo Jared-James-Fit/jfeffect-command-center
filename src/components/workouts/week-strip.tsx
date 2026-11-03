@@ -65,17 +65,17 @@ export function WeekStrip({
   })();
   return (
     <Card className="p-2">
-      <div className="mb-1 flex items-center justify-between px-1">
+      <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
           onClick={() => onSelectDate(addWeeks(selectedDate, -1))}
           aria-label="Previous week"
-          className="rounded p-1 hover:bg-secondary"
+          className="-my-1 grid h-10 w-10 place-items-center rounded-lg hover:bg-secondary"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-xs font-semibold text-muted-foreground">
-          {trainingWeek && <span className="font-black text-foreground">{trainingWeek} · </span>}
+          {trainingWeek && <span className="font-bold text-foreground">{trainingWeek} · </span>}
           {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
           {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
         </div>
@@ -83,7 +83,7 @@ export function WeekStrip({
           type="button"
           onClick={() => onSelectDate(addWeeks(selectedDate, 1))}
           aria-label="Next week"
-          className="rounded p-1 hover:bg-secondary"
+          className="-my-1 grid h-10 w-10 place-items-center rounded-lg hover:bg-secondary"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -128,7 +128,7 @@ export function WeekStrip({
                 {format(d, "EEE")}
               </span>
               <span className={cn(
-                "text-base font-black",
+                "text-base font-bold",
                 isSelected ? "" : isToday ? "text-primary" : "",
               )}>
                 {format(d, "d")}

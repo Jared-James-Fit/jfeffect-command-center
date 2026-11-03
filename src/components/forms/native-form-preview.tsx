@@ -143,7 +143,7 @@ export function NativeFormPreviewDialog({
                 <div className="text-xs text-muted-foreground">
                   Submit is simulated. No record is created.
                 </div>
-                <Button onClick={trySubmit} className="bg-gradient-primary font-bold">
+                <Button onClick={trySubmit} className="bg-primary font-semibold">
                   Try Submit
                 </Button>
               </div>

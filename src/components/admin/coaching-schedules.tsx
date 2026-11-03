@@ -310,7 +310,7 @@ export function AdminCoachingSchedules() {
     <div className="space-y-8 p-4 pb-24 md:p-6">
       <section>
         <div className="mb-3">
-          <h2 className="text-lg font-black">Global defaults</h2>
+          <h2 className="text-lg font-bold">Global defaults</h2>
           <p className="text-xs text-muted-foreground">Every client uses these unless a per-client override exists.</p>
         </div>
         {loadingDefs ? (
@@ -326,7 +326,7 @@ export function AdminCoachingSchedules() {
 
       <section>
         <div className="mb-3">
-          <h2 className="text-lg font-black">Per-client overrides</h2>
+          <h2 className="text-lg font-bold">Per-client overrides</h2>
           <p className="text-xs text-muted-foreground">Tune schedules for a specific athlete. Reset to fall back to defaults.</p>
         </div>
         <Card className="p-3">

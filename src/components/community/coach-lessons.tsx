@@ -88,7 +88,7 @@ export function CoachLessons() {
         <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
           <BookOpen className="h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-black">Lessons</div>
+            <div className="text-[14px] font-bold">Lessons</div>
             <div className="truncate text-[11px] text-muted-foreground">{data.author ? `Posts as ${data.author.name} · Winnipeg time` : "No posting account set"}</div>
           </div>
           <label className="flex items-center gap-2 text-[12px] font-bold">
@@ -149,7 +149,7 @@ export function CoachLessons() {
             <span className="min-w-0 flex-1 text-[12px] font-bold text-primary">
               {waiting.length === 1 ? "1 lesson this week needs your OK" : `${waiting.length} lessons this week need your OK`}
             </span>
-            <button type="button" onClick={() => setApproveAll(true)} disabled={act.isPending} className="shrink-0 rounded-full bg-primary px-3 py-1 text-[11px] font-black text-primary-foreground disabled:opacity-50" data-lesson-approve-all>
+            <button type="button" onClick={() => setApproveAll(true)} disabled={act.isPending} className="shrink-0 rounded-full bg-primary px-3 py-1 text-[11px] font-bold text-primary-foreground disabled:opacity-50" data-lesson-approve-all>
               Approve all
             </button>
           </div>
@@ -157,7 +157,7 @@ export function CoachLessons() {
 
         {weeks.map((w) => (
           <div key={w.label}>
-            <div className="bg-muted/40 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">{w.label}</div>
+            <div className="bg-muted/40 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{w.label}</div>
             <ul className="divide-y divide-border/60">
               {w.rows.map((r) => (
                 <PlanRow key={r.id} row={r} mode={data.mode} onOpen={() => setOpenId(r.id)} onPlay={stories.some((x) => x.id === r.id) ? () => setPlayId(r.id) : undefined} />
@@ -168,7 +168,7 @@ export function CoachLessons() {
 
         {earlier.length > 0 && (
           <div className="border-t border-border/60 px-4 py-3">
-            <div className="mb-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">Recently posted</div>
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Recently posted</div>
             <ul className="space-y-1">
               {earlier.reverse().map((r) => (
                 <li key={r.id}>
@@ -185,7 +185,7 @@ export function CoachLessons() {
 
         {stories.length > 0 && (
           <div className="border-t border-border/60 px-4 pt-3">
-            <button type="button" onClick={() => setPlayId(stories[0].id)} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-foreground text-[13px] font-black text-background active:scale-[0.99]" data-lesson-play-all>
+            <button type="button" onClick={() => setPlayId(stories[0].id)} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-foreground text-[13px] font-bold text-background active:scale-[0.99]" data-lesson-play-all>
               <Play className="h-4 w-4 fill-current" /> Preview the stories · {stories.length}
             </button>
           </div>
@@ -295,15 +295,15 @@ function PlanRow({ row, mode, onOpen, onPlay }: { row: LessonPlanRow; mode: "rev
     <li className="flex items-center">
       <button type="button" onClick={onOpen} className={cn("flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left active:bg-muted/60", onPlay ? "pr-2" : "pr-4", off && "opacity-60")} data-lesson-row={row.status}>
         <div className="w-11 shrink-0 text-center">
-          <div className="text-[10px] font-black uppercase tracking-[0.1em] text-muted-foreground">{dayLabel(row.day).slice(0, 3)}</div>
-          <div className="text-[19px] font-black leading-none">{Number(row.day.slice(8, 10))}</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{dayLabel(row.day).slice(0, 3)}</div>
+          <div className="text-[19px] font-bold leading-none">{Number(row.day.slice(8, 10))}</div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
               {it ? lessonKicker(it) : LESSON_TRACK[row.track].name}
             </span>
-            <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-black", STATUS_TONE[status] ?? "bg-muted text-muted-foreground")}>{status}</span>
+            <span className={cn("shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_TONE[status] ?? "bg-muted text-muted-foreground")}>{status}</span>
           </div>
           <div className={cn("truncate text-[14px] font-bold", off && "line-through")}>{row.posted_as === "data" ? "The crew's own data" : it?.title ?? "Nothing in the library for this day"}</div>
           <div className="mt-0.5 flex items-center gap-2 overflow-hidden whitespace-nowrap text-[11px] text-muted-foreground">
@@ -356,7 +356,7 @@ function TimeLine({ data }: { data: LessonsOverview }) {
           type="button"
           disabled={settings.isPending || !value}
           onClick={() => settings.mutate({ time: value }, { onSuccess: () => { setEditing(false); toast.success(`Lessons go out at ${clockLabel(value)}`); } })}
-          className="h-9 rounded-full bg-primary px-3 text-[12px] font-black text-primary-foreground"
+          className="h-9 rounded-full bg-primary px-3 text-[12px] font-bold text-primary-foreground"
         >
           Save
         </button>
@@ -392,16 +392,16 @@ function StatsPanel({ data }: { data: LessonsOverview }) {
       ) : (
         <>
           <div>
-            <div className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">By day · last 12 weeks · coaches not counted</div>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">By day · last 12 weeks · coaches not counted</div>
             <table className="w-full text-left">
               <thead>
                 <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                  <th className="py-1 font-black">Track</th>
-                  <th className="py-1 text-right font-black">Posts</th>
-                  <th className="py-1 text-right font-black">Avg views</th>
-                  <th className="py-1 text-right font-black">❤️</th>
-                  <th className="py-1 text-right font-black">💬</th>
-                  <th className="py-1 text-right font-black">Answers</th>
+                  <th className="py-1 font-bold">Track</th>
+                  <th className="py-1 text-right font-bold">Posts</th>
+                  <th className="py-1 text-right font-bold">Avg views</th>
+                  <th className="py-1 text-right font-bold">❤️</th>
+                  <th className="py-1 text-right font-bold">💬</th>
+                  <th className="py-1 text-right font-bold">Answers</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,7 +420,7 @@ function StatsPanel({ data }: { data: LessonsOverview }) {
             {s.posts < 15 && <p className="mt-1 text-[11px] text-muted-foreground">Small numbers so far: read these as hints, not a ranking.</p>}
           </div>
           <div>
-            <div className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">Recent</div>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Recent</div>
             <ul className="space-y-1">
               {s.recent.slice(0, 6).map((r) => (
                 <li key={r.post_id}>
@@ -441,7 +441,7 @@ function StatsPanel({ data }: { data: LessonsOverview }) {
       )}
       {s.interest.length > 0 && (
         <div>
-          <div className="mb-1 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">What the crew's story answers point to</div>
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">What the crew's story answers point to</div>
           <div className="flex flex-wrap gap-1.5">
             {s.interest.map((t) => (
               <span key={t.tag} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold">
@@ -490,7 +490,7 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
       <SheetContent side="bottom" hideCloseButton className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[560px]" data-lesson-sheet>
         <SheetHeader className="sticky top-0 z-10 flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 bg-background px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="truncate text-[16px] font-black">{it?.title ?? LESSON_TRACK[row.track].name}</SheetTitle>
+            <SheetTitle className="truncate text-[16px] font-bold">{it?.title ?? LESSON_TRACK[row.track].name}</SheetTitle>
             <SheetDescription className="text-[12px]">
               {dayLabel(row.day)} · {coachTimeLabel(row.post_at)} · {status}
             </SheetDescription>
@@ -509,7 +509,7 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
           )}
           {isTuesday && data.observation && live && (
             <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-              <div className="text-[10px] font-black uppercase tracking-[0.12em] text-primary">Goes out instead if the numbers still hold · the crew's own data</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Goes out instead if the numbers still hold · the crew's own data</div>
               <div className="mt-1.5 whitespace-pre-line text-[12px] text-muted-foreground">{data.observation.caption}</div>
               <div className="mt-1.5 text-[11px] text-muted-foreground">5+ people on each side, never more than once every 4 weeks. Approving this day approves either one.</div>
             </div>
@@ -564,18 +564,18 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
 
           {/* what to do */}
           {row.status === "posted" ? (
-            <button type="button" onClick={() => row.post_id && openCommunityPost(row.post_id)} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-black text-primary-foreground">
+            <button type="button" onClick={() => row.post_id && openCommunityPost(row.post_id)} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-bold text-primary-foreground">
               Open the post <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
             <>
               {live && it && data.mode === "review" && (
                 row.status === "approved" ? (
-                  <button type="button" disabled={act.isPending} onClick={() => run({ kind: "unapprove", id: row.id }, "Back to needing your OK")} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-emerald-500/10 text-[14px] font-black text-emerald-700 dark:text-emerald-400" data-lesson-unapprove>
+                  <button type="button" disabled={act.isPending} onClick={() => run({ kind: "unapprove", id: row.id }, "Back to needing your OK")} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-emerald-500/10 text-[14px] font-bold text-emerald-700 dark:text-emerald-400" data-lesson-unapprove>
                     <Check className="h-4 w-4" /> Approved for {coachTimeLabel(row.post_at)} · <Undo2 className="h-3.5 w-3.5" /> Undo
                   </button>
                 ) : (
-                  <button type="button" disabled={act.isPending} onClick={() => run({ kind: "approve", id: row.id }, `Approved for ${dayLabel(row.day)} ${coachTimeLabel(row.post_at)}`, onClose)} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-black text-primary-foreground" data-lesson-approve>
+                  <button type="button" disabled={act.isPending} onClick={() => run({ kind: "approve", id: row.id }, `Approved for ${dayLabel(row.day)} ${coachTimeLabel(row.post_at)}`, onClose)} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-bold text-primary-foreground" data-lesson-approve>
                     <Check className="h-4 w-4" /> Approve for {dayLabel(row.day).split(",")[0]} {coachTimeLabel(row.post_at)}
                   </button>
                 )
@@ -584,7 +584,7 @@ function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data:
                 <p className="rounded-xl bg-muted/60 px-3 py-2.5 text-center text-[12px] font-bold text-muted-foreground">Goes out on its own {dayLabel(row.day)} at {coachTimeLabel(row.post_at)}</p>
               )}
               {row.status === "skipped" && (
-                <button type="button" disabled={act.isPending} onClick={() => (new Date(row.post_at).getTime() < Date.now() + 120_000 ? setMove(true) : run({ kind: "restore", id: row.id }, "Back in the plan"))} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-black text-primary-foreground">
+                <button type="button" disabled={act.isPending} onClick={() => (new Date(row.post_at).getTime() < Date.now() + 120_000 ? setMove(true) : run({ kind: "restore", id: row.id }, "Back in the plan"))} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary text-[14px] font-bold text-primary-foreground">
                   <RefreshCw className="h-4 w-4" /> {row.item ? "Bring it back" : "Put a lesson here"}
                 </button>
               )}
@@ -702,7 +702,7 @@ function MoveSheet({ open, row, onClose }: { open: boolean; row: LessonPlanRow; 
       <SheetContent side="bottom" hideCloseButton className="gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[480px]">
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">Move it</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">Move it</SheetTitle>
             <SheetDescription className="text-[12px]">Winnipeg time. Another day's lesson trades places with it.</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -711,14 +711,14 @@ function MoveSheet({ open, row, onClose }: { open: boolean; row: LessonPlanRow; 
         </SheetHeader>
         <div className="flex flex-wrap items-end gap-3 px-5 py-4">
           <label className="block">
-            <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">Day</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Day</span>
             <input type="date" value={date} min={now.date} onChange={(e) => setDate(e.target.value)} className="mt-1 block h-11 rounded-xl border border-border bg-background px-3 text-[16px]" />
           </label>
           <label className="block">
-            <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">Time</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Time</span>
             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 block h-11 rounded-xl border border-border bg-background px-3 text-[16px]" />
           </label>
-          <button type="button" disabled={act.isPending || !date || !time} onClick={save} className="ml-auto h-11 rounded-full bg-primary px-5 text-[14px] font-black text-primary-foreground disabled:opacity-50" data-lesson-move-save>
+          <button type="button" disabled={act.isPending || !date || !time} onClick={save} className="ml-auto h-11 rounded-full bg-primary px-5 text-[14px] font-bold text-primary-foreground disabled:opacity-50" data-lesson-move-save>
             Move
           </button>
         </div>
@@ -756,7 +756,7 @@ function LibrarySheet({ open, onClose, pickFor, onPicked }: { open: boolean; onC
         <SheetHeader className="space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <SheetTitle className="text-[16px] font-black">{pickFor ? "Swap in a lesson" : "Lesson library"}</SheetTitle>
+              <SheetTitle className="text-[16px] font-bold">{pickFor ? "Swap in a lesson" : "Lesson library"}</SheetTitle>
               <SheetDescription className="text-[12px]">{pickFor ? `For ${dayLabel(pickFor.day)}` : `${data?.length ?? 0} lessons · least used go first`}</SheetDescription>
             </div>
             <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -797,7 +797,7 @@ function LibrarySheet({ open, onClose, pickFor, onPicked }: { open: boolean; onC
                     className={cn("w-full rounded-xl border border-border/70 px-3 py-2.5 text-left disabled:opacity-50", !i.active && "opacity-60")}
                     data-lesson-item={i.key}
                   >
-                    <div className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">{lessonKicker(i)}</div>
+                    <div className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{lessonKicker(i)}</div>
                     <div className="truncate text-[14px] font-bold">{i.title}</div>
                     <div className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{i.body}</div>
                     <div className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
@@ -851,7 +851,7 @@ function ItemEditor({ item, defaultTrack, onClose }: { item: LessonItem | null; 
       <SheetContent side="bottom" hideCloseButton className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[560px]" data-lesson-item-editor>
         <SheetHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 px-5 pb-3 pt-4 text-left">
           <div className="min-w-0">
-            <SheetTitle className="text-[16px] font-black">{item ? "Edit lesson" : "New lesson"}</SheetTitle>
+            <SheetTitle className="text-[16px] font-bold">{item ? "Edit lesson" : "New lesson"}</SheetTitle>
             <SheetDescription className="text-[12px]">Changes apply the next time it's planned. Lessons already approved keep what you approved.</SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -861,7 +861,7 @@ function ItemEditor({ item, defaultTrack, onClose }: { item: LessonItem | null; 
         <div className="space-y-3 px-5 py-4">
           <div className="grid grid-cols-2 gap-2">
             <label className="col-span-2 block">
-              <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">Title (just for you and the story)</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Title (just for you and the story)</span>
               <input value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-[15px]" />
             </label>
             <Select label="Day" value={track} onChange={(v) => setTrack(v as LessonTrack)} options={LESSON_TRACKS.map((t) => [t, `${LESSON_TRACK[t].day} · ${LESSON_TRACK[t].name}`])} />
@@ -869,7 +869,7 @@ function ItemEditor({ item, defaultTrack, onClose }: { item: LessonItem | null; 
             {track === "fix" && <Select label="Level" value={level} onChange={(v) => setLevel(v as LessonLevel | "")} options={[["", "Pick one"], ...LESSON_LEVELS.map((l) => [l, LEVEL_LABEL[l]] as [string, string])]} />}
           </div>
           <label className="block">
-            <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">The post</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">The post</span>
             <textarea value={body} maxLength={1200} onChange={(e) => setBody(e.target.value)} rows={10} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[15px] leading-[1.45]" />
             <span className="text-[11px] text-muted-foreground">{body.length}/1200 · first line is the hook (it leads the story)</span>
           </label>
@@ -888,7 +888,7 @@ function ItemEditor({ item, defaultTrack, onClose }: { item: LessonItem | null; 
             <span className="text-[13px] font-bold">In the rotation</span>
             <Switch checked={active} onCheckedChange={setActive} />
           </label>
-          <button type="button" disabled={save.isPending || !title.trim() || !body.trim()} onClick={submit} className="h-11 w-full rounded-full bg-primary text-[14px] font-black text-primary-foreground disabled:opacity-50">
+          <button type="button" disabled={save.isPending || !title.trim() || !body.trim()} onClick={submit} className="h-11 w-full rounded-full bg-primary text-[14px] font-bold text-primary-foreground disabled:opacity-50">
             {save.isPending ? "Saving…" : "Save lesson"}
           </button>
         </div>
@@ -901,7 +901,7 @@ function ItemEditor({ item, defaultTrack, onClose }: { item: LessonItem | null; 
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-black uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
       <span className="relative mt-1 block">
         <select value={value} onChange={(e) => onChange(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-border bg-background pl-3 pr-8 text-[14px]">
           {options.map(([v, l]) => (

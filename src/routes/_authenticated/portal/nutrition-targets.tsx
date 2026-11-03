@@ -18,8 +18,7 @@ import { PageHeader } from "@/components/app-shell";
 import { PageBodySkeleton } from "@/components/route-pending";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ChevronRight, ClipboardList, Download, FileText, Loader2, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
+import { ClipboardList, Download, FileText, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { getClientWorkouts } from "@/lib/pl-programs";
@@ -40,8 +39,8 @@ import { MacroTargetsChart } from "@/components/nutrition/MacroTargetsChart";
 import { MealPlanReader } from "@/components/nutrition/MealPlanReader";
 import { NutritionInfoSheet, RulesList } from "@/components/nutrition/NutritionInfoSheet";
 import { TodaysIntakeCard, LogFoodToolButton } from "@/components/nutrition/TodaysIntakeCard";
-import { CookbookEntryCard } from "@/components/nutrition/CookbookSheet";
-import { NutritionToolsCard, ToolTile } from "@/components/nutrition/NutritionToolsCard";
+import { CookbookToolTile } from "@/components/nutrition/CookbookSheet";
+import { NutritionToolsCard, ToolRow, ToolTile } from "@/components/nutrition/NutritionToolsCard";
 import { GroceryListEntryCard } from "@/components/nutrition/GroceryListSheet";
 import { RecentAdherenceWidget } from "@/components/nutrition/RecentAdherenceWidget";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
@@ -230,25 +229,21 @@ function PortalNutrition() {
           />
         </SectionErrorBoundary>
 
-        {/* 2. Meal Plan first: it's what the client opens Nutrition for. */}
+        {/* 2. Meal Plan first: it's what the client opens Nutrition for. Its PDF
+            is the Tools tile (one PDF button on the page, reachable on any day). */}
         {plan && day && (
           <SectionErrorBoundary label="Meal plan">
             <Card className="space-y-4 p-4 md:p-5">
               <div className="flex items-center gap-2">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-                  <Utensils className="h-4 w-4" />
-                </div>
+                <Utensils className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-black uppercase tracking-widest">Meal Plan</div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-base font-semibold">Meal plan</div>
+                  <div className="text-xs text-muted-foreground">
                     {day.day_label || DAY_TYPE_LABEL[automaticDayType]}
                     {/* When the coach last updated the plan: the same date the coach sees on it. */}
                     {plan.updated_at ? ` · Updated ${format(new Date(plan.updated_at), "MMM d")}` : ""}
                   </div>
                 </div>
-                <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5" onClick={handleDownload} disabled={downloading}>
-                  {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PDF
-                </Button>
               </div>
               {day.notes && String(day.notes).trim() ? (
                 <MealPlanReader text={String(day.notes)} water={plan.water ?? null} />
@@ -257,23 +252,24 @@ function PortalNutrition() {
                   Your coach hasn't added meal details for this day yet.
                 </div>
               )}
-              {weighingRules && (
-                <button
-                  type="button"
-                  onClick={() => setRulesOpen(true)}
-                  className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Scale className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                  <span className="min-w-0 flex-1 text-sm font-semibold">How to weigh your food</span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                </button>
+              {/* 3. The meal plan's own tools, right under it: weighing, then the grocery list. */}
+              {(weighingRules || clientId) && (
+                <div className="space-y-2">
+                  {weighingRules && (
+                    <ToolRow icon={Scale} title="How to weigh your food" onClick={() => setRulesOpen(true)} />
+                  )}
+                  {clientId && (
+                    <SectionErrorBoundary label="Grocery list">
+                      <GroceryListEntryCard clientId={clientId} viewAsUserId={impersonatedClient?.user_id ?? null} />
+                    </SectionErrorBoundary>
+                  )}
+                </div>
               )}
             </Card>
           </SectionErrorBoundary>
         )}
-
-        {/* 3. Grocery list, right under the meal plan. */}
-        {plan && clientId && (
+        {/* No plan day today: the grocery list still has the week's days. */}
+        {plan && !day && clientId && (
           <SectionErrorBoundary label="Grocery list">
             <GroceryListEntryCard clientId={clientId} viewAsUserId={impersonatedClient?.user_id ?? null} />
           </SectionErrorBoundary>
@@ -286,12 +282,10 @@ function PortalNutrition() {
           ) : planQ.isError || !plan ? (
             <Card className="p-5">
               <div className="flex items-center gap-2">
-                <div className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
-                  <Target className="h-4 w-4" />
-                </div>
+                <Target className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div>
-                  <div className="text-sm font-black uppercase tracking-widest">Nutrition Targets</div>
-                  <div className="text-[12px] text-muted-foreground">
+                  <div className="text-base font-semibold">Nutrition targets</div>
+                  <div className="text-xs text-muted-foreground">
                     {planQ.isError ? "We couldn't load your plan right now." : "No nutrition targets assigned yet."}
                   </div>
                 </div>
@@ -301,12 +295,10 @@ function PortalNutrition() {
             <Card className="space-y-4 p-4 md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
-                    <Target className="h-4 w-4" />
-                  </div>
+                  <Target className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
                   <div>
-                    <div className="text-sm font-black uppercase tracking-widest">Nutrition Targets</div>
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-base font-semibold">Nutrition targets</div>
+                    <div className="text-xs text-muted-foreground">
                       {day?.day_label || DAY_TYPE_LABEL[automaticDayType]}
                       {headerLine ? ` · ${headerLine}` : ""}
                     </div>
@@ -334,14 +326,15 @@ function PortalNutrition() {
         {plan?.client_notes && (
           <Card className="p-4 md:p-5">
             <div className="mb-2 flex items-center gap-2">
-              <ClipboardList className="h-4 w-4 text-primary" />
-              <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Coach Notes</div>
+              <ClipboardList className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <div className="text-base font-semibold">Notes from your coach</div>
             </div>
-            <div className="whitespace-pre-wrap text-xs">{plan.client_notes}</div>
+            <div className="whitespace-pre-wrap text-sm">{plan.client_notes}</div>
           </Card>
         )}
 
-        {/* Nutrition Tools — always open, right under the plan. */}
+        {/* Nutrition Tools — always open, right under the plan. Every tool appears
+            once on the page: Log Food, the PDF and the Cookbook live only here. */}
         <SectionErrorBoundary label="Nutrition tools">
           <NutritionToolsCard
             viewer="client"
@@ -365,6 +358,8 @@ function PortalNutrition() {
                     href={plan.pdf_signed_url}
                   />
                 )}
+                {/* recipes load only when it's opened */}
+                <CookbookToolTile viewer="client" />
               </>
             }
             footer={<RecentAdherenceWidget />}
@@ -382,11 +377,6 @@ function PortalNutrition() {
             <ClientCardioSection clientId={clientId} hideWhenEmpty variant="line" />
           </SectionErrorBoundary>
         )}
-
-        {/* 7. Cookbook entry — recipes load only when opened. */}
-        <SectionErrorBoundary label="Cookbook">
-          <CookbookEntryCard viewer="client" />
-        </SectionErrorBoundary>
 
         {/* Nutrition disclaimer: one quiet line, the full text a tap away. Always last. */}
         <button

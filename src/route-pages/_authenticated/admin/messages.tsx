@@ -19,7 +19,7 @@ import {
   setConversationStatus, setConversationPriority, PRIORITIES,
   markUnread, markRead, setConversationWorkflow, type WorkflowStatus,
 } from "@/lib/messages";
-import { AlertTriangle, CalendarClock, Clock, Hourglass, Image as ImageIcon, ClipboardCheck, Search, ChevronLeft, MoreHorizontal, ExternalLink, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, NotebookPen } from "lucide-react";
+import { AlertTriangle, CalendarClock, Clock, Hourglass, Image as ImageIcon, ClipboardCheck, Search, ChevronLeft, MoreHorizontal, Phone, MessageSquare, MailOpen, Mail, Trash2, Archive, Eye, NotebookPen } from "lucide-react";
 import { ClientNotesSheet } from "@/components/messages/client-notes-log";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
@@ -80,7 +80,7 @@ export function WorkflowPill({ state, className, compact }: { state: InboxWorkfl
   if (state === "archived") return null;
   return (
     <span
-      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-black uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
+      className={cn("inline-flex h-5 min-w-0 shrink items-center whitespace-nowrap rounded-full border px-2 text-[10px] font-bold uppercase tracking-wide", WORKFLOW_STYLE[state], className)}
       title={WORKFLOW_LABEL[state]}
     >
       {compact ? (
@@ -800,26 +800,29 @@ export function MessagesInbox({
               : { paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }
           }
         >
-          <div className="mb-2 flex items-center gap-2">
-            <h1 className="text-base font-black tracking-tight md:text-lg">Messages</h1>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {conversations.length}
-            </span>
+          {/* No second title: the page (Communication) and its 1:1 Chats tab already say where you are. */}
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-10 pl-9 text-base sm:text-sm"
+                placeholder="Search client…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             {view && (
-              <Button size="sm" variant="ghost" onClick={() => setMassOpen(true)} className="ml-auto h-8 px-2 text-xs" aria-label="Mass message">
-                <Megaphone className="h-3.5 w-3.5 md:mr-1" />
-                <span className="hidden md:inline">Mass message</span>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => setMassOpen(true)}
+                className="h-10 w-10 shrink-0"
+                aria-label="Mass message"
+                title="Mass message: the same message in each client's chat"
+              >
+                <Megaphone className="h-4 w-4" />
               </Button>
             )}
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-9 pl-9 text-base sm:text-sm"
-              placeholder="Search client…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
           </div>
           <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => {
@@ -896,9 +899,9 @@ export function MessagesInbox({
           {role === "admin" && !search && (
             // Cleo's way in on admin: pinned at the top of the inbox (there is
             // no floating button). Not a client thread: nothing is ever sent.
-            <div className="flex items-stretch border-b border-border/60 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-pink-500/5">
-              <button type="button" onClick={() => openSummer()} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition hover:bg-secondary/40">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white">
+            <div className="flex items-stretch border-b border-border/60">
+              <button type="button" onClick={() => openSummer()} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/60">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
                   <Sparkles className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -909,11 +912,11 @@ export function MessagesInbox({
               <button
                 type="button"
                 onClick={() => openSummer({ dictate: true })}
-                className="flex w-14 shrink-0 items-center justify-center transition hover:bg-secondary/40"
+                className="flex w-14 shrink-0 items-center justify-center transition hover:bg-muted/60"
                 aria-label="Talk to Cleo"
                 title="Talk to Cleo"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 via-orange-400 to-pink-500 text-white shadow-sm">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-foreground">
                   <Mic className="h-4 w-4" />
                 </span>
               </button>
@@ -1119,10 +1122,10 @@ export function MessagesInbox({
                     aria-label={`Brief: ${selected.full_name ?? "client"}`}
                   >
                     <span className="truncate">{selected.full_name}</span>
-                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   </button>
                   {(selectedClientLive || isClientActive((selected as any).last_active_at)) && (
-                    <LiveMark className="shrink-0 text-[11px] font-semibold" size={6}>
+                    <LiveMark className="hidden shrink-0 text-[11px] font-semibold sm:inline-flex" size={6}>
                       {selectedClientLive ? "Live in chat" : "Active now"}
                     </LiveMark>
                   )}
@@ -1139,29 +1142,20 @@ export function MessagesInbox({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 shrink-0 gap-1 rounded-full border-emerald-500/40 px-3 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300"
+                  className="h-10 shrink-0 gap-1 px-3"
                   onClick={() => void changeWorkflow(selected.id, "done", { undoFrom: "needs_response" })}
                   title="No reply needed — clear it from Needs Response"
                 >
                   <Check className="h-4 w-4" /> <span className="hidden sm:inline">Mark</span> Done
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
-                title="View client POV"
-                aria-label={`View ${selected.full_name ?? "client"} POV`}
-                onClick={enterSelectedClientPov}
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
+              {/* Three buttons (Done, Call, Notes) and ⋯: View as client and Text live in ⋯. */}
               {(selected as any).call_access_enabled && (selected as any).phone ? (
                 <Button
                   asChild
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                  className="h-10 w-10 shrink-0"
                   title={`Call ${selected.full_name ?? "client"} (${(selected as any).phone})`}
                 >
                   <a href={`tel:${String((selected as any).phone).replace(/[^+\d]/g, "")}`} aria-label="Call client">
@@ -1169,22 +1163,11 @@ export function MessagesInbox({
                   </a>
                 </Button>
               ) : null}
-              {(selected as any).phone && !(selected as any).sms_opt_out ? (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                  title={`Send SMS to ${selected.full_name ?? "client"}`}
-                  onClick={() => setSmsOpen(true)}
-                >
-                  <MessageSquare className="h-4 w-4" />
-                </Button>
-              ) : null}
               {/* everything they've told you in workouts: pain, review notes, exercise notes */}
               <Button
                 variant="outline"
                 size="icon"
-                className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+                className="h-10 w-10 shrink-0"
                 title={`${selected.full_name ?? "Client"}'s workout notes`}
                 aria-label="Workout notes"
                 onClick={() => setNotesOpen(true)}
@@ -1194,18 +1177,22 @@ export function MessagesInbox({
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-7 shrink-0 sm:h-9 sm:w-9">
+                  <Button variant="ghost" size="icon" className="h-10 w-9 shrink-0 sm:w-10" aria-label="More">
                     <MoreHorizontal className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="text-xs">Conversation</DropdownMenuLabel>
-                  <DropdownMenuItem asChild>
-                    <ClientNameLink clientId={selected.id}>
-                      <ExternalLink className="mr-2 h-4 w-4" /> Open client profile
-                    </ClientNameLink>
+                  {/* The profile opens from their photo; their name opens the Brief. */}
+                  <DropdownMenuItem onClick={enterSelectedClientPov} title="View client POV">
+                    <Eye className="mr-2 h-4 w-4" /> View as client
                   </DropdownMenuItem>
+                  {(selected as any).phone && !(selected as any).sms_opt_out ? (
+                    <DropdownMenuItem onClick={() => setSmsOpen(true)} title={`Send SMS to ${selected.full_name ?? "client"}`}>
+                      <MessageSquare className="mr-2 h-4 w-4" /> Send a text (SMS)
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs">Conversation</DropdownMenuLabel>
                   <DropdownMenuItem onClick={handleMarkUnread}>
                     <Mail className="mr-2 h-4 w-4" /> Mark as unread
                   </DropdownMenuItem>
@@ -1213,7 +1200,7 @@ export function MessagesInbox({
                     <MailOpen className="mr-2 h-4 w-4" /> Mark as read
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Response status</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">Response status</DropdownMenuLabel>
                   {(["needs_response", "waiting_on_client", "done"] as const).map((w) => (
                     <DropdownMenuItem key={w} onClick={() => void changeWorkflow(selected.id, w, { undoFrom: selectedWorkflow?.state === "archived" ? undefined : selectedWorkflow?.state as WorkflowStatus })}>
                       Mark {WORKFLOW_LABEL[w]}{selectedWorkflow?.state === w ? " ✓" : ""}
@@ -1224,7 +1211,7 @@ export function MessagesInbox({
                     ? <DropdownMenuItem onClick={() => updateStatus("open")}>Unarchive</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => updateStatus("archived")}>Archive conversation</DropdownMenuItem>}
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Priority</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">Priority</DropdownMenuLabel>
                   {PRIORITIES.map((p) => (
                     <DropdownMenuItem key={p} onClick={() => updatePriority(p)}>
                       {p}{selectedState?.priority === p ? " ✓" : ""}

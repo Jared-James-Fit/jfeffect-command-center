@@ -210,7 +210,7 @@ export function WorkoutViewToggle({ view, onChange, className, hint = false }: {
       role="radiogroup"
       aria-label="Workout view"
       data-testid="workout-view-toggle"
-      className={cn("inline-flex h-7 shrink-0 items-center rounded-full bg-secondary/70 p-0.5", className)}
+      className={cn("inline-flex h-10 shrink-0 items-center rounded-full bg-secondary/70 px-0.5", className)}
     >
       {options.map(({ value, label, icon: Icon }) => {
         const on = view === value;
@@ -223,14 +223,19 @@ export function WorkoutViewToggle({ view, onChange, className, hint = false }: {
             aria-label={value === "story" ? "Focus: one exercise at a time, full screen" : "List: every exercise on one page"}
             data-view={value}
             onClick={() => { if (!on) onChange(value); }}
-            className={cn(
-              "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition-colors duration-200",
-              on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              hint && value === "story" && !on && "badge-pulse text-foreground",
-            )}
+            // The whole 40px height is the tap target; the pill inside shows which is on.
+            className="group inline-flex h-10 items-center focus-visible:outline-none"
           >
-            <Icon className="h-3.5 w-3.5" aria-hidden />
-            {label}
+            <span
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors duration-200 group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground group-hover:text-foreground",
+                hint && value === "story" && !on && "badge-pulse text-foreground",
+              )}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              {label}
+            </span>
           </button>
         );
       })}

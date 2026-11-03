@@ -59,7 +59,7 @@ function CoachingAppPreview() {
         <div className="flex h-full w-full flex-col">
           <div className="px-4 pb-2 pt-8">
             <div className="text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">JF Effect · Coaching</div>
-            <div className="mt-1 text-lg font-black leading-tight">Welcome back</div>
+            <div className="mt-1 text-lg font-bold leading-tight">Welcome back</div>
             <div className="text-[11px] text-[#B0B4BE]">Block 2 · Week 3</div>
           </div>
 
@@ -128,7 +128,7 @@ export function CoachingProcess() {
     <section className="container mx-auto px-4 py-16 md:py-24">
       <div className="mx-auto mb-10 max-w-2xl text-center">
         <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">How this actually works</div>
-        <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">A real process — not a checkout</h2>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">A real process — not a checkout</h2>
         <p className="mt-3 text-sm text-muted-foreground md:text-base">
           This is application-only. We don't take everyone, and we don't take on people we can't actually help.
         </p>
@@ -137,7 +137,7 @@ export function CoachingProcess() {
         <div className="absolute left-0 right-0 top-6 hidden h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent md:block" />
         {steps.map((s) => (
           <li key={s.n} className="relative rounded-2xl border border-border/70 bg-card/60 p-5">
-            <div className="grid h-9 w-9 place-items-center rounded-full border border-primary/40 bg-background text-xs font-black text-primary">
+            <div className="grid h-9 w-9 place-items-center rounded-full border border-primary/40 bg-background text-xs font-bold text-primary">
               {s.n}
             </div>
             <div className="mt-3 text-base font-bold">{s.title}</div>
@@ -154,12 +154,12 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
     <section className="container mx-auto px-4 py-16 md:py-24">
       <div className="mx-auto mb-10 max-w-2xl text-center">
         <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">Coaching vs Membership</div>
-        <h2 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Two different products. Pick the one you actually need.</h2>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">Two different products. Pick the one you actually need.</h2>
       </div>
       <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
         <div className="rounded-2xl border-2 border-primary/60 bg-gradient-to-br from-primary/10 via-card to-card p-6 shadow-xl shadow-primary/10">
           <div className="text-[11px] font-bold uppercase tracking-widest text-primary">Private Coaching</div>
-          <div className="mt-1 text-2xl font-black">Built for you. Run with you.</div>
+          <div className="mt-1 text-2xl font-bold">Built for you. Run with you.</div>
           <ul className="mt-4 space-y-2 text-sm">
             {[
               "A plan built for you, not pulled from a library",
@@ -178,7 +178,7 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
         </div>
         <div className="rounded-2xl border border-border/70 bg-card/50 p-6">
           <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">JF Membership</div>
-          <div className="mt-1 text-2xl font-black">Self-guided app subscription</div>
+          <div className="mt-1 text-2xl font-bold">Self-guided app subscription</div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {[
               "The full app + workout library",

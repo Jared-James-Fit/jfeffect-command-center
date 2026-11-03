@@ -1,4 +1,5 @@
 import { type ReactNode, type ComponentType } from "react";
+import { HomeCardHeader } from "@/components/home/home-card-header";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -131,10 +132,7 @@ export function ProgressSummaryCard({
     return (
       <Card className="overflow-hidden">
         {/* the same header as Home's Bodyweight and Water cards, which sit right above it */}
-        <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-          <Images className="h-5 w-5 shrink-0 text-primary" />
-          <h3 className="text-base font-bold">Progress</h3>
-        </div>
+        <HomeCardHeader icon={Images} title="Progress" className="border-b border-border px-5 py-3" />
         <div className="divide-y divide-border">
           {primary.map((p) => {
             const Icon = p.icon;
@@ -146,8 +144,8 @@ export function ProgressSummaryCard({
                 search={{ action: p.action } as never}
                 className="flex min-h-14 items-center gap-3 px-5 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
               >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10">
-                  <Icon className="h-4.5 w-4.5 text-primary" />
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+                  <Icon className="h-4.5 w-4.5" />
                 </span>
                 <span className="flex-1 text-sm font-semibold">{p.label}</span>
                 {last ? <span className="text-xs text-muted-foreground">Last {fmtDate(last)}</span> : null}
@@ -157,9 +155,9 @@ export function ProgressSummaryCard({
           })}
           <Link
             to="/portal/progress"
-            className="flex min-h-14 items-center gap-3 bg-primary/[0.04] px-5 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
+            className="flex min-h-14 items-center gap-3 px-5 py-3 transition active:bg-secondary/60 hover:bg-secondary/30"
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
               <History className="h-4.5 w-4.5" />
             </span>
             <span className="min-w-0 flex-1">

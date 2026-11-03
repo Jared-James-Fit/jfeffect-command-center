@@ -120,7 +120,7 @@ export function DetailedData({ report, records }: { report: IntelReport; records
       })}
       {(blockNotes.length > 0 || records.fileNotes.length > 0) && (
         <Card className="space-y-1.5 p-3 text-xs">
-          <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Coach notes</div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Coach notes</div>
           {blockNotes.map((b) => (
             <div key={b.id}><b>{b.name}:</b> {b.coach_notes}</div>
           ))}

@@ -73,7 +73,7 @@ function LaunchReadinessPage() {
         <>
           <Card className={`p-4 border ${summaryTone}`}>
             <div className="text-xs uppercase tracking-widest opacity-80">Overall</div>
-            <div className="text-2xl font-black tracking-tight">{data?.summary}</div>
+            <div className="text-2xl font-bold tracking-tight">{data?.summary}</div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
               <Badge variant="outline" className="border-emerald-500/30">{data?.counts.ready ?? 0} ready</Badge>
               <Badge variant="outline" className="border-amber-500/30">{data?.counts.warning ?? 0} warning</Badge>

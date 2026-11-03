@@ -38,7 +38,7 @@ export function CrewGoalCard({ className }: { className?: string }) {
   return (
     <section data-crew-goal className={cn("rounded-3xl border bg-card px-4 pb-3.5 pt-3.5", s.hit ? "border-amber-400/60" : "border-border/80", className)}>
       <div className="flex items-center justify-between gap-2">
-        <span className={cn("text-[10px] font-black uppercase tracking-[0.16em]", s.hit ? "text-amber-500" : "text-primary")}>Crew goal · this week</span>
+        <span className={cn("text-[10px] font-bold uppercase tracking-[0.16em]", s.hit ? "text-amber-500" : "text-primary")}>Crew goal · this week</span>
         {g.last_week.done > 0 && (
           <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-muted-foreground">
             Last week {g.last_week.hit && <Check className="h-3 w-3 text-emerald-500" strokeWidth={3} />}
@@ -47,7 +47,7 @@ export function CrewGoalCard({ className }: { className?: string }) {
         )}
       </div>
       <div className="mt-1.5 flex items-baseline gap-1.5">
-        <span className="text-[28px] font-black leading-none tabular-nums">{g.done}</span>
+        <span className="text-[28px] font-bold leading-none tabular-nums">{g.done}</span>
         <span className="text-[15px] font-bold text-muted-foreground">/ {g.target} sessions</span>
       </div>
       <GoalBar pct={s.pct} hit={s.hit} className="mt-2.5 h-2.5" />
@@ -60,7 +60,7 @@ export function CrewGoalCard({ className }: { className?: string }) {
                 <UserAvatar src={a.avatar_url} name={a.name} size={26} expandable={false} />
               </span>
             ))}
-            {more > 0 && <span className="z-10 grid h-[26px] min-w-[26px] place-items-center rounded-full bg-muted px-1 text-[10px] font-black ring-2 ring-card">+{more}</span>}
+            {more > 0 && <span className="z-10 grid h-[26px] min-w-[26px] place-items-center rounded-full bg-muted px-1 text-[10px] font-bold ring-2 ring-card">+{more}</span>}
           </div>
           <span className="min-w-0 truncate text-[12px] text-muted-foreground">
             {g.people} trained{g.mine > 0 ? ` · you: ${g.mine}` : ""}
@@ -79,11 +79,11 @@ export function CrewGoalStrip({ className }: { className?: string }) {
   const s = crewGoalStatus(g);
   return (
     <div data-crew-goal-strip className={cn("flex items-center gap-2.5", className)}>
-      <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-black text-muted-foreground">
+      <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-muted-foreground">
         <Users className="h-3.5 w-3.5" /> Crew goal
       </span>
       <GoalBar pct={s.pct} hit={s.hit} className="h-1.5 flex-1" />
-      <span className={cn("shrink-0 text-[11px] font-black tabular-nums", s.hit && "text-amber-500")}>
+      <span className={cn("shrink-0 text-[11px] font-bold tabular-nums", s.hit && "text-amber-500")}>
         {g.done}/{g.target}
         {s.hit && " 🎉"}
       </span>

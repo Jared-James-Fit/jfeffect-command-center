@@ -104,8 +104,8 @@ function DetailSheet({ badge, onClose }: { badge: DetailBadge | null; onClose: (
           <div className="flex flex-col items-center gap-3 py-2 text-center">
             <BadgeIcon icon={badge.icon_key} rarity={badge.rarity} locked={!badge.earned_at} size="lg" badgeKey={badge.badge_key} />
             <SheetHeader className="items-center text-center">
-              <div className={cn("text-[10px] font-black uppercase tracking-[0.2em]", r.text)}>{r.label} · {badge.category}</div>
-              <SheetTitle className="text-xl font-black">{badge.name}</SheetTitle>
+              <div className={cn("text-[10px] font-bold uppercase tracking-[0.2em]", r.text)}>{r.label} · {badge.category}</div>
+              <SheetTitle className="text-xl font-bold">{badge.name}</SheetTitle>
               <SheetDescription>{badge.description}</SheetDescription>
             </SheetHeader>
             <div className="w-full rounded-xl border bg-muted/30 p-3 text-left">
@@ -191,13 +191,13 @@ export function MyAchievementsRow({ catalog, earned, metrics }: {
             </SheetHeader>
             {got.length > 0 && (
               <section>
-                <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Earned</div>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Earned</div>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{got.map((b) => <Tile key={b.badge_key} b={b} onClick={() => setDetail(b)} />)}</div>
               </section>
             )}
             {locked.length > 0 && (
               <section>
-                <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">In progress</div>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">In progress</div>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{locked.map((b) => <Tile key={b.badge_key} b={b} onClick={() => setDetail(b)} />)}</div>
               </section>
             )}
@@ -219,7 +219,7 @@ export function PublicAchievements({ badges, name }: { badges: PublicBadge[]; na
     <div>
       <div className="mb-2 flex items-end justify-between">
         <div>
-          <div className="text-sm font-black">Achievements</div>
+          <div className="text-sm font-bold">Achievements</div>
           <div className="text-[11px] text-muted-foreground">Only earned public badges are shared.</div>
         </div>
         <span className="text-xs font-bold text-muted-foreground">{badges.length} earned</span>
@@ -328,14 +328,14 @@ export function AchievementCelebrations({ clientId, catalog }: { clientId: strin
         <button type="button" onClick={close} aria-label="Close" className="absolute right-2 top-2 grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-muted">
           <X className="h-4 w-4" />
         </button>
-        <div className="text-[10px] font-black uppercase tracking-[.24em] text-muted-foreground">{prestige ? "Prestige milestone" : "Milestone unlocked"}</div>
+        <div className="text-[10px] font-bold uppercase tracking-[.24em] text-muted-foreground">{prestige ? "Prestige milestone" : "Milestone unlocked"}</div>
         <div className="mx-auto mt-4 w-fit"><BadgeIcon icon={b.icon_key} rarity={b.rarity} size="lg" badgeKey={b.badge_key} /></div>
-        <div className={cn("mt-3 text-[10px] font-black uppercase tracking-[.2em]", r.text)}>{r.label}</div>
-        <div className="mt-1 text-2xl font-black">{b.name}</div>
+        <div className={cn("mt-3 text-[10px] font-bold uppercase tracking-[.2em]", r.text)}>{r.label}</div>
+        <div className="mt-1 text-2xl font-bold">{b.name}</div>
         <div className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">{b.description}</div>
         {b.earned_at && <div className="mt-2 text-[11px] font-semibold text-muted-foreground">Earned {format(new Date(b.earned_at), "MMM d, yyyy")}</div>}
         {queue.length > 1 && <div className="mt-4 text-xs font-bold text-muted-foreground">{index + 1} of {queue.length}</div>}
-        <button type="button" onClick={next} className="mt-4 min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-black text-primary-foreground active:scale-[0.99]">
+        <button type="button" onClick={next} className="mt-4 min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground active:scale-[0.99]">
           {index < queue.length - 1 ? "Next milestone" : "Awesome"}
         </button>
 

@@ -66,7 +66,7 @@ export function RescheduleDialog({
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending} className="bg-gradient-primary">
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending} className="bg-primary">
             {mut.isPending ? "Saving…" : "Reschedule"}
           </Button>
         </DialogFooter>

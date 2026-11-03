@@ -25,13 +25,9 @@ export function RecoveryPatternsCard({ clientId, rangeStart, rangeEnd }: Props) 
     staleTime: 60_000,
     queryFn: async () => {
       const [reviewsRes, setsRes] = await Promise.all([
-        (supabase as any)
-          .from("member_workout_reviews")
-          .select("overall_rating, session_rpe, strength_feel, fatigue_feel, pain, review_submitted_at, member_plan_enrollments!inner(client_id)")
-          .eq("member_plan_enrollments.client_id", clientId)
-          .gte("review_submitted_at", start)
-          .lte("review_submitted_at", end)
-          .order("review_submitted_at", { ascending: true }),
+        // Old member reviews have no client_id (their join never matched and
+        // 400'd every load); set logs below carry the sessions.
+        Promise.resolve({ data: [] as any[] }),
         (supabase as any)
           .from("pl_row_results")
           .select("actual_rpe, actual_rir, completed_at, client_id")
@@ -94,7 +90,7 @@ export function RecoveryPatternsCard({ clientId, rangeStart, rangeEnd }: Props) 
   return (
     <section aria-label="Recovery patterns">
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-wider text-foreground">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           <Lightbulb className="h-5 w-5 text-primary" />
           Detected Patterns
         </h2>

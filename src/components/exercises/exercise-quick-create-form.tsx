@@ -256,7 +256,7 @@ export function ExerciseQuickCreateForm({
         />
         {matches.length > 0 && (
           <div className="mt-2 space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-50 p-2 dark:bg-amber-500/10">
-            <div className="text-[11px] font-black uppercase tracking-wide text-amber-800 dark:text-amber-300">Possible existing exercise</div>
+            <div className="text-[11px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Possible existing exercise</div>
             {matches.map((m) => (
               <div key={m.exercise.id} className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
@@ -413,7 +413,7 @@ export function ExerciseQuickCreateForm({
           type="submit"
           disabled={busy || !name.trim() || needsMuscles}
           title={needsMuscles ? "Pick at least one primary muscle" : undefined}
-          className="bg-gradient-primary font-bold uppercase"
+          className="bg-primary font-semibold"
         >
           {busy ? "Saving…" : submitLabel}
         </Button>

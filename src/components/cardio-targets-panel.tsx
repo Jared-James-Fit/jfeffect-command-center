@@ -104,7 +104,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
           <Heart className="h-4 w-4 shrink-0" /> Cardio Targets
         </h3>
         <div className="flex flex-wrap gap-2">
-          <ActionButton size="sm" className="flex-1 bg-gradient-primary font-bold uppercase sm:flex-none" onClick={() => setDefaultsOpen(true)}>
+          <ActionButton size="sm" className="flex-1 bg-primary font-semibold sm:flex-none" onClick={() => setDefaultsOpen(true)}>
             <Sparkles className="mr-1 h-4 w-4" /> Apply Default Cardio
           </ActionButton>
           <DropdownMenu>

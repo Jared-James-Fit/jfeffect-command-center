@@ -275,10 +275,11 @@ export function ClientRow({ r, onArchive, calSync }: { r: DirectoryRow; onArchiv
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
+                  variant="outline"
                   onClick={enterPov}
                   disabled={povBusy}
                   aria-label={`Enter ${r.full_name ?? "client"} POV`}
-                  className="h-11 w-11 border border-warning/50 bg-warning/15 text-warning shadow-sm hover:bg-warning/25 xl:h-10 xl:w-10"
+                  className="h-11 w-11 xl:h-10 xl:w-10"
                 >
                   <Eye className="h-5 w-5" />
                 </Button>
@@ -577,7 +578,7 @@ function AssignmentStatusStrip({
           body="The next training block is already set up for this client, and this is when it starts. Nothing to do here."
           icon={ArrowRight}
           tone="info"
-          className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-400"
+          className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground"
         >
           <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
           <span className="truncate">

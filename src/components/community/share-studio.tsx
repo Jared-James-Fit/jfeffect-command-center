@@ -1198,7 +1198,7 @@ export function ShareStudio({
                   setAspect(nextAspect(aspect));
                   setShapeFlash((n) => n + 1);
                 }}
-                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-black text-white backdrop-blur active:scale-95"
+                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
                 aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
                 data-frame-shape={aspect}
               >
@@ -1211,7 +1211,7 @@ export function ShareStudio({
               <button
                 type="button"
                 onClick={() => setCoverFor(clip0.id)}
-                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-black text-white backdrop-blur active:scale-95"
+                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
                 data-edit-cover
               >
                 <Film className="h-4 w-4" /> Cover
@@ -1222,7 +1222,7 @@ export function ShareStudio({
               <button
                 type="button"
                 onClick={() => void tray.edit(clip0.id)}
-                className="absolute bottom-2.5 right-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-black text-white backdrop-blur active:scale-95"
+                className="absolute bottom-2.5 right-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
                 data-studio-trim
               >
                 <Scissors className="h-4 w-4" /> Trim{clip0.seconds != null ? ` · ${formatClock(clip0.seconds)}` : ""}
@@ -1237,9 +1237,9 @@ export function ShareStudio({
                     <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
                       <Camera className="h-9 w-9" />
                     </div>
-                    <div className="text-[17px] font-black">Update JF Effect to use the camera</div>
+                    <div className="text-[17px] font-bold">Update JF Effect to use the camera</div>
                     <p className="max-w-[270px] text-[13px] text-white/75">This version of the app can't open the camera. Get the latest one in TestFlight and it opens right here.</p>
-                    <button type="button" onClick={openTestFlight} className="h-11 rounded-full bg-white px-6 text-[15px] font-black text-black active:scale-95">
+                    <button type="button" onClick={openTestFlight} className="h-11 rounded-full bg-white px-6 text-[15px] font-bold text-black active:scale-95">
                       Update in TestFlight
                     </button>
                     <button type="button" disabled={!canShoot} onClick={() => libRef.current?.click()} className="text-[14px] font-bold text-white/80 underline-offset-4 active:underline disabled:opacity-40">
@@ -1252,13 +1252,13 @@ export function ShareStudio({
                     <div className="grid h-20 w-20 place-items-center rounded-full bg-white/10">
                       <Camera className="h-9 w-9" />
                     </div>
-                    <div className="text-[17px] font-black">Camera is off for JF Effect</div>
+                    <div className="text-[17px] font-bold">Camera is off for JF Effect</div>
                     <p className="max-w-[270px] text-[13px] text-white/75">
                       {/* iOS restarts an app when its camera permission changes, so it's "open it again", not "come back" */}
                       {getPlatform() === "ios" ? "Turn on Camera, then open Post again. From then on it opens right here." : "Allow the camera for JF Effect in your phone's settings and come back. It opens right here."}
                     </p>
                     {getPlatform() === "ios" && (
-                      <button type="button" onClick={openAppSettings} className="h-11 rounded-full bg-white px-6 text-[15px] font-black text-black active:scale-95" data-camera-settings>
+                      <button type="button" onClick={openAppSettings} className="h-11 rounded-full bg-white px-6 text-[15px] font-bold text-black active:scale-95" data-camera-settings>
                         Turn on camera
                       </button>
                     )}
@@ -1271,7 +1271,7 @@ export function ShareStudio({
                     <button type="button" disabled={!canShoot} onClick={() => capRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-full bg-white text-black shadow-xl active:scale-95 disabled:opacity-40" aria-label="Open the camera">
                       <Camera className="h-10 w-10" />
                     </button>
-                    <div className="text-[15px] font-black">Take a photo</div>
+                    <div className="text-[15px] font-bold">Take a photo</div>
                     <p className="max-w-[260px] text-[12px] text-white/70">The live camera didn't start here, so this opens your phone's camera.</p>
                   </>
                 )}
@@ -1344,7 +1344,7 @@ export function ShareStudio({
                     <button
                       type="button"
                       onClick={() => setTimer((t) => (t === 0 ? 3 : t === 3 ? 10 : 0))}
-                      className={cn("inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-black backdrop-blur active:scale-95", timer ? "bg-white text-black" : "bg-black/40")}
+                      className={cn("inline-flex h-11 items-center gap-1 rounded-full px-3 text-[13px] font-bold backdrop-blur active:scale-95", timer ? "bg-white text-black" : "bg-black/40")}
                       aria-label={timer ? `Self-timer ${timer} seconds` : "Self-timer off"}
                     >
                       <Timer className="h-5 w-5" />
@@ -1515,7 +1515,7 @@ export function ShareStudio({
                     setVisibility(audList[(audList.indexOf(audBase) + 1) % audList.length].key);
                     setPosted(false);
                   }}
-                  className="inline-flex h-14 shrink-0 items-center gap-1.5 rounded-2xl bg-white/10 px-3 text-[13px] font-black active:scale-95"
+                  className="inline-flex h-14 shrink-0 items-center gap-1.5 rounded-2xl bg-white/10 px-3 text-[13px] font-bold active:scale-95"
                   aria-label={`Who sees it: ${aud.label}. Tap to change`}
                 >
                   <AudIcon className="h-4 w-4" /> {aud.label}
@@ -1541,7 +1541,7 @@ export function ShareStudio({
                   onClick={() => void doPost()}
                   className={cn(
                     // the app's own primary button: JF red, solid
-                    "inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-black shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
+                    "inline-flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-bold shadow-lg shadow-primary/25 active:scale-[0.98] disabled:opacity-100",
                     posted ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground",
                     !post && "opacity-60",
                   )}
@@ -1713,7 +1713,7 @@ function ModeTabs({ modes, mode, onMode }: { modes: CameraMode[]; mode?: string;
             role="tab"
             aria-selected={mode === m.key}
             onClick={() => onMode(m.key)}
-            className={cn("h-10 shrink-0 px-[6px] text-[12px] font-black uppercase tracking-[0.06em] transition-colors min-[375px]:px-[7px] min-[375px]:text-[13px] min-[385px]:px-2 min-[420px]:px-3", mode === m.key ? "text-white" : "text-white/50")}
+            className={cn("h-10 shrink-0 px-[6px] text-[12px] font-bold uppercase tracking-[0.06em] transition-colors min-[375px]:px-[7px] min-[375px]:text-[13px] min-[385px]:px-2 min-[420px]:px-3", mode === m.key ? "text-white" : "text-white/50")}
           >
             {m.label}
           </button>

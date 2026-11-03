@@ -216,7 +216,7 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
               <Instagram className="h-5 w-5" strokeWidth={2.2} />
             </span>
             <div className="min-w-0">
-              <SheetTitle className="text-[16px] font-black leading-tight">Share to Instagram</SheetTitle>
+              <SheetTitle className="text-[16px] font-bold leading-tight">Share to Instagram</SheetTitle>
               <SheetDescription className="text-[12px] leading-tight text-muted-foreground">
                 {touch ? "Copies the caption, then pick Instagram and paste it in" : "Saves the files and copies the caption"}
               </SheetDescription>
@@ -302,7 +302,7 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
               type="button"
               onClick={share}
               disabled={!ready || busy}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#f58529,#dd2a7b_45%,#8134af)] text-[15px] font-black text-white shadow-sm transition-opacity active:scale-[0.99] disabled:opacity-50"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(90deg,#f58529,#dd2a7b_45%,#8134af)] text-[15px] font-bold text-white shadow-sm transition-opacity active:scale-[0.99] disabled:opacity-50"
               data-ig-share
             >
               {!ready && !failed ? (

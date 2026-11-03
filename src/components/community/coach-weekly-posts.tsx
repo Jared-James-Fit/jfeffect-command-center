@@ -120,7 +120,7 @@ export function CoachWeeklyPosts() {
         <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
           <CalendarClock className="h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-black">Daily series</div>
+            <div className="text-[14px] font-bold">Daily series</div>
             <div className="truncate text-[11px] text-muted-foreground">Alongside the lessons · Winnipeg time</div>
           </div>
         </header>
@@ -143,7 +143,7 @@ export function CoachWeeklyPosts() {
                 <div className="flex items-center justify-between gap-2 px-4 py-3">
                   <button type="button" onClick={() => setOpen(expanded ? null : series)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={expanded}>
                     <div className="min-w-0">
-                      <div className={cn("truncate text-[13px] font-black", !on && "text-muted-foreground")}>{SERIES_LABEL[series].name}</div>
+                      <div className={cn("truncate text-[13px] font-bold", !on && "text-muted-foreground")}>{SERIES_LABEL[series].name}</div>
                       <div className="truncate text-[11px] text-muted-foreground">
                         {WHEN[series]} · {library ? (done ? "posted this week" : on ? `${data.library?.[series] ?? 0} in rotation` : "off") : `always on · ${SOURCE[series]}`}
                       </div>
@@ -178,14 +178,14 @@ export function CoachWeeklyPosts() {
                     )}
                     {obs && (
                       <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-                        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-primary">Goes out instead · from the crew's data</div>
+                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Goes out instead · from the crew's data</div>
                         <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{obs.caption}</div>
                         <CompareBars compare={obs as CrewCompare} className="mt-2.5" />
                       </div>
                     )}
                     {library && next && (
                       <button type="button" onClick={() => setEditing({ series, item: next })} className={cn("block w-full rounded-xl bg-muted/60 px-3 py-2.5 text-left", obs && "opacity-70")}>
-                        <div className="flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                           <span className="truncate">
                             {obs ? "Then next tip" : "Up next"} · {itemName(series, next)}
                           </span>
@@ -206,7 +206,7 @@ export function CoachWeeklyPosts() {
                     {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
                     {series === "try_it_thursday" && next?.data?.habit && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                           {thursday.isLoading ? "Checking the crew's numbers…" : stat ? "Adds this from the crew's data" : "Posts without a number (not a big enough gap right now)"}
                         </div>
                         {stat && <CompareBars compare={stat} className="mt-2.5" />}
@@ -214,7 +214,7 @@ export function CoachWeeklyPosts() {
                     )}
                     {wins && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                           {preview ? `${preview.next_week ? "Next week so far" : "Goes out"} · ${preview.featured} featured · ${preview.trainers} trained` : "Nobody has logged a session yet"}
                         </div>
                         {preview && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{preview.body}</div>}
@@ -222,7 +222,7 @@ export function CoachWeeklyPosts() {
                     )}
                     {series === "sunday_recap" && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                           {sunday.isLoading ? "Adding up the week…" : recapNow ? "This week so far" : "Nobody has trained this week yet"}
                         </div>
                         {recapNow?.caption && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{recapNow.caption}</div>}
@@ -257,7 +257,7 @@ export function CoachWeeklyPosts() {
 
         {recent.length > 0 && (
           <div className="border-t border-border/60 px-4 py-3">
-            <div className="mb-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">Recent</div>
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Recent</div>
             <ul className="space-y-1">
               {recent.slice(0, 4).map((h) => (
                 <li key={h.id} className="flex items-baseline gap-2 text-[12px]">
@@ -279,7 +279,7 @@ export function CoachWeeklyPosts() {
           <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
             <PartyPopper className="h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-black">Holidays coming up</div>
+              <div className="text-[14px] font-bold">Holidays coming up</div>
               <div className="truncate text-[11px] text-muted-foreground">Post on their own at 9 am on the day</div>
             </div>
           </header>
@@ -287,7 +287,7 @@ export function CoachWeeklyPosts() {
             {holidays.map((h) => (
               <li key={`${h.key}:${h.date}`} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 truncate text-[13px] font-black">{h.name}</div>
+                  <div className="min-w-0 truncate text-[13px] font-bold">{h.name}</div>
                   {h.posted ? (
                     <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
                       <Check className="h-3 w-3" /> Posted
@@ -357,7 +357,7 @@ function SaturdayPicture({ item, on }: { item: SeriesItem; on: boolean }) {
         <SpiritScene scene={item.data!.scene} className={cn("w-[120px] rounded-lg", busy && "animate-pulse")} />
       )}
       <div className="min-w-0 flex-1 space-y-1.5 pb-0.5">
-        <div className="text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
           {own ? "Your photo" : made ? "Its picture" : on ? "Picture coming" : "Its picture"}
         </div>
         <p className="text-[11px] leading-snug text-muted-foreground">

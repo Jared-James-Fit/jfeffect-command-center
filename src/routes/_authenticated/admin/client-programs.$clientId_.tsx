@@ -140,7 +140,7 @@ function ClientProgramsPage() {
             </section>
 
             <section>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Recent Assignments</h2>
+              <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Recent Assignments</h2>
               <AssignmentHistoryPanel clientId={clientId} />
             </section>
           </div>
@@ -224,7 +224,7 @@ function PrepsSection({
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Preps / Phases</h2>
+      <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Preps / Phases</h2>
       {preps.length === 0 ? (
         <Card className="p-6 text-sm text-muted-foreground">No preps yet.</Card>
       ) : (
@@ -395,7 +395,7 @@ function _BlocksSectionImpl({ blocks, templateLookup, onRefresh }: { blocks: any
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-widest text-muted-foreground">Current Blocks</h2>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Current Blocks</h2>
         {current.length === 0 ? (
           <Card className="p-6 text-sm text-muted-foreground">No active blocks.</Card>
         ) : (
@@ -404,7 +404,7 @@ function _BlocksSectionImpl({ blocks, templateLookup, onRefresh }: { blocks: any
       </div>
       {upcoming.length > 0 && (
         <div>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             <CalendarClock className="h-3.5 w-3.5" /> Upcoming Blocks ({upcoming.length})
           </h2>
           <BlockGroup
@@ -424,7 +424,7 @@ function _BlocksSectionImpl({ blocks, templateLookup, onRefresh }: { blocks: any
       )}
       {previous.length > 0 && (
         <div>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             <History className="h-3.5 w-3.5" /> Previous Blocks
           </h2>
           <BlockGroup

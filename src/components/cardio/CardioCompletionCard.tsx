@@ -256,7 +256,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
           <div className="min-w-0 flex-1">
             {/* Activity · Mode · status */}
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className={`text-base font-black leading-none ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+              <span className={`text-base font-bold leading-none ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
                 {view.activity}
               </span>
               {view.modeLabel && (

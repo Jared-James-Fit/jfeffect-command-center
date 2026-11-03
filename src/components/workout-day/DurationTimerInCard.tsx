@@ -199,7 +199,7 @@ export function DurationTimerInCard({
         }}
         aria-label={started ? "Time remaining" : "Set time"}
         className={cn(
-          "min-w-0 flex-1 text-left text-sm font-black tabular-nums",
+          "min-w-0 flex-1 text-left text-sm font-bold tabular-nums",
           done ? "text-emerald-700" : paused ? "text-amber-700" : started ? "text-primary" : "text-foreground",
         )}
       >

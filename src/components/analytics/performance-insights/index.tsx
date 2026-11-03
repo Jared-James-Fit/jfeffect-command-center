@@ -218,7 +218,7 @@ export function PerformanceInsights({
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-black">Performance Insights</div>
+              <div className="text-sm font-bold">Performance Insights</div>
               <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                 <span>{teaser.tonnage.toLocaleString()} {displayUnit} moved</span>
                 <span>Top: {teaser.topMuscle}</span>

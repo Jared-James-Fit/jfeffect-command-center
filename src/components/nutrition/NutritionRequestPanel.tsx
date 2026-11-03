@@ -123,7 +123,7 @@ function CopyBlock({ title, text, icon, defaultOpen = true }: { title: string; t
       <div className="flex items-center gap-2 px-3 py-2">
         <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           {icon}
-          <span className="truncate text-xs font-black uppercase tracking-widest">{title}</span>
+          <span className="truncate text-xs font-bold uppercase tracking-widest">{title}</span>
           <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open && "rotate-180")} />
         </button>
         <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1.5" onClick={copy}>
@@ -369,7 +369,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
               <Sparkles className="h-4 w-4 text-primary" /> Nutrition Plan
             </h3>
             <Badge variant="outline" className={cn("text-[10px]", tones[statusChip.tone])}>{statusChip.label}</Badge>
@@ -435,7 +435,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           <Button variant="outline" className="gap-1.5" onClick={() => setManualOpen(true)} title="Build or paste a plan yourself (targets, meals, steps and cardio)">
             <PencilLine className="h-4 w-4" /> Build
           </Button>
-          <Button className="gap-2 bg-gradient-primary font-bold" onClick={() => setSendOpen(true)}>
+          <Button className="gap-2 bg-primary font-semibold" onClick={() => setSendOpen(true)}>
             <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "New request" : "Send request"}
           </Button>
         </div>
@@ -467,7 +467,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           )}
           <div className="space-y-2 rounded-xl border border-border bg-secondary/20 p-3">
             <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="plan-change" className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
+              <Label htmlFor="plan-change" className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
                 <MessageSquarePlus className="h-4 w-4 text-primary" /> Change something
               </Label>
               {revisions.length > 0 && !revising && (

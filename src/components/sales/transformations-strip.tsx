@@ -49,7 +49,7 @@ export function TransformationsStrip({
             <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
               {eyebrow}
             </div>
-            <h2 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">
+            <h2 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">
               {headline}
             </h2>
             {sub ? (

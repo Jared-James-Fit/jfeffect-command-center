@@ -39,7 +39,7 @@ export function MembershipHero({
             <Smartphone className="h-3 w-3" />
             JF Membership · {priceChip}
           </div>
-          <h1 className="mt-5 max-w-[18ch] text-4xl font-black leading-[1.02] tracking-tight text-white md:text-5xl lg:text-[3.6rem]">
+          <h1 className="mt-5 max-w-[18ch] text-4xl font-bold leading-[1.02] tracking-tight text-white md:text-5xl lg:text-[3.6rem]">
             {headline}
           </h1>
           <p className="mt-5 max-w-xl text-base text-[#B0B4BE] md:text-lg">{sub}</p>
@@ -97,7 +97,7 @@ export function MembershipHero({
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">
               <TrendingUp className="h-3 w-3 text-primary" /> Weekly volume
             </div>
-            <div className="mt-2 text-2xl font-black text-white">+12.4%</div>
+            <div className="mt-2 text-2xl font-bold text-white">+12.4%</div>
             <div className="mt-2 flex h-10 items-end gap-1">
               {[40, 55, 48, 62, 70, 65, 78].map((h, i) => (
                 <div
@@ -153,7 +153,7 @@ function SyntheticAppPreview() {
     <div className="flex h-full w-full flex-col bg-gradient-to-b from-[#0A0B0E] via-[#0B0D12] to-[#111318] text-white">
       <div className="px-4 pb-2 pt-8">
         <div className="text-[10px] font-bold uppercase tracking-widest text-[#7E848F]">JF Effect</div>
-        <div className="mt-1 text-lg font-black leading-tight">Welcome back</div>
+        <div className="mt-1 text-lg font-bold leading-tight">Welcome back</div>
         <div className="text-[11px] text-[#B0B4BE]">Week 3 · Push / Pull / Legs</div>
       </div>
 

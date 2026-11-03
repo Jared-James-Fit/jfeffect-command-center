@@ -27,7 +27,7 @@ export function PaymentRequestCard({ att, mine }: { att: SharedAttachment; mine:
       </div>
       <div className="px-3 py-2.5">
         {att.title && <div className="text-sm font-semibold leading-tight">{att.title}</div>}
-        {amount && <div className="mt-0.5 text-lg font-black tracking-tight">{amount}</div>}
+        {amount && <div className="mt-0.5 text-lg font-bold tracking-tight">{amount}</div>}
         {att.payment_structure && (
           <div className="text-[11px] text-muted-foreground">{att.payment_structure}</div>
         )}

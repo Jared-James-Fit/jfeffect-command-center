@@ -86,7 +86,7 @@ export function LoadSuggestionCard({
       <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-base font-black tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
+          <span className="text-base font-bold tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
           <span className="truncate text-[11px] font-medium text-muted-foreground">
             {plan.reps} @ RPE {fmtNum(plan.rpe)}
           </span>
@@ -162,7 +162,7 @@ export function LoadSuggestionsChip({ highlight = false, className }: { highligh
       onClick={() => setShow(!show)}
       data-testid="load-suggestions-chip"
       className={cn(
-        "inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition active:scale-[0.97]",
+        "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition active:scale-[0.97]",
         show ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-background text-foreground",
         highlight && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
         className,
@@ -184,16 +184,16 @@ export function LoadSuggestionsChip({ highlight = false, className }: { highligh
 export function LoadSuggestionsNudge({ onDismiss }: { onDismiss: () => void }) {
   const [, setShow] = useShowLoadSuggestions();
   return (
-    <div role="note" data-testid="load-suggestions-nudge" className="mt-1.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 py-1.5 pl-2.5 pr-1">
-      <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+    <div role="note" data-testid="load-suggestions-nudge" className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-muted/40 py-1.5 pl-2.5 pr-1">
+      <Target className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="text-xs font-bold text-foreground">New: live weight suggestions</div>
         <div className="text-[11px] text-muted-foreground">Updates after every set you log. Turn off anytime.</div>
       </div>
-      <button type="button" onClick={() => setShow(true)} className="h-8 shrink-0 rounded-full bg-primary px-3.5 text-xs font-bold text-primary-foreground active:scale-[0.97]">
+      <button type="button" onClick={() => setShow(true)} className="h-9 shrink-0 rounded-full border border-border bg-background px-3.5 text-xs font-semibold text-foreground active:scale-[0.97]">
         Try it
       </button>
-      <button type="button" onClick={onDismiss} aria-label="Not now" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10">
+      <button type="button" onClick={onDismiss} aria-label="Not now" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10">
         <X className="h-4 w-4" />
       </button>
     </div>
@@ -254,7 +254,7 @@ export function LoadSuggestionsDone({
         {read && <> · today ran <span className="font-semibold text-foreground">{read}</span></>}
         {next && (
           <span className="block" data-testid="load-next-time">
-            Next time: <span className="text-sm font-black tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
+            Next time: <span className="text-sm font-bold tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
             {plan && <> for {plan.reps} @ RPE {fmtNum(plan.rpe)}</>}
           </span>
         )}

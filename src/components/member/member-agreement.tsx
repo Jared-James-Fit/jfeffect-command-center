@@ -97,7 +97,7 @@ function MemberAgreementSheet({
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4">
             <section>
-              <h3 className="text-sm font-black">The short version</h3>
+              <h3 className="text-sm font-bold">The short version</h3>
               <ul className="mt-2 space-y-1.5">
                 {MEMBERSHIP_AGREEMENT_SUMMARY.map((line) => (
                   <li key={line} className="flex gap-2 text-sm leading-snug">

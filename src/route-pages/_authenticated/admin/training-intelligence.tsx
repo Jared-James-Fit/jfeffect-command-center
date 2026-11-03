@@ -142,7 +142,7 @@ function SummaryStat({ icon: Icon, label, value, tone }: { icon: any; label: str
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-black">{value}</div>
+          <div className="mt-1 text-2xl font-bold">{value}</div>
         </div>
         <div className={`grid h-9 w-9 place-items-center rounded-md ${cls}`}><Icon className="h-4 w-4" /></div>
       </div>
@@ -160,7 +160,7 @@ function Section({ title, icon: Icon, clients, variant, allFollowups }: { title:
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{title}</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
         <Badge variant="outline">{clients.length}</Badge>
       </div>
       <div className="grid gap-3 md:grid-cols-2">

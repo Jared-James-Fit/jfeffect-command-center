@@ -106,7 +106,8 @@ describe("wiring", () => {
 
   it("My Voice is reachable from settings tabs, the gear menu and search", () => {
     expect(readFileSync("src/components/settings/settings-tabs.tsx", "utf8")).toContain('"/admin/voice"');
-    expect(readFileSync("src/lib/admin-nav.ts", "utf8")).toContain('to: "/admin/voice"');
+    // the staff menu (sidebar, More, the avatar's settings) is the internal-nav registry
+    expect(readFileSync("src/lib/internal-nav.ts", "utf8")).toContain('to: "/admin/voice"');
     expect(readFileSync("src/lib/admin-route-registry.ts", "utf8")).toContain('to: "/admin/voice"');
     expect(readFileSync("src/routeTree.gen.ts", "utf8")).toContain("'/admin/voice'");
   });

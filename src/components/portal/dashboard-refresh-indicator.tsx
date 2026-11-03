@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { Loader2, AlertTriangle, WifiOff } from "lucide-react";
+import { AlertTriangle, WifiOff } from "lucide-react";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 
 /**
- * Subtle dashboard-refresh status pill.
+ * Subtle dashboard status pill, shown only when it matters:
  *
- * - "Updating…" while any portal query is fetching in the background and
- *   we already have cached data on screen.
- * - Small non-intrusive warning if the most recent refresh failed but
- *   cached data is still visible.
+ * - offline, showing the last saved version;
+ * - the most recent refresh failed but cached data is still visible.
+ *
+ * Nothing while a refresh is simply running: a background refetch isn't news,
+ * and a pill that came and went with every query shifted the page (pull to
+ * refresh has its own spinner).
  */
 export function DashboardRefreshIndicator() {
   const fetching = useIsFetching();
@@ -46,15 +48,6 @@ export function DashboardRefreshIndicator() {
       >
         <WifiOff className="h-3 w-3" aria-hidden />
         Offline mode — showing last saved version.
-      </span>
-    );
-  }
-
-  if (fetching > 0) {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-        Updating…
       </span>
     );
   }

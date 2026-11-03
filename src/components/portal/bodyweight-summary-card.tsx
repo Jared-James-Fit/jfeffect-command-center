@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { HomeCardHeader, HOME_CARD_ACTION } from "@/components/home/home-card-header";
 import { latestLoggedUnit, useBodyweightUnit } from "@/lib/use-bodyweight-unit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -111,15 +112,15 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
 
   return (
     <Card id="bodyweight-card" className="border-border bg-card p-5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Scale className="h-5 w-5 text-primary" />
-          <h3 className="text-base font-bold">Bodyweight</h3>
-        </div>
-        <Button type="button" variant="ghost" size="sm" className="h-11 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setHistoryOpen(true)}>
-          <History className="h-3.5 w-3.5" /> History
-        </Button>
-      </div>
+      <HomeCardHeader
+        icon={Scale}
+        title="Bodyweight"
+        action={
+          <Button type="button" variant="ghost" size="sm" className={HOME_CARD_ACTION} onClick={() => setHistoryOpen(true)}>
+            <History className="h-3.5 w-3.5" /> History
+          </Button>
+        }
+      />
 
       {hasData ? (
         <>
@@ -153,8 +154,8 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
           )}
 
           {goalTarget != null && (
-            <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-              <Target className="h-3.5 w-3.5 text-primary" />
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs">
+              <Target className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-muted-foreground">Goal</span>
               <span className="font-bold">{formatWeight(goalTarget, unit)}</span>
             </div>
@@ -164,9 +165,11 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
         <p className="mt-3 text-sm text-muted-foreground">Track your weight over time — log your first weigh-in to get started.</p>
       )}
 
+      {/* secondary like Water's quick adds: Home's one red action is today's workout */}
       <Button
         onClick={openSheet}
-        className="mt-4 h-12 w-full bg-gradient-primary text-sm font-bold uppercase"
+        variant="secondary"
+        className="mt-4 h-11 w-full text-sm font-semibold"
       >
         <Plus className="mr-1.5 h-4 w-4" />
         {hasData ? "Log Weight" : "Log First Weight"}
@@ -229,7 +232,7 @@ export function BodyweightSummaryCard({ clientId, userId, defaultUnit = "lb" }: 
               loadingLabel="Saving…"
               successLabel="Saved"
               successToast={false}
-              className="h-12 w-full bg-gradient-primary font-bold uppercase"
+              className="h-12 w-full bg-primary font-semibold"
             >
               Save Bodyweight
             </ActionButton>

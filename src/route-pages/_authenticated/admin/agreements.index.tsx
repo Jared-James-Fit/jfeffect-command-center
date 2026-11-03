@@ -108,7 +108,7 @@ export function AgreementsAdminPage({ embedded = false }: { embedded?: boolean }
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Agreement Templates</h2>
+              <h2 className="text-sm font-semibold text-muted-foreground">Agreement Templates</h2>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button

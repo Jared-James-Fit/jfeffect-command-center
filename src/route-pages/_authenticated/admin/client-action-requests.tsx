@@ -48,14 +48,14 @@ export function AdminClientActionRequests({ embedded = false }: { embedded?: boo
         title="Client Action Requests"
         subtitle="Send forms, links, and files. Pops up for the client until they confirm complete."
         actions={
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Action Request
           </Button>
         }
       />}
       {embedded && (
         <div className="flex justify-end px-4 pt-4 md:px-6">
-          <Button onClick={() => setComposerOpen(true)} className="bg-gradient-primary font-bold">
+          <Button onClick={() => setComposerOpen(true)} className="bg-primary font-semibold">
             <Plus className="mr-1 h-4 w-4" /> New Action Request
           </Button>
         </div>

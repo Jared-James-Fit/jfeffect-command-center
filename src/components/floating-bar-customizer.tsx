@@ -152,7 +152,7 @@ export function FloatingBarCustomizer({
     <Card className="border-border bg-card p-4 md:p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-black uppercase tracking-widest">Floating Bar</h3>
+          <h3 className="text-sm font-semibold">Floating Bar</h3>
           <p className="text-xs text-muted-foreground">
             Customize what shows in your mobile bottom bar. Add children to stack
             multiple toggles above a single button — hold and drag to pick.

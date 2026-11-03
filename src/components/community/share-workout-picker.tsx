@@ -250,7 +250,7 @@ export function ShareWorkoutButton({
           type="button"
           onClick={begin}
           className={cn(
-            "inline-flex items-center justify-center gap-1.5 font-black text-white shadow-md shadow-primary/25 transition active:scale-[0.97]",
+            "inline-flex items-center justify-center gap-1.5 font-bold text-white shadow-md shadow-primary/25 transition active:scale-[0.97]",
             SHARE_GRADIENT,
             variant === "pill" ? "h-9 rounded-full px-4 text-[13px]" : "h-12 w-full rounded-2xl text-[15px]",
             className,
@@ -267,7 +267,7 @@ export function ShareWorkoutButton({
           <SheetHeader className="border-b border-border/70 px-4 py-3 text-left">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-            <SheetTitle className="text-base font-black">Share a workout</SheetTitle>
+            <SheetTitle className="text-base font-bold">Share a workout</SheetTitle>
             <SheetDescription className="text-xs">Which workout are you sharing?</SheetDescription>
           </div>
                 <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
@@ -287,7 +287,7 @@ export function ShareWorkoutButton({
             ) : (
               groupSessions(sessions).map((g) => (
                 <section key={g.key} className="pb-1">
-                  <div className={cn("px-3 pb-1 pt-2 text-[11px] font-black uppercase tracking-[0.14em]", g.key === "today" ? "text-primary" : "text-muted-foreground")}>{g.label}</div>
+                  <div className={cn("px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.14em]", g.key === "today" ? "text-primary" : "text-muted-foreground")}>{g.label}</div>
                   {g.items.map(({ session: s, when }) => {
                     const dur = formatWorkoutDuration(s.duration_min);
                     const today = g.key === "today";

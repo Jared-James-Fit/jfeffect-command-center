@@ -458,7 +458,7 @@ export function ClientBlockView({
       {block && (
         <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Now viewing
           </span>
           <span className="truncate text-sm font-bold">
@@ -495,7 +495,7 @@ export function ClientBlockView({
         </div>
         {(blockRoadmap?.label || blockRoadmap?.purpose) && (
           <div className="mt-1.5 border-t border-border/60 pt-1.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               {blockRoadmap.label && <span className="text-foreground/80">{blockRoadmap.label}</span>}
               {blockRoadmap.style && STYLE_LABEL[blockRoadmap.style] && <span>{STYLE_LABEL[blockRoadmap.style]}</span>}
               <span className="font-semibold normal-case tracking-normal">
@@ -558,7 +558,7 @@ export function ClientBlockView({
                 aria-label={`${b.name ?? "Block"} — ${statusLabel}`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-xs font-black uppercase tracking-wider">
+                  <span className="truncate text-xs font-bold uppercase tracking-wider">
                     {b.name ?? `Block`}
                   </span>
                   {st === "current" && (
@@ -649,7 +649,7 @@ export function ClientBlockView({
                   aria-label={`Week ${w.week_index}${rw?.label ? `, ${rw.label}` : ""}${isCur ? " — current" : past ? " — done" : upcoming ? " — upcoming" : ""}`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black uppercase tracking-wider">W{w.week_index}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">W{w.week_index}</span>
                     {isCur && (
                       <Crosshair className={cn("h-3 w-3", isSel ? "" : "text-primary")} />
                     )}
@@ -740,7 +740,7 @@ export function ClientBlockView({
                   aria-label={`Day ${d.day_index}${dd ? `, ${format(dd, "EEEE, MMMM d")}` : ""}${done ? ", completed" : started ? ", in progress" : ""}`}
                 >
                   <div className="flex items-center gap-1 whitespace-nowrap">
-                    <span className="font-black uppercase tracking-wide">Day {d.day_index}</span>
+                    <span className="font-bold uppercase tracking-wide">Day {d.day_index}</span>
                     {done && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
                     {started && !done && <span className="text-[9px] text-amber-500">●</span>}
                   </div>
@@ -757,7 +757,7 @@ export function ClientBlockView({
 
       {(weeklyPriorities.length > 0 || weekRoadmap?.label || weekRoadmap?.focus) && (
         <Card className="p-3">
-          <div className="mb-1.5 text-[11px] font-black uppercase tracking-wide text-foreground/70">
+          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-foreground/70">
             Week {resolvedWeek?.week_index}
             {weekRoadmap?.label ? ` · ${weekRoadmap.label}` : weeklyPriorities.length > 0 ? " Priorities" : ""}
           </div>
@@ -767,7 +767,7 @@ export function ClientBlockView({
             </p>
           )}
           {weeklyPriorities.length > 0 && weekRoadmap?.label && (
-            <div className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Priorities</div>
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Priorities</div>
           )}
           {weeklyPriorities.length > 0 && (
           <>
@@ -906,7 +906,7 @@ export function ClientBlockView({
                   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
-                        <h3 className="min-w-0 break-words text-sm font-black uppercase tracking-wide">
+                        <h3 className="min-w-0 break-words text-sm font-semibold">
                           {cleanDayTitle(d.title, d.day_index)}
                         </h3>
                         {isToday && !done && blockStatus === "current" && (

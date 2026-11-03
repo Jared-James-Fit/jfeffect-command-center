@@ -234,7 +234,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
         <div className="border-t border-border bg-background/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto w-full max-w-lg space-y-2">
             <p className="truncate text-center text-xs text-muted-foreground">{summary}</p>
-            <Button className="h-12 w-full bg-gradient-primary font-bold" disabled={busy || isPov || !date || needsNote} onClick={submit}>
+            <Button className="h-12 w-full bg-primary font-semibold" disabled={busy || isPov || !date || needsNote} onClick={submit}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send request
             </Button>
           </div>
@@ -281,8 +281,8 @@ export function MySessionRequests({ clientId, isPov = false, children }: { clien
     <section className="space-y-2">
       {/* The section's one action, labelled in words. */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Sessions</h2>
-        <Button size="sm" className="h-9 gap-1.5 bg-gradient-primary font-bold" onClick={() => setOpen(true)}>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sessions</h2>
+        <Button size="sm" className="h-9 gap-1.5 bg-primary font-semibold" onClick={() => setOpen(true)}>
           <CalendarPlus className="h-4 w-4" /> Request a session
         </Button>
       </div>

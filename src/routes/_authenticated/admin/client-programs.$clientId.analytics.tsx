@@ -239,7 +239,7 @@ function AnalyticsPage() {
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Dumbbell className="h-7 w-7" />
                 </div>
-                <h2 className="mt-4 text-xl font-black tracking-tight text-foreground">
+                <h2 className="mt-4 text-xl font-bold tracking-tight text-foreground">
                   No logged sets yet
                 </h2>
                 <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
@@ -253,7 +253,7 @@ function AnalyticsPage() {
               </Card>
             )}
             <section>
-              <h2 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                 <Trophy className="h-4 w-4" /> Recent PRs
               </h2>
               <div className="mb-3 text-xs font-semibold text-muted-foreground">{filter.label}</div>
@@ -270,7 +270,7 @@ function AnalyticsPage() {
                           </Badge>
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">{format(new Date(p.date), "MMM d, yyyy")}</div>
-                        <div className="mt-2 text-2xl font-black">{fmtNum(p.est_1rm)} <span className="text-xs font-normal text-muted-foreground">est 1RM</span></div>
+                        <div className="mt-2 text-2xl font-bold">{fmtNum(p.est_1rm)} <span className="text-xs font-normal text-muted-foreground">est 1RM</span></div>
                         <div className="mt-1 text-xs text-muted-foreground">{fmtNum(p.load)} × {p.reps} · prev best {fmtNum(p.prior_est)}</div>
                       </Card>
                     );
@@ -282,7 +282,7 @@ function AnalyticsPage() {
             <section>
               <div className="mb-3 flex flex-wrap items-center gap-3">
                 <div>
-                  <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                     <TrendingUp className="h-4 w-4" /> Estimated 1RM Progress
                   </h2>
                   <div className="mt-0.5 text-xs font-semibold text-muted-foreground">{filter.label}</div>
@@ -338,7 +338,7 @@ function AnalyticsPage() {
             </section>
 
             <section>
-              <h2 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
                 <Dumbbell className="h-4 w-4" /> Volume by Muscle Group
               </h2>
               <div className="mb-3 text-xs font-semibold text-muted-foreground">{filter.label}</div>

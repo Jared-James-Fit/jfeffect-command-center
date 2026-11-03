@@ -788,7 +788,7 @@ export function BookingTypeEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary font-bold">
+          <Button onClick={save} disabled={saving} className="bg-primary font-semibold">
             {saving ? "Saving…" : isEdit ? "Save" : "Create"}
           </Button>
         </DialogFooter>

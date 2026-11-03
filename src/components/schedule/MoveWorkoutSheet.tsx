@@ -562,7 +562,7 @@ export function MoveWorkoutSheet({
                   >
                     <div className="w-10 shrink-0 text-center leading-tight">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{format(d, "EEE")}</div>
-                      <div className="text-lg font-black tabular-nums">{format(d, "d")}</div>
+                      <div className="text-lg font-bold tabular-nums">{format(d, "d")}</div>
                     </div>
                     <div className="min-w-0 flex-1">
                       {current ? (

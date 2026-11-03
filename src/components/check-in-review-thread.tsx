@@ -184,7 +184,7 @@ export function CheckInReviewThread({ review, viewerRole, autoMarkRead = true, c
           onClick={send}
           disabled={!draft.trim() || sending}
           size="icon"
-          className="bg-gradient-primary"
+          className="bg-primary"
           aria-label="Send reply"
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

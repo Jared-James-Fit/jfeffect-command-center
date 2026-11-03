@@ -69,12 +69,12 @@ describe("the coach's community, in one place", () => {
     expect(read("src/components/app-shell.tsx")).toContain("hash={shortcut.hash || undefined}");
     expect(read("src/components/community/admin-league-page.tsx")).toContain("<StaffLeagueTab tools={!viewOnly} />");
     // findable in the sidebar and the search
-    expect(nav).toContain('{ to: "/admin/league", label: "League", icon: Trophy, group: "Messages",');
+    expect(nav).toContain('{ to: "/admin/league", label: "League", icon: Trophy, group: "Crew",');
     expect(read("src/lib/admin-route-registry.ts")).toContain('{ id: "league", label: "League", to: "/admin/league",');
   });
-  it("the dashboard has no community card: it's one tap away on the Crew button (a birthday draft to approve still shows)", () => {
+  it("the dashboard has no community card: it's one tap away on the Crew button (a birthday draft to approve is in Crew's Needs you)", () => {
     expect(dash).not.toContain("CommunityPulseCard");
-    expect(dash).toContain("<BirthdayPostsCard actionableOnly />");
+    expect(dash).not.toContain("BirthdayPostsCard");
     expect(dash).not.toContain("CommunityCoachCard");
     expect(dash).not.toContain("UpcomingBirthdaysWidget");
     expect(read("src/components/community/community-entry.tsx")).not.toContain("Nothing shared this week yet");

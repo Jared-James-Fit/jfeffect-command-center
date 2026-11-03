@@ -128,7 +128,7 @@ function useHold(hold: Hold | undefined, blocked: boolean) {
 /** The clip's time over the shutter while it films. */
 function FilmingTime({ seconds }: { seconds: number }) {
   return (
-    <span className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+    <span className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-bold tabular-nums text-white" data-recording-time>
       {`0:${String(seconds).padStart(2, "0")}`}
     </span>
   );
@@ -270,7 +270,7 @@ function Glide({ looks, look, onLook, onShoot, disabled, counting, showName, hol
       {/* what the ring holds, above it (the clip's time while filming) */}
       <div className={cn("pointer-events-none mb-1.5 flex justify-center", !showName && !filming && "sr-only")}>
         {filming ? (
-          <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-black tabular-nums text-white" data-recording-time>
+          <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[13px] font-bold tabular-nums text-white" data-recording-time>
             {`0:${String(hold!.seconds).padStart(2, "0")}`}
           </span>
         ) : (

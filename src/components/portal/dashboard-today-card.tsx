@@ -76,7 +76,7 @@ function DashboardTodayCardInner({ state }: { state: TodayState }) {
           <Badge
             variant="outline"
             className={cn(
-              "text-[10px] font-black uppercase tracking-wider",
+              "text-[10px] font-bold uppercase tracking-wider",
               view.badgeClass,
             )}
           >

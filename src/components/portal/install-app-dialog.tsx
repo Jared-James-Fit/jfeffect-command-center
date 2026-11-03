@@ -84,7 +84,7 @@ export function InstallAppDialog({ open, onOpenChange }: Props) {
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-primary/15 text-primary">
+            <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-muted text-foreground">
               <Smartphone className="h-6 w-6" />
             </div>
             <DialogTitle className="text-center">Install JF Effect on iPhone</DialogTitle>
@@ -152,7 +152,7 @@ export function InstallAppDialog({ open, onOpenChange }: Props) {
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-primary/15 text-primary">
+            <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-muted text-foreground">
               <Download className="h-6 w-6" />
             </div>
             <DialogTitle className="text-center">Install JF Effect on Android</DialogTitle>
@@ -222,7 +222,7 @@ export function InstallAppDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-primary/15 text-primary">
+          <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-muted text-foreground">
             <Smartphone className="h-6 w-6" />
           </div>
           <DialogTitle className="text-center">Install JF Effect on Your Phone</DialogTitle>

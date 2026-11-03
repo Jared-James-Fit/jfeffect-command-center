@@ -110,6 +110,16 @@ export type ProgressInitialAction =
   | "measure"
   | "history";
 
+const PROGRESS_TABS = [
+  { value: "overview", label: "Overview" },
+  { value: "photos", label: "Photos" },
+  { value: "videos", label: "Videos" },
+  { value: "bodyweight", label: "Weight" },
+  { value: "water", label: "Water" },
+  { value: "measurements", label: "Measure" },
+  { value: "timeline", label: "History" },
+] as const;
+
 export function ProgressSection({
   ctx, initialAction, actionOnly = false, onActionClose,
 }: {
@@ -125,6 +135,16 @@ export function ProgressSection({
   const [measureDialog, setMeasureDialog] = useState(false);
   const [compareDialog, setCompareDialog] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  // keep the open tab in view in the sideways-scrolling row (History opens from Home)
+  useEffect(() => {
+    const row = tabsRef.current;
+    const active = row?.querySelector<HTMLElement>('[data-state="active"]');
+    if (!row || !active || row.scrollWidth <= row.clientWidth) return;
+    const a = active.getBoundingClientRect();
+    const r = row.getBoundingClientRect();
+    if (a.left < r.left || a.right > r.right) row.scrollBy({ left: a.left - r.left - 16, behavior: "smooth" });
+  }, [tab]);
 
   // Auto-open the right dialog when navigated from a Home action button.
   useEffect(() => {
@@ -157,14 +177,17 @@ export function ProgressSection({
   return (
     <div className="space-y-4 p-3 pb-[max(5rem,env(safe-area-inset-bottom))] md:p-6 md:pb-12">
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 h-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="photos">Photos</TabsTrigger>
-          <TabsTrigger value="videos">Videos</TabsTrigger>
-          <TabsTrigger value="bodyweight">Weight</TabsTrigger>
-          <TabsTrigger value="water">Water</TabsTrigger>
-          <TabsTrigger value="measurements">Measure</TabsTrigger>
-          <TabsTrigger value="timeline">History</TabsTrigger>
+        {/* One row on any phone: it scrolls sideways (the tab you're on kept in
+            view) instead of wrapping to a second row; a full-width row on wider screens. */}
+        <TabsList
+          ref={tabsRef}
+          className="flex h-auto w-full justify-start gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] md:grid md:grid-cols-7 [&::-webkit-scrollbar]:hidden"
+        >
+          {PROGRESS_TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value} className="min-h-9 shrink-0 md:shrink">
+              {t.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="overview">
@@ -310,19 +333,19 @@ function OverviewTab({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-2">
-        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onLogWeight}>
+        <Button variant="outline" className="h-auto min-h-16 min-w-0 flex-col gap-1 whitespace-normal px-1 py-2.5 text-center text-[11px] font-semibold leading-tight" onClick={onLogWeight}>
           <Scale className="h-4 w-4" />
           Log Weight
         </Button>
-        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onAddPhotos}>
+        <Button variant="outline" className="h-auto min-h-16 min-w-0 flex-col gap-1 whitespace-normal px-1 py-2.5 text-center text-[11px] font-semibold leading-tight" onClick={onAddPhotos}>
           <Camera className="h-4 w-4" />
           Add Photos
         </Button>
-        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onAddVideo}>
+        <Button variant="outline" className="h-auto min-h-16 min-w-0 flex-col gap-1 whitespace-normal px-1 py-2.5 text-center text-[11px] font-semibold leading-tight" onClick={onAddVideo}>
           <VideoIcon className="h-4 w-4" />
           Add Video
         </Button>
-        <Button variant="outline" className="h-auto flex-col gap-1 py-3 text-[10px] font-bold" onClick={onAddMeasurements}>
+        <Button variant="outline" className="h-auto min-h-16 min-w-0 flex-col gap-1 whitespace-normal px-1 py-2.5 text-center text-[11px] font-semibold leading-tight" onClick={onAddMeasurements}>
           <Ruler className="h-4 w-4" />
           Add Measurements
         </Button>
@@ -338,7 +361,7 @@ function OverviewTab({
           <div>
             <div className="flex items-end gap-3">
               <div>
-                <p className="text-3xl font-black tabular-nums leading-none">{stats.latest}</p>
+                <p className="text-3xl font-bold tabular-nums leading-none">{stats.latest}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{stats.unit}{stats.avg7 != null ? ` · 7-day avg ${stats.avg7}` : ""}</p>
               </div>
               {stats.count > 1 && (
@@ -1456,7 +1479,7 @@ function BodyweightTab({
             </ResponsiveContainer>
           </div>
           {selectedPoint ? (
-            <div className="mt-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+            <div className="mt-2 rounded-md border border-border px-3 py-2 text-sm">
               <div className="font-semibold">{selectedPoint.value.toFixed(1)} {selectedPoint.unit}</div>
               <div className="text-xs text-muted-foreground">{fmtDate(selectedPoint.date)}{selectedPoint.note ? ` · ${selectedPoint.note}` : ""}</div>
             </div>
@@ -2087,9 +2110,9 @@ function TimelineTab({ ctx, onOpen }: { ctx: ProgressContext; onOpen: (id: strin
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-1 overflow-x-auto">
+      <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {(["all", "photos", "videos", "weight", "measure"] as const).map((k) => (
-          <Button key={k} size="sm" variant={filter === k ? "default" : "outline"} onClick={() => setFilter(k)}>{k}</Button>
+          <Button key={k} size="sm" variant={filter === k ? "secondary" : "ghost"} className="h-9 shrink-0 capitalize" onClick={() => setFilter(k)}>{k}</Button>
         ))}
       </div>
       {!items.length ? (
@@ -2136,8 +2159,8 @@ function EmptyState({ icon: Icon, title, body, actionLabel, onAction }: { icon: 
   return (
     <Card className="p-3">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <Icon className="h-4 w-4 text-primary" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+          <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight">{title}</p>

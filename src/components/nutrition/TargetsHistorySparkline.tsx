@@ -69,7 +69,7 @@ export function TargetsHistorySparkline() {
           <div className="text-xs uppercase tracking-wide text-muted-foreground">
             Calorie target history
           </div>
-          <div className="mt-0.5 text-lg font-black leading-none">
+          <div className="mt-0.5 text-lg font-bold leading-none">
             {last.toLocaleString()}{" "}
             <span className="text-xs font-normal text-muted-foreground">cal · {latestDate}</span>
           </div>

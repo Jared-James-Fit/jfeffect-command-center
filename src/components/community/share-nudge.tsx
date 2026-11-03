@@ -113,7 +113,7 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
           <Icon className="h-5 w-5" />
         </span>
         <div>
-          <div className="text-[16px] font-black leading-tight">{title}</div>
+          <div className="text-[16px] font-bold leading-tight">{title}</div>
           <p className="mt-1 text-[12.5px] leading-snug text-muted-foreground">{body}</p>
         </div>
         <ShareWorkoutButton unit={unit} label={lock ? "Lock in" : "Share"} previewOnly={isImpersonating} className="w-full" />
@@ -127,7 +127,7 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[15px] font-black leading-tight">{title}</div>
+        <div className="text-[15px] font-bold leading-tight">{title}</div>
         <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">{body}</p>
         <ShareWorkoutButton unit={unit} label={lock ? "Lock in" : "Share"} previewOnly={isImpersonating} className="mt-3" />
       </div>

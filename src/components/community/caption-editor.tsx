@@ -67,8 +67,8 @@ export function CaptionEditor({ value, onChange, onDone, thumb }: { value: strin
       aria-label="Caption"
     >
       <div className="relative flex h-11 shrink-0 items-center justify-center px-3">
-        <div className="text-[16px] font-black">Caption</div>
-        <button type="button" onClick={onDone} className="absolute right-3 inline-flex h-9 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-black text-black active:scale-95">
+        <div className="text-[16px] font-bold">Caption</div>
+        <button type="button" onClick={onDone} className="absolute right-3 inline-flex h-9 items-center gap-1 rounded-full bg-white px-4 text-[14px] font-bold text-black active:scale-95">
           <Check className="h-4 w-4" /> Done
         </button>
       </div>

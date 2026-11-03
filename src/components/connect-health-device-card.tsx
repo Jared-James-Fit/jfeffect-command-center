@@ -17,7 +17,7 @@ export function ConnectHealthDeviceCard() {
     <Card className="border-border bg-card p-6 space-y-4">
       <div className="flex items-center gap-2">
         <Activity className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Connect Health Device</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground">Connect Health Device</h3>
       </div>
       <p className="text-xs text-muted-foreground">
         Device sync is coming soon. You can still log your bodyweight and metrics manually — your coach sees them immediately.

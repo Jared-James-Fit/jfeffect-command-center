@@ -104,8 +104,8 @@ export function ClientAgreementPanel({
   return (
     <Card className="space-y-5 border-border bg-card p-6" data-testid="client-agreement-panel">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <FileSignature className="h-4 w-4" /> Coaching Agreement (in-app)
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <FileSignature className="h-4 w-4 text-muted-foreground" /> Coaching agreement (in-app)
         </h3>
         <AgreementStatusChip status={status} />
       </div>

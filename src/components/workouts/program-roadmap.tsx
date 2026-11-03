@@ -193,7 +193,7 @@ export function ProgramRoadmapCard({
             </div>
           )}
           {meet ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-bold text-primary" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-foreground" title={[meet.name, fmt(meet.date)].filter(Boolean).join(" · ")}>
               <Flag className="h-3 w-3" /> {meetText(meet.daysOut)}
             </span>
           ) : roadmap.end && !allDone ? (
@@ -202,7 +202,7 @@ export function ProgramRoadmapCard({
             <span className="shrink-0 text-[12px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</span>
           ) : null}
         </div>
-        <div className="mt-1 text-[22px] font-black leading-tight tracking-tight tabular-nums">{headline}</div>
+        <div className="mt-1 text-[22px] font-bold leading-tight tracking-tight tabular-nums">{headline}</div>
 
         {/* One segment per block, so the shape of the program reads at a glance. */}
         <div className="mt-3 flex gap-1" aria-hidden>
@@ -229,7 +229,7 @@ export function ProgramRoadmapCard({
         <div className="border-t border-border/60 px-4 py-3.5" data-roadmap-now>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-primary">
+              <div className="text-xs font-semibold text-muted-foreground">
                 {blocks.length > 1 ? `Block ${currentIdx + 1} of ${blocks.length}` : "This block"}
                 {current.status === "upcoming" ? " · starts soon" : ""}
               </div>
@@ -326,7 +326,7 @@ function ProgramTitle({ program, browsing }: { program: ProgramSummary; browsing
     <>
       <span className="min-w-0 truncate text-[13px] font-semibold text-muted-foreground">{programName(program)}</span>
       {browsing && program.status !== "active" && (
-        <span className="shrink-0 rounded px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider bg-secondary text-muted-foreground">
+        <span className="shrink-0 rounded px-1.5 text-[9px] font-bold uppercase leading-4 tracking-wider bg-secondary text-muted-foreground">
           {program.status === "completed" ? "Past" : "Upcoming"}
         </span>
       )}
@@ -374,7 +374,7 @@ function RoadmapStep({
       <div className="flex flex-col items-center pt-3">
         <span
           className={cn(
-            "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-black tabular-nums",
+            "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold tabular-nums",
             block.status === "completed" && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400",
             block.status === "current" && "bg-primary text-primary-foreground",
             block.status === "upcoming" && "border border-border text-muted-foreground",
@@ -396,7 +396,7 @@ function RoadmapStep({
             <div className="flex items-center gap-1.5">
               <span className={cn("truncate text-sm font-bold", block.status === "upcoming" && "text-foreground/80")}>{blockTitle(block)}</span>
               {block.status === "current" && (
-                <span className="shrink-0 rounded bg-primary/15 px-1.5 text-[9px] font-black uppercase leading-4 tracking-wider text-primary">
+                <span className="shrink-0 rounded bg-primary/15 px-1.5 text-[9px] font-bold uppercase leading-4 tracking-wider text-primary">
                   Now
                 </span>
               )}

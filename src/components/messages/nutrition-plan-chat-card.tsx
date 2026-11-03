@@ -21,7 +21,7 @@ export function NutritionPlanChatCard({ att, staff, clientId }: { att: PlanMessa
           <Utensils className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-widest">
+          <div className="text-[11px] font-bold uppercase tracking-widest">
             {att.update === "changed" ? "Plan updated" : "New nutrition plan"}
           </div>
           <div className="truncate text-[11px] text-muted-foreground">{[att.period, att.phase].filter(Boolean).join(" · ")}</div>

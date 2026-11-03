@@ -218,7 +218,7 @@ export function BlockPickerSheet({
         className="flex w-full max-w-[520px] flex-col p-0 sm:max-w-[520px]"
       >
         <SheetHeader className="border-b border-border p-4">
-          <SheetTitle className="text-base font-black uppercase tracking-wider">
+          <SheetTitle className="text-base font-semibold">
             Browse Training Blocks
           </SheetTitle>
           <div className="relative mt-3">
@@ -293,7 +293,7 @@ export function BlockPickerSheet({
             <div className="space-y-6">
               {groups.map((g) => (
                 <section key={g.title}>
-                  <h3 className="mb-2 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                     {g.title}
                   </h3>
                   <ul className="space-y-2">

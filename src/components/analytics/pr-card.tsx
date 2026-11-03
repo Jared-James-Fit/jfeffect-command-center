@@ -58,7 +58,7 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
       </div>
       {assisted ? (
         <>
-          <div className={`mt-2 font-black tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
+          <div className={`mt-2 font-bold tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
             {fmtNum(conv(pr.assist))}{" "}
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {displayUnit} · assistance
@@ -73,7 +73,7 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
         </>
       ) : (
         <>
-      <div className={`mt-2 font-black tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
+      <div className={`mt-2 font-bold tracking-tight text-foreground ${dense ? "text-2xl" : "text-3xl"}`}>
         {fmtNum(conv(pr.est_1rm))}{" "}
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {displayUnit} · est 1RM

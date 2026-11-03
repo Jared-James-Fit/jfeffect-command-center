@@ -53,7 +53,7 @@ export function Heading({
 }
 
 const PRIMARY =
-  "inline-flex h-[54px] items-center justify-center gap-2 rounded-2xl bg-gradient-primary px-7 text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex h-[54px] items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** The one button per screen. Pass `to` for a route or `onClick` for an action. */
 export function PrimaryCta({

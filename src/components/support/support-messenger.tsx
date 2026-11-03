@@ -101,7 +101,7 @@ export function SupportMessenger({ sub, onOpen }: { sub?: string; onOpen: (sub: 
       <aside className={cn("flex w-full min-h-0 flex-col border-r border-border bg-card md:w-[360px] md:shrink-0", open ? "hidden md:flex" : "flex")}>
         <header className="space-y-2 border-b border-border px-3 py-2.5 md:px-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-black tracking-tight md:text-lg">Support</h1>
+            <h1 className="text-base font-bold tracking-tight md:text-lg">Support</h1>
             {counts.needs > 0 && (
               <span className="rounded-full bg-destructive px-1.5 text-[10px] font-bold leading-4 text-destructive-foreground">{counts.needs}</span>
             )}

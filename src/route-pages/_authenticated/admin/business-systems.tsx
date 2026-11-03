@@ -29,7 +29,7 @@ export function BusinessSystemsHub({ embedded = false }: { embedded?: boolean } 
           <Link key={t.to} to={t.to}>
             <Card className="group border-border bg-card p-6 transition hover:border-primary hover:bg-secondary/40">
               <div className="flex items-start gap-4">
-                <div className="grid h-10 w-10 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
+                <div className="grid h-10 w-10 place-items-center rounded-md bg-primary text-primary-foreground">
                   <t.icon className="h-5 w-5" />
                 </div>
                 <div>

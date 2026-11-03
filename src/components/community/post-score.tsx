@@ -45,7 +45,7 @@ const PART_NOTE: Record<ScorePart, { carried: string; held: string }> = {
 export function ScoreBadge({ score, className }: { score: Pick<PostScore, "score" | "early">; className?: string }) {
   const band = scoreBand(score);
   return (
-    <span className={cn("inline-flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-full px-2 text-[12px] font-black tabular-nums", TONE[band.tone].badge, className)}>
+    <span className={cn("inline-flex h-6 min-w-[2.25rem] shrink-0 items-center justify-center rounded-full px-2 text-[12px] font-bold tabular-nums", TONE[band.tone].badge, className)}>
       {score.score}
     </span>
   );
@@ -104,7 +104,7 @@ function ScoreRing({ score }: { score: PostScore }) {
         <circle cx="42" cy="42" r={r} fill="none" strokeWidth="8" className="stroke-muted" />
         <circle cx="42" cy="42" r={r} fill="none" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(Math.max(2, score.score) / 100) * c} ${c}`} className={TONE[band.tone].ring} />
       </svg>
-      <span className="absolute inset-0 grid place-items-center text-[26px] font-black tabular-nums">{score.score}</span>
+      <span className="absolute inset-0 grid place-items-center text-[26px] font-bold tabular-nums">{score.score}</span>
     </div>
   );
 }
@@ -114,7 +114,7 @@ function PartRow({ part, pct, line, tone }: { part: ScorePart; pct: number | nul
   return (
     <div className="py-3" data-score-part={part}>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[14px] font-black">{PART_LABEL[part]}</span>
+        <span className="text-[14px] font-bold">{PART_LABEL[part]}</span>
         <span className="text-[12px] font-semibold text-muted-foreground">{rankLine(pct)}</span>
       </div>
       <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
@@ -138,7 +138,7 @@ export function PostScoreSheet({ score, open, onOpenChange }: { score: PostScore
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] px-5 pb-[max(env(safe-area-inset-bottom),20px)] pt-5 sm:mx-auto sm:max-w-[520px]" data-post-score-sheet>
         <SheetHeader className="space-y-0.5 text-left">
-          <SheetTitle className="text-[17px] font-black">Post insights</SheetTitle>
+          <SheetTitle className="text-[17px] font-bold">Post insights</SheetTitle>
           <SheetDescription className="line-clamp-1 text-[12px]">
             {kindLabel(score.kind_key)} · {shortDate(score.created_at)} · {scoreTitle(score)}
           </SheetDescription>
@@ -147,7 +147,7 @@ export function PostScoreSheet({ score, open, onOpenChange }: { score: PostScore
         <div className="mt-4 flex items-center gap-4">
           <ScoreRing score={score} />
           <div className="min-w-0">
-            <div className="text-[20px] font-black leading-tight">{band.label}</div>
+            <div className="text-[20px] font-bold leading-tight">{band.label}</div>
             <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
               {score.early
                 ? "Up less than a day. The score settles as the crew sees it."
@@ -179,12 +179,12 @@ export function PostScoreSheet({ score, open, onOpenChange }: { score: PostScore
           <div className="mt-2 space-y-2">
             {carried && (
               <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-[13px] leading-snug">
-                <span className="font-black">What carried it: {PART_LABEL[carried].toLowerCase()}.</span> {PART_NOTE[carried].carried}
+                <span className="font-bold">What carried it: {PART_LABEL[carried].toLowerCase()}.</span> {PART_NOTE[carried].carried}
               </p>
             )}
             {heldBack && (
               <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-[13px] leading-snug">
-                <span className="font-black">What held it back: {PART_LABEL[heldBack].toLowerCase()}.</span> {PART_NOTE[heldBack].held}
+                <span className="font-bold">What held it back: {PART_LABEL[heldBack].toLowerCase()}.</span> {PART_NOTE[heldBack].held}
               </p>
             )}
           </div>
@@ -192,7 +192,7 @@ export function PostScoreSheet({ score, open, onOpenChange }: { score: PostScore
 
         {score.kind_n > 1 && (
           <p className="mt-3 text-[13px] text-muted-foreground">
-            {kindLabel(score.kind_key)} average <span className="font-black text-foreground">{score.kind_avg}</span> across {score.kind_n} posts.
+            {kindLabel(score.kind_key)} average <span className="font-bold text-foreground">{score.kind_avg}</span> across {score.kind_n} posts.
           </p>
         )}
         <p className="mt-3 text-[11px] leading-snug text-muted-foreground">Coaches are never counted: not as viewers, not in likes or comments.</p>
