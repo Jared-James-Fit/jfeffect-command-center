@@ -200,11 +200,8 @@ function PortalNutrition() {
     }
   };
 
-  const headerLine = useMemo(
-    () =>
-      plan ? [plan.phase, plan.goal, plan.structure].filter(Boolean).join(" · ") || "Assigned by your coach" : "",
-    [plan],
-  );
+  // The targets card names the day and the phase; goal and structure are the coach's detail.
+  const phase = plan?.phase ? String(plan.phase).trim() : "";
 
   const missingDayNote = plan && !day
     ? `No ${DAY_TYPE_LABEL[automaticDayType]} plan is assigned for today. You can still review any uploaded plan above.`
@@ -212,7 +209,7 @@ function PortalNutrition() {
 
   return (
     <>
-      <PageHeader title="Nutrition" subtitle="Your plan, targets, and recipes — set by your coach." />
+      <PageHeader title="Nutrition" />
 
       <div className="space-y-4 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 md:px-6">
         {/* 1. Which day's plan: a slim switch (date + chips), not a hero; the targets card names the day. */}
@@ -238,11 +235,10 @@ function PortalNutrition() {
                 <Utensils className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="text-base font-semibold">Meal plan</div>
-                  <div className="text-xs text-muted-foreground">
-                    {day.day_label || DAY_TYPE_LABEL[automaticDayType]}
-                    {/* When the coach last updated the plan: the same date the coach sees on it. */}
-                    {plan.updated_at ? ` · Updated ${format(new Date(plan.updated_at), "MMM d")}` : ""}
-                  </div>
+                  {/* The day is the chip above; this is when the coach last updated the plan (the same date the coach sees on it). */}
+                  {plan.updated_at && (
+                    <div className="text-xs text-muted-foreground">Updated {format(new Date(plan.updated_at), "MMM d")}</div>
+                  )}
                 </div>
               </div>
               {day.notes && String(day.notes).trim() ? (
@@ -300,7 +296,7 @@ function PortalNutrition() {
                     <div className="text-base font-semibold">Nutrition targets</div>
                     <div className="text-xs text-muted-foreground">
                       {day?.day_label || DAY_TYPE_LABEL[automaticDayType]}
-                      {headerLine ? ` · ${headerLine}` : ""}
+                      {phase ? ` · ${phase}` : ""}
                     </div>
                   </div>
                 </div>
@@ -345,25 +341,23 @@ function PortalNutrition() {
                 <ToolTile
                   icon={Download}
                   title="Meal Plan PDF"
-                  hint={plan ? "Save or print your plan" : "Ready once your coach sends a plan"}
                   onClick={handleDownload}
                   disabled={!plan}
                   busy={downloading}
                 />
                 {plan?.pdf_signed_url && (
-                  <ToolTile
-                    icon={FileText}
-                    title="Coach's PDF"
-                    hint={plan.pdf_name || "Open the file your coach attached"}
-                    href={plan.pdf_signed_url}
-                  />
+                  <ToolTile icon={FileText} title="Coach's PDF" href={plan.pdf_signed_url} />
                 )}
                 {/* recipes load only when it's opened */}
                 <CookbookToolTile viewer="client" />
               </>
             }
-            footer={<RecentAdherenceWidget />}
           />
+        </SectionErrorBoundary>
+
+        {/* Self-reported adherence: its own card, only once there are updates to show. */}
+        <SectionErrorBoundary label="Recent adherence">
+          <RecentAdherenceWidget />
         </SectionErrorBoundary>
 
         {/* 5. Today's Intake — only when food logging is actually in use. */}

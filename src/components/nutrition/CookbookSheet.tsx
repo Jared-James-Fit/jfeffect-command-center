@@ -34,7 +34,7 @@ export function CookbookToolTile({ viewer }: { viewer: CookbookViewer }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <ToolTile icon={BookOpen} title="Open Cookbook" hint="Easy meals, no-cook & store-bought" onClick={() => setOpen(true)} />
+      <ToolTile icon={BookOpen} title="Open Cookbook" onClick={() => setOpen(true)} />
       {open && <CookbookSheet viewer={viewer} open={open} onOpenChange={setOpen} />}
     </>
   );

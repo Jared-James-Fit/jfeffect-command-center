@@ -86,7 +86,7 @@ import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type Calen
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
-import { WorkoutMarkLegend, WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
+import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import { blockNameParts, type ProgramRoadmap } from "@/lib/training-roadmap";
@@ -473,6 +473,17 @@ export function WorkoutsExperience({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {/* Coaching clients always have a way to their appointments, even on a week with none. */}
+                {showAppointmentsLink && (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      to="/portal/calendar"
+                      search={{ date: toLocalISO(selectedDate) } as any}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" /> Appointments
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onSelect={() =>
                     navigate({
@@ -565,18 +576,8 @@ export function WorkoutsExperience({
                     />
                   )}
                 </CalendarDndProvider>
-                <div className="-mt-2 flex items-start justify-between gap-2 px-1">
-                  <WorkoutMarkLegend className="min-w-0 flex-1" sessions={sessionDays.size > 0} />
-                  {showAppointmentsLink && (
-                    <Link
-                      to="/portal/calendar"
-                      search={{ date: toLocalISO(selectedDate) } as any}
-                      className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-violet-400 hover:text-violet-300"
-                    >
-                      <CalendarIcon className="h-3.5 w-3.5" /> Appointments <ChevronRight className="h-3.5 w-3.5" />
-                    </Link>
-                  )}
-                </div>
+                {/* No legend under the strip: the dot, ring and check say it, and a day with a
+                    session lists it right under its workout. Appointments live in the header's ⋯. */}
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   pageBlockId={headerBlock?.id ?? null}
@@ -666,10 +667,11 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
   // Render the analytics card immediately alongside the rest of the page so
   // sections appear together instead of popping in one-by-one on scroll.
   return (
-    <div className="min-h-[220px]">
+    // sized to the month card (its label, one row of numbers, the More / analytics row)
+    <div className="min-h-[148px]">
       <Suspense
         fallback={
-          <Card className="h-[220px] animate-pulse bg-muted/30" aria-hidden />
+          <Card className="h-[148px] animate-pulse bg-muted/30" aria-hidden />
         }
       >
         <TrainingAnalyticsPreviewCard clientId={clientId} />
@@ -1078,9 +1080,6 @@ function SelectedDayCard({
         <div className="text-xs text-muted-foreground">
           {format(date, "EEEE, MMMM d")}
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground/80">
-          Any prescribed cardio still shows below.
-        </div>
       </Card>
     );
   }
@@ -1122,7 +1121,8 @@ function SelectedDayCard({
               {isAtHomeBackupSessionBlock(item.block) && (
                 <Badge variant="secondary" className="text-[10px]">{AT_HOME_BACKUP_BADGE}</Badge>
               )}
-              {progress && progress.prescribedSets > 0 && (
+              {/* the ring only once a set is logged: a 0% ring before the start says nothing */}
+              {progress && progress.prescribedSets > 0 && progress.completedSets > 0 && (
                 <WorkoutProgressRing
                   pct={progress.pct}
                   status={

@@ -17,6 +17,7 @@ import {
   type FactorDetail,
   type FactorKey,
   type FactorStatus,
+  type ReadinessBreakdown,
   type SleepSample,
 } from "@/lib/analytics/readiness-factors";
 import { pickCurrentBlock } from "@/lib/block-dates";
@@ -29,7 +30,6 @@ import {
   type CardioTargetRow,
 } from "@/lib/analytics/cardio-adherence";
 import { cn } from "@/lib/utils";
-import { SectionLabel } from "@/components/ui/section-label";
 
 interface Props {
   clientId: string;
@@ -476,26 +476,14 @@ export function RecoveryPreviewCard({ clientId }: Props) {
     },
   });
 
-  const [openFactor, setOpenFactor] = useState<FactorKey | null>(null);
-
-  const label = (
-    <SectionLabel
-      icon={<Activity className="h-4 w-4 shrink-0" />}
-      action={
-        data?.hasData ? (
-          <span className="text-[11px] normal-case tracking-normal text-muted-foreground/80">Tap a factor for details</span>
-        ) : undefined
-      }
-    >
-      Today's readiness
-    </SectionLabel>
-  );
+  // One sheet, two levels: the whole breakdown, then one factor's detail.
+  // Back (the sheet's own pill, Escape or a tap outside) steps out one level.
+  const [view, setView] = useState<"overview" | FactorKey | null>(null);
 
   if (isLoading) {
     return (
       <section aria-label="Training Readiness">
-        {label}
-        <Card className="h-[236px] animate-pulse border-border/60 bg-muted/20 shadow-sm" aria-hidden />
+        <Card className="h-[68px] animate-pulse bg-muted/30" aria-hidden />
       </section>
     );
   }
@@ -503,12 +491,14 @@ export function RecoveryPreviewCard({ clientId }: Props) {
   if (!data || !data.hasData) {
     return (
       <section aria-label="Training Readiness">
-        {label}
-        <Card className="border-border/60 bg-card p-4 shadow-sm">
-          <div className="text-sm font-bold text-foreground">Not enough data yet</div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Finish a few workouts and their quick check-outs to unlock your readiness.
-          </p>
+        <Card className="flex items-center gap-3 p-4">
+          <Activity className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-foreground">Today's readiness</div>
+            <p className="text-xs text-muted-foreground">
+              Finish a few workouts and their quick check-outs to unlock it.
+            </p>
+          </div>
         </Card>
       </section>
     );
@@ -516,16 +506,26 @@ export function RecoveryPreviewCard({ clientId }: Props) {
 
   const tier = tierFor(data.latest);
   const bd = data.breakdown;
-  const activeFactor = openFactor ? bd.factors[openFactor] : null;
+  const activeFactor = view && view !== "overview" ? bd.factors[view] : null;
+  // The row's one line: the call's first sentence ("Sleep was short."), plus
+  // what's limiting it; the whole call and every factor are one tap away.
+  // (no lookbehind: older iPhones can't parse it)
+  const lead = bd.recommendation.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? bd.recommendation;
+  const takeaway = bd.limiter ? `${lead.replace(/[.!?]$/, "")} · Limiter: ${bd.limiter.label}` : lead;
 
   return (
     <section aria-label="Training Readiness">
-      {label}
-      {/* One card: the score, what to do about it, and the six inputs. The
-          score's history (block average, trend) lives in full analytics. */}
-      <Card className="border-border/60 bg-card p-4 shadow-sm">
-        <div className="flex items-center gap-4">
+      {/* One compact row in the page; the score's breakdown opens in a sheet. */}
+      <Card className="p-0">
+        <button
+          type="button"
+          onClick={() => setView("overview")}
+          className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition active:bg-muted/50"
+          aria-haspopup="dialog"
+          data-testid="readiness-row"
+        >
           <ReadinessRing
+            compact
             score={data.latest}
             label={tier.label}
             labelClass={tier.labelClass}
@@ -533,51 +533,111 @@ export function RecoveryPreviewCard({ clientId }: Props) {
             ringSoftClass={tier.ringSoftClass}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold leading-snug text-foreground" data-testid="readiness-call">
-              {bd.recommendation}
-            </p>
-            {bd.limiter ? (
-              <button
-                type="button"
-                onClick={() => setOpenFactor(bd.limiter!.key)}
-                className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-700 transition active:scale-[0.98] dark:text-amber-300"
-              >
-                <span className="truncate">Limiter: {bd.limiter.label}</span>
-                <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              </button>
-            ) : (
-              <div className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                Nothing holding you back
-              </div>
-            )}
+            <div className="text-[15px] font-semibold leading-tight text-foreground">
+              Today's readiness <span className={cn("font-semibold", tier.labelClass)}>· {tier.label}</span>
+            </div>
+            <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{takeaway}</p>
           </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-1 border-t border-border/50 pt-2">
-          {bd.order.map((k) => (
-            <FactorBar key={k} factor={bd.factors[k]} onClick={() => setOpenFactor(k)} />
-          ))}
-        </div>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </button>
       </Card>
 
-      <Sheet open={!!openFactor} onOpenChange={(v) => !v && setOpenFactor(null)}>
-        <SheetContent side="bottom" className="rounded-t-2xl border-border/60 p-0">
-          {activeFactor && <FactorSheet factor={activeFactor} />}
+      <Sheet
+        open={view != null}
+        onOpenChange={(open) => {
+          if (open) return;
+          setView((v) => (v && v !== "overview" ? "overview" : null));
+        }}
+      >
+        <SheetContent side="bottom" className="max-h-[88dvh] overflow-y-auto rounded-t-2xl border-border/60 p-0">
+          {activeFactor ? (
+            <FactorSheet factor={activeFactor} />
+          ) : (
+            <ReadinessSheet
+              score={data.latest}
+              tier={tier}
+              bd={bd}
+              onOpenFactor={(k) => setView(k)}
+            />
+          )}
         </SheetContent>
       </Sheet>
     </section>
   );
 }
 
+/** The whole readiness picture: the score, today's call, the limiter and the six inputs. */
+function ReadinessSheet({
+  score, tier, bd, onOpenFactor,
+}: {
+  score: number;
+  tier: ReturnType<typeof tierFor>;
+  bd: ReadinessBreakdown;
+  onOpenFactor: (k: FactorKey) => void;
+}) {
+  return (
+    <div className="mx-auto max-w-lg px-5 pb-8 pt-5">
+      <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted-foreground/30" />
+      <SheetHeader className="text-left">
+        <SheetTitle className="flex items-center gap-2 text-lg">
+          <Activity className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Today's readiness
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Your readiness score, what to do about it, and the six inputs behind it
+        </SheetDescription>
+      </SheetHeader>
+
+      <div className="mt-4 flex items-center gap-4">
+        <ReadinessRing
+          score={score}
+          label={tier.label}
+          labelClass={tier.labelClass}
+          ringClass={tier.ringClass}
+          ringSoftClass={tier.ringSoftClass}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold leading-snug text-foreground" data-testid="readiness-call">
+            {bd.recommendation}
+          </p>
+          {bd.limiter ? (
+            <button
+              type="button"
+              onClick={() => onOpenFactor(bd.limiter!.key)}
+              className="mt-2 inline-flex min-h-8 max-w-full items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[12px] font-semibold text-amber-700 transition active:scale-[0.98] dark:text-amber-300"
+            >
+              <span className="truncate">Limiter: {bd.limiter.label}</span>
+              <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+            </button>
+          ) : (
+            <div className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">
+              Nothing holding you back
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-1 border-t border-border/50 pt-2">
+        {bd.order.map((k) => (
+          <FactorBar key={k} factor={bd.factors[k]} onClick={() => onOpenFactor(k)} />
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">Tap a factor for details.</p>
+    </div>
+  );
+}
+
 // ---------- pieces ---------- //
 
 function ReadinessRing({
-  score, label, labelClass, ringClass, ringSoftClass,
+  score, label, labelClass, ringClass, ringSoftClass, compact = false,
 }: {
   score: number; label: string; labelClass: string; ringClass: string; ringSoftClass: string;
+  /** The page row's small ring: the number only (the tier is said beside it). */
+  compact?: boolean;
 }) {
-  const size = 96;
-  const stroke = 9;
+  const size = compact ? 44 : 96;
+  const stroke = compact ? 4.5 : 9;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, score));
@@ -604,12 +664,18 @@ function ReadinessRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
-          {pct}%
-        </span>
-        <span className={cn("mt-1 text-[9px] font-bold uppercase leading-none tracking-[0.12em]", labelClass)}>
-          {label}
-        </span>
+        {compact ? (
+          <span className="text-sm font-bold leading-none tabular-nums text-foreground">{pct}</span>
+        ) : (
+          <>
+            <span className="text-2xl font-bold leading-none tabular-nums text-foreground">
+              {pct}%
+            </span>
+            <span className={cn("mt-1 text-[9px] font-bold uppercase leading-none tracking-[0.12em]", labelClass)}>
+              {label}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -777,8 +843,8 @@ function FactorSheet({ factor }: { factor: FactorDetail }) {
         </div>
       )}
 
-      <div className="mt-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-primary">
+      <div className="mt-4 rounded-2xl border border-border/60 bg-muted/40 p-4">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           Recommendation
         </div>
         <p className="mt-1 text-sm leading-snug text-foreground">

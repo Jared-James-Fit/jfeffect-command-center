@@ -19,11 +19,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, UserPlus, Users } from "lucide-react";
+import { ChevronRight, Plus, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { archiveClient } from "@/lib/clients.functions";
-import { listClientCalendarSyncKinds } from "@/lib/schedule.functions";
 import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { filtersFromSearch, matchFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { STATUS_META } from "@/components/clients/clients-status";
@@ -142,14 +141,8 @@ function ClientsDirectoryPage() {
   const counts = data?.counts;
   const total = data?.total ?? 0;
   const rows = data?.rows ?? [];
-  const calKindsFn = useServerFn(listClientCalendarSyncKinds);
-  const rowIds = rows.map((r) => r.id);
-  const { data: calKinds } = useQuery({
-    queryKey: ["clients-calendar-sync-kinds", rowIds],
-    enabled: rowIds.length > 0,
-    queryFn: () => calKindsFn({ data: { clientIds: rowIds.slice(0, 200) } }),
-    staleTime: 5 * 60_000,
-  });
+  // A row names the client's coach only when there's more than one coach to tell apart.
+  const showCoach = isAdmin && (coaches as unknown[]).length > 1;
 
   // Only surface a count next to the controls when the result set is
   // narrowed — the page heading already shows the active-client total.
@@ -177,12 +170,14 @@ function ClientsDirectoryPage() {
         // The count is said once: on the Clients / Members / Team switcher for
         // admins, here for coaches (who don't get the switcher).
         subtitle={!isAdmin && counts ? `${counts.all} active` : undefined}
+        // Phones: Add sits on the title's row, not a row of its own above it.
+        actionsInline
         actions={
           isAdmin && !viewOnly && kind === "clients" ? (
-            <Button size="sm" className="h-9" onClick={() => setAddOpen(true)}>
-              <UserPlus className="mr-1.5 h-4 w-4" />
-              <span className="hidden sm:inline">Add Client</span>
-              <span className="sm:hidden">Add</span>
+            // Not an every-visit action, so a quiet + rather than the screen's red button.
+            <Button variant="outline" size="sm" className="h-10 w-10 px-0 sm:w-auto sm:px-3" onClick={() => setAddOpen(true)} aria-label="Add client">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add client</span>
             </Button>
           ) : isAdmin && !viewOnly && kind === "members" ? (
             <NewMemberButton />
@@ -259,7 +254,7 @@ function ClientsDirectoryPage() {
         ) : (
           <ul className="space-y-2">
             {rows.map((r) => (
-              <ClientRow key={r.id} r={r} calSync={calKinds ? (calKinds[r.id] ?? null) : undefined} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
+              <ClientRow key={r.id} r={r} showCoach={showCoach} onArchive={isAdmin && isActiveLifecycle ? setArchiveTarget : undefined} />
             ))}
           </ul>
         )}

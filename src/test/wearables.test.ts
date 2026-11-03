@@ -470,11 +470,15 @@ describe("daily training load RPC contract", () => {
 });
 
 describe("where athletes find device setup", () => {
-  it("puts the full setup on the Account page with a quick-jump entry, and a summary on Home", () => {
+  it("puts the full setup in its own Account section (only where a device can connect), and a summary on Home", () => {
     const account = read("src/routes/_authenticated/portal/account.tsx");
-    expect(account).toContain("<WearablesCard />");
-    expect(account).toContain('id: "devices"');
+    expect(account).toContain("<WearablesCard bare />");
     expect(account).toContain('id="devices"');
+    expect(account).toContain("connectableProviders(wearables)");
+    const card = read("src/components/portal/wearables-card.tsx");
+    // no "Coming soon" rows: only what can actually connect on this device
+    expect(card).not.toContain('"Coming soon"');
+    expect(card).toContain("const offered = connectableProviders(data);");
     expect(read("src/routes/_authenticated/portal/index.tsx")).toContain(
       '<WearablesCard mode="summary" />',
     );
@@ -525,7 +529,7 @@ describe("Apple Health / Health Connect go-live", () => {
     expect(bridge).toContain('reason: "needs_update"');
     const card = read("src/components/portal/wearables-card.tsx");
     expect(card).toContain("Update the app to connect");
-    expect(card).toContain("Connect in the iPhone app");
+    expect(card).toContain("Apple Health and Health Connect: connect in the iPhone app or the Android app.");
   });
 
   it("ships the plugin with a one-package lockfile change", () => {

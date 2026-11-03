@@ -86,8 +86,9 @@ export function ClientFilterRail({
                   onClick={() => onToggle(key)}
                   className={cn(
                     "inline-flex h-9 shrink-0 cursor-pointer touch-manipulation items-center gap-2 rounded-full border px-3 text-[13px] font-medium transition-colors",
+                    // Picked reads in neutral, like every in-page toggle; red is for the screen's one action.
                     selected
-                      ? "border-primary bg-primary text-primary-foreground"
+                      ? "border-foreground/40 bg-secondary text-foreground"
                       : "border-border bg-card hover:border-foreground/25 hover:bg-accent/40",
                   )}
                 >
@@ -97,7 +98,7 @@ export function ClientFilterRail({
                     <span aria-hidden className={cn("h-2 w-2 rounded-full", DOT[meta.tone])} />
                   )}
                   {meta.label}
-                  <span className={cn("tabular-nums", selected ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  <span className="tabular-nums text-muted-foreground">
                     {count}
                   </span>
                 </button>

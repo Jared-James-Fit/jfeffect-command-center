@@ -52,21 +52,48 @@ const STATE_STYLE: Record<RecoveryState, { label: string; cls: string }> = {
 
 const QUERY_KEY = ["wearable-overview"] as const;
 
-/**
- * mode "full"    : Account page. Connect / reconnect / disconnect / sharing, always shown to the athlete.
- * mode "summary" : Home. Only appears once a device is connected, with a link to manage it.
- */
-export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) {
-  const qc = useQueryClient();
+/** The athlete's devices and recovery data (one read, shared by Home, Account and its row). */
+export function useWearableOverview() {
   const pov = usePovArgs();
   const overviewFn = usePovFn(getWearableOverview);
-  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
-
-  const { data, isPending, isError, error } = useQuery({
+  return useQuery({
     queryKey: [...QUERY_KEY, pov.viewAsClientId ?? "me"],
     staleTime: 60_000,
     queryFn: () => overviewFn({ data: {} }),
   });
+}
+
+/** The parts of the overview that decide what can connect. */
+type ConnectInputs = {
+  configured: { oura?: boolean | null };
+  connections: ReadonlyArray<{ provider: string; status: string }>;
+};
+
+/**
+ * The devices that can actually connect where this is open: this phone's own
+ * health store inside the app (Apple Health on an iPhone, Health Connect on
+ * Android), and a cloud service that's set up (Oura). Never a "coming soon" one.
+ */
+export function connectableProviders(data: ConnectInputs) {
+  const deviceStore = healthStoreProvider();
+  return WEARABLE_PROVIDERS.filter(
+    (p) =>
+      p.live &&
+      !data.connections.some((c) => c.provider === p.id && c.status !== "disconnected") &&
+      (p.kind === "health_store" ? !!deviceStore && p.id === deviceStore : p.id !== "oura" || !!data.configured.oura),
+  );
+}
+
+/**
+ * mode "full"    : Account page. Connect / reconnect / disconnect / sharing, always shown to the athlete.
+ *                  `bare`: inside the Account section that already names it (no card or title).
+ * mode "summary" : Home. Only appears once a device is connected, with a link to manage it.
+ */
+export function WearablesCard({ mode = "full", bare = false }: { mode?: "full" | "summary"; bare?: boolean }) {
+  const qc = useQueryClient();
+  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
+
+  const { data, isPending, isError, error } = useWearableOverview();
 
   // Result of returning from the provider's authorize page.
   useEffect(() => {
@@ -204,19 +231,22 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
   if (isError || !data) {
     // Never vanish silently: if this fails (migration not applied, network), say so on the settings page.
     if (mode === "summary") return null;
+    const ErrorShell = bare ? "div" : Card;
     return (
-      <Card className="p-4 space-y-1">
-        <div className="flex items-center gap-2">
-          <Watch className="h-5 w-5 shrink-0 text-muted-foreground" />
-          <h3 className="font-semibold">Devices &amp; recovery</h3>
-        </div>
+      <ErrorShell className={bare ? "space-y-1" : "p-4 space-y-1"}>
+        {!bare && (
+          <div className="flex items-center gap-2">
+            <Watch className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <h3 className="font-semibold">Devices &amp; recovery</h3>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           Device connections aren&apos;t available right now. Try again in a moment.
         </p>
         {error instanceof Error && error.message && (
           <p className="text-xs text-muted-foreground/70 break-words">{error.message}</p>
         )}
-      </Card>
+      </ErrorShell>
     );
   }
 
@@ -227,13 +257,16 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
   // On Home, setup lives in Account; only show the card once there is something to show.
   if (mode === "summary" && active.length === 0) return null;
 
-  const offered = WEARABLE_PROVIDERS.filter((p) => !active.some((c) => c.provider === p.id));
+  // Only what can connect here: no "coming soon" rows, and the phone health
+  // stores only inside that phone's app.
+  const offered = connectableProviders(data);
 
+  const Shell = bare ? "div" : Card;
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex min-h-10 items-center gap-2">
-        <Watch className="h-5 w-5 shrink-0 text-muted-foreground" />
-        <h3 className="text-base font-semibold">Devices &amp; recovery</h3>
+    <Shell className={bare ? "space-y-4" : "p-4 space-y-4"}>
+      <div className={cn("flex items-center gap-2", bare ? "empty:hidden" : "min-h-10")}>
+        {!bare && <Watch className="h-5 w-5 shrink-0 text-muted-foreground" />}
+        {!bare && <h3 className="text-base font-semibold">Devices &amp; recovery</h3>}
         {sourceLabel && <span className="text-xs text-muted-foreground">via {sourceLabel}</span>}
         {recovery && (
           <span
@@ -400,34 +433,17 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
 
       {isOwner && mode === "full" && (
         <div className="space-y-2">
-          {active.length === 0 && (
+          {active.length === 0 && offered.length > 0 && (
             <p className="text-sm text-muted-foreground">
-              Connect a device so your coach can program around your sleep, HRV and resting heart
-              rate, not just your training log.
+              Your coach can program around your sleep, HRV and resting heart rate.
             </p>
           )}
           <div className="space-y-2">
-            {offered
-              // In the phone app, only offer that phone's own health store.
-              .filter((p) => p.kind !== "health_store" || !deviceStore || p.id === deviceStore)
-              .map((p) => {
+            {offered.map((p) => {
                 const isStore = p.kind === "health_store";
-                const ready =
-                  p.live &&
-                  (isStore
-                    ? healthState === "ready" && p.id === deviceStore
-                    : p.id !== "oura" || data.configured.oura);
-                const status = !p.live
-                  ? "Coming soon"
-                  : isStore
-                    ? healthState === "needs_update"
-                      ? "Update the app to connect"
-                      : healthState === "loading"
-                        ? ""
-                        : p.id === "apple_health"
-                          ? "Connect in the iPhone app"
-                          : "Connect in the Android app"
-                    : "Not set up";
+                // a phone's store connects once the app's health plugin has loaded
+                const ready = isStore ? healthState === "ready" : true;
+                const status = healthState === "needs_update" ? "Update the app to connect" : "";
                 return (
                   <div key={p.id} className="flex items-center gap-3 rounded-lg border p-3">
                     <div className="min-w-0 flex-1">
@@ -449,6 +465,12 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
                 );
               })}
           </div>
+          {/* On the web the phone health stores aren't offered: they connect from the app. */}
+          {!deviceStore && (
+            <p className="text-xs text-muted-foreground">
+              Apple Health and Health Connect: connect in the iPhone app or the Android app.
+            </p>
+          )}
         </div>
       )}
 
@@ -485,7 +507,7 @@ export function WearablesCard({ mode = "full" }: { mode?: "full" | "summary" }) 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </Shell>
   );
 }
 

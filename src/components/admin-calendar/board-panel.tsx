@@ -96,13 +96,14 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
   }
 
   const sourceSwitch = (
-    <div className="inline-flex h-9 shrink-0 rounded-full border border-border bg-background/60 p-0.5 text-xs font-bold" role="radiogroup" aria-label="What to show">
+    // The choice on reads in neutral, like every in-page switch (red is the Book button's).
+    <div className="inline-flex h-10 shrink-0 rounded-full border border-border bg-background/60 p-0.5 text-xs font-semibold" role="radiogroup" aria-label="What to show">
       <button
         type="button"
         role="radio"
         aria-checked={!includeGoogle}
         onClick={() => chooseSource(false)}
-        className={cn("rounded-full px-3", !includeGoogle ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+        className={cn("rounded-full px-3", !includeGoogle ? "bg-secondary text-foreground" : "text-muted-foreground")}
       >
         Coaching
       </button>
@@ -113,7 +114,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
           aria-checked={includeGoogle}
           onClick={() => chooseSource(true)}
           title={gcalStatus?.calendarName ? `Adds ${gcalStatus.calendarName} and your main Google calendar` : undefined}
-          className={cn("inline-flex items-center gap-1 rounded-full px-3", includeGoogle ? "bg-sky-500 text-white" : "text-muted-foreground")}
+          className={cn("inline-flex items-center gap-1 rounded-full px-3", includeGoogle ? "bg-secondary text-foreground" : "text-muted-foreground")}
         >
           <CalIcon className="h-3 w-3" /> + Google
         </button>
@@ -138,8 +139,8 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
           onClick={() => setFiltersOpen((o) => !o)}
           aria-expanded={filtersOpen}
           className={cn(
-            "ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-bold",
-            activeFilterCount > 0 ? "border-primary/50 text-primary" : "border-border text-muted-foreground",
+            "ml-auto inline-flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold",
+            activeFilterCount > 0 ? "border-foreground/40 text-foreground" : "border-border text-muted-foreground",
           )}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" /> Filter{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
@@ -167,7 +168,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
                   type="button"
                   onClick={() => toggleKind(k)}
                   className={cn(
-                    "rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors",
+                    "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
                     active ? KIND_META[k].chip : "border-border text-muted-foreground opacity-50 hover:opacity-100",
                   )}
                 >
@@ -202,11 +203,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
             onCreate={(date) => setBooking({ date })}
             onItemSelect={onItemSelect}
             onRangeChange={setVisible}
-            emptyHint={
-              activeFilterCount > 0
-                ? "No calendar items match your current filters. Try clearing filters or widening the date range."
-                : "Nothing scheduled yet. Tap Book to add a session."
-            }
+            emptyHint={activeFilterCount > 0 ? "Nothing matches these filters." : "Nothing scheduled yet."}
           />
         </section>
       </div>

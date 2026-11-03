@@ -62,10 +62,7 @@ export function MemberNutritionPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl pb-safe-bottom">
-      <PageHeader
-        title="Nutrition"
-        subtitle="Your daily targets, meals and recipes."
-      />
+      <PageHeader title="Nutrition" />
       <SectionErrorBoundary label="Meal plan">
         <MemberMealPlanPanel />
       </SectionErrorBoundary>

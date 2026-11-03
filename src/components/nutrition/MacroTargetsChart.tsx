@@ -53,8 +53,9 @@ export function MacroTargetsChart({
   const hasMacros = p != null && c != null && f != null;
   const split = hasMacros ? kcalShares(p, c, f) : null;
   const centerKcal = target ?? (split && split.kcal > 0 ? split.kcal : null);
+  // only worth saying when the macros don't add up: more than 5% off the target
   const mismatch =
-    !!split && target != null && split.kcal > 0 && Math.abs(target - split.kcal) > 25;
+    !!split && target != null && target > 0 && split.kcal > 0 && Math.abs(target - split.kcal) > target * 0.05;
 
   const rows = [
     { key: "protein", label: "Protein", grams: p, color: MACRO_COLOR.protein },

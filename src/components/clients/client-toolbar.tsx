@@ -126,7 +126,7 @@ export function ClientToolbar({
         <div className="flex w-full items-center gap-1.5 overflow-x-auto sm:w-auto sm:gap-2 sm:overflow-visible">
           <Select value={lifecycle} onValueChange={(v) => setLifecycle(v as Lifecycle)}>
             <SelectTrigger
-              className={cn("h-11 w-[124px] shrink-0 font-semibold", lifecycle !== "active" && "border-primary/50 text-primary")}
+              className={cn("h-11 w-[124px] shrink-0 font-semibold", lifecycle !== "active" && "border-foreground/40")}
               aria-label="Which clients"
             >
               <SelectValue />
@@ -146,17 +146,18 @@ export function ClientToolbar({
             </SelectContent>
           </Select>
 
+          {/* Phones: just the icon (and its count), so Active, Sort and Filters fit on one line. */}
           <Button
             variant="outline"
             size="sm"
-            className={cn("relative h-11 shrink-0 px-2.5 sm:px-3", activeCount > 0 && "border-primary/50 text-primary")}
+            className={cn("relative h-11 min-w-11 shrink-0 gap-1.5 px-2.5 sm:px-3", activeCount > 0 && "border-foreground/40")}
             aria-label={activeCount > 0 ? `Filters, ${activeCount} on` : "Filters"}
             onClick={() => setSheetOpen(true)}
           >
-            <SlidersHorizontal className="mr-2 h-4 w-4" />
-            Filters
+            <SlidersHorizontal className="h-4 w-4" />
+            <span className="hidden sm:inline">Filters</span>
             {activeCount > 0 && (
-              <span className="ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-bold text-background">
                 {activeCount}
               </span>
             )}

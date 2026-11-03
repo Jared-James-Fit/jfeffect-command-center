@@ -103,12 +103,7 @@ export function LogFoodToolButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <ToolTile
-        icon={UtensilsCrossed}
-        title="Log Food"
-        hint="Track what you ate today"
-        onClick={() => setOpen(true)}
-      />
+      <ToolTile icon={UtensilsCrossed} title="Log Food" onClick={() => setOpen(true)} />
       <LogSheet open={open} onOpenChange={setOpen} />
     </>
   );
