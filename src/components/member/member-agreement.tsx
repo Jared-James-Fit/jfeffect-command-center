@@ -229,13 +229,14 @@ export function MemberAgreementGate() {
   );
 }
 
-/** Where a member's agreement stands, for the Account row: "Signed" / "Accepted" / "Action required". */
+/** Where a member's agreement stands, for the Account row: "Signed" / "Accepted" / "Action required"; null when it doesn't apply. */
 export function membershipAgreementStatus(data: ReturnType<typeof useMembershipAgreement>["data"]): { label: string; needsYou: boolean } | null {
   if (!data?.applicable) return null;
   if (data.signedAt) return { label: "Signed", needsYou: false };
   if (!data.needsSigning && data.acceptedAt) return { label: "Accepted", needsYou: false };
   if (data.needsSigning) return { label: "Action required", needsYou: true };
-  return null;
+  // applicable but nothing to do (an older version): the row stays, with no status
+  return { label: "", needsYou: false };
 }
 
 /**

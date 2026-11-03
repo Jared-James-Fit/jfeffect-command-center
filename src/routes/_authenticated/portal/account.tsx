@@ -612,7 +612,7 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <AccordionItem value={id} id={id} className="scroll-mt-20 border-b-0">
+    <AccordionItem value={id} id={id} className="scroll-mt-28 border-b-0">
       <AccordionTrigger className={cn(rowClass, "font-normal hover:no-underline")}>
         <RowLabel icon={icon} title={title} summary={summary} destructive={destructive} />
       </AccordionTrigger>

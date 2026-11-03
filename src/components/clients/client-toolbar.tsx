@@ -137,8 +137,8 @@ export function ClientToolbar({
           </Select>
 
           <Select value={sort} onValueChange={(v) => set({ sort: v })}>
-            <SelectTrigger className="h-11 w-[178px] shrink-0 sm:w-[190px]" aria-label="Sort by">
-              <ArrowUpDown className="mr-2 h-4 w-4" aria-hidden />
+            <SelectTrigger className="h-11 w-[160px] shrink-0 sm:w-[190px]" aria-label="Sort by">
+              <ArrowUpDown className="mr-2 hidden h-4 w-4 sm:inline" aria-hidden />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
