@@ -515,7 +515,7 @@ export function WorkoutsExperience({
             <div className="flex items-center justify-between gap-2">
               {client ? <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" /> : <span />}
               {!isLoading && dayItems.length > 0 && (
-                <div className="inline-flex shrink-0 rounded-full border bg-card px-0.5 text-[13px]" role="group" aria-label="Calendar view">
+                <div className="inline-flex shrink-0 rounded-full bg-muted px-0.5 text-[13px]" role="group" aria-label="Calendar view">
                   {(["week", "month"] as const).map((v) => (
                     // The whole 40px is the tap target; the pill inside is what shows.
                     <button
@@ -528,7 +528,7 @@ export function WorkoutsExperience({
                       <span
                         className={cn(
                           "inline-flex h-8 items-center rounded-full px-3 font-semibold transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring",
-                          calView === v ? "bg-primary text-primary-foreground" : "text-muted-foreground group-hover:bg-secondary",
+                          calView === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground group-hover:text-foreground",
                         )}
                       >
                         {v === "week" ? "Week" : "Month"}

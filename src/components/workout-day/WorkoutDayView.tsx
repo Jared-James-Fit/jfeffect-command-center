@@ -6391,7 +6391,7 @@ function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "
           {label}
         </span>
       )}
-      <div className={cn("inline-flex items-center overflow-hidden rounded-md border border-border bg-secondary/40", compact ? "text-[11px]" : "text-xs")}
+      <div className={cn("inline-flex items-center gap-0.5 overflow-hidden rounded-lg bg-muted p-0.5", compact ? "text-[11px]" : "text-xs")}
            role="group"
            aria-label={label ?? "Unit toggle"}>
       {(["kg", "lb"] as const).map((u) => (
@@ -6401,9 +6401,9 @@ function UnitToggle({ unit, onChange, label, compact = false }: { unit: "kg" | "
           onClick={() => unit !== u && onChange(u)}
           aria-pressed={unit === u}
           className={cn(
-            "font-bold uppercase tracking-wider transition-colors",
+            "rounded-md font-semibold uppercase transition-colors",
             compact ? "px-2 py-1 min-w-[34px]" : "px-3 py-1.5",
-            unit === u ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+            unit === u ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
           )}
         >
           {u}
