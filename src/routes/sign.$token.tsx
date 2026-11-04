@@ -11,10 +11,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/sign/$token")({
   component: SignPage,
-  head: () => ({ meta: [{ title: "Sign your agreement — JF Effect" }] }),
+  head: () => ({ meta: [{ title: "Sign your agreement — JF Effect" }, ...shareMeta({ title: "Sign your JF Effect agreement", description: "Read and sign your agreement." })] }),
 });
 
 const INTENT = "I have read this agreement, I intend to be legally bound by it, and my typed name constitutes my electronic signature.";

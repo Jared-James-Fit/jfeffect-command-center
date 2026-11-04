@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { getPublicLegalDocument } from "@/lib/legal.functions";
 import { ArrowLeft, ShieldAlert, FileText } from "lucide-react";
+import { legalShareTitle, shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/legal/$slug")({
   loader: async ({ params }) => {
@@ -8,15 +9,15 @@ export const Route = createFileRoute("/legal/$slug")({
     if (!doc) throw notFound();
     return { doc };
   },
-  head: ({ loaderData }) => {
+  head: ({ loaderData, params }) => {
     const title = loaderData?.doc?.title ?? "Legal";
     const desc = loaderData?.doc?.version?.summary ?? "Legal document";
     return {
       meta: [
         { title: `${title} — JF Effect` },
         { name: "description", content: desc },
-        { property: "og:title", content: `${title} — JF Effect` },
-        { property: "og:description", content: desc },
+        // the card is the document's name, never its version notes
+        ...shareMeta({ title: legalShareTitle(title), description: "Read the full document.", path: `/legal/${params.slug}` }),
         { name: "robots", content: "index,follow" },
       ],
     };

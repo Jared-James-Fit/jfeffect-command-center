@@ -6,9 +6,10 @@ import { launchTarget } from "@/lib/launch-home";
 import { AuthSplash } from "@/components/auth-splash";
 import { AuthShell, AuthLogo } from "@/components/auth/auth-shell";
 import { SignInForm } from "@/components/auth/sign-in-form";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "JF Effect — Private Coaching OS" }] }),
+  head: () => ({ meta: [{ title: "JF Effect — Private Coaching OS" }, ...shareMeta({ title: "Sign in to JF Effect", description: "Your training, nutrition and coaching in one place.", path: "/auth" })] }),
   validateSearch: z.object({ next: z.string().optional() }),
   component: AuthPage,
 });

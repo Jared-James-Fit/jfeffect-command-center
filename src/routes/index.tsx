@@ -7,6 +7,7 @@ import { CLIENT_VIEW_HOME, cachedLaunchTarget, launchTarget } from "@/lib/launch
 import { getViewMode } from "@/lib/view-mode";
 import { supabase } from "@/integrations/supabase/client";
 import { hasPersistedAuthSession } from "@/lib/session-hint";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/")({
   // First-time / signed-out visitors: skip "splash -> hydrate -> wait for auth ->
@@ -22,8 +23,7 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "JF Effect — Private Coaching & Training System" },
       { name: "description", content: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
-      { property: "og:title", content: "JF Effect — Private Coaching & Training System" },
-      { property: "og:description", content: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over." },
+      ...shareMeta({ title: "JF Effect", description: "Structured training, nutrition, progress tracking, and private coaching for men who are done starting over.", path: "/" }),
     ],
   }),
   component: IndexRedirect,

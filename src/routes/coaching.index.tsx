@@ -13,6 +13,7 @@ import { Block, Group, Heading, IconTile, PrimaryCta, Rail, SocialLinks, Stat, S
 import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
 import { COACH_NAME, INQUIRY_DM_URL } from "@/lib/social-links";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/coaching/")({
   component: CoachingPage,
@@ -20,16 +21,13 @@ export const Route = createFileRoute("/coaching/")({
     meta: [
       { title: "Online Fitness Coaching Selkirk & Winnipeg MB | Private 1:1 Coaching | JF Effect" },
       { name: "description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre. Weekly check-ins, custom programming, and nutrition coaching. By application." },
-      { property: "og:title", content: "Online Fitness Coaching Selkirk & Winnipeg MB | Private 1:1 Coaching | JF Effect" },
-      { property: "og:description", content: "Private 1:1 online fitness coaching serving Selkirk, Winnipeg, and all of Manitoba. Strength, fat loss, muscle building, and powerlifting coaching by Jared McIntyre. By application." },
+      ...shareMeta({
+        title: "JF Effect Coaching",
+        description: "Private 1:1 coaching for strength, fat loss, muscle and powerlifting. A plan built around your life, weekly check-ins, and a coach who knows your numbers.",
+        path: "/coaching",
+      }),
       { name: "geo.region", content: "CA-MB" },
       { name: "geo.placename", content: "Selkirk, Manitoba" },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://jfeffect.com/coaching" },
-      { property: "og:site_name", content: "JF Effect" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Private 1:1 Fitness Coaching by Application | JF Effect" },
-      { name: "twitter:description", content: "Private 1:1 online fitness coaching for strength, fat loss, muscle, and powerlifting. A plan built around your life, weekly check-ins, and a coach who knows your numbers. By application." },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/coaching" }],
     scripts: [

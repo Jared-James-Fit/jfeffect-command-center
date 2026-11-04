@@ -12,14 +12,14 @@ import {
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { recordInstall, recordInstallDismissed } from "@/lib/install-tracking.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/install")({
   head: () => ({
     meta: [
       { title: "Install JF Effect — Add to your phone" },
       { name: "description", content: "Install the JF Effect app on your iPhone or Android phone in under 30 seconds." },
-      { property: "og:title", content: "Install JF Effect" },
-      { property: "og:description", content: "Install the JF Effect app on your iPhone or Android phone." },
+      ...shareMeta({ title: "Install JF Effect", description: "Install the JF Effect app on your iPhone or Android phone.", path: "/install" }),
     ],
   }),
   component: InstallPage,

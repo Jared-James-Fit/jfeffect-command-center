@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { submitCoachingApplication } from "@/lib/coaching-applications.functions";
 import { toast } from "sonner";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/personal-trainer-selkirk/apply")({
   component: SelkirkApply,
@@ -19,8 +20,7 @@ export const Route = createFileRoute("/personal-trainer-selkirk/apply")({
     meta: [
       { title: "Apply — Personal Training in Selkirk, MB | JF Effect" },
       { name: "description", content: "Apply for in-person personal training in Selkirk, MB at Iron Image Barbell Club with JF Effect." },
-      { property: "og:title", content: "Apply — Personal Training in Selkirk, MB" },
-      { property: "og:description", content: "Apply for in-person personal training in Selkirk, MB at Iron Image Barbell Club with JF Effect." },
+      ...shareMeta({ title: "Apply for Personal Training", description: "One-on-one, in-person training with JF Effect.", path: "/personal-trainer-selkirk/apply" }),
       { name: "robots", content: "noindex,follow" },
     ],
     links: [{ rel: "canonical", href: "https://jfeffect.com/personal-trainer-selkirk/apply" }],

@@ -11,6 +11,7 @@ import {
   ShieldCheck, Scale, Trophy, Brain, Apple,
 } from "lucide-react";
 import { Reveal } from "@/components/sales/reveal";
+import { shareMeta } from "@/lib/share-meta";
 
 const TITLE = "Personal Trainer Selkirk MB | Online Fitness Coaching Selkirk & Winnipeg | JF Effect";
 const DESCRIPTION =
@@ -38,16 +39,12 @@ export const Route = createFileRoute("/personal-trainer-selkirk")({
     meta: [
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      { property: "og:title", content: TITLE },
-      { property: "og:description", content: DESCRIPTION },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: URL },
-      { property: "og:image", content: OG_IMAGE },
-      { property: "og:site_name", content: "JF Effect" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: TITLE },
-      { name: "twitter:description", content: DESCRIPTION },
-      { name: "twitter:image", content: OG_IMAGE },
+      // Google reads TITLE / DESCRIPTION; a sent link gets a clean card.
+      ...shareMeta({
+        title: "JF Effect Personal Training",
+        description: "One-on-one training for strength, fat loss, muscle and powerlifting, in person or online.",
+        path: "/personal-trainer-selkirk",
+      }),
       { name: "geo.region", content: "CA-MB" },
       { name: "geo.placename", content: "Selkirk, Manitoba" },
     ],

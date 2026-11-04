@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { requestAccountRecovery } from "@/lib/account-recovery.functions";
 import { NEUTRAL_RESPONSE_MESSAGE } from "@/lib/account-recovery.constants";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/recover")({
-  head: () => ({ meta: [{ title: "Recover your account — JF Effect" }] }),
+  head: () => ({ meta: [{ title: "Recover your account — JF Effect" }, ...shareMeta({ title: "Recover your JF Effect account", description: "Get back into your account." })] }),
   component: RecoverPage,
 });
 

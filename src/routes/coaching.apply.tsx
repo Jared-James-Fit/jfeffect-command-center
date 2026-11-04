@@ -19,6 +19,7 @@ import {
 } from "@/lib/apply-form";
 import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
 import { toast } from "sonner";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/coaching/apply")({
   component: QuestionFlow,
@@ -26,8 +27,7 @@ export const Route = createFileRoute("/coaching/apply")({
     meta: [
       { title: "Apply for JF Effect Coaching: 7 quick questions" },
       { name: "description", content: "Tell us who you are, what you want, and when you want to start." },
-      { property: "og:title", content: "Apply for JF Effect Coaching" },
-      { property: "og:description", content: "Tell us who you are, what you want, and when you want to start." },
+      ...shareMeta({ title: "Apply for JF Effect Coaching", description: "Tell us who you are, what you want, and when you want to start.", path: "/coaching/apply" }),
     ],
   }),
 });

@@ -15,6 +15,7 @@ import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { FileSignature } from "lucide-react";
 import { getAgreementSigningContext } from "@/lib/coaching-agreement.functions";
+import { shareMeta } from "@/lib/share-meta";
 
 // The signing flow carries the full agreement text, so it only loads when this step is reached.
 const AgreementSignFlow = lazyWithRetry(() =>
@@ -24,7 +25,7 @@ const AgreementSignFlow = lazyWithRetry(() =>
 );
 
 export const Route = createFileRoute("/setup")({
-  head: () => ({ meta: [{ title: "Set up your account — JF Effect" }] }),
+  head: () => ({ meta: [{ title: "Set up your account — JF Effect" }, ...shareMeta({ title: "Set up your JF Effect account", description: "Finish setting up your account to get started." })] }),
   component: SetupPage,
 });
 

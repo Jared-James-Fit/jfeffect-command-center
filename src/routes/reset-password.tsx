@@ -14,9 +14,10 @@ import {
   consumeRecoveryToken,
   validateRecoveryToken,
 } from "@/lib/account-recovery.functions";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Reset password — JF Effect" }] }),
+  head: () => ({ meta: [{ title: "Reset password — JF Effect" }, ...shareMeta({ title: "Reset your JF Effect password", description: "Choose a new password." })] }),
   component: ResetPage,
 });
 
