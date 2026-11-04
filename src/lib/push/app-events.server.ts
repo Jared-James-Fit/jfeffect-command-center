@@ -22,6 +22,7 @@ export type AppEvent =
   | "birthday_post_reminder"
   | "chat_reported"
   | "session_requested"
+  | "lead_ready"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -42,7 +43,7 @@ type EventSpec = {
    */
   title: (name: string) => string;
   body: (name: string) => string;
-  url: (clientId: string) => string;
+  url: (clientId: string, sourceId?: string) => string;
   /** Minutes in which repeats for the same client collapse into one push. */
   rateMinutes: number;
 };
@@ -88,6 +89,14 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `Form from ${n}`,
     body: () => "Submitted a form. Tap to view.",
     url: (id) => `/admin/clients/${id}?tab=documents`, rateMinutes: 60,
+  },
+  // A new coaching application, once its AI read and text are written
+  // (coaching-leads.server.ts). Opens the lead with the text to copy.
+  lead_ready: {
+    to: "staff", category: "coaching_apps",
+    title: (n) => `New coaching application: ${n}`,
+    body: () => "Your read on them and a text to send are ready. Tap to copy it.",
+    url: (_id, applicationId) => (applicationId ? `/admin/leads?id=${applicationId}` : "/admin/leads"), rateMinutes: 60,
   },
   nutrition_submitted: {
     to: "staff", category: "check_ins",
@@ -249,7 +258,7 @@ export async function notifyAppEvent(
         {
           title: spec.title(name),
           body: spec.body(name),
-          url: spec.url(input.clientId),
+          url: spec.url(input.clientId, input.sourceId),
           tag: `${event}:${input.clientId}`,
           data: { kind: event, clientId: input.clientId, sourceId: input.sourceId },
         },

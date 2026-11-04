@@ -91,6 +91,9 @@ const REGISTRY: Entry[] = [
     keywords: ["inbox", "chat", "direct messages", "group chat", "support inbox"] },
   { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Messages", searchOnly: true,
     visibleTo: ["admin", "coach", "support"], keywords: ["support inbox", "help", "alerts", "tickets"] },
+  // New coaching applications with the AI's read and a text to send (pinned in Messages, on Home).
+  { to: "/admin/leads", label: "Coaching leads", icon: UserPlus, group: "Messages", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["leads", "applications", "prospects", "new clients", "sales", "follow up"] },
 
   // ── CLIENTS ──────────────────────────────────────────────────────────
   { to: "/admin/clients", label: "Clients", icon: Contact, group: "Clients",

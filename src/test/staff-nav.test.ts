@@ -88,7 +88,7 @@ describe("one menu row per page", () => {
     const admin = buildInternalNavCollapsed("admin");
     const messages = admin.find((i) => i.label === "Messages")!;
     expect(messages.children?.map((c) => [c.to, !!c.searchOnly])).toEqual([
-      ["/admin/communication", true], ["/admin/support-alerts", true],
+      ["/admin/communication", true], ["/admin/support-alerts", true], ["/admin/leads", true],
     ]);
     const all = admin.flatMap((i) => [i, ...(i.children ?? [])]);
     const listedTos = admin.flatMap((i) => [i.to, ...listed(i).map((c) => (c as { to: string }).to)]);

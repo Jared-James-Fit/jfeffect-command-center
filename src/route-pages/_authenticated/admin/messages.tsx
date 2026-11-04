@@ -1,4 +1,5 @@
 import { Link, redirect, useNavigate } from "@tanstack/react-router";
+import { LeadsInboxRow } from "@/components/leads/leads-inbox-row";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
@@ -922,6 +923,8 @@ export function MessagesInbox({
               </button>
             </div>
           )}
+          {/* New coaching applications, with the AI's read and a text to send (admin). */}
+          {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
           {conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
           ) : conversations.map(({ client, state, last, unread, liftReview, workflow, signals, tags }) => (

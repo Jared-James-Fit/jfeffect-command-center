@@ -236,7 +236,8 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
     // application or the CRM records written above.
     try {
       const { notifyNewApplicationFixedRecipients } = await import("./coaching-app-notify.server");
-      const adminLink = `https://jfeffect.com/admin/forms?tab=applications`;
+      // Opens the lead with the AI's read and a text ready to send (coaching-leads.ts).
+      const adminLink = `https://jfeffect.com/admin/leads?id=${inserted.id}`;
       const crmLink = `https://jfeffect.com/admin/clients/${upsert.client_id}`;
       const startLabel = (data.timeline || "no timeline").replace(/_/g, " ");
       const submittedAtStr = new Date().toLocaleString("en-CA", {
@@ -280,7 +281,7 @@ export const submitCoachingApplication = createServerFn({ method: "POST" })
         `Lead Score is a prioritization aid, not a judgment of the applicant.`,
         `Recommended offer: ${scored.recommended_offer}`,
         ``,
-        `Review application: ${adminLink}`,
+        `Your read + a text to send: ${adminLink}`,
         `CRM client record: ${crmLink}`,
       ].join("\n");
 

@@ -248,6 +248,9 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   { id: "coaching-apps", label: "Coaching Applications", to: "/admin/sales/coaching-applications",
     category: "Sales & Payments", parent: "Admin → Sales", roles: ADMIN_COACH, icon: ClipboardList, hidden: true,
     keywords: ["applications", "leads", "website form"] },
+  { id: "coaching-leads", label: "Coaching leads", to: "/admin/leads",
+    category: "Sales & Payments", parent: "Admin → Messages", roles: ADMIN, icon: UserPlus,
+    keywords: ["leads", "applications", "prospects", "text to send", "follow up"] },
 
   // ── MEMBERSHIP ──────────────────────────────────────────────────────
   { id: "membership-home", label: "Membership Home", to: "/admin/membership",

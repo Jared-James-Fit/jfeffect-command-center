@@ -23,6 +23,7 @@ import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/po
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { cn } from "@/lib/utils";
 import { onDashboardClickCapture } from "@/components/return-to-dashboard";
+import { NewLeadsCard } from "@/components/leads/new-leads-card";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminDashboard,
@@ -357,6 +358,11 @@ function AdminDashboard() {
         <SectionErrorBoundary label="Schedule">
           <ChangeRequestsCard />
           <DashboardScheduleCard />
+        </SectionErrorBoundary>
+
+        {/* ---------------- LEADS: new applications waiting on a text (admin; hidden when none) ---------------- */}
+        <SectionErrorBoundary label="Leads">
+          <NewLeadsCard />
         </SectionErrorBoundary>
 
         <DriveSetupBanner />
