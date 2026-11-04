@@ -644,7 +644,8 @@ export function AppShell({
     <div className="flex min-h-screen w-full overflow-x-hidden bg-background text-foreground">
       <aside
         className={cn(
-          "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex transition-[width] duration-200",
+          // On an iPad home-screen app the status bar is over the page: the sidebar and the page start under it.
+          "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex md:pt-[env(safe-area-inset-top)] transition-[width] duration-200",
           sidebarWidthClass,
         )}
       >
@@ -933,7 +934,7 @@ export function AppShell({
       </aside>
 
       {/* Mobile top bar */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:pt-[env(safe-area-inset-top)]">
         {/* The PWA runs under a translucent iOS status bar, so scrolled page
             content would print over the clock/battery. This opaque strip
             covers exactly the status-bar inset (0px in a normal browser tab). */}

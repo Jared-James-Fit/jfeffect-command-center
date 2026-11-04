@@ -151,10 +151,10 @@ function CommunicationWorkspace() {
         // opens, --bottom-nav-clearance collapses to 0 (the nav is
         // hidden), so the math stays correct.
         top: viewportLockedTab
-          ? "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))"
+          ? "calc(var(--vv-top, 0px) + var(--app-top-chrome, 0px))"
           : undefined,
         height:
-          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+          "calc(var(--vv-h, 100dvh) - var(--app-top-chrome, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* Desktop-only page header. On mobile the screen jumps straight to the

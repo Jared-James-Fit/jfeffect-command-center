@@ -365,14 +365,13 @@ html[data-keyboard-open="true"] {
 /* Height of the AppShell mobile top bar (logo + actions row).
    Pages that render their own viewport-tall surface (chat, messenger) subtract
    this so content + topbar + bottom nav add up to the visual viewport and the
-   body never has to scroll. We deliberately do NOT add env(safe-area-inset-top)
-   here: the fixed messenger shell is positioned via
-   `top: var(--vv-top) + var(--shell-topbar-h)` and sized via
-   `height: var(--vv-h) - var(--shell-topbar-h) - var(--bottom-nav-clearance)`,
-   so the bottom edge (composer/keyboard anchor) is `vv-top + vv-h - bottom-nav`
-   regardless of this constant. Inflating it by the safe-area inset only shifts
-   the whole shell down by the notch height, producing a large dead gap at the
-   top of the admin messenger on notched iPhones. */
+   body never has to scroll. It is only the bar's row: the notch the bar is
+   padded for (and the View as client banner) come on top through
+   --app-top-chrome below, which is what a fixed, viewport-tall screen uses:
+   `top: var(--vv-top) + var(--app-top-chrome)`,
+   `height: var(--vv-h) - var(--app-top-chrome) - var(--bottom-nav-clearance)`,
+   so the bottom edge (composer/keyboard anchor) stays `vv-top + vv-h - bottom-nav`.
+   Leaving the notch out put the chats over the bar on notched iPhones. */
 /* Where the app's own phone top bars start (the shell's, Crew's). Normally at
    the very top, padded for the notch; while a coach views as a client the red
    banner is up there with the notch inside it (ClientPovBanner sets
@@ -385,7 +384,36 @@ html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-bann
 @media (max-width: 768px) {
   :root { --shell-topbar-h: 49px; }
 }
-/* When keyboard is open, collapse the topbar height so the messenger
+/* Everything above a page on a phone: the View as client banner (when on), the
+   notch the shell's bar is padded for, and the bar's own row. A fixed,
+   viewport-tall screen (the chats) starts here and is this much shorter, so it
+   sits under the bar instead of covering it on a notched iPhone. With the
+   keyboard up the bar's row collapses (above) and only the notch is left. */
+:root { --app-top-chrome: calc(var(--app-chrome-top) + var(--app-safe-top) + var(--shell-topbar-h)); }
+
+/* The colour iOS 26 puts under the status bar (root layout's strip). Safari and
+   home-screen apps hit-test 4px under the top edge's centre for a fixed or
+   sticky element at least 90% wide and more than 10px deep, and use its
+   background colour solid; with none they blur the page content there instead,
+   over the bars (the Messages tabs, the Crew bar). Its colour is only read, never
+   painted (background-clip: text, no text), so the bars keep their own look; the
+   View as client banner's tint while it holds the notch. Topmost, untouchable. */
+.ios-status-band {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: max(12px, env(safe-area-inset-top, 0px));
+  background-color: var(--background);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+html[data-pov-banner-on] .ios-status-band {
+  background-color: color-mix(in oklch, var(--destructive) 10%, var(--background));
+}/* When keyboard is open, collapse the topbar height so the messenger
    container fills the full visual viewport without dead space at the top. */
 html[data-keyboard-open="true"] {
   --shell-topbar-h: 0px;

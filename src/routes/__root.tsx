@@ -363,6 +363,12 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        {/* iOS 26 blurs whatever web content sits under the status bar (its
+            scroll edge effect) unless a fixed, full-width element with an
+            opaque colour is at the top edge, and it decides from the first
+            frame. This strip is that element on every screen, splash included:
+            invisible (styles.css .ios-status-band), only its colour is read. */}
+        <div className="ios-status-band" aria-hidden="true" />
         {children}
         <Scripts />
       </body>

@@ -411,20 +411,20 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
       )}
 
       <Tabs value={view} onValueChange={(v) => setView(v as any)}>
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <TabsList>
             <TabsTrigger value="month">Month</TabsTrigger>
             <TabsTrigger value="list">List</TabsTrigger>
           </TabsList>
           {view === "month" && (
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setCursor(addMonths(cursor, -1))}>
+            <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+              <Button size="sm" variant="outline" className="h-9 w-9 px-0" aria-label="Previous month" onClick={() => setCursor(addMonths(cursor, -1))}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="text-sm font-semibold w-32 text-center">
+              <div className="w-28 truncate text-center text-sm font-semibold sm:w-32">
                 {format(cursor, "MMMM yyyy")}
               </div>
-              <Button size="sm" variant="outline" onClick={() => setCursor(addMonths(cursor, 1))}>
+              <Button size="sm" variant="outline" className="h-9 w-9 px-0" aria-label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setCursor(startOfMonth(new Date()))}>

@@ -249,13 +249,12 @@ function ClientMessages() {
         // NOT shrink on iOS Safari, which is what creates the dead black
         // gap above the keyboard). Falls back to 100dvh on browsers without
         // the Visual Viewport API.
-        // NOTE: --shell-topbar-h only measures the topbar's content row; on
-        // notched devices the topbar also has env(safe-area-inset-top) of
-        // padding above it. Include that inset here so the fixed messenger
-        // starts BELOW the "Client Portal" top bar instead of covering it.
-        top: "calc(var(--vv-top, 0px) + var(--shell-topbar-h, 0px))",
+        // --app-top-chrome is the whole bar above it: the notch the bar is
+        // padded for plus its row (styles.css), so the chat starts BELOW the
+        // top bar instead of covering it on a notched iPhone.
+        top: "calc(var(--vv-top, 0px) + var(--app-top-chrome, 0px))",
         height:
-          "calc(var(--vv-h, 100dvh) - var(--shell-topbar-h, 0px) - var(--bottom-nav-clearance, 0px))",
+          "calc(var(--vv-h, 100dvh) - var(--app-top-chrome, 0px) - var(--bottom-nav-clearance, 0px))",
       }}
     >
       {/* One inbox, like iMessage: the coach chat pinned first, then your own
