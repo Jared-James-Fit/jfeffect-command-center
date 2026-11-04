@@ -80,6 +80,15 @@ jobs:
           else
             echo "::warning::Could not disable shake-to-undo in AppDelegate.swift"
           fi
+          # iOS 26 blurs the web view's content under the status bar and behind the
+          # floating tab bar (UIKit's scroll edge effect); the page draws its own
+          # bars, so the effect is turned off. Built with Xcode 26 only, iOS 26+ only.
+          perl -0pi -e 's/(func applicationDidBecomeActive\(_ application: UIApplication\) \{)/$1\n        #if compiler(>=6.2)\n        if #available(iOS 26.0, *), let scrollView = (window?.rootViewController as? CAPBridgeViewController)?.webView?.scrollView {\n            scrollView.topEdgeEffect.isHidden = true\n            scrollView.bottomEdgeEffect.isHidden = true\n        }\n        #endif/' "$APPDELEGATE"
+          if grep -q "topEdgeEffect.isHidden = true" "$APPDELEGATE"; then
+            echo "✅ iOS 26 scroll edge effect off"
+          else
+            echo "::warning::Could not turn off the iOS 26 scroll edge effect in AppDelegate.swift"
+          fi
           cat > ios/App/Podfile << 'PODFILE'
           require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
           platform :ios, '16.0'

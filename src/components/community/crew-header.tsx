@@ -67,7 +67,7 @@ export function CrewBar({ left, center, right, hidden = false, label }: {
         aria-label={label}
         data-crew-bar
         data-hidden={hidden ? "" : undefined}
-        className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:relative md:inset-auto"
+        className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background md:relative md:inset-auto"
         style={{ paddingTop: "var(--app-safe-top)" }}
       >
         <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-between px-1.5" style={{ height: CREW_BAR_HEIGHT }}>
