@@ -26,7 +26,7 @@ describe("live indicators: one animated look across the app", () => {
   });
 
   it("the coach's chat row and header, the coach's inbox header, Rankings and Crew all use it", () => {
-    expect(read("src/components/group-chats-pane.tsx")).toContain("<LiveAvatar live={pinned.live} size={44}>");
+    expect(read("src/components/group-chats-pane.tsx")).toContain("<LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>");
     expect(read("src/routes/_authenticated/portal/messages.tsx")).toContain("<LiveAvatar live={coachLive} size={40} tag={false}>");
     expect(read("src/route-pages/_authenticated/admin/messages.tsx")).toContain("<LiveAvatar live={selectedClientLive || isClientActive((selected as any).last_active_at)} size={40} tag={false}>");
     expect(read("src/components/community/crew-list.tsx")).toContain('<LiveAvatar live={m.live} size={44} tone="red" tag={false}>');
@@ -47,7 +47,7 @@ describe("live indicators: one animated look across the app", () => {
     const thread = read("src/components/group-message-thread.tsx");
     expect(thread).toContain("<LiveAvatar live={isLive} size={28} tag={false}>");
     const pane = read("src/components/group-chats-pane.tsx");
-    expect(pane).toContain("<LiveAvatar key={m.user_id} live={liveIds.has(m.user_id)} size={32} tag={false}>");
+    expect(pane).toContain("<LiveAvatar live={liveIds.has(m.user_id)} size={px} tag={false}>");
     for (const [f, t] of [["group-message-thread", thread], ["group-chats-pane", pane], ["admin/messages", admin]] as const) {
       expect(t, f).not.toMatch(/rounded-full bg-emerald-500 ring-2/);
     }

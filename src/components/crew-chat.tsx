@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
-import { fmtTime } from "@/components/chat-shared";
+import { CHAT_ROW_AVATAR, ChatListRow } from "@/components/messages/chat-list-row";
 import { useCommunityMembers } from "@/lib/community.queries";
 import type { CommunityAuthor } from "@/lib/community";
 import { isMuted, useChatPrefs, useSetChatPrefs } from "@/lib/chat-prefs";
@@ -35,8 +35,8 @@ export function CrewFaces({ faces, size = 36 }: { faces: Pick<CommunityAuthor, "
   const two = faces.slice(0, 2);
   if (two.length === 0) {
     return (
-      <span className="grid shrink-0 place-items-center rounded-full bg-primary/10 text-primary" style={{ width: size, height: size }}>
-        <Users className="h-4 w-4" />
+      <span className="grid shrink-0 place-items-center rounded-full bg-muted text-foreground" style={{ width: size, height: size }}>
+        <Users className={size >= 48 ? "h-6 w-6" : "h-4 w-4"} />
       </span>
     );
   }
@@ -65,30 +65,18 @@ export function CrewRow({ thread, me, selected, onClick, unread: markedUnread, m
 }) {
   const unread = markedUnread ?? isCrewUnread(thread, me);
   return (
-    <button
-      type="button"
+    <ChatListRow
       onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
-        selected && "bg-secondary/60",
-      )}
-    >
-      {leading}
-      <CrewFaces faces={thread.faces} />
-      <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>{thread.name}</span>
-          <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-            {muted && <BellOff className="h-3 w-3" aria-label="Alerts hidden" />}
-            {thread.last && fmtTime(thread.last.created_at)}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <span className={cn("flex-1 truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>{crewPreview(thread, me)}</span>
-          {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="New" />}
-        </div>
-      </div>
-    </button>
+      selected={selected}
+      unread={unread}
+      muted={muted}
+      leading={leading}
+      at={thread.last?.created_at}
+      unreadLabel="New"
+      avatar={<CrewFaces faces={thread.faces} size={CHAT_ROW_AVATAR} />}
+      name={thread.name}
+      preview={crewPreview(thread, me)}
+    />
   );
 }
 

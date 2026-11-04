@@ -24,7 +24,6 @@ import { ClientNotesSheet } from "@/components/messages/client-notes-log";
 import { SwipeableRow } from "@/components/ui/swipeable-row";
 import { toast } from "sonner";
 import { SendSmsDialog } from "@/components/send-sms-dialog";
-import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useChatPresence } from "@/hooks/use-chat-presence";
 import { LiveAvatar, LiveMark } from "@/components/live-indicator";
@@ -49,6 +48,7 @@ import {
   type ClientSignals, type SignalFilter, type SignalTag,
 } from "@/lib/inbox-brief";
 import { ClientBriefSheet } from "@/components/messages/client-brief-sheet";
+import { CHAT_ROW_AVATAR, ChatListRow } from "@/components/messages/chat-list-row";
 import { messagePreviewText } from "@/lib/message-preview";
 
 type StaffInboxRow = {
@@ -124,7 +124,7 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
   return (
     <span className="min-w-0 truncate">
       <span data-tag={first.key} className={cn("font-semibold", TAG_TEXT[first.tone])}>
-        {Icon && <Icon className="mr-1 inline h-3 w-3 -translate-y-px" aria-hidden />}
+        {Icon && <Icon className="mr-1 inline h-3.5 w-3.5 -translate-y-px" aria-hidden />}
         {first.label}
       </span>
       {more.map((t) => <span key={t.key} data-tag={t.key} className="text-muted-foreground"> · {t.label}</span>)}
@@ -805,7 +805,7 @@ export function MessagesInbox({
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                className="h-10 pl-9 text-base sm:text-sm"
+                className="h-10 pl-9 text-base"
                 placeholder="Search client…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -824,7 +824,7 @@ export function MessagesInbox({
               </Button>
             )}
           </div>
-          <div className="mt-2 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => {
               const n = FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;
               const on = filter === f;
@@ -837,8 +837,8 @@ export function MessagesInbox({
                   aria-label={n ? `${label}, ${n}` : label}
                   aria-pressed={on}
                   className={cn(
-                    "inline-flex shrink-0 items-center rounded-full py-1 text-[11px] font-semibold transition",
-                    n ? "pl-3 pr-1" : "px-3",
+                    "inline-flex h-8 shrink-0 items-center rounded-full text-[14px] font-semibold transition",
+                    n ? "pl-3.5 pr-1.5" : "px-3.5",
                     on
                       ? "bg-primary text-primary-foreground"
                       : n
@@ -851,7 +851,7 @@ export function MessagesInbox({
                     <span
                       data-filter-badge={FILTER_BADGE[f]}
                       className={cn(
-                        "ml-1.5 inline-block h-[18px] min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold leading-[18px] tabular-nums",
+                        "ml-1.5 inline-block h-5 min-w-5 rounded-full px-1.5 text-center text-[12px] font-bold leading-5 tabular-nums",
                         on ? "bg-primary-foreground/25 text-primary-foreground" : BADGE_STYLE[FILTER_BADGE[f]!],
                       )}
                     >
@@ -867,7 +867,7 @@ export function MessagesInbox({
               to="/admin/forms"
               search={{ tab: "requests", kind: formFilterSummary.kind } as any}
               data-form-filter-summary
-              className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-[11px] font-semibold text-foreground hover:bg-secondary"
+              className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-[13px] font-semibold text-foreground hover:bg-secondary"
             >
               <span className="min-w-0 truncate">
                 <span className={formFilterSummary.review ? "text-sky-700 dark:text-sky-400" : "text-muted-foreground"}>{formFilterSummary.review} to review</span>
@@ -881,7 +881,7 @@ export function MessagesInbox({
             <Link
               to="/admin/forms"
               search={{ tab: "requests" } as any}
-              className="mt-1 flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2 text-[11px] font-semibold text-foreground hover:bg-secondary"
+              className="mt-1 flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2 text-[13px] font-semibold text-foreground hover:bg-secondary"
             >
               <span>Manage outstanding requests: open, re-send or delete</span>
               <span aria-hidden>›</span>
@@ -899,25 +899,25 @@ export function MessagesInbox({
           {role === "admin" && !search && (
             // Cleo's way in on admin: pinned at the top of the inbox (there is
             // no floating button). Not a client thread: nothing is ever sent.
-            <div className="flex items-stretch border-b border-border/60">
-              <button type="button" onClick={() => openSummer()} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/60">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-                  <Sparkles className="h-5 w-5" />
+            <div className="flex items-stretch" data-cleo-row>
+              <button type="button" onClick={() => openSummer()} className="flex min-h-[72px] min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left transition hover:bg-muted/60">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+                  <Sparkles className="h-6 w-6" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold">Cleo</span>
-                  <span className="block truncate text-xs text-muted-foreground">Ask anything, or tap the mic and talk</span>
+                  <span className="block truncate text-[16px] leading-5">Cleo</span>
+                  <span className="mt-0.5 block truncate text-[15px] leading-5 text-muted-foreground">Ask anything, or tap the mic</span>
                 </span>
               </button>
               <button
                 type="button"
                 onClick={() => openSummer({ dictate: true })}
-                className="flex w-14 shrink-0 items-center justify-center transition hover:bg-muted/60"
+                className="flex w-16 shrink-0 items-center justify-center transition hover:bg-muted/60"
                 aria-label="Talk to Cleo"
                 title="Talk to Cleo"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-foreground">
-                  <Mic className="h-4 w-4" />
+                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-foreground">
+                  <Mic className="h-5 w-5" />
                 </span>
               </button>
             </div>
@@ -927,7 +927,6 @@ export function MessagesInbox({
           ) : conversations.map(({ client, state, last, unread, liftReview, workflow, signals, tags }) => (
             <SwipeableRow
               key={client.id}
-              className="border-b border-border/60"
               actions={[
                 {
                   key: "unread",
@@ -965,105 +964,77 @@ export function MessagesInbox({
                 },
               ]}
             >
-            <div
-              role="button"
-              tabIndex={0}
+            <ChatListRow
+              as="div"
               onPointerDown={() => prefetchThread(client.id)}
               onClick={() => selectClient(client.id)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectClient(client.id); } }}
-              className={cn(
-                "flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition hover:bg-secondary/40",
-                selectedId === client.id && "bg-secondary/60",
-              )}
-            >
-              {/* Their photo opens the Brief: everything waiting + an AI read. */}
-              <button
-                type="button"
-                data-open-brief
-                aria-label={`Brief: ${client.full_name ?? "client"}${waitingCount(signals) ? `, ${waitingCount(signals)} waiting` : ""}`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
-                className="relative shrink-0 rounded-full transition active:scale-95"
-              >
-                {/* the same live look as the client's inbox: the turning ring and LIVE tag */}
-                <LiveAvatar
-                  live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}
-                  size={44}
+              selected={selectedId === client.id}
+              unread={unread > 0}
+              unreadLabel={`${unread} unread message${unread === 1 ? "" : "s"}`}
+              at={(liftReview?.latestAt ?? "") > (last?.created_at ?? "") ? liftReview!.latestAt : last?.created_at}
+              avatar={
+                // Their photo opens the Brief: everything waiting + an AI read.
+                <button
+                  type="button"
+                  data-open-brief
+                  aria-label={`Brief: ${client.full_name ?? "client"}${waitingCount(signals) ? `, ${waitingCount(signals)} waiting` : ""}`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
+                  className="relative flex shrink-0 rounded-full transition active:scale-95"
                 >
-                  <UserAvatar
-                    src={client.profile_picture_url}
-                    name={client.full_name}
-                    size={44}
-                    ring
-                    expandable={false}
-                  />
-                </LiveAvatar>
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={cn("truncate text-sm", unread > 0 ? "font-bold" : "font-semibold")}>
-                    {client.full_name}
-                  </span>
-                  {(last || liftReview) && (
-                    <span className={cn("shrink-0 text-[10px]", unread > 0 ? "font-semibold text-[#007AFF]" : "text-muted-foreground")}>
-                      {formatDistanceToNow(
-                        parseISO(
-                          (liftReview?.latestAt ?? "") > (last?.created_at ?? "")
-                            ? liftReview!.latestAt
-                            : last!.created_at,
-                        ),
-                        { addSuffix: false },
-                      )}
+                  {/* the same live look as the client's inbox: the turning ring and LIVE tag */}
+                  <LiveAvatar
+                    live={isClientActive((client as any).last_active_at) || (client.id === selectedId && selectedClientLive)}
+                    size={CHAT_ROW_AVATAR}
+                  >
+                    <UserAvatar
+                      src={client.profile_picture_url}
+                      name={client.full_name}
+                      size={CHAT_ROW_AVATAR}
+                      ring
+                      expandable={false}
+                    />
+                  </LiveAvatar>
+                </button>
+              }
+              name={client.full_name}
+              preview={
+                liftReview && liftReview.latestAt >= (last?.created_at ?? "")
+                  ? `Lift review · ${liftReview.count} waiting`
+                  : last
+                    ? previewPrefix(last as any) + (messagePreviewText(last.body, last.attachments) || "(attachment)")
+                    : "No messages yet"
+              }
+              extra={tags.length > 0 && (
+                // One quiet line of what's waiting. Tapping it (or their photo) opens the Brief.
+                <span className="mt-0.5 flex min-h-6 items-center gap-1.5" data-row-tags>
+                  <button
+                    type="button"
+                    data-open-brief-line
+                    aria-label={`Brief: ${client.full_name ?? "client"}. ${tags.map((t) => t.label).join(", ")}`}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
+                    className="-mx-1 inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-md px-1 py-0.5 text-left text-[13px] leading-[18px] transition hover:bg-secondary/60 active:bg-secondary"
+                  >
+                    <SignalLine tags={tags} />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden />
+                  </button>
+                  {workflow.state === "needs_response" && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Mark ${client.full_name ?? "conversation"} done`}
+                      title="No reply needed: mark done"
+                      onClick={(e) => { e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); } }}
+                      className="ml-auto hidden h-7 w-7 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600 [@media(hover:hover)]:grid"
+                    >
+                      <Check className="h-4 w-4" />
                     </span>
                   )}
-                </div>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className={cn("truncate flex-1 text-xs", unread > 0 ? "font-semibold text-foreground" : liftReview ? "text-foreground" : "text-muted-foreground")}>
-                    {liftReview && liftReview.latestAt >= (last?.created_at ?? "")
-                      ? `Lift review · ${liftReview.count} waiting`
-                      : last
-                        ? previewPrefix(last as any) + (messagePreviewText(last.body, last.attachments) || "(attachment)")
-                        : "No messages yet"}
-                  </span>
-                  {unread > 0 && (
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#007AFF]"
-                      aria-label={`${unread} unread message${unread === 1 ? "" : "s"}`}
-                      title={`${unread} unread`}
-                    />
-                  )}
-                </div>
-                {tags.length > 0 && (
-                  // One quiet line of what's waiting. Tapping it (or their photo) opens the Brief.
-                  <div className="mt-0.5 flex min-h-5 items-center gap-1.5" data-row-tags>
-                    <button
-                      type="button"
-                      data-open-brief-line
-                      aria-label={`Brief: ${client.full_name ?? "client"}. ${tags.map((t) => t.label).join(", ")}`}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); setBriefFor(client.id); }}
-                      className="-mx-1 inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-md px-1 py-0.5 text-left text-[11px] leading-4 transition hover:bg-secondary/60 active:bg-secondary"
-                    >
-                      <SignalLine tags={tags} />
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
-                    </button>
-                    {workflow.state === "needs_response" && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Mark ${client.full_name ?? "conversation"} done`}
-                        title="No reply needed: mark done"
-                        onClick={(e) => { e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); void changeWorkflow(client.id, "done", { undoFrom: "needs_response" }); } }}
-                        className="ml-auto hidden h-6 w-6 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600 [@media(hover:hover)]:grid"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+                </span>
+              )}
+            />
             </SwipeableRow>
           ))}
         </div>

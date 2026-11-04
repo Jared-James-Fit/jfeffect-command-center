@@ -5,12 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import {
-  BellOff, Check, ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil, Search, ShieldOff, SquarePen, MailOpen,
+  Check, ChevronLeft, Plus, Settings2, Users, Archive, Trash2, CheckSquare, X, Pencil, Search, ShieldOff, SquarePen, MailOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -38,7 +37,7 @@ import { DirectChatView, DirectRow, RequestsEntry, RequestsList } from "@/compon
 import { crewPreview, crewThreadsKey, isCrewUnread, useCrewThreads, type CrewThread } from "@/lib/crew-chats";
 import { CreateCrewSheet, CrewChatView, CrewFaces, CrewRow } from "@/components/crew-chat";
 import { listenChannel } from "@/lib/realtime-channel";
-import { fmtTime } from "@/components/chat-shared";
+import { CHAT_ROW_AVATAR, ChatListRow } from "@/components/messages/chat-list-row";
 import type { CommunityAuthor } from "@/lib/community";
 import {
   MAX_PINS, deletePatch, isHidden, isMarkedUnread, isMuted, isPinned, pinnedKeys, useChatPrefs, useSetChatPrefs,
@@ -62,8 +61,8 @@ export type PinnedChat = {
   live?: boolean;
   /** The list row's second line. */
   preview: string;
-  /** When the latest message was sent, already formatted. */
-  when: string;
+  /** When the latest message was sent (ISO): the row shows its age ("· 5m"). */
+  at: string | null;
   unread?: boolean;
   /** The coach's newest unread message, shown over the pinned face. */
   unreadPreview?: string | null;
@@ -535,74 +534,44 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
     if (r.direct) return <DirectRow thread={r.direct} me={me} selected={selectedId === r.key && !selectMode} onClick={onClick} unread={r.unread} muted={r.muted} leading={leading} />;
     const { group, last } = r.group!;
     return (
-      <div
-        role="button"
-        tabIndex={0}
+      <ChatListRow
+        as={selectMode && asAdmin ? "div" : "button"}
         onClick={onClick}
-        className={cn(
-          "flex w-full cursor-pointer items-start gap-2 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
-          selectedId === group.id && !selectMode && "bg-secondary/60",
-          selectMode && checked[group.id] && "bg-primary/10",
-          group.archived && "opacity-60",
-        )}
-      >
-        {selectMode && asAdmin && (
+        selected={selectedId === group.id && !selectMode}
+        className={cn(selectMode && checked[group.id] && "bg-primary/10")}
+        dim={group.archived}
+        unread={r.unread}
+        muted={r.muted}
+        at={last?.created_at}
+        leading={selectMode && asAdmin ? (
           <Checkbox
-            className="mt-1"
             checked={!!checked[group.id]}
             onCheckedChange={(v) => setChecked((s) => { const n = { ...s }; if (v) n[group.id] = true; else delete n[group.id]; return n; })}
             onClick={(e) => e.stopPropagation()}
           />
-        )}
-        {leading && <span className="self-center">{leading}</span>}
-        <GroupCover groupId={group.id} myRole={myPresenceRole} />
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <div className="flex items-center justify-between gap-2">
-            <span className={cn("truncate text-sm", r.unread ? "font-bold" : "font-semibold")}>
-              {group.name}
-            </span>
-            <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-              {r.muted && <BellOff className="h-3 w-3" aria-label="Alerts hidden" />}
-              {group.archived && <Archive className="h-3 w-3" />}
-              {last?.created_at && fmtTime(last.created_at)}
-            </span>
-          </div>
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <span className={cn("flex-1 truncate text-xs", r.unread ? "text-foreground" : "text-muted-foreground")}>
-              {last?.body || "No messages yet"}
-            </span>
-            {r.unread && (
-              <Badge className="h-4 min-w-[16px] rounded-full px-1 text-[10px]">1</Badge>
-            )}
-          </div>
-        </div>
-      </div>
+        ) : leading}
+        avatar={<GroupCover groupId={group.id} myRole={myPresenceRole} />}
+        name={group.name}
+        preview={last?.body || "No messages yet"}
+        after={group.archived ? <Archive className="h-4 w-4 text-muted-foreground" aria-label="Archived" /> : undefined}
+      />
     );
   };
 
   const coachRow = pinned && (
-    <button
-      type="button"
+    <ChatListRow
       onClick={() => openChat(pinned.id)}
-      className={cn(
-        "flex w-full items-center gap-3 border-b border-border/60 px-3 py-3 text-left transition hover:bg-secondary/40",
-        pinnedSelected && "bg-secondary/60",
-      )}
-    >
-      <LiveAvatar live={pinned.live} size={44}>
-        <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={44} ring expandable={false} />
-      </LiveAvatar>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-2">
-          <span className={cn("truncate text-[15px]", pinned.unread ? "font-bold" : "font-semibold")}>{pinned.name}</span>
-          <span className={cn("shrink-0 text-[11px]", pinned.unread ? "font-semibold text-primary" : "text-muted-foreground")}>{pinned.when}</span>
-        </span>
-        <span className="mt-0.5 flex items-center gap-2">
-          <span className={cn("flex-1 truncate text-[13px]", pinned.unread ? "text-foreground" : "text-muted-foreground")}>{pinned.preview}</span>
-          {pinned.unread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Unread" />}
-        </span>
-      </span>
-    </button>
+      selected={pinnedSelected}
+      unread={pinned.unread}
+      at={pinned.at}
+      avatar={
+        <LiveAvatar live={pinned.live} size={CHAT_ROW_AVATAR}>
+          <UserAvatar src={pinned.avatarUrl} name={pinned.name} size={CHAT_ROW_AVATAR} ring expandable={false} />
+        </LiveAvatar>
+      }
+      name={pinned.name}
+      preview={pinned.preview}
+    />
   );
 
   return (
@@ -643,7 +612,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             </div>
           </header>
         ) : (
-          <header className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center border-b border-border px-2 py-1.5">
+          <header className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center px-2 py-1.5">
             <div>
               {canEdit && (selectMode ? (
                 <Button size="sm" variant="ghost" className="h-9 px-2 font-semibold text-primary" onClick={() => { setSelectMode(false); setChecked({}); }}>
@@ -665,7 +634,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                 </DropdownMenu>
               ))}
             </div>
-            <div className="text-center text-lg font-bold tracking-tight">{pinned ? "Messages" : "Chats"}</div>
+            <div className="text-center text-xl font-semibold tracking-tight">{pinned ? "Messages" : "Chats"}</div>
             <div className="flex justify-end">
               {canEdit && !selectMode && (
                 <Button size="icon" variant="ghost" className="h-9 w-9 text-primary" onClick={() => setComposeOpen(true)} aria-label="New message" title="New message">
@@ -675,16 +644,16 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             </div>
           </header>
         )}
-        <div className="space-y-2 border-b border-border px-3 py-2">
+        <div className="space-y-2.5 px-4 pb-2 pt-1">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={asAdmin ? "Search groups" : "Search chats and people"}
               aria-label="Search chats"
-              className="h-9 w-full rounded-full border border-border bg-secondary/40 pl-9 pr-9 text-[15px] outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:bg-background [&::-webkit-search-cancel-button]:hidden"
+              className="h-10 w-full rounded-full border border-border bg-secondary/40 pl-10 pr-9 text-[16px] outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:bg-background [&::-webkit-search-cancel-button]:hidden"
             />
             {query && (
               <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
@@ -702,7 +671,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                 aria-selected={filter === key}
                 onClick={() => setFilter(key)}
                 className={cn(
-                  "h-7 shrink-0 rounded-full border px-3 text-xs font-semibold transition",
+                  "h-8 shrink-0 rounded-full border px-3.5 text-[14px] font-semibold transition",
                   filter === key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-secondary",
                 )}
               >
@@ -749,7 +718,7 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
             />
           )}
           {showGrid && (
-            <div className="flex flex-wrap items-end justify-center border-b border-border/60 px-2 py-2" aria-label="Pinned chats">
+            <div className="flex flex-wrap items-end justify-center px-2 py-2" aria-label="Pinned chats">
               {pinned && (
                 <PinTile
                   name={pinned.name}
@@ -957,52 +926,41 @@ function GroupFaces({ groupId, size }: { groupId: string; size: number }) {
   );
 }
 
-/** Stacked member avatars; anyone here now gets the turning live ring. */
-function GroupCover({ groupId, myRole }: { groupId: string; myRole: "admin" | "coach" | "client" | "member" }) {
+/**
+ * A coach-run group's face in the list: two members on a diagonal at the
+ * list's size (Instagram's group face), anyone here now with the turning
+ * live ring, or a group icon.
+ */
+function GroupCover({ groupId, myRole, size = CHAT_ROW_AVATAR }: { groupId: string; myRole: "admin" | "coach" | "client" | "member"; size?: number }) {
   const { data: rawMembers = [] } = useQuery({
     queryKey: ["group-member-profiles", groupId],
     queryFn: () => listGroupMemberProfiles(groupId),
     staleTime: 60_000,
   });
   const { others } = useGroupPresence(groupId, myRole);
-  const members = Array.isArray(rawMembers) ? rawMembers : [];
+  const members = Array.isArray(rawMembers) ? (rawMembers as GroupMemberProfile[]) : [];
   const liveIds = new Set(others.map((p) => p.user_id));
-  const visible = (members as GroupMemberProfile[]).slice(0, 2);
-  const extra = Math.max(0, members.length - visible.length);
+  const two = members.slice(0, 2);
 
-  if (visible.length === 0) {
+  if (two.length === 0) {
     return (
-      <div className="pointer-events-none grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-        <Users className="h-4 w-4" />
-      </div>
+      <span className="pointer-events-none grid shrink-0 place-items-center rounded-full bg-muted text-foreground" style={{ width: size, height: size }}>
+        <Users className="h-6 w-6" />
+      </span>
     );
   }
-
+  const face = (m: GroupMemberProfile, px: number) => (
+    <LiveAvatar live={liveIds.has(m.user_id)} size={px} tag={false}>
+      <UserAvatar src={m.avatar_url} name={m.full_name ?? "Member"} size={px} tone="neutral" expandable={false} />
+    </LiveAvatar>
+  );
+  if (two.length === 1) return <span className="pointer-events-none shrink-0">{face(two[0], size)}</span>;
+  const s = Math.round(size * 0.72);
   return (
-    <div
-      className="pointer-events-none relative flex h-10 shrink-0 items-center"
-      style={{ width: visible.length === 1 ? 36 : 50 }}
-    >
-      <div className="flex -space-x-2.5">
-        {visible.map((m) => (
-          <LiveAvatar key={m.user_id} live={liveIds.has(m.user_id)} size={32} tag={false}>
-            <UserAvatar
-              src={m.avatar_url}
-              name={m.full_name ?? "Member"}
-              size={32}
-              tone="neutral"
-              expandable={false}
-              className="border-2 border-card"
-            />
-          </LiveAvatar>
-        ))}
-      </div>
-      {extra > 0 && (
-        <span className="absolute -bottom-1 -right-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-secondary px-1 text-[9px] font-bold leading-none text-foreground ring-2 ring-card">
-          +{extra}
-        </span>
-      )}
-    </div>
+    <span className="pointer-events-none relative block shrink-0" style={{ width: size, height: size }} data-group-cover>
+      <span className="absolute right-0 top-0">{face(two[0], s)}</span>
+      <span className="absolute bottom-0 left-0 rounded-full ring-2 ring-card">{face(two[1], s)}</span>
+    </span>
   );
 }
 
