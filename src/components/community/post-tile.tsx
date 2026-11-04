@@ -4,6 +4,7 @@ import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { autoPostHasArt, featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
 import { focusPosition } from "@/lib/photo-frame";
+import { postArtCard } from "@/lib/instagram-export";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 // Small on purpose: Home's shelf loads this with the app, the feed card stays in its own chunk.
@@ -68,7 +69,7 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
           )}
         </GridCard>
       ) : post.kind === "note" ? (
-        <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)] text-left", pad, bottom)}>
+        <div className={cn("flex h-full w-full flex-col justify-between bg-muted text-left text-foreground", pad, bottom)}>
           <span className={cn("font-bold uppercase tracking-[0.14em] text-primary", large ? "text-[10px]" : "text-[8px]")}>{post.poll ? "Poll" : "Note"}</span>
           <span className={cn("font-semibold leading-snug", large ? "line-clamp-4 text-[15px]" : cn("text-[11px]", footer ? "line-clamp-4" : "line-clamp-5"))}>
             {post.quote ? `“${post.quote}”` : post.caption || (shared ? `“${shared.body || "📷"}”` : "")}
@@ -90,14 +91,14 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
         </GridCard>
       ) : (
         // a reopened workout without a photo: its words, else the session
-        <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)] text-left text-white", pad, bottom)}>
-          <span className={cn("font-bold uppercase tracking-[0.14em] text-red-400", large ? "text-[10px]" : "text-[8px]")}>Workout</span>
+        <div className={cn("flex h-full w-full flex-col justify-between bg-muted text-left text-foreground", pad, bottom)}>
+          <span className={cn("font-bold uppercase tracking-[0.14em] text-muted-foreground", large ? "text-[10px]" : "text-[8px]")}>Workout</span>
           <span className={cn("font-semibold leading-snug", large ? "line-clamp-4 text-[15px]" : cn("text-[11px]", footer ? "line-clamp-4" : "line-clamp-5"))}>
             {post.caption || <span className={cn("font-display uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{post.session_title ?? "Session"}</span>}
           </span>
         </div>
       )}
-      {(post.extra_media?.length ?? 0) > 0 || (autoPostHasArt(post) && !!post.media_type) ? (
+      {(post.extra_media?.length ?? 0) > 0 || (!!post.media_type && !!postArtCard(post)) ? (
         <Layers className={cn("absolute text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} aria-label="Carousel" />
       ) : (
         post.media_type === "video" && <Play className={cn("absolute fill-white text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} />
@@ -131,11 +132,12 @@ function TileImg({ src, onError, position }: { src: string; onError: () => void;
 
 type Box = { pad: string; bottom: string | false; large: boolean };
 
+/** Every card tile is the same plain surface with the theme; a PR says so in amber, never with a glow. */
 const CARD_BG = {
-  note: "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.28),transparent_60%)]",
-  workout: "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)] text-white",
-  pr: "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)] text-white",
-  lockin: "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)] text-white",
+  note: "bg-muted text-foreground",
+  workout: "bg-muted text-foreground",
+  pr: "bg-muted text-foreground",
+  lockin: "bg-muted text-foreground",
 } as const;
 
 /**
@@ -155,7 +157,7 @@ function GridCard({ tone, mark, children }: { tone: keyof typeof CARD_BG; mark?:
 /** What a card is, in its corner: a small pill (PR, Poll). */
 function TileMark({ children, tone = "red" }: { children: React.ReactNode; tone?: "red" | "gold" }) {
   return (
-    <span className={cn("rounded-full px-1.5 text-[8px] font-bold uppercase leading-[14px] tracking-[0.08em]", tone === "gold" ? "bg-amber-400 text-[#2b1700]" : "bg-primary/90 text-primary-foreground")}>{children}</span>
+    <span className={cn("rounded-full px-1.5 text-[8px] font-bold uppercase leading-[14px] tracking-[0.08em]", tone === "gold" ? "bg-warning/15 text-warning" : "bg-primary/90 text-primary-foreground")}>{children}</span>
   );
 }
 
@@ -167,17 +169,17 @@ function WorkoutTile({ stats, unit, pad, bottom, large }: { stats: WorkoutShareS
     return (
       <GridCard tone={pr ? "pr" : "workout"} mark={pr ? <TileMark tone="gold">PR</TileMark> : null}>
         <span className="font-display line-clamp-3 text-balance text-[15px] uppercase leading-[1.02]">{workoutHeadline(stats)}</span>
-        {lift && <span className={cn("font-display text-[13px] uppercase leading-none", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</span>}
+        {lift && <span className={cn("font-display text-[13px] uppercase leading-none", pr ? "text-warning" : "text-foreground/80")}>{formatTopSet(lift.detail, unit)}</span>}
       </GridCard>
     );
   return (
-    <div className={cn("flex h-full w-full flex-col justify-between text-white", pad, bottom, pr ? "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(245,158,11,0.45),#0b0b0e_60%)]" : "bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.5),#0b0b0e_60%)]")}>
-      {pr ? <span className={cn("w-max rounded-full bg-amber-400 font-bold uppercase text-[#2b1700]", large ? "px-2 py-px text-[10px]" : "px-1.5 text-[8px]")}>PR</span> : <span />}
+    <div className={cn("flex h-full w-full flex-col justify-between bg-muted text-foreground", pad, bottom)}>
+      {pr ? <span className={cn("w-max rounded-full bg-warning/15 font-bold uppercase text-warning", large ? "px-2 py-px text-[10px]" : "px-1.5 text-[8px]")}>PR</span> : <span />}
       <div>
-        {large && <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">Workout completed</div>}
+        {large && <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-success">Workout completed</div>}
         <div className={cn("font-display line-clamp-2 uppercase leading-[1.02]", large ? "text-[26px]" : "text-[15px]")}>{workoutHeadline(stats)}</div>
-        {large && workoutSubtitle(stats) && <div className="mt-0.5 truncate text-[11px] font-semibold text-white/60">{workoutSubtitle(stats)}</div>}
-        {lift && <div className={cn("font-display mt-0.5 uppercase", large ? "text-[19px]" : "text-[13px]", pr ? "text-amber-300" : "text-white/80")}>{formatTopSet(lift.detail, unit)}</div>}
+        {large && workoutSubtitle(stats) && <div className="mt-0.5 truncate text-[11px] font-semibold text-muted-foreground">{workoutSubtitle(stats)}</div>}
+        {lift && <div className={cn("font-display mt-0.5 uppercase", large ? "text-[19px]" : "text-[13px]", pr ? "text-warning" : "text-foreground/80")}>{formatTopSet(lift.detail, unit)}</div>}
       </div>
     </div>
   );
@@ -189,15 +191,15 @@ function LockInTile({ post, pad, bottom, large }: { post: CommunityPost } & Box)
     return (
       <GridCard tone="lockin" mark={isTrainingNow(post) ? <LiveDot size={8} tone="red" ring={false} /> : null}>
         <span className="font-display text-[17px] uppercase leading-none">Locked in</span>
-        {post.session_title && <span className="line-clamp-2 text-balance text-[10px] font-bold text-white/70">{post.session_title}</span>}
+        {post.session_title && <span className="line-clamp-2 text-balance text-[10px] font-bold text-muted-foreground">{post.session_title}</span>}
       </GridCard>
     );
   return (
-    <div className={cn("flex h-full w-full flex-col justify-between bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)] text-white", pad, bottom)}>
+    <div className={cn("flex h-full w-full flex-col justify-between bg-muted text-foreground", pad, bottom)}>
       {isTrainingNow(post) ? <LiveDot size={8} tone="red" ring={false} /> : <span />}
       <div>
         <div className={cn("font-display uppercase leading-none", large ? "text-[32px]" : "text-[17px]")}>Locked in</div>
-        <div className={cn("mt-0.5 line-clamp-2 font-bold text-white/70", large ? "text-[12px]" : "text-[10px]")}>{post.session_title}</div>
+        <div className={cn("mt-0.5 line-clamp-2 font-bold text-muted-foreground", large ? "text-[12px]" : "text-[10px]")}>{post.session_title}</div>
       </div>
     </div>
   );

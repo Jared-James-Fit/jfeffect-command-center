@@ -1,17 +1,20 @@
 /**
  * Pictures for automated posts from an image model (server only).
  *
- * Saturday Spirit used to go out with a drawing the app made in code. Now its
- * scene is a real picture: made for the next Saturday post as soon as it's up
- * next (it rides along as the library item's photo, so the coach sees it in
- * Crew → Posts a week ahead and can ask for another), and made for a Saturday
- * post that went out without one. The coach can also tap New picture on the
- * post. Runs from the post-pictures-tick hook (pg_cron) and makePostPicture.
+ * Every automated post (the daily series, Wins, the Recap, a lesson, a
+ * holiday, a birthday) goes out as a real photo with its words under it.
+ * A library post's photo is made as soon as it's up next for its day (it
+ * rides along as the item's photo, so the coach sees it in Crew → Posts
+ * ahead of time and can ask for another); a post the app writes on the day
+ * (Wins, the Recap, Tuesday's numbers, a lesson, a holiday, a birthday) gets
+ * one right after it goes out, and older posts are caught up. The coach can
+ * also tap New picture on the post. Runs from the post-pictures-tick hook
+ * (pg_cron) and makePostPicture.
  *
  * Model: OpenAI's image model (ChatGPT's) when OPENAI_API_KEY is set, else
  * Google's image model through the Lovable AI gateway the app already uses.
  */
-import { imageSize, scenePicturePrompt } from "@/lib/post-pictures";
+import { imageSize, pictureKind, postPicturePrompt, type PictureKind } from "@/lib/post-pictures";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 
 type Admin = any;
@@ -24,7 +27,14 @@ const GATEWAY_MODELS = ["google/gemini-3-pro-image-preview", "google/gemini-2.5-
 const BUCKET = "community-media";
 const STATUS_KEY = "post_pictures_status";
 /** After a failed try the tick waits this long before spending another call. */
-const BACKOFF_MS = 6 * 60 * 60 * 1000;
+const BACKOFF_MS = 2 * 60 * 60 * 1000;
+/** Posts out this recently without a photo come first (they're at the top of the feed). */
+const RECENT_MS = 36 * 60 * 60 * 1000;
+/** Older posts are caught up too, back this far. */
+const CATCH_UP_MS = 21 * 24 * 60 * 60 * 1000;
+/** The days with a library of posts, each with its picture made ahead. */
+const LIBRARY_DAYS = ["monday_motivation", "tuesday_tips", "try_it_thursday", "finish_strong_friday", "saturday_spirit"] as const;
+const DAY_OF: Record<(typeof LIBRARY_DAYS)[number], number> = { monday_motivation: 1, tuesday_tips: 2, try_it_thursday: 4, finish_strong_friday: 5, saturday_spirit: 6 };
 
 function fromBase64(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -147,37 +157,46 @@ async function removeOld(admin: Admin, paths: unknown[]) {
   if (mine.length) await admin.storage.from(BUCKET).remove(mine);
 }
 
-/** A new picture on a Saturday post (replacing one made here; never one the coach put on). */
+/** The prompt for a post or library item: its kind's shot and its own words. */
+function promptFor(kind: PictureKind, caption: string | null, data: any): string {
+  const scene = isSpiritScene(data?.scene) ? data.scene : null;
+  const title = typeof data?.lesson?.title === "string" ? data.lesson.title : null;
+  return postPicturePrompt(kind, caption, { scene, title });
+}
+
+/** A new photo on an automated post (replacing one made here; never one the coach put on). */
 export async function pictureForPost(admin: Admin, postId: string): Promise<PictureResult> {
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, series, series_data, caption, author_user_id, media_path, extra_media")
+    .select("id, kind, series, series_data, caption, author_user_id, media_path, extra_media, story_only")
     .eq("id", postId)
     .maybeSingle();
   if (!post) return { ok: false, reason: "Post not found" };
-  const scene = post.series_data?.scene;
-  if (post.series !== "saturday_spirit" || !isSpiritScene(scene)) return { ok: false, reason: "Only Saturday's scene posts get a made picture." };
+  const kind = post.kind === "note" && !post.story_only ? pictureKind(post) : null;
+  if (!kind) return { ok: false, reason: "Only the app's own posts get a made picture." };
   if (post.media_path && !madeHere(post.media_path)) return { ok: false, reason: "This post has your own photo on it. Remove it first to get a made picture." };
-  const made = await generatePicture(scenePicturePrompt(scene, post.caption));
+  const made = await generatePicture(promptFor(kind, post.caption, post.series_data));
   if (!made.ok) return made;
   const entry = await storePicture(admin, post.author_user_id, `post-${post.id}`, made.picture);
-  const { error } = await admin.rpc("community_apply_media", { _post_id: post.id, _media: [entry] });
+  // the made photo is the cover; anything else already on the post stays after it
+  const rest = (Array.isArray(post.extra_media) ? post.extra_media : []) as unknown[];
+  const { error } = await admin.rpc("community_apply_media", { _post_id: post.id, _media: [entry, ...(post.media_path ? rest : [])] });
   if (error) return { ok: false, reason: error.message };
   await removeOld(admin, [post.media_path]);
   return { ok: true, path: entry.path, provider: made.picture.provider };
 }
 
-/** A new picture on Saturday's next library post: it goes out with it (once), like a photo the coach added. */
+/** A new photo on a day's next library post: it goes out with it (once), like a photo the coach added. */
 export async function pictureForItem(admin: Admin, itemId: string): Promise<PictureResult> {
   const { data: item } = await admin.from("community_series_items").select("id, series, data, body, media").eq("id", itemId).maybeSingle();
   if (!item) return { ok: false, reason: "That post isn't in the library." };
-  const scene = item.data?.scene;
-  if (item.series !== "saturday_spirit" || !isSpiritScene(scene)) return { ok: false, reason: "Only Saturday's scene posts get a made picture." };
+  const kind = pictureKind({ series: item.series });
+  if (!kind) return { ok: false, reason: "This kind of post doesn't get a made picture." };
   const media = (Array.isArray(item.media) ? item.media : []) as { path?: string }[];
   if (media.some((m) => !madeHere(m?.path))) return { ok: false, reason: "This post has your own photo on it. Remove it first to get a made picture." };
   const { data: settings } = await admin.from("community_series_settings").select("author_user_id").maybeSingle();
   if (!settings?.author_user_id) return { ok: false, reason: "No account to post as yet." };
-  const made = await generatePicture(scenePicturePrompt(scene, item.body));
+  const made = await generatePicture(promptFor(kind, item.body, item.data));
   if (!made.ok) return made;
   const entry = await storePicture(admin, settings.author_user_id, `item-${item.id}`, made.picture);
   const { error } = await admin.from("community_series_items").update({ media: [entry] }).eq("id", item.id);
@@ -203,45 +222,71 @@ async function writeStatus(admin: Admin, status: TickStatus) {
   if (!data?.length) await admin.from("app_settings").insert({ key: STATUS_KEY, value });
 }
 
+/** The app's own posts out since `since` with no photo yet, newest first. */
+async function postsWithoutPicture(admin: Admin, since: string, limit: number): Promise<{ id: string }[]> {
+  const { data } = await admin
+    .from("community_posts")
+    .select("id, kind, series, series_data, story_only")
+    .eq("kind", "note")
+    .is("media_path", null)
+    .is("archived_at", null)
+    .gte("created_at", since)
+    .or("series.not.is.null,series_data->birthday.not.is.null")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []).filter((p: any) => !p.story_only && pictureKind(p));
+}
+
+/** The library days that are on, the soonest first (today counts if it hasn't gone out). */
+export function libraryDaysInOrder(on: string[], todayIsoDow: number): (typeof LIBRARY_DAYS)[number][] {
+  const ahead = (d: (typeof LIBRARY_DAYS)[number]) => (DAY_OF[d] - todayIsoDow + 7) % 7;
+  return LIBRARY_DAYS.filter((d) => on.includes(d)).sort((a, b) => ahead(a) - ahead(b));
+}
+
 /**
- * One picture per run, most visible first: a Saturday post out in the last
- * day and a half without one, else the next Saturday post (while Saturday
- * Spirit is on and posting isn't paused). A failure waits BACKOFF_MS.
+ * One picture per run, most visible first: an automated post out in the
+ * last day and a half without a photo; else the next library post of the
+ * soonest day that's on (while posting isn't paused); else an older post
+ * from the last three weeks. A failure waits BACKOFF_MS.
  */
 export async function runPostPicturesTick(admin: Admin): Promise<Record<string, unknown>> {
   const last = await readStatus(admin);
   if (last && !last.ok && Date.now() - Date.parse(last.at) < BACKOFF_MS) return { skipped: "waiting after a failed try", last };
 
-  const since = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
-  const { data: posts } = await admin
-    .from("community_posts")
-    .select("id, series_data")
-    .eq("series", "saturday_spirit")
-    .is("media_path", null)
-    .is("archived_at", null)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(3);
-  const post = (posts ?? []).find((p: any) => isSpiritScene(p?.series_data?.scene));
-
   let what: string | null = null;
   let result: PictureResult | null = null;
-  if (post) {
-    what = `post ${post.id}`;
-    result = await pictureForPost(admin, post.id);
+  const [recent] = await postsWithoutPicture(admin, new Date(Date.now() - RECENT_MS).toISOString(), 1);
+  if (recent) {
+    what = `post ${recent.id}`;
+    result = await pictureForPost(admin, recent.id);
   } else {
     const { data: settings } = await admin.from("community_series_settings").select("paused, series_on").maybeSingle();
-    if (!settings || settings.paused || !(settings.series_on ?? []).includes("saturday_spirit")) return { skipped: "Saturday Spirit is off" };
-    const { data: next } = await admin.rpc("community_series_next", { _series: "saturday_spirit" });
-    const item = Array.isArray(next) ? next[0] : next;
-    if (!item?.id || !isSpiritScene(item?.data?.scene)) return { skipped: "no Saturday scene up next" };
-    if (Array.isArray(item.media) && item.media.length) return { skipped: "next Saturday post already has a picture" };
-    what = `item ${item.id}`;
-    result = await pictureForItem(admin, item.id);
+    if (settings && !settings.paused) {
+      for (const series of libraryDaysInOrder(settings.series_on ?? [], isoDowIn("America/Winnipeg"))) {
+        const { data: next } = await admin.rpc("community_series_next", { _series: series });
+        const item = Array.isArray(next) ? next[0] : next;
+        if (!item?.id || (Array.isArray(item.media) && item.media.length)) continue;
+        what = `item ${item.id}`;
+        result = await pictureForItem(admin, item.id);
+        break;
+      }
+    }
+    if (!result) {
+      const [older] = await postsWithoutPicture(admin, new Date(Date.now() - CATCH_UP_MS).toISOString(), 1);
+      if (!older) return { skipped: "every post has its picture" };
+      what = `post ${older.id}`;
+      result = await pictureForPost(admin, older.id);
+    }
   }
   const status: TickStatus = result.ok
-    ? { at: new Date().toISOString(), ok: true, what, provider: result.provider }
-    : { at: new Date().toISOString(), ok: false, what, reason: result.reason };
+    ? { at: new Date().toISOString(), ok: true, what: what ?? undefined, provider: result.provider }
+    : { at: new Date().toISOString(), ok: false, what: what ?? undefined, reason: result.reason };
   await writeStatus(admin, status);
   return status;
+}
+
+/** Monday = 1 … Sunday = 7, in `tz`. */
+function isoDowIn(tz: string): number {
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(new Date());
+  return ({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 } as Record<string, number>)[day] ?? 1;
 }

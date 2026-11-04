@@ -14,6 +14,7 @@ import { POST_LIST_KEYS, useArchivePost, useDeletePost, useLeavePost, useMyCommu
 import { makePostPicture } from "@/lib/post-pictures.functions";
 import { extraScene, postSlides } from "@/lib/community";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
+import { pictureKind } from "@/lib/post-pictures";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
 import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
@@ -64,8 +65,8 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const canInstagram = viewerIsStaff && !isImpersonating && !post.story;
   // an automated post's painted picture (a post with its own photo saves those from Share to Instagram)
   const artCard = canInstagram ? postArtCard(post) : null;
-  // Saturday's scene: a picture made for it (or another one), unless the coach put their own photo on
-  const canPicture = canInstagram && post.series === "saturday_spirit" && isSpiritScene(extraScene(post.series_extra)) && (!post.media_path || post.media_path.includes("/post-pictures/"));
+  // an automated post's photo: one made for it (or another one), unless the coach put their own photo on
+  const canPicture = canInstagram && !!pictureKind(post) && (!post.media_path || post.media_path.includes("/post-pictures/"));
   const qc = useQueryClient();
   const makePicture = useServerFn(makePostPicture);
   const [making, setMaking] = useState(false);

@@ -74,10 +74,22 @@ export function WeekStrip({
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="text-xs font-semibold text-muted-foreground">
-          {trainingWeek && <span className="font-bold text-foreground">{trainingWeek} · </span>}
-          {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
-          {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
+        <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+          <span>
+            {trainingWeek && <span className="font-bold text-foreground">{trainingWeek} · </span>}
+            {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
+            {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
+          </span>
+          {/* only once you've moved off today */}
+          {!isSameDay(selectedDate, today) && (
+            <button
+              type="button"
+              onClick={() => onSelectDate(today)}
+              className="-my-2 inline-flex h-10 items-center rounded-lg px-2 text-xs font-semibold text-primary hover:bg-secondary"
+            >
+              Today
+            </button>
+          )}
         </div>
         <button
           type="button"

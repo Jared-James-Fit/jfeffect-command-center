@@ -124,24 +124,27 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
     const made: string[] = [];
     setFailed(false);
     (async () => {
-      const out: Prepared[] = [];
+      const cardItems: Prepared[] = [];
+      const slideItems: Prepared[] = [];
+      // the card goes first, or after the photos when it carries the numbers (plan.cardLast)
+      const cardAt = plan.cardLast ? plan.slides.length : 0;
       if (plan.card) {
         const card = plan.card;
         // 4:5: the feed's own picture (kept, or painted once for both); 9:16: painted for the story
         const file =
           format === "feed"
-            ? (await loadPostArt(postArtKey(post, card, unit), instagramFileName(post, 0, "image/jpeg"), () => paintCardFile(post, card, "feed", unit, artHost)))?.file
+            ? (await loadPostArt(postArtKey(post, card, unit), instagramFileName(post, cardAt, "image/jpeg"), () => paintCardFile(post, card, "feed", unit, artHost)))?.file
             : await paintCardFile(post, card, format, unit, artHost);
         if (!file) throw new Error("card");
-        out.push({ file, url: "", video: false, aspect: `${IG_SIZES[format].w} / ${IG_SIZES[format].h}` });
+        cardItems.push({ file, url: "", video: false, aspect: `${IG_SIZES[format].w} / ${IG_SIZES[format].h}` });
       }
       if (plan.slides.length) {
         const key = `${post.id}:${attempt}`;
-        if (slidesRef.current?.key !== key) slidesRef.current = { key, files: slideFiles(post, plan.slides, plan.card ? 1 : 0) };
+        if (slidesRef.current?.key !== key) slidesRef.current = { key, files: slideFiles(post, plan.slides, plan.card && !plan.cardLast ? 1 : 0) };
         const files = await slidesRef.current.files;
-        files.forEach((file, i) => out.push({ file, url: "", video: file.type.startsWith("video/"), aspect: slideAspect(plan.slides[i]) }));
+        files.forEach((file, i) => slideItems.push({ file, url: "", video: file.type.startsWith("video/"), aspect: slideAspect(plan.slides[i]) }));
       }
-      return out;
+      return plan.cardLast ? [...slideItems, ...cardItems] : [...cardItems, ...slideItems];
     })()
       .then((out) => {
         if (!alive) return;
@@ -261,7 +264,7 @@ export function InstagramShareSheet({ post, open, onOpenChange, unit: shownUnit 
               )
             ) : (
               Array.from({ length: Math.max(1, count) }, (_, i) => (
-                <div key={i} className="grid h-[200px] shrink-0 place-items-center rounded-2xl bg-muted" style={{ aspectRatio: i === 0 && plan.card ? cardShape : "4 / 5" }}>
+                <div key={i} className="grid h-[200px] shrink-0 place-items-center rounded-2xl bg-muted" style={{ aspectRatio: plan.card && i === (plan.cardLast ? count - 1 : 0) ? cardShape : "4 / 5" }}>
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Getting it ready" />
                 </div>
               ))

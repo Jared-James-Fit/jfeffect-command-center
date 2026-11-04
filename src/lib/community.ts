@@ -1130,9 +1130,9 @@ export function isAutoPost(post: Pick<CommunityPost, "kind" | "series" | "series
   return post.kind === "note" && !post.story && (!!post.series || !!extraBirthday(post));
 }
 
-/** An automated post whose picture is its painted card (a lesson's comes before any photo on it); else its own photo is. */
+/** An automated post whose picture is its painted card: one with no photo yet (a photo always leads). */
 export function autoPostHasArt(post: Pick<CommunityPost, "kind" | "series" | "series_data" | "story" | "media_type">): boolean {
-  return isAutoPost(post) && (!post.media_type || post.series === "lesson");
+  return isAutoPost(post) && !post.media_type;
 }
 
 export function extraScene(e: SeriesExtra | null | undefined): string | null {

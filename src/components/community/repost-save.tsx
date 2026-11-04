@@ -189,12 +189,12 @@ export function SaveButton({ post }: { post: CommunityPost }) {
   );
 }
 
-/** A tile's picture: the post's photo, else a few of its words on the brand tint. */
+/** A tile's picture: the post's photo, else a few of its words on a plain surface with the theme. */
 export function CoverFace({ cover, url, className }: { cover: SaveCover | undefined; url: string | null | undefined; className?: string }) {
   if (!cover) return <div className={cn("bg-muted", className)} />;
   if (url) return <img src={url} alt="" loading="lazy" decoding="async" draggable={false} className={cn("h-full w-full object-cover", className)} />;
   return (
-    <div className={cn("flex h-full w-full items-end bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.45),#111114_65%)] p-1.5 text-left text-white", className)}>
+    <div className={cn("flex h-full w-full items-end bg-muted p-1.5 text-left text-foreground", className)}>
       <span className="line-clamp-3 text-[9px] font-semibold leading-snug">{cover.text ?? (cover.kind === "workout" ? "Workout" : "Post")}</span>
     </div>
   );

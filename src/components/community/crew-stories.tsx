@@ -973,7 +973,7 @@ function StoryFrame({ post, unit, clip }: { post: CommunityPost; unit: "kg" | "l
   }
   const words = storyWords(post);
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col items-center bg-[radial-gradient(120%_90%_at_80%_0%,rgba(239,51,64,0.35),transparent_60%)] bg-zinc-950 px-8", place)} style={layout.style} data-story-frame="words">
+    <div className={cn("flex min-h-0 flex-1 flex-col items-center bg-zinc-950 px-8", place)} style={layout.style} data-story-frame="words">
       <p className="line-clamp-[12] whitespace-pre-wrap text-center text-[24px] font-bold leading-snug">{words.text}</p>
       {words.by && <p className="mt-3 text-center text-[14px] font-semibold text-white/60">{words.by}</p>}
     </div>
@@ -1253,7 +1253,7 @@ function StoryEndCard({
   const feedFaces = [...new Map(end.feedNew.map((p) => [p.author.user_id, p.author])).values()].slice(0, 3);
   return (
     <div
-      className="relative flex min-h-0 flex-1 flex-col bg-zinc-950 bg-[radial-gradient(110%_60%_at_50%_0%,rgba(239,51,64,0.30),transparent_65%)] animate-in fade-in duration-300"
+      className="relative flex min-h-0 flex-1 flex-col bg-zinc-950 animate-in fade-in duration-300"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       data-story-end

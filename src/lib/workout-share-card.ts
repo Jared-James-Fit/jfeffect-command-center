@@ -240,7 +240,7 @@ export function darkGlow(ctx: Ctx, W: number, H: number, tint: "red" | "gold") {
 }
 
 /** Small brand mark + date. `y` is the baseline. */
-export function brandRow(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: number, W: number, dateLabel: string | null, alpha = 0.72) {
+export function brandRow(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: number, W: number, dateLabel: string | null, alpha = 0.72, color: string = INK) {
   const size = 36;
   ctx.save();
   ctx.textBaseline = "alphabetic";
@@ -255,7 +255,7 @@ export function brandRow(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: 
     bx += size + 14;
   }
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = INK;
+  ctx.fillStyle = color;
   ctx.textAlign = "left";
   ctx.font = font(800, 24);
   setSpacing(ctx, 4);
