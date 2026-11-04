@@ -122,7 +122,8 @@ export function ChatListRow({
           )}
         >
           <span className="truncate">{preview}</span>
-          {age && <span className="shrink-0 whitespace-pre" data-chat-age>{` · ${age}`}</span>}
+          {/* the age stays grey and regular, unread or not (Instagram's "2 new messages · 1m") */}
+          {age && <span className="shrink-0 whitespace-pre font-normal text-muted-foreground" data-chat-age>{` · ${age}`}</span>}
         </span>
         {extra}
       </span>

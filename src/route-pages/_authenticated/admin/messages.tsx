@@ -838,13 +838,10 @@ export function MessagesInbox({
                   aria-label={n ? `${label}, ${n}` : label}
                   aria-pressed={on}
                   className={cn(
-                    "inline-flex h-8 shrink-0 items-center rounded-full text-[14px] font-semibold transition",
+                    // Instagram's chips: the one you're on is a grey fill, the rest outlined
+                    "inline-flex h-8 shrink-0 items-center rounded-full border text-[15px] font-semibold text-foreground transition",
                     n ? "pl-3.5 pr-1.5" : "px-3.5",
-                    on
-                      ? "bg-primary text-primary-foreground"
-                      : n
-                        ? "bg-secondary/60 text-foreground hover:bg-secondary"
-                        : "bg-secondary/60 text-muted-foreground hover:bg-secondary",
+                    on ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60",
                   )}
                 >
                   {label}
@@ -853,7 +850,7 @@ export function MessagesInbox({
                       data-filter-badge={FILTER_BADGE[f]}
                       className={cn(
                         "ml-1.5 inline-block h-5 min-w-5 rounded-full px-1.5 text-center text-[12px] font-bold leading-5 tabular-nums",
-                        on ? "bg-primary-foreground/25 text-primary-foreground" : BADGE_STYLE[FILTER_BADGE[f]!],
+                        BADGE_STYLE[FILTER_BADGE[f]!],
                       )}
                     >
                       {badgeNumber(n)}

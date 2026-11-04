@@ -41,6 +41,20 @@ describe("chat lists are Instagram's size", () => {
     expect(row({ unread: true, dot: false })).not.toContain("data-chat-unread");
   });
 
+  it("the age stays grey and regular even on an unread chat, like Instagram's \"2 new messages · 1m\"", () => {
+    const unread = row({ unread: true });
+    expect(unread).toMatch(/class="shrink-0 whitespace-pre font-normal text-muted-foreground" data-chat-age="true"> · 5m</);
+  });
+
+  it("filter chips are Instagram's: the one you're on is a grey fill, never the brand red", () => {
+    const admin = read("src/route-pages/_authenticated/admin/messages.tsx");
+    expect(admin).toContain('on ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60"');
+    expect(admin).not.toContain('"bg-primary-foreground/25 text-primary-foreground"');
+    const pane = read("src/components/group-chats-pane.tsx");
+    expect(pane).toContain('filter === key ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60"');
+    expect(pane).not.toContain('filter === key ? "border-primary bg-primary');
+  });
+
   it("muted shows the bell; a row holding its own button is a div acting as one", () => {
     expect(row({ muted: true })).toContain('aria-label="Alerts hidden"');
     const div = row({ as: "div" });
