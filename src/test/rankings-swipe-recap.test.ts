@@ -33,7 +33,7 @@ describe("Rankings: swipe between Monthly and Strength", () => {
 
 describe("Monthly board: you first, one board, the rest folded", () => {
   it("your rank, points and next step sit above the board; the breakdown is one tap away", () => {
-    expect(card).toContain("<YouPanel me={me} rows={rows} />");
+    expect(card).toContain("<YouPanel me={me} rows={rows} finalWeek={finalWeek} />");
     expect(card.indexOf("<YouPanel")).toBeLessThan(card.indexOf('aria-label="Standings"'));
     expect(card).toContain("{standingText(standing)}");
     expect(card).toContain("aria-expanded={open}");
@@ -56,25 +56,26 @@ describe("Monthly board: you first, one board, the rest folded", () => {
     expect(card).toContain("data-tiebreak-rule");
     expect(card.indexOf("data-tiebreak-rule")).toBeLessThan(card.indexOf("Final Week Boost: finish 90%+"));
   });
-  it("the Final Week Boost: a quiet progress line all month, the race card in the final week", () => {
-    expect(card).toContain("me?.qualified && finalWeek ? (");
+  it("the Final Week Boost: one line inside your panel all month, one plain card in the final week", () => {
+    expect(card).toContain("{!finalWeek && <BoostProgressLine me={me} />}");
+    expect(card).toContain("{me?.qualified && finalWeek && (");
     expect(card).toContain("<BoostHero me={me} rows={rows} />");
-    expect(card).toContain("<BoostProgressLine me={me} />");
   });
 });
 
-describe("Recap: on top in recap week, a big tile under the board after, never dismissible", () => {
-  it("the banner above the Monthly / Strength switch only in recap week; then one tile under the board; no ✕ or hidden state", () => {
+describe("Recap: on top in recap week, under the board after, never dismissible", () => {
+  it("one card: above the Monthly / Strength switch only in recap week, then under the board; no ✕ or hidden state", () => {
     expect(hub).toContain("{inRecapWindow() && <LeagueRecapButton />}");
     expect(hub.indexOf("<LeagueRecapButton />")).toBeLessThan(hub.indexOf('aria-label="Leaderboard"'));
-    // never both: the row is the rest of the month
-    expect(card).toContain('{!inRecapWindow() && <LeagueRecapButton variant="tile" />}');
-    expect(card.indexOf('<LeagueRecapButton variant="tile" />')).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
-    // big enough to find: a 56px video-style thumbnail with the play button, your finish under the title
-    const tile = recap.slice(recap.indexOf('if (variant === "tile")'));
-    expect(tile).toContain('className="grid h-14 w-14 shrink-0 place-items-center rounded-xl shadow-sm"');
-    expect(tile).toContain("text-[15px] font-bold");
+    // never both: under the board the rest of the month
+    expect(card).toContain("{!inRecapWindow() && <LeagueRecapButton />}");
+    expect(card.indexOf("<LeagueRecapButton />")).toBeGreaterThan(card.indexOf('aria-label="Standings"'));
+    // big enough to find, plain like the page: a 56px dark thumbnail that plays, your finish under the title
+    const tile = recap.slice(recap.indexOf("export function LeagueRecapButton"));
+    expect(tile).toContain('className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-foreground text-background"');
+    expect(tile).toContain("text-[15px] font-semibold");
     expect(tile).toContain("{result}");
+    expect(tile).not.toMatch(/gradient|shadow|font-black|font-bold/);
     expect(recap).not.toContain("Dismiss recap");
     expect(recap).not.toContain("jf-recap-dismissed");
     expect(recap).not.toMatch(/localStorage/);
@@ -94,5 +95,28 @@ describe("Home order", () => {
     expect(today).toBeGreaterThan(-1);
     expect(today).toBeLessThan(progress);
     expect(home).not.toContain("HomeLeaguePreviews");
+  });
+});
+
+describe("Monthly board: calm, plain and easy to read", () => {
+  const boost = read("src/components/portal/league-boost.tsx");
+  const spot = read("src/components/community/rankings-spotlight.tsx");
+  it("says what the League is under its title, in one line", () => {
+    expect(card).toContain("{LEAGUE_ONE_LINER}");
+    expect(read("src/lib/league-standing.ts")).toContain('export const LEAGUE_ONE_LINER = "Train and log to earn points. Most points wins.";');
+  });
+  it("one design system: no gradients, glows, shouting caps or brand red on the board, the boost or the podiums", () => {
+    for (const [name, src] of [["card", card], ["boost", boost], ["spotlight", spot]] as const) {
+      expect(src, name).not.toMatch(/gradient|shadow-lg|font-black|uppercase|text-primary|bg-primary|orange-/);
+    }
+    // you're picked out in grey, not red
+    expect(card).toContain('r.is_me && "bg-muted/60"');
+    // colour only where it means something: green for an unlocked boost, amber for the last days
+    expect(card).toContain('ready ? "bg-emerald-500" : "bg-foreground/70"');
+    expect(card).toContain('finalWeek ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"');
+  });
+  it("the board is one row a person: rank, face, name, points (the final week adds one short line only when it matters)", () => {
+    expect(card).toContain('<ol className="mt-3 divide-y divide-border/60 border-t border-border/60" aria-label="Standings">');
+    expect(boost).not.toContain("Projected:");
   });
 });

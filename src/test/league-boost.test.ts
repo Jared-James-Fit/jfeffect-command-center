@@ -47,11 +47,12 @@ const row = (o: Partial<LeagueRow>): LeagueRow => ({
 });
 
 describe("leaderboard boost tags", () => {
-  it("keeps labels short and honest", () => {
-    expect(boostTag({ boost_status: "ready", needed_workouts: 0 })).toBe("🔥 BOOST READY");
-    expect(boostTag({ boost_status: "chasing", needed_workouts: 1 })).toBe("🔥 1 WORKOUT LEFT");
-    expect(boostTag({ boost_status: "chasing", needed_workouts: 2 })).toBe("🔥 2 WORKOUTS LEFT");
-    expect(boostTag({ boost_status: "chasing", needed_workouts: 5 })).toBe("🔥 IN THE RACE");
+  it("keeps labels short, plain and honest (only who's unlocked it or one or two away)", () => {
+    expect(boostTag({ boost_status: "ready", needed_workouts: 0 })).toBe("Boost unlocked");
+    expect(boostTag({ boost_status: "chasing", needed_workouts: 1 })).toBe("1 workout to unlock");
+    expect(boostTag({ boost_status: "chasing", needed_workouts: 2 })).toBe("2 workouts to unlock");
+    // further off: nothing, so the board stays one line a person
+    expect(boostTag({ boost_status: "chasing", needed_workouts: 5 })).toBeNull();
     expect(boostTag({ boost_status: "out", needed_workouts: 3 })).toBeNull();
     expect(boostTag({ boost_status: "none", needed_workouts: 0 })).toBeNull();
   });
@@ -59,10 +60,15 @@ describe("leaderboard boost tags", () => {
 
 describe("final-week hero", () => {
   it("escalates as the athlete gets closer", () => {
-    expect(heroState({ boost_status: "chasing", needed_workouts: 3 })).toMatchObject({ tone: "hype", headline: "3 workouts to go" });
-    expect(heroState({ boost_status: "chasing", needed_workouts: 2 })).toMatchObject({ headline: "2 WORKOUTS LEFT", sub: "Finish them → Unlock the boost" });
-    expect(heroState({ boost_status: "chasing", needed_workouts: 1 })).toMatchObject({ headline: "ONE WORKOUT LEFT", sub: "Finish it → Workout Points Match unlocked" });
-    expect(heroState({ boost_status: "ready", needed_workouts: 0 })).toMatchObject({ tone: "win", eyebrow: "🔥 BOOST UNLOCKED", sub: "Workout Points Match secured" });
+    expect(heroState({ boost_status: "chasing", needed_workouts: 3 })).toMatchObject({ tone: "hype", eyebrow: "Final Week Boost", headline: "3 workouts to go" });
+    expect(heroState({ boost_status: "chasing", needed_workouts: 2 })).toMatchObject({ headline: "2 workouts to go", sub: "Finish them to unlock the boost" });
+    expect(heroState({ boost_status: "chasing", needed_workouts: 1 })).toMatchObject({ headline: "1 workout to go", sub: "Finish it to unlock the boost" });
+    expect(heroState({ boost_status: "ready", needed_workouts: 0 })).toMatchObject({ tone: "win", headline: "Boost unlocked", sub: "Your workout points match the month's best" });
+    // sentence case: nothing shouts
+    for (const n of [0, 1, 2, 5]) {
+      const s = heroState({ boost_status: n ? "chasing" : "ready", needed_workouts: n });
+      expect(`${s.eyebrow} ${s.headline} ${s.sub}`).not.toMatch(/[A-Z]{3,}|🔥/);
+    }
   });
 
   it("never hypes an athlete who can no longer qualify", () => {
@@ -70,7 +76,7 @@ describe("final-week hero", () => {
       const s = heroState({ boost_status: status, needed_workouts: 4 });
       expect(s.tone).toBe("neutral");
       expect(`${s.eyebrow} ${s.headline} ${s.sub}`).not.toMatch(/unlock|left|to go|🔥/i);
-      expect(s.headline).toBe("90% monthly adherence required");
+      expect(s.headline).toBe("Needs 90% of this month's workouts");
     }
   });
 });

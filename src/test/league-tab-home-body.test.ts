@@ -101,7 +101,10 @@ describe("Rankings", () => {
   it("Logging Level is gone from the client app (its points still feed Milestones)", () => {
     expect(card).not.toContain("Logging Level</span>");
     expect(card).not.toContain("LevelsView");
-    expect(card).toContain("<MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} />");
+    // Milestones: a row under the board (one tap away), not inside it
+    expect(card).toContain('<MyAchievementsRow catalog={catalog} earned={earned} metrics={stats} variant="row" />');
+    expect(card.indexOf("<MyAchievementsRow")).toBeGreaterThan(card.indexOf("final standings <ChevronRight"));
+    expect(card.indexOf("<MyAchievementsRow")).toBeLessThan(card.indexOf("<HowPointsWork />"));
     expect(read("src/components/records/workout-points-card.tsx")).not.toContain("TrendingUp");
   });
   it("new-milestone reveals pop on Home, once (not again on Rankings)", () => {
