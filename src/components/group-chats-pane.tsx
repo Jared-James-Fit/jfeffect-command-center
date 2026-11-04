@@ -671,8 +671,9 @@ export function GroupChatsPane({ asAdmin, pinned }: { asAdmin: boolean; pinned?:
                 aria-selected={filter === key}
                 onClick={() => setFilter(key)}
                 className={cn(
-                  "h-8 shrink-0 rounded-full border px-3.5 text-[14px] font-semibold transition",
-                  filter === key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-secondary",
+                  // Instagram's chips: the one you're on is a grey fill, the rest outlined
+                  "h-8 shrink-0 rounded-full border px-3.5 text-[15px] font-semibold text-foreground transition",
+                  filter === key ? "border-transparent bg-secondary" : "border-border bg-background hover:bg-secondary/60",
                 )}
               >
                 {label}
