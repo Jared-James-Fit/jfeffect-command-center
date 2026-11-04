@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CalendarDays, CalendarPlus, CalendarRange, Plus, Ticket, SlidersHorizontal, ChevronRight, StickyNote } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarRange, Plus, Ticket, SlidersHorizontal, ChevronRight, StickyNote, MessageSquare } from "lucide-react";
 import { GoogleImportDialog } from "@/components/sessions/google-import-dialog";
 import { PrebookDialog } from "@/components/sessions/prebook-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
@@ -159,6 +159,7 @@ export function ClientSessionsPanel({
 
   // Why a session was cancelled, moved or missed: the coach's own notes, never shown to the client.
   const { data: coachNotes } = useCoachNotes(clientId);
+  const clientFirst = client?.first_name || String(client?.full_name ?? "").split(" ")[0] || "client";
 
   const { data: balance = [] } = useQuery<SessionBalanceRow[]>({
     queryKey: ["pt-balance", clientId],
@@ -345,6 +346,13 @@ export function ClientSessionsPanel({
                         <div className="mt-0.5 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-200">
                           <StickyNote className="mt-0.5 h-3 w-3 shrink-0" />
                           <span className="line-clamp-2">{coachNotes.get(s.id)}</span>
+                        </div>
+                      )}
+                      {/* The note on the session itself is the client's to read: said so, so it's never mistaken for a private one. */}
+                      {s.notes?.trim() && s.client_visible_notes !== false && (
+                        <div className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground" data-client-note>
+                          <MessageSquare className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span className="line-clamp-2">To {clientFirst}: {s.notes.trim()}</span>
                         </div>
                       )}
                     </div>
