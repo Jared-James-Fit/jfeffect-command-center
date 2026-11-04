@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { THEME_BOOT_SCRIPT, useThemeSync } from "@/lib/theme";
+import { IOS_WEB_APP_BOOT_SCRIPT } from "@/lib/ios-edge";
 import { installShakeUndoGuard } from "@/lib/shake-undo-guard";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
@@ -358,6 +359,8 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         {/* Applies the saved light/dark preference before first paint. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        {/* The iPhone home-screen app: top bars start below iOS's own blur (ios-edge.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: IOS_WEB_APP_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -401,7 +404,7 @@ function RootComponent() {
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
             <RouteTracker />
-            <Toaster position="top-right" theme="dark" richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + 72px)", right: "16px", left: "16px" }} />
+            <Toaster position="top-right" theme="dark" richColors offset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px" }} mobileOffset={{ top: "calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room, 0px) + 72px)", right: "16px", left: "16px" }} />
             <ProgressDrawer />
             <GlobalHighlight />
             <OnlineOfflineBanner />
