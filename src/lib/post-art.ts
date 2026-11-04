@@ -57,7 +57,7 @@ function wordsHead(post: CommunityPost): string {
   if (post.quote?.trim()) return `“${post.quote.trim()}”`;
   const line = (post.caption ?? "").split("\n").map((l) => l.trim()).find(Boolean);
   if (line) return line;
-  return post.series && post.series !== "holiday" ? SERIES_LABEL[post.series].name : "Coach post";
+  return post.series && post.series !== "holiday" && post.series !== "daily_visual" ? SERIES_LABEL[post.series].name : "Coach post";
 }
 
 /** What the picture says, for screen readers. */

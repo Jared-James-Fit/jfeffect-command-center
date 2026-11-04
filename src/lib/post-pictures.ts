@@ -57,7 +57,9 @@ export type PictureKind =
   | "sunday_recap"
   | "lesson"
   | "holiday"
-  | "birthday";
+  | "birthday"
+  /** A daily picture (daily-visuals.ts): made again from its own day's scene. */
+  | "daily_visual";
 
 const KINDS: PictureKind[] = [
   "monday_motivation",
@@ -69,10 +71,14 @@ const KINDS: PictureKind[] = [
   "sunday_recap",
   "lesson",
   "holiday",
+  "daily_visual",
 ];
 
 /** A post (or library item) the app makes, and so can get a made photo (the coach's New picture): its kind. */
-export function pictureKind(p: { series?: string | null; series_data?: unknown }): PictureKind | null {
+export function pictureKind(p: {
+  series?: string | null;
+  series_data?: unknown;
+}): PictureKind | null {
   if (p.series && (KINDS as string[]).includes(p.series)) return p.series as PictureKind;
   const d = p.series_data as { birthday?: unknown } | null | undefined;
   return !p.series && d && typeof d === "object" && d.birthday ? "birthday" : null;
@@ -110,16 +116,23 @@ export const KIND_PICTURE: Record<Exclude<PictureKind, "saturday_spirit">, strin
     "The holiday's feeling in a real, warm everyday scene (people together, the food, the season), bright and joyful.",
   birthday:
     "A birthday cake with lit candles sitting on a bench in a bright strength gym, a few balloons, cheerful and warm.",
+  // made again from the day's own scene (daily-visuals.server.ts repictureDailyPost); this is only the fallback
+  daily_visual: "A calm, clean everyday scene that shows the post's feeling without words.",
 };
 
-const clean = (s: string | null | undefined) => String(s ?? "").replace(/\s+/g, " ").trim();
+const clean = (s: string | null | undefined) =>
+  String(s ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /** The prompt for a Saturday scene's picture; the post's own words set the mood. */
 export function scenePicturePrompt(scene: SpiritSceneKey, caption?: string | null): string {
   const words = clean(caption).slice(0, 200);
   return [
     `A picture for a strength coach's Saturday post. ${SCENE_PICTURE[scene]}`,
-    words ? `The post says: "${words}". The picture should make that feeling land without any words.` : "",
+    words
+      ? `The post says: "${words}". The picture should make that feeling land without any words.`
+      : "",
     PICTURE_STYLE,
   ]
     .filter(Boolean)
@@ -127,13 +140,22 @@ export function scenePicturePrompt(scene: SpiritSceneKey, caption?: string | nul
 }
 
 /** The prompt for any automated post's photo: its kind's shot, then what it says. */
-export function postPicturePrompt(kind: PictureKind, caption?: string | null, opts: { scene?: SpiritSceneKey | null; title?: string | null } = {}): string {
+export function postPicturePrompt(
+  kind: PictureKind,
+  caption?: string | null,
+  opts: { scene?: SpiritSceneKey | null; title?: string | null } = {},
+): string {
   if (kind === "saturday_spirit" && opts.scene) return scenePicturePrompt(opts.scene, caption);
-  const shot = kind === "saturday_spirit" ? "A real, simple scene that makes the post's feeling land." : KIND_PICTURE[kind];
+  const shot =
+    kind === "saturday_spirit"
+      ? "A real, simple scene that makes the post's feeling land."
+      : KIND_PICTURE[kind];
   const words = clean([opts.title, caption].filter(Boolean).join(". ")).slice(0, 320);
   return [
     `The cover photo for a strength coach's Instagram post. ${shot}`,
-    words ? `The post says: "${words}". The photo should fit what it's about without showing any words.` : "",
+    words
+      ? `The post says: "${words}". The photo should fit what it's about without showing any words.`
+      : "",
     PICTURE_STYLE,
   ]
     .filter(Boolean)
@@ -141,7 +163,9 @@ export function postPicturePrompt(kind: PictureKind, caption?: string | null, op
 }
 
 /** An image file's type and size from its first bytes (PNG, JPEG, WebP), or null. */
-export function imageSize(bytes: Uint8Array): { mime: string; width: number; height: number } | null {
+export function imageSize(
+  bytes: Uint8Array,
+): { mime: string; width: number; height: number } | null {
   const b = bytes;
   const u16be = (i: number) => (b[i] << 8) | b[i + 1];
   const u32be = (i: number) => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
@@ -158,17 +182,39 @@ export function imageSize(bytes: Uint8Array): { mime: string; width: number; hei
       }
       const marker = b[i + 1];
       // start of frame (not DHT 0xc4, JPG 0xc8, DAC 0xcc)
-      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (
+        marker >= 0xc0 &&
+        marker <= 0xcf &&
+        marker !== 0xc4 &&
+        marker !== 0xc8 &&
+        marker !== 0xcc
+      ) {
         return { mime: "image/jpeg", width: u16be(i + 7), height: u16be(i + 5) };
       }
       i += 2 + u16be(i + 2);
     }
     return null;
   }
-  if (b.length >= 30 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+  if (
+    b.length >= 30 &&
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
+  ) {
     const kind = String.fromCharCode(b[12], b[13], b[14], b[15]);
-    if (kind === "VP8X") return { mime: "image/webp", width: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), height: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) };
-    if (kind === "VP8 ") return { mime: "image/webp", width: u16le(26) & 0x3fff, height: u16le(28) & 0x3fff };
+    if (kind === "VP8X")
+      return {
+        mime: "image/webp",
+        width: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)),
+        height: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)),
+      };
+    if (kind === "VP8 ")
+      return { mime: "image/webp", width: u16le(26) & 0x3fff, height: u16le(28) & 0x3fff };
     if (kind === "VP8L") {
       const v = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
       return { mime: "image/webp", width: (v & 0x3fff) + 1, height: ((v >> 14) & 0x3fff) + 1 };
