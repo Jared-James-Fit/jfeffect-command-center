@@ -15,11 +15,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SESSION_TYPES, SESSION_STATUSES, COMMON_TIMEZONES, statusTone, fmtTimeRange } from "@/lib/pt-sessions";
 import {
   AlertTriangle, Repeat, CalendarDays, ChevronDown, CheckCircle2, Ban, CircleOff, Undo2, Wallet, Trash2,
-  ChevronLeft, LayoutTemplate, Plus,
+  ChevronLeft, LayoutTemplate, Plus, StickyNote, MessageSquare,
 } from "lucide-react";
 import { setPtSessionStatus } from "@/lib/pt-pack.functions";
 import { getPtSessionCreditEvents } from "@/lib/pt-session-manage.functions";
-import { sessionStatusLabel, statusForDate } from "@/lib/session-credit";
+import { COACH_NOTE_MAX, normalizeCoachNote, sessionStatusLabel, statusForDate } from "@/lib/session-credit";
+import { COACH_NOTES_KEY, saveCoachNote, useCoachNote } from "@/lib/session-coach-notes";
 import {
   creditImpact, creditToneClasses, invalidatePtSessionCaches, type PtLedgerEvent,
 } from "@/lib/pt-session-manage";
@@ -98,6 +99,12 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
   const [creditTouched, setCreditTouched] = useState(false);
   // Charging for the booking (a product or a typed price, paid by a link in their chat).
   const [sale, setSale] = useState<SaleDraft>(EMPTY_SALE);
+  // The coach's own note (session-coach-notes.ts, staff only). The session's
+  // `notes` column is the note TO the client: they can read every column of
+  // their own sessions, so a reason ("booked a foot tattoo") never goes there.
+  const [privateNote, setPrivateNote] = useState("");
+  const [clientNoteOpen, setClientNoteOpen] = useState(false);
+  const { data: coachNote, isFetched: coachNoteFetched } = useCoachNote(initial?.id ?? null, open);
   const sellFn = useSellSessions();
 
   // Booking cards (templates) — used for the picker step and the edit-mode
@@ -132,8 +139,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       end_time: addMinutesToTime(startAt, duration),
       timezone: c?.timezone ?? "America/Winnipeg",
       location: card?.location || c?.default_session_location || "Iron Image Gym",
-      notes: card?.default_notes ?? "",
-      client_visible_notes: card?.client_visible_notes ?? true,
+      // A type's notes the client isn't meant to see are the coach's own note.
+      notes: card?.client_visible_notes === false ? "" : card?.default_notes ?? "",
+      client_visible_notes: true,
       status: "Scheduled",
       visible_to_client: card?.visible_to_client ?? true,
       reminders_enabled: card?.reminders_enabled ?? true,
@@ -149,6 +157,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       _includeStartDate: true,
       _skipDates: [],
     });
+    setPrivateNote(card?.client_visible_notes === false ? card?.default_notes ?? "" : "");
     setStep("form");
   };
 
@@ -161,8 +170,17 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     setConflictOverride(false);
     setCreditTouched(false);
     setSale(EMPTY_SALE);
+    setPrivateNote("");
+    setClientNoteOpen(false);
     if (initial) {
-      setForm({ ...initial, _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true });
+      // An older note hidden from the client was never private (they can read the row): it's the coach's note now.
+      const hidden = initial.client_visible_notes === false;
+      setForm({
+        ...initial,
+        notes: hidden ? "" : initial.notes ?? "",
+        client_visible_notes: true,
+        _isRecurring: false, _weekdays: [], _weeks: 4, _includeStartDate: true,
+      });
       return;
     }
     if (initialCard) {
@@ -176,6 +194,12 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     // array literal on every render, which would reset the form (and wipe the
     // just-picked booking card) the instant the parent re-rendered.
   }, [open, initial, clientId, initialCard, initialDate, initialTime]);
+
+  useEffect(() => {
+    if (!open || !initial?.id || !coachNoteFetched) return;
+    const hidden = initial.client_visible_notes === false ? (initial.notes ?? "").trim() : "";
+    setPrivateNote([coachNote ?? "", hidden].filter(Boolean).join("\n"));
+  }, [open, initial, coachNote, coachNoteFetched]);
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
@@ -332,6 +356,7 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const impact = form.id ? creditImpact(form.status, events) : null;
   const clientName = selectedClient?.full_name ?? form.clients?.full_name ?? "";
+  const noteFirst = clientFirst || clientName.split(" ")[0] || "the client";
   const template = form.booking_card_id ? allCards.find((c) => c.id === form.booking_card_id) : undefined;
   const dateLabel = form.id
     ? new Date(form.session_date + "T00:00:00").toLocaleDateString(undefined, {
@@ -365,8 +390,8 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
       end_time: form.end_time,
       timezone: form.timezone,
       location: form.location,
-      notes: form.notes,
-      client_visible_notes: form.client_visible_notes,
+      notes: form.notes?.trim() ? form.notes.trim() : null,
+      client_visible_notes: true,
       status: form.status,
       visible_to_client: form.visible_to_client,
       reminders_enabled: form.reminders_enabled,
@@ -395,6 +420,17 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (error) {
       setSaving(false);
       return toast.error(error.message);
+    }
+    // The coach's own note, on each session it was written for (a failed save never undoes the booking).
+    const noteIds = form.id ? [form.id] : createdIds;
+    const noteChanged = form.id ? normalizeCoachNote(privateNote) !== normalizeCoachNote(coachNote) : !!normalizeCoachNote(privateNote);
+    if (noteChanged && noteIds.length) {
+      try {
+        await Promise.all(noteIds.map((id) => saveCoachNote(id, privateNote)));
+      } catch (e: any) {
+        toast.error(e?.message ? `Saved, but not your note: ${e.message}` : "Saved, but your note didn't save");
+      }
+      qc.invalidateQueries({ queryKey: [COACH_NOTES_KEY] });
     }
     // Booked first, then sold: the booking stands whatever happens to the sale.
     if (selling && createdIds.length) {
@@ -675,9 +711,45 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
             </div>
           )}
 
-          <div className="md:col-span-2">
-            <Label>Notes</Label>
-            <Textarea rows={3} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+          <div className="md:col-span-2 space-y-1">
+            <Label className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5"><StickyNote className="h-3.5 w-3.5" /> Note</span>
+              <span className="text-xs font-normal text-muted-foreground">Only you see it</span>
+            </Label>
+            <Textarea
+              rows={2}
+              value={privateNote}
+              maxLength={COACH_NOTE_MAX}
+              placeholder="e.g. why it was moved or cancelled, what they paid"
+              onChange={(e) => setPrivateNote(e.target.value)}
+              className="text-base sm:text-sm"
+            />
+          </div>
+
+          <div className="md:col-span-2" data-client-note>
+            {clientNoteOpen || form.notes?.trim() ? (
+              <div className="space-y-1">
+                <Label className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Note to {noteFirst}</span>
+                  <span className="text-xs font-normal text-muted-foreground">On their session and calendar</span>
+                </Label>
+                <Textarea
+                  rows={2}
+                  value={form.notes ?? ""}
+                  placeholder="e.g. bring your belt"
+                  onChange={(e) => { setClientNoteOpen(true); set("notes", e.target.value); }}
+                  className="text-base sm:text-sm"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setClientNoteOpen(true)}
+                className="inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <MessageSquare className="h-3.5 w-3.5" /> Add a note for {noteFirst}
+              </button>
+            )}
           </div>
         </div>
 
@@ -709,7 +781,6 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
                 <SelectContent>{COMMON_TIMEZONES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <Toggle label="Show notes to client" checked={form.client_visible_notes} onChange={(v) => set("client_visible_notes", v)} />
             <Toggle label="Show session in client calendar" checked={form.visible_to_client} onChange={(v) => set("visible_to_client", v)} />
             <Toggle label="Text a reminder at 6 PM the evening before" checked={form.reminders_enabled} onChange={(v) => set("reminders_enabled", v)} />
           </CollapsibleContent>
