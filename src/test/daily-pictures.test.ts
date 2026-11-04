@@ -265,3 +265,14 @@ describe("the background writer and the 7 am post", () => {
     );
   });
 });
+
+describe("a week never reads like one template", () => {
+  it("refuses a line that opens or ends like the days around it", async () => {
+    const { repeatsNearby } = await import("@/lib/daily-visuals");
+    const near = ["honestly just showing up is the win 🤝", "training hits different with the crew 🤝"];
+    expect(repeatsNearby("honestly the work speaks", near)).toContain('opens with "honestly"');
+    expect(repeatsNearby("you showed up all week 🤝", near)).toContain("ends on 🤝");
+    expect(repeatsNearby("slow is still moving 🌱", near)).toBeNull();
+    expect(repeatsNearby("slow is still moving", [])).toBeNull();
+  });
+});
