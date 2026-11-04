@@ -6,13 +6,14 @@
  * builds one block at a time from the approved strategy; repairs fix only
  * what the audit found.
  */
+import { EXERCISE_STANDARD } from "./exercise-standard";
 import { BLOCK_GUIDE, PROGRAMMING_METHOD } from "./methods";
 import { BRAIN_LABEL, type Brain } from "./types";
 import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 3;
+export const PIPELINE_PROMPT_VERSION = 4;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -23,7 +24,9 @@ const PROGRAMMING_RULES = `Programming rules:
 - Start from THIS athlete's response, never a generic template. Don't assume the next program needs a redesign: keep what worked and progress it; change what didn't only after naming the likely reason; every meaningful change has a purpose.
 - The coach's setup is binding: days per week, weeks, session limits, equipment, required and excluded exercises, restrictions. A setting the coach changed is a requirement. If two requirements conflict, say so in "conflicts" instead of silently dropping one.
 - Respect the athlete's real circumstances: their equipment (only what's listed), the equipment rules, their session time, injuries and pain reports, and what they actually adhere to.
-- Cardio is the client's cardio plan (see "Cardio" in the brief), not part of the program you write: the app adds the plan's training-day session as the last exercise of every workout and asks for its rest-day sessions on days off. Never write walking, treadmill, bike, elliptical, stair, rowing-machine or other steady cardio into a workout; leave the time for it and let it shape the lifting (fatigue, leg volume, session length).`;
+- Cardio is the client's cardio plan (see "Cardio" in the brief), not part of the program you write: the app adds the plan's training-day session as the last exercise of every workout and asks for its rest-day sessions on days off. Never write walking, treadmill, bike, elliptical, stair, rowing-machine or other steady cardio into a workout; leave the time for it and let it shape the lifting (fatigue, leg volume, session length).
+
+${EXERCISE_STANDARD}`;
 
 export function strategySystemPrompt(brain: Brain): string {
   return `You are the head coach's ${BRAIN_LABEL[brain]} programming brain at JF Effect, an elite strength and physique coaching business. Before any exercise is chosen, you write the PROGRAMMING STRATEGY for one athlete's next cycle: who they are and what they're training for, what the previous program was designed to do and what actually happened, what stays, what changes and why, what gets priority, what gets reduced, how the cycle progresses, and how success will be judged.
@@ -154,6 +157,7 @@ export function repairUserPrompt(x: { block: BuiltBlock; blockIndex: number; iss
     `- ${x.setup.daysPerWeek} days a week, ${x.setup.weeks} weeks in the program; this block has ${x.block.weeks} weeks.`,
     `- Session maximum: ${x.setup.maxSessionMinutes ?? x.setup.sessionMinutes ?? "—"} minutes${x.setup.cardio?.trainingDay ? `, including the ${x.setup.cardio.trainingDay.minutes}-min cardio the app adds after the lifting` : ""}.`,
     `- No walking, treadmill, bike or other steady cardio in the workouts: that's the client's cardio plan.`,
+    `- Every exercise and substitution meets the exercise standard: no landmine / plate / kettlebell isolation, combos, twists, wall sits or unstable surfaces.`,
     `- Excluded exercises: ${x.setup.excluded.map((e) => e.name).join(", ") || "none"}; required: ${x.setup.required.map((e) => e.name).join(", ") || "none"}.`,
     ...x.equipmentRules.map((r) => `- ${r}`),
     ``,

@@ -21,6 +21,7 @@ import { rpcRead } from "@/lib/permissions.server";
 import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { rxText, rxToRow, trainingDayDates, weekdayLabel, type Rx, type Weekday } from "@/lib/cleo-program";
 import { carryPlanDayRules } from "@/lib/client-nutrition-day";
+import { lowValueReason, EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
 
 type Db = any;
 
@@ -54,7 +55,7 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
   return {
     exercise_library: tool({
       description:
-        "Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up.",
+        `Find exercises in the app's exercise library by name. Program changes can only use exercises from here (by id). If nothing fits, say so and suggest the closest ones; never make one up. Results marked "below the exercise standard" shouldn't go in a program unless the coach asked for that exact exercise.\n\n${EXERCISE_STANDARD}`,
       inputSchema: z.object({ query: z.string().trim().min(2).max(60) }),
       execute: safe("the exercise library", async ({ query }) => {
         const [exact, byName, byAlias] = await Promise.all([
@@ -83,7 +84,7 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
         list.sort((a, b) => (a.id === exact?.data ? -1 : b.id === exact?.data ? 1 : a.name.length - b.name.length));
         return [
           `Library matches for "${query}" (use the id):`,
-          ...list.map((e) => `- ${e.name} | id ${e.id} | ${e.primary_muscle_group ?? e.muscle_group ?? "?"}${e.category ? ` | ${e.category}` : ""}${e.video_url ? " | has demo video" : ""}${e.id === exact?.data ? " | exact match" : ""}`),
+          ...list.map((e) => `- ${e.name} | id ${e.id} | ${e.primary_muscle_group ?? e.muscle_group ?? "?"}${e.category ? ` | ${e.category}` : ""}${e.video_url ? " | has demo video" : ""}${e.id === exact?.data ? " | exact match" : ""}${lowValueReason(e.name) ? ` | below the exercise standard: ${lowValueReason(e.name)}` : ""}`),
         ].join("\n");
       }),
     }),
@@ -297,6 +298,16 @@ export function isProgramKind(k: string): k is ProgramKind {
   return (PROGRAM_KINDS as readonly string[]).includes(k);
 }
 
+/** "⚠ X is below the exercise standard: …" lines for the coach's card, one per exercise. */
+function standardWarnings(names: Iterable<string | undefined>): string[] {
+  const out = new Map<string, string>();
+  for (const n of names) {
+    const why = n ? lowValueReason(n) : null;
+    if (n && why && !out.has(n)) out.set(n, `⚠ ${n} is below the exercise standard: ${why}.`);
+  }
+  return [...out.values()];
+}
+
 function longDate(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
 }
@@ -333,6 +344,7 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
           lines.push(`- ${names.get(e.exercise_id)}: ${rxText(e) || "no prescription"}${prog ? ` | ${prog}` : ""}`);
         }
       });
+      lines.push(...standardWarnings(names.values()));
       lines.push(p.publish ? `${clientLabel(c)} sees it right away.` : "Hidden from them until you publish it.");
       return lines.join("\n");
     }
@@ -356,6 +368,7 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
         if (ch.op === "add") lines.push(`- Add ${names.get(ch.exercise_id)}: ${rxText(ch) || "no prescription"}`);
         if (ch.op === "remove") lines.push(`- Remove ${rowName.get(ch.row_id)}`);
       }
+      lines.push(...standardWarnings(names.values()));
       if (t.lockedCount) lines.push(`${t.lockedCount} started or logged day${t.lockedCount === 1 ? "" : "s"} left as trained.`);
       return lines.join("\n");
     }
@@ -366,6 +379,7 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       return [
         `Add "${p.title}"${p.focus ? ` (${p.focus})` : ""} to ${clientLabel(c)}'s ${block.name} on ${longDate(p.date)}:`,
         ...p.exercises.map((e: any) => `- ${names.get(e.exercise_id)}: ${rxText(e) || "no prescription"}`),
+        ...standardWarnings(names.values()),
         block.client_visible ? `${clientLabel(c)} sees it on their calendar.` : `This block is hidden from ${clientLabel(c)} until it's published.`,
       ].join("\n");
     }

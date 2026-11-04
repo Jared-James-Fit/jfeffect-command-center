@@ -8,6 +8,7 @@
  */
 import { repRange, rpeRange, sum } from "./core";
 import { missingEquipment, stationOf, type EquipmentResolution } from "./equipment";
+import { lowValueReason } from "./exercise-standard";
 import type { BuiltBlock, BuiltExercise, BuiltProgram, Strategy } from "./generator-schemas";
 import { rxForWeek } from "./program-view";
 import type { Baseline, GenerationSetup } from "./recommend";
@@ -318,6 +319,12 @@ export function auditProgram(x: AuditInput): AuditResult {
     if (hit) add("selection", "failed", `Excluded exercise ${r.name} is in block ${hit.bi + 1} (${hit.d.title}).`, hit.bi, true);
   }
   for (const r of setup.required) if (!allEx.some((a) => (r.id && a.e.exercise_id === r.id) || norm(a.e.exercise_name) === norm(r.name))) add("selection", "failed", `Required exercise ${r.name} isn't in the program.`, 0, true);
+  // the exercise standard: nothing too heavy to start, too coarse to progress, or a gimmick (a coach's required pick stays)
+  const isRequired = (e: BuiltExercise) => setup.required.some((r) => (r.id && e.exercise_id === r.id) || norm(e.exercise_name) === norm(r.name));
+  for (const { e, bi, d } of allEx) {
+    const why = isRequired(e) ? null : lowValueReason(e.exercise_name);
+    if (why) add("selection", "failed", `${e.exercise_name} (block ${bi + 1}, ${d.title}) is below the exercise standard: ${why}.`, bi, true);
+  }
   for (const { d, bi } of allEx.filter((a) => a.ei === 0)) {
     const seen = new Set<string>();
     for (const e of d.exercises) {
