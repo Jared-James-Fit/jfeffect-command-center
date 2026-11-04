@@ -9,9 +9,7 @@ import { MemberAgreementGate } from "@/components/member/member-agreement";
 import { SubscriptionRestrictedBanner } from "@/components/subscription-restricted-banner";
 import { ClientPovBanner, PovFrame } from "@/components/client-pov-banner";
 import { useActivityHeartbeat } from "@/hooks/use-activity-heartbeat";
-import { BroadcastPopupGate } from "@/components/broadcast-popup-gate";
 import { ClientBirthdayCard } from "@/components/client-birthday-card";
-import { EventPopupGate } from "@/components/events/event-popup-gate";
 import { HomeScreenSetupGate } from "@/components/home-screen-setup-gate";
 import { FormPopupGate } from "@/components/form-popup-gate";
 import { LegalAcceptanceGate } from "@/components/legal/legal-acceptance-gate";
@@ -53,8 +51,6 @@ function PortalLayout() {
             client" they'd show the coach's own popups/legal status — skip. */}
         {!isImpersonating && (
           <>
-            <BroadcastPopupGate />
-            <EventPopupGate />
             <FormPopupGate />
             <HomeScreenSetupGate />
             <LegalAcceptanceGate />

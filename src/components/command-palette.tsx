@@ -31,7 +31,6 @@ const KIND_META: Record<GlobalSearchHit["kind"], { heading: string; icon: Lucide
   exercise: { heading: "Exercises", icon: Dumbbell },
   member_plan: { heading: "Member Plans", icon: Library },
   recipe: { heading: "Recipes", icon: ChefHat },
-  broadcast: { heading: "Broadcasts", icon: Megaphone },
   purchase: { heading: "Purchases", icon: ShoppingBag },
 };
 

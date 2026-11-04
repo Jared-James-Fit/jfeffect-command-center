@@ -232,12 +232,10 @@ describe("every place a video can be picked uses the trimmer and the pipeline", 
     expect(read("src/components/composer-plus-menu.tsx").match(/preloadVideoEngine\(\)/g)?.length).toBe(2);
   });
 
-  it("progress videos, check-in videos and broadcasts", () => {
+  it("progress videos and check-in videos", () => {
     expect(read("src/components/progress/progress-section.tsx")).toContain('pickVideo(f, "coach", { trim: trimmer.request })');
     expect(read("src/components/forms/client-form-renderer.tsx")).toContain('pickVideo(file, "coach", { trim: trimmer.request })');
-    expect(read("src/components/broadcast-composer.tsx")).toContain('pickVideo(f, "coach", { trim: trimmer.request })');
     expect(read("src/lib/native-forms.ts")).toContain('bucket: "form-uploads"');
-    expect(read("src/lib/broadcasts.ts")).toContain('bucket: "broadcast-media"');
   });
 
   it("the trimmer: preview never cropped, handles as sliders, an overview for long videos", () => {

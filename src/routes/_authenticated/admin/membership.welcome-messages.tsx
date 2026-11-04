@@ -1,5 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MembershipLeaf, ComingSoonCard } from "@/components/admin/membership-leaf";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+
+// Removed page: its address only redirects, so old links and bookmarks never 404.
+// Was only ever a "coming soon" placeholder.
 export const Route = createFileRoute("/_authenticated/admin/membership/welcome-messages")({
-  component: () => <MembershipLeaf title="Welcome Messages" subtitle="Templates sent after a new member completes setup."><ComingSoonCard note="Edit your SMS & email welcome copy from the SMS / Email tools page until templates land here." /></MembershipLeaf>,
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/membership", replace: true });
+  },
 });

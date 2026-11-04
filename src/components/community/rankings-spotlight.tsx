@@ -18,15 +18,16 @@ import {
   type StrengthView,
 } from "@/lib/rankings-spotlight";
 
-/** Each board's look: an icon and a tint, so you know which podium you're on at a glance. */
-function look(slide: SpotlightSlide): { Icon: typeof Trophy; tint: string; text: string } {
-  if (slide.board === "monthly") return { Icon: Trophy, tint: "from-primary/20", text: "text-primary" };
-  if (slide.board === "champions") return { Icon: Crown, tint: "from-violet-500/20", text: "text-violet-500" };
+/** Each board's icon, so you know which podium you're on at a glance (the title says it in words). */
+function iconOf(slide: SpotlightSlide): typeof Trophy {
+  if (slide.board === "monthly") return Trophy;
+  if (slide.board === "champions") return Crown;
   // a scale for pound for pound (it's per bodyweight), a dumbbell for the heaviest
-  return { Icon: slide.view?.mode === "p4p" ? Scale : Dumbbell, tint: "from-amber-400/20", text: "text-amber-500" };
+  return slide.view?.mode === "p4p" ? Scale : Dumbbell;
 }
 
-const RING = ["ring-amber-400", "ring-zinc-300 dark:ring-zinc-400", "ring-orange-400/80"];
+// gold for the winner only; the medals on the steps say 2nd and 3rd
+const RING = ["ring-amber-400", "ring-border", "ring-border"];
 const MEDAL = ["🥇", "🥈", "🥉"];
 
 function readPaused() {
@@ -169,7 +170,7 @@ export function RankingsSpotlight({ onOpen, under, underView }: {
   };
 
   if (!slide) return null;
-  const { Icon, tint, text } = look(slide);
+  const Icon = iconOf(slide);
   // 2nd · 1st · 3rd, like a real podium
   const order: [SpotlightPerson | undefined, number][] = [[slide.people[1], 1], [slide.people[0], 0], [slide.people[2], 2]];
   return (
@@ -179,7 +180,7 @@ export function RankingsSpotlight({ onOpen, under, underView }: {
       data-playing={playing ? "" : undefined}
       aria-roledescription="carousel"
       aria-label="Podiums"
-      className={cn("relative overflow-hidden rounded-2xl border bg-card bg-gradient-to-b to-transparent to-70% transition-colors duration-500", tint)}
+      className="relative overflow-hidden rounded-2xl border bg-card"
     >
       <div
         // its own sideways swipe: not the page's swipe-back
@@ -228,10 +229,10 @@ export function RankingsSpotlight({ onOpen, under, underView }: {
         >
           <div className="min-w-0 pr-9">
             <div className="flex min-w-0 items-center gap-1.5">
-              <Icon className={cn("h-4 w-4 shrink-0", text)} aria-hidden />
-              <span className="truncate text-[15px] font-bold leading-5 tracking-tight">{slide.title}</span>
+              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="truncate text-[15px] font-semibold leading-5">{slide.title}</span>
             </div>
-            <div className="truncate pl-[22px] text-[11px] font-semibold leading-4 text-muted-foreground">{slide.sub}</div>
+            <div className="truncate pl-[22px] text-[12px] leading-4 text-muted-foreground">{slide.sub}</div>
           </div>
           {/* room for the winner's crown under the title */}
           <div className="mt-4 grid grid-cols-3 items-end gap-2">
@@ -292,8 +293,8 @@ function Step({ person, place }: { person: SpotlightPerson | undefined; place: n
             <UserAvatar src={person.avatar_url} name={person.name} size={first ? 52 : 40} expandable={false} />
             {first && <Crown className="absolute -top-3.5 left-1/2 h-4 w-4 -translate-x-1/2 fill-amber-400 text-amber-500" aria-hidden />}
           </span>
-          <span className={cn("mt-1.5 w-full truncate text-center text-[12px] font-bold leading-4", person.me && "text-primary")}>{person.me ? "You" : person.name}</span>
-          <span className="w-full truncate text-center text-[11px] font-bold tabular-nums leading-4 text-muted-foreground">{person.value}</span>
+          <span className="mt-1.5 w-full truncate text-center text-[12px] font-semibold leading-4">{person.me ? "You" : person.name}</span>
+          <span className="w-full truncate text-center text-[11px] font-medium tabular-nums leading-4 text-muted-foreground">{person.value}</span>
         </>
       ) : (
         <span className="h-10" />
@@ -301,7 +302,7 @@ function Step({ person, place }: { person: SpotlightPerson | undefined; place: n
       <span
         className={cn(
           "mt-1.5 grid w-full place-items-center rounded-t-lg text-[12px] leading-none",
-          first ? "h-7 bg-amber-400/25" : place === 1 ? "h-5 bg-muted" : "h-4 bg-muted/70",
+          first ? "h-7 bg-muted" : place === 1 ? "h-5 bg-muted/70" : "h-4 bg-muted/50",
         )}
         aria-hidden
       >

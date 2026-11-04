@@ -9,7 +9,6 @@ import type { TrainingPhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupTracker } from "@/components/home-screen-setup-card";
-import { ClientActionRequestModal } from "@/components/client-action-request-modal";
 import { UpcomingEventsPanel } from "@/components/events/upcoming-events-panel";
 import { InstallAppCard } from "@/components/portal/install-app-card";
 import { UpcomingScheduleCard } from "@/components/home/upcoming-schedule-card";
@@ -203,7 +202,6 @@ function PortalHome() {
   return (
     <>
       {/* Background gates / popups — keep wired exactly as before. */}
-      {client?.id && coaching && <ClientActionRequestModal clientId={client.id} />}
       {client?.id && coaching && (
         <Dialog
           open={goalsSetupPromptOpen && !isGoalsSetupComplete(goalsSetup ?? null)}
@@ -353,7 +351,7 @@ function SectionSkeleton({ height = "h-32" }: { height?: string }) {
 }
 
 // No bell: what clients need to see reaches them in Messages (its tab shows
-// the count) and Crew; announcements pop up on open and live in the ☰ menu.
+// the count) and Crew.
 function GreetingHeader({ firstName }: { firstName: string }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {

@@ -88,7 +88,7 @@ describe("one menu row per page", () => {
     const admin = buildInternalNavCollapsed("admin");
     const messages = admin.find((i) => i.label === "Messages")!;
     expect(messages.children?.map((c) => [c.to, !!c.searchOnly])).toEqual([
-      ["/admin/communication", true], ["/admin/broadcasts", true], ["/admin/support-alerts", true],
+      ["/admin/communication", true], ["/admin/support-alerts", true],
     ]);
     const all = admin.flatMap((i) => [i, ...(i.children ?? [])]);
     const listedTos = admin.flatMap((i) => [i.to, ...listed(i).map((c) => (c as { to: string }).to)]);
@@ -108,12 +108,12 @@ describe("one menu row per page", () => {
     const coach = buildInternalNavCollapsed("coach");
     const reachable = new Set(coach.flatMap((i) => [i.to, ...(i.children ?? []).map((c) => c.to)]));
     for (const to of [
-      "/admin", "/admin/tasks", "/admin/support-alerts", "/admin/messages", "/admin/communication", "/admin/broadcasts",
+      "/admin", "/admin/tasks", "/admin/support-alerts", "/admin/messages", "/admin/communication",
       "/admin/community", "/admin/league", "/admin/athlete-records", "/admin/clients", "/admin/check-in-reviews",
-      "/admin/client-action-requests", "/admin/training-intelligence", "/admin/coaching", "/admin/agreements",
+      "/admin/training-intelligence", "/admin/coaching", "/admin/agreements",
       "/admin/programming", "/admin/program-library", "/admin/exercises", "/admin/cardio-targets", "/admin/warmup-protocols",
       "/admin/recipes", "/admin/native-forms", "/admin/forms", "/admin/fillout-submissions", "/admin/calendar",
-      "/admin/pt-calendar", "/admin/events", "/admin/google-calendar", "/admin/sales/coaching-applications",
+      "/admin/pt-calendar", "/admin/google-calendar", "/admin/sales/coaching-applications",
       "/admin/settings", "/admin/account", "/admin/faqs", "/admin/automations", "/admin/floating-bar", "/admin/voice",
     ]) {
       expect(reachable.has(to), to).toBe(true);

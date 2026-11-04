@@ -10,7 +10,6 @@ import { useAdminNavBadgeCounts } from "@/hooks/use-admin-nav-badges";
 
 // Only the Messages tab ships with this page. The rest load on first visit so
 // opening Messages doesn't download and parse unrelated admin screens.
-const AdminBroadcasts = lazyWithRetry(() => import("@/route-pages/_authenticated/admin/broadcasts").then((m) => ({ default: m.AdminBroadcasts })));
 const SupportMessenger = lazyWithRetry(() => import("@/components/support/support-messenger").then((m) => ({ default: m.SupportMessenger })));
 
 function TabFallback() {
@@ -25,11 +24,11 @@ const TABS = [
   { value: "messages", label: "1:1 Chats" },
   { value: "groups", label: "Groups" },
   { value: "support", label: "Support" },
-  { value: "broadcasts", label: "Broadcasts" },
 ] as const;
 type TabKey = typeof TABS[number]["value"];
 
-/** Old tab names (bookmarks, notifications, redirects) → where that lives now. */
+/** Old tab names (bookmarks, notifications, redirects) → where that lives now.
+ *  Broadcasts were never sent and are gone: ?tab=broadcasts opens Chats. */
 const LEGACY_TABS: Record<string, TabKey> = { "support-inbox": "support", "support-alerts": "support" };
 const MOVED_TO_SETTINGS: Record<string, string> = {
   popups: "/admin/popups",
@@ -162,7 +161,7 @@ function CommunicationWorkspace() {
       <div className="hidden md:block">
         <PageHeader
           title="Communication"
-          subtitle="Chats, group chats, support and broadcasts. Popups and chat media live in Settings."
+          subtitle="Chats, group chats and support. Popups and chat media live in Settings."
         />
       </div>
       <div className="flex shrink-0 items-center border-b border-border bg-background/50">
@@ -211,7 +210,7 @@ function CommunicationWorkspace() {
       {/* Chat-like tabs own their own scroll (inbox list + thread).
           Page-style tabs scroll the whole panel. Mixing the two causes the
           messenger header/sidebar to drift as the outer container scrolls. */}
-      {viewportLockedTab ? (
+      {viewportLockedTab && (
         <div className="min-h-0 flex-1 overflow-hidden">
           {tab === "messages" && <MessagesInbox key="chats" initialClient={client} embedded view="chats" />}
           {tab === "groups" && <MessagesInbox key="groups" embedded view="groups" />}
@@ -220,12 +219,6 @@ function CommunicationWorkspace() {
               <SupportMessenger sub={sub} onOpen={(next) => navigate({ to: "/admin/communication", search: { tab: "support", ...(next ? { sub: next } : {}) } as any })} />
             </Suspense>
           )}
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-auto">
-          <Suspense fallback={<TabFallback />}>
-            {tab === "broadcasts" && <AdminBroadcasts embedded />}
-          </Suspense>
         </div>
       )}
     </div>

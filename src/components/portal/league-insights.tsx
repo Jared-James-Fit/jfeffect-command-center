@@ -33,7 +33,7 @@ export function PointsLegend({ rows }: { rows: Row[] }) {
   if (present.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] font-semibold text-muted-foreground">
-      <span className="font-bold uppercase tracking-wider">Points from</span>
+      <span className="font-medium">Points from</span>
       {present.map((s) => (
         <span key={s.key} className="inline-flex items-center gap-1">
           <span className={cn("h-2 w-2 rounded-full", s.color)} />
@@ -67,13 +67,14 @@ export function VsCard({ me, them, themName }: { me: Row & { total_points: numbe
     <div className="overflow-hidden rounded-2xl border bg-card">
       <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2 px-4 pt-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">You</div>
-          <div className={cn("text-2xl font-bold tabular-nums leading-none", lead < 0 && "text-primary")}>{formatLeaguePoints(me.total_points)}</div>
+          <div className="text-[12px] text-muted-foreground">You</div>
+          {/* the leader's number is the strong one; no colour needed */}
+          <div className={cn("text-2xl font-semibold tabular-nums leading-none", lead > 0 && "text-muted-foreground")}>{formatLeaguePoints(me.total_points)}</div>
         </div>
-        <div className="pb-0.5 text-xs font-bold text-muted-foreground">VS</div>
+        <div className="pb-0.5 text-xs font-medium text-muted-foreground">vs</div>
         <div className="text-right">
-          <div className="truncate text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{first}</div>
-          <div className={cn("text-2xl font-bold tabular-nums leading-none", lead > 0 && "text-primary")}>{formatLeaguePoints(them.total_points)}</div>
+          <div className="truncate text-[12px] text-muted-foreground">{first}</div>
+          <div className={cn("text-2xl font-semibold tabular-nums leading-none", lead < 0 && "text-muted-foreground")}>{formatLeaguePoints(them.total_points)}</div>
         </div>
       </div>
       <p className="px-4 pt-2 text-xs font-semibold leading-snug">{summary}</p>
@@ -113,16 +114,16 @@ export function CoachFocus({ me, title = "Coach's focus", className }: { me: Foc
   const tips = coachFocus(me);
   if (tips.length === 0) return null;
   return (
-    <div className={cn("rounded-2xl border border-primary/30 bg-background p-3", className)}>
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+    <div className={cn("rounded-xl border bg-background p-3", className)}>
+      <div className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
         <Target className="h-3.5 w-3.5" /> {title}
       </div>
       <ol className="mt-2 space-y-2.5">
         {tips.map((t, i) => (
           <li key={t.key} className="flex gap-2.5">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">{i + 1}</span>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground">{i + 1}</span>
             <div className="min-w-0">
-              <div className="text-sm font-bold leading-tight">{t.title}</div>
+              <div className="text-sm font-semibold leading-tight">{t.title}</div>
               <div className="mt-0.5 text-xs leading-snug text-muted-foreground">{t.detail}</div>
             </div>
           </li>

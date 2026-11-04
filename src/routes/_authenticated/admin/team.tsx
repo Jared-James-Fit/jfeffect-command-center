@@ -10,19 +10,15 @@ const CoachesPage = lazyWithRetry(() =>
 const StaffPage = lazyWithRetry(() =>
   import("@/route-pages/_authenticated/admin/staff").then((m) => ({ default: m.StaffPage })),
 );
-const BusinessSystemsHub = lazyWithRetry(() =>
-  import("@/route-pages/_authenticated/admin/business-systems").then((m) => ({ default: m.BusinessSystemsHub })),
-);
 
 const TabFallback = () => (
   <div className="p-8 text-sm text-muted-foreground">Loading…</div>
 );
 
-type TabKey = "people" | "staff-media" | "operations";
+type TabKey = "people" | "staff-media";
 const TABS: { value: TabKey; label: string }[] = [
   { value: "people", label: "People" },
   { value: "staff-media", label: "Staff access" },
-  { value: "operations", label: "Operations" },
 ];
 const LAST_TAB_KEY = "jf-admin-team-last-tab";
 const isTab = (v: unknown): v is TabKey => typeof v === "string" && TABS.some((t) => t.value === v);
@@ -46,7 +42,7 @@ function TeamWorkspace() {
   const setTab = (n: TabKey) => navigate({ to: "/admin/team", search: { tab: n } as any });
   return (
     <>
-      <PageHeader title="Team" subtitle="Coaches, staff, and internal operations." />
+      <PageHeader title="Team" subtitle="Coaches and staff access." />
       <div className="border-b border-border bg-background/50">
         <div className="-mb-px flex gap-1 overflow-x-auto px-2 md:px-4">
           {TABS.map((t) => {
@@ -63,7 +59,6 @@ function TeamWorkspace() {
         <Suspense fallback={<TabFallback />}>
           {tab === "people" && <CoachesPage embedded />}
           {tab === "staff-media" && <StaffPage embedded />}
-          {tab === "operations" && <BusinessSystemsHub embedded />}
         </Suspense>
       </div>
     </>

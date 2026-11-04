@@ -76,11 +76,12 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** Short leaderboard tag. Null = show nothing (no clutter, no fake hype). */
 export function boostTag(row: Pick<LeagueRow, "boost_status" | "needed_workouts">): string | null {
-  if (row.boost_status === "ready") return "🔥 BOOST READY";
+  if (row.boost_status === "ready") return "Boost unlocked";
   if (row.boost_status !== "chasing") return null;
-  if (row.needed_workouts === 1) return "🔥 1 WORKOUT LEFT";
-  if (row.needed_workouts === 2) return "🔥 2 WORKOUTS LEFT";
-  return "🔥 IN THE RACE";
+  if (row.needed_workouts === 1) return "1 workout to unlock";
+  if (row.needed_workouts === 2) return "2 workouts to unlock";
+  // everyone else still chasing: nothing, so the board stays one line a person
+  return null;
 }
 
 /** Can this row still gain points from the boost? */
@@ -99,24 +100,19 @@ export type HeroState = {
 /** The big final-week card for the signed-in athlete. */
 export function heroState(me: Pick<LeagueRow, "boost_status" | "needed_workouts">): HeroState {
   if (me.boost_status === "ready") {
-    return { tone: "win", eyebrow: "🔥 BOOST UNLOCKED", headline: "90%+ complete", sub: "Workout Points Match secured" };
+    return { tone: "win", eyebrow: "Final Week Boost", headline: "Boost unlocked", sub: "Your workout points match the month's best" };
   }
   if (me.boost_status === "chasing") {
-    if (me.needed_workouts === 1) {
-      return { tone: "hype", eyebrow: "🔥 FINAL WEEK BOOST", headline: "ONE WORKOUT LEFT", sub: "Finish it → Workout Points Match unlocked" };
-    }
-    if (me.needed_workouts === 2) {
-      return { tone: "hype", eyebrow: "🔥 FINAL WEEK BOOST", headline: "2 WORKOUTS LEFT", sub: "Finish them → Unlock the boost" };
-    }
+    const n = me.needed_workouts;
     return {
       tone: "hype",
-      eyebrow: "🔥 FINAL WEEK BOOST",
-      headline: `${plural(me.needed_workouts, "workout")} to go`,
-      sub: "Finish strong and unlock your Workout Points Match",
+      eyebrow: "Final Week Boost",
+      headline: `${plural(n, "workout")} to go`,
+      sub: `Finish ${n === 1 ? "it" : "them"} to unlock the boost`,
     };
   }
   // Can't qualify (or no qualifying program): neutral, never misleading.
-  return { tone: "neutral", eyebrow: "Final Week Boost", headline: "90% monthly adherence required", sub: "" };
+  return { tone: "neutral", eyebrow: "Final Week Boost", headline: "Needs 90% of this month's workouts", sub: "" };
 }
 
 /**

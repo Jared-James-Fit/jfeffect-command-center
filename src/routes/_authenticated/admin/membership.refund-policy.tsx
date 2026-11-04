@@ -1,11 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MembershipLeaf } from "@/components/admin/membership-leaf";
-import { JfMembershipSettingsCard } from "@/components/admin/jf-membership-settings-card";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// Removed page: its address only redirects, so old links and bookmarks never 404.
+// Was a second menu entry for the same settings card as Checkout settings.
 export const Route = createFileRoute("/_authenticated/admin/membership/refund-policy")({
-  component: () => (
-    <MembershipLeaf title="Refund / Cancellation Policy" subtitle="Shown on the public signup page and in member billing.">
-      <div className="grid gap-4 md:grid-cols-2"><JfMembershipSettingsCard /></div>
-    </MembershipLeaf>
-  ),
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/membership/checkout-settings", replace: true });
+  },
 });

@@ -27,7 +27,7 @@ export function UpcomingEventsPanel({
   if (!data || data.length === 0) return null;
 
   const toBase = audience === "admin" ? "/admin/events/$id" : "/portal/events/$id";
-  const listLink = audience === "admin" ? "/admin/events" : "/portal/calendar";
+  const listLink = audience === "admin" ? "/admin/calendar" : "/portal/calendar";
 
   return (
     <Card className="p-4">

@@ -1,4 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { BroadcastsRedirect } from "@/route-pages/_authenticated/admin/broadcasts";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_authenticated/admin/broadcasts")({ component: BroadcastsRedirect });
+// Removed page: its address only redirects, so old links and bookmarks never 404.
+// Broadcasts / announcements were never sent (0 ever) and are gone.
+export const Route = createFileRoute("/_authenticated/admin/broadcasts")({
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/communication", replace: true });
+  },
+});
