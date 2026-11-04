@@ -378,6 +378,15 @@ html[data-keyboard-open="true"] {
    --pov-banner-h), so the bars sit right under it with no notch padding of
    their own: one bar under the banner, as the client sees it, no gap. */
 :root { --app-safe-top: env(safe-area-inset-top, 0px); --app-chrome-top: 0px; }
+/* The iPhone home-screen app (ios-edge.ts): iOS blurs ~40pt under the notch over any
+   web content, fixed bars included, so the bars (and Focus) start below it there. Before
+   the View as client rule, which still wins (the banner holds the notch then). */
+:root { --ios-edge-room: 0px; }
+html[data-ios-web-app] {
+  --ios-edge-room: 28px;
+  --app-safe-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
+  --focus-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
+}
 html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); }
 
 :root { --shell-topbar-h: 0px; }
