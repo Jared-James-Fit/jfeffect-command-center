@@ -8,11 +8,13 @@ const source = readFileSync(
 );
 
 describe("Jared workout display boundary", () => {
-  it("derives the page header from the selected calendar workout, then the week on screen, before falling back", () => {
-    expect(source).toContain("const selectedItems = byDate.get(toLocalISO(selectedDate)) ?? [];");
-    expect(source).toContain("const selectedHeaderItem = selectedPrimaryItems[0] ?? null;");
-    expect(source).toContain("if (selectedHeaderItem) return selectedHeaderItem;");
-    expect(source).toContain("const headerItem = weekItem ?? fallbackHeaderItem;");
+  it("the day's card reads the picked date; the block is the Program card's, so the header derives nothing", () => {
+    expect(source).toContain("items={byDate.get(toLocalISO(selectedDate)) ?? []}");
+    // a workout from another block than the current one names its own block on its card
+    expect(source).toContain("const currentBlockId = todayItem?.block?.id ?? pickCurrentBlock(allBlocks, today)?.id ?? null;");
+    expect(source).toContain("pageBlockId={currentBlockId}");
+    expect(source).not.toContain("const headerItem =");
+    expect(source).not.toContain("subtitle={subtitle");
   });
 
   it("does not infer Continue Workout from an empty completion row", () => {

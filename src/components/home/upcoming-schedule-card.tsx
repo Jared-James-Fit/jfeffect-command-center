@@ -8,6 +8,7 @@ import { usePovArgs, usePovFn } from "@/lib/client-pov-args";
 import { KIND_FAMILY, KIND_META, placeLabel, scheduleTitle, useClientCalendarSources, type CalendarItem } from "@/lib/calendar-sources";
 import { buildHomeAgenda } from "@/lib/home-upcoming";
 import { getWorkoutStatus } from "@/lib/workout-status";
+import { blockNameParts } from "@/lib/training-roadmap";
 import { compactTimeRange } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { useEntitlement } from "@/lib/service-tier";
@@ -42,11 +43,16 @@ function timeLabel(item: CalendarItem): string | null {
   return compactTimeRange(item.startsAt, item.endsAt);
 }
 
-/** "Week 2 of 5" for a workout row; the block itself lives on the Workouts page. */
+/**
+ * "Block 2 · Week 1 of 5" for a workout row: a bare "Week 1 of 5" didn't say
+ * of what. The block's own name and the program live on the Workouts page.
+ */
 function workoutContext(raw: any): string | null {
   const wk = raw?.week?.week_index;
   const of = raw?.block?.weeks;
-  return wk ? `Week ${wk}${of ? ` of ${of}` : ""}` : null;
+  const week = wk ? `Week ${wk}${of ? ` of ${of}` : ""}` : null;
+  const tag = blockNameParts(raw?.block?.name)?.tag ?? null;
+  return [tag, week].filter(Boolean).join(" · ") || null;
 }
 
 /** What today's workout asks for: Start / Continue / done. */
@@ -200,11 +206,7 @@ export function UpcomingScheduleCard({ clientId, links = true }: {
             )),
           )}
         </AgendaNext>
-        {!isLoading && agenda.upcoming.length === 0 && (
-          <div className="mt-1.5 border-t border-border/60 pt-1">
-            <AgendaEmpty>No appointments coming up.</AgendaEmpty>
-          </div>
-        )}
+        {/* Nothing coming up says nothing: no row of its own (the week's dots and the Calendar say it). */}
 
         {/* The action, in words: ask for (or book) a session. Seeing everything is the header's link. */}
         {links && (singleBook || (bookable.length > 1 && !pov.viewAsClientId) || canRequest) && (

@@ -6,7 +6,7 @@ import type { WorkoutItem } from "@/lib/workout-today";
 /**
  * One workout status mark for every calendar (Home week, Workouts week and month):
  *   scheduled / not started → small grey dot
- *   in progress             → red ring filled to the real logged-set progress
+ *   in progress             → a ring filled to the real logged-set progress (neutral: red reads as a problem)
  *   completed               → green check
  *   skipped                 → muted red minus (only when a workout is explicitly skipped;
  *                             an unfinished past workout is never shown as skipped)
@@ -79,7 +79,7 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
           cx="5" cy="5" r={r} fill="none" strokeWidth="1.6" strokeLinecap="round"
           strokeDasharray={`${(c * Math.max(mark.pct, 4)) / 100} ${c}`}
           transform="rotate(-90 5 5)"
-          className={onPrimary ? "stroke-white" : "stroke-primary"}
+          className={onPrimary ? "stroke-white" : "stroke-foreground"}
         />
       </svg>
     );

@@ -59,11 +59,8 @@ export function ProgramCardSkeleton() {
 export function WorkoutsBodySkeleton() {
   return (
     <div className="space-y-4 p-4 pb-32 md:p-6" aria-busy="true">
-      <Skeleton className="h-10 w-full rounded-lg sm:w-72" />
-      <div className="flex items-center justify-between gap-2">
-        <Skeleton className="h-8 w-44 rounded-full" />
-        <Skeleton className="h-8 w-28 rounded-full" />
-      </div>
+      {/* the Week · Month · Block control */}
+      <Skeleton className="h-11 w-full rounded-xl" />
       <ScheduleSkeleton />
       <ProgramCardSkeleton />
       <span className="sr-only">Loading workouts…</span>

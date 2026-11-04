@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Check, ChevronRight } from "lucide-react";
+import { CalendarDays, Check, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { weekDays } from "@/components/calendar/week-strip";
 import type { KindFamily } from "@/lib/calendar-sources";
@@ -8,30 +8,34 @@ import { cn } from "@/lib/utils";
 
 /**
  * The Home calendar card, shared by every account's Home (client, coach,
- * staff). It has to read as a calendar at a glance, so it leads with a
- * calendar's own shapes: a date tile and "Calendar" (tap to open it), then
- * this Monday–Sunday week with a dot per thing (tap a day to open the calendar
- * there). Below that, today's items on a time column with one hairline of
- * colour each and a Now line, the next few things one line each, then worded
- * actions. Callers map their own data onto these rows and wrap each row in
- * whatever it opens (a link, a button, Google).
+ * staff). It reads as a calendar at a glance and stays neutral: the same
+ * header as Home's other cards ("Calendar ›", the month on the right), this
+ * Monday–Sunday week with today in a plain filled circle and a dot per thing
+ * (tap a day to open the calendar there), today's items on a time column with
+ * one hairline each, the next few things one line each, then worded actions.
+ * The only brand red on the card is today's workout's Start. Callers map
+ * their own data onto these rows and wrap each row in whatever it opens.
  */
 
 /** Where a tap goes: a route plus its search params. */
 export type AgendaLink = { to: string; search?: Record<string, unknown> };
 
-/** A hairline in the item's colour family: the only colour on a row. */
+/**
+ * A hairline per item. Training is neutral (it's most of what's there, and a
+ * colour on every workout said nothing); sessions with the coach keep violet
+ * and coach events amber, the colours they carry everywhere else.
+ */
 export const FAMILY_ACCENT: Record<KindFamily, string> = {
-  training: "bg-cyan-500",
+  training: "bg-foreground/60",
   people: "bg-violet-500",
   coach: "bg-amber-500",
-  google: "bg-slate-400/70",
+  google: "bg-muted-foreground/35",
 };
 
 /** Tap target for a row, whatever element it is. */
 export const AGENDA_ROW = "block w-full rounded-lg py-1 text-left transition active:bg-secondary/40";
-/** The footer's main action (red) and the "see everything" link (quiet). */
-export const AGENDA_ACTION = "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-primary";
+/** The footer's main action and the "see everything" link (quiet): both neutral, the words say what they do. */
+export const AGENDA_ACTION = "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-foreground";
 export const AGENDA_LINK = "inline-flex min-h-10 items-center gap-0.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold text-muted-foreground hover:text-foreground";
 
 const TIME_COL = "grid grid-cols-[3.75rem_minmax(0,1fr)] gap-x-2";
@@ -80,37 +84,23 @@ export function AgendaCard({ children, className }: { children: ReactNode; class
   return <Card className={cn("border-border bg-card px-3.5 pb-2 pt-3", className)}>{children}</Card>;
 }
 
-/** A tear-off calendar page for today: weekday on a red band, the day's number below. */
-export function DateTile({ day }: { day: string }) {
-  const d = new Date(`${day}T00:00:00`);
-  return (
-    <span aria-hidden className="flex h-10 w-10 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-center shadow-sm">
-      <span className="bg-primary py-px text-[9px] font-bold uppercase leading-tight tracking-wider text-primary-foreground">
-        {d.toLocaleDateString(undefined, { weekday: "short" })}
-      </span>
-      <span className="flex flex-1 items-center justify-center text-base font-bold leading-none tabular-nums">{d.getDate()}</span>
-    </span>
-  );
-}
-
 /**
- * "[21] Calendar ›  /  Today · Wednesday, Oct 21". The tile and title open the
- * full calendar; `right` has room for one small control of its own.
+ * "[icon] Calendar ›  ·  November": the same header as Home's other cards (a
+ * plain icon, a 16px title). The title opens the full calendar; the week under
+ * it says which day is today, so the header only adds the month. `right`
+ * replaces the month with one small control of its own.
  */
 export function AgendaHeader({ today, link, right }: { today: string; link?: AgendaLink | null; right?: ReactNode }) {
-  const date = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const month = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { month: "long" });
   const body = (
     <>
-      <DateTile day={today} />
-      <span className="min-w-0">
-        <span className="flex items-center gap-0.5 text-[15px] font-bold leading-tight">
-          Calendar {link && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-        </span>
-        <span className="block truncate text-xs text-muted-foreground">Today · {date}</span>
+      <CalendarDays className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="flex items-center gap-0.5 text-base font-semibold leading-tight">
+        Calendar {link && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </span>
     </>
   );
-  const cls = "-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1";
+  const cls = "-m-1 flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-xl p-1";
   return (
     <div className="flex items-center gap-2">
       {link ? (
@@ -120,15 +110,16 @@ export function AgendaHeader({ today, link, right }: { today: string; link?: Age
       ) : (
         <div className={cls}>{body}</div>
       )}
-      {right}
+      {right ?? <span className="shrink-0 text-[13px] text-muted-foreground">{month}</span>}
     </div>
   );
 }
 
 /**
  * This Monday–Sunday week, like the top of a calendar: day names, dates, today
- * in a red circle and a dot per thing on the day (colour = kind, up to 3).
- * Each day opens the full calendar on that day.
+ * in a plain filled circle (no brand red: red is for the card's one action)
+ * and a dot per thing on the day (up to 3). Each day opens the full calendar
+ * on that day.
  */
 export function AgendaWeek({ today, dots, link }: { today: string; dots: (day: string) => string[]; link?: ((day: string) => AgendaLink) | null }) {
   return (
@@ -147,15 +138,15 @@ export function AgendaWeek({ today, dots, link }: { today: string; dots: (day: s
             {...(to ? { to: to.to, search: to.search } : {})}
             aria-label={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}${isToday ? " (today)" : ""}${marks.length ? `, ${marks.length} scheduled` : ""}`}
             aria-current={isToday ? "date" : undefined}
-            className={cn("flex min-h-[54px] min-w-0 flex-col items-center justify-start gap-0.5 rounded-lg pt-1", to && "transition active:bg-secondary/50")}
+            className={cn("flex min-h-[56px] min-w-0 flex-col items-center justify-start gap-1 rounded-lg pt-1", to && "transition active:bg-secondary/50")}
           >
-            <span className={cn("text-[10px] font-bold uppercase tracking-wide", isToday ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn("text-[11px] font-medium", isToday ? "text-foreground" : "text-muted-foreground")}>
               {date.toLocaleDateString(undefined, { weekday: "short" })}
             </span>
             <span
               className={cn(
-                "grid h-7 w-7 place-items-center rounded-full text-sm font-bold tabular-nums",
-                isToday ? "bg-primary text-primary-foreground" : past ? "text-muted-foreground" : "text-foreground",
+                "grid h-8 w-8 place-items-center rounded-full text-[15px] font-semibold tabular-nums",
+                isToday ? "bg-foreground text-background" : past ? "text-muted-foreground" : "text-foreground",
               )}
             >
               {date.getDate()}
@@ -193,10 +184,10 @@ export function AgendaEmpty({ children }: { children: ReactNode }) {
 export function NowLine() {
   return (
     <div className={cn(TIME_COL, "items-center")} aria-label="Now">
-      <span className="text-right text-[10px] font-bold uppercase tracking-wider text-primary">Now</span>
+      <span className="text-right text-[11px] font-semibold text-foreground">Now</span>
       <span className="flex items-center">
-        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-        <span className="h-px flex-1 bg-primary/50" />
+        <span className="h-1.5 w-1.5 rounded-full bg-foreground" />
+        <span className="h-px flex-1 bg-foreground/40" />
       </span>
     </div>
   );
@@ -230,7 +221,7 @@ export function AgendaRow({
             <div
               className={cn(
                 "min-w-0 flex-1 line-clamp-2 text-sm leading-snug",
-                quiet ? "font-medium text-foreground/75" : "font-bold",
+                quiet ? "font-medium text-foreground/75" : "font-semibold",
                 struck && "text-muted-foreground line-through",
               )}
             >
@@ -291,7 +282,7 @@ export function AgendaFooter({ children }: { children: ReactNode }) {
   return <div className="mt-1 flex items-center justify-between gap-2 border-t border-border/60 pt-1">{children}</div>;
 }
 
-/** Start / Continue / Review pill, or a green Done. */
+/** Start / Continue / Review pill (the card's one red), or a green Done. */
 export function ActionPill({ label, done }: { label: string; done?: boolean }) {
   if (done) {
     return (
@@ -301,8 +292,8 @@ export function ActionPill({ label, done }: { label: string; done?: boolean }) {
     );
   }
   return (
-    <span className="inline-flex h-6 shrink-0 items-center gap-0.5 rounded-full bg-primary pl-2.5 pr-1.5 text-[11px] font-bold text-primary-foreground">
-      {label} <ChevronRight className="h-3.5 w-3.5" />
+    <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">
+      {label}
     </span>
   );
 }

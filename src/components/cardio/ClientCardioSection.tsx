@@ -153,8 +153,8 @@ export function ClientCardioSection({
     if (hideWhenEmpty) return null;
     return (
       <Card className="p-4 sm:p-6">
-        <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <Heart className="h-4 w-4 shrink-0" /> Cardio
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <Heart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden /> Cardio
         </h2>
         {resolved?.day?.cardioDayType === "rest" ? (
           <p className="mt-3 text-sm text-muted-foreground">Full Cardio Rest — no cardio scheduled.</p>
@@ -170,10 +170,10 @@ export function ClientCardioSection({
   return (
     <div className="space-y-3">
       <div className="px-0.5">
-        <h2 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <Heart className="h-4 w-4 shrink-0" /> Cardio
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <Heart className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden /> Cardio
         </h2>
-        <p className="mt-0.5 text-[11px] text-muted-foreground/80">Today's plan: {resolvedLabel}</p>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">Today's plan: {resolvedLabel}</p>
       </div>
       {filteredTargets.map((t: any) => (
         <CardioCompletionCard

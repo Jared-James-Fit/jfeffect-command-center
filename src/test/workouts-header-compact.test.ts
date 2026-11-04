@@ -22,14 +22,17 @@ describe("Workouts: a compact top, no schedule card", () => {
     expect(shell).toContain("if (actionsInline && !showBack) {");
     expect(shell).toContain('<h1 className="min-w-0 truncate text-lg font-bold');
   });
-  it("the committed days are one chip beside Week / Month (tap to change them in a sheet), not a card", () => {
+  it("the committed days are a chip only while they still need setting; once set they live in ⋯ (same sheet), never a card", () => {
     expect(page).not.toContain("<TrainingScheduleCard");
-    expect(page).toContain('<TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />');
+    expect(page).toContain('{showDaysChip && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}');
+    expect(page).toContain('const showDaysChip = !!client && (mode === "coach" || !!daysState?.needed);');
+    expect(page).toContain("<CalendarCheck className=\"mr-2 h-4 w-4\" /> Training days");
+    expect(page).toContain("<TrainingDaysSheet client={client as any} open={daysOpen} onOpenChange={setDaysOpen} />");
     expect(card).toContain("export function TrainingScheduleChip(");
     expect(card).toContain('days.length >= 6 ? `${days.length} days a week` : days.join(" ")');
     expect(card).toContain('"Set your training days"');
     // the same editor and the same save, closing the sheet when it's done
-    expect(card).toContain("<TrainingScheduleCard client={client} editable defaultEditing embedded onDone={() => setOpen(false)} />");
+    expect(card).toContain("<TrainingScheduleCard client={client} editable defaultEditing embedded onDone={() => onOpenChange(false)} />");
     expect(card).toContain("    onDone?.();");
   });
 });
