@@ -20,6 +20,9 @@ export type Standing =
   | { kind: "tied"; with: StandingRow }
   | { kind: "behind"; pts: number; of: StandingRow };
 
+/** What the League is, in one line under its title. */
+export const LEAGUE_ONE_LINER = "Train and log to earn points. Most points wins.";
+
 /** Same order as league_month_scores(): points, then whoever reached that total first. */
 export const TIEBREAK_NOTE = "Tied on points? Whoever got there first ranks higher.";
 

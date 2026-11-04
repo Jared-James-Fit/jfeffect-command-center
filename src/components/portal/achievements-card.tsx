@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
-  Award, Calendar, Camera, ChartLine, ClipboardCheck, Clock, Crown, Droplet, Dumbbell, Flag, Flame, Gem, Hammer, Lock, Medal,
+  Award, Calendar, Camera, ChartLine, ChevronRight, ClipboardCheck, Clock, Crown, Droplet, Dumbbell, Flag, Flame, Gem, Hammer, Lock, Medal,
   Megaphone, MessageSquare, NotebookPen, Ruler, Scale, Shield, Star, Target, Trophy, Users, Video, X, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -153,8 +153,10 @@ function Tile({ b, onClick }: { b: DetailBadge; onClick: () => void }) {
 }
 
 /** Own collection: earned first, then locked with private progress. */
-export function MyAchievementsRow({ catalog, earned, metrics }: {
+export function MyAchievementsRow({ catalog, earned, metrics, variant = "card" }: {
   catalog: CatalogBadge[]; earned: { badge_key: string; earned_at: string }[]; metrics: AchievementMetrics;
+  /** "row": a plain list row (Rankings' list under the board), "N of M" on the right. */
+  variant?: "card" | "row";
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<DetailBadge | null>(null);
@@ -170,6 +172,15 @@ export function MyAchievementsRow({ catalog, earned, metrics }: {
 
   return (
     <>
+      {variant === "row" ? (
+        <button type="button" onClick={() => setOpen(true)} data-milestones-row
+          className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-[14px] font-medium active:bg-muted">
+          Milestones
+          <span className="flex shrink-0 items-center gap-1 text-[13px] font-normal tabular-nums text-muted-foreground">
+            {got.length} of {items.length} <ChevronRight className="h-4 w-4" aria-hidden />
+          </span>
+        </button>
+      ) : (
       <button type="button" onClick={() => setOpen(true)}
         className="mt-3 flex w-full min-w-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-xs transition hover:border-primary/40">
         <span className="flex shrink-0 -space-x-2">
@@ -181,6 +192,7 @@ export function MyAchievementsRow({ catalog, earned, metrics }: {
           <span className="block text-[10px] text-muted-foreground">{got.length}/{items.length}</span>
         </span>
       </button>
+      )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto rounded-t-2xl pb-safe-bottom">

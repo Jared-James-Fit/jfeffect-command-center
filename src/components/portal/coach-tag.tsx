@@ -10,8 +10,9 @@ export function CoachTag({ className, onDark }: { className?: string; onDark?: b
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase leading-none tracking-wider",
-        onDark ? "bg-white/15 text-white" : "bg-primary/15 text-primary",
+        // neutral: the word says who it is, no colour needed
+        "inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
+        onDark ? "bg-white/15 text-white" : "bg-muted text-muted-foreground",
         className,
       )}
     >
