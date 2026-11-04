@@ -492,7 +492,7 @@ export function lessonArtPrompt(l: Pick<LessonExtra, "title" | "lift" | "track">
   return [
     `Cover illustration for a strength coaching post titled "${l.title}".`,
     `Subject: ${subject}.`,
-    "Style: minimal flat vector illustration that matches a clean fitness app: simple rounded shapes, no outlines, no texture, soft even light, dark charcoal background (#0a0a0d), warm grey and off-white shapes, one small red accent (#ef3340), lots of empty space.",
+    "Style: minimal flat vector illustration that matches a clean fitness app: simple rounded shapes, no outlines, no texture, soft even light, clean off-white paper background (#f6f3ee) like the post's card, charcoal and warm grey shapes, one small red accent (#ef3340), lots of empty space.",
     "Plain silhouettes without facial detail, realistic proportions, no exaggerated muscles, no clutter.",
     "Absolutely no text, letters, numbers, logos or watermarks anywhere in the image.",
   ].join(" ");

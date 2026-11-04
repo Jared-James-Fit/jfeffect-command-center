@@ -84,19 +84,8 @@ export async function drawWorkoutStory(canvas: HTMLCanvasElement, d: StoryCardDa
   if (!ctx) return;
   const cx = STORY_W / 2;
 
-  // ── Background: near-black, red glow top, warm glow bottom, fine grain lines
-  ctx.fillStyle = "#07070a";
-  ctx.fillRect(0, 0, STORY_W, STORY_H);
-  let g = ctx.createRadialGradient(cx, 120, 40, cx, 120, 1100);
-  g.addColorStop(0, "rgba(239,51,64,0.55)");
-  g.addColorStop(0.45, "rgba(127,29,29,0.22)");
-  g.addColorStop(1, "rgba(7,7,10,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, STORY_W, STORY_H);
-  g = ctx.createRadialGradient(cx, STORY_H + 100, 40, cx, STORY_H + 100, 900);
-  g.addColorStop(0, "rgba(245,158,11,0.18)");
-  g.addColorStop(1, "rgba(7,7,10,0)");
-  ctx.fillStyle = g;
+  // ── Background: one flat charcoal (no glow), fine grain lines
+  ctx.fillStyle = "#18181b";
   ctx.fillRect(0, 0, STORY_W, STORY_H);
   ctx.save();
   ctx.globalAlpha = 0.05;

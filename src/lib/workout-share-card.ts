@@ -216,26 +216,16 @@ export function drawCover(ctx: Ctx, src: ShareCardMedia, W: number, H: number) {
   ctx.drawImage(src, (W - w * s) / 2, (H - h * s) / 2, w * s, h * s);
 }
 
-function gold(ctx: Ctx, x: number, w: number) {
-  const g = ctx.createLinearGradient(x, 0, x + w, 0);
-  g.addColorStop(0, GOLD_FROM);
-  g.addColorStop(1, GOLD_TO);
-  return g;
+/** A PR's colour: one solid amber, never a gradient (`x` / `w` kept for callers). */
+function gold(_ctx: Ctx, _x: number, _w: number): string {
+  return GOLD_TO;
 }
 
-export function darkGlow(ctx: Ctx, W: number, H: number, tint: "red" | "gold") {
-  ctx.fillStyle = "#08080b";
-  ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W * 0.85, -60, 20, W * 0.85, -60, H * 0.95);
-  g.addColorStop(0, tint === "gold" ? "rgba(245,158,11,0.40)" : "rgba(239,51,64,0.42)");
-  g.addColorStop(0.5, tint === "gold" ? "rgba(120,53,15,0.14)" : "rgba(127,29,29,0.16)");
-  g.addColorStop(1, "rgba(8,8,11,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  const b = ctx.createRadialGradient(0, H + 40, 20, 0, H + 40, H * 0.6);
-  b.addColorStop(0, tint === "gold" ? "rgba(245,158,11,0.10)" : "rgba(239,51,64,0.10)");
-  b.addColorStop(1, "rgba(8,8,11,0)");
-  ctx.fillStyle = b;
+/** A share card's backdrop with no photo under it: one flat charcoal, never a glow (the white type reads on it). */
+const CARD_BACKDROP = "#232327";
+
+export function plainBackdrop(ctx: Ctx, W: number, H: number) {
+  ctx.fillStyle = CARD_BACKDROP;
   ctx.fillRect(0, 0, W, H);
 }
 
@@ -362,19 +352,19 @@ export function paintShareCard(canvas: HTMLCanvasElement, d: ShareCardData, logo
   else drawVolume(ctx, d, logo, L);
 }
 
-/** No filter: just the photo (the brand glow when there isn't one yet). */
+/** No filter: just the photo (the plain backdrop when there isn't one yet). */
 function drawPlain(ctx: Ctx, d: ShareCardData, L: Layout) {
   if (d.media) drawCover(ctx, d.media, L.W, L.H);
-  else darkGlow(ctx, L.W, L.H, "red");
+  else plainBackdrop(ctx, L.W, L.H);
 }
 
-/** The photo, dimmed so data reads on it — or the brand glow without one. */
+/** The photo, dimmed so data reads on it — or the plain backdrop without one. */
 function backdrop(ctx: Ctx, d: ShareCardData, L: Layout, dim: number, tint: "red" | "gold" = "red") {
   if (d.media) {
     drawCover(ctx, d.media, L.W, L.H);
     ctx.fillStyle = `rgba(8,8,11,${dim})`;
     ctx.fillRect(0, 0, L.W, L.H);
-  } else darkGlow(ctx, L.W, L.H, tint);
+  } else plainBackdrop(ctx, L.W, L.H);
 }
 
 type Layout = { W: number; H: number; PAD: number; innerW: number; top: number; bottom: number; story: boolean };
@@ -394,7 +384,7 @@ function drawPr(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: La
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   } else {
-    darkGlow(ctx, W, H, "gold");
+    plainBackdrop(ctx, W, H);
   }
 
   brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel);
@@ -445,7 +435,7 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
     drawCover(ctx, d.media, W, H);
   } else {
     // No photo yet: the editor shows an "Add photo" button on top of this.
-    darkGlow(ctx, W, H, "red");
+    plainBackdrop(ctx, W, H);
   }
   const scrimTop = H * 0.42;
   const g = ctx.createLinearGradient(0, scrimTop, 0, H);
@@ -506,7 +496,7 @@ function drawPhoto(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L:
 function drawLockIn(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
   const { W, H, PAD, innerW } = L;
   if (d.media) drawCover(ctx, d.media, W, H);
-  else darkGlow(ctx, W, H, "red");
+  else plainBackdrop(ctx, W, H);
   const scrimTop = H * 0.38;
   const g = ctx.createLinearGradient(0, scrimTop, 0, H);
   g.addColorStop(0, "rgba(8,8,11,0)");
@@ -557,7 +547,7 @@ function drawLockIn(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L
 function photoWithScrim(ctx: Ctx, d: ShareCardData, L: Layout, from: number, strength = 0.94) {
   const { W, H } = L;
   if (d.media) drawCover(ctx, d.media, W, H);
-  else darkGlow(ctx, W, H, "red");
+  else plainBackdrop(ctx, W, H);
   const top = H * from;
   const g = ctx.createLinearGradient(0, top, 0, H);
   g.addColorStop(0, "rgba(8,8,11,0)");
@@ -661,7 +651,7 @@ function drawMealPrep(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null,
 function drawOnPlan(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout) {
   const { W, H, PAD } = L;
   if (d.media) drawCover(ctx, d.media, W, H);
-  else darkGlow(ctx, W, H, "red");
+  else plainBackdrop(ctx, W, H);
   topShade(ctx, L);
   brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
 
@@ -766,7 +756,7 @@ function drawFuel(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: 
 function drawMealSticker(ctx: Ctx, d: ShareCardData, logo: HTMLImageElement | null, L: Layout, kind: "high" | "cheat") {
   const { W, PAD } = L;
   photoWithScrim(ctx, d, L, 0.55, 0.7);
-  if (!d.media) darkGlow(ctx, W, L.H, kind === "high" ? "gold" : "red");
+  if (!d.media) plainBackdrop(ctx, W, L.H);
   topShade(ctx, L);
   brandRow(ctx, logo, PAD, L.top + 30, W, d.dateLabel, 0.9);
 

@@ -17,18 +17,7 @@ export async function drawRecapStory(canvas: HTMLCanvasElement, r: LeagueRecap, 
   const month = monthName(r.month_start);
 
   // Background
-  ctx.fillStyle = "#07070a";
-  ctx.fillRect(0, 0, STORY_W, STORY_H);
-  let g = ctx.createRadialGradient(cx, 160, 40, cx, 160, 1150);
-  g.addColorStop(0, "rgba(239,51,64,0.55)");
-  g.addColorStop(0.5, "rgba(76,29,149,0.2)");
-  g.addColorStop(1, "rgba(7,7,10,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, STORY_W, STORY_H);
-  g = ctx.createRadialGradient(cx, STORY_H + 100, 40, cx, STORY_H + 100, 950);
-  g.addColorStop(0, "rgba(234,179,8,0.2)");
-  g.addColorStop(1, "rgba(7,7,10,0)");
-  ctx.fillStyle = g;
+  ctx.fillStyle = "#18181b";
   ctx.fillRect(0, 0, STORY_W, STORY_H);
   ctx.save();
   ctx.globalAlpha = 0.05;

@@ -41,7 +41,7 @@ export function LessonStoryFrame({ post }: { post: CommunityPost }) {
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col bg-zinc-950 bg-[radial-gradient(120%_70%_at_100%_0%,rgba(239,51,64,0.38),transparent_60%)] px-6",
+        "flex min-h-0 flex-1 flex-col bg-zinc-950 px-6",
         layout.place === "bottom" ? "justify-end" : layout.place === "top" ? "justify-start" : "justify-center",
       )}
       style={layout.style}
