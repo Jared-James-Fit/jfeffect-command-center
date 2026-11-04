@@ -3,8 +3,9 @@
  *
  * The dashboard is an overview, not another inbox: the Clients page and Messages already
  * organise the to-do list. Here we only summarise (snapshot tiles that open those pages,
- * already filtered) and show what those pages don't: today's training, this week's records,
- * and the business numbers (admin_dashboard_overview).
+ * already filtered) and show what those pages don't: today's training
+ * (admin_dashboard_overview). This week's records live in Crew (props, Wednesday Wins)
+ * and adherence in Training Intel, so neither is repeated here.
  */
 
 export type InboxRow = {
@@ -63,71 +64,20 @@ export type OverviewSession = {
   client_id: string; name: string | null; avatar: string | null; title: string | null;
   status: "done" | "training" | "pending"; completed_at: string | null;
 };
-export type OverviewWin = {
-  client_id: string; name: string | null; avatar: string | null; exercise: string | null;
-  reps: number | null; load_kg: number | null; unit: string | null; tier: "atpr" | "program" | "block"; at: string;
-};
-export type OverviewMoney = { currency: string; this_month: number; last_month_to_date: number; last_month: number; payments: number };
 export type Overview = {
   today: string;
   is_admin: boolean;
   training: { scheduled: OverviewSession[]; unscheduled: Array<Omit<OverviewSession, "status"> & { status?: never }> };
-  wins: OverviewWin[];
-  money: OverviewMoney[] | null;
-  leads: { new_7d: number; new_30d: number; latest: Array<{ id: string; name: string | null; submitted_at: string; temperature: string | null; status: string | null }> } | null;
-  roster: { active: number; new_this_month: number };
 };
 
-export const TIER_LABEL: Record<OverviewWin["tier"], string> = {
-  atpr: "All-time PR",
-  program: "Program PR",
-  block: "Block PR",
-};
-const TIER_RANK: Record<OverviewWin["tier"], number> = { atpr: 3, program: 2, block: 1 };
-
-/** 176.9 kg in lb → "390 lb"; kg shown to the nearest 0.5. */
-export function formatLoad(kg: number | null | undefined, unit: string | null | undefined): string | null {
-  if (kg == null || !(kg > 0)) return null;
-  if (unit === "kg") return `${Math.round(kg * 2) / 2} kg`;
-  return `${Math.round(kg * 2.2046226)} lb`;
-}
-
-/** One line per lift: "Leg Press 390 lb × 15". */
-export function winLine(w: OverviewWin): string {
-  const load = formatLoad(w.load_kg, w.unit);
-  return [w.exercise ?? "Lift", load && w.reps ? `${load} × ${w.reps}` : load].filter(Boolean).join(" ");
-}
-
-/** Records grouped by client: best tier first, then most recent. */
-export function groupWins(wins: OverviewWin[]): Array<{ client_id: string; name: string; avatar: string | null; best: OverviewWin["tier"]; lifts: OverviewWin[]; at: string }> {
-  const by = new Map<string, OverviewWin[]>();
-  for (const w of wins) by.set(w.client_id, [...(by.get(w.client_id) ?? []), w]);
-  return [...by.entries()]
-    .map(([client_id, lifts]) => {
-      const sorted = [...lifts].sort((a, b) => TIER_RANK[b.tier] - TIER_RANK[a.tier] || b.at.localeCompare(a.at));
-      return {
-        client_id,
-        name: sorted[0].name?.trim() || "Client",
-        avatar: sorted[0].avatar ?? null,
-        best: sorted[0].tier,
-        lifts: sorted,
-        at: lifts.reduce((m, l) => (l.at > m ? l.at : m), lifts[0].at),
-      };
-    })
-    .sort((a, b) => b.at.localeCompare(a.at));
-}
-
-/** "+117% vs this point last month" (null when last month had nothing to compare). */
-export function revenueDelta(m: OverviewMoney): { pct: number; up: boolean } | null {
-  if (!(m.last_month_to_date > 0)) return null;
-  const pct = Math.round(((m.this_month - m.last_month_to_date) / m.last_month_to_date) * 100);
-  return { pct: Math.abs(pct), up: pct >= 0 };
-}
-
-export function formatMoney(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-CA", { style: "currency", currency, maximumFractionDigits: amount % 1 === 0 ? 0 : 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
+/** Training today as one line: "3 of 8 done · 1 training now · 2 more trained". */
+export function trainingSummary(scheduled: Pick<OverviewSession, "status">[], extra: number): { total: number; line: string } {
+  const done = scheduled.filter((s) => s.status === "done").length;
+  const now = scheduled.filter((s) => s.status === "training").length;
+  const parts = [
+    scheduled.length ? `${done} of ${scheduled.length} done` : null,
+    now ? `${now} training now` : null,
+    extra ? `${extra} ${scheduled.length ? "more " : ""}trained` : null,
+  ].filter(Boolean);
+  return { total: scheduled.length + extra, line: parts.join(" · ") };
 }
