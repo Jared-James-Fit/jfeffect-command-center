@@ -38,11 +38,11 @@ actually does with it.
   then what to do. "Do paused reps" is not a conclusion; why, for whom, and how
   you'd know it's working is.
 - **Separate evidence from interpretation.** Plain words, in the post itself:
-  - what a study found ("A 1989 study of elite powerlifters found…"),
-  - its limits when they matter ("Both were small, and only the first used
-    powerlifters"),
-  - your interpretation ("Best read: …"),
-  - your coaching hypothesis ("My take: …").
+  - what a study found ("a 1989 study of 10 top powerlifters found…"),
+  - its limits when they matter ("only 11 guys on one team, so its a clue not
+    proof"),
+  - what it means and what the coach thinks, said as his ("my take: …",
+    "what I think: …"). Never "Best read".
 - **Don't force certainty.** When several explanations fit, say so. Challenge an
   established idea when the reasoning or newer evidence justifies it.
 - **Never invent or stretch evidence.** Every study, number, athlete or coach
@@ -55,22 +55,39 @@ actually does with it.
 
 ## How it reads
 
-- **The hook earns the tap.** The first line is a reason to keep reading: a
-  surprising claim, a question the reader has felt, a real athlete or coach when
-  one makes the point. The feed shows about four lines before "more".
-- **Short lines, sentence case, plain words.** Explain hard ideas simply ("the bar
-  only slows when your push drops below its weight"), skip jargon unless it's
-  explained in the same line, no science-paper voice.
-- **Studies by year, not author** ("a 2013 study pressed from a dead stop…"),
-  never "(Author & co)". Sources, disclaimers and series labels stay out of the
-  post (see the lesson rules in AGENTS.md).
+The coach's rule (Nov 2026): every automated post reads "dummy proof, like a
+5th grade reading level", and sounds like him. The thinking above stays; the
+words get simple. `src/lib/plain-words.ts` (`plainCheck`) is the check, and the
+tests run it on the library and the post templates.
+
+- **His voice.** He's texting athletes he knows: mostly lowercase (capitals for
+  names, "I", RPE / PR and the odd stressed word like FIRST), light punctuation,
+  thats / lets / its / youre / dont with no apostrophe, "&" sometimes, short
+  lines with blank lines between, an emoji or two of his own (💪 🔥 🫡 🤝 👀 🙏).
+  Nothing on his My Voice never-say list, no dashes, no semicolons.
+- **5th grade.** Flesch-Kincaid grade 5 or under (`PLAIN_GRADE_MAX`), no
+  sentence over 16 words (`LONGEST_SENTENCE_MAX`), everyday words: "muscle
+  growth" not hypertrophy, "your max" not 1RM, "the way down" not eccentric,
+  "a 2022 look at 69 studies" not a review or meta-analysis (`JARGON` has the
+  swaps). RPE, PR, reps, sets, top set and bar speed are fine: everyone logs them.
+- **Few numbers, few studies.** At most 8 numbers (`NUMBERS_MAX`) and 2 studies
+  (`STUDIES_MAX`) a post. Keep the one or two that make the point.
+- **The hook earns the tap.** Under the picture the feed shows about 3 lines
+  before "more", so line 1 is a reason to keep reading: a question the reader
+  has felt, a surprising claim, a real athlete or coach when one makes the point.
+- **Studies by year, not author** ("a 2013 study found…"), never "(Author & co)".
+  Sources, disclaimers and series labels stay out of the post (see the lesson
+  rules in AGENTS.md).
 - **No fixed template.** Structure follows the subject: a myth-buster, a
   diagnostic test, a mechanism explained, an experiment to run, a story. Bullets
   only where they help scanning.
-- **End on something memorable**: the conclusion in one line, a test to run this
-  week, or a reframe they'll remember at the bar.
+- **End on something to do**: one thing to try this week, a test to run, or a
+  line they'll remember at the bar.
 - **Length:** up to 1200 characters (the database's limit for a post and a library
-  lesson). Most land between 600 and 1200. Cut words, never the reasoning.
+  lesson). Most land between 350 and 800. Cut words, never the reasoning.
+- **The card is type, in sentence case.** The lesson's card (title, the struck
+  out belief and the truth, a reset's three things) keeps normal capitals, it's a
+  designed picture, but its words are as plain as the caption.
 - **The picture agrees with the words.** A diagram (`visual`) must show what the
   post claims, drawn accurately (e.g. the sticking region runs from the bar's
   fastest point to its slowest, `sticking_point` with `variant: "window"`).
@@ -89,7 +106,7 @@ the bar and pause where it slows. The rewrite:
   found the slowdown, so the bounce can't be the whole story. Both were small,
   and only the first used powerlifters.
 - **Own conclusion, labelled:** a weak position you coast through on the speed
-  built below it ("Best read"), so train the inches before the stall, not the
+  built below it (what it means), so train the inches before the stall, not the
   stall ("My take").
 - **Told the causes apart:** normal (same path, only near max), a weak bottom
   range (the bar crawls off the chest, no speed to coast on), technique
