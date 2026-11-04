@@ -1,20 +1,19 @@
 /**
  * Pictures for automated posts from an image model (server only).
  *
- * Every automated post (the daily series, Wins, the Recap, a lesson, a
- * holiday, a birthday) goes out as a real photo with its words under it.
- * A library post's photo is made as soon as it's up next for its day (it
- * rides along as the item's photo, so the coach sees it in Crew → Posts
- * ahead of time and can ask for another); a post the app writes on the day
- * (Wins, the Recap, Tuesday's numbers, a lesson, a holiday, a birthday) gets
- * one right after it goes out, and older posts are caught up. The coach can
- * also tap New picture on the post. Runs from the post-pictures-tick hook
- * (pg_cron) and makePostPicture.
+ * Only Saturday's scene gets a made photo by itself (picturedByItself): it's
+ * made as soon as Saturday's next library post is up next (it rides along as
+ * the item's photo, so the coach sees it in Crew → Posts ahead of time and
+ * can ask for another), and for a Saturday post that went out without one.
+ * Every other automated post leads with its own diagram, chart or type card;
+ * the coach can still ask for a photo on any of them (New picture, any
+ * automated post's ⋯). Runs from the post-pictures-tick hook (pg_cron) and
+ * makePostPicture.
  *
  * Model: OpenAI's image model (ChatGPT's) when OPENAI_API_KEY is set, else
  * Google's image model through the Lovable AI gateway the app already uses.
  */
-import { imageSize, pictureKind, postPicturePrompt, type PictureKind } from "@/lib/post-pictures";
+import { AUTO_PICTURE_KINDS, imageSize, pictureKind, picturedByItself, postPicturePrompt, type PictureKind } from "@/lib/post-pictures";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 
 type Admin = any;
@@ -231,10 +230,11 @@ async function postsWithoutPicture(admin: Admin, since: string, limit: number): 
     .is("media_path", null)
     .is("archived_at", null)
     .gte("created_at", since)
-    .or("series.not.is.null,series_data->birthday.not.is.null")
+    // only the kinds that get a picture by themselves (Saturday's scene), asked for in the query so a newer lesson can't hide one
+    .in("series", [...AUTO_PICTURE_KINDS])
     .order("created_at", { ascending: false })
     .limit(limit);
-  return (data ?? []).filter((p: any) => !p.story_only && pictureKind(p));
+  return (data ?? []).filter((p: any) => !p.story_only && picturedByItself(pictureKind(p)));
 }
 
 /** The library days that are on, the soonest first (today counts if it hasn't gone out). */
@@ -244,10 +244,11 @@ export function libraryDaysInOrder(on: string[], todayIsoDow: number): (typeof L
 }
 
 /**
- * One picture per run, most visible first: an automated post out in the
- * last day and a half without a photo; else the next library post of the
- * soonest day that's on (while posting isn't paused); else an older post
- * from the last three weeks. A failure waits BACKOFF_MS.
+ * One picture per run, most visible first, for the kinds that get one by
+ * themselves (Saturday's scene): such a post out in the last day and a half
+ * without a photo; else its day's next library post (while it's on and
+ * posting isn't paused); else an older one from the last three weeks. A
+ * failure waits BACKOFF_MS.
  */
 export async function runPostPicturesTick(admin: Admin): Promise<Record<string, unknown>> {
   const last = await readStatus(admin);
@@ -262,7 +263,8 @@ export async function runPostPicturesTick(admin: Admin): Promise<Record<string, 
   } else {
     const { data: settings } = await admin.from("community_series_settings").select("paused, series_on").maybeSingle();
     if (settings && !settings.paused) {
-      for (const series of libraryDaysInOrder(settings.series_on ?? [], isoDowIn("America/Winnipeg"))) {
+      const on = (settings.series_on ?? []).filter((s: string) => picturedByItself(pictureKind({ series: s })));
+      for (const series of libraryDaysInOrder(on, isoDowIn("America/Winnipeg"))) {
         const { data: next } = await admin.rpc("community_series_next", { _series: series });
         const item = Array.isArray(next) ? next[0] : next;
         if (!item?.id || (Array.isArray(item.media) && item.media.length)) continue;

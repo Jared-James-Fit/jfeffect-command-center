@@ -1,9 +1,11 @@
 /**
  * Pictures for automated posts, made by an image model (pure parts: the
- * prompts, which posts get one, and reading an image's size). Every
- * automated post (the daily series, Wins, the Recap, a lesson, a holiday, a
- * birthday) goes out as a real photo with its words under it, like a post
- * someone actually uploaded; the server side is post-pictures.server.ts.
+ * prompts, which posts get one, and reading an image's size). Only a post
+ * with nothing of its own to show gets one by itself: Saturday's scene. A
+ * lesson leads with its diagram, Wins / the Recap / Tuesday's numbers /
+ * Thursday's feature with their chart, quotes and tips as a clean type card,
+ * a holiday with its own photo; the coach can still ask for a picture on any
+ * of them (New picture). The server side is post-pictures.server.ts.
  */
 import type { SpiritSceneKey } from "@/components/community/spirit-scenes";
 
@@ -69,11 +71,23 @@ const KINDS: PictureKind[] = [
   "holiday",
 ];
 
-/** A post (or library item) the app makes, and so gets a made photo: its kind. */
+/** A post (or library item) the app makes, and so can get a made photo (the coach's New picture): its kind. */
 export function pictureKind(p: { series?: string | null; series_data?: unknown }): PictureKind | null {
   if (p.series && (KINDS as string[]).includes(p.series)) return p.series as PictureKind;
   const d = p.series_data as { birthday?: unknown } | null | undefined;
   return !p.series && d && typeof d === "object" && d.birthday ? "birthday" : null;
+}
+
+/**
+ * The kinds that get a made photo by themselves (post-pictures-tick): only
+ * Saturday's scene, a picture idea with no chart, diagram or words card of
+ * its own. Everything else already has a cover that says more than a stock
+ * gym shot would, and a feed of made photos reads as AI.
+ */
+export const AUTO_PICTURE_KINDS: readonly PictureKind[] = ["saturday_spirit"];
+
+export function picturedByItself(kind: PictureKind | null): boolean {
+  return !!kind && AUTO_PICTURE_KINDS.includes(kind);
 }
 
 /** The shot for each kind of post (Saturday's comes from its scene). */

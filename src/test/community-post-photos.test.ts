@@ -62,7 +62,7 @@ describe("photos on every post, same rules as sharing a workout", () => {
     expect(read("src/components/community/post-detail.tsx")).toContain("cover={post.media_type ? <PostMedia post={post} thumbUrl={thumb} full /> : undefined}");
     // on an automated post a photo (made for it, or his own) is the picture; a numbers / diagram card follows it
     expect(read("src/components/community/post-card.tsx")).toContain("if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail=");
-    expect(read("src/lib/instagram-export.ts")).toContain("if (slides.length) return { card: info, slides, cardLast: !!info };");
+    expect(read("src/lib/instagram-export.ts")).toContain('if (slides.length) return { card: info, slides, cardLast: !!info && info !== "lesson" };');
     // a picture shipped with the app needs no signing and is never deleted from the bucket
     expect(read("src/lib/community-media.ts")).toContain("if (p.startsWith(APP_MEDIA)) {");
     expect(read("src/lib/community-media.ts")).toContain("!p.startsWith(APP_MEDIA)");

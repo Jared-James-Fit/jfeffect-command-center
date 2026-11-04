@@ -171,14 +171,14 @@ describe("which posts are automated, and what picture each gets", () => {
       ),
     ).toBe("lesson");
     expect(postArtCard(post())).toBeNull();
-    // with a photo: the numbers / diagram card comes after it; a words, birthday or holiday card is dropped
+    // with a photo: a numbers card comes after it, a lesson's diagram before it; a words, birthday or holiday card is dropped
     const photo = { media_path: "a.jpg", media_type: "image" } as const;
     expect(
       instagramPlan(post({ series: "wednesday_wins", series_data: wins as never, ...photo })),
     ).toMatchObject({ card: "wins", cardLast: true });
     expect(
       instagramPlan(post({ series: "lesson", series_extra: lessonExtra as never, ...photo })),
-    ).toMatchObject({ card: "lesson", cardLast: true });
+    ).toMatchObject({ card: "lesson", cardLast: false });
     expect(
       instagramPlan(post({ series: "monday_motivation", quote: "Do the work.", ...photo })),
     ).toMatchObject({ card: null, cardLast: false });
@@ -189,9 +189,9 @@ describe("which posts are automated, and what picture each gets", () => {
     expect(
       instagramPlan(post({ series: "wednesday_wins", series_data: wins as never })).cardLast,
     ).toBeFalsy();
-    // the grid / Home decide without loading the painters: a photo always leads
+    // the grid / Home decide without loading the painters: a photo leads, except on a lesson (its diagram does)
     expect(autoPostHasArt(post({ series: "saturday_spirit", media_type: "image" }))).toBe(false);
-    expect(autoPostHasArt(post({ series: "lesson", media_type: "image" }))).toBe(false);
+    expect(autoPostHasArt(post({ series: "lesson", media_type: "image" }))).toBe(true);
     expect(autoPostHasArt(post({ series: "wednesday_wins" }))).toBe(true);
   });
 });

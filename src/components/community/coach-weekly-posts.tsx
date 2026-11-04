@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunityPost, type CommunitySeries, type CrewCompare } from "@/lib/community";
 import { useFullMediaUrl, useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem } from "@/lib/community.queries";
 import { makePostPicture } from "@/lib/post-pictures.functions";
+import { picturedByItself } from "@/lib/post-pictures";
 import { useAuth } from "@/lib/auth";
 import { CompareBars } from "@/components/community/series-cards";
 import { PostArtImage } from "@/components/community/post-art";
@@ -202,7 +203,7 @@ export function CoachWeeklyPosts() {
                         )}
                       </button>
                     )}
-                    {library && next && <NextPicture item={next} series={series} on={on} />}
+                    {library && next && picturedByItself(series) && <NextPicture item={next} series={series} on={on} />}
                     {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
                     {series === "try_it_thursday" && next?.data?.habit && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">

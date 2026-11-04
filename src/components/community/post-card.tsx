@@ -47,7 +47,7 @@ import { MessageAuthorSheet } from "@/components/community/message-author-sheet"
 import { PostShareSheet } from "@/components/community/post-share-sheet";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
 import { PostArtImage } from "@/components/community/post-art";
-import { postArtCard } from "@/lib/instagram-export";
+import { instagramPlan } from "@/lib/instagram-export";
 import { PostScoreRow } from "@/components/community/post-score";
 import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
@@ -110,13 +110,16 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
 
 /**
  * An automated post (the daily series, a lesson, a holiday, a birthday) is
- * an Instagram photo post: its photo edge to edge at 4:5 (made for it, or the
- * coach's own), then the words. A card with the numbers or a lesson's
- * diagram is the next slide (the one Save image and Share to Instagram send
- * with it). Until its photo is made, the painted card is the picture.
+ * an Instagram post: its picture edge to edge at 4:5, then the words. The
+ * picture is its own card (a lesson's diagram, the week's numbers, a quote
+ * in type, the holiday's photo, the one Save image and Share to Instagram
+ * send); a photo on it (Saturday's made scene, or one the coach added) is the
+ * picture instead, with a numbers card after it and a lesson's card before it.
  */
 export function AutoPostHero({ post, thumbUrl, unit, full = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean }) {
-  const card = postArtCard(post);
+  const plan = instagramPlan(post);
+  const card = isAutoPost(post) ? plan.card : null;
+  if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;
   if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill /> : undefined} />;
   return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} /> : null;
 }
