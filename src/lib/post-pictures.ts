@@ -1,41 +1,101 @@
 /**
  * Pictures for automated posts, made by an image model (pure parts: the
- * prompts and reading an image's size). Saturday Spirit's scenes go out as a
- * real picture instead of the app's own drawing; the server side is
- * post-pictures.server.ts.
+ * prompts, which posts get one, and reading an image's size). Every
+ * automated post (the daily series, Wins, the Recap, a lesson, a holiday, a
+ * birthday) goes out as a real photo with its words under it, like a post
+ * someone actually uploaded; the server side is post-pictures.server.ts.
  */
 import type { SpiritSceneKey } from "@/components/community/spirit-scenes";
 
-/** How every post picture looks: one style, so the feed reads as one account. */
+/**
+ * How every post picture looks: one style, so the feed reads as one account.
+ * Bright and true to life on purpose: the feed is dark, and a dark, moody
+ * picture sinks into it and reads as the app's art instead of a photo.
+ */
 export const PICTURE_STYLE = [
-  "Style: cinematic, photorealistic, editorial quality, like a premium strength brand's Instagram.",
-  "Moody, dramatic natural light, deep shadows and rich blacks, warm red (#ef3340) and gold (#fbbf24) highlights used sparingly.",
-  "One clear subject, simple uncluttered background, shallow depth of field, vertical portrait composition (4:5) with the subject centred and room around it.",
+  "Style: a real photograph, like one a good photographer took on a modern camera for a strength coach's Instagram.",
+  "Natural daylight, bright and airy, true-to-life colours, clean and uncluttered background, shallow depth of field. Not dark, not moody, no black background, no neon, not an illustration, not CGI.",
+  "Real people only from behind, from the side or as hands, candid and never posed or looking at the camera.",
+  "Vertical portrait composition (4:5) with the subject centred and room around it.",
   "Absolutely no text, letters, numbers, logos or watermarks anywhere in the image.",
 ].join(" ");
 
 /** Each Saturday scene as a picture: the same idea as the drawing, shot for real. */
 export const SCENE_PICTURE: Record<SpiritSceneKey, string> = {
   keep_digging:
-    "A lone miner deep in a dark rock tunnel, mid-swing with a pickaxe, lit only by his headlamp; just beyond the rock face in front of him, unseen by him, a thick vein of glowing gold.",
+    "A lone miner in a sunlit open quarry, mid-swing with a pickaxe at a rock face; just past the rock in front of him, unseen by him, a thick vein of gold catching the light.",
   bamboo_roots:
-    "A single tiny bamboo sprout breaking through dark soil at sunrise, shown in a cross-section of the earth: underneath it an enormous, intricate root system spreads far and wide, softly glowing, many times bigger than the sprout above.",
+    "A single tiny bamboo sprout breaking through soil in morning sun, shown in a cross-section of the earth: underneath it an enormous, intricate root system spreads far and wide, many times bigger than the sprout above.",
   stonecutter:
-    "A stonecutter's hammer striking a huge granite boulder at the exact moment it splits cleanly in two, stone dust hanging in a beam of light, countless chips and marks from earlier blows all over the rock.",
+    "A stonecutter's hammer striking a huge granite boulder at the exact moment it splits cleanly in two, stone dust in the sunlight, countless chips and marks from earlier blows all over the rock.",
   iceberg:
-    "A split-level view of an iceberg in a calm dark sea at dusk: a small tip above the waterline and, below the surface, a colossal mass of blue ice disappearing into the deep.",
+    "A split-level view of an iceberg in a calm blue sea under a bright sky: a small tip above the waterline and, below the surface, a colossal mass of blue ice going down into clear water.",
   stairs_fog:
-    "A lone athlete climbing a long stone staircase that disappears into thick fog, seen from behind, warm light breaking through the fog above.",
+    "A lone athlete climbing a long stone staircase that disappears into soft morning mist, seen from behind, sunlight breaking through the mist above.",
   water_stone:
-    "Close-up of a single drop of water falling onto a dark stone, a smooth deep hollow worn into the rock by years of drops, light glinting on the water.",
+    "Close-up of a single drop of water falling onto a stone in daylight, a smooth deep hollow worn into the rock by years of drops, light glinting on the water.",
   year_dots:
-    "A worn leather training journal lying open on a gym bench, pages full of handwritten entries too small and blurred to read, chalk dust and a pencil beside it, early morning light.",
+    "A worn leather training journal lying open on a gym bench, pages full of handwritten entries too small and blurred to read, chalk dust and a pencil beside it, bright morning light.",
   switchback:
-    "A zigzag switchback trail up a steep mountain at night under a sky full of stars, a single headlamp most of the way up, the summit edged with the first light of dawn.",
+    "A zigzag switchback trail up a steep green mountain at sunrise, a single hiker most of the way up, the summit lit gold.",
   sunrise_rack:
-    "An empty, quiet strength gym at sunrise, golden light streaming through tall windows onto a loaded barbell resting in a squat rack, dust in the air.",
+    "An empty, quiet strength gym at sunrise, golden light streaming through tall windows onto a loaded barbell resting in a squat rack.",
   seed_to_tree:
-    "A row across dark soil in soft morning light showing a seed, a sprout, a young sapling and a full-grown tree, like a time-lapse in a single frame.",
+    "A row across rich soil in soft morning light showing a seed, a sprout, a young sapling and a full-grown tree, like a time-lapse in a single frame.",
+};
+
+/** What kind of automated post it is, for its picture (null: not one that gets a made picture). */
+export type PictureKind =
+  | "monday_motivation"
+  | "tuesday_tips"
+  | "wednesday_wins"
+  | "try_it_thursday"
+  | "finish_strong_friday"
+  | "saturday_spirit"
+  | "sunday_recap"
+  | "lesson"
+  | "holiday"
+  | "birthday";
+
+const KINDS: PictureKind[] = [
+  "monday_motivation",
+  "tuesday_tips",
+  "wednesday_wins",
+  "try_it_thursday",
+  "finish_strong_friday",
+  "saturday_spirit",
+  "sunday_recap",
+  "lesson",
+  "holiday",
+];
+
+/** A post (or library item) the app makes, and so gets a made photo: its kind. */
+export function pictureKind(p: { series?: string | null; series_data?: unknown }): PictureKind | null {
+  if (p.series && (KINDS as string[]).includes(p.series)) return p.series as PictureKind;
+  const d = p.series_data as { birthday?: unknown } | null | undefined;
+  return !p.series && d && typeof d === "object" && d.birthday ? "birthday" : null;
+}
+
+/** The shot for each kind of post (Saturday's comes from its scene). */
+export const KIND_PICTURE: Record<Exclude<PictureKind, "saturday_spirit">, string> = {
+  monday_motivation:
+    "An athlete in a bright, clean strength gym getting ready to start the week's first session: chalking up, setting up a barbell or tightening a belt, morning light.",
+  tuesday_tips:
+    "A real close-up in a bright strength gym of exactly what the tip is about (the lift, the body position, the grip or the equipment it mentions), clear enough to teach from, like a coach's photo of a cue.",
+  wednesday_wins:
+    "A candid moment in a bright strength gym right after a big lift: a high five between training partners, chalky hands, a loaded barbell, everyone seen from behind or the side.",
+  try_it_thursday:
+    "An athlete checking their phone between sets in a bright gym, the screen turned away or too blurred to read, a barbell or dumbbells nearby.",
+  finish_strong_friday:
+    "An athlete finishing the last hard set of the week in a bright strength gym, racking the bar or catching their breath, sweat and chalk, warm late-day light.",
+  sunday_recap:
+    "A calm Sunday reset on a bright kitchen table in soft daylight: an open training journal, a water bottle, lifting shoes and a couple of meal-prep containers.",
+  lesson:
+    "A real, clear photo of what the lesson is about (the lift, the position, the habit or the idea), like the cover photo of a coach's educational post.",
+  holiday:
+    "The holiday's feeling in a real, warm everyday scene (people together, the food, the season), bright and joyful.",
+  birthday:
+    "A birthday cake with lit candles sitting on a bench in a bright strength gym, a few balloons, cheerful and warm.",
 };
 
 const clean = (s: string | null | undefined) => String(s ?? "").replace(/\s+/g, " ").trim();
@@ -46,6 +106,20 @@ export function scenePicturePrompt(scene: SpiritSceneKey, caption?: string | nul
   return [
     `A picture for a strength coach's Saturday post. ${SCENE_PICTURE[scene]}`,
     words ? `The post says: "${words}". The picture should make that feeling land without any words.` : "",
+    PICTURE_STYLE,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** The prompt for any automated post's photo: its kind's shot, then what it says. */
+export function postPicturePrompt(kind: PictureKind, caption?: string | null, opts: { scene?: SpiritSceneKey | null; title?: string | null } = {}): string {
+  if (kind === "saturday_spirit" && opts.scene) return scenePicturePrompt(opts.scene, caption);
+  const shot = kind === "saturday_spirit" ? "A real, simple scene that makes the post's feeling land." : KIND_PICTURE[kind];
+  const words = clean([opts.title, caption].filter(Boolean).join(". ")).slice(0, 320);
+  return [
+    `The cover photo for a strength coach's Instagram post. ${shot}`,
+    words ? `The post says: "${words}". The photo should fit what it's about without showing any words.` : "",
     PICTURE_STYLE,
   ]
     .filter(Boolean)

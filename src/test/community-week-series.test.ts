@@ -133,8 +133,8 @@ describe("Sunday Recap: the week's report card", () => {
     expect(isWinsStats({ feature: "bodyweight" })).toBe(false);
     // each is painted as its own picture (the one the feed, Save image and Instagram share)
     const plan = read("src/lib/instagram-export.ts");
-    expect(plan).toContain('if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return { card: "recap", slides: [] };');
-    expect(plan).toContain('if (isWinsStats(post.series_data)) return { card: "wins", slides: [] };');
+    expect(plan).toContain('if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return "recap";');
+    expect(plan).toContain('if (isWinsStats(post.series_data)) return "wins";');
   });
 });
 
