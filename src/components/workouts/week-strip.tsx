@@ -1,4 +1,4 @@
-// The 7-day workout strip (Mon-first, status dot per day, week arrows).
+// The 7-day workout strip (Mon-first, the week's dates, a status mark per day, week arrows).
 // Shared by the client's Workouts screen and the coach's workout peek in the
 // messenger, so both read a client's week the same way.
 import { addDays, addWeeks, format, isSameDay, isSameMonth, startOfWeek } from "date-fns";
@@ -11,34 +11,15 @@ import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { CalendarDayCell, type CalendarDnd } from "@/components/workouts/calendar-day-dnd";
 import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 
-export function statusDotClass(status: WorkoutStatus | "none"): string {
-  switch (status) {
-    case "completed_today":
-    case "completed_on_scheduled":
-    case "completed_different_day":
-      return "bg-emerald-500";
-    case "today": return "bg-primary";
-    case "in_progress":
-    case "review_pending":
-    case "incomplete":
-      return "bg-amber-500";
-    case "missed": return "bg-rose-500";
-    case "upcoming": return "bg-muted-foreground/60";
-    case "available":
-    case "not_started":
-      return "bg-muted-foreground/40";
-    default: return "bg-transparent";
-  }
+/** A session or appointment with the coach that day: violet, like everywhere else sessions show. */
+export function SessionDot({ className }: { className?: string }) {
+  return <span aria-hidden className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-violet-500", className)} />;
 }
 
-/** A session or appointment with the coach that day: violet, like everywhere else sessions show. */
-export function SessionDot({ onPrimary, className }: { onPrimary?: boolean; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-violet-500", onPrimary && "ring-2 ring-primary-foreground", className)}
-    />
-  );
+/** "Nov 2 – 8", or "Oct 26 – Nov 1" across a month: the strip is a calendar, so it says dates. */
+export function weekRangeLabel(weekStart: Date): string {
+  const end = addDays(weekStart, 6);
+  return `${format(weekStart, "MMM d")} – ${format(end, isSameMonth(weekStart, end) ? "d" : "MMM d")}`;
 }
 
 export function WeekStrip({
@@ -55,37 +36,26 @@ export function WeekStrip({
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = localStartOfToday();
-  // A workout schedule, not a plain calendar: lead with the program's week.
-  const trainingWeek = (() => {
-    for (const d of days) {
-      const n = (byDate.get(toLocalISO(d)) ?? []).find((it) => it.week?.week_index)?.week?.week_index;
-      if (n) return `Week ${n}`;
-    }
-    return null;
-  })();
+  // Dates only: where this week sits in the program (block, week) is the Program card's.
   return (
-    <Card className="p-2">
-      <div className="mb-1 flex items-center justify-between">
+    <Card className="px-2 pb-2 pt-1.5">
+      <div className="mb-0.5 flex items-center justify-between">
         <button
           type="button"
           onClick={() => onSelectDate(addWeeks(selectedDate, -1))}
           aria-label="Previous week"
-          className="-my-1 grid h-10 w-10 place-items-center rounded-lg hover:bg-secondary"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-          <span>
-            {trainingWeek && <span className="font-bold text-foreground">{trainingWeek} · </span>}
-            {format(weekStart, isSameMonth(weekStart, days[6]) ? "MMMM yyyy" : "MMM d")}
-            {!isSameMonth(weekStart, days[6]) && ` – ${format(days[6], "MMM d")}`}
-          </span>
+        <div className="flex items-center gap-1">
+          <span className="text-[13px] font-semibold tabular-nums text-foreground">{weekRangeLabel(weekStart)}</span>
           {/* only once you've moved off today */}
           {!isSameDay(selectedDate, today) && (
             <button
               type="button"
               onClick={() => onSelectDate(today)}
-              className="-my-2 inline-flex h-10 items-center rounded-lg px-2 text-xs font-semibold text-primary hover:bg-secondary"
+              className="-my-2 inline-flex h-10 items-center rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               Today
             </button>
@@ -95,12 +65,12 @@ export function WeekStrip({
           type="button"
           onClick={() => onSelectDate(addWeeks(selectedDate, 1))}
           aria-label="Next week"
-          className="-my-1 grid h-10 w-10 place-items-center rounded-lg hover:bg-secondary"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5">
         {days.map((d) => {
           const iso = toLocalISO(d);
           const list = byDate.get(iso) ?? [];
@@ -122,39 +92,30 @@ export function WeekStrip({
               {...cellDnd.props}
               className={cn(
                 cellDnd.className,
-                "flex flex-col items-center justify-between rounded-lg px-1 py-2 text-center transition",
-                "min-h-[64px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isSelected
-                  ? "bg-primary text-primary-foreground"
-                  : isToday
-                    ? "border border-primary/60 bg-primary/10"
-                    : "hover:bg-secondary",
+                "flex min-h-[64px] flex-col items-center gap-1 rounded-xl px-0.5 py-1.5 text-center transition",
+                "hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
               aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}${hasSession ? ", session with your coach" : ""}`}
+              aria-current={isToday ? "date" : undefined}
+              aria-label={`${format(d, "EEEE MMMM d")}${isToday ? " (today)" : ""}${item ? `, ${getWorkoutStatus(item).label}${extra ? ` (+${extra} more)` : ""}` : ", rest day"}${hasSession ? ", session with your coach" : ""}`}
             >
-              <span className={cn(
-                "text-[10px] font-bold uppercase tracking-wider",
-                isSelected ? "text-primary-foreground/80" : "text-muted-foreground",
-              )}>
+              <span className={cn("text-[11px] font-medium", isSelected || isToday ? "text-foreground" : "text-muted-foreground")}>
                 {format(d, "EEE")}
               </span>
-              <span className={cn(
-                "text-base font-bold",
-                isSelected ? "" : isToday ? "text-primary" : "",
-              )}>
+              {/* the day picked is a plain filled circle, today a thin ring: no brand red (that's Start's) */}
+              <span
+                className={cn(
+                  "grid h-8 w-8 place-items-center rounded-full text-[15px] font-semibold tabular-nums",
+                  isSelected ? "bg-foreground text-background" : isToday ? "ring-1 ring-inset ring-foreground/40" : "",
+                )}
+              >
                 {format(d, "d")}
               </span>
-              <span className="mt-0.5 flex items-center gap-1">
-                <WorkoutStatusMark mark={dayMark(list)} onPrimary={isSelected} />
-                {hasSession && <SessionDot onPrimary={isSelected} />}
+              <span className="flex h-2.5 items-center gap-1">
+                <WorkoutStatusMark mark={dayMark(list)} />
+                {hasSession && <SessionDot />}
               </span>
-              {extra > 0 && (
-                <span className={cn(
-                  "text-[9px] font-bold leading-none",
-                  isSelected ? "text-primary-foreground/80" : "text-muted-foreground",
-                )}>+{extra}</span>
-              )}
+              {extra > 0 && <span className="text-[9px] font-semibold leading-none text-muted-foreground">+{extra}</span>}
             </button>
               )}
             </CalendarDayCell>

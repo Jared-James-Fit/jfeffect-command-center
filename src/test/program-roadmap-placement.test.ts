@@ -3,18 +3,28 @@ import { describe, expect, it } from "vitest";
 
 describe("Workouts page: program roadmap under the calendar", () => {
   const src = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
-  it("renders after the calendar / Block View tabs, before cardio and analytics", () => {
-    const tabsEnd = src.indexOf("</Tabs>");
+  it("renders after the calendar / Block view, before cardio and analytics", () => {
+    const blockView = src.indexOf("<BlockViewTab");
     const card = src.indexOf("<ProgramRoadmapCard");
-    expect(tabsEnd).toBeGreaterThan(-1);
-    expect(card).toBeGreaterThan(tabsEnd);
+    expect(blockView).toBeGreaterThan(-1);
+    expect(card).toBeGreaterThan(blockView);
     expect(card).toBeLessThan(src.indexOf("<ClientCardioSection"));
   });
-  it("is compact by default with an expandable roadmap and per-block weeks", () => {
+  it("is compact by default with an expandable roadmap; one bar, no week pills on top of it", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
     expect(card).toContain("See the full roadmap");
     expect(card).toContain("Open workouts in Block View");
-    expect(card).toContain("<WeekPills");
+    expect(card).toContain("<ProgramBar blocks={blocks} />");
+    expect(card).not.toContain("WeekPills");
+  });
+  it("is the one place that says the block and week, in neutral ink (no red or green bar)", () => {
+    const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");
+    expect(card).toContain("? blockTitle(current)");
+    expect(card).toContain("`Block ${currentIdx + 1} of ${blocks.length}`");
+    expect(card).toContain('<div className="h-full rounded-full bg-foreground" style={{ width: `${pct}%` }} />');
+    expect(card).not.toMatch(/bg-primary|text-primary/);
+    // the program's own week rides on the roadmap row
+    expect(card).toContain("{programWeekText ?? `${blocks.length} blocks`}");
   });
   it("reads in one pass: the program's name, the week, one bar, then this block and this week", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");

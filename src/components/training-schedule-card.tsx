@@ -256,17 +256,46 @@ function committedShortDays(client: Client): string[] {
 }
 
 /**
- * The committed training days as one chip ("Mon Tue Wed Sat"), for a
- * page whose calendar already shows the week (Workouts): tap it to change
- * them in a sheet, the same editor and the same save (every upcoming workout
- * moves onto the new days). Not set yet: an amber "Set your training days".
+ * The committed days as a short label ("Mon Tue Wed Sat", "6 days a week"),
+ * whether they're set, and whether the athlete still has to set or confirm
+ * them (`needed`: the only time the chip earns a spot on Workouts).
  */
-export function TrainingScheduleChip({ client, editable = true, className }: { client: Client; editable?: boolean; className?: string }) {
-  const [open, setOpen] = useState(false);
+export function trainingDaysState(client: Client, editable = true): { label: string; set: boolean; needed: boolean } {
   const days = committedShortDays(client);
   const set = !!client.committed_training_frequency && days.length > 0;
   const needed = editable && (!set || !client.training_schedule_completed);
   const label = !set ? "Set your training days" : days.length >= 6 ? `${days.length} days a week` : days.join(" ");
+  return { label, set, needed };
+}
+
+/**
+ * The training-days editor in a bottom sheet: the same editor and the same
+ * save as everywhere (every upcoming workout moves onto the new days). Opened
+ * from the chip, or from Workouts' ⋯ once the days are set.
+ */
+export function TrainingDaysSheet({ client, open, onOpenChange }: { client: Client; open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" hideCloseButton className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
+        <SheetHeader className="mb-3 min-h-0 space-y-1 pl-0 text-left">
+          <SheetTitle>Your training days</SheetTitle>
+          <SheetDescription>Your upcoming workouts move onto the days you pick.</SheetDescription>
+        </SheetHeader>
+        {open && <TrainingScheduleCard client={client} editable defaultEditing embedded onDone={() => onOpenChange(false)} />}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/**
+ * The committed training days as one chip ("Mon Tue Wed Sat"): tap it to
+ * change them in a sheet. Not set yet: an amber "Set your training days".
+ * On the athlete's Workouts it shows only while that's needed (the week
+ * strip already shows the days); once set, the days live in the page's ⋯.
+ */
+export function TrainingScheduleChip({ client, editable = true, className }: { client: Client; editable?: boolean; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const { label, set, needed } = trainingDaysState(client, editable);
   return (
     <>
       <button
@@ -285,17 +314,7 @@ export function TrainingScheduleChip({ client, editable = true, className }: { c
         <span className="min-w-0 truncate">{label}</span>
         {editable && set && <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" />}
       </button>
-      {editable && (
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="bottom" hideCloseButton className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
-            <SheetHeader className="mb-3 min-h-0 space-y-1 pl-0 text-left">
-              <SheetTitle>Your training days</SheetTitle>
-              <SheetDescription>Your upcoming workouts move onto the days you pick.</SheetDescription>
-            </SheetHeader>
-            {open && <TrainingScheduleCard client={client} editable defaultEditing embedded onDone={() => setOpen(false)} />}
-          </SheetContent>
-        </Sheet>
-      )}
+      {editable && <TrainingDaysSheet client={client} open={open} onOpenChange={setOpen} />}
     </>
   );
 }

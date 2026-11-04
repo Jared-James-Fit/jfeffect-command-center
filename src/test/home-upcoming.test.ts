@@ -113,12 +113,29 @@ describe("Home schedule card: today in full, then what's coming", () => {
     expect(src).not.toContain("Open calendar");
     expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');
   });
-  it("reads as a calendar: date tile + Calendar header and this week's days, each opening the Calendar page", () => {
+  it("reads as a calendar: Home's card header + this week's days, each opening the Calendar page", () => {
     expect(src).toContain('<AgendaHeader today={today} link={links ? { to: "/portal/calendar" } : null} />');
     expect(src).toContain('link={links ? (d) => ({ to: "/portal/calendar", search: { date: d } }) : null}');
     const agenda = readFileSync("src/components/schedule/agenda.tsx", "utf8");
-    expect(agenda).toContain("export function DateTile(");
     expect(agenda).toContain("Calendar {link && <ChevronRight");
     expect(agenda).toContain("export function AgendaWeek(");
+    // the same header as Home's other cards (plain icon, 16px title), no red date tile
+    expect(agenda).not.toContain("export function DateTile(");
+    expect(agenda).toContain('<CalendarDays className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />');
+  });
+  it("is neutral: today is a plain filled circle and the only red is today's workout's Start", () => {
+    const agenda = readFileSync("src/components/schedule/agenda.tsx", "utf8");
+    expect(agenda).toContain('isToday ? "bg-foreground text-background"');
+    expect(agenda).not.toContain('isToday ? "bg-primary text-primary-foreground"');
+    expect(agenda).toContain('training: "bg-foreground/60"');
+    expect(agenda).not.toContain("bg-cyan-500");
+    expect(agenda).not.toMatch(/AGENDA_ACTION = "[^"]*text-primary/);
+    // Now is neutral too
+    expect(agenda).not.toContain("bg-primary/50");
+    // the one red: Start / Continue / Review
+    expect(agenda).toContain("rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground");
+  });
+  it("today's workout says which block its week is in", () => {
+    expect(src).toContain("const tag = blockNameParts(raw?.block?.name)?.tag ?? null;");
   });
 });

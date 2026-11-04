@@ -7,7 +7,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { supabase } from "@/integrations/supabase/client";
 import { getClientResults } from "@/lib/pl-programs";
 import { InfoTip } from "@/components/analytics/info-tip";
-import { SectionLabel } from "@/components/ui/section-label";
 import {
   compactWeight,
   computeMonthHighlights,
@@ -72,8 +71,12 @@ export function TrainingAnalyticsPreviewCard({
 
   return (
     <section aria-label={`Your ${h.monthLabel}`}>
-      <SectionLabel icon={<CalendarDays className="h-4 w-4 shrink-0" />}>Your {h.monthLabel}</SectionLabel>
       <Card className="overflow-hidden p-0">
+        {/* Its own header, like every card on the page: no all-caps label floating above it. */}
+        <div className="flex items-center gap-2 px-4 pt-3">
+          <CalendarDays className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+          <h2 className="text-base font-semibold">Your {h.monthLabel}</h2>
+        </div>
         <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
           {empty ? (
             <div className="p-4 text-center">
@@ -86,7 +89,7 @@ export function TrainingAnalyticsPreviewCard({
           ) : (
             <>
               {/* The three numbers that matter, in one row */}
-              <div className="grid grid-cols-3 divide-x divide-border/60 px-2 py-3.5">
+              <div className="grid grid-cols-3 divide-x divide-border/60 px-2 pb-3.5 pt-3">
                 <Tile label="Workouts" value={isLoading ? "…" : String(h.workouts)} />
                 <Tile label="PRs" value={isLoading ? "…" : String(h.prLifts)} record={h.prLifts > 0} />
                 <Tile label="Week streak" value={isLoading ? "…" : String(h.streakWeeks)} />
@@ -197,7 +200,7 @@ function Tile({
 }) {
   return (
     <div className="px-2 text-center">
-      <div className={"text-2xl font-bold leading-none tabular-nums " + (record ? "text-amber-600 dark:text-amber-400" : "")}>{value}</div>
+      <div className={"text-2xl font-semibold leading-none tabular-nums " + (record ? "text-amber-600 dark:text-amber-400" : "")}>{value}</div>
       <div className="mt-1 text-xs text-muted-foreground">{label}</div>
     </div>
   );

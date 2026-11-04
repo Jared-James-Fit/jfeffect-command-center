@@ -57,12 +57,10 @@ describe("workout schedule source of truth", () => {
     expect(iso(dayScheduledDate(byTitle.get("Squat Day") as any))).toBe("2026-08-06");
   });
 
-  it("4. selected week header follows the selected instance", () => {
+  it("4. the picked day's card follows the selected instance", () => {
     const source = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
-    expect(source).toContain("const selectedItems = byDate.get(toLocalISO(selectedDate)) ?? [];");
-    expect(source).toContain("const selectedHeaderItem = selectedPrimaryItems[0] ?? null;");
-    expect(source).toContain("if (selectedHeaderItem) return selectedHeaderItem;");
-    expect(source).toContain("const headerItem = weekItem ?? fallbackHeaderItem;");
+    expect(source).toContain("items={byDate.get(toLocalISO(selectedDate)) ?? []}");
+    expect(source).toContain("sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}");
   });
 
   it("5. an untouched instance never shows Continue Workout", () => {

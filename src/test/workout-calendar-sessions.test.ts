@@ -35,6 +35,6 @@ describe("sessions show on the Workouts calendar too", () => {
     expect(exp).toMatch(/\{showAppointmentsLink && \(\s*<DropdownMenuItem asChild>\s*<Link\s+to="\/portal\/calendar"/);
     expect(exp).not.toContain("text-violet-400");
     const strip = read("src/components/workouts/week-strip.tsx");
-    expect(strip).toContain("{hasSession && <SessionDot onPrimary={isSelected} />}");
+    expect(strip).toContain("{hasSession && <SessionDot />}");
   });
 });

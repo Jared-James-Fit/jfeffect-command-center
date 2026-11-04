@@ -4,7 +4,7 @@ import { blockNameParts } from "@/lib/training-roadmap";
 
 const page = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
 
-describe("Workouts: the block is said once, at the top", () => {
+describe("Workouts: the block is said once, on the Program card", () => {
   it("a coach's Block 1 — Volume 5s/7s reads as a Block 1 tag beside its name", () => {
     expect(blockNameParts("Block 1 — Volume 5s/7s")).toEqual({ tag: "Block 1", name: "Volume 5s/7s" });
     expect(blockNameParts("Block 3 – Peak / Taper / Meet")).toEqual({ tag: "Block 3", name: "Peak / Taper / Meet" });
@@ -15,16 +15,20 @@ describe("Workouts: the block is said once, at the top", () => {
     expect(blockNameParts("  ")).toBeNull();
     expect(blockNameParts(null)).toBeNull();
   });
-  it("the header names the block (no week: the strip under it says which week)", () => {
-    expect(page).toContain('data-testid="workouts-block"');
-    expect(page).not.toContain("headerWeek");
-    expect(read("src/components/workouts/week-strip.tsx")).toContain("if (n) return `Week ${n}`;");
+  it("the header is just Workouts and the strip says dates: no block tag, no week number up top", () => {
+    expect(page).not.toContain('data-testid="workouts-block"');
+    expect(page).not.toContain("subtitle={subtitle");
+    const strip = read("src/components/workouts/week-strip.tsx");
+    expect(strip).not.toContain("if (n) return `Week ${n}`;");
+    expect(strip).toContain("export function weekRangeLabel(");
   });
   it("the day card is the day and how long, never the block and week again (another block's workout still names its block)", () => {
     expect(page).toContain('data-testid="workout-day-meta"');
     expect(page).toContain("item.block?.id && item.block.id !== pageBlockId && item.block.name && !isAtHomeBackupSessionBlock(item.block)");
-    expect(page).not.toContain('item.block?.name,\n                item.week?.week_index ? `Week ${item.week.week_index}` : null,\n                format(date, "EEE MMM d"),');
-    expect(page).toContain("pageBlockId={headerBlock?.id ?? null}");
+    expect(page).toContain("pageBlockId={currentBlockId}");
+    // "Today" is the day line, so no "Today" / "Upcoming" badge on top of it
+    expect(page).toContain('const QUIET_DAY_STATUSES: WorkoutStatus[] = ["today", "upcoming", "available", "not_started"];');
+    expect(page).toContain('const dayText = isSameDay(date, localStartOfToday()) ? "Today" : format(date, "EEE, MMM d");');
   });
 });
 

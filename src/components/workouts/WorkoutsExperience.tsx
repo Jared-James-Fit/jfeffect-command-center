@@ -9,7 +9,7 @@ import {
   addMonths, startOfMonth, endOfMonth, endOfWeek, eachDayOfInterval,
 } from "date-fns";
 import {
-  Calendar as CalendarIcon, ChevronLeft, ChevronRight, ClipboardList, Clock,
+  Calendar as CalendarIcon, CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Clock,
   History, Loader2, Move, MoreVertical, Play, Pencil, Sun, Activity, Download,
   RotateCcw, MessageSquare, Trophy, ChevronDown, CircleDot,
 } from "lucide-react";
@@ -18,7 +18,6 @@ import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from "@/components/ui/sheet";
@@ -32,7 +31,7 @@ import { clientWorkoutsQuery, PAGE_CACHE_MS } from "@/lib/client-workouts-query"
 import { useArrivalClass } from "@/hooks/use-arrival";
 import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/components/workouts/workouts-skeleton";
 import { resolveEstimatedWorkoutMinutes } from "@/lib/workout-estimate";
-import { cleanDayTitle, type WorkoutItem, dayScheduledDate } from "@/lib/workout-today";
+import { cleanDayTitle, type WorkoutItem } from "@/lib/workout-today";
 import { getWorkoutStatus, type WorkoutStatus } from "@/lib/workout-status";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
@@ -48,7 +47,7 @@ import { useClientImpersonation } from "@/lib/client-impersonation";
 import { useServiceTier } from "@/lib/service-tier";
 import { WorkoutProgressRing } from "@/components/workout/shared/workout-progress-ring";
 import { useWorkoutProgress } from "@/lib/workout-progress";
-import { TrainingScheduleChip } from "@/components/training-schedule-card";
+import { TrainingDaysSheet, TrainingScheduleChip, trainingDaysState } from "@/components/training-schedule-card";
 import { toast } from "sonner";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 import {
@@ -84,7 +83,7 @@ import {
   type CalendarDnd,
 } from "@/components/workouts/calendar-day-dnd";
 import { formatCompactWorkoutLabel } from "@/lib/workout-day-label";
-import { SessionDot, WeekStrip, statusDotClass } from "@/components/workouts/week-strip";
+import { SessionDot, WeekStrip } from "@/components/workouts/week-strip";
 import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type CalendarItem } from "@/lib/calendar-sources";
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
@@ -92,7 +91,7 @@ import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
 import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
-import { blockNameParts, type ProgramRoadmap } from "@/lib/training-roadmap";
+import type { ProgramRoadmap } from "@/lib/training-roadmap";
 
 type Mode = "self" | "coach";
 
@@ -165,12 +164,9 @@ export function WorkoutsExperience({
   // --- Selected date drives the calendar tab and header context. ----------
   const today = localStartOfToday();
   const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const selectedItems = byDate.get(toLocalISO(selectedDate)) ?? [];
-  const selectedPrimaryItems = selectedItems.filter((it) => !isAtHomeBackupSessionBlock(it.block));
   const todayItems = byDate.get(toLocalISO(today)) ?? [];
   const todayPrimaryItems = todayItems.filter((it) => !isAtHomeBackupSessionBlock(it.block));
   const todayItem = todayPrimaryItems[0] ?? null;
-  const selectedHeaderItem = selectedPrimaryItems[0] ?? null;
   const allBlocks = useMemo(() => {
     const seen = new Map<string, any>();
     for (const it of primaryDayItems) {
@@ -178,41 +174,17 @@ export function WorkoutsExperience({
     }
     return [...seen.values()];
   }, [primaryDayItems]);
-  const fallbackHeaderItem =
-    todayItem ??
-    primaryDayItems.find((it) => {
-      const d = dayScheduledDate(it, committedDays);
-      return d && d >= today;
-    }) ??
-    primaryDayItems[primaryDayItems.length - 1] ?? null;
-  // The block is said once, here: the block of the week on screen (the day
-  // picked, else any workout that week, so a rest day never shows today's
-  // block over another week). The strip under it says which week; the day's
-  // card doesn't repeat either.
-  const weekItem = (() => {
-    if (selectedHeaderItem) return selectedHeaderItem;
-    const start = startOfWeek(selectedDate, { weekStartsOn: 1 });
-    for (let i = 0; i < 7; i++) {
-      const it = (byDate.get(toLocalISO(addDays(start, i))) ?? []).find((x) => x.block?.id && !isAtHomeBackupSessionBlock(x.block));
-      if (it) return it;
-    }
-    return null;
-  })();
-  const headerItem = weekItem ?? fallbackHeaderItem;
-  const headerBlock = headerItem?.block ?? pickCurrentBlock(allBlocks, today) ?? null;
-  const headerBlockName = blockNameParts(headerBlock?.name);
-  const subtitle = headerBlockName ? (
-    <span className="inline-flex max-w-full items-center gap-1.5" data-testid="workouts-block">
-      {headerBlockName.tag && (
-        <span className="shrink-0 rounded bg-secondary px-1.5 py-px text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          {headerBlockName.tag}
-        </span>
-      )}
-      <span className="truncate text-[13px] font-semibold text-foreground/85">{headerBlockName.name}</span>
-    </span>
-  ) : null;
+  // Where you are in the program (block, week) is said once, on the Program
+  // card: the header is just "Workouts" and the strip says dates. A workout
+  // from another block than the current one (a week ahead or behind) names
+  // its own block on its card.
+  const currentBlockId = todayItem?.block?.id ?? pickCurrentBlock(allBlocks, today)?.id ?? null;
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [calView, setCalView] = useState<"week" | "month">("week");
+  const [daysOpen, setDaysOpen] = useState(false);
+  const daysState = client ? trainingDaysState(client as any, mode === "self") : null;
+  // The athlete's days are in ⋯ once set (the strip already shows them); the
+  // chip shows only while they still have to set them, or read-only for a coach.
+  const showDaysChip = !!client && (mode === "coach" || !!daysState?.needed);
 
   // Program roadmap: under the calendar, shared by both tabs. Tapping
   // "Open workouts in Block View" on a block opens it there.
@@ -224,7 +196,9 @@ export function WorkoutsExperience({
     programId: roadmapProgramId,
     ownerName: (client as any)?.full_name ?? (client as any)?.first_name ?? null,
   });
-  const [tab, setTab] = useState<"calendar" | "block">("calendar");
+  // One control for the three ways to look at the schedule: this week, the
+  // month, or the block's workouts in order.
+  const [view, setView] = useState<"week" | "month" | "block">("week");
   const [blockViewId, setBlockViewId] = useState<string | null>(null);
 
   // ---- Drag & drop rescheduling (pointer + touch) ------------------------
@@ -444,11 +418,10 @@ export function WorkoutsExperience({
     <>
       <PageHeader
         title={mode === "coach" ? `${clientName ?? "Client"} — Workouts` : "Workouts"}
-        subtitle={subtitle || undefined}
-        // the title and ⋮ on one row, the block under them (the coach's
-        // "Name — Workouts" keeps its own row so the name isn't cut). Today lives
-        // by the week / month arrows, only once you've moved off today; analytics
-        // is the month card's "See all analytics" and this ⋮.
+        // the title and ⋮ on one row, nothing under them: the block and week are
+        // the Program card's (the coach's "Name — Workouts" keeps its own row so
+        // the name isn't cut). Today lives by the week / month arrows, only once
+        // you've moved off today; analytics is the month card's and this ⋮.
         actionsInline={mode === "self"}
         actions={
           <div className="flex items-center">
@@ -477,6 +450,13 @@ export function WorkoutsExperience({
                     </Link>
                   </DropdownMenuItem>
                 )}
+                {/* The athlete's training days, once set: the same editor the chip opened. */}
+                {mode === "self" && daysState?.set && (
+                  <DropdownMenuItem onSelect={() => setDaysOpen(true)}>
+                    <CalendarCheck className="mr-2 h-4 w-4" /> Training days
+                    <span className="ml-auto pl-3 text-xs text-muted-foreground">{daysState.label}</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onSelect={() =>
                     navigate({
@@ -503,45 +483,30 @@ export function WorkoutsExperience({
 
       <div className="space-y-4 p-4 pb-32 md:p-6">
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "calendar" | "block")} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
-            {/* "Schedule": the training schedule. The Calendar page is for appointments. */}
-            <TabsTrigger value="calendar" className="gap-1">
-              <CalendarIcon className="h-3.5 w-3.5" /> Schedule
-            </TabsTrigger>
-            <TabsTrigger value="block" className="gap-1">
-              <ClipboardList className="h-3.5 w-3.5" /> Block View
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="calendar" className="space-y-4">
-            {/* the committed training days (tap to change them) beside Week / Month: one row, not a card */}
-            <div className="flex items-center justify-between gap-2">
-              {client ? <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" /> : <span />}
-              {!isLoading && dayItems.length > 0 && (
-                <div className="inline-flex shrink-0 rounded-full bg-muted px-0.5 text-[13px]" role="group" aria-label="Calendar view">
-                  {(["week", "month"] as const).map((v) => (
-                    // The whole 40px is the tap target; the pill inside is what shows.
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setCalView(v)}
-                      className="group inline-flex h-10 items-center px-0.5 focus-visible:outline-none"
-                      aria-pressed={calView === v}
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex h-8 items-center rounded-full px-3 font-semibold transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring",
-                          calView === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground group-hover:text-foreground",
-                        )}
-                      >
-                        {v === "week" ? "Week" : "Month"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+        {/* One control for the schedule: this week, the month, or the block's workouts in order.
+            (The Calendar page is for appointments; this is the training schedule.) */}
+        <div className="grid grid-cols-3 rounded-xl bg-muted p-1" role="group" aria-label="Schedule view" data-testid="workouts-view">
+          {(["week", "month", "block"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={cn(
+                "h-9 rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                view === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
               )}
-            </div>
+            >
+              {v === "week" ? "Week" : v === "month" ? "Month" : "Block"}
+            </button>
+          ))}
+        </div>
+
+        {/* Training days: only while they still have to be set (or read-only for a coach); the athlete's are in ⋯. */}
+        {showDaysChip && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}
+
+        {view !== "block" ? (
+          <div className="space-y-4">
             {isLoading ? (
               <ScheduleSkeleton />
             ) : dayItems.length === 0 ? (
@@ -549,7 +514,7 @@ export function WorkoutsExperience({
             ) : (
               <div className={cn("space-y-4", arrived)}>
                 <CalendarDndProvider dnd={dnd}>
-                  {calView === "week" ? (
+                  {view === "week" ? (
                     <WeekStrip
                       selectedDate={selectedDate}
                       onSelectDate={setSelectedDate}
@@ -571,7 +536,7 @@ export function WorkoutsExperience({
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
                 <SelectedDayList
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
-                  pageBlockId={headerBlock?.id ?? null}
+                  pageBlockId={currentBlockId}
                   sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}
                   date={selectedDate}
                   readonly={mode === "coach"}
@@ -581,9 +546,9 @@ export function WorkoutsExperience({
                 />
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="block" className="space-y-3">
+          </div>
+        ) : (
+          <div className="space-y-3">
             {isLoading ? (
               <div className="space-y-3" role="status" aria-label="Loading your program">
                 <WorkoutCardSkeleton />
@@ -599,20 +564,20 @@ export function WorkoutsExperience({
                 onSelectBlock={setBlockViewId}
               />
             )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
 
-        {/* The calendar says what to do today; the roadmap says where it's going and why. */}
+        {/* The calendar says what to do today; the Program card says where you are and where it's going. */}
         {isLoading ? (
           <ProgramCardSkeleton />
         ) : (
           <div className={arrived}>
           <ProgramRoadmapCard
             roadmap={roadmap}
-            selectedBlockId={tab === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
+            selectedBlockId={view === "block" ? blockViewId ?? roadmap?.currentBlockId ?? null : null}
             onSelectBlock={(id) => {
               setBlockViewId(id);
-              setTab("block");
+              setView("block");
               if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             coach={mode === "coach"}
@@ -622,8 +587,8 @@ export function WorkoutsExperience({
         )}
 
         {mode === "self" && (
-          // Each section carries its own label, so give them room to breathe.
-          <div className="space-y-6 pt-2">
+          // The same rhythm as the cards above: each card carries its own header.
+          <div className="space-y-4">
             <ClientCardioSection
               clientId={clientId}
               hideWhenEmpty
@@ -650,6 +615,9 @@ export function WorkoutsExperience({
         open={historyOpen}
         onOpenChange={setHistoryOpen}
       />
+      {mode === "self" && client && (
+        <TrainingDaysSheet client={client as any} open={daysOpen} onOpenChange={setDaysOpen} />
+      )}
     </>
   );
 }
@@ -728,7 +696,7 @@ function MonthGrid({
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid grid-cols-7 gap-1 px-1 pb-1 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+      <div className="grid grid-cols-7 gap-1 px-1 pb-1 text-center text-[11px] font-medium text-muted-foreground">
         {weekdayLabels.map((d) => (<div key={d}>{d}</div>))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -762,20 +730,18 @@ function MonthGrid({
                 cellDnd.className,
                 "flex min-h-[64px] flex-col items-stretch rounded-lg border p-1 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isSelected
-                  ? "border-primary bg-primary/15"
-                  : isToday
-                    ? "border-primary/60 bg-primary/5"
-                    : "border-transparent hover:bg-secondary",
+                // neutral like the week strip: the day picked is a soft fill, today a filled number
+                isSelected ? "border-foreground/25 bg-secondary" : "border-transparent hover:bg-secondary/60",
                 !inMonth && "opacity-40",
               )}
               aria-pressed={isSelected}
-              aria-label={`${format(d, "EEEE MMMM d")}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}${sessionDays?.has(iso) ? ", session with your coach" : ""}`}
+              aria-current={isToday ? "date" : undefined}
+              aria-label={`${format(d, "EEEE MMMM d")}${isToday ? " (today)" : ""}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}${sessionDays?.has(iso) ? ", session with your coach" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <span className={cn(
-                  "text-xs font-bold",
-                  isToday && !isSelected ? "text-primary" : "",
+                  "grid h-5 min-w-5 place-items-center rounded-full px-0.5 text-xs font-semibold tabular-nums",
+                  isToday && "bg-foreground text-background",
                 )}>
                   {format(d, "d")}
                 </span>
@@ -910,6 +876,9 @@ function DaySessionsCard({ sessions, date, clientId }: { sessions: CalendarItem[
  * the card is already that day's. A workout done on another day keeps its
  * label ("Completed Tue instead of Mon"), since that's news.
  */
+/** Statuses the day line already says ("Today", a date to come): no badge for them. */
+const QUIET_DAY_STATUSES: WorkoutStatus[] = ["today", "upcoming", "available", "not_started"];
+
 function dayCardStatusLabel(status: string, label: string): string {
   switch (status) {
     case "upcoming": return "Upcoming";
@@ -1073,7 +1042,7 @@ function SelectedDayCard({
         <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
           <Sun className="h-5 w-5 text-muted-foreground" />
         </div>
-        <div className="mt-3 text-base font-bold">No lifting workout</div>
+        <div className="mt-3 text-base font-semibold">No lifting workout</div>
         <div className="text-xs text-muted-foreground">
           {format(date, "EEEE, MMMM d")}
         </div>
@@ -1099,6 +1068,10 @@ function SelectedDayCard({
   // title, so the title drops its "Monday — " and the badge its weekday.
   const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });
   const badgeLabel = dayCardStatusLabel(visibleStatus.status, visibleStatus.label);
+  // A badge only when it's news (done, missed, in progress, review): "Today" /
+  // "Upcoming" just repeat the day line under the title.
+  const showBadge = !QUIET_DAY_STATUSES.includes(visibleStatus.status);
+  const dayText = isSameDay(date, localStartOfToday()) ? "Today" : format(date, "EEE, MMM d");
   const cta: WorkoutCta = needsReviewToFinish
     ? {
         label: "Finish Review",
@@ -1112,44 +1085,49 @@ function SelectedDayCard({
       <Card className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="line-clamp-2 text-lg font-bold leading-snug">{title}</div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className={cn("text-[10px]", visibleStatus.tone)}>{badgeLabel}</Badge>
-              {isAtHomeBackupSessionBlock(item.block) && (
-                <Badge variant="secondary" className="text-[10px]">{AT_HOME_BACKUP_BADGE}</Badge>
-              )}
-              {/* the ring only once a set is logged: a 0% ring before the start says nothing */}
-              {progress && progress.prescribedSets > 0 && progress.completedSets > 0 && (
-                <WorkoutProgressRing
-                  pct={progress.pct}
-                  status={
-                    visibleStatus.status === "review_pending" || visibleStatus.status === "incomplete"
-                      ? "in_progress"
-                      : progress.status
-                  }
-                  size={36}
-                />
-              )}
-            </div>
-            {/* The day and how long; the block and week are said once, at the top of the page
-                (a workout from another block than the page's still names its own). */}
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground" data-testid="workout-day-meta">
+            <div className="line-clamp-2 text-lg font-semibold leading-snug">{title}</div>
+            {/* The day and how long; the block and week are said once, on the Program card
+                (a workout from another block than the current one still names its own). */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[13px] text-muted-foreground" data-testid="workout-day-meta">
               {item.block?.id && item.block.id !== pageBlockId && item.block.name && !isAtHomeBackupSessionBlock(item.block) && (
                 <span className="font-medium text-foreground/80">{item.block.name} ·</span>
               )}
-              <span>{format(date, "EEE MMM d")}</span>
+              <span>{dayText}</span>
               {!isCompleted && (() => {
                 const est = ((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }));
                 return est != null ? (
                   <>
                     <span aria-hidden>·</span>
                     <span className="inline-flex items-center gap-1" data-testid="workout-est-duration">
-                      <Clock className="h-3 w-3" /> Est. {est} min
+                      <Clock className="h-3 w-3" /> {est} min
                     </span>
                   </>
                 ) : null;
               })()}
             </div>
+            {(() => {
+              // the ring only once a set is logged: a 0% ring before the start says nothing
+              const ring = !!progress && progress.prescribedSets > 0 && progress.completedSets > 0;
+              const backup = isAtHomeBackupSessionBlock(item.block);
+              if (!showBadge && !ring && !backup) return null;
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {showBadge && <Badge variant="outline" className={cn("text-[11px]", visibleStatus.tone)}>{badgeLabel}</Badge>}
+                  {backup && <Badge variant="secondary" className="text-[11px]">{AT_HOME_BACKUP_BADGE}</Badge>}
+                  {ring && progress && (
+                    <WorkoutProgressRing
+                      pct={progress.pct}
+                      status={
+                        visibleStatus.status === "review_pending" || visibleStatus.status === "incomplete"
+                          ? "in_progress"
+                          : progress.status
+                      }
+                      size={36}
+                    />
+                  )}
+                </div>
+              );
+            })()}
           </div>
           {hasMenuActions && (!readonly || canEditHere) && (
             <DropdownMenu>
@@ -1653,8 +1631,8 @@ function SelfEmptyState() {
   if (!isSelfServe) return <CoachedEmptyState />;
   return (
     <Card className="p-10 text-center">
-      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary/10">
-        <ClipboardList className="h-6 w-6 text-primary" />
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-muted">
+        <ClipboardList className="h-6 w-6 text-muted-foreground" />
       </div>
       <p className="mt-3 text-sm text-muted-foreground">
         No plan yet. Pick one from the Plan Library and Week 1 lands here.
@@ -1674,7 +1652,7 @@ export function BackToToday({ selectedDate, onSelectDate }: { selectedDate: Date
     <button
       type="button"
       onClick={() => onSelectDate(today)}
-      className="-my-2 inline-flex h-10 items-center rounded-lg px-2 text-xs font-semibold text-primary hover:bg-secondary"
+      className="-my-2 inline-flex h-10 items-center rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground"
     >
       Today
     </button>

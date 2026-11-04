@@ -25,7 +25,8 @@ describe("Calendar = appointments and the way in to today's workout; Workouts = 
     const card = read("src/components/home/upcoming-schedule-card.tsx");
     expect(card).toContain('return item.kind !== "workout" && item.kind !== "cardio";');
     expect(card).toContain("if (!it || !isCalendarItem(it) || it.status === \"Cancelled\") continue;");
-    expect(card).toContain("No appointments coming up.");
+    // nothing coming up says nothing: no empty row of its own
+    expect(card).not.toContain("No appointments coming up.");
   });
 
   it("the Calendar page shows no workout schedule, only a way in to today's workout", () => {
@@ -36,13 +37,19 @@ describe("Calendar = appointments and the way in to today's workout; Workouts = 
     expect(page.indexOf("<TodayWorkoutLink")).toBeLessThan(page.indexOf("<CalendarBoard"));
   });
 
-  it("Workouts reads as the training schedule: Schedule tab, the program week on the strip, Monday said once", () => {
+  it("Workouts reads as the training schedule: one Week · Month · Block control, dates on the strip, Monday said once", () => {
     const exp = read("src/components/workouts/WorkoutsExperience.tsx");
-    expect(exp).toContain('<CalendarIcon className="h-3.5 w-3.5" /> Schedule');
+    expect(exp).toContain('{(["week", "month", "block"] as const).map((v) => (');
+    expect(exp).toContain('aria-label="Schedule view"');
     expect(exp).toContain('const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(item.day?.title, item.day?.day_index) });');
     expect(exp).toContain('case "upcoming": return "Upcoming";');
-    expect(exp).toContain('<div className="line-clamp-2 text-lg font-bold leading-snug">{title}</div>');
+    expect(exp).toContain('<div className="line-clamp-2 text-lg font-semibold leading-snug">{title}</div>');
+    // the strip is a calendar: it says the week's dates; block and week are the Program card's
     const strip = read("src/components/workouts/week-strip.tsx");
-    expect(strip).toContain("{trainingWeek && <span className=\"font-bold text-foreground\">{trainingWeek} · </span>}");
+    expect(strip).toContain("{weekRangeLabel(weekStart)}");
+    expect(strip).not.toContain("trainingWeek");
+    // the day picked is a plain filled circle, today a thin ring: brand red is only Start's
+    expect(strip).toContain('isSelected ? "bg-foreground text-background" : isToday ? "ring-1 ring-inset ring-foreground/40" : ""');
+    expect(strip).not.toContain("bg-primary");
   });
 });
