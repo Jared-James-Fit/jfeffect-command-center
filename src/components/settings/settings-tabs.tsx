@@ -22,7 +22,6 @@ const TABS: Tab[] = [
   { to: "/admin/archives",      label: "Archive",      roles: ["admin"] },
   { to: "/admin/popups",        label: "Popups",       roles: ["admin"] },
   { to: "/admin/chat-gifs",     label: "Chat media",   roles: ["admin"], also: ["/admin/chat-sounds"] },
-  { to: "/admin/sops",          label: "SOPs",         roles: ["admin"] },
 ];
 
 export function SettingsTabs() {

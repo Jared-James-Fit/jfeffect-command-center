@@ -20,9 +20,7 @@ export function memberPathToPortal(pathname: string): string | null {
     "/m/nutrition/targets-manage": "/portal/nutrition-targets",
     "/m/nutrition/targets-setup": "/portal/nutrition-targets",
     "/m/progress": "/portal/progress",
-    "/m/resources": "/portal/resources",
     "/m/tools": "/portal/tools",
-    "/m/announcements": "/portal/announcements",
     "/m/support": "/portal/support",
     "/m/billing": "/portal/membership",
     "/m/upgrade": "/portal/upgrade",
@@ -31,7 +29,6 @@ export function memberPathToPortal(pathname: string): string | null {
   if (exact[p]) return exact[p];
   let m: RegExpMatchArray | null;
   if ((m = p.match(/^\/m\/plans\/([^/]+)$/))) return `/portal/plans/${m[1]}`;
-  if ((m = p.match(/^\/m\/resources\/([^/]+)$/))) return `/portal/resources/${m[1]}`;
   if ((m = p.match(/^\/m\/nutrition\/([^/]+)$/))) return `/portal/recipes/${m[1]}`;
   if (p.startsWith("/m/workouts/") || p.startsWith("/m/my-plans/")) return "/portal/workouts";
   return "/portal";

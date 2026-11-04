@@ -11,7 +11,6 @@ export type GlobalSearchHit = {
     | "exercise"
     | "member_plan"
     | "recipe"
-    | "broadcast"
     | "purchase";
   id: string;
   label: string;
@@ -50,7 +49,7 @@ export const globalSearchFn = createServerFn({ method: "GET" })
     const limit = data.limit ?? 8;
     const like = `%${escape(q)}%`;
 
-    const [clientsRes, coachesRes, membersRes, tplRes, exRes, planRes, recipeRes, bcastRes, purchaseRes] = await Promise.all([
+    const [clientsRes, coachesRes, membersRes, tplRes, exRes, planRes, recipeRes, purchaseRes] = await Promise.all([
       supabase
         .from("clients")
         .select(
@@ -114,11 +113,6 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         .from("recipes")
         .select("id, title, category, body")
         .or([`title.ilike.${like}`, `category.ilike.${like}`, `body.ilike.${like}`].join(","))
-        .limit(limit),
-      supabase
-        .from("broadcasts")
-        .select("id, title, body")
-        .or([`title.ilike.${like}`, `body.ilike.${like}`].join(","))
         .limit(limit),
       supabase
         .from("purchase_records")
@@ -232,18 +226,6 @@ export const globalSearchFn = createServerFn({ method: "GET" })
         label: r.title || "Recipe",
         sub: m?.snippet ?? r.category ?? null,
         to: `/admin/recipes?focus=${r.id}`,
-        matchedField: m?.field ?? null,
-      });
-    }
-
-    for (const b of bcastRes.data ?? []) {
-      const m = pickMatch(q, { title: b.title, body: b.body });
-      hits.push({
-        kind: "broadcast",
-        id: b.id,
-        label: b.title || "Broadcast",
-        sub: m?.snippet ?? null,
-        to: `/admin/broadcasts/${b.id}`,
         matchedField: m?.field ?? null,
       });
     }

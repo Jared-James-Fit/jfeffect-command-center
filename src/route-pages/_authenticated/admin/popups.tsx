@@ -4,10 +4,9 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import {
-  Megaphone, Calendar as CalendarIcon, ListChecks, Cake, ExternalLink, Plus, Eye, Search,
+  ListChecks, Cake, Plus, Eye, Search,
   Smartphone, ClipboardCheck, Archive, Pencil, Trash2, Image as ImageIcon, UserCog, Activity, LayoutGrid,
 } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
@@ -44,7 +43,8 @@ const sb = supabase as any;
    OVERVIEW (unified list of every popup)
    ============================================================ */
 
-type PopupType = "broadcast" | "event" | "task" | "birthday" | "install";
+// Broadcasts were never sent and events never used: neither pops up any more.
+type PopupType = "task" | "birthday" | "install";
 
 type UnifiedPopup = {
   popupType: PopupType;
@@ -60,9 +60,7 @@ type UnifiedPopup = {
   sentAt: string | null;
 };
 
-const TYPE_META: Record<PopupType, { label: string; icon: typeof Megaphone; color: string }> = {
-  broadcast: { label: "Broadcast", icon: Megaphone,   color: "#3b82f6" },
-  event:     { label: "Event",     icon: CalendarIcon, color: "#a855f7" },
+const TYPE_META: Record<PopupType, { label: string; icon: typeof ListChecks; color: string }> = {
   task:      { label: "Task",      icon: ListChecks,  color: "#22c55e" },
   birthday:  { label: "Birthday",  icon: Cake,        color: "#ec4899" },
   install:   { label: "Install",   icon: Smartphone,  color: "#0ea5e9" },
@@ -80,72 +78,18 @@ function toneClass(t: UnifiedPopup["statusTone"]) {
 }
 
 async function fetchAllPopups(): Promise<UnifiedPopup[]> {
-  const [bc, ev, tk, bd, ip, bcSeen, evAcks, bdViews] = await Promise.all([
-    supabase.from("broadcasts").select("id,title,type,audience_scope,status,publish_at,expires_at,created_at"),
-    supabase.from("events").select("id,name,importance,audience_scope,status,event_date").in("importance", ["High", "Critical"]),
+  const [tk, bd, ip, bdViews] = await Promise.all([
     supabase.from("tasks").select("id,title,status,quadrant").eq("status", "open"),
     sb.from("client_birthday_cards").select("id,client_id,enabled,template_key,headline,clients(full_name)"),
     sb.from("setup_prompts").select("id,title,audience_scope,enabled,sort_order"),
-    supabase.from("broadcast_seen").select("broadcast_id"),
-    supabase.from("event_popup_acks").select("event_id"),
     supabase.from("client_birthday_card_views").select("client_id"),
   ]);
 
-  const bcCount = new Map<string, number>();
-  (bcSeen.data ?? []).forEach((r: any) => bcCount.set(r.broadcast_id, (bcCount.get(r.broadcast_id) ?? 0) + 1));
-  const evCount = new Map<string, number>();
-  (evAcks.data ?? []).forEach((r: any) => evCount.set(r.event_id, (evCount.get(r.event_id) ?? 0) + 1));
   const bdCount = new Map<string, number>();
   (bdViews.data ?? []).forEach((r: any) => bdCount.set(r.client_id, (bdCount.get(r.client_id) ?? 0) + 1));
 
   const now = Date.now();
   const out: UnifiedPopup[] = [];
-
-  for (const b of (bc.data ?? []) as any[]) {
-    const expired = b.expires_at && new Date(b.expires_at).getTime() < now;
-    const scheduled = b.publish_at && new Date(b.publish_at).getTime() > now;
-    const isActive = (b.status === "Active") && !expired && !scheduled;
-    const tone: UnifiedPopup["statusTone"] =
-      b.status === "Draft" ? "draft" :
-      b.status === "Archived" ? "off" :
-      expired ? "expired" :
-      scheduled ? "scheduled" :
-      isActive ? "active" : "off";
-    out.push({
-      popupType: "broadcast",
-      id: b.id,
-      title: b.title || "(untitled broadcast)",
-      audience: b.audience_scope ?? "—",
-      status: tone === "expired" ? "Expired" : tone === "scheduled" ? "Scheduled" : (b.status ?? "—"),
-      statusTone: tone,
-      enabled: b.status === "Active",
-      canToggle: true,
-      editPath: `/admin/broadcasts/${b.id}`,
-      seenCount: bcCount.get(b.id) ?? 0,
-      sentAt: b.publish_at ?? b.created_at ?? null,
-    });
-  }
-
-  for (const e of (ev.data ?? []) as any[]) {
-    const past = e.event_date && new Date(e.event_date).getTime() < now - 24 * 3600 * 1000;
-    const tone: UnifiedPopup["statusTone"] =
-      e.status === "Active" && !past ? "active" :
-      e.status === "Draft" ? "draft" :
-      past || e.status === "Completed" || e.status === "Archived" ? "expired" : "off";
-    out.push({
-      popupType: "event",
-      id: e.id,
-      title: e.name || "(untitled event)",
-      audience: e.audience_scope ?? "—",
-      status: past ? "Past" : (e.status ?? "—"),
-      statusTone: tone,
-      enabled: e.status === "Active",
-      canToggle: true,
-      editPath: `/admin/events/${e.id}`,
-      seenCount: evCount.get(e.id) ?? 0,
-      sentAt: e.event_date ?? null,
-    });
-  }
 
   const openCount = (tk.data ?? []).length;
   out.push({
@@ -199,13 +143,7 @@ async function fetchAllPopups(): Promise<UnifiedPopup[]> {
 }
 
 async function togglePopup(row: UnifiedPopup, next: boolean): Promise<void> {
-  if (row.popupType === "broadcast") {
-    const { error } = await supabase.from("broadcasts").update({ status: next ? "Active" : "Archived" }).eq("id", row.id);
-    if (error) throw error;
-  } else if (row.popupType === "event") {
-    const { error } = await sb.from("events").update({ status: next ? "Active" : "Archived" }).eq("id", row.id);
-    if (error) throw error;
-  } else if (row.popupType === "birthday") {
+  if (row.popupType === "birthday") {
     const { error } = await sb.from("client_birthday_cards").update({ enabled: next }).eq("id", row.id);
     if (error) throw error;
   } else if (row.popupType === "install") {
@@ -266,8 +204,6 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
 
   const stats = useMemo(() => {
     const by: Record<PopupType, { total: number; active: number }> = {
-      broadcast: { total: 0, active: 0 },
-      event:     { total: 0, active: 0 },
       task:      { total: 0, active: 0 },
       birthday:  { total: 0, active: 0 },
       install:   { total: 0, active: 0 },
@@ -319,8 +255,6 @@ function OverviewPanel({ onJumpToTab }: { onJumpToTab: (tab: string) => void }) 
             <SelectTrigger className="md:w-44"><SelectValue placeholder="All types" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="broadcast">Broadcasts</SelectItem>
-              <SelectItem value="event">Events</SelectItem>
               <SelectItem value="task">Tasks</SelectItem>
               <SelectItem value="birthday">Birthday cards</SelectItem>
               <SelectItem value="install">Install prompts</SelectItem>
@@ -474,158 +408,6 @@ function ConfirmDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
-}
-
-/* ================= BROADCASTS BULK ================= */
-function BroadcastsPanel() {
-  const qc = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirm, setConfirm] = useState<null | "archive" | "delete">(null);
-
-  const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["popups-broadcasts"],
-    queryFn: async () => (await sb.from("broadcasts").select("*").order("publish_at", { ascending: false })).data ?? [],
-  });
-
-  const toggle = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleAll = (checked: boolean) => setSelected(checked ? new Set(rows.map((r: any) => r.id)) : new Set());
-
-  const doArchive = async () => {
-    const ids = [...selected];
-    const { error } = await sb.from("broadcasts").update({ status: "Archived" }).in("id", ids);
-    if (error) toast.error(error.message); else toast.success(`Archived ${ids.length}`);
-    setSelected(new Set()); setConfirm(null); qc.invalidateQueries({ queryKey: ["popups-broadcasts"] });
-    qc.invalidateQueries({ queryKey: ["admin-popups"] });
-  };
-  const doDelete = async () => {
-    const ids = [...selected];
-    const { error } = await sb.from("broadcasts").delete().in("id", ids);
-    if (error) toast.error(error.message); else toast.success(`Deleted ${ids.length}`);
-    setSelected(new Set()); setConfirm(null); qc.invalidateQueries({ queryKey: ["popups-broadcasts"] });
-    qc.invalidateQueries({ queryKey: ["admin-popups"] });
-  };
-
-  return (
-    <Card className="p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">Popups that appear when clients open the app. Edit opens the full broadcast editor.</div>
-        <Button asChild size="sm" variant="outline"><Link to="/admin/broadcasts">Open full editor</Link></Button>
-      </div>
-      <BulkBar total={rows.length} selectedCount={selected.size} onToggleAll={toggleAll}
-        onArchive={() => setConfirm("archive")} onDelete={() => setConfirm("delete")} />
-      {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No broadcasts.</div>
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((r: any) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-card p-3">
-              <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggle(r.id)} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-semibold">{r.title}</span>
-                  <Badge variant="outline" className="text-[10px]">{r.status}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{r.type}</Badge>
-                </div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">
-                  Publish {format(new Date(r.publish_at), "MMM d, yyyy h:mma")}{r.expires_at ? ` · Expires ${format(new Date(r.expires_at), "MMM d")}` : ""}
-                </div>
-              </div>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/admin/broadcasts/$broadcastId" params={{ broadcastId: r.id }}>
-                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                </Link>
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ConfirmDialog open={confirm === "archive"} onOpenChange={(v) => !v && setConfirm(null)}
-        title="Archive broadcasts?" description={`${selected.size} will be hidden from clients but kept.`}
-        confirmText="Archive" onConfirm={doArchive} />
-      <ConfirmDialog open={confirm === "delete"} onOpenChange={(v) => !v && setConfirm(null)}
-        title="Delete broadcasts?" description={`${selected.size} will be permanently deleted.`}
-        confirmText="Delete" destructive onConfirm={doDelete} />
-    </Card>
-  );
-}
-
-/* ================= EVENTS BULK ================= */
-function EventsPanel() {
-  const qc = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirm, setConfirm] = useState<null | "archive" | "delete">(null);
-
-  const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["popups-events"],
-    queryFn: async () => (await sb.from("events").select("id, name, event_type, event_date, status, audience_scope, importance, archived_at").order("event_date", { ascending: false })).data ?? [],
-  });
-
-  const toggle = (id: string) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleAll = (checked: boolean) => setSelected(checked ? new Set(rows.map((r: any) => r.id)) : new Set());
-
-  const doArchive = async () => {
-    const ids = [...selected];
-    const { error } = await sb.from("events").update({ archived_at: new Date().toISOString(), status: "Archived" }).in("id", ids);
-    if (error) toast.error(error.message); else toast.success(`Archived ${ids.length}`);
-    setSelected(new Set()); setConfirm(null); qc.invalidateQueries({ queryKey: ["popups-events"] });
-    qc.invalidateQueries({ queryKey: ["admin-popups"] });
-  };
-  const doDelete = async () => {
-    const ids = [...selected];
-    const { error } = await sb.from("events").delete().in("id", ids);
-    if (error) toast.error(error.message); else toast.success(`Deleted ${ids.length}`);
-    setSelected(new Set()); setConfirm(null); qc.invalidateQueries({ queryKey: ["popups-events"] });
-    qc.invalidateQueries({ queryKey: ["admin-popups"] });
-  };
-
-  return (
-    <Card className="p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">Events that surface as popups based on reminders/deadlines.</div>
-        <Button asChild size="sm" variant="outline"><Link to="/admin/events">Open full editor</Link></Button>
-      </div>
-      <BulkBar total={rows.length} selectedCount={selected.size} onToggleAll={toggleAll}
-        onArchive={() => setConfirm("archive")} onDelete={() => setConfirm("delete")} />
-      {isLoading ? (
-        <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-      ) : rows.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No events.</div>
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((r: any) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-card p-3">
-              <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggle(r.id)} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-semibold">{r.name}</span>
-                  <Badge variant="outline" className="text-[10px]">{r.status}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{r.event_type}</Badge>
-                  <Badge variant="outline" className="text-[10px]">{r.importance}</Badge>
-                  {r.archived_at && <Badge variant="outline" className="text-[10px]">Archived</Badge>}
-                </div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">
-                  {format(new Date(r.event_date + "T00:00:00"), "MMM d, yyyy")} · {r.audience_scope}
-                </div>
-              </div>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/admin/events/$id" params={{ id: r.id }}>
-                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                </Link>
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ConfirmDialog open={confirm === "archive"} onOpenChange={(v) => !v && setConfirm(null)}
-        title="Archive events?" description={`${selected.size} will be archived.`}
-        confirmText="Archive" onConfirm={doArchive} />
-      <ConfirmDialog open={confirm === "delete"} onOpenChange={(v) => !v && setConfirm(null)}
-        title="Delete events?" description={`${selected.size} will be permanently deleted (including popups, deadlines, assignments).`}
-        confirmText="Delete" destructive onConfirm={doDelete} />
-    </Card>
   );
 }
 
@@ -1001,7 +783,6 @@ export function PopupsSettingsPage() {
 
 const POPUP_SECTIONS = [
   { value: "overview", label: "All popups", icon: LayoutGrid },
-  { value: "events", label: "Events", icon: CalendarIcon },
   { value: "birthdays", label: "Birthdays", icon: Cake },
   { value: "install", label: "Install prompt", icon: Smartphone },
   { value: "setup", label: "Setup gates", icon: ClipboardCheck },
@@ -1043,7 +824,6 @@ export function PopupsManager({ embedded = false }: { embedded?: boolean } = {})
           ))}
         </div>
         {tab === "overview" && <OverviewPanel onJumpToTab={setTab} />}
-        {tab === "events" && <EventsPanel />}
         {tab === "birthdays" && <BirthdaysPanel />}
         {tab === "install" && <InstallPromptsPanel />}
         {tab === "setup" && <SetupGatesPanel />}

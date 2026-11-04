@@ -182,12 +182,12 @@ function MembershipDashboard() {
       <section>
         <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">More</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <QuickCard to="/admin/membership/promo-tools" icon={Tags} title="Promotions & Referrals"
-            desc="Discount and referral codes." />
+          <QuickCard to="/admin/discount-codes" icon={Tags} title="Discount codes"
+            desc="Codes for checkout." />
           <QuickCard to="/admin/membership/sales-page" icon={FileText} title="Sales Page"
             desc="Edit and preview jfeffect.com/join." />
-          <QuickCard to="/admin/membership/stripe-sync" icon={Activity} title="Stripe Sync & Health"
-            desc="Webhooks, mismatches, manual sync." />
+          <QuickCard to="/admin/membership/billing-events" icon={Activity} title="Stripe events"
+            desc="Verified Stripe webhooks for memberships." />
           <QuickCard to="/admin/membership/signup-stats" icon={TrendingUp} title="Signup Stats"
             desc="Growth trends and cohort snapshots." />
         </div>

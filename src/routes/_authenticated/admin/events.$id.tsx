@@ -115,14 +115,14 @@ function EventEditorPage() {
     toast.success("Event archived");
     qc.invalidateQueries({ queryKey: ["admin-event", id] });
     qc.invalidateQueries({ queryKey: ["admin-events"] });
-    nav({ to: "/admin/events" });
+    nav({ to: "/admin/calendar" });
   }
 
   async function removeEvent() {
     try {
       await deleteEventFn({ data: { id: evt.id } });
       toast.success("Event deleted");
-      nav({ to: "/admin/events" });
+      nav({ to: "/admin/calendar" });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not delete event");
     }
@@ -169,7 +169,7 @@ function EventEditorPage() {
       <PageHeader
         title={evt.name || "Untitled event"}
         subtitle={`${evt.event_type} · ${countdown.label}`}
-        backTo="/admin/events"
+        backTo="/admin/calendar"
         backLabel="All events"
         actions={
           <div className="flex flex-wrap gap-2">
