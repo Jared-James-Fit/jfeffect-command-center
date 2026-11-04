@@ -30,6 +30,7 @@ import { useBlockedPeople, useBlockPerson, useStartDirect, type DirectThread } f
 import { useFollowState } from "@/lib/community-social";
 import type { CrewThread } from "@/lib/crew-chats";
 import { TallSheet } from "@/components/crew-chat";
+import { UNREAD_DOT } from "@/components/messages/chat-list-row";
 
 /* ------------------------------ hold menu ------------------------------ */
 
@@ -228,7 +229,7 @@ export function PinTile({
         {unread && !live && (
           <span
             data-pin-unread
-            className="absolute -left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full bg-primary ring-[3px] ring-card animate-in zoom-in-50 duration-200"
+            className={cn("absolute -left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full ring-[3px] ring-card animate-in zoom-in-50 duration-200", UNREAD_DOT)}
             aria-hidden
           />
         )}
@@ -238,7 +239,7 @@ export function PinTile({
           </span>
         )}
       </span>
-      <span className={cn("max-w-full truncate text-[12px]", unread ? "font-bold text-foreground" : "font-medium text-muted-foreground")}>
+      <span className={cn("max-w-full truncate text-[13px]", unread ? "font-semibold text-foreground" : "text-muted-foreground")}>
         {name}
       </span>
     </button>

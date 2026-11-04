@@ -16,7 +16,7 @@ import {
 import { GroupMessageThread } from "@/components/group-message-thread";
 import { GroupChatErrorBoundary } from "@/components/group-chat-error-boundary";
 import { listGroupMessages } from "@/lib/group-chats";
-import { fmtTime } from "@/components/chat-shared";
+import { CHAT_ROW_AVATAR, ChatListRow, UNREAD_DOT } from "@/components/messages/chat-list-row";
 import { isUnread, previewLine, useRespondToChat, type DirectThread, type RequestAction } from "@/lib/direct-chats";
 import { CrewRow } from "@/components/crew-chat";
 import type { CrewThread } from "@/lib/crew-chats";
@@ -220,52 +220,44 @@ export function DirectRow({ thread, me, selected, onClick, unread: markedUnread,
 }) {
   const unread = markedUnread ?? isUnread(thread, me);
   return (
-    <button
-      type="button"
+    <ChatListRow
       onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40",
-        selected && "bg-secondary/60",
-      )}
-    >
-      {leading}
-      <UserAvatar src={thread.other.avatar_url} name={thread.other.name} size={36} expandable={false} />
-      <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn("truncate text-sm", unread ? "font-bold" : "font-semibold")}>{thread.other.name}</span>
-          <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-            {muted && <BellOff className="h-3 w-3" aria-label="Alerts hidden" />}
-            {thread.last && fmtTime(thread.last.created_at)}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <span className={cn("flex-1 truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>
-            {thread.incoming ? `${thread.other.name} wants to message you` : previewLine(thread, me)}
-          </span>
-          {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-label="New" />}
-        </div>
-      </div>
-    </button>
+      selected={selected}
+      unread={unread}
+      muted={muted}
+      leading={leading}
+      at={thread.last?.created_at}
+      unreadLabel="New"
+      avatar={<UserAvatar src={thread.other.avatar_url} name={thread.other.name} size={CHAT_ROW_AVATAR} expandable={false} />}
+      name={thread.other.name}
+      preview={thread.incoming ? `${thread.other.name} wants to message you` : previewLine(thread, me)}
+    />
   );
 }
 
 /** The "Requests" row at the top of Chats (DM requests + group chat invites). */
 export function RequestsEntry({ count, fresh, onClick }: { count: number; fresh: boolean; onClick: () => void }) {
   return (
-    <button
-      type="button"
+    <ChatListRow
       onClick={onClick}
-      className="flex w-full items-center gap-2.5 border-b border-border/60 px-3 py-2.5 text-left transition hover:bg-secondary/40"
-    >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-        <Inbox className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className={cn("block text-sm", fresh ? "font-bold" : "font-semibold")}>Requests</span>
-        <span className="block truncate text-xs text-muted-foreground">{count === 1 ? "1 waiting for you" : `${count} waiting for you`}</span>
-      </span>
-      <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">{count}</span>
-    </button>
+      unread={fresh}
+      dot={false}
+      avatar={
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+          <Inbox className="h-6 w-6" />
+        </span>
+      }
+      name="Requests"
+      preview={count === 1 ? "1 waiting for you" : `${count} waiting for you`}
+      after={
+        <span
+          aria-label={fresh ? `${count} waiting, new` : `${count} waiting`}
+          className={cn("grid h-6 min-w-6 place-items-center rounded-full px-2 text-[13px] font-semibold tabular-nums", fresh ? cn(UNREAD_DOT, "text-white") : "bg-secondary text-foreground")}
+        >
+          {count}
+        </span>
+      }
+    />
   );
 }
 

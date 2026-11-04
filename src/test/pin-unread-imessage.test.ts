@@ -21,7 +21,9 @@ describe("pinned chat's unread look, like iMessage", () => {
   it("the unread badge sits on the face's left edge with a ring, clear of the bubble", () => {
     const html = tile({ preview: "hi" });
     expect(html).toContain("data-pin-unread");
-    expect(html).toContain("absolute -left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full bg-primary ring-[3px] ring-card");
+    expect(html).toContain("absolute -left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full ring-[3px] ring-card");
+    // the same unread blue as the chat rows (red means errors / overdue / delete)
+    expect(html).toContain("bg-[#0095F6]");
     expect(tile({ unread: false, preview: "hi" })).not.toContain("data-pin-unread");
     expect(tile({ live: true, preview: "hi" })).not.toContain("data-pin-unread");
   });

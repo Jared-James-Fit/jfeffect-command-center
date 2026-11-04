@@ -68,6 +68,6 @@ describe("pinned chats show what's new (iMessage pins)", () => {
     expect(page).toContain("unreadPreview: coachUnread ? coachLast?.coachText : null,");
     const pane = read("src/components/group-chats-pane.tsx");
     expect(pane).toContain("preview={pinned.unreadPreview}");
-    expect(pane).toContain('<div className="flex flex-wrap items-end justify-center border-b border-border/60 px-2 py-2" aria-label="Pinned chats">');
+    expect(pane).toContain('<div className="flex flex-wrap items-end justify-center px-2 py-2" aria-label="Pinned chats">');
   });
 });

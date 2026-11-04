@@ -28,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Phone, MessageSquare, AlertTriangle, Mail, ChevronLeft, MoreHorizontal } from "lucide-react";
-import { formatDistanceToNowStrict, isToday, format } from "date-fns";
 import { UserAvatar } from "@/components/user-avatar";
 import { markRead, markUnread } from "@/lib/messages";
 import { useQueryClient } from "@tanstack/react-query";
@@ -128,9 +127,6 @@ function ClientMessages() {
   const coachPreview = coachLast
     ? `${coachLast.sender_role === "client" ? "You: " : ""}${coachLast.body?.trim() || (coachLast.attachments?.length ? "Attachment" : "")}`
     : "Message your coach";
-  const coachWhen = coachLast
-    ? isToday(new Date(coachLast.created_at)) ? format(new Date(coachLast.created_at), "h:mm a") : formatDistanceToNowStrict(new Date(coachLast.created_at), { addSuffix: false })
-    : "";
 
   const markCoachUnread = async () => {
     if (!client?.id) return;
@@ -148,7 +144,7 @@ function ClientMessages() {
     avatarUrl: coach?.profile_picture_url ?? null,
     live: coachLive,
     preview: coachPreview,
-    when: coachWhen,
+    at: coachLast?.created_at ?? null,
     searchText: `${coachName} coach ${coachLast?.body ?? ""}`,
     unread: coachUnread,
     unreadPreview: coachUnread ? coachLast?.coachText : null,
