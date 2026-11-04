@@ -233,23 +233,23 @@ function SharePreview({ stats, unit, hideLoads, onPhoto }: { stats: WorkoutShare
   // weights hidden on their posts: never on the preview either
   const detail = win?.detail && !hideLoads ? win.detail : null;
   return (
-    <div className={cn("flex items-center gap-3 bg-[#0b0b0e] px-3.5 py-3 text-white", style.tint)} data-recap-preview={win?.kind ?? "loading"}>
-      <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10", style.text)}>
+    <div className="flex items-center gap-3 bg-muted px-3.5 py-3 text-foreground" data-recap-preview={win?.kind ?? "loading"}>
+      <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full bg-background", style.tone)}>
         <style.Icon className="h-[18px] w-[18px]" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-[10px] font-bold uppercase tracking-[0.16em]", style.text)}>{win ? win.label : "Your workout"}</span>
+        <span className={cn("block truncate text-[10px] font-bold uppercase tracking-[0.16em]", style.tone)}>{win ? win.label : "Your workout"}</span>
         {win ? (
           // a long lift name gives way, the numbers never do
           <span className="font-display flex min-w-0 text-[19px] uppercase leading-tight">
             <span className="truncate">{win.headline}</span>
-            {detail && <span className="shrink-0 whitespace-pre text-white/75"> · {detail}</span>}
+            {detail && <span className="shrink-0 whitespace-pre text-muted-foreground"> · {detail}</span>}
           </span>
         ) : (
-          <span className="mt-1 block h-4 w-40 animate-pulse rounded bg-white/15" />
+          <span className="mt-1 block h-4 w-40 animate-pulse rounded bg-background" />
         )}
       </span>
-      <button type="button" onClick={onPhoto} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 active:scale-95" aria-label="Share with a photo">
+      <button type="button" onClick={onPhoto} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background active:scale-95" aria-label="Share with a photo">
         <Camera className="h-5 w-5" />
       </button>
     </div>

@@ -160,11 +160,11 @@ function CrewCard({ post, unit, thumb: signed, fresh, onOpen }: { post: Communit
       aria-label={live ? `${name} is training now` : `${name}'s post${fresh ? ", new" : ""}`}
     >
       <PostTileFace post={post} thumb={thumb} unit={unit} footer={counts} large onBroken={setBroken} />
-      {/* who and when: over a soft shade on a photo; a note card is light or dark with the theme */}
-      <span className={cn("absolute inset-x-0 top-0 flex items-center gap-1.5 px-3 pb-5 pt-2.5", photo || art ? "bg-gradient-to-b from-black/55 to-transparent text-white" : post.kind === "note" ? "text-foreground" : "text-white")}>
+      {/* who and when: over a soft shade on a photo; a card with no photo is light or dark with the theme */}
+      <span className={cn("absolute inset-x-0 top-0 flex items-center gap-1.5 px-3 pb-5 pt-2.5", photo || art ? "bg-gradient-to-b from-black/55 to-transparent text-white" : "text-foreground")}>
         <UserAvatar src={post.author.avatar_url} name={post.author.name} size={24} expandable={false} />
         <span className={cn("min-w-0 truncate text-[12px] font-bold", (photo || art) && "drop-shadow")}>{name}</span>
-        <span className={cn("shrink-0 text-[11px]", post.kind === "note" && !photo && !art ? "text-muted-foreground" : "text-white/75")}>{postTimeLabel(post.created_at)}</span>
+        <span className={cn("shrink-0 text-[11px]", !photo && !art ? "text-muted-foreground" : "text-white/75")}>{postTimeLabel(post.created_at)}</span>
         {live ? (
           <LivePill className="shrink-0" />
         ) : fresh ? (

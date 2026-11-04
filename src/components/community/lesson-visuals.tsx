@@ -16,9 +16,13 @@ import type { LessonLift, LessonVisual } from "@/lib/lessons";
  * region); curves that are models say so in the card's note.
  */
 
-export type VisualTone = "auto" | "dark";
+export type VisualTone = "auto" | "dark" | "paper";
 
-/** The palette, as variables: "auto" follows the app's theme, "dark" is for stories (always on black). */
+/**
+ * The palette, as variables: "auto" follows the app's theme, "dark" is for
+ * stories (always on black), "paper" is for the post's painted card (dark ink
+ * on the card's light panel; its gap is the panel's own colour).
+ */
 const TONES: Record<VisualTone, CSSProperties> = {
   auto: {
     "--lv-ink": "var(--foreground)",
@@ -40,10 +44,22 @@ const TONES: Record<VisualTone, CSSProperties> = {
     "--lv-accent": "#ff4d58",
     "--lv-soft": "rgba(255,77,88,0.17)",
   } as CSSProperties,
+  paper: {
+    "--lv-ink": "#141417",
+    "--lv-body": "#4a4a52",
+    "--lv-gap": "#ece9e4",
+    "--lv-sub": "rgba(20,20,23,0.66)",
+    "--lv-line": "rgba(20,20,23,0.30)",
+    "--lv-faint": "rgba(20,20,23,0.08)",
+    "--lv-accent": "#e42f3d",
+    "--lv-soft": "rgba(228,47,61,0.16)",
+  } as CSSProperties,
 };
 
-/** The dark tone's colours by variable, to write into a diagram drawn off the page (an Instagram card). */
+/** The dark tone's colours by variable, to write into a diagram drawn off the page (a story frame). */
 export const LESSON_DARK_COLORS = TONES.dark as unknown as Record<string, string>;
+/** The paper tone's colours, written into a diagram painted on a post's card (instagram-cards.ts). */
+export const LESSON_PAPER_COLORS = TONES.paper as unknown as Record<string, string>;
 
 const C = {
   ink: "var(--lv-ink)",

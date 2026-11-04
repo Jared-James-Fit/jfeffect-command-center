@@ -374,3 +374,44 @@ describe("the cards are clean paper, never the feed's near-black", () => {
     expect(POST_ART_VERSION).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("charts on a card read on its paper", () => {
+  it("a lesson's diagram goes on in dark ink (its paper tone), never the story's white", () => {
+    const art = read("src/components/community/post-art.tsx");
+    expect(art).toContain("standaloneSvg(svg, LESSON_PAPER_COLORS, 1080)");
+    expect(art).toContain('<LessonVisualArt visual={v} tone="paper" />');
+    expect(art).not.toContain("LESSON_DARK_COLORS");
+    const visuals = read("src/components/community/lesson-visuals.tsx");
+    expect(visuals).toContain('"--lv-ink": "#141417"');
+    // the gap colour is the card panel's own, so cut-outs never show as stripes
+    expect(visuals).toContain('"--lv-gap": "#ece9e4"');
+  });
+  it("chart marks that aren't the highlight are a solid grey, not a faint wash", () => {
+    const cards = read("src/lib/instagram-cards.ts");
+    expect(cards).toContain("c.fillStyle = b.hot ? RED : ink(0.42);");
+    expect(cards).toContain("c.fillStyle = r.lead ? RED : ink(0.55);");
+  });
+});
+
+describe("workout posts are plain and clean", () => {
+  it("no glow or gradient on a workout, a PR, a lock in or their tiles; amber for a PR, green for done", () => {
+    for (const f of [
+      "src/components/community/post-card.tsx",
+      "src/components/community/post-tile.tsx",
+      "src/components/community/pulse-style.ts",
+      "src/components/community/recap-post.tsx",
+      "src/components/community/repost-save.tsx",
+      "src/components/community/post-chat-card.tsx",
+      "src/components/community/share-nudge.tsx",
+    ]) {
+      const src = read(f);
+      expect(src, f).not.toMatch(/radial-gradient|linear-gradient\(90deg,#fde68a/);
+    }
+    const card = read("src/components/community/post-card.tsx");
+    expect(card).toContain(
+      '<div className={cn("relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-7" : "py-5")} data-workout-hero={pr ? "pr" : "done"}>',
+    );
+    expect(card).toContain('pr && "text-warning"');
+    expect(card).toContain("text-success");
+  });
+});

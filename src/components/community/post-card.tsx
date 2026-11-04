@@ -74,15 +74,15 @@ export function TrainingNowPill({ className }: { className?: string }) {
 export function LockInHero({ post, size = "feed" }: { post: CommunityPost; size?: "feed" | "detail" }) {
   const now = isTrainingNow(post);
   const time = lockInTimeLabel(post.locked_in_at);
-  const bg = "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.55),rgba(127,29,29,0.16)_45%,#0a0a0d_75%)]";
   const big = size === "detail";
+  // a plain surface with the theme (never a glow), so it reads apart from the feed in light and dark
   return (
-    <div className={cn("relative overflow-hidden px-5 text-white", big ? "py-8" : "py-6", bg)}>
-      {now ? <TrainingNowPill /> : time ? <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-400">{time}</span> : null}
+    <div className={cn("relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-8" : "py-6")}>
+      {now ? <TrainingNowPill /> : time ? <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{time}</span> : null}
       <div className={cn("font-display mt-2 uppercase leading-[0.95]", big ? "text-[60px]" : "text-[48px]")}>Locked in</div>
-      <div className="mt-1.5 h-1.5 w-24 rounded-full bg-red-500" />
-      {post.session_title && <div className="mt-3 truncate text-[15px] font-bold text-white/80">{post.session_title}</div>}
-      {post.live && <div className="mt-1 text-[12px] text-white/55">Numbers land here when they finish.</div>}
+      <div className="mt-1.5 h-1.5 w-24 rounded-full bg-primary" />
+      {post.session_title && <div className="mt-3 truncate text-[15px] font-bold text-foreground/80">{post.session_title}</div>}
+      {post.live && <div className="mt-1 text-[12px] text-muted-foreground">Numbers land here when they finish.</div>}
     </div>
   );
 }
@@ -305,27 +305,26 @@ export function PulseHero({ stats, unit }: { post?: CommunityPost; stats: Workou
   const style = WIN_STYLE[win.kind];
   const nums = [formatWorkoutDuration(stats.duration_min), stats.working_sets > 0 && win.kind !== "done" ? `${stats.working_sets} sets` : null, win.kind !== "pr" && stats.pr_count > 0 ? `${stats.pr_count} PR${stats.pr_count === 1 ? "" : "s"}` : null].filter(Boolean);
   return (
-    <div data-pulse={win.kind} className={cn("mx-3.5 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b0e] p-4 text-white", style.tint)}>
+    <div data-pulse={win.kind} className="mx-3.5 overflow-hidden rounded-2xl bg-muted p-4 text-foreground">
       <div className="flex min-w-0 items-center gap-2">
-        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10", style.text)}>
+        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full bg-background", style.tone)}>
           <style.Icon className="h-4 w-4" />
         </span>
-        <span className={cn("truncate text-[10px] font-bold uppercase tracking-[0.16em]", style.text)}>{win.label}</span>
-        <span className="ml-auto min-w-0 truncate text-[11px] font-semibold text-white/50">{workoutHeadline(stats)}</span>
+        <span className={cn("truncate text-[10px] font-bold uppercase tracking-[0.16em]", style.tone)}>{win.label}</span>
+        <span className="ml-auto min-w-0 truncate text-[11px] font-semibold text-muted-foreground">{workoutHeadline(stats)}</span>
       </div>
       <div className="font-display mt-3 text-[28px] uppercase leading-[1.02]">{win.headline}</div>
-      {win.detail && (
-        <div className={cn("font-display mt-0.5 text-[24px] uppercase leading-none", win.kind === "pr" ? "bg-[linear-gradient(90deg,#fde68a,#f59e0b)] bg-clip-text text-transparent" : "text-white/85")}>{win.detail}</div>
-      )}
-      {nums.length > 0 && <div className="mt-3 min-w-0 truncate text-[11px] font-semibold text-white/55">{nums.join(" · ")}</div>}
+      {win.detail && <div className={cn("font-display mt-0.5 text-[24px] uppercase leading-none", win.kind === "pr" ? "text-warning" : "text-foreground/85")}>{win.detail}</div>}
+      {nums.length > 0 && <div className="mt-3 min-w-0 truncate text-[11px] font-semibold text-muted-foreground">{nums.join(" · ")}</div>}
     </div>
   );
 }
 
 /**
  * Workout "card" drawn in the DOM (posts without a photo, profile tiles,
- * detail header). Same look as the share card so the feed feels branded, but
- * every number is the live canonical stat.
+ * detail header): a plain surface with the theme, the session, its best lift
+ * (amber for a PR) and the numbers; never a glow or gradient. Every number is
+ * the live canonical stat.
  */
 export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShareStats; unit: "kg" | "lb"; size?: "feed" | "detail" }) {
   const lift = featuredLift(stats);
@@ -334,42 +333,32 @@ export function WorkoutHero({ stats, unit, size = "feed" }: { stats: WorkoutShar
   const subtitle = workoutSubtitle(stats);
   const big = size === "detail";
   return (
-    <div
-      className={cn(
-        "relative overflow-hidden px-5 text-white",
-        big ? "py-7" : "py-5",
-        pr
-          ? "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(245,158,11,0.42),rgba(120,53,15,0.12)_45%,#0a0a0d_75%)]"
-          : "bg-[radial-gradient(130%_90%_at_95%_0%,rgba(239,51,64,0.45),rgba(127,29,29,0.14)_45%,#0a0a0d_75%)]",
-      )}
-    >
-      <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/55">
+    <div className={cn("relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-7" : "py-5")} data-workout-hero={pr ? "pr" : "done"}>
+      <span data-workout-completed className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-success">
         <CheckCircle2 className="h-3 w-3" /> Workout completed
       </span>
       {/* what was trained, then where it sits in the program */}
       <div className={cn("font-display mt-1.5 uppercase leading-[0.98]", big ? "text-[40px]" : "text-[30px]")}>{workoutHeadline(stats)}</div>
-      {subtitle && <div className="mt-1 truncate text-[12px] font-semibold text-white/60">{subtitle}</div>}
+      {subtitle && <div className="mt-1 truncate text-[12px] font-semibold text-muted-foreground">{subtitle}</div>}
       {lift && (
         <div className="mt-3">
           <div className="flex min-w-0 items-center gap-2">
             {pr && lift.pr && (
-              <span className="shrink-0 rounded-full bg-[linear-gradient(90deg,#fde68a,#f59e0b)] px-2 py-px text-[9px] font-bold uppercase tracking-[0.14em] text-[#2b1700]">
+              <span className="shrink-0 rounded-full bg-warning/15 px-2 py-px text-[9px] font-bold uppercase tracking-[0.14em] text-warning">
                 New {SCOPE_WORD[lift.pr]}
               </span>
             )}
-            <span className="truncate text-[12px] font-semibold text-white/65">{lift.name}</span>
+            <span className="truncate text-[12px] font-semibold text-muted-foreground">{lift.name}</span>
           </div>
-          <div className={cn("font-display uppercase leading-none", big ? "text-[54px]" : "text-[42px]", pr ? "bg-[linear-gradient(90deg,#fde68a,#f59e0b)] bg-clip-text text-transparent" : "")}>
-            {formatTopSet(lift.detail, unit)}
-          </div>
+          <div className={cn("font-display uppercase leading-none", big ? "text-[54px]" : "text-[42px]", pr && "text-warning")}>{formatTopSet(lift.detail, unit)}</div>
         </div>
       )}
       {nums.length > 0 && (
-        <div className={cn("mt-4 grid gap-2 border-t border-white/10 pt-3", nums.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+        <div className={cn("mt-4 grid gap-2 border-t border-border pt-3", nums.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {nums.map((n) => (
             <div key={n.label} className="min-w-0">
               <div className={cn("font-display truncate uppercase leading-none", big ? "text-[30px]" : "text-[24px]")}>{n.value}</div>
-              <div className="mt-1 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-white/55">{n.label}</div>
+              <div className="mt-1 truncate text-[9px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{n.label}</div>
             </div>
           ))}
         </div>
