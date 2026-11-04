@@ -1220,6 +1220,15 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
 @keyframes activity-spin { to { transform: rotate(360deg); } }
 .activity-spin { animation: activity-spin 0.8s steps(8) infinite; transform-origin: 50% 50%; }
 /* The Crew bar slides away as you read down and comes back the moment you scroll up. */
+/* The shell's phone bar: fixed, opaque, under the notch, sliding away while you read down
+   (Crew's bar's behaviour). While typing it steps aside: iOS pans fixed bars with the
+   keyboard, and full-height chats rise to the notch then (--shell-topbar-h: 0). */
+.shell-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.shell-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
+html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .shell-bar { transition: none; }
+}
 .crew-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .crew-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
 @media (min-width: 768px) { .crew-bar[data-hidden] { transform: none; } }

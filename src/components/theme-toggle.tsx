@@ -34,9 +34,9 @@ export function ThemeToggle({ className }: { className?: string }) {
         "transition-colors duration-300 ease-out focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         "active:scale-[0.97] [-webkit-tap-highlight-color:transparent]",
         highlight && "jf-toggle-highlight",
-        dark
-          ? "bg-[oklch(0.32_0.03_275)] shadow-[inset_0_1px_2px_oklch(0_0_0/0.45)]"
-          : "bg-[oklch(0.92_0.004_80)] shadow-[inset_0_1px_2px_oklch(0_0_0/0.10)]",
+        // A neutral track in both modes (the design system's greys, no tint, no inset shadow),
+        // so it weighs the same as the bar's other buttons.
+        "bg-secondary",
         className,
       )}
     >
@@ -44,14 +44,14 @@ export function ThemeToggle({ className }: { className?: string }) {
       <Sun
         aria-hidden
         className={cn(
-          "pointer-events-none absolute left-[9px] h-3.5 w-3.5 text-amber-300/70 transition-opacity duration-300",
+          "pointer-events-none absolute left-[9px] h-3.5 w-3.5 text-muted-foreground transition-opacity duration-300",
           dark ? "opacity-100" : "opacity-0",
         )}
       />
       <Moon
         aria-hidden
         className={cn(
-          "pointer-events-none absolute right-[9px] h-3.5 w-3.5 text-[oklch(0.55_0.02_275)] transition-opacity duration-300",
+          "pointer-events-none absolute right-[9px] h-3.5 w-3.5 text-muted-foreground transition-opacity duration-300",
           dark ? "opacity-0" : "opacity-100",
         )}
       />
@@ -60,13 +60,13 @@ export function ThemeToggle({ className }: { className?: string }) {
         aria-hidden
         className={cn(
           "relative z-10 grid h-[1.625rem] w-[1.625rem] place-items-center rounded-full",
-          "shadow-[0_2px_6px_oklch(0_0_0/0.22),0_0_0_0.5px_oklch(0_0_0/0.06)]",
+          "shadow-[0_1px_2px_oklch(0_0_0/0.18)]",
           "transition-[transform,background-color] duration-[420ms] ease-[cubic-bezier(0.34,1.45,0.55,1)]",
-          dark ? "translate-x-[1.25rem] bg-[oklch(0.20_0.02_275)]" : "translate-x-0 bg-white",
+          dark ? "translate-x-[1.25rem] bg-background" : "translate-x-0 bg-background",
         )}
       >
         {dark ? (
-          <Moon className="h-3.5 w-3.5 fill-[oklch(0.90_0.04_275)] text-[oklch(0.90_0.04_275)]" />
+          <Moon className="h-3.5 w-3.5 fill-foreground text-foreground" />
         ) : (
           <Sun className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
         )}
