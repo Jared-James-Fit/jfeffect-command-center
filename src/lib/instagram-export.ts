@@ -46,8 +46,12 @@ export type IgFormat = "feed" | "story";
 /** A card painted from the post (instagram-cards.ts). */
 export type IgCard = "lesson" | "wins" | "recap" | "compare" | "feature" | "birthday" | "workout" | "holiday" | "scene" | "words";
 
-/** What goes to Instagram: a painted card (first), then the post's own photos / clips. */
-export type IgPlan = { card: IgCard | null; slides: PostSlide[] };
+/**
+ * What goes to Instagram: the post's own photos / clips, then a painted card
+ * when it carries what the words don't (`cardLast`); with no photo, the card
+ * alone.
+ */
+export type IgPlan = { card: IgCard | null; slides: PostSlide[]; cardLast?: boolean };
 
 export const IG_CAPTION_MAX = 2200;
 
@@ -57,14 +61,27 @@ export const IG_SIZES: Record<IgFormat, { w: number; h: number; safeTop: number;
   story: { w: 1080, h: 1920, safeTop: 250, safeBottom: 280 },
 };
 
+/**
+ * The card that carries what a post's words don't (a lesson's diagram, the
+ * week's numbers, the crew's comparison, where to find a feature): it rides
+ * after the post's photo. A words, birthday, holiday or Saturday card only
+ * says what the caption and the photo already do, so a photo replaces it.
+ */
+export function infoCard(post: CommunityPost): IgCard | null {
+  if (post.series === "lesson" && extraLesson(post)) return "lesson";
+  if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return "recap";
+  if (isWinsStats(post.series_data)) return "wins";
+  if (post.series === "tuesday_tips" && extraObservation(post.series_extra)) return "compare";
+  if (post.series === "try_it_thursday" && extraFeature(post.series_extra)) return "feature";
+  return null;
+}
+
 export function instagramPlan(post: CommunityPost): IgPlan {
   const slides = postSlides(post);
-  if (post.series === "lesson" && extraLesson(post)) return { card: "lesson", slides };
-  if (slides.length) return { card: null, slides };
-  if (post.series === "sunday_recap" && isRecapStats(post.series_data)) return { card: "recap", slides: [] };
-  if (isWinsStats(post.series_data)) return { card: "wins", slides: [] };
-  if (post.series === "tuesday_tips" && extraObservation(post.series_extra)) return { card: "compare", slides: [] };
-  if (post.series === "try_it_thursday" && extraFeature(post.series_extra)) return { card: "feature", slides: [] };
+  const info = infoCard(post);
+  // a photo first (made for it, or the coach's own), the card that carries the numbers after it
+  if (slides.length) return { card: info, slides, cardLast: !!info };
+  if (info) return { card: info, slides: [] };
   if (extraBirthday(post)) return { card: "birthday", slides: [] };
   if (post.series === "holiday" && extraHoliday(post.series_extra)) return { card: "holiday", slides: [] };
   if (post.series === "saturday_spirit" && extraScene(post.series_extra)) return { card: "scene", slides: [] };
@@ -73,9 +90,9 @@ export function instagramPlan(post: CommunityPost): IgPlan {
 }
 
 /**
- * The painted card an automated post shows as its picture: the same 4:5
- * card that goes to Instagram. null when it isn't automated, or when its
- * own photo / clip is the picture (a lesson keeps its card in front of them).
+ * The painted card an automated post shows: the same 4:5 card that goes to
+ * Instagram. Its whole picture while it has no photo; after the photo when
+ * it carries numbers or a diagram (instagramPlan's cardLast); else null.
  */
 export function postArtCard(post: CommunityPost): IgCard | null {
   return isAutoPost(post) ? instagramPlan(post).card : null;

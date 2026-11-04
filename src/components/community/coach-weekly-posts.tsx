@@ -202,7 +202,7 @@ export function CoachWeeklyPosts() {
                         )}
                       </button>
                     )}
-                    {library && next && series === "saturday_spirit" && isSpiritScene(next.data?.scene) && <SaturdayPicture item={next} on={on} />}
+                    {library && next && <NextPicture item={next} series={series} on={on} />}
                     {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
                     {series === "try_it_thursday" && next?.data?.habit && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
@@ -322,11 +322,12 @@ export function CoachWeeklyPosts() {
 }
 
 /**
- * Saturday's next post goes out with a picture made for its scene
+ * A day's next library post goes out with a photo made for it
  * (post-pictures.server.ts, made as soon as it's up next): the coach sees it
- * here a week ahead and can ask for another. A photo of their own wins.
+ * here ahead of time and can ask for another. A photo of their own wins.
  */
-function SaturdayPicture({ item, on }: { item: SeriesItem; on: boolean }) {
+function NextPicture({ item, series, on }: { item: SeriesItem; series: CommunitySeries; on: boolean }) {
+  const day = SERIES_LABEL[series].name;
   const qc = useQueryClient();
   const make = useServerFn(makePostPicture);
   const [busy, setBusy] = useState(false);
@@ -341,7 +342,7 @@ function SaturdayPicture({ item, on }: { item: SeriesItem; on: boolean }) {
       const r = await make({ data: { itemId: item.id } });
       if (!r.ok) return void toast.error("Couldn't make a picture", { description: r.reason });
       await qc.invalidateQueries({ queryKey: ["community-series"] });
-      toast.success("New picture ready", { description: "It goes out with Saturday's post." });
+      toast.success("New picture ready", { description: `It goes out with ${day}.` });
     } catch (e: any) {
       toast.error("Couldn't make a picture", { description: e?.message ?? undefined });
     } finally {
@@ -350,11 +351,15 @@ function SaturdayPicture({ item, on }: { item: SeriesItem; on: boolean }) {
   };
 
   return (
-    <div className="flex items-end gap-3 rounded-xl bg-muted/60 px-3 py-2.5" data-saturday-picture>
+    <div className="flex items-end gap-3 rounded-xl bg-muted/60 px-3 py-2.5" data-next-picture>
       {slide && url ? (
         <img src={url} alt="" className="aspect-[4/5] w-[120px] rounded-lg object-cover" />
-      ) : (
+      ) : isSpiritScene(item.data?.scene) ? (
         <SpiritScene scene={item.data!.scene} className={cn("w-[120px] rounded-lg", busy && "animate-pulse")} />
+      ) : (
+        <div className={cn("grid aspect-[4/5] w-[120px] place-items-center rounded-lg bg-background text-muted-foreground", busy && "animate-pulse")}>
+          <ImagePlus className="h-5 w-5" aria-hidden />
+        </div>
       )}
       <div className="min-w-0 flex-1 space-y-1.5 pb-0.5">
         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
@@ -366,8 +371,8 @@ function SaturdayPicture({ item, on }: { item: SeriesItem; on: boolean }) {
             : made
               ? "Made for this one. Not it? Make another."
               : on
-                ? "Made for this scene before Saturday. Or make it now."
-                : "Made for it once Saturday Spirit is on. Or make it now."}
+                ? `Made for it before it goes out. Or make it now.`
+                : `Made for it once ${day} is on. Or make it now.`}
         </p>
         {!own && (
           <button

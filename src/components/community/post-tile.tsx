@@ -4,6 +4,7 @@ import { Layers, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { autoPostHasArt, featuredLift, formatTopSet, isTrainingNow, workoutHeadline, workoutSubtitle, type CommunityPost, type WorkoutShareStats } from "@/lib/community";
 import { focusPosition } from "@/lib/photo-frame";
+import { postArtCard } from "@/lib/instagram-export";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 // Small on purpose: Home's shelf loads this with the app, the feed card stays in its own chunk.
@@ -97,7 +98,7 @@ export function PostTileFace({ post, thumb: signed, unit, footer = false, large 
           </span>
         </div>
       )}
-      {(post.extra_media?.length ?? 0) > 0 || (autoPostHasArt(post) && !!post.media_type) ? (
+      {(post.extra_media?.length ?? 0) > 0 || (!!post.media_type && !!postArtCard(post)) ? (
         <Layers className={cn("absolute text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} aria-label="Carousel" />
       ) : (
         post.media_type === "video" && <Play className={cn("absolute fill-white text-white drop-shadow", large ? "right-3 top-3 h-5 w-5" : "right-1.5 top-1.5 h-4 w-4")} />

@@ -8,19 +8,17 @@
  * the app's feed (post-art.ts), shown about a third of its size on a phone,
  * so nothing on it is smaller than it can be read there (FEED_MIN_SCALE).
  *
- * Canvas only, in the share cards' look (workout-share-card.ts): always dark,
- * the brand a small mark, never a banner. A lesson's diagram and Saturday's
+ * Canvas only: clean paper with dark ink and the brand red as the accent,
+ * the brand a small mark, never a banner. Never the feed's near-black: a
+ * dark card sinks into the dark feed and reads as the app's art, not a post. A lesson's diagram and Saturday's
  * scene come in as pictures of their own SVG (svgPicture, colours written in,
  * no HTML inside, so the canvas can still be saved on an iPhone).
  */
 import { ellipsize, font, loadImage, roundRect } from "@/lib/workout-story-card";
 import {
-  INK,
-  MUTED,
   RED,
   brandRow,
   cardLogo,
-  darkGlow,
   display,
   drawCover,
   ensureDisplayFont,
@@ -60,11 +58,15 @@ type Ctx = CanvasRenderingContext2D;
 type Picture = CanvasImageSource & { width: number; height: number };
 
 const PAD = 88;
-const SUB = "rgba(255,255,255,0.58)";
-const BODY = "rgba(255,255,255,0.85)";
-const LINE = "rgba(255,255,255,0.16)";
-const FAINT = "rgba(255,255,255,0.07)";
-const ACCENT = "#ff4d58";
+/** The cards' paper and ink. */
+const PAPER = "#f6f3ee";
+const INK = "#141417";
+const ink = (a: number) => `rgba(20,20,23,${a})`;
+const SUB = ink(0.58);
+const BODY = ink(0.82);
+const LINE = ink(0.14);
+const FAINT = ink(0.06);
+const ACCENT = "#e42f3d";
 
 export type IgCardInput = {
   card: IgCard;
@@ -129,15 +131,15 @@ export async function paintInstagramCard(canvas: HTMLCanvasElement, input: IgCar
 
 type Layout = { W: number; H: number; top: number; bottom: number; format: IgFormat };
 
-/** The lesson cards' backdrop (the story frame's): near-black with the red glow up in the corner. */
+/** Every card's backdrop: plain paper, no glow. */
 function backdrop(ctx: Ctx, W: number, H: number) {
-  ctx.fillStyle = "#09090b";
+  ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W, 0, 0, W, 0, Math.max(W, H) * 0.85);
-  g.addColorStop(0, "rgba(239,51,64,0.40)");
-  g.addColorStop(0.6, "rgba(239,51,64,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+}
+
+/** The small brand mark at a card's foot, in ink (on a photo it stays light: brandRow's own). */
+function brand(ctx: Ctx, logo: HTMLImageElement | null, x: number, y: number, W: number, label: string | null) {
+  brandRow(ctx, logo, x, y, W, label, 0.72, INK);
 }
 
 /** Wrap at the biggest size (from `start` down to `min`) that fits `maxLines`. */
@@ -247,7 +249,7 @@ function paintLesson(ctx: Ctx, L: Layout, post: CommunityPost, logo: HTMLImageEl
     L.bottom - L.top - FOOTER,
     "middle",
   );
-  brandRow(ctx, logo, PAD, L.bottom, W, null);
+  brand(ctx, logo, PAD, L.bottom, W, null);
 }
 
 /** Room kept under a card's content for the brand row. */
@@ -262,10 +264,10 @@ function panel(c: Ctx, w: number, top: number, draw: (c: Ctx, w: number) => numb
   const oc = off.getContext("2d");
   const h = oc ? Math.ceil(draw(oc, w - inner * 2)) : 0;
   const ph = h + inner * 2;
-  c.fillStyle = "rgba(255,255,255,0.045)";
+  c.fillStyle = ink(0.045);
   roundRect(c, 0, top, w, ph, 40);
   c.fill();
-  c.strokeStyle = "rgba(255,255,255,0.10)";
+  c.strokeStyle = ink(0.10);
   c.lineWidth = 2;
   roundRect(c, 1, top + 1, w - 2, ph - 2, 39);
   c.stroke();
@@ -286,7 +288,7 @@ function truthBlock(c: Ctx, w: number, belief: string, truth: string): number {
   y = kicker(c, "The truth", 0, y, ACCENT) + 22;
   const t = fitWrap(c, truth, w, 900, 72, 52, 5);
   c.font = font(900, t.size);
-  return textLines(c, t.lines, 0, y, t.size, 1.12, "rgba(255,255,255,0.95)") + t.size * 0.06;
+  return textLines(c, t.lines, 0, y, t.size, 1.12, ink(0.95)) + t.size * 0.06;
 }
 
 const WEEK = ["M", "T", "W", "T", "F", "S", "S"];
@@ -302,7 +304,7 @@ function resetBlock(c: Ctx, w: number, items: string[]): number {
     c.beginPath();
     c.arc(x + d / 2, d / 2, d / 2, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = i === 0 ? "#121215" : SUB;
+    c.fillStyle = i === 0 ? "#ffffff" : SUB;
     c.font = font(800, 22);
     c.textAlign = "center";
     c.textBaseline = "middle";
@@ -321,7 +323,7 @@ function resetBlock(c: Ctx, w: number, items: string[]): number {
     roundRect(c, 2.5, top + 4, box - 5, box - 5, 12);
     c.stroke();
     c.font = font(800, 46);
-    y = textLines(c, lines, box + 30, top, 46, 1.18, "rgba(255,255,255,0.95)");
+    y = textLines(c, lines, box + 30, top, 46, 1.18, ink(0.95));
     y = Math.max(y, top + box) + 34;
   });
   return y - 34;
@@ -333,15 +335,8 @@ function resetBlock(c: Ctx, w: number, items: string[]): number {
 
 function paintStats(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, label: string, draw: (c: Ctx, w: number, maxH: number) => number) {
   const { W, H } = L;
-  ctx.fillStyle = "#0a0a0d";
-  ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W * 0.95, 0, 0, W * 0.95, 0, W * 1.25);
-  g.addColorStop(0, "rgba(239,51,64,0.50)");
-  g.addColorStop(0.45, "rgba(127,29,29,0.14)");
-  g.addColorStop(0.75, "rgba(10,10,13,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  brandRow(ctx, logo, PAD, L.top + 30, W, label);
+  backdrop(ctx, W, H);
+  brand(ctx, logo, PAD, L.top + 30, W, label);
   const top = L.top + 84;
   const maxH = L.bottom - top;
   placeBlock(ctx, (c, w) => draw(c, w, maxH), PAD, top, W - PAD * 2, maxH, L.format === "story" ? "middle" : "top");
@@ -410,10 +405,10 @@ function tilesBlock(c: Ctx, w: number, top: number, tiles: { value: string; labe
       let ty = y + 92 + 16;
       c.font = font(700, 32);
       const label = wrapLines(c, t.label, colW, 2);
-      ty = textLines(c, label, x, ty, 32, 1.2, "rgba(255,255,255,0.80)");
+      ty = textLines(c, label, x, ty, 32, 1.2, ink(0.80));
       if (t.sub) {
         c.font = font(500, 28);
-        ty = textLines(c, wrapLines(c, t.sub, colW, 2), x, ty + 4, 28, 1.2, "rgba(255,255,255,0.50)");
+        ty = textLines(c, wrapLines(c, t.sub, colW, 2), x, ty + 4, 28, 1.2, ink(0.50));
       }
       rowBottom = Math.max(rowBottom, ty);
     }
@@ -423,7 +418,7 @@ function tilesBlock(c: Ctx, w: number, top: number, tiles: { value: string; labe
 }
 
 function divider(c: Ctx, w: number, y: number): number {
-  c.fillStyle = "rgba(255,255,255,0.10)";
+  c.fillStyle = ink(0.10);
   c.fillRect(0, y, w, 2);
   return y + 40;
 }
@@ -443,10 +438,10 @@ function pills(c: Ctx, items: { text: string; gold?: boolean }[], top: number, w
       g.addColorStop(0, "#fde68a");
       g.addColorStop(1, "#f59e0b");
       c.fillStyle = g;
-    } else c.fillStyle = "rgba(255,255,255,0.10)";
+    } else c.fillStyle = ink(0.10);
     roundRect(c, x, y, pw, 50, 25);
     c.fill();
-    c.fillStyle = p.gold ? "#2b1700" : "rgba(255,255,255,0.85)";
+    c.fillStyle = p.gold ? "#2b1700" : ink(0.85);
     c.textAlign = "left";
     c.textBaseline = "middle";
     c.fillText(p.text, x + 22, y + 26);
@@ -462,11 +457,11 @@ function bars(c: Ctx, w: number, top: number, data: { n: number; share: number; 
   data.forEach((b, i) => {
     const x = i * (bw + gap);
     const h = Math.max(8, Math.round(b.share * (height - 40)));
-    c.fillStyle = b.hot ? RED : "rgba(255,255,255,0.20)";
+    c.fillStyle = b.hot ? RED : ink(0.20);
     roundRect(c, x, top + height - h, bw, h, Math.min(10, bw / 3));
     c.fill();
     if (b.label != null) {
-      c.fillStyle = b.hot ? INK : "rgba(255,255,255,0.55)";
+      c.fillStyle = b.hot ? INK : ink(0.55);
       c.font = font(900, 26);
       c.textAlign = "center";
       c.fillText(b.label, x + bw / 2, top + height - h - 10);
@@ -481,13 +476,13 @@ function noteBox(c: Ctx, w: number, top: number, title: string | null, text: str
   c.font = font(700, 34);
   const lines = wrapLines(c, text, w - inner * 2, 3);
   const h = inner * 2 + (title ? 40 : 0) + lines.length * 34 * 1.25;
-  c.fillStyle = "rgba(255,255,255,0.07)";
+  c.fillStyle = ink(0.07);
   roundRect(c, 0, top, w, h, 24);
   c.fill();
   let y = top + inner;
-  if (title) y = kicker(c, title, inner, y, "rgba(255,255,255,0.55)", 22) + 18;
+  if (title) y = kicker(c, title, inner, y, ink(0.55), 22) + 18;
   c.font = font(700, 34);
-  textLines(c, lines, inner, y, 34, 1.25, "rgba(255,255,255,0.90)");
+  textLines(c, lines, inner, y, 34, 1.25, ink(0.90));
   return top + h;
 }
 
@@ -499,7 +494,7 @@ function heroAmount(c: Ctx, top: number, amount: string, unit: string): number {
   const base = top + 170 * 0.9;
   c.fillText(amount.toUpperCase(), 0, base);
   const aw = c.measureText(amount.toUpperCase()).width;
-  c.fillStyle = "rgba(255,255,255,0.70)";
+  c.fillStyle = ink(0.70);
   c.font = display(84);
   c.fillText(unit.toUpperCase(), aw + 22, base);
   return top + 170;
@@ -511,7 +506,7 @@ function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats, unit: "kg" | "
     parts.push({
       draw: (c, w, top) => {
         const hero = winsHero(s, unit);
-        let y = kicker(c, "Together the crew lifted", 0, top, "rgba(255,255,255,0.60)", 28) + 20;
+        let y = kicker(c, "Together the crew lifted", 0, top, ink(0.60), 28) + 20;
         y = heroAmount(c, y, hero.amount, hero.unit) + 22;
         if (hero.compare) {
           c.font = font(600, 40);
@@ -529,10 +524,10 @@ function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats, unit: "kg" | "
     parts.push({
       keep: 1,
       draw: (c, w, top) => {
-        kicker(c, "Workouts each week", 0, top, "rgba(255,255,255,0.60)", 26);
+        kicker(c, "Workouts each week", 0, top, ink(0.60), 26);
         let y = bars(c, w, top + 50, chart.map((b) => ({ n: b.sessions, share: b.share, hot: b.current, label: b.current ? String(b.sessions) : undefined })), 210);
         c.font = font(600, 26);
-        c.fillStyle = "rgba(255,255,255,0.45)";
+        c.fillStyle = ink(0.45);
         c.fillText(chart[0].label, 0, y + 36);
         c.textAlign = "right";
         c.fillText(chart[chart.length - 1].label, w, y + 36);
@@ -564,7 +559,7 @@ function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" |
         const cy = y + r + 14;
         c.lineCap = "round";
         c.lineWidth = 26;
-        c.strokeStyle = "rgba(255,255,255,0.12)";
+        c.strokeStyle = ink(0.12);
         c.beginPath();
         c.arc(cx, cy, r, 0, Math.PI * 2);
         c.stroke();
@@ -603,11 +598,11 @@ function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" |
     {
       keep: 0,
       draw: (c, w, top) => {
-        kicker(c, "Workouts by day", 0, top, "rgba(255,255,255,0.60)", 26);
+        kicker(c, "Workouts by day", 0, top, ink(0.60), 26);
         const y = bars(c, w, top + 50, sum.days.map((d) => ({ n: d.n, share: d.share, hot: d.best, label: String(d.n) })), 170);
         const bw = (w - 18 * 6) / 7;
         c.font = font(800, 26);
-        c.fillStyle = "rgba(255,255,255,0.45)";
+        c.fillStyle = ink(0.45);
         c.textAlign = "center";
         sum.days.forEach((d, i) => c.fillText(d.letter, i * (bw + 18) + bw / 2, y + 40));
         c.textAlign = "left";
@@ -621,12 +616,12 @@ function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" |
       keep: 3 - i,
       joined: i > 0,
       draw: (c, w, top) => {
-        let y = i === 0 ? kicker(c, "Biggest moments", 0, top, "rgba(255,255,255,0.60)", 26) + 26 : top;
+        let y = i === 0 ? kicker(c, "Biggest moments", 0, top, ink(0.60), 26) + 26 : top;
         c.font = font(400, 44);
         c.fillStyle = INK;
         c.fillText(MEDALS[i] ?? "•", 0, y + 40);
         c.font = font(600, 36);
-        y = textLines(c, wrapLines(c, t.text, w - 74, 3), 74, y, 36, 1.25, "rgba(255,255,255,0.90)");
+        y = textLines(c, wrapLines(c, t.text, w - 74, 3), 74, y, 36, 1.25, ink(0.90));
         return y;
       },
     }),
@@ -652,7 +647,7 @@ function compareBlock(c: Ctx, w: number, top: number, compare: CrewCompare): num
     const label = ellipsize(c, r.label, w - vw - 30);
     c.fillText(label, 0, y + 40);
     c.font = display(valueSize);
-    c.fillStyle = r.lead ? INK : "rgba(255,255,255,0.75)";
+    c.fillStyle = r.lead ? INK : ink(0.75);
     c.textAlign = "right";
     c.fillText(r.value.toUpperCase(), w, y + 48);
     c.textAlign = "left";
@@ -660,10 +655,10 @@ function compareBlock(c: Ctx, w: number, top: number, compare: CrewCompare): num
     c.fillStyle = SUB;
     c.fillText(r.count, 0, y + 86);
     y += 108;
-    c.fillStyle = "rgba(255,255,255,0.10)";
+    c.fillStyle = ink(0.10);
     roundRect(c, 0, y, w, 34, 17);
     c.fill();
-    c.fillStyle = r.lead ? RED : "rgba(255,255,255,0.32)";
+    c.fillStyle = r.lead ? RED : ink(0.32);
     roundRect(c, 0, y, Math.max(34, Math.round(w * Math.min(1, r.share))), 34, 17);
     c.fill();
     y += 34 + 48;
@@ -686,7 +681,7 @@ function paintCompare(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: 
       y = textLines(c, h.lines, 0, y, h.size, 1.1, INK) + 64;
       y = compareBlock(c, w, y, obs);
       c.font = font(500, 28);
-      y = textLines(c, wrapLines(c, sleep ? "How sessions were rated, by sleep the night before." : "People who joined in the last 8 weeks aren't counted.", w, 2), 0, y + 44, 28, 1.25, "rgba(255,255,255,0.45)");
+      y = textLines(c, wrapLines(c, sleep ? "How sessions were rated, by sleep the night before." : "People who joined in the last 8 weeks aren't counted.", w, 2), 0, y + 44, 28, 1.25, ink(0.45));
       return y;
     },
     PAD,
@@ -695,7 +690,7 @@ function paintCompare(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: 
     L.bottom - L.top - FOOTER,
     "middle",
   );
-  brandRow(ctx, logo, PAD, L.bottom, W, null);
+  brand(ctx, logo, PAD, L.bottom, W, null);
 }
 
 /** Thursday: try this feature, where it is, and (when it says something) how the people who use it train. */
@@ -712,7 +707,7 @@ function paintFeature(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: 
       if (f.where.length) y = path(c, f.where, y, w) + 12;
       if (f.stat) {
         y = divider(c, w, y + 44);
-        y = kicker(c, "How the crew trains · last 8 weeks", 0, y, "rgba(255,255,255,0.60)", 26) + 40;
+        y = kicker(c, "How the crew trains · last 8 weeks", 0, y, ink(0.60), 26) + 40;
         y = compareBlock(c, w, y, f.stat);
       } else {
         const hook = hookLine(post.caption);
@@ -729,7 +724,7 @@ function paintFeature(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: 
     L.bottom - L.top - FOOTER,
     "middle",
   );
-  brandRow(ctx, logo, PAD, L.bottom, W, null);
+  brand(ctx, logo, PAD, L.bottom, W, null);
 }
 
 /** Where a feature lives, as the app's own steps: "Workouts › ⋯ › Tools". */
@@ -745,17 +740,17 @@ function path(c: Ctx, steps: string[], top: number, w: number): number {
       y += 76;
     }
     if (i > 0 && x > 0) {
-      c.fillStyle = "rgba(255,255,255,0.45)";
+      c.fillStyle = ink(0.45);
       c.font = font(700, 34);
       c.textAlign = "center";
       c.textBaseline = "middle";
       c.fillText("›", x + arrow / 2, y + 30);
       x += arrow;
     }
-    c.fillStyle = "rgba(255,255,255,0.10)";
+    c.fillStyle = ink(0.10);
     roundRect(c, x, y, pw, 60, 30);
     c.fill();
-    c.fillStyle = "rgba(255,255,255,0.92)";
+    c.fillStyle = ink(0.92);
     c.font = font(800, 32);
     c.textAlign = "left";
     c.textBaseline = "middle";
@@ -779,7 +774,7 @@ function confetti(ctx: Ctx, W: number, H: number, seed: string) {
     h = Math.imul(h ^ (h >>> 13), 3266489909);
     return ((h ^= h >>> 16) >>> 0) / 4294967296;
   };
-  const colors = ["rgba(253,230,138,0.85)", "rgba(245,158,11,0.75)", "rgba(239,51,64,0.80)", "rgba(255,255,255,0.55)"];
+  const colors = ["rgba(245,158,11,0.85)", "rgba(239,51,64,0.80)", ink(0.30), "rgba(217,119,6,0.55)"];
   for (let i = 0; i < 34; i++) {
     // along the top and bottom edges, clear of the words in the middle
     const top = i % 2 === 0;
@@ -805,7 +800,7 @@ function confetti(ctx: Ctx, W: number, H: number, seed: string) {
 /** Happy birthday, their name big, then what they've done (the caption's next lines). */
 function paintBirthday(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: CommunityPost, name: string) {
   const { W, H } = L;
-  darkGlow(ctx, W, H, "gold");
+  backdrop(ctx, W, H);
   confetti(ctx, W, H, post.id);
   const caption = post.caption?.trim() ? plainMentions(post.caption.trim(), post.mentions) : "";
   const lines = caption.split("\n").map((l) => l.trim());
@@ -814,7 +809,7 @@ function paintBirthday(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post:
   placeBlock(
     ctx,
     (c, w) => {
-      let y = kicker(c, "Happy birthday", 0, 0, "#fbbf24", 34) + 26;
+      let y = kicker(c, "Happy birthday", 0, 0, "#b7791f", 34) + 26;
       const big = name.toUpperCase();
       const size = fitDisplay(c, big, w, 250, 110);
       c.font = display(size);
@@ -842,7 +837,7 @@ function paintBirthday(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post:
     L.bottom - L.top - FOOTER,
     "middle",
   );
-  brandRow(ctx, logo, PAD, L.bottom, W, null);
+  brand(ctx, logo, PAD, L.bottom, W, null);
 }
 
 /* ------------------------------------------------------------------ */
@@ -852,13 +847,13 @@ function paintBirthday(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post:
 function paintPicture(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, pic: Picture) {
   const { W, H } = L;
   if (L.format === "feed") {
-    ctx.fillStyle = "#07070a";
+    ctx.fillStyle = PAPER;
     ctx.fillRect(0, 0, W, H);
     drawCover(ctx, pic, W, H);
     return;
   }
   backdrop(ctx, W, H);
-  brandRow(ctx, logo, PAD, L.top + 30, W, null);
+  brand(ctx, logo, PAD, L.top + 30, W, null);
   // the 4:5 picture, edge to edge, in the middle of the story
   const h = (W * pic.height) / pic.width;
   const y = Math.max(L.top + 80, (H - h) / 2);
@@ -954,7 +949,7 @@ function paintWords(ctx: Ctx, L: Layout, post: CommunityPost, logo: HTMLImageEle
     L.bottom - L.top - FOOTER,
     "middle",
   );
-  brandRow(ctx, logo, PAD, L.bottom, W, null);
+  brand(ctx, logo, PAD, L.bottom, W, null);
 }
 
 /* ------------------------------------------------------------------ */

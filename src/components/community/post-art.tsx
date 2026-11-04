@@ -135,7 +135,7 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
   return (
     <div
       ref={box}
-      className={cn("relative w-full overflow-hidden bg-[#09090b]", fill && "h-full", className)}
+      className={cn("relative w-full overflow-hidden bg-[#f6f3ee]", fill && "h-full", className)}
       style={fill ? undefined : { aspectRatio: "4 / 5" }}
       data-post-art={card}
       data-ready={art ? "" : undefined}
@@ -146,12 +146,12 @@ export function PostArtImage({ post, card, unit, eager = false, fill = false, zo
           <ArtImg src={art.url} alt={alt} />
         </div>
       ) : failed ? (
-        // couldn't paint it on this phone: its words, on the same dark card
-        <div className="absolute inset-0 flex items-center px-[9%] text-white">
+        // couldn't paint it on this phone: its words, on the same paper card
+        <div className="absolute inset-0 flex items-center px-[9%] text-[#141417]">
           <p className="line-clamp-6 text-balance text-[22px] font-bold leading-tight">{alt}</p>
         </div>
       ) : (
-        <div className="absolute inset-0 animate-pulse bg-[radial-gradient(85%_70%_at_100%_0%,rgba(239,51,64,0.32),transparent_60%)]" aria-label="Loading picture" role="img" />
+        <div className="absolute inset-0 animate-pulse bg-[#ece8e0]" aria-label="Loading picture" role="img" />
       )}
       {host}
     </div>
@@ -184,5 +184,5 @@ function ArtImg({ src, alt }: { src: string; alt: string }) {
  */
 export function AutoPostTile({ post, unit }: { post: CommunityPost; unit: "kg" | "lb" }) {
   const card = postArtCard(post);
-  return card ? <PostArtImage post={post} card={card} unit={unit} fill zoom={false} /> : <div className="h-full w-full bg-[#09090b]" />;
+  return card ? <PostArtImage post={post} card={card} unit={unit} fill zoom={false} /> : <div className="h-full w-full bg-[#f6f3ee]" />;
 }

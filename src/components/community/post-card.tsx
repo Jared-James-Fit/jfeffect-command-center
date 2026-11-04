@@ -110,15 +110,15 @@ export function isPhotoPost(post: Pick<CommunityPost, "kind" | "media_type" | "s
 
 /**
  * An automated post (the daily series, a lesson, a holiday, a birthday) is
- * an Instagram post: its picture edge to edge (its painted card, the one
- * Save image and Share to Instagram send; or the coach's own photo / clip
- * when he put one on it, a lesson's card in front of them), then the words.
+ * an Instagram photo post: its photo edge to edge at 4:5 (made for it, or the
+ * coach's own), then the words. A card with the numbers or a lesson's
+ * diagram is the next slide (the one Save image and Share to Instagram send
+ * with it). Until its photo is made, the painted card is the picture.
  */
 export function AutoPostHero({ post, thumbUrl, unit, full = false }: { post: CommunityPost; thumbUrl: string | null; unit: "kg" | "lb"; full?: boolean }) {
   const card = postArtCard(post);
-  if (card && post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;
-  if (card) return <PostArtImage post={post} card={card} unit={unit} eager={full} />;
-  return post.media_type ? <PostMedia post={post} thumbUrl={thumbUrl} full={full} /> : null;
+  if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill /> : undefined} />;
+  return card ? <PostArtImage post={post} card={card} unit={unit} eager={full} /> : null;
 }
 
 /**
@@ -765,16 +765,17 @@ export function ReactionBar({
 }
 
 /** Feed media: the thumbnail only. Full-size image / video loads on demand. */
-export function PostMedia({ post, thumbUrl, full = false, lead }: { post: CommunityPost; thumbUrl: string | null; full?: boolean; lead?: ReactNode }) {
+export function PostMedia({ post, thumbUrl, full = false, lead, trail, ratio: fixed }: { post: CommunityPost; thumbUrl: string | null; full?: boolean; lead?: ReactNode; trail?: ReactNode; ratio?: number }) {
   const slides = postSlides(post);
   const cover = slides[0] ?? null;
   // Never taller than 4:5, never wider than 16:9 — keeps the feed rhythm steady.
   // A carousel takes its cover's shape for every slide (Instagram does too).
   // A picture framed in the studio is already exactly its shape; a clip (or an
   // older photo) is cropped to it, showing the part its focus says.
-  // `lead`: a slide before the post's own (an automated post's 4:5 card), whose shape it takes.
-  const ratio = lead ? 0.8 : feedAspect(post.media_width, post.media_height);
-  if (slides.length > 1 || lead) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} lead={lead} />;
+  // `lead` / `trail`: a slide before / after the post's own (an automated post's 4:5 card), whose shape it takes.
+  // `ratio`: a fixed shape (an automated post is always 4:5, like the card that may follow its photo).
+  const ratio = fixed ?? (lead ? 0.8 : feedAspect(post.media_width, post.media_height));
+  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} lead={lead} trail={trail} />;
   return (
     <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }}>
       {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} /> : <div className="h-full w-full animate-pulse bg-muted" />}
@@ -831,14 +832,14 @@ function FadeImg({ src, position }: { src: string; position?: string }) {
  * and the dots say where you are. Only the slide you're on and its
  * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
  */
-function PostCarousel({ slides, coverUrl, ratio, full, lead }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean; lead?: ReactNode }) {
+function PostCarousel({ slides, coverUrl, ratio, full, lead, trail }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean; lead?: ReactNode; trail?: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
   const track = useRef<HTMLDivElement | null>(null);
   const urls = useSlideThumbUrls(slides.slice(1));
   // with a lead slide, the post's own slides start one along
   const off = lead ? 1 : 0;
-  const count = slides.length + off;
+  const count = slides.length + off + (trail ? 1 : 0);
   const onScroll = () => {
     const el = track.current;
     if (!el || !el.clientWidth) return;
@@ -874,6 +875,12 @@ function PostCarousel({ slides, coverUrl, ratio, full, lead }: { slides: PostSli
             </div>
           );
         })}
+        {trail && (
+          <div className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${count} of ${count}`}>
+            {/* painted once it's next to the one on screen */}
+            {index >= count - 2 || seen >= count - 1 ? trail : <div className="h-full w-full bg-muted" />}
+          </div>
+        )}
       </div>
       <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur">
         {index + 1}/{count}
