@@ -79,8 +79,8 @@ export function infoCard(post: CommunityPost): IgCard | null {
 export function instagramPlan(post: CommunityPost): IgPlan {
   const slides = postSlides(post);
   const info = infoCard(post);
-  // a photo first (made for it, or the coach's own), the card that carries the numbers after it
-  if (slides.length) return { card: info, slides, cardLast: !!info };
+  // a lesson's diagram leads, the photos after it; for the others a photo leads and the numbers card follows
+  if (slides.length) return { card: info, slides, cardLast: !!info && info !== "lesson" };
   if (info) return { card: info, slides: [] };
   if (extraBirthday(post)) return { card: "birthday", slides: [] };
   if (post.series === "holiday" && extraHoliday(post.series_extra)) return { card: "holiday", slides: [] };

@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  AUTO_PICTURE_KINDS,
   KIND_PICTURE,
   PICTURE_STYLE,
   SCENE_PICTURE,
   imageSize,
   pictureKind,
+  picturedByItself,
   postPicturePrompt,
   scenePicturePrompt,
 } from "@/lib/post-pictures";
@@ -75,9 +77,7 @@ describe("Saturday's scene as a real picture", () => {
     expect(server).toContain("if (media.some((m) => !madeHere(m?.path))) return { ok: false");
     expect(server).toContain('return { skipped: "waiting after a failed try", last }');
     expect(server).toContain("if (settings && !settings.paused) {");
-    expect(server).toContain(
-      'libraryDaysInOrder(settings.series_on ?? [], isoDowIn("America/Winnipeg"))',
-    );
+    expect(server).toContain('libraryDaysInOrder(on, isoDowIn("America/Winnipeg"))');
     expect(read("src/routes/api/public/hooks/post-pictures-tick.ts")).toContain(
       "authorizeHookRequest(request)",
     );
@@ -146,5 +146,32 @@ describe("Saturday's scene as a real picture", () => {
     ]);
     // only days that are on
     expect(libraryDaysInOrder(["saturday_spirit"], 1)).toEqual(["saturday_spirit"]);
+  });
+
+  it("only Saturday's scene gets a made photo by itself; every other post leads with its own card", () => {
+    expect(AUTO_PICTURE_KINDS).toEqual(["saturday_spirit"]);
+    expect(picturedByItself("saturday_spirit")).toBe(true);
+    for (const k of [
+      "monday_motivation",
+      "tuesday_tips",
+      "wednesday_wins",
+      "try_it_thursday",
+      "finish_strong_friday",
+      "sunday_recap",
+      "lesson",
+      "holiday",
+      "birthday",
+    ] as const)
+      expect(picturedByItself(k), k).toBe(false);
+    const server = read("src/lib/post-pictures.server.ts");
+    // asked for in the query, so a newer lesson without a photo can't hide a Saturday post
+    expect(server).toContain('.in("series", [...AUTO_PICTURE_KINDS])');
+    // the coach can still ask for one on any automated post
+    expect(server).toContain(
+      'const kind = post.kind === "note" && !post.story_only ? pictureKind(post) : null;',
+    );
+    expect(read("src/components/community/coach-weekly-posts.tsx")).toContain(
+      "picturedByItself(series) && <NextPicture",
+    );
   });
 });

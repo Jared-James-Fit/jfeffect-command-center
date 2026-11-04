@@ -206,7 +206,7 @@ describe("a lesson in the feed and the story", () => {
     // the lesson's photo leads, edge to edge, its card (title + diagram) the next slide, his words under them;
     // until its photo is made the card is the picture
     const postCard = read("src/components/community/post-card.tsx");
-    expect(postCard).toContain("if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail={card ? <PostArtImage post={post} card={card} unit={unit} fill /> : undefined} />;");
+    expect(postCard).toContain("if (post.media_type && card && !plan.cardLast) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} lead={<PostArtImage post={post} card={card} unit={unit} fill eager={full} />} />;");
     expect(postCard).toContain("{auto && <AutoPostCaption post={post} clamp onOpenPerson={onOpenAuthor} />}");
     // the sources stay with the coach, in his planner
     expect(read("src/components/community/coach-lessons.tsx")).toContain("Sources · only you see these");
