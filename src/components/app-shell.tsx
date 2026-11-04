@@ -42,6 +42,7 @@ import { touchActiveWorkoutSession } from "@/components/workout-day/WorkoutTimer
 import { OPEN_MORE_EVENT, pageOwnsTopBar } from "@/lib/shell-events";
 import { pageScrolledPx, requestTabRefresh, scrollPageToTop, topFirstPage, topFirstTap } from "@/lib/tab-refresh";
 import { TabRefresh } from "@/components/tab-refresh";
+import { useBarHidden } from "@/components/community/crew-header";
 
 export interface NavItem {
   to: string;
@@ -325,6 +326,8 @@ export function AppShell({
   const search = useRouterState({ select: (r) => r.location.search as Record<string, unknown> });
   const hash = useRouterState({ select: (r) => r.location.hash });
   const pageBar = pageOwnsTopBar(pathname, ownTopBarOn);
+  // The phone bar is fixed and slides away while you read down, like Crew's.
+  const shellBarHidden = useBarHidden(!pageBar);
   // Tapping the tab you're already on (Instagram's): back to the top, the page's own retap (Crew: out of a
   // profile, back to the feed), and a refresh of what's on screen with the spinner.
   const retapTab = useCallback((to: string) => {
@@ -945,10 +948,14 @@ export function AppShell({
         />
         {/* Phone top bar: the JF Effect mark in the middle (Crew's look), tools left, More / you right */}
         {/* under the notch, or right under the View as client banner (it holds the notch) */}
+        {/* Fixed at the very top, opaque, the notch inside it (like Crew's bar): iOS 26 draws
+            its own blur over whatever sits under the status bar unless a real fixed, opaque,
+            full-width bar is at the top edge, so a bar that scrolled with the page showed blurred. */}
         {!pageBar && <header
-          className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"
+          className="shell-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"
           style={{ paddingTop: "var(--app-safe-top)" }}
           data-shell-bar
+          data-hidden={shellBarHidden ? "" : undefined}
         >
           {/* search and light / dark on every screen, clients included: staff search everything
               (the palette), anyone else the app's pages (More, its search field ready) */}
@@ -1004,6 +1011,8 @@ export function AppShell({
             )}
           </div>
         </header>}
+        {/* holds the bar's room in the page (48px + its border), so nothing sits under it */}
+        {!pageBar && <div aria-hidden className="md:hidden" style={{ height: "calc(var(--app-safe-top) + 3rem + 1px)" }} data-shell-bar-room />}
 
         <main className="w-full max-w-full box-border min-w-0 flex-1 overflow-x-hidden pb-[calc(140px+env(safe-area-inset-bottom))] md:pb-0">
           {/* Refreshing: the bar's re-tap, or a pull down at the top of a tab's own page (Instagram's).

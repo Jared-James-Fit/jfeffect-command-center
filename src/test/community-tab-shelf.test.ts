@@ -45,7 +45,8 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("Photo, email, sign out");
     expect(shell).toContain('<Button variant="ghost" aria-label="More" onClick={() => setMoreOpen(true)} className="h-10 w-10 shrink-0 rounded-full px-0">');
     // the JF Effect mark sits in the middle of the bar, Crew's look, on every shell page
-    expect(shell).toContain('className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"');
+    // fixed at the top edge so iOS never blurs it (shell-bar-fixed.test.ts)
+    expect(shell).toContain('className="shell-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-border/60 bg-background px-2 md:hidden"');
     expect(shell).toContain("<ShellBrand title={title} compact={!simpleHeader} />");
     // the bar is Crew's height, so the refresh spinner opens at the same spot on every tab
     expect(shell).toContain('top="calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem + 5px)"');
