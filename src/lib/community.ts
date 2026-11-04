@@ -178,8 +178,8 @@ export type CommunityPost = {
   completion_id: string | null;
   /** "workout" (a session) or "note" (a coach's text post). Missing = workout. */
   kind?: "workout" | "note";
-  /** A daily post, or "holiday" (a coach post on a big holiday, with its picture in series_extra). */
-  series?: CommunitySeries | "holiday" | null;
+  /** A daily post, "holiday" (a coach post on a big holiday, with its picture in series_extra) or "daily_visual" (a daily picture, daily-visuals.ts). */
+  series?: CommunitySeries | "holiday" | "daily_visual" | null;
   /** A featured quote on a note: always from the verified library. */
   quote?: string | null;
   quote_author?: string | null;

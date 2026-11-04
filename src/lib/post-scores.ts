@@ -59,6 +59,7 @@ const OTHER_KINDS: Record<string, string> = {
   member_workout: "Members' workouts",
   member_post: "Members' posts",
   holiday: "Holidays",
+  daily_visual: "Daily pictures",
 };
 
 /** "Lesson · Strength science", "Wednesday Wins", "Your posts", "Members' workouts". */

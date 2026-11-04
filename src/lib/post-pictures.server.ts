@@ -13,16 +13,34 @@
  * Model: OpenAI's image model (ChatGPT's) when OPENAI_API_KEY is set, else
  * Google's image model through the Lovable AI gateway the app already uses.
  */
-import { AUTO_PICTURE_KINDS, imageSize, pictureKind, picturedByItself, postPicturePrompt, type PictureKind } from "@/lib/post-pictures";
+import {
+  AUTO_PICTURE_KINDS,
+  imageSize,
+  pictureKind,
+  picturedByItself,
+  postPicturePrompt,
+  type PictureKind,
+} from "@/lib/post-pictures";
 import { isSpiritScene } from "@/components/community/spirit-scenes";
 
 type Admin = any;
-export type Picture = { bytes: Uint8Array; mime: string; width: number; height: number; provider: string };
+export type Picture = {
+  bytes: Uint8Array;
+  mime: string;
+  width: number;
+  height: number;
+  provider: string;
+};
 type Made = { ok: true; picture: Picture } | { ok: false; reason: string };
-export type PictureResult = { ok: true; path: string; provider: string } | { ok: false; reason: string };
+export type PictureResult =
+  { ok: true; path: string; provider: string } | { ok: false; reason: string };
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const GATEWAY_MODELS = ["google/gemini-3-pro-image-preview", "google/gemini-2.5-flash-image", "google/gemini-2.5-flash-image-preview"];
+const GATEWAY_MODELS = [
+  "google/gemini-3-pro-image-preview",
+  "google/gemini-2.5-flash-image",
+  "google/gemini-2.5-flash-image-preview",
+];
 const BUCKET = "community-media";
 const STATUS_KEY = "post_pictures_status";
 /** After a failed try the tick waits this long before spending another call. */
@@ -32,8 +50,20 @@ const RECENT_MS = 36 * 60 * 60 * 1000;
 /** Older posts are caught up too, back this far. */
 const CATCH_UP_MS = 21 * 24 * 60 * 60 * 1000;
 /** The days with a library of posts, each with its picture made ahead. */
-const LIBRARY_DAYS = ["monday_motivation", "tuesday_tips", "try_it_thursday", "finish_strong_friday", "saturday_spirit"] as const;
-const DAY_OF: Record<(typeof LIBRARY_DAYS)[number], number> = { monday_motivation: 1, tuesday_tips: 2, try_it_thursday: 4, finish_strong_friday: 5, saturday_spirit: 6 };
+const LIBRARY_DAYS = [
+  "monday_motivation",
+  "tuesday_tips",
+  "try_it_thursday",
+  "finish_strong_friday",
+  "saturday_spirit",
+] as const;
+const DAY_OF: Record<(typeof LIBRARY_DAYS)[number], number> = {
+  monday_motivation: 1,
+  tuesday_tips: 2,
+  try_it_thursday: 4,
+  finish_strong_friday: 5,
+  saturday_spirit: 6,
+};
 
 function fromBase64(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -44,7 +74,8 @@ function fromBase64(b64: string): Uint8Array {
 
 function picture(bytes: Uint8Array, provider: string): Made {
   const size = imageSize(bytes);
-  if (!size || size.width < 256 || size.height < 256) return { ok: false, reason: `${provider} sent something that isn't a picture` };
+  if (!size || size.width < 256 || size.height < 256)
+    return { ok: false, reason: `${provider} sent something that isn't a picture` };
   return { ok: true, picture: { bytes, ...size, provider } };
 }
 
@@ -53,7 +84,15 @@ async function viaOpenAI(key: string, prompt: string): Promise<Made> {
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, prompt, size: "1024x1536", quality: "high", output_format: "jpeg", output_compression: 88, n: 1 }),
+    body: JSON.stringify({
+      model,
+      prompt,
+      size: "1024x1536",
+      quality: "high",
+      output_format: "jpeg",
+      output_compression: 88,
+      n: 1,
+    }),
     signal: AbortSignal.timeout(150_000),
   });
   if (!res.ok) {
@@ -67,7 +106,9 @@ async function viaOpenAI(key: string, prompt: string): Promise<Made> {
     return { ok: false, reason: msg };
   }
   const b64: string | undefined = (await res.json())?.data?.[0]?.b64_json;
-  return b64 ? picture(fromBase64(b64), `openai:${model}`) : { ok: false, reason: "OpenAI didn't send a picture back" };
+  return b64
+    ? picture(fromBase64(b64), `openai:${model}`)
+    : { ok: false, reason: "OpenAI didn't send a picture back" };
 }
 
 /** The picture in a chat reply: `message.images[]`, or an image part / data URL in `content`. */
@@ -75,7 +116,9 @@ export function gatewayImage(json: any): string | null {
   const msg = json?.choices?.[0]?.message;
   const urls: unknown[] = [
     ...(Array.isArray(msg?.images) ? msg.images.map((i: any) => i?.image_url?.url ?? i?.url) : []),
-    ...(Array.isArray(msg?.content) ? msg.content.map((p: any) => p?.image_url?.url ?? p?.url) : []),
+    ...(Array.isArray(msg?.content)
+      ? msg.content.map((p: any) => p?.image_url?.url ?? p?.url)
+      : []),
     typeof msg?.content === "string" ? msg.content : null,
   ];
   for (const u of urls) {
@@ -91,8 +134,16 @@ async function viaGateway(key: string, prompt: string): Promise<Made> {
   for (const model of models) {
     const res = await fetch(GATEWAY, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Lovable-API-Key": key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: `Generate an image. ${prompt}` }], modalities: ["image", "text"] }),
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: `Generate an image. ${prompt}` }],
+        modalities: ["image", "text"],
+      }),
       signal: AbortSignal.timeout(150_000),
     });
     if (!res.ok) {
@@ -119,7 +170,8 @@ async function viaGateway(key: string, prompt: string): Promise<Made> {
 export async function generatePicture(prompt: string): Promise<Made> {
   const openai = process.env.OPENAI_API_KEY;
   const lovable = process.env.LOVABLE_API_KEY;
-  if (!openai && !lovable) return { ok: false, reason: "No image model is set up (OPENAI_API_KEY or LOVABLE_API_KEY)." };
+  if (!openai && !lovable)
+    return { ok: false, reason: "No image model is set up (OPENAI_API_KEY or LOVABLE_API_KEY)." };
   let first: Made | null = null;
   if (openai) {
     try {
@@ -143,13 +195,16 @@ export async function generatePicture(prompt: string): Promise<Made> {
 export async function storePicture(admin: Admin, ownerId: string, name: string, pic: Picture) {
   const ext = pic.mime === "image/jpeg" ? "jpg" : pic.mime === "image/webp" ? "webp" : "png";
   const path = `${ownerId}/post-pictures/${name}-${Date.now()}.${ext}`;
-  const { error } = await admin.storage.from(BUCKET).upload(path, pic.bytes, { contentType: pic.mime, upsert: false });
+  const { error } = await admin.storage
+    .from(BUCKET)
+    .upload(path, pic.bytes, { contentType: pic.mime, upsert: false });
   if (error) throw new Error(`Couldn't save the picture: ${error.message}`);
   return { path, type: "image", width: pic.width, height: pic.height };
 }
 
 /** A picture this module made earlier, which a new one replaces (anything the coach uploaded stays). */
-const madeHere = (path: unknown): path is string => typeof path === "string" && path.includes("/post-pictures/");
+const madeHere = (path: unknown): path is string =>
+  typeof path === "string" && path.includes("/post-pictures/");
 
 async function removeOld(admin: Admin, paths: unknown[]) {
   const mine = paths.filter(madeHere);
@@ -167,19 +222,33 @@ function promptFor(kind: PictureKind, caption: string | null, data: any): string
 export async function pictureForPost(admin: Admin, postId: string): Promise<PictureResult> {
   const { data: post } = await admin
     .from("community_posts")
-    .select("id, kind, series, series_data, caption, author_user_id, media_path, extra_media, story_only")
+    .select(
+      "id, kind, series, series_data, caption, author_user_id, media_path, extra_media, story_only",
+    )
     .eq("id", postId)
     .maybeSingle();
   if (!post) return { ok: false, reason: "Post not found" };
   const kind = post.kind === "note" && !post.story_only ? pictureKind(post) : null;
   if (!kind) return { ok: false, reason: "Only the app's own posts get a made picture." };
-  if (post.media_path && !madeHere(post.media_path)) return { ok: false, reason: "This post has your own photo on it. Remove it first to get a made picture." };
+  if (post.media_path && !madeHere(post.media_path))
+    return {
+      ok: false,
+      reason: "This post has your own photo on it. Remove it first to get a made picture.",
+    };
+  // a daily picture is made again from its own day's scene and look
+  if (kind === "daily_visual") {
+    const { repictureDailyPost } = await import("@/lib/daily-visuals.server");
+    return repictureDailyPost(admin, post.id);
+  }
   const made = await generatePicture(promptFor(kind, post.caption, post.series_data));
   if (!made.ok) return made;
   const entry = await storePicture(admin, post.author_user_id, `post-${post.id}`, made.picture);
   // the made photo is the cover; anything else already on the post stays after it
   const rest = (Array.isArray(post.extra_media) ? post.extra_media : []) as unknown[];
-  const { error } = await admin.rpc("community_apply_media", { _post_id: post.id, _media: [entry, ...(post.media_path ? rest : [])] });
+  const { error } = await admin.rpc("community_apply_media", {
+    _post_id: post.id,
+    _media: [entry, ...(post.media_path ? rest : [])],
+  });
   if (error) return { ok: false, reason: error.message };
   await removeOld(admin, [post.media_path]);
   return { ok: true, path: entry.path, provider: made.picture.provider };
@@ -187,27 +256,48 @@ export async function pictureForPost(admin: Admin, postId: string): Promise<Pict
 
 /** A new photo on a day's next library post: it goes out with it (once), like a photo the coach added. */
 export async function pictureForItem(admin: Admin, itemId: string): Promise<PictureResult> {
-  const { data: item } = await admin.from("community_series_items").select("id, series, data, body, media").eq("id", itemId).maybeSingle();
+  const { data: item } = await admin
+    .from("community_series_items")
+    .select("id, series, data, body, media")
+    .eq("id", itemId)
+    .maybeSingle();
   if (!item) return { ok: false, reason: "That post isn't in the library." };
   const kind = pictureKind({ series: item.series });
   if (!kind) return { ok: false, reason: "This kind of post doesn't get a made picture." };
   const media = (Array.isArray(item.media) ? item.media : []) as { path?: string }[];
-  if (media.some((m) => !madeHere(m?.path))) return { ok: false, reason: "This post has your own photo on it. Remove it first to get a made picture." };
-  const { data: settings } = await admin.from("community_series_settings").select("author_user_id").maybeSingle();
+  if (media.some((m) => !madeHere(m?.path)))
+    return {
+      ok: false,
+      reason: "This post has your own photo on it. Remove it first to get a made picture.",
+    };
+  const { data: settings } = await admin
+    .from("community_series_settings")
+    .select("author_user_id")
+    .maybeSingle();
   if (!settings?.author_user_id) return { ok: false, reason: "No account to post as yet." };
   const made = await generatePicture(promptFor(kind, item.body, item.data));
   if (!made.ok) return made;
   const entry = await storePicture(admin, settings.author_user_id, `item-${item.id}`, made.picture);
-  const { error } = await admin.from("community_series_items").update({ media: [entry] }).eq("id", item.id);
+  const { error } = await admin
+    .from("community_series_items")
+    .update({ media: [entry] })
+    .eq("id", item.id);
   if (error) return { ok: false, reason: error.message };
-  await removeOld(admin, media.map((m) => m?.path));
+  await removeOld(
+    admin,
+    media.map((m) => m?.path),
+  );
   return { ok: true, path: entry.path, provider: made.picture.provider };
 }
 
 type TickStatus = { at: string; ok: boolean; what?: string; reason?: string; provider?: string };
 
 async function readStatus(admin: Admin): Promise<TickStatus | null> {
-  const { data } = await admin.from("app_settings").select("value").eq("key", STATUS_KEY).maybeSingle();
+  const { data } = await admin
+    .from("app_settings")
+    .select("value")
+    .eq("key", STATUS_KEY)
+    .maybeSingle();
   try {
     return data?.value ? (JSON.parse(data.value) as TickStatus) : null;
   } catch {
@@ -217,12 +307,20 @@ async function readStatus(admin: Admin): Promise<TickStatus | null> {
 
 async function writeStatus(admin: Admin, status: TickStatus) {
   const value = JSON.stringify(status);
-  const { data } = await admin.from("app_settings").update({ value, updated_at: status.at }).eq("key", STATUS_KEY).select("id");
+  const { data } = await admin
+    .from("app_settings")
+    .update({ value, updated_at: status.at })
+    .eq("key", STATUS_KEY)
+    .select("id");
   if (!data?.length) await admin.from("app_settings").insert({ key: STATUS_KEY, value });
 }
 
 /** The app's own posts out since `since` with no photo yet, newest first. */
-async function postsWithoutPicture(admin: Admin, since: string, limit: number): Promise<{ id: string }[]> {
+async function postsWithoutPicture(
+  admin: Admin,
+  since: string,
+  limit: number,
+): Promise<{ id: string }[]> {
   const { data } = await admin
     .from("community_posts")
     .select("id, kind, series, series_data, story_only")
@@ -238,7 +336,10 @@ async function postsWithoutPicture(admin: Admin, since: string, limit: number): 
 }
 
 /** The library days that are on, the soonest first (today counts if it hasn't gone out). */
-export function libraryDaysInOrder(on: string[], todayIsoDow: number): (typeof LIBRARY_DAYS)[number][] {
+export function libraryDaysInOrder(
+  on: string[],
+  todayIsoDow: number,
+): (typeof LIBRARY_DAYS)[number][] {
   const ahead = (d: (typeof LIBRARY_DAYS)[number]) => (DAY_OF[d] - todayIsoDow + 7) % 7;
   return LIBRARY_DAYS.filter((d) => on.includes(d)).sort((a, b) => ahead(a) - ahead(b));
 }
@@ -252,18 +353,28 @@ export function libraryDaysInOrder(on: string[], todayIsoDow: number): (typeof L
  */
 export async function runPostPicturesTick(admin: Admin): Promise<Record<string, unknown>> {
   const last = await readStatus(admin);
-  if (last && !last.ok && Date.now() - Date.parse(last.at) < BACKOFF_MS) return { skipped: "waiting after a failed try", last };
+  if (last && !last.ok && Date.now() - Date.parse(last.at) < BACKOFF_MS)
+    return { skipped: "waiting after a failed try", last };
 
   let what: string | null = null;
   let result: PictureResult | null = null;
-  const [recent] = await postsWithoutPicture(admin, new Date(Date.now() - RECENT_MS).toISOString(), 1);
+  const [recent] = await postsWithoutPicture(
+    admin,
+    new Date(Date.now() - RECENT_MS).toISOString(),
+    1,
+  );
   if (recent) {
     what = `post ${recent.id}`;
     result = await pictureForPost(admin, recent.id);
   } else {
-    const { data: settings } = await admin.from("community_series_settings").select("paused, series_on").maybeSingle();
+    const { data: settings } = await admin
+      .from("community_series_settings")
+      .select("paused, series_on")
+      .maybeSingle();
     if (settings && !settings.paused) {
-      const on = (settings.series_on ?? []).filter((s: string) => picturedByItself(pictureKind({ series: s })));
+      const on = (settings.series_on ?? []).filter((s: string) =>
+        picturedByItself(pictureKind({ series: s })),
+      );
       for (const series of libraryDaysInOrder(on, isoDowIn("America/Winnipeg"))) {
         const { data: next } = await admin.rpc("community_series_next", { _series: series });
         const item = Array.isArray(next) ? next[0] : next;
@@ -274,7 +385,11 @@ export async function runPostPicturesTick(admin: Admin): Promise<Record<string, 
       }
     }
     if (!result) {
-      const [older] = await postsWithoutPicture(admin, new Date(Date.now() - CATCH_UP_MS).toISOString(), 1);
+      const [older] = await postsWithoutPicture(
+        admin,
+        new Date(Date.now() - CATCH_UP_MS).toISOString(),
+        1,
+      );
       if (!older) return { skipped: "every post has its picture" };
       what = `post ${older.id}`;
       result = await pictureForPost(admin, older.id);
@@ -289,6 +404,10 @@ export async function runPostPicturesTick(admin: Admin): Promise<Record<string, 
 
 /** Monday = 1 … Sunday = 7, in `tz`. */
 function isoDowIn(tz: string): number {
-  const day = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(new Date());
-  return ({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 } as Record<string, number>)[day] ?? 1;
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(
+    new Date(),
+  );
+  return (
+    ({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 } as Record<string, number>)[day] ?? 1
+  );
 }
