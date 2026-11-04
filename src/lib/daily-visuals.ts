@@ -411,7 +411,7 @@ RULES
 4. Never invent facts, studies, numbers, names or stories. No hashtags. No quotes from anyone. Never write a Bible verse or mention a verse yourself (the app adds the verse on Sundays).
 5. An emoji only if it fits, one at most, from his list.
 6. You may end with a tiny question that invites a reply ("who's yours?"), only if it's natural.
-7. Don't repeat or closely echo any line in RECENT LINES.
+7. Don't repeat or closely echo any line in RECENT LINES, and vary it: don't open with the same word or end on the same emoji as the ones around it (no "honestly" every day, no 🤝 every day). Often no emoji at all is best.
 
 Also write the PICTURE: one specific, calm scene that shows the theme without any words in it, with the person described in the brief (a woman or a man) seen from behind, from the side or as hands, never looking at the camera. Say the setting, the light, what they're doing and the mood in one or two sentences. Make it different from RECENT PICTURES.
 
@@ -465,6 +465,23 @@ export function parseDailyWriter(text: string): { line: string; picture: string 
   } catch {
     return null;
   }
+}
+
+const EMOJI_RE = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/gu;
+const firstWord = (s: string) => s.trim().toLowerCase().match(/^[a-z']+/)?.[0] ?? "";
+const lastEmoji = (s: string) => s.match(EMOJI_RE)?.pop() ?? "";
+
+/**
+ * A line that opens with the same word, or ends on the same emoji, as a day
+ * near it reads like a template ("honestly … 🤝" three days running): what's
+ * repeated, or null. `near` = the lines of the days around it.
+ */
+export function repeatsNearby(line: string, near: string[]): string | null {
+  const w = firstWord(line);
+  if (w && near.some((n) => firstWord(n) === w)) return `opens with "${w}" like a day near it`;
+  const e = lastEmoji(line);
+  if (e && near.some((n) => lastEmoji(n) === e)) return `ends on ${e} like a day near it`;
+  return null;
 }
 
 /** What's wrong with a written line (empty = it can go out). The verse is the app's, so only his line is checked. */

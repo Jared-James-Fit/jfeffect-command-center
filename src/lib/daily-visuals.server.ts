@@ -28,6 +28,7 @@ import {
   nextChoices,
   parseDailyWriter,
   pickVerse,
+  repeatsNearby,
   type DailyAudience,
   type DailyStyle,
   type DailyTheme,
@@ -167,9 +168,11 @@ export async function writeDay(admin: Admin, row: DailyRow, stats: VisualStat[])
       .slice(-10),
   });
 
+  // the days around it (either side), so a week never reads like one template
+  const near = past.filter((r) => Math.abs(Date.parse(r.day) - Date.parse(row.day)) <= 3 * 86_400_000).map(lines).filter(Boolean);
   let written: { line: string; picture: string } | null = null;
   let problems: string[] = [];
-  for (let attempt = 0; attempt < 2 && !written; attempt++) {
+  for (let attempt = 0; attempt < 3 && !written; attempt++) {
     const t = await generateText({
       model: createLovableAiGateway()(modelId),
       system: `${DAILY_WRITER_PROMPT}\n\n${voice}`,
@@ -184,7 +187,8 @@ export async function writeDay(admin: Admin, row: DailyRow, stats: VisualStat[])
       continue;
     }
     const line = casualize(parsed.line);
-    problems = dailyLineProblems(line, choice.maxChars);
+    const repeat = repeatsNearby(line, near);
+    problems = [...dailyLineProblems(line, choice.maxChars), ...(repeat ? [repeat] : [])];
     if (!problems.length) written = { line, picture: parsed.picture };
   }
   if (!written) throw new Error(`The line didn't pass: ${problems.join("; ")}`);
