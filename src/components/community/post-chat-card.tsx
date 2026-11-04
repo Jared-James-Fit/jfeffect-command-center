@@ -85,8 +85,8 @@ export function CommunityPostChatCard({ att, mine, staff }: { att: PostCardAttac
               <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" draggable={false} onError={() => setBroken(thumb)} />
             ) : (
               // No photo: the words, the way the story itself shows them.
-              <span className="absolute inset-0 flex flex-col bg-[radial-gradient(120%_90%_at_80%_0%,rgba(239,51,64,0.45),transparent_60%)] p-2.5 text-white">
-                {att.name && <span className="truncate text-[10px] font-semibold text-white/70">{att.name}</span>}
+              <span className="absolute inset-0 flex flex-col bg-muted p-2.5 text-foreground">
+                {att.name && <span className="truncate text-[10px] font-semibold text-muted-foreground">{att.name}</span>}
                 <span className="flex flex-1 items-center justify-center text-center">
                   {birthday ? (
                     <span className="text-[44px] leading-none">🎂</span>

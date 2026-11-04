@@ -457,11 +457,11 @@ function bars(c: Ctx, w: number, top: number, data: { n: number; share: number; 
   data.forEach((b, i) => {
     const x = i * (bw + gap);
     const h = Math.max(8, Math.round(b.share * (height - 40)));
-    c.fillStyle = b.hot ? RED : ink(0.20);
+    c.fillStyle = b.hot ? RED : ink(0.42);
     roundRect(c, x, top + height - h, bw, h, Math.min(10, bw / 3));
     c.fill();
     if (b.label != null) {
-      c.fillStyle = b.hot ? INK : ink(0.55);
+      c.fillStyle = b.hot ? INK : ink(0.72);
       c.font = font(900, 26);
       c.textAlign = "center";
       c.fillText(b.label, x + bw / 2, top + height - h - 10);
@@ -527,7 +527,7 @@ function winsBlock(c: Ctx, w: number, maxH: number, s: WinsStats, unit: "kg" | "
         kicker(c, "Workouts each week", 0, top, ink(0.60), 26);
         let y = bars(c, w, top + 50, chart.map((b) => ({ n: b.sessions, share: b.share, hot: b.current, label: b.current ? String(b.sessions) : undefined })), 210);
         c.font = font(600, 26);
-        c.fillStyle = ink(0.45);
+        c.fillStyle = ink(0.62);
         c.fillText(chart[0].label, 0, y + 36);
         c.textAlign = "right";
         c.fillText(chart[chart.length - 1].label, w, y + 36);
@@ -602,7 +602,7 @@ function recapBlock(c: Ctx, w: number, maxH: number, s: RecapStats, unit: "kg" |
         const y = bars(c, w, top + 50, sum.days.map((d) => ({ n: d.n, share: d.share, hot: d.best, label: String(d.n) })), 170);
         const bw = (w - 18 * 6) / 7;
         c.font = font(800, 26);
-        c.fillStyle = ink(0.45);
+        c.fillStyle = ink(0.62);
         c.textAlign = "center";
         sum.days.forEach((d, i) => c.fillText(d.letter, i * (bw + 18) + bw / 2, y + 40));
         c.textAlign = "left";
@@ -655,10 +655,10 @@ function compareBlock(c: Ctx, w: number, top: number, compare: CrewCompare): num
     c.fillStyle = SUB;
     c.fillText(r.count, 0, y + 86);
     y += 108;
-    c.fillStyle = ink(0.10);
+    c.fillStyle = ink(0.08);
     roundRect(c, 0, y, w, 34, 17);
     c.fill();
-    c.fillStyle = r.lead ? RED : ink(0.32);
+    c.fillStyle = r.lead ? RED : ink(0.55);
     roundRect(c, 0, y, Math.max(34, Math.round(w * Math.min(1, r.share))), 34, 17);
     c.fill();
     y += 34 + 48;
@@ -681,7 +681,7 @@ function paintCompare(ctx: Ctx, L: Layout, logo: HTMLImageElement | null, post: 
       y = textLines(c, h.lines, 0, y, h.size, 1.1, INK) + 64;
       y = compareBlock(c, w, y, obs);
       c.font = font(500, 28);
-      y = textLines(c, wrapLines(c, sleep ? "How sessions were rated, by sleep the night before." : "People who joined in the last 8 weeks aren't counted.", w, 2), 0, y + 44, 28, 1.25, ink(0.45));
+      y = textLines(c, wrapLines(c, sleep ? "How sessions were rated, by sleep the night before." : "People who joined in the last 8 weeks aren't counted.", w, 2), 0, y + 44, 28, 1.25, ink(0.58));
       return y;
     },
     PAD,

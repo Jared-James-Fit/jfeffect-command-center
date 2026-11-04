@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { LESSON_DARK_COLORS, LessonVisualArt } from "@/components/community/lesson-visuals";
+import { LESSON_PAPER_COLORS, LessonVisualArt } from "@/components/community/lesson-visuals";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { extraScene, type CommunityPost } from "@/lib/community";
 import { extraLesson } from "@/lib/lessons";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 export function cardArtElement(post: CommunityPost, card: IgCard): ReactNode | null {
   if (card === "lesson") {
     const v = extraLesson(post)?.visual;
-    return v && v.kind !== "truth" && v.kind !== "reset" ? <LessonVisualArt visual={v} tone="dark" /> : null;
+    return v && v.kind !== "truth" && v.kind !== "reset" ? <LessonVisualArt visual={v} tone="paper" /> : null;
   }
   if (card === "scene") {
     const scene = extraScene(post.series_extra);
@@ -24,7 +24,8 @@ export function cardArtElement(post: CommunityPost, card: IgCard): ReactNode | n
 /** Paint a post's card as a JPEG file. `host`: where its drawing was put (cardArtElement), if it has one. */
 export async function paintCardFile(post: CommunityPost, card: IgCard, format: IgFormat, unit: "kg" | "lb", host: Element | null, index = 0): Promise<File | null> {
   const svg = host?.querySelector("svg");
-  const art = svg ? await svgPicture(standaloneSvg(svg, LESSON_DARK_COLORS, 1080)) : null;
+  // the card is light paper: the diagram goes on in its paper colours (dark ink), never the story's white
+  const art = svg ? await svgPicture(standaloneSvg(svg, LESSON_PAPER_COLORS, 1080)) : null;
   const canvas = document.createElement("canvas");
   await paintInstagramCard(canvas, { card, format, post, unit, art });
   const file = await canvasFile(canvas, instagramFileName(post, index, "image/jpeg"));

@@ -103,7 +103,7 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
         data-share-nudge="home"
         onClickCapture={() => setEngaged(true)}
         className={cn(
-          "relative flex h-full w-[74%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-[20px] border border-primary/20 bg-[radial-gradient(120%_80%_at_100%_0%,rgba(239,51,64,0.16),transparent_60%)] bg-card p-4",
+          "relative flex h-full w-[74%] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-[20px] border border-border bg-card p-4",
           className,
           !show && "hidden",
         )}
@@ -121,7 +121,7 @@ export function ShareNudge({ surface, unit, className }: { surface: Surface; uni
     );
   }
   return (
-    <div ref={ref} data-share-nudge="feed" onClickCapture={() => setEngaged(true)} className={cn("relative flex gap-3 rounded-3xl border border-primary/20 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(239,51,64,0.12),transparent_60%)] bg-card p-4 pr-10", className, !show && "hidden")}>
+    <div ref={ref} data-share-nudge="feed" onClickCapture={() => setEngaged(true)} className={cn("relative flex gap-3 rounded-3xl border border-border bg-card p-4 pr-10", className, !show && "hidden")}>
       {notNow}
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
         <Icon className="h-5 w-5" />

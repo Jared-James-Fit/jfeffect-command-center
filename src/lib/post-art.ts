@@ -16,7 +16,7 @@ import { extraLesson } from "@/lib/lessons";
 import type { IgCard } from "@/lib/instagram-export";
 
 /** Bump when a card's look changes: every phone paints its pictures again. */
-export const POST_ART_VERSION = 2;
+export const POST_ART_VERSION = 3;
 
 export type PostArt = { key: string; url: string; file: File };
 
