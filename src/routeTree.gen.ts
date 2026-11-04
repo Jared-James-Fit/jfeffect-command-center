@@ -85,6 +85,7 @@ import { Route as AuthenticatedAdminFinanceRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminFloatingBarRouteImport } from './routes/_authenticated/admin/floating-bar'
 import { Route as AuthenticatedAdminFormsRouteImport } from './routes/_authenticated/admin/forms'
 import { Route as AuthenticatedAdminGoogleCalendarRouteImport } from './routes/_authenticated/admin/google-calendar'
+import { Route as AuthenticatedAdminLeadsRouteImport } from './routes/_authenticated/admin/leads'
 import { Route as AuthenticatedAdminLeagueRouteImport } from './routes/_authenticated/admin/league'
 import { Route as AuthenticatedAdminLegacyMigrationRouteImport } from './routes/_authenticated/admin/legacy-migration'
 import { Route as AuthenticatedAdminLegalRouteImport } from './routes/_authenticated/admin/legal'
@@ -236,6 +237,7 @@ import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
+import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/public/hooks/lead-replies-tick'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
 import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/api/public/hooks/nutrition-plans-tick'
@@ -681,6 +683,12 @@ const AuthenticatedAdminGoogleCalendarRoute =
   AuthenticatedAdminGoogleCalendarRouteImport.update({
     id: '/google-calendar',
     path: '/google-calendar',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminLeadsRoute =
+  AuthenticatedAdminLeadsRouteImport.update({
+    id: '/leads',
+    path: '/leads',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminLeagueRoute =
@@ -1576,6 +1584,12 @@ const ApiPublicHooksGcalSessionImportRoute =
     path: '/api/public/hooks/gcal-session-import',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksLeadRepliesTickRoute =
+  ApiPublicHooksLeadRepliesTickRouteImport.update({
+    id: '/api/public/hooks/lead-replies-tick',
+    path: '/api/public/hooks/lead-replies-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksLiftArchiveTickRoute =
   ApiPublicHooksLiftArchiveTickRouteImport.update({
     id: '/api/public/hooks/lift-archive-tick',
@@ -1850,6 +1864,7 @@ export interface FileRoutesByFullPath {
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
   '/admin/legal': typeof AuthenticatedAdminLegalRoute
@@ -1985,6 +2000,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
@@ -2108,6 +2124,7 @@ export interface FileRoutesByTo {
   '/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
   '/admin/legal': typeof AuthenticatedAdminLegalRoute
@@ -2242,6 +2259,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
@@ -2370,6 +2388,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/floating-bar': typeof AuthenticatedAdminFloatingBarRoute
   '/_authenticated/admin/forms': typeof AuthenticatedAdminFormsRoute
   '/_authenticated/admin/google-calendar': typeof AuthenticatedAdminGoogleCalendarRoute
+  '/_authenticated/admin/leads': typeof AuthenticatedAdminLeadsRoute
   '/_authenticated/admin/league': typeof AuthenticatedAdminLeagueRoute
   '/_authenticated/admin/legacy-migration': typeof AuthenticatedAdminLegacyMigrationRoute
   '/_authenticated/admin/legal': typeof AuthenticatedAdminLegalRoute
@@ -2505,6 +2524,7 @@ export interface FileRoutesById {
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
   '/api/public/hooks/nutrition-plans-tick': typeof ApiPublicHooksNutritionPlansTickRoute
@@ -2633,6 +2653,7 @@ export interface FileRouteTypes {
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
+    | '/admin/leads'
     | '/admin/league'
     | '/admin/legacy-migration'
     | '/admin/legal'
@@ -2768,6 +2789,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-plans-tick'
@@ -2891,6 +2913,7 @@ export interface FileRouteTypes {
     | '/admin/floating-bar'
     | '/admin/forms'
     | '/admin/google-calendar'
+    | '/admin/leads'
     | '/admin/league'
     | '/admin/legacy-migration'
     | '/admin/legal'
@@ -3025,6 +3048,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-plans-tick'
@@ -3152,6 +3176,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/floating-bar'
     | '/_authenticated/admin/forms'
     | '/_authenticated/admin/google-calendar'
+    | '/_authenticated/admin/leads'
     | '/_authenticated/admin/league'
     | '/_authenticated/admin/legacy-migration'
     | '/_authenticated/admin/legal'
@@ -3287,6 +3312,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/client-calendars-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
     | '/api/public/hooks/nutrition-plans-tick'
@@ -3387,6 +3413,7 @@ export interface RootRouteChildren {
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
+  ApiPublicHooksLeadRepliesTickRoute: typeof ApiPublicHooksLeadRepliesTickRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
   ApiPublicHooksNutritionPlansTickRoute: typeof ApiPublicHooksNutritionPlansTickRoute
@@ -3943,6 +3970,13 @@ declare module '@tanstack/react-router' {
       path: '/google-calendar'
       fullPath: '/admin/google-calendar'
       preLoaderRoute: typeof AuthenticatedAdminGoogleCalendarRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/leads': {
+      id: '/_authenticated/admin/leads'
+      path: '/leads'
+      fullPath: '/admin/leads'
+      preLoaderRoute: typeof AuthenticatedAdminLeadsRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/league': {
@@ -5002,6 +5036,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGcalSessionImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/lead-replies-tick': {
+      id: '/api/public/hooks/lead-replies-tick'
+      path: '/api/public/hooks/lead-replies-tick'
+      fullPath: '/api/public/hooks/lead-replies-tick'
+      preLoaderRoute: typeof ApiPublicHooksLeadRepliesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/lift-archive-tick': {
       id: '/api/public/hooks/lift-archive-tick'
       path: '/api/public/hooks/lift-archive-tick'
@@ -5429,6 +5470,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminFloatingBarRoute: typeof AuthenticatedAdminFloatingBarRoute
   AuthenticatedAdminFormsRoute: typeof AuthenticatedAdminFormsRoute
   AuthenticatedAdminGoogleCalendarRoute: typeof AuthenticatedAdminGoogleCalendarRoute
+  AuthenticatedAdminLeadsRoute: typeof AuthenticatedAdminLeadsRoute
   AuthenticatedAdminLeagueRoute: typeof AuthenticatedAdminLeagueRoute
   AuthenticatedAdminLegacyMigrationRoute: typeof AuthenticatedAdminLegacyMigrationRoute
   AuthenticatedAdminLegalRoute: typeof AuthenticatedAdminLegalRoute
@@ -5555,6 +5597,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminFormsRoute: AuthenticatedAdminFormsRoute,
     AuthenticatedAdminGoogleCalendarRoute:
       AuthenticatedAdminGoogleCalendarRoute,
+    AuthenticatedAdminLeadsRoute: AuthenticatedAdminLeadsRoute,
     AuthenticatedAdminLeagueRoute: AuthenticatedAdminLeagueRoute,
     AuthenticatedAdminLegacyMigrationRoute:
       AuthenticatedAdminLegacyMigrationRoute,
@@ -5922,6 +5965,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksClientCalendarsTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
+  ApiPublicHooksLeadRepliesTickRoute: ApiPublicHooksLeadRepliesTickRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,
   ApiPublicHooksNutritionPlansTickRoute: ApiPublicHooksNutritionPlansTickRoute,
