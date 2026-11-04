@@ -132,7 +132,7 @@ export function RepostNoteEditor({ post, onClose, preview }: { post: CommunityPo
                 style={post.media_focus ? { objectPosition: `${post.media_focus.x * 100}% ${post.media_focus.y * 100}%` } : undefined}
               />
             ) : (
-              <div className="h-full w-full bg-[radial-gradient(120%_90%_at_90%_0%,rgba(239,51,64,0.32),#111114_65%)]" />
+              <div className="h-full w-full bg-muted" />
             )}
             <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/20 to-black/70" />
           </div>

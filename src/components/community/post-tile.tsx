@@ -9,7 +9,8 @@ import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 // Small on purpose: Home's shelf loads this with the app, the feed card stays in its own chunk.
 
-const ArtBlank = () => <div className="h-full w-full bg-[#09090b]" aria-hidden />;
+// the painted card's paper while it paints (never the old near-black)
+const ArtBlank = () => <div className="h-full w-full bg-[#f6f3ee]" aria-hidden />;
 /** An automated post's painted picture: its painter loads only when such a tile shows. */
 const AutoPostTile = lazyWithRetry(() => import("@/components/community/post-art").then((m) => ({ default: m.AutoPostTile })), { fallback: ArtBlank });
 

@@ -609,12 +609,8 @@ function postShareCard(c0: ShareCardInput): Bitmap {
       });
     }
   } else {
-    ctx.fillStyle = "#0b0b0d";
-    ctx.fillRect(0, y0, W, midH);
-    const g = ctx.createRadialGradient(W, y0, 0, W, y0, W * 1.1);
-    g.addColorStop(0, "rgba(239,51,64,0.45)");
-    g.addColorStop(1, "rgba(239,51,64,0)");
-    ctx.fillStyle = g;
+    // a post that's words: on one flat charcoal, never a glow
+    ctx.fillStyle = "#232327";
     ctx.fillRect(0, y0, W, midH);
     const textH = titleLines.length * titleSize * 1.12 + (titleLines.length && bodyLines.length ? 22 * PX : 0) + bodyLines.length * bodySize * 1.32;
     let y = y0 + (midH - textH) / 2;

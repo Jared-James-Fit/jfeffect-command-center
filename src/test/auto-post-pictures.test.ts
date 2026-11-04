@@ -415,3 +415,26 @@ describe("workout posts are plain and clean", () => {
     expect(card).toContain("text-success");
   });
 });
+
+describe("every preview matches the post: no glow anywhere a post is drawn", () => {
+  it("share cards, story cards and their placeholders are flat; a PR is solid amber", () => {
+    const share = read("src/lib/workout-share-card.ts");
+    expect(share).not.toMatch(/createRadialGradient|darkGlow/);
+    expect(share).toContain('const CARD_BACKDROP = "#232327";');
+    expect(share).toContain("return GOLD_TO;");
+    for (const f of [
+      "src/lib/workout-story-card.ts",
+      "src/lib/recap-story-card.ts",
+      "src/components/community/sticker-layer.tsx",
+    ])
+      expect(read(f), f).not.toMatch(/createRadialGradient/);
+    for (const f of [
+      "src/components/community/lesson-card.tsx",
+      "src/components/community/repost-note-editor.tsx",
+    ])
+      expect(read(f), f).not.toMatch(/radial-gradient/);
+    // the grid's placeholder is the card's paper, and a lesson illustration sits on the same paper
+    expect(read("src/components/community/post-tile.tsx")).toContain('bg-[#f6f3ee]" aria-hidden');
+    expect(read("src/lib/lessons.ts")).toContain("clean off-white paper background (#f6f3ee)");
+  });
+});
