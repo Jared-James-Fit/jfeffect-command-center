@@ -6,19 +6,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { HardDrive, Activity, Check, ChevronRight, Dumbbell, Trophy } from "lucide-react";
+import { HardDrive, Check, ChevronDown, Dumbbell } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO } from "date-fns";
 import { listClientsDirectoryFn } from "@/lib/clients-directory.functions";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import {
-  buildSnapshot, waitingOnMe, groupWins, winLine, TIER_LABEL,
-  type InboxRow, type SnapshotTile, type Overview, type OverviewSession, type OverviewWin,
+  buildSnapshot, waitingOnMe, trainingSummary,
+  type InboxRow, type SnapshotTile, type Overview, type OverviewSession,
 } from "@/lib/dashboard-feed";
 import { DashboardScheduleCard } from "@/components/admin-calendar/dashboard-schedule-card";
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { UserAvatar } from "@/components/user-avatar";
-import { getCoachIntel } from "@/lib/coach-intel";
 import { DashboardOfflineEmpty, useIsOfflineWithoutCache } from "@/components/portal/dashboard-offline-empty";
 import { NotificationSetupPrompt } from "@/components/notification-setup-prompt";
 import { cn } from "@/lib/utils";
@@ -32,21 +31,6 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 /* ------------------------------------------------------------------ */
 /* Small building blocks                                               */
 /* ------------------------------------------------------------------ */
-
-function SectionHeader({ title, icon: Icon, viewAll }: { title: string; icon?: any; viewAll?: { to: string; label?: string; search?: any; params?: any } }) {
-  return (
-    <div className="mb-2.5 flex items-center justify-between gap-2">
-      <h2 className="flex min-w-0 items-center gap-2 text-[13px] font-bold tracking-tight">
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}{title}
-      </h2>
-      {viewAll && (
-        <Link to={viewAll.to as any} search={viewAll.search} params={viewAll.params} className="shrink-0 text-[12px] font-semibold text-muted-foreground hover:text-foreground">
-          {viewAll.label ?? "View all"} →
-        </Link>
-      )}
-    </div>
-  );
-}
 
 function DriveSetupBanner() {
   const { data } = useQuery({
@@ -146,133 +130,64 @@ const STATUS_CHIP: Record<OverviewSession["status"], { label: string; cls: strin
   pending: { label: "Not yet", cls: "font-medium text-muted-foreground" },
 };
 
+/**
+ * Who trains today, as one line: "3 of 8 done" with their faces. The list opens
+ * on a tap (the rest one tap away); with nothing scheduled and nobody trained,
+ * there's no card at all.
+ */
 function TrainingTodayCard({ overview, loading }: { overview: Overview | undefined; loading: boolean }) {
+  const [open, setOpen] = useState(false);
   const scheduled = overview?.training.scheduled ?? [];
   const extra = overview?.training.unscheduled ?? [];
-  const done = scheduled.filter((s) => s.status === "done").length;
-  const pct = scheduled.length ? Math.round((done / scheduled.length) * 100) : 0;
+  const sum = trainingSummary(scheduled, extra.length);
+  if (loading) return <div className="h-[60px] animate-pulse rounded-2xl border border-border bg-card" aria-busy="true" />;
+  if (sum.total === 0) return null;
+  const faces = [...scheduled, ...extra].slice(0, 4);
   return (
-    <Card className="border-border bg-card p-4">
-      <SectionHeader title="Training today" icon={Dumbbell} viewAll={{ to: "/admin/training-intelligence", label: "Training intel" }} />
-      {loading ? (
-        <div className="h-16 animate-pulse rounded-lg bg-muted" />
-      ) : scheduled.length === 0 && extra.length === 0 ? (
-        <p className="py-1 text-sm text-muted-foreground">No workouts scheduled today.</p>
-      ) : (
-        <>
-          {scheduled.length > 0 && (
-            <div className="mb-1">
-              <div className="text-[13px]">
-                <span className="font-semibold"><span className="text-base font-bold tabular-nums">{done}</span> of {scheduled.length} done</span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
-              </div>
-            </div>
-          )}
-          <ul className="divide-y divide-border">
-            {scheduled.map((s) => {
-              const chip = STATUS_CHIP[s.status];
-              const name = s.name?.trim() || "Client";
-              const at = s.status === "done" ? timeOf(s.completed_at) : null;
-              return (
-                <li key={`${s.client_id}-${s.title}`}>
-                  <ClientNameLink clientId={s.client_id} tab="training" className="flex items-center gap-2.5 py-2" ariaLabel={`Open ${name}'s training`}>
-                    <UserAvatar src={s.avatar ?? undefined} name={name} size={32} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-bold">{name}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
-                    </div>
-                    <span className={cn("shrink-0 text-[11px]", chip.cls)}>{chip.label}</span>
-                  </ClientNameLink>
-                </li>
-              );
-            })}
-          </ul>
-          {extra.length > 0 && (
-            <div className="mt-2 border-t border-border pt-2">
-              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Also trained today</div>
-              <ul className="divide-y divide-border">
-                {extra.map((s) => {
-                  const name = s.name?.trim() || "Client";
-                  const at = timeOf(s.completed_at);
-                  return (
-                    <li key={`${s.client_id}-${s.title}`}>
-                      <ClientNameLink clientId={s.client_id} tab="training" className="flex items-center gap-2.5 py-2" ariaLabel={`Open ${name}'s training`}>
-                        <UserAvatar src={s.avatar ?? undefined} name={name} size={32} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-xs font-bold">{name}</div>
-                          <div className="truncate text-[11px] text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
-                        </div>
-                        <span className={cn("shrink-0 text-[11px]", STATUS_CHIP.done.cls)}>Done</span>
-                      </ClientNameLink>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </>
+    <Card className="border-border bg-card" data-training-today>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex min-h-[60px] w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <Dumbbell className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold">Training today</div>
+          <div className="truncate text-[13px] text-muted-foreground">{sum.line}</div>
+        </div>
+        <div className="flex shrink-0 -space-x-2" aria-hidden>
+          {faces.map((f) => (
+            <UserAvatar key={`${f.client_id}-${f.title}`} src={f.avatar ?? undefined} name={f.name?.trim() || "Client"} size={26} expandable={false} className="ring-2 ring-card" />
+          ))}
+        </div>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {open && (
+        <ul className="divide-y divide-border border-t border-border px-4">
+          {scheduled.map((s) => <TrainingRow key={`${s.client_id}-${s.title}`} s={s} status={s.status} />)}
+          {extra.map((s) => <TrainingRow key={`${s.client_id}-${s.title}`} s={s} status="done" />)}
+        </ul>
       )}
     </Card>
   );
 }
 
-// The label says which record it is; the chip stays neutral.
-const TIER_CHIP: Record<OverviewWin["tier"], string> = {
-  atpr: "bg-foreground/10 text-foreground",
-  program: "bg-muted text-foreground",
-  block: "bg-muted text-muted-foreground",
-};
-
-function WinsCard({ wins }: { wins: OverviewWin[] }) {
-  const [showAll, setShowAll] = useState(false);
-  const groups = useMemo(() => groupWins(wins), [wins]);
-  if (groups.length === 0) return null;
-  const visible = showAll ? groups : groups.slice(0, 4);
+function TrainingRow({ s, status }: { s: Pick<OverviewSession, "client_id" | "name" | "avatar" | "title" | "completed_at">; status: OverviewSession["status"] }) {
+  const chip = STATUS_CHIP[status];
+  const name = s.name?.trim() || "Client";
+  const at = status === "done" ? timeOf(s.completed_at) : null;
   return (
-    <Card className="border-border bg-card p-4">
-      <SectionHeader title="Wins this week" icon={Trophy} />
-      <ul className="divide-y divide-border">
-        {visible.map((g) => {
-          const first = g.name.split(" ")[0];
-          return (
-            <li key={g.client_id} className="flex items-center gap-2.5 py-2">
-              <ClientNameLink clientId={g.client_id} tab="training" className="flex min-w-0 flex-1 items-center gap-2.5" ariaLabel={`Open ${g.name}'s training`}>
-                <UserAvatar src={g.avatar ?? undefined} name={g.name} size={32} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-xs font-bold">{g.name}</span>
-                    <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold", TIER_CHIP[g.best])}>{TIER_LABEL[g.best]}</span>
-                  </div>
-                  <div className="truncate text-[11px] text-muted-foreground">
-                    {winLine(g.lifts[0])}
-                    {g.lifts.length > 1 && <span className="text-muted-foreground/70"> · +{g.lifts.length - 1} more</span>}
-                  </div>
-                </div>
-              </ClientNameLink>
-              <Link
-                to="/admin/messages"
-                search={{ client: g.client_id } as any}
-                className="inline-flex h-9 shrink-0 items-center rounded-lg border border-border px-3 text-[12px] font-semibold text-foreground transition hover:bg-muted active:scale-95"
-                aria-label={`Message ${first}`}
-              >
-                Send props
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      {groups.length > 4 && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="mt-2 min-h-10 w-full rounded-lg border border-border py-2 text-[12px] font-semibold text-foreground hover:bg-muted"
-        >
-          {showAll ? "Show less" : `Show ${groups.length - 4} more`}
-        </button>
-      )}
-    </Card>
+    <li>
+      <ClientNameLink clientId={s.client_id} tab="training" className="flex min-h-11 items-center gap-2.5 py-2" ariaLabel={`Open ${name}'s training`}>
+        <UserAvatar src={s.avatar ?? undefined} name={name} size={32} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-semibold">{name}</div>
+          <div className="truncate text-xs text-muted-foreground">{s.title ?? "Workout"}{at ? ` · ${at}` : ""}</div>
+        </div>
+        <span className={cn("shrink-0 text-[11px]", chip.cls)}>{chip.label}</span>
+      </ClientNameLink>
+    </li>
   );
 }
 
@@ -307,7 +222,7 @@ function AdminDashboard() {
   });
   const waiting = useMemo(() => waitingOnMe(inbox), [inbox]);
 
-  // Today's training, this week's records, money + leads: the things no other page summarises.
+  // Today's training: the one thing here no other page summarises.
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ["admin-dashboard-overview"],
     queryFn: async () => {
@@ -318,29 +233,10 @@ function AdminDashboard() {
     ...liveQueueQuery,
   });
 
-  const { data: intel = [] } = useQuery({
-    queryKey: ["coach-intel"],
-    queryFn: () => getCoachIntel(),
-    ...liveQueueQuery,
-  });
-
   const snapshot = useMemo(
     () => buildSnapshot({ waitingReplies: waiting.length, counts: directory?.counts ?? {} }),
     [waiting.length, directory?.counts],
   );
-
-  /* ---------- Client pulse (training) ---------- */
-  const rosterIds = useMemo(() => new Set(rows.map((r: any) => r.id)), [rows]);
-  const activeIntel = (intel as any[]).filter((x: any) => rosterIds.has(x.client_id));
-  const pulseAtRisk = activeIntel.filter((x: any) =>
-    (x.pain_flags ?? []).some((p: any) => p.status === "new" || p.status === "followup") ||
-    (x.compliance_pct != null && x.assigned > 0 && x.compliance_pct < 60) ||
-    (x.labels ?? []).includes("inactive")
-  );
-  const pulseWatch = activeIntel.filter((x: any) =>
-    !pulseAtRisk.includes(x) && x.compliance_pct != null && x.assigned > 0 && x.compliance_pct < 80
-  );
-  const pulseRows = [...pulseAtRisk, ...pulseWatch];
 
   if (offlineNoCache) return <DashboardOfflineEmpty />;
 
@@ -373,36 +269,6 @@ function AdminDashboard() {
 
         {/* ---------------- TODAY: who trains today and who already has ---------------- */}
         <TrainingTodayCard overview={overview} loading={overviewLoading} />
-
-        {/* ---------------- WINS: records this week, one tap to send props ---------------- */}
-        <WinsCard wins={overview?.wins ?? []} />
-
-        {/* ---------------- TRAINING TO CHECK: only who needs a look (pain, low adherence, gone quiet) ---------------- */}
-        {pulseRows.length > 0 && (
-          <Card className="border-border bg-card p-4">
-            <SectionHeader title="Training to check · last 14 days" icon={Activity} />
-            <ul className="divide-y divide-border">
-              {pulseRows.slice(0, 4).map((x: any) => {
-                const pain = (x.pain_flags ?? []).some((p: any) => p.status === "new" || p.status === "followup");
-                const reason = pain ? "Pain/discomfort reported" :
-                  (x.labels ?? []).includes("inactive") ? "Inactive" :
-                  x.compliance_pct != null ? `${x.compliance_pct}% of workouts done (${x.completed}/${x.assigned})` : "Needs review";
-                return (
-                  <li key={x.client_id}>
-                    <ClientNameLink clientId={x.client_id} tab="training" className="flex min-h-11 items-center gap-2.5 py-2">
-                      <UserAvatar src={x.profile_picture_url ?? undefined} name={x.full_name ?? "Client"} size={30} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-bold">{x.full_name}</div>
-                        <div className={cn("truncate text-[11px]", pain ? "text-destructive" : "text-muted-foreground")}>{reason}</div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    </ClientNameLink>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        )}
       </div>
     </>
   );

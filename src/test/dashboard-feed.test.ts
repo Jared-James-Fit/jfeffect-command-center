@@ -1,17 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  buildSnapshot, waitingOnMe, groupWins, winLine, formatLoad, revenueDelta, formatMoney,
-  type InboxRow, type OverviewWin,
-} from "@/lib/dashboard-feed";
+import { buildSnapshot, waitingOnMe, trainingSummary, type InboxRow } from "@/lib/dashboard-feed";
 
 const inbox = (client_id: string, extra: Partial<InboxRow> = {}): InboxRow => ({
   client_id, archived: false, unread: false, workflow_status: "waiting_on_client",
   last_inbound_at: "2026-10-08T10:00:00Z", last_inbound_kind: "message", ...extra,
-});
-const win = (client_id: string, extra: Partial<OverviewWin> = {}): OverviewWin => ({
-  client_id, name: `Client ${client_id}`, avatar: null, exercise: "Squat", reps: 5, load_kg: 100, unit: "lb",
-  tier: "block", at: "2026-10-07T10:00:00Z", ...extra,
 });
 
 describe("dashboard replies count", () => {
@@ -28,7 +21,10 @@ describe("dashboard is an overview, not another inbox", () => {
     expect(src).not.toMatch(/buildNeedsYou/);
     expect(src).toMatch(/admin_dashboard_overview/);
     expect(src).toMatch(/TrainingTodayCard/);
-    expect(src).toMatch(/WinsCard/);
+    // records are Crew's (props, Wednesday Wins) and adherence Training Intel's: not repeated here
+    expect(src).not.toMatch(/WinsCard/);
+    expect(src).not.toMatch(/Training to check/);
+    expect(src).not.toMatch(/getCoachIntel/);
     // the Business (money) card was removed from the dashboard
     expect(src).not.toMatch(/BusinessCard/);
     // numbers refresh silently: no "Updating" spinner floating over the tiles
@@ -42,36 +38,32 @@ describe("dashboard is an overview, not another inbox", () => {
   });
 });
 
-describe("wins this week", () => {
-  it("shows load in the client's unit", () => {
-    expect(formatLoad(176.9, "lb")).toBe("390 lb");
-    expect(formatLoad(102.3, "kg")).toBe("102.5 kg");
-    expect(formatLoad(0, "lb")).toBeNull();
-    expect(winLine(win("a", { exercise: "Leg Press", load_kg: 176.9, reps: 15 }))).toBe("Leg Press 390 lb × 15");
-    expect(winLine(win("a", { exercise: "Plank", load_kg: null }))).toBe("Plank");
+describe("training today", () => {
+  it("is one line: done of scheduled, who's training now, who trained unscheduled", () => {
+    const st = (status: "done" | "training" | "pending") => ({ status });
+    expect(trainingSummary([st("done"), st("done"), st("training"), st("pending")], 1)).toEqual({
+      total: 5, line: "2 of 4 done · 1 training now · 1 more trained",
+    });
+    expect(trainingSummary([], 2)).toEqual({ total: 2, line: "2 trained" });
+    expect(trainingSummary([], 0).total).toBe(0);
   });
 
-  it("one row per client, best record first, most recent client on top", () => {
-    const g = groupWins([
-      win("a", { tier: "block", exercise: "Bench", at: "2026-10-05T10:00:00Z" }),
-      win("b", { tier: "program", at: "2026-10-06T10:00:00Z" }),
-      win("a", { tier: "atpr", exercise: "Deadlift", at: "2026-10-04T10:00:00Z" }),
-      win("a", { tier: "block", exercise: "Row", at: "2026-10-07T12:00:00Z" }),
-    ]);
-    expect(g.map((x) => x.client_id)).toEqual(["a", "b"]);
-    expect(g[0].best).toBe("atpr");
-    expect(g[0].lifts[0].exercise).toBe("Deadlift");
-    expect(g[0].lifts).toHaveLength(3);
+  it("folds into one row that opens its list, and isn't there when nobody trains today", () => {
+    const src = readFileSync("src/routes/_authenticated/admin/index.tsx", "utf8");
+    expect(src).toContain("if (sum.total === 0) return null;");
+    expect(src).toContain("aria-expanded={open}");
+    expect(src).toContain("{open && (");
   });
-});
 
-describe("business", () => {
-  it("compares against the same point last month", () => {
-    expect(revenueDelta({ currency: "CAD", this_month: 682.5, last_month_to_date: 315, last_month: 735, payments: 6 })).toEqual({ pct: 117, up: true });
-    expect(revenueDelta({ currency: "CAD", this_month: 100, last_month_to_date: 200, last_month: 400, payments: 1 })).toEqual({ pct: 50, up: false });
-    expect(revenueDelta({ currency: "CAD", this_month: 100, last_month_to_date: 0, last_month: 0, payments: 1 })).toBeNull();
-    expect(formatMoney(682.5, "CAD")).toMatch(/682\.50/);
-    expect(formatMoney(735, "CAD")).toMatch(/735$/);
+  it("the overview only builds today's training (no rep-history walk on every refresh)", () => {
+    // the code, not the comment explaining what was taken out
+    const sql = readFileSync("supabase/migrations/20270122090000_dashboard_overview_training_only.sql", "utf8")
+      .split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
+    expect(sql).not.toContain("client_rep_records");
+    expect(sql).not.toContain("admin_transactions_v1");
+    expect(sql).not.toContain("coaching_applications");
+    expect(sql).toContain("and c.service_tier = 'coaching'");
+    expect(sql).toContain("REVOKE ALL ON FUNCTION public.admin_dashboard_overview() FROM public, anon;");
   });
 });
 
