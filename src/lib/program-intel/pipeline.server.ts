@@ -26,6 +26,7 @@ import { builtBlockSchema, setupSchema, strategySchema, type BuiltBlock, type Bu
 import { constructSystemPrompt, constructUserPrompt, PIPELINE_PROMPT_VERSION, repairUserPrompt, strategySystemPrompt, strategyUserPrompt } from "./generator-prompts";
 import { buildGeneratorIntel, type GeneratorIntel } from "./intelligence";
 import { privacySafeRecords } from "./export";
+import { isLowValueExercise, meetsStandard, withStandardSubstitutions } from "./exercise-standard";
 import { loadIntelRecords } from "./load";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
@@ -145,6 +146,9 @@ export function strategyIssues(s: Strategy, setup: GenerationSetup): string[] {
   const names = JSON.stringify(s.exercise_plan).toLowerCase();
   for (const e of setup.excluded) if ([...s.exercise_plan.retain, ...s.exercise_plan.add].some((x) => x.name.toLowerCase() === e.name.toLowerCase())) out.push(`${e.name} is excluded by the coach but the plan keeps or adds it.`);
   for (const r of setup.required) if (!names.includes(r.name.toLowerCase())) out.push(`Required exercise ${r.name} isn't in exercise_plan (retain or add).`);
+  const required = new Set(setup.required.map((r) => r.name.toLowerCase()));
+  for (const x of [...s.exercise_plan.retain, ...s.exercise_plan.add, ...s.exercise_plan.replace.flatMap((r) => (r.with ? [{ name: r.with }] : []))])
+    if (isLowValueExercise(x.name) && !required.has(x.name.toLowerCase())) out.push(`${x.name} is below the exercise standard; replace it with a dumbbell, cable or machine exercise for the same muscle.`);
   return out;
 }
 
@@ -316,9 +320,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   const ai = ctxRow.audit_inputs ?? {};
   const exercisesCtx = async () => {
     const eq = { items: setup.equipment.items as any, confidence: setup.equipment.confidence };
-    const athlete = equipmentFit((ctxRow.athlete_catalog ?? []) as CatalogExercise[], eq);
+    // only exercises their equipment allows and that meet the exercise standard (a coach's required pick always stays)
+    const athlete = meetsStandard(equipmentFit((ctxRow.athlete_catalog ?? []) as CatalogExercise[], eq), setup.required);
     const lib = await libraryCatalog(admin);
-    const library = equipmentFit(lib.filter((e) => !athlete.some((a) => a.id === e.id)), eq);
+    const library = meetsStandard(equipmentFit(lib.filter((e) => !athlete.some((a) => a.id === e.id)), eq), setup.required);
     return { athlete, library, all: lib };
   };
 
@@ -338,7 +343,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     );
     if (issues.length) throw new Error(`Block ${i + 1} didn't match the strategy: ${issues.join(" ")}`);
     // cardio is the client's cardio plan (added to every workout by the app), never a second copy here
-    const lean = withoutCardioRows(value);
+    const lean = withoutCardioRows(withStandardSubstitutions(value));
     if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
     built[i] = { ...lean.block, name: lean.block.name || sb.name };
     result.blocks = built;
@@ -358,7 +363,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       if (bi != null) {
         const issues: string[] = result.audit?.repairs?.[bi] ?? [];
         const { value } = await askChecked<BuiltBlock>(admin, job, `repair:block ${bi + 1}`, constructSystemPrompt(brain), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
-        const lean = withoutCardioRows(value);
+        const lean = withoutCardioRows(withStandardSubstitutions(value));
         if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
         result.blocks[bi] = lean.block;
         result.repairs = [...(result.repairs ?? []), { round: result.repairRound ?? 1, block: bi, issues }];

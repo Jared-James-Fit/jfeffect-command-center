@@ -316,6 +316,17 @@ describe("Program quality audit and scorecard", () => {
     expect(sel.reasons.join(" ")).toMatch(/Required exercise Nordic Curl isn't in the program/);
     expect(a.scorecard.find((r) => r.criterion === "completeness")!.reasons.join(" ")).toMatch(/3 training days a week; the setup asks for 4/);
   });
+  it("an exercise below the exercise standard fails for repair, unless the coach required it", () => {
+    const p = good();
+    p.blocks[0].days[3].exercises.push(exr("e-lmlat", "Landmine Lateral Raise", { role: "Accessory" }));
+    const a = auditProgram(input(p));
+    const sel = a.scorecard.find((r) => r.criterion === "selection")!;
+    expect(sel.status).toBe("failed");
+    expect(sel.reasons.join(" ")).toMatch(/Landmine Lateral Raise .* below the exercise standard/);
+    expect(a.repairs[0].join(" ")).toMatch(/Landmine Lateral Raise/);
+    const asked = auditProgram(input(p, { setup: { ...setup, required: [{ id: "e-lmlat", name: "Landmine Lateral Raise" }] } }));
+    expect(asked.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).not.toMatch(/exercise standard/);
+  });
   it("a block that misses the strategy's own frequency target fails for repair; a 'replaced' exercise still there is flagged", () => {
     const strategy = strategyFor(setup, { frequency_targets: [{ target: "Bench", per_week: 3 }], exercise_plan: { retain: [], replace: [{ exercise_id: "e-rdl", name: "Romanian Deadlift", with: null, why: "" }], add: [] } });
     const a = auditProgram(input(good(), { strategy }));
