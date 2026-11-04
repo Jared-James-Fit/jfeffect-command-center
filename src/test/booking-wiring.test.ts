@@ -8,7 +8,7 @@ describe("one place for booking", () => {
   it("Calendar has a Booking tab, and old Setup / booking links land on it", () => {
     const cal = read("src/routes/_authenticated/admin/calendar.tsx");
     expect(cal).toContain(
-      'const TAB_VALUES = ["board", "booking", "sessions", "upcoming", "events"]',
+      'const TAB_VALUES = ["board", "booking", "sessions", "upcoming"]',
     );
     expect(cal).toContain('setup: "booking"');
     expect(cal).toContain('"booking-links": "booking"');

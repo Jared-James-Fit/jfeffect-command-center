@@ -4,13 +4,13 @@ import { z } from "zod";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UpcomingPanel } from "@/components/admin-calendar/upcoming-panel";
 import { PtCalendarPanel } from "@/components/admin-calendar/pt-calendar-panel";
-import { AdminEventsPage } from "@/route-pages/_authenticated/admin/events.index";
 import { AdminCalendarBoardPanel } from "@/components/admin-calendar/board-panel";
 import { AdminBookingPanel } from "@/components/admin-calendar/booking-panel";
 
-// Five tabs, one job each. Older links (?tab=setup, pt-calendar,
-// google-calendar, booking-links, availability) still land on the right one.
-const TAB_VALUES = ["board", "booking", "sessions", "upcoming", "events"] as const;
+// Four tabs, one job each. Older links (?tab=setup, pt-calendar,
+// google-calendar, booking-links, availability) still land on the right one;
+// Events was never used (three blank test events) and ?tab=events opens the board.
+const TAB_VALUES = ["board", "booking", "sessions", "upcoming"] as const;
 type TabValue = typeof TAB_VALUES[number];
 const LEGACY_TABS: Record<string, TabValue> = {
   "pt-calendar": "sessions",
@@ -74,7 +74,6 @@ function AdminCalendarShell() {
               <TabsTrigger value="booking">Booking</TabsTrigger>
               <TabsTrigger value="sessions">Sessions</TabsTrigger>
               <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-              <TabsTrigger value="events">Events</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -83,7 +82,6 @@ function AdminCalendarShell() {
       {active === "booking" && <AdminBookingPanel />}
       {active === "sessions" && <PtCalendarPanel />}
       {active === "upcoming" && <UpcomingPanel />}
-      {active === "events" && <div className="p-3 sm:p-4 md:p-6"><AdminEventsPage embedded /></div>}
     </>
   );
 }

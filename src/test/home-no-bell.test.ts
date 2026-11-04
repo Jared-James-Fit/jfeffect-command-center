@@ -20,9 +20,9 @@ describe("Home has no notification bell", () => {
     expect(home).not.toContain('from("lift_video_comments")');
   });
 
-  it("what the bell pointed at is still reachable: Messages tab, Announcements in the menu", () => {
+  it("what the bell pointed at is still reachable: the Messages tab (Announcements were never sent and are gone)", () => {
     expect(clientBottomNav.map((n) => n.to)).toContain("/portal/messages");
-    expect(clientNav.map((n) => n.to)).toContain("/portal/announcements");
-    expect(selfServeNav.map((n) => n.to)).toContain("/portal/announcements");
+    expect(clientNav.map((n) => n.to)).not.toContain("/portal/announcements");
+    expect(selfServeNav.map((n) => n.to)).not.toContain("/portal/announcements");
   });
 });

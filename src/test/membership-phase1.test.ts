@@ -51,7 +51,8 @@ describe("/m lands on the same screen in the portal", () => {
     expect(memberPathToPortal("/m/upgrade")).toBe("/portal/upgrade");
     expect(memberPathToPortal("/m/support")).toBe("/portal/support");
     expect(memberPathToPortal("/m/plans/abc")).toBe("/portal/plans/abc");
-    expect(memberPathToPortal("/m/resources/guide")).toBe("/portal/resources/guide");
+    // Resources are gone (one setup placeholder ever): their old member links open Home.
+    expect(memberPathToPortal("/m/resources/guide")).toBe("/portal");
     expect(memberPathToPortal("/m/nutrition/r1")).toBe("/portal/recipes/r1");
     expect(memberPathToPortal("/m/workouts/e/1/2")).toBe("/portal/workouts");
     expect(memberPathToPortal("/m/forms/x/complete")).toBeNull();
@@ -116,11 +117,10 @@ describe("the app keeps the coach's layer to coaching clients", () => {
     expect(read("src/route-pages/_authenticated/admin/members.$memberId.tsx")).toContain('<MoveToCoachingCard memberId={memberId} />');
   });
 
-  it("member screens moved into the portal; resources are shared, coaching clients see everything", () => {
+  it("member screens moved into the portal", () => {
     for (const f of ["support", "membership", "upgrade", "tools", "resources.index", "resources.$slug"]) {
       expect(read(`src/routes/_authenticated/portal/${f}.tsx`)).toContain('createFileRoute("/_authenticated/portal/');
     }
-    expect(read("src/lib/member-resources.functions.ts")).toContain("locked: !coaching && !accessKeys.includes(r.required_access_level)");
     expect(read("src/routes/_authenticated/portal/nutrition-targets.tsx")).toContain('tier === "self_serve" ? <MemberNutritionPage /> : <PortalNutrition />');
   });
 });

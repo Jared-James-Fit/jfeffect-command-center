@@ -1,11 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ComingSoon } from "@/components/coming-soon";
-import { SettingsTabs } from "@/components/settings/settings-tabs";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+
+// Removed page: its address only redirects, so old links and bookmarks never 404.
+// SOPs was only ever a "coming soon" placeholder.
 export const Route = createFileRoute("/_authenticated/admin/sops")({
-  component: () => (
-    <>
-      <SettingsTabs />
-      <ComingSoon title="SOPs & Business Systems" phase="Phase 3" />
-    </>
-  ),
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/settings", replace: true });
+  },
 });

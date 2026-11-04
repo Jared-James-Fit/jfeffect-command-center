@@ -1,7 +1,7 @@
 import {
-  LayoutDashboard, CreditCard, Package, Dumbbell, FolderOpen, Calendar,
+  LayoutDashboard, CreditCard, Package, Dumbbell, Calendar,
   Settings, Apple, ClipboardCheck, MessageCircle, FileSignature, BookOpen,
-  Activity, Wrench, HelpCircle, Megaphone, Trophy, UsersRound, Target, Camera,
+  Activity, Wrench, HelpCircle, Trophy, UsersRound, Target, Camera,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -20,12 +20,10 @@ export const clientNav: NavItem[] = [
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
-  { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
   { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
-  { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
@@ -56,9 +54,7 @@ export const selfServeNav: NavItem[] = [
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","community","members","posts"] },
   { to: "/portal/support", label: "Support", icon: HelpCircle, keywords: ["help","support","question","bug","contact"] },
-  { to: "/portal/announcements", label: "Announcements", icon: Megaphone },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
-  { to: "/portal/resources", label: "Resources", icon: FolderOpen },
   { to: "/portal/tools", label: "Tools", icon: Wrench, keywords: ["calculator","1rm","macro","plate","water","sleep"] },
   { to: "/portal/membership", label: "Membership", icon: CreditCard, keywords: ["billing","subscription","payment","cancel","hold","plan","upgrade"] },
   { to: "/portal/account", label: "Account Settings", icon: Settings },

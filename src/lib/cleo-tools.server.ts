@@ -164,7 +164,7 @@ export function cleoReadTools(ctx: ToolCtx) {
 
     find_data: tool({
       description:
-        "Find where anything in the app is kept when no other lookup covers it: offers and prices, discount codes, coaching applications and leads, forms and their questions, tasks, broadcasts, community posts and comments, agreements sent, booking types and hours, settings, the exercise library, program templates, payments, app members and more. Give a few words (e.g. 'coaching applications', 'discount codes', 'offer price'); returns the matching tables with their columns, to read with read_data.",
+        "Find where anything in the app is kept when no other lookup covers it: offers and prices, discount codes, coaching applications and leads, forms and their questions, tasks, community posts and comments, agreements sent, booking types and hours, settings, the exercise library, program templates, payments, app members and more. Give a few words (e.g. 'coaching applications', 'discount codes', 'offer price'); returns the matching tables with their columns, to read with read_data.",
       inputSchema: z.object({ query: z.string().trim().min(2).max(120) }),
       execute: safe("the data list", async ({ query }) => {
         const catalog = visibleCatalog(await loadCatalog(db), { books });

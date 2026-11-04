@@ -89,8 +89,6 @@ const REGISTRY: Entry[] = [
   { to: "/admin/communication", label: "Communication Hub", icon: MessagesSquare, group: "Messages", searchOnly: true,
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support"],
     keywords: ["inbox", "chat", "direct messages", "group chat", "support inbox"] },
-  { to: "/admin/broadcasts", label: "Broadcasts", icon: Megaphone, group: "Messages", searchOnly: true,
-    visibleTo: ["admin", "coach", "assistant_coach"], keywords: ["mass message", "announcement", "blast"] },
   { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Messages", searchOnly: true,
     visibleTo: ["admin", "coach", "support"], keywords: ["support inbox", "help", "alerts", "tickets"] },
 
@@ -118,8 +116,6 @@ const REGISTRY: Entry[] = [
     keywords: ["calendar", "schedule", "appointments", "upcoming", "book", "booking"] },
   { to: "/admin/pt-calendar", label: "Sessions", icon: Calendar, group: "Calendar", searchOnly: true,
     visibleTo: ["admin", "coach"], keywords: ["pt", "personal training", "1:1", "sessions", "pt calendar"] },
-  { to: "/admin/events", label: "Events", icon: Calendar, group: "Calendar", searchOnly: true,
-    visibleTo: ["admin", "coach"] },
   { to: "/admin/google-calendar", label: "Calendar Setup", icon: LinkIcon, group: "Calendar", searchOnly: true,
     visibleTo: ["admin", "coach", "sales"], keywords: ["google calendar", "booking links", "sync", "availability"] },
 
@@ -140,8 +136,6 @@ const REGISTRY: Entry[] = [
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardCheck, group: "Coaching", searchOnly: true,
     visibleTo: COACHING_STAFF, keywords: ["weekly check in", "submissions", "reviews"] },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Coaching", searchOnly: true,
-    visibleTo: COACHING_STAFF },
-  { to: "/admin/client-action-requests", label: "Action Requests", icon: ClipboardCheck, group: "Coaching", searchOnly: true,
     visibleTo: COACHING_STAFF },
   { to: "/admin/native-forms", label: "Check-Ins & Forms", icon: FileEdit, group: "Coaching", searchOnly: true,
     visibleTo: COACHING_STAFF },
@@ -228,8 +222,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], section: "Sales", keywords: ["membership analytics", "signups", "conversion"] },
   { to: "/admin/membership/checkout-settings", label: "Checkout Kill-Switch", icon: PowerOff, group: "Membership",
     visibleTo: ["admin"], section: "Sales", keywords: ["kill switch", "pause", "checkout", "disable signups", "join page", "trial settings"] },
-  { to: "/admin/membership/stripe-sync", label: "Stripe Sync", icon: RefreshCw, group: "Membership",
-    visibleTo: ["admin"], section: "Setup" },
   { to: "/admin/membership/billing-events", label: "Billing Events", icon: Activity, group: "Membership",
     visibleTo: ["admin"], section: "Setup" },
   { to: "/admin/membership/calendar", label: "Membership Calendar", icon: Calendar, group: "Membership",
@@ -241,14 +233,10 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], section: "Setup" },
   { to: "/admin/membership/onboarding-email", label: "Onboarding Email", icon: Megaphone, group: "Membership",
     visibleTo: ["admin"], section: "Setup" },
-  { to: "/admin/membership/launch-readiness", label: "Launch Readiness", icon: ShieldCheck, group: "Membership",
-    visibleTo: ["admin"], section: "Setup", keywords: ["launch", "readiness", "checklist", "go live", "promote"] },
   { to: "/admin/membership/notifications", label: "Notifications Log", icon: AlertCircle, group: "Membership",
     visibleTo: ["admin"], section: "Setup", keywords: ["notifications", "dry run", "allowlist", "live", "attempts", "push notifications"] },
   { to: "/admin/membership/access-checklist", label: "Access Checklist", icon: ListChecks, group: "Membership",
     visibleTo: ["admin"], section: "Setup", keywords: ["access rules", "access setup"] },
-  { to: "/admin/membership/refund-policy", label: "Refund Policy", icon: FileText, group: "Membership",
-    visibleTo: ["admin"], section: "Setup" },
 
   // ── TEAM ─────────────────────────────────────────────────────────────
   // One Team page: People · Staff access · Operations tabs.
@@ -257,8 +245,6 @@ const REGISTRY: Entry[] = [
   { to: "/admin/coaches", label: "Coaches", icon: UserCheck, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
   { to: "/admin/staff", label: "Staff access", icon: UserPlus, group: "Team", searchOnly: true,
-    visibleTo: ["admin", "operations"] },
-  { to: "/admin/business-systems", label: "Operations", icon: Briefcase, group: "Team", searchOnly: true,
     visibleTo: ["admin", "operations"] },
 
   // ── SETTINGS ─────────────────────────────────────────────────────────
@@ -294,8 +280,6 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], section: "Messaging", keywords: ["popup", "modal", "birthday cards", "task popup", "load screen"] },
   { to: "/admin/legal", label: "Legal", icon: FileSignature, group: "Settings",
     visibleTo: ["admin"], section: "Business", keywords: ["terms", "privacy", "policy", "disclaimers"] },
-  { to: "/admin/sops", label: "SOPs", icon: FileText, group: "Settings",
-    visibleTo: ["admin", "operations"], section: "Business" },
   { to: "/admin/settings/notifications/coaching-applications", label: "Application Alerts", icon: AlertCircle, group: "Settings",
     visibleTo: ["admin"], section: "Business" },
   // Advanced / technical utilities — surfaced last inside the Settings flyout.

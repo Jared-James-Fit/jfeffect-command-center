@@ -26,7 +26,7 @@ export const DEFAULT_ACCESS_LABELS: Record<string, string> = {
   program_library:  "Plan / Program Library",
   resource_library: "Resource Library",
   nutrition_tools:  "Nutrition tools & education",
-  community:        "Community, group chats & announcements",
+  community:        "Community & group chats",
 };
 
 export const INACTIVE_STATUSES = ["Past Due", "Cancelled", "Expired", "Deactivated"];
