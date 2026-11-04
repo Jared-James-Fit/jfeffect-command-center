@@ -5,8 +5,9 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Plus, Camera, Image as ImageIcon, FileText, Sparkles,
-  ClipboardList, FileSignature, UtensilsCrossed, Video,
+  ClipboardList, FileSignature, UtensilsCrossed, Video, CalendarPlus,
 } from "lucide-react";
+import { BookSessionFromChat, ChatBookingDialog } from "@/components/messages/book-session-from-chat";
 import { cn } from "@/lib/utils";
 import { preloadVideoEngine } from "@/lib/video-edit/pick";
 import { ChatSendMenu, type ChatSendAttachment } from "@/components/chat-send-menu";
@@ -69,10 +70,12 @@ export function ComposerPlusMenu({
   const [sigOpen, setSigOpen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [creatingMeet, setCreatingMeet] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
   const createMeet = useServerFn(createMeetLink);
 
   const isAdmin = role === "admin";
   const canSendRequests = !!onAttach && (isAdmin || surface === "group");
+  const canBook = isAdmin && surface === "dm" && !!defaultClientId;
 
   const tiles: Tile[] = [
     {
@@ -104,6 +107,15 @@ export function ComposerPlusMenu({
       onClick: () => { setOpen(false); setGifOpen(true); },
       hidden: !canSendGifs,
       tone: "accent",
+    },
+    {
+      key: "book",
+      section: "send",
+      label: "Book Session",
+      icon: <CalendarPlus className="h-6 w-6" />,
+      onClick: () => { setOpen(false); setBookOpen(true); },
+      hidden: !canBook,
+      tone: "primary",
     },
     {
       key: "checkin",
@@ -172,7 +184,14 @@ export function ComposerPlusMenu({
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          // Fetch the booking dialog while the menu is up, so Book Session opens at once.
+          if (o && canBook) void ChatBookingDialog.preload().catch(() => {});
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             type="button"
@@ -222,6 +241,10 @@ export function ComposerPlusMenu({
           ))}
         </PopoverContent>
       </Popover>
+
+      {canBook && defaultClientId && (
+        <BookSessionFromChat clientId={defaultClientId} open={bookOpen} onOpenChange={setBookOpen} />
+      )}
 
       {isAdmin && surface === "dm" && defaultClientId && (
         <MessengerCheckinRequestDialog

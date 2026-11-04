@@ -486,6 +486,45 @@ html[data-keyboard-open="true"] {
   50%      { transform: translateY(-6%) scale(1.06); }
 }
 
+/* Loading placeholders (`Skeleton`): neutral, with one soft light sweeping across
+   so a wait reads as "on its way", not stuck. Utilities still win (an absolute
+   skeleton stays absolute). */
+@layer components {
+  .jf-skeleton {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .jf-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklab, var(--foreground) 6%, transparent) 50%,
+      transparent 100%
+    );
+    animation: jf-skeleton-sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+}
+@keyframes jf-skeleton-sweep {
+  to { transform: translateX(100%); }
+}
+/* Content arriving in place of its placeholder: a quick fade, once (useArrivalClass).
+   Opacity only: a transform, even mid-animation, would make it the containing
+   block of anything position: fixed inside it (see page-enter). */
+@keyframes jf-arrive {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.jf-arrive { animation: jf-arrive 240ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .jf-skeleton::after { animation: none; opacity: 0; }
+  .jf-arrive { animation: none; }
+}
+
 /* Avatar shimmer — lightweight CSS-only loading state */
 @keyframes avatar-shimmer {
   0%   { background-position: 200% 0; }

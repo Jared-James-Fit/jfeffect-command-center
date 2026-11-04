@@ -26,6 +26,10 @@ export function SwipeableRow({
 }) {
   const [dx, setDx] = useState(0);
   const [open, setOpen] = useState(false);
+  // The buttons are painted only while a swipe has them on screen. Left under
+  // a closed row they showed through as a 1px blue / red line at its edge on
+  // iPhones whenever the row's height fell between pixels.
+  const [revealed, setRevealed] = useState(false);
   const startX = useRef<number | null>(null);
   const startY = useRef<number | null>(null);
   const locked = useRef<"h" | "v" | null>(null);
@@ -58,6 +62,7 @@ export function SwipeableRow({
     }
     if (locked.current !== "h") return;
     e.preventDefault();
+    if (!revealed) setRevealed(true);
     const base = open ? -maxSwipe : 0;
     let next = base + deltaX;
     if (next > 0) next = 0;
@@ -78,6 +83,7 @@ export function SwipeableRow({
     locked.current = null;
     if (!wasHorizontal) {
       setDx(0);
+      if (dx === 0 && !open) setRevealed(false);
       return;
     }
     const threshold = maxSwipe / 2;
@@ -87,6 +93,8 @@ export function SwipeableRow({
     } else {
       setOpen(false);
       setDx(0);
+      // Already closed: no slide back, so no transitionend to hide them on.
+      if (dx === 0) setRevealed(false);
     }
   };
 
@@ -100,8 +108,9 @@ export function SwipeableRow({
       {/* Actions layer */}
       <div
         className="absolute inset-y-0 right-0 flex items-stretch"
-        style={{ width: actionsWidth }}
+        style={{ width: actionsWidth, visibility: revealed ? "visible" : "hidden" }}
         aria-hidden={!open}
+        data-swipe-actions
       >
         {actions.map((a) => (
           <button
@@ -130,6 +139,10 @@ export function SwipeableRow({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onTransitionEnd={(e) => {
+          // Slid all the way back: stop painting the buttons underneath.
+          if (e.target === e.currentTarget && e.propertyName === "transform" && dx === 0 && !open) setRevealed(false);
+        }}
         style={{
           transform: `translate3d(${dx}px, 0, 0)`,
           transition: pointerId.current == null ? "transform 200ms ease" : "none",
