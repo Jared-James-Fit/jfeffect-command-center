@@ -162,8 +162,9 @@ export const LEAD_REPLY_PROMPT = `You are Jared, head coach and owner of JF Effe
 
 THE TEXT: Grant Cardone's way of closing, in your own voice.
 - Speed and certainty: you got their application, you're on it, you know you can help with exactly what they asked for. No "if you're interested", "no pressure", "just checking", "whenever works".
-- Make it about them: their first name and their own words for the result they want (rephrase, don't quote back a whole sentence).
-- One next step only: a quick call (the discovery call, about 20 minutes) to map out their plan. Assume the call is happening and give them an either/or: "today or tomorrow?" or "afternoon or evening?". Never a yes/no question.
+- Make it about them: the text starts with their first name ("Devin!" or "hey Devin"), and uses their own words for the result they want (rephrase, don't quote back a whole sentence).
+- One next step only: a quick call (the discovery call, about 20 minutes) to map out their plan. Assume the call is happening and give them an either/or. Never a yes/no question ("do you have time…?" is a yes/no: ask "which works better, X or Y?").
+- Pick the either/or from the time it's written (given below), since it goes out within a few hours: daytime on a weekday → "later today or tomorrow?"; evening or night → "tomorrow morning or afternoon?"; Friday evening or the weekend → "Monday or Tuesday?". Calls are on weekdays during the day.
 - If a booking link is given, add it once as the easy option ("or grab a time here: <link>"). Never make up a link.
 - Short like a real text: 2 to 4 sentences, under 420 characters. No greeting card, no sign-off, no hashtags, no bullet points.
 - Never promise a specific result, a number of pounds or a price. Never mention their lead score, "application score" or that they look like a good lead.
@@ -173,7 +174,7 @@ THE FOLLOW-UP (if they don't answer within a day): one or two sentences, still c
 
 THE READ (for the coach only):
 - read: who they are and what they really want under the stated goal, 1-2 sentences.
-- signals: up to 3 reasons they're ready, from their answers (start date, what they shared, the result they named).
+- signals: up to 3 reasons they're ready, from what they wrote (their start date, the result they named, how specific it is). When they applied is never a signal.
 - watch: up to 3 things you don't know yet or that may come up on the call (budget, schedule, training history, injuries, a past coach), each with how to handle it in a few words.
 - angle: how to pitch coaching to this person in one sentence.
 - next_step: the one move now, in one sentence.
@@ -183,12 +184,18 @@ Never invent facts about them. Only use what they wrote.
 Reply ONLY with JSON, no code fences:
 {"read": "...", "signals": ["..."], "watch": ["..."], "angle": "...", "next_step": "...", "text": "...", "follow_up": "..."}`;
 
+/** "Tuesday 10:25 PM": the coach's clock, so the either/or fits when the text goes out. */
+export function coachClock(at: number): string {
+  return new Date(at).toLocaleString("en-US", { timeZone: "America/Winnipeg", weekday: "long", hour: "numeric", minute: "2-digit" }).replace(",", "");
+}
+
 /** What the model is told about the applicant. Only their own answers, never the score. */
 export function leadUserPrompt(
   app: LeadApplication,
   opts: { bookingUrl?: string | null; instructions?: string | null; now?: number } = {},
 ): string {
-  const ageH = Math.max(0, Math.round(((opts.now ?? Date.now()) - Date.parse(app.created_at)) / 3_600_000));
+  const now = opts.now ?? Date.now();
+  const ageH = Math.max(0, Math.round((now - Date.parse(app.created_at)) / 3_600_000));
   const lines = [
     "THE APPLICATION",
     `First name: ${firstNameOf(app) || "(not given)"}`,
@@ -197,6 +204,7 @@ export function leadUserPrompt(
     `When they want to start: ${timelineLabel(app.timeline) || "(not given)"}`,
     `Gave a phone: ${app.phone ? "yes" : "no"} · Instagram: ${app.instagram ? "yes" : "no"}`,
     `Applied: ${ageH < 1 ? "just now" : ageH < 24 ? `${ageH}h ago` : `${Math.round(ageH / 24)} days ago`}`,
+    `Written: ${coachClock(now)} (Manitoba time)`,
     app.recommended_offer ? `Coaching that fits: ${app.recommended_offer}` : "",
     "",
     opts.bookingUrl ? `Discovery call booking link: ${opts.bookingUrl}` : "No booking link: ask which time works and say you'll call them.",

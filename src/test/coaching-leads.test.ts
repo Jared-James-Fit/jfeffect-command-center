@@ -93,6 +93,7 @@ describe("the AI's read and texts", () => {
     expect(p).toContain("When they want to start: ASAP");
     expect(p).toContain(`Discovery call booking link: ${BOOK}`);
     expect(p).toContain("Applied: 9h ago");
+    expect(p).toMatch(/Written: Wednesday \d{1,2}:00 (AM|PM) \(Manitoba time\)/);
     expect(p).not.toMatch(/88|Priority|hot/);
     expect(leadUserPrompt(devin, { now: NOW + 3 * 86_400_000 })).toContain("applied a while ago");
     expect(leadUserPrompt(devin, { now: NOW, instructions: "Shorter" })).toContain("COACH'S NOTE FOR THIS VERSION (follow it): Shorter");
@@ -102,6 +103,9 @@ describe("the AI's read and texts", () => {
     expect(LEAD_REPLY_PROMPT).toContain("Grant Cardone");
     expect(LEAD_REPLY_PROMPT).toContain("either/or");
     expect(LEAD_REPLY_PROMPT).toContain("Never a yes/no question");
+    expect(LEAD_REPLY_PROMPT).toContain('the text starts with their first name');
+    expect(LEAD_REPLY_PROMPT).toContain('evening or night → "tomorrow morning or afternoon?"');
+    expect(LEAD_REPLY_PROMPT).toContain("When they applied is never a signal.");
     expect(LEAD_REPLY_PROMPT).toContain("Never make up a link");
     expect(LEAD_REPLY_PROMPT).toContain("Never invent facts about them");
   });
