@@ -15,6 +15,7 @@ import { CompareBars } from "@/components/community/series-cards";
 import { PostArtImage } from "@/components/community/post-art";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { NoteEditor } from "@/components/community/note-editor";
+import { DailyPicturesCard } from "@/components/community/daily-pictures-card";
 
 type DailySeries = Exclude<CommunitySeries, "lesson">;
 const ORDER: DailySeries[] = ["monday_motivation", "tuesday_tips", "wednesday_wins", "try_it_thursday", "finish_strong_friday", "saturday_spirit", "sunday_recap"];
@@ -52,7 +53,8 @@ function holidayDay(day: string): string {
 
 /**
  * Every coach post that goes out on its own, besides the lessons: the daily
- * series, one per day, and the holidays coming up.
+ * series, one per day, the daily pictures (DailyPicturesCard) and the
+ * holidays coming up.
  *
  * Wednesday Wins and Sunday Recap are written from the crew's logs and always
  * run. The other five (Monday Motivation, Tuesday Tips, Try it Thursday,
@@ -274,6 +276,8 @@ export function CoachWeeklyPosts() {
           </div>
         )}
       </div>
+
+      <DailyPicturesCard />
 
       {holidays.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-coach-holidays>

@@ -235,6 +235,7 @@ import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './route
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
 import { Route as ApiPublicHooksCleoAttachmentsSweepRouteImport } from './routes/api/public/hooks/cleo-attachments-sweep'
 import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/api/public/hooks/client-calendars-tick'
+import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
 import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/public/hooks/lead-replies-tick'
@@ -685,12 +686,11 @@ const AuthenticatedAdminGoogleCalendarRoute =
     path: '/google-calendar',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminLeadsRoute =
-  AuthenticatedAdminLeadsRouteImport.update({
-    id: '/leads',
-    path: '/leads',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
+const AuthenticatedAdminLeadsRoute = AuthenticatedAdminLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
+  getParentRoute: () => AuthenticatedAdminRouteRoute,
+} as any)
 const AuthenticatedAdminLeagueRoute =
   AuthenticatedAdminLeagueRouteImport.update({
     id: '/league',
@@ -1573,6 +1573,12 @@ const ApiPublicHooksClientCalendarsTickRoute =
     path: '/api/public/hooks/client-calendars-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksDailyVisualsTickRoute =
+  ApiPublicHooksDailyVisualsTickRouteImport.update({
+    id: '/api/public/hooks/daily-visuals-tick',
+    path: '/api/public/hooks/daily-visuals-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksFilloutRoute = ApiPublicHooksFilloutRouteImport.update({
   id: '/api/public/hooks/fillout',
   path: '/api/public/hooks/fillout',
@@ -1998,6 +2004,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
+  '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
@@ -2257,6 +2264,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
+  '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
@@ -2522,6 +2530,7 @@ export interface FileRoutesById {
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
   '/api/public/hooks/cleo-attachments-sweep': typeof ApiPublicHooksCleoAttachmentsSweepRoute
   '/api/public/hooks/client-calendars-tick': typeof ApiPublicHooksClientCalendarsTickRoute
+  '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
@@ -2787,6 +2796,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
+    | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lead-replies-tick'
@@ -3046,6 +3056,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
+    | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lead-replies-tick'
@@ -3310,6 +3321,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/cleanup-pending-signups'
     | '/api/public/hooks/cleo-attachments-sweep'
     | '/api/public/hooks/client-calendars-tick'
+    | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
     | '/api/public/hooks/lead-replies-tick'
@@ -3411,6 +3423,7 @@ export interface RootRouteChildren {
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
   ApiPublicHooksCleoAttachmentsSweepRoute: typeof ApiPublicHooksCleoAttachmentsSweepRoute
   ApiPublicHooksClientCalendarsTickRoute: typeof ApiPublicHooksClientCalendarsTickRoute
+  ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
   ApiPublicHooksLeadRepliesTickRoute: typeof ApiPublicHooksLeadRepliesTickRoute
@@ -5022,6 +5035,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksClientCalendarsTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/daily-visuals-tick': {
+      id: '/api/public/hooks/daily-visuals-tick'
+      path: '/api/public/hooks/daily-visuals-tick'
+      fullPath: '/api/public/hooks/daily-visuals-tick'
+      preLoaderRoute: typeof ApiPublicHooksDailyVisualsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/fillout': {
       id: '/api/public/hooks/fillout'
       path: '/api/public/hooks/fillout'
@@ -5963,6 +5983,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksCleoAttachmentsSweepRoute,
   ApiPublicHooksClientCalendarsTickRoute:
     ApiPublicHooksClientCalendarsTickRoute,
+  ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
   ApiPublicHooksLeadRepliesTickRoute: ApiPublicHooksLeadRepliesTickRoute,

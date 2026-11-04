@@ -174,6 +174,11 @@ export async function pictureForPost(admin: Admin, postId: string): Promise<Pict
   const kind = post.kind === "note" && !post.story_only ? pictureKind(post) : null;
   if (!kind) return { ok: false, reason: "Only the app's own posts get a made picture." };
   if (post.media_path && !madeHere(post.media_path)) return { ok: false, reason: "This post has your own photo on it. Remove it first to get a made picture." };
+  // a daily picture is made again from its own day's scene and look
+  if (kind === "daily_visual") {
+    const { repictureDailyPost } = await import("@/lib/daily-visuals.server");
+    return repictureDailyPost(admin, post.id);
+  }
   const made = await generatePicture(promptFor(kind, post.caption, post.series_data));
   if (!made.ok) return made;
   const entry = await storePicture(admin, post.author_user_id, `post-${post.id}`, made.picture);

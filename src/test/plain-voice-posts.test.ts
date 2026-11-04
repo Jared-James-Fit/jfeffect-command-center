@@ -205,3 +205,19 @@ describe("the post templates read the same way", () => {
     expect(templates).toContain("posted a lil something for you on Crew 👀");
   });
 });
+
+describe("lessons stay under 800 characters, from the crew's own numbers", () => {
+  it("every lesson as it now posts is 800 or less, and the trimmed ones still read plain", async () => {
+    const { LESSON_MAX_CHARS } = await import("@/lib/plain-words");
+    const trim = read("supabase/migrations/20270124091000_lessons_under_800.sql");
+    const trimmed = new Map(
+      [...trim.matchAll(/\('([0-9a-f-]{36})'::uuid, '([0-9a-f]{32})', \$l\$([\s\S]*?)\$l\$\)/g)].map(([, id, , body]) => [id, body]),
+    );
+    expect(trimmed.size).toBe(8);
+    for (const body of trimmed.values()) expect(plainCheck(body).problems).toEqual([]);
+    for (const { id, body } of rows) expect((trimmed.get(id) ?? body).length, id).toBeLessThanOrEqual(LESSON_MAX_CHARS);
+    // a trim replaces only the text it was written against, the post too
+    expect(trim).toContain("FROM v JOIN public.community_series_items i ON i.id = v.id AND md5(i.body) = v.old_md5");
+    expect(trim).toContain("WHERE i.id = v.id AND md5(i.body) = v.old_md5;");
+  });
+});

@@ -11,6 +11,14 @@
 /** The grade every automated post stays at or under. */
 export const PLAIN_GRADE_MAX = 5;
 
+/**
+ * A lesson's longest. From the crew's own attention numbers (Nov 2026, 45
+ * days): posts over 800 characters were read longest but liked least, and
+ * more people left the app right after them. Long only pays while it keeps
+ * people around (20270124091000_lessons_under_800.sql).
+ */
+export const LESSON_MAX_CHARS = 800;
+
 /** Words and marks that never sound like the coach (his My Voice never-say list, plus writing tics). */
 export const NEVER_SAY = [
   "navigating",
