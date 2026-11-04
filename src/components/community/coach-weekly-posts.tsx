@@ -1,38 +1,13 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  CalendarClock,
-  Check,
-  ChevronDown,
-  ImagePlus,
-  Loader2,
-  PartyPopper,
-  PenLine,
-  Send,
-} from "lucide-react";
+import { CalendarClock, Check, ChevronDown, ImagePlus, Loader2, PartyPopper, PenLine, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import {
-  SERIES_LABEL,
-  TIP_KIND_LABEL,
-  isRecapStats,
-  postTimeLabel,
-  type CommunityPost,
-  type CommunitySeries,
-  type CrewCompare,
-} from "@/lib/community";
-import {
-  useFullMediaUrl,
-  useSeriesAction,
-  useSeriesOverview,
-  useSeriesPreview,
-  useViewerUnit,
-  type LibrarySeries,
-  type SeriesItem,
-} from "@/lib/community.queries";
+import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunityPost, type CommunitySeries, type CrewCompare } from "@/lib/community";
+import { useFullMediaUrl, useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem } from "@/lib/community.queries";
 import { makePostPicture } from "@/lib/post-pictures.functions";
 import { picturedByItself } from "@/lib/post-pictures";
 import { useAuth } from "@/lib/auth";
@@ -43,15 +18,7 @@ import { NoteEditor } from "@/components/community/note-editor";
 import { DailyPicturesCard } from "@/components/community/daily-pictures-card";
 
 type DailySeries = Exclude<CommunitySeries, "lesson">;
-const ORDER: DailySeries[] = [
-  "monday_motivation",
-  "tuesday_tips",
-  "wednesday_wins",
-  "try_it_thursday",
-  "finish_strong_friday",
-  "saturday_spirit",
-  "sunday_recap",
-];
+const ORDER: DailySeries[] = ["monday_motivation", "tuesday_tips", "wednesday_wins", "try_it_thursday", "finish_strong_friday", "saturday_spirit", "sunday_recap"];
 const WHEN: Record<DailySeries, string> = {
   monday_motivation: "Mon · 7 am",
   tuesday_tips: "Tue · 12 pm",
@@ -61,10 +28,7 @@ const WHEN: Record<DailySeries, string> = {
   saturday_spirit: "Sat · 9 am",
   sunday_recap: "Sun · 7 pm",
 };
-const SOURCE: Partial<Record<DailySeries, string>> = {
-  wednesday_wins: "last week's logs",
-  sunday_recap: "this week's logs",
-};
+const SOURCE: Partial<Record<DailySeries, string>> = { wednesday_wins: "last week's logs", sunday_recap: "this week's logs" };
 const DAYS: Record<LibrarySeries, string> = {
   monday_motivation: "Mondays",
   tuesday_tips: "Tuesdays",
@@ -72,8 +36,7 @@ const DAYS: Record<LibrarySeries, string> = {
   finish_strong_friday: "Fridays",
   saturday_spirit: "Saturdays",
 };
-const isLibrary = (s: DailySeries): s is LibrarySeries =>
-  !(s === "wednesday_wins" || s === "sunday_recap");
+const isLibrary = (s: DailySeries): s is LibrarySeries => !(s === "wednesday_wins" || s === "sunday_recap");
 
 /** What the "Up next" label calls a library post. */
 function itemName(series: LibrarySeries, item: Pick<SeriesItem, "mentor" | "data">): string {
@@ -85,12 +48,7 @@ function itemName(series: LibrarySeries, item: Pick<SeriesItem, "mentor" | "data
 
 /** "Sat, Oct 31" for a yyyy-mm-dd day. */
 function holidayDay(day: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(new Date(`${day}T12:00:00Z`));
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${day}T12:00:00Z`));
 }
 
 /**
@@ -150,14 +108,9 @@ export function CoachWeeklyPosts() {
       { kind: "series_on", series, on },
       {
         onSuccess: () =>
-          toast.success(
-            on ? `${SERIES_LABEL[series].name} is on` : `${SERIES_LABEL[series].name} is off`,
-            {
-              description: on
-                ? `${DAYS[series]} at ${WHEN[series].split(" · ")[1]}, alongside that day's lesson.`
-                : undefined,
-            },
-          ),
+          toast.success(on ? `${SERIES_LABEL[series].name} is on` : `${SERIES_LABEL[series].name} is off`, {
+            description: on ? `${DAYS[series]} at ${WHEN[series].split(" · ")[1]}, alongside that day's lesson.` : undefined,
+          }),
         onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
       },
     );
@@ -171,9 +124,7 @@ export function CoachWeeklyPosts() {
           <CalendarClock className="h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-bold">Daily series</div>
-            <div className="truncate text-[11px] text-muted-foreground">
-              Alongside the lessons · Winnipeg time
-            </div>
+            <div className="truncate text-[11px] text-muted-foreground">Alongside the lessons · Winnipeg time</div>
           </div>
         </header>
 
@@ -187,56 +138,23 @@ export function CoachWeeklyPosts() {
             const done = data.this_week?.[series];
             const expanded = open === series;
             const obs = series === "tuesday_tips" && on ? tuesday.data : null;
-            const stat =
-              series === "try_it_thursday"
-                ? (thursday.data as CrewCompare | null | undefined)
-                : null;
+            const stat = series === "try_it_thursday" ? (thursday.data as CrewCompare | null | undefined) : null;
             const recapNow = series === "sunday_recap" ? sunday.data : null;
-            const canPost =
-              !act.isPending && !data.paused && (wins ? !!preview : library ? !!next : true);
+            const canPost = !act.isPending && !data.paused && (wins ? !!preview : library ? !!next : true);
             return (
               <div key={series} data-daily-series={series}>
                 <div className="flex items-center justify-between gap-2 px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setOpen(expanded ? null : series)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    aria-expanded={expanded}
-                  >
+                  <button type="button" onClick={() => setOpen(expanded ? null : series)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={expanded}>
                     <div className="min-w-0">
-                      <div
-                        className={cn(
-                          "truncate text-[13px] font-bold",
-                          !on && "text-muted-foreground",
-                        )}
-                      >
-                        {SERIES_LABEL[series].name}
-                      </div>
+                      <div className={cn("truncate text-[13px] font-bold", !on && "text-muted-foreground")}>{SERIES_LABEL[series].name}</div>
                       <div className="truncate text-[11px] text-muted-foreground">
-                        {WHEN[series]} ·{" "}
-                        {library
-                          ? done
-                            ? "posted this week"
-                            : on
-                              ? `${data.library?.[series] ?? 0} in rotation`
-                              : "off"
-                          : `always on · ${SOURCE[series]}`}
+                        {WHEN[series]} · {library ? (done ? "posted this week" : on ? `${data.library?.[series] ?? 0} in rotation` : "off") : `always on · ${SOURCE[series]}`}
                       </div>
                     </div>
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                        expanded && "rotate-180",
-                      )}
-                    />
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
                   </button>
                   {library ? (
-                    <Switch
-                      checked={on}
-                      disabled={act.isPending}
-                      onCheckedChange={(v) => flip(series, v)}
-                      aria-label={`${SERIES_LABEL[series].name} on`}
-                    />
+                    <Switch checked={on} disabled={act.isPending} onCheckedChange={(v) => flip(series, v)} aria-label={`${SERIES_LABEL[series].name} on`} />
                   ) : done ? (
                     <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
                       <Check className="h-3 w-3" /> Posted
@@ -258,31 +176,18 @@ export function CoachWeeklyPosts() {
                     {library && !on && (
                       <p className="text-[11px] leading-snug text-muted-foreground">
                         Off: {DAYS[series]} only get the lesson.{" "}
-                        {series === "tuesday_tips"
-                          ? "Turn it on and the crew's own numbers post here (when they hold) instead of in Tuesday's lesson."
-                          : "Turn it on and this goes out too."}
+                        {series === "tuesday_tips" ? "Turn it on and the crew's own numbers post here (when they hold) instead of in Tuesday's lesson." : "Turn it on and this goes out too."}
                       </p>
                     )}
                     {obs && (
                       <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
-                          Goes out instead · from the crew's data
-                        </div>
-                        <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">
-                          {obs.caption}
-                        </div>
+                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Goes out instead · from the crew's data</div>
+                        <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{obs.caption}</div>
                         <CompareBars compare={obs as CrewCompare} className="mt-2.5" />
                       </div>
                     )}
                     {library && next && (
-                      <button
-                        type="button"
-                        onClick={() => setEditing({ series, item: next })}
-                        className={cn(
-                          "block w-full rounded-xl bg-muted/60 px-3 py-2.5 text-left",
-                          obs && "opacity-70",
-                        )}
-                      >
+                      <button type="button" onClick={() => setEditing({ series, item: next })} className={cn("block w-full rounded-xl bg-muted/60 px-3 py-2.5 text-left", obs && "opacity-70")}>
                         <div className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                           <span className="truncate">
                             {obs ? "Then next tip" : "Up next"} · {itemName(series, next)}
@@ -291,38 +196,21 @@ export function CoachWeeklyPosts() {
                             <PenLine className="h-3 w-3" /> Edit
                           </span>
                         </div>
-                        {next.quote && (
-                          <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold">
-                            “{next.quote}”
-                          </div>
-                        )}
-                        <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">
-                          {next.body}
-                        </div>
+                        {next.quote && <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold">“{next.quote}”</div>}
+                        <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">{next.body}</div>
                         {!!next.media?.length && series !== "saturday_spirit" && (
                           <div className="mt-1.5 text-[11px] font-bold text-primary">
-                            + {next.media.length}{" "}
-                            {next.media.length === 1 ? "photo" : "photos / videos"}
+                            + {next.media.length} {next.media.length === 1 ? "photo" : "photos / videos"}
                           </div>
                         )}
                       </button>
                     )}
-                    {library && next && picturedByItself(series) && (
-                      <NextPicture item={next} series={series} on={on} />
-                    )}
-                    {library && !next && (
-                      <p className="text-[12px] text-muted-foreground">
-                        Nothing left in this one's library.
-                      </p>
-                    )}
+                    {library && next && picturedByItself(series) && <NextPicture item={next} series={series} on={on} />}
+                    {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
                     {series === "try_it_thursday" && next?.data?.habit && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
                         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          {thursday.isLoading
-                            ? "Checking the crew's numbers…"
-                            : stat
-                              ? "Adds this from the crew's data"
-                              : "Posts without a number (not a big enough gap right now)"}
+                          {thursday.isLoading ? "Checking the crew's numbers…" : stat ? "Adds this from the crew's data" : "Posts without a number (not a big enough gap right now)"}
                         </div>
                         {stat && <CompareBars compare={stat} className="mt-2.5" />}
                       </div>
@@ -330,45 +218,21 @@ export function CoachWeeklyPosts() {
                     {wins && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
                         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          {preview
-                            ? `${preview.next_week ? "Next week so far" : "Goes out"} · ${preview.featured} featured · ${preview.trainers} trained`
-                            : "Nobody has logged a session yet"}
+                          {preview ? `${preview.next_week ? "Next week so far" : "Goes out"} · ${preview.featured} featured · ${preview.trainers} trained` : "Nobody has logged a session yet"}
                         </div>
-                        {preview && (
-                          <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">
-                            {preview.body}
-                          </div>
-                        )}
+                        {preview && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{preview.body}</div>}
                       </div>
                     )}
                     {series === "sunday_recap" && (
                       <div className="rounded-xl bg-muted/60 px-3 py-2.5">
                         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          {sunday.isLoading
-                            ? "Adding up the week…"
-                            : recapNow
-                              ? "This week so far"
-                              : "Nobody has trained this week yet"}
+                          {sunday.isLoading ? "Adding up the week…" : recapNow ? "This week so far" : "Nobody has trained this week yet"}
                         </div>
-                        {recapNow?.caption && (
-                          <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">
-                            {recapNow.caption}
-                          </div>
-                        )}
+                        {recapNow?.caption && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{recapNow.caption}</div>}
                         {/* the picture it goes out with, as it'd be right now (the one the feed and Instagram get) */}
                         {isRecapStats(recapNow?.stats) && (
                           <PostArtImage
-                            post={
-                              {
-                                id: `recap-preview-${recapNow!.stats.week_of}`,
-                                created_at: new Date().toISOString(),
-                                kind: "note",
-                                series: "sunday_recap",
-                                series_data: recapNow!.stats,
-                                caption: recapNow!.caption ?? null,
-                                mentions: [],
-                              } as unknown as CommunityPost
-                            }
+                            post={{ id: `recap-preview-${recapNow!.stats.week_of}`, created_at: new Date().toISOString(), kind: "note", series: "sunday_recap", series_data: recapNow!.stats, caption: recapNow!.caption ?? null, mentions: [] } as unknown as CommunityPost}
                             card="recap"
                             unit={unit}
                             eager
@@ -396,25 +260,16 @@ export function CoachWeeklyPosts() {
 
         {recent.length > 0 && (
           <div className="border-t border-border/60 px-4 py-3">
-            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-              Recent
-            </div>
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Recent</div>
             <ul className="space-y-1">
               {recent.slice(0, 4).map((h) => (
                 <li key={h.id} className="flex items-baseline gap-2 text-[12px]">
-                  <span className="w-8 shrink-0 font-bold">
-                    {SERIES_LABEL[h.series]?.short ?? ""}
-                  </span>
+                  <span className="w-8 shrink-0 font-bold">{SERIES_LABEL[h.series]?.short ?? ""}</span>
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {h.mentor &&
-                    (h.series === "monday_motivation" || h.series === "finish_strong_friday")
-                      ? `${h.mentor} · `
-                      : ""}
+                    {h.mentor && (h.series === "monday_motivation" || h.series === "finish_strong_friday") ? `${h.mentor} · ` : ""}
                     {h.caption}
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {postTimeLabel(h.created_at)}
-                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{postTimeLabel(h.created_at)}</span>
                 </li>
               ))}
             </ul>
@@ -425,17 +280,12 @@ export function CoachWeeklyPosts() {
       <DailyPicturesCard />
 
       {holidays.length > 0 && (
-        <div
-          className="overflow-hidden rounded-2xl border border-border/70 bg-card"
-          data-coach-holidays
-        >
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-coach-holidays>
           <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
             <PartyPopper className="h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
               <div className="text-[14px] font-bold">Holidays coming up</div>
-              <div className="truncate text-[11px] text-muted-foreground">
-                Post on their own at 9 am on the day
-              </div>
+              <div className="truncate text-[11px] text-muted-foreground">Post on their own at 9 am on the day</div>
             </div>
           </header>
           <ul className="divide-y divide-border/60">
@@ -448,14 +298,10 @@ export function CoachWeeklyPosts() {
                       <Check className="h-3 w-3" /> Posted
                     </span>
                   ) : (
-                    <span className="shrink-0 text-[11px] font-bold text-muted-foreground">
-                      {holidayDay(h.date)} · 9 am
-                    </span>
+                    <span className="shrink-0 text-[11px] font-bold text-muted-foreground">{holidayDay(h.date)} · 9 am</span>
                   )}
                 </div>
-                <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">
-                  {h.body}
-                </div>
+                <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">{h.body}</div>
               </li>
             ))}
           </ul>
@@ -466,20 +312,10 @@ export function CoachWeeklyPosts() {
         open={!!editing}
         title={`Edit the next ${editing ? itemName(editing.series, editing.item) : ""} post`}
         initial={editing?.item.body ?? ""}
-        quote={
-          editing?.item.quote ? { text: editing.item.quote, author: editing.item.mentor } : null
-        }
+        quote={editing?.item.quote ? { text: editing.item.quote, author: editing.item.mentor } : null}
         saving={act.isPending}
         onClose={() => setEditing(null)}
-        media={
-          editing
-            ? {
-                initial: editing.item.media,
-                key: editing.item.id,
-                hint: "Photos go out with this post once. The text stays for next time.",
-              }
-            : undefined
-        }
+        media={editing ? { initial: editing.item.media, key: editing.item.id, hint: "Photos go out with this post once. The text stays for next time." } : undefined}
         onSave={async (body, _poll, media) => {
           if (!editing) return;
           await act.mutateAsync({ kind: "item", id: editing.item.id, body, media });
@@ -495,15 +331,7 @@ export function CoachWeeklyPosts() {
  * (post-pictures.server.ts, made as soon as it's up next): the coach sees it
  * here ahead of time and can ask for another. A photo of their own wins.
  */
-function NextPicture({
-  item,
-  series,
-  on,
-}: {
-  item: SeriesItem;
-  series: CommunitySeries;
-  on: boolean;
-}) {
+function NextPicture({ item, series, on }: { item: SeriesItem; series: CommunitySeries; on: boolean }) {
   const day = SERIES_LABEL[series].name;
   const qc = useQueryClient();
   const make = useServerFn(makePostPicture);
@@ -511,7 +339,7 @@ function NextPicture({
   const slide = item.media?.find((m) => m.type === "image") ?? null;
   const made = !!slide?.path.includes("/post-pictures/");
   const own = !!item.media?.length && !made;
-  const url = useFullMediaUrl(slide ? (slide.thumb ?? slide.path) : null, !!slide).data ?? null;
+  const url = useFullMediaUrl(slide ? slide.thumb ?? slide.path : null, !!slide).data ?? null;
 
   const again = async () => {
     setBusy(true);
@@ -532,17 +360,9 @@ function NextPicture({
       {slide && url ? (
         <img src={url} alt="" className="aspect-[4/5] w-[120px] rounded-lg object-cover" />
       ) : isSpiritScene(item.data?.scene) ? (
-        <SpiritScene
-          scene={item.data!.scene}
-          className={cn("w-[120px] rounded-lg", busy && "animate-pulse")}
-        />
+        <SpiritScene scene={item.data!.scene} className={cn("w-[120px] rounded-lg", busy && "animate-pulse")} />
       ) : (
-        <div
-          className={cn(
-            "grid aspect-[4/5] w-[120px] place-items-center rounded-lg bg-background text-muted-foreground",
-            busy && "animate-pulse",
-          )}
-        >
+        <div className={cn("grid aspect-[4/5] w-[120px] place-items-center rounded-lg bg-background text-muted-foreground", busy && "animate-pulse")}>
           <ImagePlus className="h-5 w-5" aria-hidden />
         </div>
       )}
@@ -566,11 +386,7 @@ function NextPicture({
             disabled={busy}
             className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-bold disabled:opacity-60"
           >
-            {busy ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <ImagePlus className="h-3 w-3" />
-            )}
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
             {busy ? "Making it…" : made ? "New picture" : "Make it now"}
           </button>
         )}
