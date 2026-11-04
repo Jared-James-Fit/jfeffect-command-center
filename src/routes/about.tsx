@@ -12,6 +12,7 @@ import phillipAsset from "@/assets/athletes/phillip.png.asset.json";
 import dwayneAsset from "@/assets/athletes/dwayne.png.asset.json";
 import frederickAsset from "@/assets/athletes/frederick.png.asset.json";
 import elisaAsset from "@/assets/athletes/elisa.png.asset.json";
+import { shareMeta } from "@/lib/share-meta";
 
 const jaredHeroImage = jaredAsset.url;
 const phillipAthleteImage = phillipAsset.url;
@@ -387,14 +388,8 @@ export const Route = createFileRoute("/about")({
     meta: [
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      { property: "og:title", content: TITLE },
-      { property: "og:description", content: DESCRIPTION },
+      ...shareMeta({ title: "About Jared McIntyre", description: DESCRIPTION, path: "/about" }),
       { property: "og:type", content: "profile" },
-      { property: "og:url", content: URL },
-      { property: "og:site_name", content: "JF Effect" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: TITLE },
-      { name: "twitter:description", content: DESCRIPTION },
     ],
     links: [{ rel: "canonical", href: URL }],
     scripts: [

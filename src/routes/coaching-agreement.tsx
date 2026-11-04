@@ -6,6 +6,7 @@ import { AGREEMENT_CONTENT } from "@/lib/coaching-agreement/content";
 import { personalizeAgreement } from "@/lib/coaching-agreement/coach";
 import { formatSignedDate } from "@/components/coaching-agreement/agreement-copy";
 import { useAuth } from "@/lib/auth";
+import { shareMeta } from "@/lib/share-meta";
 
 /**
  * Public, read-only copy of the current Coaching Agreement. This is the page linked
@@ -22,6 +23,11 @@ export const Route = createFileRoute("/coaching-agreement")({
           "The JF Effect Coaching Agreement: terms for coaching, personal training, programs and digital products.",
       },
       { name: "robots", content: "noindex,follow" },
+      ...shareMeta({
+        title: "JF Effect Coaching Agreement",
+        description: "Terms for coaching, personal training, programs and digital products.",
+        path: "/coaching-agreement",
+      }),
     ],
   }),
   component: PublicCoachingAgreement,

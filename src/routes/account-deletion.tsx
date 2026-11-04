@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Mail, Trash2, ShieldAlert } from "lucide-react";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/account-deletion")({
   head: () => ({
@@ -12,11 +13,7 @@ export const Route = createFileRoute("/account-deletion")({
         content:
           "Request permanent deletion of your JF Effect account and personal data. Submit a request from inside the app or by email.",
       },
-      { property: "og:title", content: "Delete your JF Effect account" },
-      {
-        property: "og:description",
-        content: "How to permanently delete your JF Effect account and data.",
-      },
+      ...shareMeta({ title: "Delete your JF Effect account", description: "How to permanently delete your JF Effect account and data.", path: "/account-deletion" }),
     ],
   }),
   component: AccountDeletionPage,

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BookingPage } from "@/components/booking/booking-page";
+import { shareMeta } from "@/lib/share-meta";
 
 /**
  * Public booking page for a booking type (Calendar → Booking → Send link).
@@ -7,8 +8,12 @@ import { BookingPage } from "@/components/booking/booking-page";
  * application flow: ?name=&email=&phone=&application_id=
  */
 export const Route = createFileRoute("/book/$slug")({
-  head: () => ({
-    meta: [{ title: "Book a time · JF Effect" }, { name: "robots", content: "noindex" }],
+  head: ({ params }) => ({
+    meta: [
+      { title: "Book a time · JF Effect" },
+      { name: "robots", content: "noindex" },
+      ...shareMeta({ title: "Book a time with JF Effect", description: "Pick a time that works for you.", path: `/book/${params.slug}` }),
+    ],
   }),
   validateSearch: (search: Record<string, unknown>) => ({
     name: typeof search.name === "string" ? search.name : "",

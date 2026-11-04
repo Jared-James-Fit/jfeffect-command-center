@@ -42,6 +42,7 @@ import { OnlineOfflineBanner } from "@/components/pwa/online-offline-banner";
 // offline writes (bodyweight, water, …) so pending items can drain at boot.
 import "@/lib/offline/data-handlers";
 import "@/lib/offline/workout-completion-sync";
+import { SITE_NAME, shareImageMeta, shareMeta } from "@/lib/share-meta";
 // HTML5 drag-and-drop polyfill for touch devices. Loaded only in the browser
 // because the package touches `document` at module scope and crashes SSR.
 if (typeof document !== "undefined") {
@@ -236,7 +237,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "JF Effect | Personal Trainer Selkirk MB & Online Fitness Coaching" },
+      { title: "JF Effect" },
       { name: "description", content: "JF Effect — personal training in Selkirk, MB and online fitness coaching for Selkirk, Winnipeg, and beyond. Strength, fat loss, muscle building, and powerlifting coaching by Jared James Fit." },
       { name: "author", content: "Jared James Fit | JF Effect" },
       { name: "theme-color", content: "#0a0a0a" },
@@ -248,17 +249,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "geo.placename", content: "Selkirk, Manitoba" },
       { name: "geo.position", content: "50.1436;-96.8839" },
       { name: "ICBM", content: "50.1436, -96.8839" },
-      { property: "og:title", content: "JF Effect | Personal Trainer Selkirk MB & Online Fitness Coaching" },
-      { property: "og:description", content: "Personal training in Selkirk, MB and online fitness coaching for Selkirk, Winnipeg, and beyond. Strength, fat loss, muscle building, and powerlifting by Jared James Fit." },
+      // A sent link's card (iMessage, texts, Instagram…): "JF Effect" and the
+      // logo unless the page says more (share-meta.ts). No og:url here: each
+      // page names its own, or a share would point at the home page.
+      ...shareMeta({ title: SITE_NAME }),
+      ...shareImageMeta(),
       { property: "og:type", content: "website" },
-      { property: "og:site_name", content: "JF Effect" },
+      { property: "og:site_name", content: SITE_NAME },
       { property: "og:locale", content: "en_CA" },
-      { property: "og:url", content: "https://jfeffect.com" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "JF Effect | Personal Trainer Selkirk MB & Online Fitness Coaching" },
-      { name: "twitter:description", content: "Personal training in Selkirk, MB and online fitness coaching for Selkirk, Winnipeg, and beyond. Strength, fat loss, muscle building, and powerlifting by Jared James Fit." },
-      { property: "og:image", content: "https://jfeffect.com/logo.png" },
-      { name: "twitter:image", content: "https://jfeffect.com/logo.png" },
     ],
     links: [
       { rel: "manifest", href: "/manifest.json" },

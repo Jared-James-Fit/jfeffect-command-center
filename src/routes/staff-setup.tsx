@@ -11,10 +11,11 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getStaffInvitePreview, redeemStaffInvite } from "@/lib/staff-invites.functions";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/staff-setup")({
   validateSearch: (s: Record<string, unknown>) => ({ token: String(s.token ?? "") }),
-  head: () => ({ meta: [{ title: "Set up your team account — JF Effect" }] }),
+  head: () => ({ meta: [{ title: "Set up your team account — JF Effect" }, ...shareMeta({ title: "Join the JF Effect team", description: "Set up your team account." })] }),
   component: StaffSetupPage,
 });
 

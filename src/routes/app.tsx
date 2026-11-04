@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Smartphone, LogIn, Download, Loader2 } from "lucide-react";
 import { isStandalone, isNative } from "@/platform";
 import { cachedLaunchTarget } from "@/lib/launch-home";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
@@ -16,8 +17,7 @@ export const Route = createFileRoute("/app")({
         content: "Open the JF Effect app — sign in to continue your training, nutrition, and coaching.",
       },
       { name: "robots", content: "noindex" },
-      { property: "og:title", content: "Open JF Effect" },
-      { property: "og:description", content: "Open the JF Effect app." },
+      ...shareMeta({ title: "Open JF Effect", description: "Open the JF Effect app.", path: "/app" }),
     ],
   }),
   component: AppEntry,

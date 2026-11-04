@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { toast } from "sonner";
+import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/member-setup")({
   validateSearch: z.object({ token: z.string().optional() }),
-  head: () => ({ meta: [{ title: "Set up your account — JF Effect" }] }),
+  head: () => ({ meta: [{ title: "Set up your account — JF Effect" }, ...shareMeta({ title: "Set up your JF Effect account", description: "Finish setting up your account to get started." })] }),
   component: MemberSetupPage,
 });
 
