@@ -7,8 +7,18 @@ const card = read("src/components/training-schedule-card.tsx");
 const shell = read("src/components/app-shell.tsx");
 
 describe("Workouts: a compact top, no schedule card", () => {
-  it("the title and Today / Analytics / ⋮ share one row on the athlete's page; the coach's keeps the name whole", () => {
+  it("Today sits by the week / month arrows and shows only once you've moved off today", () => {
+    const strip = read("src/components/workouts/week-strip.tsx");
+    expect(strip).toContain("{!isSameDay(selectedDate, today) && (");
+    expect(page).toContain("<BackToToday selectedDate={selectedDate} onSelectDate={onSelectDate} />");
+    expect(page).toContain("if (isSameDay(selectedDate, today)) return null;");
+  });
+  it("the title and ⋮ share one row on the athlete's page; the coach's keeps the name whole", () => {
     expect(page).toContain("actionsInline={mode === \"self\"}");
+    // no Today or Analytics buttons up top: analytics is in ⋮ and the month card
+    expect(page).not.toContain('<Sun className="h-3.5 w-3.5" /> Today');
+    expect(page).not.toContain('aria-label="Open training analytics"');
+    expect(page).toContain("<Activity className=\"mr-2 h-4 w-4\" /> Training analytics");
     expect(shell).toContain("if (actionsInline && !showBack) {");
     expect(shell).toContain('<h1 className="min-w-0 truncate text-lg font-bold');
   });

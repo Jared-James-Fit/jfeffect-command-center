@@ -445,29 +445,13 @@ export function WorkoutsExperience({
       <PageHeader
         title={mode === "coach" ? `${clientName ?? "Client"} — Workouts` : "Workouts"}
         subtitle={subtitle || undefined}
-        // the title, Today, Analytics and ⋮ on one row, the block under them
-        // (the coach's "Name — Workouts" keeps its own row so the name isn't cut)
+        // the title and ⋮ on one row, the block under them (the coach's
+        // "Name — Workouts" keeps its own row so the name isn't cut). Today lives
+        // by the week / month arrows, only once you've moved off today; analytics
+        // is the month card's "See all analytics" and this ⋮.
         actionsInline={mode === "self"}
         actions={
-          // Two everyday actions; the occasional ones (report, history,
-          // rescheduling several workouts) live in ⋮.
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 gap-1"
-              onClick={() => setSelectedDate(localStartOfToday())}
-            >
-              <Sun className="h-3.5 w-3.5" /> Today
-            </Button>
-            {mode === "self" && (
-              <Button asChild size="sm" variant="outline" className="h-9 gap-1">
-                <Link to={"/portal/workouts/analytics" as any} aria-label="Open training analytics">
-                  <Activity className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Analytics</span>
-                </Link>
-              </Button>
-            )}
+          <div className="flex items-center">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-9 w-9 p-0" aria-label="More actions">
@@ -475,6 +459,13 @@ export function WorkoutsExperience({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {mode === "self" && (
+                  <DropdownMenuItem asChild>
+                    <Link to={"/portal/workouts/analytics" as any}>
+                      <Activity className="mr-2 h-4 w-4" /> Training analytics
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {/* Coaching clients always have a way to their appointments, even on a week with none. */}
                 {showAppointmentsLink && (
                   <DropdownMenuItem asChild>
@@ -724,8 +715,9 @@ function MonthGrid({
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="text-sm font-bold">
+        <div className="flex items-center gap-1 text-sm font-bold">
           {format(monthStart, "MMMM yyyy")}
+          <BackToToday selectedDate={selectedDate} onSelectDate={onSelectDate} />
         </div>
         <button
           type="button"
@@ -1671,5 +1663,20 @@ function SelfEmptyState() {
         <Link to="/portal/plans">Browse plans</Link>
       </Button>
     </Card>
+  );
+}
+
+/** "Today" beside the week / month title, only once you've moved off today. */
+export function BackToToday({ selectedDate, onSelectDate }: { selectedDate: Date; onSelectDate: (d: Date) => void }) {
+  const today = localStartOfToday();
+  if (isSameDay(selectedDate, today)) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelectDate(today)}
+      className="-my-2 inline-flex h-10 items-center rounded-lg px-2 text-xs font-semibold text-primary hover:bg-secondary"
+    >
+      Today
+    </button>
   );
 }
