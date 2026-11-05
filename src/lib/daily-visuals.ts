@@ -461,6 +461,7 @@ PICTURE RULES
 - Describe the frame: who is in it (adults, their age range, build, hair and clothes, people of different looks, fitting the audience and an everyday gym and life), what they're doing and feeling, where they are, what's around them.
 - Natural human moments full of life: training, laughing, connecting, moving, a small win, a funny moment. Bright, colourful and eye-catching (daytime, golden hour, vivid light); a night or quiet moment only when the story needs one, and then with vivid colour and one bright focal light.
 - When the caption is about a struggle, the picture shows the turn or the human side of it (walking in anyway, the friend who showed up, the laugh after), never someone miserable alone in a dark room or staring at a phone.
+- Body image stories show the person dressed and getting on with it (eating the meal, training, laughing with friends), never undressed, pinching or measuring their body, or on a scale.
 - Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
 - Any words in the scene (a text message on a phone, a note, a speech bubble, a sign) say exactly what the story needs and are written word for word in "typography" (at most 12 words): only the words as they appear in the frame, never where they are or who's reading them (write "boss: quick thing for monday?", never "on his phone: boss: quick thing for monday?"). No other words anywhere. With no words in the scene, "typography" is "".
 

@@ -478,3 +478,14 @@ describe("the writer's own clichés are banned outright", () => {
     );
   });
 });
+
+describe("a scene the image model's safety filter turns down gets a new scene, not four retries", () => {
+  it("reads the refusal and plans a new concept", async () => {
+    const { isSafetyRefusal } = await import("@/lib/daily-visuals.server");
+    expect(isSafetyRefusal(new Error("OpenAI: Your request was rejected by the safety system. If you believe this is an error"))).toBe(true);
+    expect(isSafetyRefusal(new Error("OpenAI said no (500)"))).toBe(false);
+    expect(server).toContain('issues: ["the image model\'s safety filter turned the scene down"]');
+    const { CONCEPT_PROMPT } = await import("@/lib/daily-visuals");
+    expect(CONCEPT_PROMPT).toContain("never undressed, pinching or measuring their body, or on a scale");
+  });
+});
