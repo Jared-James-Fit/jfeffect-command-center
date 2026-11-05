@@ -14,6 +14,7 @@ import {
   VOICE_EXAMPLE,
   VOICE_GUIDE,
   namedPeople,
+  motifRepeats,
   DAILY_STYLES,
   DAILY_STYLE_KEYS,
   DAILY_THEMES,
@@ -178,6 +179,11 @@ describe("captions read like a real person posting, never a rerun", () => {
     );
     expect(captionProblems("your logbook is secretly your gratitude list.", { format: "one_liner" })).toContain('says "secretly" (scripted)');
     expect(captionProblems("let's go!! new week!!", { format: "one_liner" })).toContain("more than one exclamation mark");
+    // the example's own lines never come back, and a habit the new voice picked up can't repeat day to day
+    expect(captionProblems("funny how you stop needing a pep talk to train. that's progress too.", { format: "one_liner" })).toContain(
+      'borrows "that\'s progress too" from the voice example',
+    );
+    expect(motifRepeats("strength sneaks up on you", ["funny how training sneaks up on you"])).toEqual(["sneaks up"]);
     expect(captionProblems('your "light" sets used to be your "heavy" ones.', { format: "one_liner" })).toContain("words in scare quotes");
     // the editor flags them too, and picks the most natural, not the most dramatic
     for (const k of ["natural:", "effortless:", "scripted:", "trying_too_hard:", "ai_phrasing:"]) expect(EDITOR_PROMPT, k).toContain(k);
@@ -698,7 +704,7 @@ describe("the vivid look: bright, colourful, crisp 2D film frames", () => {
 
 describe("captions don't fall back on the same stock moments", () => {
   it("a stock moment a recent post used can't come back, and humour has to be funny", async () => {
-    const { motifRepeats, REVIEW_PROMPT, reviewPrompt } = await import("@/lib/daily-visuals");
+    const { REVIEW_PROMPT, reviewPrompt } = await import("@/lib/daily-visuals");
     const recent = ["nobody cheered when you walked into the gym tonight", "the group chat is out and you hit seen"];
     expect(motifRepeats("you pack your bag and nobody cheered. thats fine", recent)).toEqual(["nobody cheered"]);
     expect(motifRepeats("your mom asks if you live at the gym now", recent)).toEqual([]);

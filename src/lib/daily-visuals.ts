@@ -666,6 +666,9 @@ it's easy to forget how much effort it used to take just to get started.
 
 that's progress too.`;
 
+/** The example's own lines, which a caption never borrows. */
+export const EXAMPLE_LINES = ["that's progress too", "people overlook", "starts feeling normal", "hype yourself up"] as const;
+
 /** What it must never sound like: the post he pointed to as scripted (Nov 5's). */
 export const NOT_HIS_VOICE = `Signs you're not "starting over" again, you're just a guy who trains now:
 
@@ -1126,6 +1129,9 @@ export function scriptedProblems(text: string): string[] {
   if ((t.match(/!/g) ?? []).length >= 2) out.push("more than one exclamation mark");
   if ((t.match(/"[^"\n]{1,40}"/g) ?? []).length >= 2) out.push("words in scare quotes");
   if (captionSimilarity(t, VOICE_EXAMPLE) >= 0.25) out.push("copies the voice example (it's a reference, not a template)");
+  // its own lines don't come back either (the first test batch closed on "that's progress too." twice in ten)
+  const plain = ` ${t.toLowerCase().replace(/[^a-z']+/g, " ")} `;
+  for (const line of EXAMPLE_LINES) if (plain.includes(` ${line} `)) out.push(`borrows "${line}" from the voice example`);
   return out;
 }
 
@@ -1234,6 +1240,8 @@ export const STOCK_MOTIFS = [
   "its friday",
   "no selfie",
   "no post",
+  // the new voice's own habit in its first test batch (3 of 10)
+  "sneaks up",
 ] as const;
 
 /** Stock moments in a caption that a recent post already used. */
