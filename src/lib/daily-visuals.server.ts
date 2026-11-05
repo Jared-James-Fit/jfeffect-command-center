@@ -490,28 +490,34 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
       else notes = typo;
       continue;
     }
-    const checks = { format: parsed.format, pillar: parsed.pillar, recent: ctx.compareTo, near: ctx.near, asked: ctx.asked, picture: typography };
+    // each draft is held to its own form (a one-liner's length, a list's lines)
+    const base = { pillar: parsed.pillar, recent: ctx.compareTo, near: ctx.near, asked: ctx.asked, picture: typography };
+    const checksFor = (form: DailyFormat) => ({ ...base, format: form });
     const drafts = parsed.drafts.map(tidyCaption);
-    const ok = drafts.filter((d) => !captionProblems(d, checks).length);
+    const forms = drafts.map((_, i) => parsed.draftForms[i] ?? parsed.format);
+    const passing = drafts.map((d, i) => ({ text: d, form: forms[i] })).filter((d) => !captionProblems(d.text, checksFor(d.form)).length);
+    const ok = passing.map((d) => d.text);
     if (typo.length || !ok.length) {
-      notes = [...typo, ...drafts.map((d, i) => `draft ${i + 1}: ${captionProblems(d, checks).join(", ")}`)].slice(0, 6);
+      notes = [...typo, ...drafts.map((d, i) => `draft ${i + 1} (${forms[i]}): ${captionProblems(d, checksFor(forms[i])).join(", ")}`)].slice(0, 6);
       continue;
     }
     // the editor: scores the drafts that passed, picks one and polishes it
-    const e = await maker.json(EDITOR_PROMPT, editorPrompt({ concept: parsed, audience: r.audience, drafts: ok, recent: recentCaptions }), { effort: "low" });
+    const e = await maker.json(EDITOR_PROMPT, editorPrompt({ concept: parsed, audience: r.audience, drafts: ok, forms: passing.map((d) => d.form), recent: recentCaptions }), { effort: "low" });
     const ed: EditorReview | null = parseEditor(e.text, ok.length);
     if (!ed) {
       notes = ["the editor's answer wasn't readable"];
       continue;
     }
     const chosen = ok[ed.best];
+    const format = passing[ed.best].form;
+    const checks = checksFor(format);
     const polished = ed.polished ? tidyCaption(ed.polished) : "";
     // the polish only stands when it still passes and is still the same caption (an editor never rewrites the idea)
     const caption = polished && polished.length >= chosen.length * 0.5 && !captionProblems(polished, checks).length ? polished : chosen;
     const verdict = editorVerdict(ed, parsed.pillar);
     const pick = ed.drafts[ed.best];
     const read = { passed: verdict.pass, score: editorScore(pick), scores: pick.scores, why: ed.why || pick.note, drafts: ok.length };
-    const concept = { ...parsed, style, typography, drafts, caption };
+    const concept = { ...parsed, format, style, typography, drafts, caption };
     if (verdict.pass) {
       made = concept;
       editor = read;

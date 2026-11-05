@@ -180,6 +180,9 @@ describe("captions read like a real person posting, never a rerun", () => {
     // food and training words aren't body words
     expect(captionProblems("Low-fat yogurt, healthy fats and a fat-loss phase walk into a bar.", { format: "one_liner" })).not.toContain("puts a body down");
     expect(captionProblems("You need to stop making excuses.", { format: "one_liner" })).toContain("lectures the reader");
+    // "not X, it's Y" twice is the AI template; once is how people talk
+    expect(captionProblems("Rest days aren't you falling off, they're when your body cashes in. That's not slacking, that's lifting smarter.", { format: "quick_take" })).toContain(`"it's not X, it's Y" 2 times (reads like AI)`);
+    expect(captionProblems("Rest days aren't you falling off. They're when your body catches up.", { format: "quick_take" })).toEqual([]);
     expect(captionProblems("Tired, stressed, overwhelmed and dreading it again.", { format: "one_liner" })[0]).toContain("leans negative");
     // a challenge can be a little heavier before it counts
     expect(captionProblems("Tired, stressed, dreading it. Go anyway, then grab a coffee with a friend.", { format: "one_liner", pillar: "challenge" })).toEqual([]);
@@ -307,8 +310,10 @@ describe("the editor reads every caption before a picture is made", () => {
   });
 
   it("the generator runs the writer, the hard checks and the editor before any picture, and keeps the editor's read", () => {
-    expect(server).toContain("const ok = drafts.filter((d) => !captionProblems(d, checks).length);");
-    expect(server).toContain('const e = await maker.json(EDITOR_PROMPT, editorPrompt({ concept: parsed, audience: r.audience, drafts: ok, recent: recentCaptions }), { effort: "low" });');
+    // each draft held to its own form, and the chosen one's form becomes the post's
+    expect(server).toContain(".filter((d) => !captionProblems(d.text, checksFor(d.form)).length);");
+    expect(server).toContain("const format = passing[ed.best].form;");
+    expect(server).toContain('const e = await maker.json(EDITOR_PROMPT, editorPrompt({ concept: parsed, audience: r.audience, drafts: ok, forms: passing.map((d) => d.form), recent: recentCaptions }), { effort: "low" });');
     expect(server).toContain("editor: c.editor ?? null,");
     // the feed reads like a social post: his never-say lists, not his texting style
     expect(server).not.toContain("casualize");
@@ -327,6 +332,12 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
     // no art direction given: a realization leans to B, the cinematic anime
     expect(c).toMatchObject({ pillar: "realization", topic: "progress_noticed", crowd: "lifters", mood: "uplifting", format: "quick_take", style: "backlit", light: "golden_teal", art: "anime", typography: "still here", message: "m", drafts: ["one", "two", "four"] });
     expect(parseConcept("no json", choices)).toBeNull();
+    // drafts labelled with their own forms: each keeps its own, the first one's is the post's until the editor picks
+    const labelled = parseConcept('{"topic": "small_milestones", "idea": "m", "visual": "v", "captions": [{"form": "one_liner", "text": "a"}, {"form": "nonsense", "text": "b"}]}', choices)!;
+    expect(labelled.drafts).toEqual(["a", "b"]);
+    expect(labelled.draftForms).toEqual(["one_liner", "quick_take"]);
+    expect(labelled.format).toBe("one_liner");
+    expect(editorPrompt({ concept: { ...labelled, crowd: "everyone" }, audience: "women", drafts: ["a", "b"], forms: ["one_liner", "quick_take"], recent: [] })).toContain("[0] (One-liner: one or two sentences");
   });
 
   it("is told the day's pillar, who it's for, what's worked, what to avoid and what the coach threw out", () => {
@@ -372,6 +383,7 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
     expect(CONCEPT_PROMPT).toContain("never put a body down");
     expect(CONCEPT_PROMPT).toContain("No made-up first-person stories");
     expect(CONCEPT_PROMPT).toContain("The picture, before any caption");
+    expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them at all.");
   });
 
   it("the picture: always a hand-drawn 2D film frame, its shot and light, the words in it spelled exactly or none at all", () => {

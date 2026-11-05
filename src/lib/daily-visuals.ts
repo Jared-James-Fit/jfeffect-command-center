@@ -641,6 +641,8 @@ export type DailyConcept = {
   typography: string;
   /** The writer's drafts (up to three), before the checks and the editor. */
   drafts: string[];
+  /** Each draft's form, in the same order (the chosen one's becomes `format`). */
+  draftForms: DailyFormat[];
   /** The chosen, polished caption. */
   caption: string;
 };
@@ -655,7 +657,7 @@ WORK IT OUT IN THIS ORDER
 2. The moment: one specific, everyday situation people recognize (the warm-up that used to be your top set, a friend texting "you up?" at 5:45, the first time someone asks you for gym advice). Specific beats general.
 3. The idea: the realization, the joke, the useful idea or the warm truth it lands on, in your own words.
 4. The picture, before any caption: it sets the scene and the feeling. The caption then expands it, adds a twist or says what the picture can't. Never just describe the picture or repeat words that are in it.
-5. Three caption drafts for that one picture, each a different shape and length (for example a one-liner, a quick take and a short story), in the form given or close to it.
+5. Three caption drafts for that one picture, each in a different one of the CAPTION FORMS given (for example a one-liner, a quick take and a short story), each labelled with its form.
 
 HOW THE CAPTIONS READ
 - Like a real person posting: natural, warm, confident, funny when it fits. Contractions with apostrophes (you're, don't, it's), normal capital letters and punctuation.
@@ -678,10 +680,10 @@ THE PICTURE
 - Expressive, likeable characters in moments full of life: training, laughing, celebrating, cheering each other on, a milestone, friends, sunshine, a hike, a beach, a park, a kitchen with friends, coffee after the gym, a busy, bright gym. Bright and inviting (daytime, golden hour, vivid light); night only when the story needs it, and then with vivid colour and one bright focal light.
 - Never someone miserable alone in a dark room, staring at a phone, undressed, pinching or measuring their body, or on a scale. A struggle shows its turn or its human side (walking in anyway, the friend who showed up, the laugh after).
 - Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
-- Any words in the scene (a text on a phone, a note, a speech bubble, a sign) are written word for word in "typography" (at most 12 words): only the words as they appear, never where they are or who's reading them. With no words in the scene, "typography" is "".
+- Most pictures have no words in them at all. Put words in the scene (a text on a phone, a note, a speech bubble, a sign) only when they ARE the joke or the point, never as decoration or a label for the scene. Then write them word for word in "typography" (at most 12 words): only the words as they appear, never where they are or who's reading them. With no words in the scene, "typography" is "".
 
 Answer with JSON only:
-{"topic": "the angle", "mood": "...", "situation": "...", "idea": "...", "format": "...", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": ["...", "...", "..."]}`;
+{"topic": "the angle", "mood": "...", "situation": "...", "idea": "...", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
 
 /** Ends on a question mark (a closing emoji aside). */
 export const endsWithQuestion = (s: string) => /\?\s*(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*\s*)?$/u.test(s.trim());
@@ -720,7 +722,7 @@ export function conceptPrompt(o: {
     `MOOD, as "mood" (pick one): ${p.moods.join(", ")}`,
     `WHO IT'S FOR: ${DAILY_AUDIENCE_GUIDE[o.audience]} Today especially ${DAILY_CROWDS[o.crowd].guide}.`,
     o.faith ? "SUNDAY: a Bible verse goes under the caption. Make it sit well under a calm verse about rest, hope or strength, without preaching." : null,
-    `CAPTION FORMS, as "format" (pick one, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
+    `CAPTION FORMS, as each draft's "form" (three different ones when there are three, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
     `COLOUR AND LIGHT, as "light" (pick the one that fits the moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
     o.art
@@ -766,10 +768,17 @@ export function parseConcept(
     const j = JSON.parse(m[0]);
     const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
     const unquote = (s: string) => s.replace(/^["“]([\s\S]*)["”]$/, "$1");
-    const drafts = (Array.isArray(j.captions) ? j.captions : [j.caption])
-      .map((c: unknown) => unquote(str(c, 900)))
-      .filter(Boolean)
-      .slice(0, 3);
+    const fallback: DailyFormat = isKey(allowed.formats, j.format) ? j.format : allowed.formats[0];
+    // a draft is "text" or {form, text}; a form outside the ones offered reads as the first one offered
+    const raw = (Array.isArray(j.captions) ? j.captions : [j.caption])
+      .map((c: unknown) =>
+        c && typeof c === "object"
+          ? { text: unquote(str((c as any).text, 900)), form: isKey(allowed.formats, (c as any).form) ? ((c as any).form as DailyFormat) : fallback }
+          : { text: unquote(str(c, 900)), form: fallback },
+      )
+      .filter((d: { text: string }) => d.text)
+      .slice(0, 3) as { text: string; form: DailyFormat }[];
+    const drafts = raw.map((d) => d.text);
     const pillar = allowed.pillar;
     const c: DailyConcept = {
       pillar,
@@ -779,13 +788,14 @@ export function parseConcept(
       situation: str(j.situation, 500),
       tension: str(j.tension, 300),
       message: str(j.idea ?? j.message, 300),
-      format: isKey(allowed.formats, j.format) ? j.format : allowed.formats[0],
+      format: raw[0]?.form ?? fallback,
       style: isKey(allowed.styles, j.style) ? j.style : allowed.styles[0],
       light: isKey(DAILY_LIGHT_KEYS, j.light) ? j.light : (allowed.lights?.[0] ?? "golden_teal"),
       art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForPillar(pillar)),
       visual: str(j.visual, 1400),
       typography: str(j.typography, 100).replace(/^["“]|["”]$/g, ""),
       drafts,
+      draftForms: raw.map((d) => d.form),
       caption: drafts[0] ?? "",
     };
     return c.drafts.length && c.visual && c.message ? c : null;
@@ -836,9 +846,12 @@ export function editorPrompt(o: {
   concept: Pick<DailyConcept, "pillar" | "topic" | "crowd" | "mood" | "situation" | "message" | "visual" | "typography" | "format">;
   audience: DailyAudience;
   drafts: string[];
+  /** Each draft's form, when they differ. */
+  forms?: DailyFormat[];
   recent: string[];
 }): string {
   const p = DAILY_PILLARS[o.concept.pillar];
+  const label = (i: number) => (o.forms?.[i] && DAILY_FORMATS[o.forms[i]] ? ` (${DAILY_FORMATS[o.forms[i]].name}: ${DAILY_FORMATS[o.forms[i]].guide})` : "");
   return [
     `PILLAR: ${p.name}. The goal: ${p.goal}`,
     `ANGLE: ${DAILY_TOPICS[o.concept.topic]?.idea ?? o.concept.topic}`,
@@ -848,9 +861,9 @@ export function editorPrompt(o: {
     `THE IDEA: ${o.concept.message}`,
     `THE PICTURE: ${o.concept.visual}`,
     o.concept.typography ? `WORDS IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE HAS NO WORDS IN IT.",
-    `THE FORM: ${DAILY_FORMATS[o.concept.format]?.guide ?? o.concept.format}`,
+    o.forms?.length ? null : `THE FORM: ${DAILY_FORMATS[o.concept.format]?.guide ?? o.concept.format}`,
     o.recent.length ? `RECENT POSTS:\n${o.recent.slice(-10).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 160)}`).join("\n")}` : null,
-    `THE DRAFTS:\n${o.drafts.map((d, i) => `[${i}]\n${d}`).join("\n\n")}`,
+    `THE DRAFTS:\n${o.drafts.map((d, i) => `[${i}]${label(i)}\n${d}`).join("\n\n")}`,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -1008,6 +1021,13 @@ export const AI_TELLS = [
   "tag a friend",
 ] as const;
 
+/**
+ * "It's not X, it's Y" said twice in one caption: the contrast every AI
+ * writer leans on. Once is natural; twice reads like a template.
+ */
+const CONTRAST = /\b(?:not|isn't|aren't|wasn't|doesn't|don't|never)\b[^.!?\n]{0,70}?[,.!?]\s+(?:it's|that's|they're|you're|it is|that is|this is)\b/gi;
+export const contrastCount = (text: string) => (text.replace(/[’]/g, "'").match(CONTRAST) ?? []).length;
+
 /** Talking at the reader, not with them. */
 const LECTURING = [
   /\byou (need|have|got) to\b/i,
@@ -1159,6 +1179,7 @@ export function captionProblems(
   for (const g of GENERIC_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (a slogan)`);
   for (const g of AI_TELLS) if (lower.includes(g)) out.push(`says "${g}" (reads like AI)`);
   if (LECTURING.some((re) => re.test(text))) out.push("lectures the reader");
+  if (contrastCount(text) >= 2) out.push(`"it's not X, it's Y" ${contrastCount(text)} times (reads like AI)`);
   if (BODY_PUTDOWN.some((re) => re.test(text))) out.push("puts a body down");
   const lean = negativeLean(text);
   if (lean.negative >= (o.pillar === "challenge" ? 4 : 3) && lean.negative > lean.positive) out.push(`leans negative (${lean.negative} heavy words, ${lean.positive} light ones)`);
