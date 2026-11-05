@@ -470,3 +470,11 @@ describe("the coach's two references set the look", () => {
     expect(() => readFileSync("public/daily-style/graphic.jpg")).toThrow();
   });
 });
+
+describe("the writer's own clichés are banned outright", () => {
+  it("nobody claps / the quiet rep fail even when no recent post used them", () => {
+    expect(captionProblems("you finish the containers and set them in the fridge\n\nthats the quiet rep that makes next week easier with no claps", { format: "observation" })).toEqual(
+      expect.arrayContaining(['says "quiet rep" (a slogan)', 'says "no claps" (a slogan)']),
+    );
+  });
+});
