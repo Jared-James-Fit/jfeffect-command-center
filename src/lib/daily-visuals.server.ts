@@ -636,9 +636,23 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
   return { entry, provider, rev, verdict, caption, imageIssues, captionIssues, madeHere };
 }
 
+/** The image model's own safety filter turned the picture down (a scene, not a fault: another scene can pass). */
+export const isSafetyRefusal = (e: unknown) => /safety system|moderation|content policy|safety_violations/i.test(String((e as Error)?.message ?? e));
+
 async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate): Promise<string> {
   const concept = c.concept!;
-  const { entry, provider, rev, verdict, caption, imageIssues, captionIssues, madeHere } = await drawAndReview(admin, r, maker, c);
+  let drawn: Awaited<ReturnType<typeof drawAndReview>>;
+  try {
+    drawn = await drawAndReview(admin, r, maker, c);
+  } catch (e) {
+    if (!isSafetyRefusal(e)) throw e;
+    // the same scene would be refused again: plan a new one (the caption stays when it's the day's own)
+    const next: Candidate = { ...c, round: c.round + 1, pictures: 0, fix: null, concept: undefined, caption: undefined, issues: ["the image model's safety filter turned the scene down"] };
+    if (next.round > MAX_ROUNDS) return giveUp(admin, { ...r, candidate: next }, "the image model's safety filter turned down every scene");
+    await saveCandidate(admin, r, next);
+    return "the image model turned the scene down, planning a new one";
+  }
+  const { entry, provider, rev, verdict, caption, imageIssues, captionIssues, madeHere } = drawn;
 
   if (!imageIssues.length && !captionIssues.length) {
     await applyMade(admin, r, concept, caption, entry, provider, rev, c, { passed: true });
