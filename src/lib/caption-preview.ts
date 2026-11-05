@@ -1,11 +1,13 @@
 /**
  * The words shown before "… more" when a feed caption is cut at a clean stop
- * (NoteCaption). A sentence's period gives way to the ellipsis ("sneaky… more",
- * never "sneaky.… more"), and a ? or ! keeps its mark with a space before it.
+ * (NoteCaption). A sentence's period, or the colon / comma / semicolon before
+ * a list or a new line, gives way to the ellipsis ("sneaky… more", never
+ * "sneaky.… more" or "now:… more"), and a ? or ! keeps its mark with a space
+ * before it.
  */
 export function cutPreview(text: string, cut: number): { shown: string; gap: string } {
   const at = text.slice(0, cut).trimEnd();
-  const shown = at.replace(/\.+$/, "");
+  const shown = at.replace(/[.:;,…]+$/, "");
   return { shown: shown || at, gap: /[!?]$/.test(shown) ? " " : "" };
 }
 
