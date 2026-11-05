@@ -177,12 +177,12 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
           <Button onClick={onApply} className="mt-6 h-11 w-full font-bold">Apply for Private Coaching</Button>
         </div>
         <div className="rounded-2xl border border-border/70 bg-card/50 p-6">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">JF Membership</div>
-          <div className="mt-1 text-2xl font-bold">Self-guided app subscription</div>
+          <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">JF Effect · Free</div>
+          <div className="mt-1 text-2xl font-bold">Train on your own, free</div>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {[
               "The full app + workout library",
-              "Pre-built training programs you choose from",
+              "Coach-written programs, or build and share your own",
               "Exercise demos, tracking, analytics",
               "Nutrition resources + education",
               "Self-paced — no application",
@@ -193,8 +193,8 @@ export function CoachingVsMembership({ onApply }: { onApply: () => void }) {
               </li>
             ))}
           </ul>
-          <a href="/membership" className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold hover:bg-muted">
-            Explore Membership instead
+          <a href="/join" className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold hover:bg-muted">
+            Start free instead
           </a>
         </div>
       </div>

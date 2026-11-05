@@ -75,6 +75,9 @@ function BillingPage() {
 
   if (!m) return <div className="mx-auto w-full max-w-3xl"><PageHeader title="Billing" /><div className="p-4 md:p-6"><Card className="p-6">No membership on file.</Card></div></div>;
 
+  // A free account (member_free_join): nothing to bill, nothing to cancel.
+  if (String(m.subscription_status ?? "").toLowerCase() === "free" && !m.stripe_subscription_id) return <FreeAccount />;
+
   const status = lc?.status ?? m.subscription_status ?? "—";
   const isHold = s?.is_hold;
   const isPaused = status === "Paused";
@@ -226,6 +229,34 @@ function Info({ label, value, hint }: { label: string; value: string; hint?: str
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="text-sm">{value}</div>
       {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
+    </div>
+  );
+}
+
+function FreeAccount() {
+  return (
+    <div className="mx-auto w-full max-w-3xl">
+      <PageHeader title="Membership" />
+      <div className="space-y-4 p-4 md:p-6">
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[16px] font-semibold">JF Effect Free</div>
+              <p className="mt-1 text-sm text-muted-foreground">Programs, your training log, progress and the crew. No charge, nothing to cancel.</p>
+            </div>
+            <Badge variant="outline" className="shrink-0">Free</Badge>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-[16px] font-semibold">Want a coach?</div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A JF Effect coach writes your program, reviews your lifts and adjusts as you go. Your history comes with you.
+          </p>
+          <Button asChild className="mt-4">
+            <a href="/coaching/apply">Apply for coaching</a>
+          </Button>
+        </Card>
+      </div>
     </div>
   );
 }

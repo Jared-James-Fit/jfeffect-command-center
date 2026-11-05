@@ -14,7 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-type ExerciseLite = {
+export type ExerciseLite = {
   id: string;
   name: string;
   muscle_group: string | null;
@@ -27,11 +27,14 @@ export function WorkoutAddExercise({
   disabled = false,
   subtle = false,
   className,
+  description = "Add it here without leaving the workout.",
 }: {
   onAdd: (exercise: ExerciseLite) => Promise<void>;
   disabled?: boolean;
   subtle?: boolean;
   className?: string;
+  /** The line under the sheet's title. */
+  description?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -93,7 +96,7 @@ export function WorkoutAddExercise({
         <SheetContent side="bottom" hideCloseButton className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0">
           <SheetHeader className="shrink-0 border-b border-border px-4 py-4 text-left">
             <SheetTitle>Add exercise</SheetTitle>
-            <SheetDescription>Add it here without leaving the workout.</SheetDescription>
+            <SheetDescription>{description}</SheetDescription>
             <div className="relative mt-2">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input

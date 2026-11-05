@@ -1635,11 +1635,16 @@ function SelfEmptyState() {
         <ClipboardList className="h-6 w-6 text-muted-foreground" />
       </div>
       <p className="mt-3 text-sm text-muted-foreground">
-        No plan yet. Pick one from the Plan Library and Week 1 lands here.
+        No plan yet. Start a coach-written plan or build your own, and Week 1 lands here.
       </p>
-      <Button asChild size="sm" className="mt-3">
-        <Link to="/portal/plans">Browse plans</Link>
-      </Button>
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        <Button asChild size="sm">
+          <Link to="/portal/plans">Browse plans</Link>
+        </Button>
+        <Button asChild size="sm" variant="secondary">
+          <Link to="/portal/programs">Build or copy one</Link>
+        </Button>
+      </div>
     </Card>
   );
 }

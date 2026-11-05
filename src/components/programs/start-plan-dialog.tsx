@@ -25,6 +25,10 @@ import { SHORT_DAY, WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 import { normalizeCommittedDays } from "@/lib/committed-schedule-realign";
 import { fitTrainingDays, listDays, weekOnePreview, type DaysFit } from "@/lib/plan-days-fit";
 
+export type StartPlanFn = (args: {
+  data: { planId: string; startDate: string | null; trainingDays: WeekDay[]; confirmReplace: boolean };
+}) => Promise<{ conflict: boolean; currentName?: string | null }>;
+
 export type StartablePlan = {
   id: string;
   name: string;
@@ -42,13 +46,16 @@ export type StartablePlan = {
  * Week 1 on the calendar.
  */
 export function StartPlanDialog({
-  plan, open, onOpenChange,
+  plan, open, onOpenChange, startWith,
 }: {
   plan: StartablePlan | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Start something other than a library plan (a program they built or copied): same days, same replace check. */
+  startWith?: StartPlanFn;
 }) {
-  const start = useServerFn(startLibraryPlan);
+  const startLibrary = useServerFn(startLibraryPlan);
+  const start: StartPlanFn = startWith ?? startLibrary;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { isImpersonating } = useClientImpersonation();

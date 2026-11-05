@@ -20,16 +20,16 @@ export function OfferComparison({ accent = "membership" }: { accent?: "membershi
 
       <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
         <OfferCard
-          eyebrow="JF Membership · $29/month USD"
-          title="Choose Membership if:"
+          eyebrow="JF Effect · Free"
+          title="Start free if:"
           bullets={[
             "You want structured workouts without direct coaching",
             "You're comfortable training on your own",
             "You want app access, resources and tracking",
-            "You want in without the bigger investment yet",
+            "You want to start today, no card needed",
           ]}
-          ctaLabel="Start Membership"
-          ctaHref="/membership"
+          ctaLabel="Create a free account"
+          ctaHref="/join"
           highlighted={memberHighlighted}
         />
         <OfferCard

@@ -163,8 +163,19 @@ function Library() {
 
   return (
     <div className="mx-auto w-full max-w-5xl pb-24">
-      <PageHeader title="Plan Library" subtitle="Coach-written plans. Pick one and start today." />
+      <PageHeader title="Plan Library" subtitle="Coach-written plans. Pick one and start today." backTo="/portal/programs" />
       <div className="space-y-5 px-4 py-4 md:px-8 md:py-6">
+        <Link
+          to="/portal/programs"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3"
+        >
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold">Programs from the crew</div>
+            <div className="text-[13px] text-muted-foreground">Copy one someone shared, or build your own.</div>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
+
         {started?.name && (
           <Card className="flex flex-col gap-3 border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">

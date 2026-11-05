@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Archive, ArchiveRestore, Download, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
+import { Archive, ArchiveRestore, Download, Flag, ImagePlus, Instagram, MoreHorizontal, Pencil, Sticker, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -17,6 +17,7 @@ import { isSpiritScene } from "@/components/community/spirit-scenes";
 import { pictureKind } from "@/lib/post-pictures";
 import { PostStickerEditor } from "@/components/community/sticker-editor";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
+import { ReportSheet } from "@/components/community/report-sheet";
 import { postArtCard, sendToInstagram } from "@/lib/instagram-export";
 import { peekPostArt, postArtKey } from "@/lib/post-art";
 import { useWeightUnit } from "@/lib/use-weight-unit";
@@ -38,6 +39,8 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [sticker, setSticker] = useState(false);
+  // mounted on first tap, like Instagram
+  const [reporting, setReporting] = useState<boolean | null>(null);
   // mounted on first open (a feed of posts never runs it for nothing), kept for its closing slide
   const [ig, setIg] = useState<boolean | null>(null);
   const del = useDeletePost();
@@ -70,7 +73,9 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
   const qc = useQueryClient();
   const makePicture = useServerFn(makePostPicture);
   const [making, setMaking] = useState(false);
-  if (!canEdit && !canDelete && !onIt && !canInstagram) return null;
+  // anyone can report someone else's post to the team (staff remove it instead)
+  const canReport = !mine && !viewerIsStaff;
+  if (!canEdit && !canDelete && !onIt && !canInstagram && !canReport) return null;
 
   const newPicture = async () => {
     setMaking(true);
@@ -191,6 +196,14 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
               </DropdownMenuItem>
             </>
           )}
+          {canReport && (
+            <>
+              {onIt && <DropdownMenuSeparator />}
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={act(() => setReporting(true))} data-report-post>
+                <Flag className="mr-2 h-4 w-4" /> Report
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -246,6 +259,7 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
       )}
       {mine && <PostStickerEditor post={post} open={sticker} onClose={() => setSticker(false)} />}
       {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+      {canReport && reporting !== null && <ReportSheet kind="post" targetId={post.id} open={reporting} onOpenChange={setReporting} />}
     </>
   );
 }
