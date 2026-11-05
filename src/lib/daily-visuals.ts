@@ -709,6 +709,8 @@ export function conceptPrompt(o: {
   art?: DailyArt | null;
   /** What the editor said about the last drafts. */
   editorNotes?: string[];
+  /** One of the two posts before had words in its picture: today's has none. */
+  noWords?: boolean;
 }): string {
   const t = DAILY_THEMES[o.theme];
   const p = DAILY_PILLARS[o.choices.pillar];
@@ -733,6 +735,7 @@ export function conceptPrompt(o: {
       ? `KEEP THIS PICTURE (it's already made${o.keep.style ? `, ${DAILY_STYLES[o.keep.style].name.toLowerCase()}` : ""}): ${o.keep.picture}\nPlan the post around it and write the captions for it. Describe it as it is in "visual"; "typography" is "".`
       : null,
     asked ? "The last two posts ended with a question: don't end with one." : null,
+    o.noWords ? 'NO WORDS IN THE PICTURE TODAY (a post just before had some): "typography" is "".' : null,
     o.neverSay?.length ? `THE COACH NEVER SAYS: ${o.neverSay.join(", ")}` : null,
     `WHAT'S WORKED WITH THIS CREW: ${o.learnings}`,
     o.best.length ? `POSTS THEY LIKED MOST:\n${o.best.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}` : null,

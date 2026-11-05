@@ -384,6 +384,10 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
     expect(CONCEPT_PROMPT).toContain("No made-up first-person stories");
     expect(CONCEPT_PROMPT).toContain("The picture, before any caption");
     expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them at all.");
+    // and never two days in a row: a post just before had words, today's has none
+    expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], noWords: true })).toContain('NO WORDS IN THE PICTURE TODAY');
+    expect(server).toContain('noWords: lastTwo.some((d) => !!d.concept?.typography?.trim()),');
+    expect(server).toContain('words in the picture again (a post just before had some): leave them out today');
   });
 
   it("the picture: always a hand-drawn 2D film frame, its shot and light, the words in it spelled exactly or none at all", () => {
