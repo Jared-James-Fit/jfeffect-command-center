@@ -932,10 +932,13 @@ const AMBIGUOUS = new Set(["lets", "ill", "wont", "cant"]);
 export function tidyCaption(text: string): string {
   let t = String(text ?? "").replace(/\r\n/g, "\n").trim();
   t = t.replace(/^["“]([\s\S]*)["”]$/, "$1").trim();
+  // a model's Unicode hyphens (non-breaking "after‑work") read and compare as a plain "-"
+  t = t.replace(/[\u2010\u2011\u2012]/g, "-");
   t = t.replace(/(\d)\s*[—–]\s*(\d)/g, "$1-$2");
   t = t.replace(/\s*[—–]\s*/g, ", ");
   t = t.replace(/\s+&\s+/g, " and ");
-  t = t.replace(/[’]/g, "'");
+  t = t.replace(/[‘’]/g, "'");
+  t = t.replace(/[“”]/g, '"');
   t = t.replace(/\b([A-Za-z]+)\b/g, (w, _x, i: number) => {
     const fix = CONTRACTIONS[w.toLowerCase()];
     if (!fix) return w;
