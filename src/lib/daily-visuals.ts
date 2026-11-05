@@ -576,6 +576,13 @@ export const GENERIC_PHRASES = [
   "every day is a new",
   "you are stronger than you think",
   "finish strong",
+  // the writer's own clichés from the first weeks: never, not just not twice
+  "nobody claps",
+  "no one claps",
+  "no claps",
+  "quiet rep",
+  "quiet win",
+  "quiet choice",
 ] as const;
 
 const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu;
