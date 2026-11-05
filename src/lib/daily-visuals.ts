@@ -574,17 +574,20 @@ export function picturePrompt(c: Pick<DailyConcept, "style" | "visual" | "typogr
 /*  The review                                                         */
 /* ------------------------------------------------------------------ */
 
-export const REVIEW_PROMPT = `You review one daily post for a strength coach's community feed before it goes out: a picture and its caption, made for a planned message. Be a strict, honest editor. Look closely at the picture.
+export const REVIEW_PROMPT = `You review one daily post for a strength coach's community feed before it goes out: a picture and its caption, made for a planned message. Be an honest editor at a good magazine. Look closely at the picture.
 
 Answer with JSON only:
 {
- "text_seen": "every word you can read in the image, exactly as written, or empty",
- "defects": ["each visible problem: wrong or extra fingers, warped faces or bodies, melted objects, garbled or misspelled text, watermarks, artefacts, an artificial or stock-photo look, cut-off subject or words at the edges"],
+ "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
+ "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
  "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5},
- "fix_image": "what to change in the picture, or empty",
- "fix_caption": "what to change in the caption, or empty"
+ "fix_image": "what would make the picture better, or empty",
+ "fix_caption": "what would make the caption better, or empty"
 }
-relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = premium and beautiful; storytelling = the picture tells a story; match = the picture and caption work together and add to each other; engaging = worth a like, comment or send.`;
+
+DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
+
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = premium and beautiful, not stock; storytelling = the picture tells a story; match = the picture and caption work together and add to each other; engaging = worth a like, comment or send.`;
 
 export type Review = {
   text_seen: string;
