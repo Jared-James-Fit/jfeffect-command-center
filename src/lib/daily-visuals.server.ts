@@ -525,7 +525,7 @@ async function applyMade(
 
 /** The coach's style reference for an art direction (community_series_settings.daily_visuals_refs), once per run. */
 const refCache = new Map<string, RefImage | null>();
-async function styleReference(admin: Admin, art: DailyArt | undefined): Promise<RefImage | null> {
+async function styleReference(admin: Admin, art: DailyArt | undefined): Promise<(RefImage & { path: string }) | null> {
   if (!art) return null;
   const { data } = await admin.from("community_series_settings").select("daily_visuals_refs").maybeSingle();
   const path = (data?.daily_visuals_refs as Record<string, string> | null)?.[art];
@@ -537,7 +537,20 @@ async function styleReference(admin: Admin, art: DailyArt | undefined): Promise<
       refCache.set(path, null);
     }
   }
-  return refCache.get(path) ?? null;
+  const ref = refCache.get(path);
+  return ref ? { ...ref, path } : null;
+}
+
+/**
+ * A stored picture as the vision model sees it: a 10-minute signed link, so
+ * a review never builds a multi-megabyte base64 copy (two at once ran the
+ * worker out of memory); the bytes as a data URL only if signing fails.
+ */
+async function pictureUrl(admin: Admin, path: string, bytes?: { bytes: Uint8Array; mime: string }): Promise<string> {
+  const { data } = await admin.storage.from(BUCKET).createSignedUrl(path, 600);
+  if (data?.signedUrl) return data.signedUrl;
+  const b = bytes ?? (await bytesOf(admin, path));
+  return dataUrl(b.bytes, b.mime);
 }
 
 type Drawn = { entry: Entry; provider: string; rev: Review; verdict: ReturnType<typeof reviewVerdict>; caption: string; imageIssues: string[]; captionIssues: string[]; madeHere: boolean };
@@ -552,10 +565,9 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
   let madeHere = false;
   const ref = c.keepPicture ? null : await styleReference(admin, concept.art);
   if (c.keepPicture && r.picture?.path) {
-    const { bytes, mime } = await bytesOf(admin, r.picture.path);
     entry = r.picture;
     provider = r.picture_provider ?? "";
-    image = dataUrl(bytes, mime);
+    image = await pictureUrl(admin, r.picture.path);
   } else {
     // with the coach's style reference for this art direction when there is one, else (or if that fails) the words alone
     let made = ref ? await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix, reference: true }), [ref]) : null;
@@ -568,11 +580,11 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     if (!settings?.author_user_id) throw new Error("No account to post as yet");
     entry = await storePicture(admin, settings.author_user_id, name, made.picture);
     provider = made.picture.provider;
-    image = dataUrl(made.picture.bytes, made.picture.mime);
+    image = await pictureUrl(admin, entry.path, made.picture);
     madeHere = true;
   }
 
-  const refUrls = ref ? [dataUrl(ref.bytes, ref.mime)] : [];
+  const refUrls = ref ? [await pictureUrl(admin, ref.path, ref)] : [];
   let rev = await review(maker, r, concept, caption, image, refUrls);
   let verdict = reviewVerdict(rev, concept.typography, concept.visual);
   // a caption the reviewer marked down gets one rewrite against this same picture

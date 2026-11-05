@@ -444,3 +444,11 @@ describe("captions don't fall back on the same stock moments", () => {
     expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", format: "humor" }, audience: "everyone" })).toContain("THE CAPTION'S FORM: Humour");
   });
 });
+
+describe("a review never copies the picture into memory", () => {
+  it("the vision model gets a signed link to the stored picture, the bytes only if signing fails", () => {
+    expect(server).toContain("const { data } = await admin.storage.from(BUCKET).createSignedUrl(path, 600);");
+    expect(server).toContain("image = await pictureUrl(admin, entry.path, made.picture);");
+    expect(server).not.toContain("image = dataUrl(");
+  });
+});
