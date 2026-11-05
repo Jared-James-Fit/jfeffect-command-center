@@ -326,14 +326,23 @@ async function fail(admin: Admin, r: DailyRow, error: string): Promise<string> {
   return "will try again";
 }
 
-type Around = { day: string; ai_line: string | null; coach_line: string | null; style: string | null; format: string | null; topic: string | null; verse_ref: string | null };
+type Around = {
+  day: string;
+  ai_line: string | null;
+  coach_line: string | null;
+  style: string | null;
+  format: string | null;
+  topic: string | null;
+  verse_ref: string | null;
+  concept: { light?: string } | null;
+};
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
 async function context(admin: Admin, r: DailyRow) {
   const [{ data: around }, { data: rejected }, { data: own }] = await Promise.all([
     admin
       .from("community_daily_visuals")
-      .select("day, ai_line, coach_line, style, format, topic, verse_ref")
+      .select("day, ai_line, coach_line, style, format, topic, verse_ref, concept")
       .neq("id", r.id)
       .gte("day", addDays(r.day, -21))
       .lte("day", addDays(r.day, 7)),
@@ -341,7 +350,7 @@ async function context(admin: Admin, r: DailyRow) {
     admin.from("community_daily_visual_versions").select("ai_line, coach_line").eq("visual_id", r.id),
   ]);
   const days = ((around ?? []) as Around[]).sort((a, b) => daysApart(b.day, r.day) - daysApart(a.day, r.day));
-  const recent: Recent[] = days.map((d) => ({ day: d.day, style: d.style, format: d.format, topic: d.topic, caption: lineOf(d) }));
+  const recent: Recent[] = days.map((d) => ({ day: d.day, style: d.style, light: d.concept?.light ?? null, format: d.format, topic: d.topic, caption: lineOf(d) }));
   const thrownOut = ((rejected ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf).filter(Boolean);
   // a remake must not come back as the one it replaces (or any earlier one of this day)
   const mine = [lineOf(r), ...((own ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf)].filter(Boolean);
@@ -374,11 +383,12 @@ function dataUrl(bytes: Uint8Array, mime: string): string {
 /*  Step 1: the concept and the caption                                */
 /* ------------------------------------------------------------------ */
 
-async function conceptStep(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate): Promise<string> {
+/** The concept and caption for a day (or a test), checked, not saved. */
+async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate): Promise<Candidate> {
   const keepCaption = r.regen === "picture" && !!lineOf(r);
   const keepPicture = r.regen === "caption" && !!r.picture?.path;
   const ctx = await context(admin, r);
-  const keptStyle = keepPicture ? ((DAILY_STYLE_KEYS as string[]).includes(r.style ?? "") ? (r.style as DailyStyle) : "cinematic_photo") : null;
+  const keptStyle = keepPicture ? ((DAILY_STYLE_KEYS as string[]).includes(r.style ?? "") ? (r.style as DailyStyle) : "medium_candid") : null;
   const choices = pickChoices(learned, r.theme, ctx.recent, Math.random, keptStyle ?? r.regen_style);
 
   const { loadCoachVoice } = await import("@/lib/coach-voice.functions");
@@ -426,7 +436,7 @@ async function conceptStep(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
   if (!made) throw new Error(`The caption didn't pass: ${problems.join("; ")}`);
 
   const verse = r.faith ? (r.verse_ref && r.verse_text ? { ref: r.verse_ref, text: r.verse_text } : pickVerse(ctx.verses)) : null;
-  await saveCandidate(admin, r, {
+  return {
     ...c,
     concept: made,
     caption: made.caption,
@@ -435,9 +445,21 @@ async function conceptStep(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
     verse,
     model,
     fix: null,
-    learned: { posts: learned.posts, text: learningsText(learned), styles: choices.styles.slice(0, 4), formats: choices.formats.slice(0, 3), topics: choices.topics.slice(0, 3) },
-  });
-  return `concept ${c.round} (${made.style}, ${made.format}, ${made.topic})`;
+    learned: {
+      posts: learned.posts,
+      text: learningsText(learned),
+      styles: choices.styles.slice(0, 4),
+      lights: choices.lights.slice(0, 3),
+      formats: choices.formats.slice(0, 3),
+      topics: choices.topics.slice(0, 3),
+    },
+  };
+}
+
+async function conceptStep(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate): Promise<string> {
+  const next = await planConcept(admin, r, maker, learned, c);
+  await saveCandidate(admin, r, next);
+  return `concept ${c.round} (${next.concept!.style}, ${next.concept!.light}, ${next.concept!.format}, ${next.concept!.topic})`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -471,7 +493,16 @@ async function applyMade(
     format: concept.format,
     topic: concept.topic,
     shot: concept.visual.slice(0, 1500),
-    concept: { situation: concept.situation, tension: concept.tension, message: concept.message, visual: concept.visual, typography: concept.typography, round: c.round },
+    concept: {
+      situation: concept.situation,
+      tension: concept.tension,
+      message: concept.message,
+      visual: concept.visual,
+      typography: concept.typography,
+      light: concept.light,
+      look: "2d_film",
+      round: c.round,
+    },
     review: { ...rev, score: reviewScore(rev), passed: verdict.passed, why: verdict.why ?? null, at: new Date().toISOString() },
     model: c.model,
     learned: c.learned,
@@ -481,7 +512,10 @@ async function applyMade(
   if (error) throw new Error(`Couldn't put it live: ${error.message}`);
 }
 
-async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate): Promise<string> {
+type Drawn = { entry: Entry; provider: string; rev: Review; verdict: ReturnType<typeof reviewVerdict>; caption: string; imageIssues: string[]; captionIssues: string[]; madeHere: boolean };
+
+/** The picture (or the day's own, for a words-only remake) and its review, with one caption rewrite if the words were marked down. */
+async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candidate, name = `daily-${r.day}`): Promise<Drawn> {
   const concept = c.concept!;
   let caption = c.caption!;
   let entry: Entry;
@@ -501,7 +535,7 @@ async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate
     if (height <= width) throw new Error(`The picture came back wide, not tall (${width}×${height})`);
     const { data: settings } = await admin.from("community_series_settings").select("author_user_id").maybeSingle();
     if (!settings?.author_user_id) throw new Error("No account to post as yet");
-    entry = await storePicture(admin, settings.author_user_id, `daily-${r.day}`, made.picture);
+    entry = await storePicture(admin, settings.author_user_id, name, made.picture);
     provider = made.picture.provider;
     image = dataUrl(made.picture.bytes, made.picture.mime);
     madeHere = true;
@@ -524,6 +558,12 @@ async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate
   // one side of a one-side remake is the day's own, so only the other side is judged
   const imageIssues = c.keepPicture ? (rev.scores.match < REVIEW_BARS.match ? [`match ${rev.scores.match}/5`] : []) : verdict.image;
   const captionIssues = c.keepCaption ? [] : verdict.caption;
+  return { entry, provider, rev, verdict, caption, imageIssues, captionIssues, madeHere };
+}
+
+async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate): Promise<string> {
+  const concept = c.concept!;
+  const { entry, provider, rev, verdict, caption, imageIssues, captionIssues, madeHere } = await drawAndReview(admin, r, maker, c);
 
   if (!imageIssues.length && !captionIssues.length) {
     await applyMade(admin, r, concept, caption, entry, provider, rev, c, { passed: true });
@@ -532,7 +572,7 @@ async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate
   }
 
   // keep a new day's best try (nothing wrong with the picture itself: its words and no defects)
-  const hard = verdict.image.some((i) => /words|defect|finger|warp|garbled|misspel|watermark|artefact|artifact/i.test(i)) || rev.defects.length > 0;
+  const hard = verdict.image.some((i) => /words|defect|finger|warp|garbled|misspel|watermark|artefact|artifact|reads as/i.test(i)) || rev.defects.length > 0;
   let best = c.best ?? null;
   if (madeHere && !hasLive(r) && !hard && (!best || reviewScore(rev) > best.score)) {
     if (best) await removeFile(admin, best.entry.path);
@@ -621,6 +661,88 @@ export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promi
   // more waiting: the next run starts now (each step is its own run)
   if (did.length) await admin.rpc("community_daily_visuals_kick", { _force: false });
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Test pictures: the whole pipeline, never a day or a post           */
+/* ------------------------------------------------------------------ */
+
+export type TestSpec = { audience: DailyAudience; theme: DailyTheme; style?: DailyStyle | null };
+const NO_DAY = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * A test post (the hook's `{ test: { audience, theme, style? } }`): a concept,
+ * a caption, a picture (a second with the review's fix if the first fails)
+ * and its review, saved in community_daily_visual_tests for the coach's card.
+ * Nothing goes on a day or in the feed.
+ */
+export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<Record<string, unknown>> {
+  const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
+  const maker = makerFor(!!settings?.daily_visuals_lovable);
+  if ("blocked" in maker) return { blocked: maker.blocked };
+  const { data: stats } = await admin.rpc("community_daily_visual_stats", { _days: 120 });
+  const learned = learnDailyVisuals(Array.isArray(stats) ? (stats as VisualStat[]) : []);
+  const r: DailyRow = {
+    id: NO_DAY,
+    day: localDay(),
+    theme: spec.theme,
+    audience: spec.audience,
+    faith: false,
+    style: null,
+    format: null,
+    topic: null,
+    ai_line: null,
+    coach_line: null,
+    shot: null,
+    concept: null,
+    verse_ref: null,
+    verse_text: null,
+    picture: null,
+    picture_provider: null,
+    status: "planned",
+    attempts: 0,
+    updated_at: new Date().toISOString(),
+    regen: "full",
+    regen_style: spec.style && (DAILY_STYLE_KEYS as string[]).includes(spec.style) ? spec.style : null,
+    regen_reason: "test",
+    candidate: null,
+    post_id: null,
+  };
+  let c = await planConcept(admin, r, maker, learned, { round: 1, pictures: 0 });
+  const tries: Record<string, unknown>[] = [];
+  let d: Drawn | null = null;
+  for (let i = 0; i < 2; i++) {
+    d = await drawAndReview(admin, r, maker, c, `daily-test-${spec.audience}`);
+    tries.push({ medium: d.rev.medium, description: d.rev.description, score: reviewScore(d.rev), issues: [...d.imageIssues, ...d.captionIssues] });
+    if (!d.imageIssues.length || i === 1) break;
+    await removeFile(admin, d.entry.path);
+    c = { ...c, fix: d.imageIssues.join("; ").slice(0, 600) };
+  }
+  const concept = c.concept!;
+  const test = {
+    audience: spec.audience,
+    theme: spec.theme,
+    style: concept.style,
+    light: concept.light,
+    format: concept.format,
+    topic: concept.topic,
+    message: concept.message,
+    visual: concept.visual,
+    typography: concept.typography,
+    caption: d!.caption,
+    picture: d!.entry.path,
+    provider: d!.provider,
+    passed: !d!.imageIssues.length && !d!.captionIssues.length,
+    score: reviewScore(d!.rev),
+    medium: d!.rev.medium,
+    description: d!.rev.description,
+    text_seen: d!.rev.text_seen,
+    issues: [...d!.imageIssues, ...d!.captionIssues],
+    tries,
+  };
+  const { error } = await admin.from("community_daily_visual_tests").insert({ data: test });
+  if (error) throw new Error(`Couldn't save the test: ${error.message}`);
+  return test;
 }
 
 /** The post's ⋯ New picture on a daily picture: the day's picture is remade in the background, the words kept. */

@@ -10,7 +10,19 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NoteEditor } from "@/components/community/note-editor";
 import { useFullMediaUrl } from "@/lib/community.queries";
-import { DAILY_FORMATS, DAILY_STYLES, DAILY_STYLE_KEYS, DAILY_THEMES, DAILY_TOPICS, dailyCaption, type DailyStyle, type DailyTheme } from "@/lib/daily-visuals";
+import {
+  DAILY_FORMATS,
+  DAILY_LIGHTS,
+  DAILY_STYLES,
+  DAILY_STYLE_KEYS,
+  DAILY_THEMES,
+  DAILY_TOPICS,
+  LEGACY_STYLE_NAMES,
+  dailyCaption,
+  type DailyLight,
+  type DailyStyle,
+  type DailyTheme,
+} from "@/lib/daily-visuals";
 import { cn } from "@/lib/utils";
 
 const db = supabase as any;
@@ -24,6 +36,7 @@ type Day = {
   audience: Audience;
   faith: boolean;
   style: string | null;
+  light: string | null;
   format: string | null;
   topic: string | null;
   message: string | null;
@@ -48,6 +61,20 @@ type Day = {
   comments: number | null;
   views: number | null;
 };
+/** A test post: the whole pipeline, never a day or a post (runDailyVisualTest). */
+type Test = {
+  id: string;
+  at: string;
+  audience: Audience;
+  theme: DailyTheme;
+  style: string;
+  light: string | null;
+  caption: string;
+  picture: string;
+  passed: boolean;
+  score: number;
+  medium: string;
+};
 type Overview = {
   on: boolean;
   paused: boolean;
@@ -55,6 +82,7 @@ type Overview = {
   today: string;
   learned: string | null;
   maker: string | null;
+  tests?: Test[];
   days: Day[];
 };
 type Version = {
@@ -77,6 +105,7 @@ const KEY = ["community-daily-visuals"];
 const AUDIENCE: Record<Audience, string> = { women: "for her", men: "for him", everyone: "for everyone" };
 const REASON: Record<string, string> = {
   rebuild: "The original, before the rebuild",
+  restyle: "Before the 2D film look",
   coach: "Replaced when you asked for a new one",
   rejected: "You rejected it",
   edited: "Before your edit",
@@ -89,7 +118,8 @@ function dayLabel(day: string, today: string): string {
   if (day === today) return "Today";
   return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${day}T12:00:00Z`));
 }
-const styleName = (s: string | null) => (s && s in DAILY_STYLES ? DAILY_STYLES[s as DailyStyle].name : s === "illustration" ? "Illustration" : s === "photo" ? "Photo" : null);
+const styleName = (s: string | null) => (s && s in DAILY_STYLES ? DAILY_STYLES[s as DailyStyle].name : s ? (LEGACY_STYLE_NAMES[s] ?? null) : null);
+const lightName = (l: string | null) => (l && l in DAILY_LIGHTS ? DAILY_LIGHTS[l as DailyLight].name : null);
 const formatName = (f: string | null) => (f && f in DAILY_FORMATS ? DAILY_FORMATS[f as keyof typeof DAILY_FORMATS].name : null);
 const topicName = (t: string | null) => (t && t in DAILY_TOPICS ? DAILY_TOPICS[t as keyof typeof DAILY_TOPICS].split(" (")[0] : null);
 
@@ -209,6 +239,8 @@ export function DailyPicturesCard() {
           <DayRow key={d.id} d={d} today={data.today} off={off} onOpen={() => setOpenId(d.id)} />
         ))}
       </ul>
+
+      {(data.tests?.length ?? 0) > 0 && <Tests tests={data.tests!} />}
 
       {learned && (
         <div className="border-t border-border px-4 py-3 text-[13px] text-muted-foreground" data-daily-learned>
@@ -355,7 +387,7 @@ function DaySheet({ d, today, off, onClose }: { d: Day | null; today: string; of
                 {(formatName(d.format) || styleName(d.style)) && (
                   <>
                     <dt className="text-muted-foreground">Made as</dt>
-                    <dd>{[formatName(d.format), styleName(d.style)].filter(Boolean).join(" · ")}</dd>
+                    <dd>{[formatName(d.format), styleName(d.style), lightName(d.light)].filter(Boolean).join(" · ")}</dd>
                   </>
                 )}
                 {d.message && (
@@ -392,11 +424,11 @@ function DaySheet({ d, today, off, onClose }: { d: Day | null; today: string; of
                   <div className="rounded-xl border border-border p-3">
                     <div className="mb-2 text-[13px] font-semibold">Make it again</div>
                     <Select value={style} onValueChange={setStyle}>
-                      <SelectTrigger className="mb-2 h-10" aria-label="Style">
+                      <SelectTrigger className="mb-2 h-10" aria-label="Shot">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="auto">Style: let it pick</SelectItem>
+                        <SelectItem value="auto">Shot: let it pick</SelectItem>
                         {DAILY_STYLE_KEYS.map((k) => (
                           <SelectItem key={k} value={k}>
                             {DAILY_STYLES[k].name}
@@ -515,5 +547,26 @@ function Versions({ id, posted }: { id: string; posted: boolean }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Test posts: the 2D film look tried on her, him and everyone before it reaches the feed. */
+function Tests({ tests }: { tests: Test[] }) {
+  return (
+    <div className="border-t border-border px-4 py-3" data-daily-tests>
+      <div className="mb-2 text-[12px] font-semibold text-muted-foreground">Test pictures · never posted</div>
+      <ul className="grid grid-cols-3 gap-2">
+        {tests.map((t) => (
+          <li key={t.id} className="min-w-0">
+            <Thumb path={t.picture} className="w-full" />
+            <div className="mt-1 truncate text-[11px] text-muted-foreground">
+              {AUDIENCE[t.audience]} · {styleName(t.style)}
+            </div>
+            <div className={cn("text-[11px]", t.passed ? "text-success" : "text-warning")}>{t.passed ? `Passed · ${t.score}/5` : `Didn't pass · ${t.score}/5`}</div>
+            <p className="line-clamp-3 text-[12px] leading-snug">{t.caption}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

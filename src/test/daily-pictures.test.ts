@@ -7,7 +7,9 @@ import {
   DAILY_THEMES,
   DAILY_THEME_KEYS,
   FAITH_VERSES,
-  JF_LOOK,
+  FILM_AVOID,
+  FILM_LOOK,
+  DAILY_LIGHTS,
   REVIEW_BARS,
   audienceForDay,
   captionProblems,
@@ -35,13 +37,14 @@ import { isDue, makerFor, workOrder } from "@/lib/daily-visuals.server";
 
 const first = readFileSync("supabase/migrations/20270124090000_daily_pictures.sql", "utf8");
 const sql = readFileSync("supabase/migrations/20270125090000_daily_pictures_rebuild.sql", "utf8");
+const film = readFileSync("supabase/migrations/20270126090000_daily_pictures_2d_film.sql", "utf8");
 const server = readFileSync("src/lib/daily-visuals.server.ts", "utf8");
 
 const stat = (o: Partial<VisualStat>): VisualStat => ({
   day: "2026-11-01",
   theme: "courage",
   audience: "men",
-  style: "cinematic_photo",
+  style: "medium_candid",
   format: "observation",
   topic: "confidence",
   line: "start before youre ready",
@@ -56,6 +59,8 @@ const stat = (o: Partial<VisualStat>): VisualStat => ({
 });
 
 const review = (o: Partial<Review> = {}): Review => ({
+  medium: "hand_drawn_2d",
+  description: "",
   text_seen: "",
   defects: [],
   scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4 },
@@ -79,8 +84,10 @@ describe("the week: a lens a day, women, men and everyone in turn", () => {
   });
 
   it("twelve art styles and six caption forms, each with its own look and length", () => {
-    expect(DAILY_STYLE_KEYS).toHaveLength(12);
-    for (const k of DAILY_STYLE_KEYS) expect(sql, k).toContain(`'${k}'`);
+    // one look (a hand-drawn 2D film frame), the variety in the shot and the light
+    expect(DAILY_STYLE_KEYS).toHaveLength(11);
+    expect(Object.keys(DAILY_LIGHTS)).toHaveLength(9);
+    for (const k of DAILY_STYLE_KEYS) expect(film, k).toContain(`'${k}'`);
     expect(Object.keys(DAILY_FORMATS)).toEqual(["one_liner", "observation", "short_story", "humor", "scenario", "encouragement"]);
     expect(DAILY_FORMATS.one_liner.max).toBeLessThan(DAILY_FORMATS.short_story.max);
   });
@@ -137,21 +144,23 @@ describe("captions: relatable, plain, his voice, never a rerun", () => {
   it("words in a picture stay few and plain enough for an image model to spell", () => {
     expect(typographyProblems("")).toEqual([]);
     expect(typographyProblems("still here")).toEqual([]);
-    expect(typographyProblems("one two three four five six seven eight")).toContain("more than 7 words in the picture");
+    // a text message can carry a whole line, no more
+    expect(typographyProblems("leaving now, be there in 10, save me the bench")).toEqual([]);
+    expect(typographyProblems("one two three four five six seven eight nine ten eleven twelve thirteen")).toContain("more than 12 words in the picture");
     expect(typographyProblems("rest → reset")).toContain("characters in the picture an image model gets wrong");
   });
 });
 
 describe("the concept comes first", () => {
-  const choices = { styles: ["watercolor", "comic"] as const, formats: ["humor", "observation"] as const, topics: ["burnout", "overwhelm"] as const };
+  const choices = { styles: ["backlit", "two_frames"] as const, lights: ["warm_lamp", "sunrise"] as const, formats: ["humor", "observation"] as const, topics: ["burnout", "overwhelm"] as const };
 
   it("reads the concept, holding its choices to the lists it was given", () => {
     const c = parseConcept(
-      '```json\n{"topic": "burnout", "situation": "s", "tension": "t", "message": "m", "format": "essay", "style": "oil painting", "visual": "v", "typography": "\\"still here\\"", "caption": "c"}\n```',
-      { styles: [...choices.styles], formats: [...choices.formats], topics: [...choices.topics] },
+      '```json\n{"topic": "burnout", "situation": "s", "tension": "t", "message": "m", "format": "essay", "style": "oil painting", "light": "sunrise", "visual": "v", "typography": "\\"still here\\"", "caption": "c"}\n```',
+      { styles: [...choices.styles], lights: [...choices.lights], formats: [...choices.formats], topics: [...choices.topics] },
     );
-    expect(c).toMatchObject({ topic: "burnout", format: "humor", style: "watercolor", typography: "still here", caption: "c" });
-    expect(parseConcept("no json", { styles: ["comic"], formats: ["humor"], topics: ["burnout"] })).toBeNull();
+    expect(c).toMatchObject({ topic: "burnout", format: "humor", style: "backlit", light: "sunrise", typography: "still here", caption: "c" });
+    expect(parseConcept("no json", { styles: ["two_frames"], formats: ["humor"], topics: ["burnout"] })).toBeNull();
   });
 
   it("is told the day, who it's for, what's worked, what to avoid and what the coach threw out", () => {
@@ -159,30 +168,36 @@ describe("the concept comes first", () => {
       theme: "emotional",
       audience: "everyone",
       faith: true,
-      choices: { styles: [...choices.styles], formats: [...choices.formats], topics: [...choices.topics] },
-      learnings: "Best looks so far: watercolour.",
+      choices: { styles: [...choices.styles], lights: [...choices.lights], formats: [...choices.formats], topics: [...choices.topics] },
+      learnings: "Best shots so far: backlit.",
       best: ["liked line"],
       worst: [],
-      recent: [{ day: "2026-11-07", topic: "burnout", format: "humor", style: "comic", caption: "recent one" }],
+      recent: [{ day: "2026-11-07", topic: "burnout", format: "humor", style: "two_frames", light: "warm_lamp", caption: "recent one" }],
       rejected: ["thrown out line"],
     });
     expect(p).toContain("TODAY'S LENS: Feelings & rest.");
     expect(p).toContain("SUNDAY: a Bible verse goes under the caption.");
     expect(p).toContain("POSTS THEY LIKED MOST:\n- liked line");
-    expect(p).toContain("RECENT POSTS (make yours different in every way):\n- 2026-11-07 · burnout · humor · comic: recent one");
+    expect(p).toContain("RECENT POSTS (make yours different in every way):\n- 2026-11-07 · burnout · humor · two_frames · warm_lamp: recent one");
+    expect(p).toContain("SHOTS, as \"style\" (pick the one that tells this story best, best performers first): backlit = ");
+    expect(p).toContain("LIGHT (pick the one that fits the moment): warm_lamp = ");
     expect(p).toContain("THE COACH THREW THESE OUT (never write like them):\n- thrown out line");
-    expect(conceptPrompt({ theme: "courage", audience: "men", faith: false, choices: { styles: ["comic"], formats: ["humor"], topics: ["confidence"] }, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } })).toContain(
+    expect(conceptPrompt({ theme: "courage", audience: "men", faith: false, choices: { styles: ["two_frames"], lights: ["sunrise"], formats: ["humor"], topics: ["confidence"] }, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } })).toContain(
       "KEEP THIS CAPTION EXACTLY, word for word",
     );
   });
 
-  it("the picture: its style, the JF Effect look, the words in it spelled exactly or none at all", () => {
-    const withWords = picturePrompt({ style: "typography", visual: "a sand background", typography: "still here", message: "m" });
-    expect(withWords).toContain(DAILY_STYLES.typography.look);
-    expect(withWords).toContain(JF_LOOK);
-    expect(withWords).toContain("The only text in the image is exactly this, spelled exactly, clean and fully legible: still here.");
-    const none = picturePrompt({ style: "cinematic_photo", visual: "a car in a gym lot at dawn", typography: "", message: "m" }, { faith: true, fix: "the hands looked wrong" });
-    expect(none).toContain("Absolutely no text, letters, numbers, signs, logos or watermarks");
+  it("the picture: always a hand-drawn 2D film frame, its shot and light, the words in it spelled exactly or none at all", () => {
+    const withWords = picturePrompt({ style: "phone_story", light: "warm_lamp", visual: "a text from her sister on the screen", typography: "you went?? proud of you", message: "m" });
+    expect(withWords.startsWith(FILM_LOOK)).toBe(true);
+    expect(withWords).toContain(`The shot: ${DAILY_STYLES.phone_story.look}`);
+    expect(withWords).toContain(`The light: ${DAILY_LIGHTS.warm_lamp.look}.`);
+    expect(withWords).toContain("spelled exactly and clearly readable: you went?? proud of you.");
+    expect(withWords).toContain(FILM_AVOID);
+    expect(FILM_LOOK).toContain("hand-drawn 2D animated feature film");
+    expect(FILM_AVOID).toContain("Not a 3D render, not CGI, not Pixar-style");
+    const none = picturePrompt({ style: "wide_moment", visual: "a car in a gym lot at dawn", typography: "", message: "m" }, { faith: true, fix: "the hands looked wrong" });
+    expect(none).toContain("No words, letters, numbers, signs, logos or watermarks anywhere in the frame");
     expect(none).toContain("never posing or looking at the camera");
     expect(none).toContain("any Bible stays closed");
     expect(none).toContain("Fix from the last try: the hands looked wrong");
@@ -210,6 +225,14 @@ describe("the review: concrete checks before any score", () => {
     expect(REVIEW_BARS.match).toBe(4);
   });
 
+  it("anything that doesn't read as a hand-drawn 2D film frame fails, whatever its scores", () => {
+    expect(reviewVerdict(review({ medium: "3d_render" }), "").image[0]).toBe("it reads as 3d render, not a hand-drawn 2D film frame");
+    expect(reviewVerdict(review({ medium: "photo" }), "").pass).toBe(false);
+    expect(reviewVerdict(review({ medium: "" }), "").pass).toBe(false);
+    expect(parseReview('{"medium": "Hand-drawn 2D", "scores": {}}')?.medium).toBe("hand_drawn_2d");
+    expect(parseReview('{"medium": "3D render", "scores": {}}')?.medium).toBe("3d_render");
+  });
+
   it("a defect is an objective error, never taste (taste is scored and goes in the fix)", async () => {
     const { REVIEW_PROMPT } = await import("@/lib/daily-visuals");
     expect(REVIEW_PROMPT).toContain("Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer)");
@@ -228,28 +251,30 @@ describe("it learns what the crew likes, and never repeats itself", () => {
   it("doesn't reuse a style from the last 4 days, a form from the last 2 or a topic from the last 10", () => {
     const l = learnDailyVisuals([]);
     const recent = [
-      { day: "2026-11-01", style: "watercolor", format: "humor", topic: "confidence" },
-      { day: "2026-11-02", style: "comic", format: "observation", topic: "ambition" },
+      { day: "2026-11-01", style: "backlit", light: "sunrise", format: "humor", topic: "confidence" },
+      { day: "2026-11-02", style: "two_frames", light: "warm_lamp", format: "observation", topic: "ambition" },
     ];
     const c = pickChoices(l, "courage", recent, () => 0.9);
-    expect(c.styles).not.toContain("watercolor");
-    expect(c.styles).not.toContain("comic");
+    expect(c.styles).not.toContain("backlit");
+    expect(c.styles).not.toContain("two_frames");
+    expect(c.lights).not.toContain("sunrise");
+    expect(c.lights).toHaveLength(7);
     expect(c.formats).not.toContain("humor");
     expect(c.topics).not.toContain("confidence");
     expect(c.topics.every((t) => DAILY_THEMES.courage.topics.includes(t))).toBe(true);
     // the coach's pick wins
-    expect(pickChoices(l, "courage", recent, () => 0.9, "watercolor").styles).toEqual(["watercolor"]);
+    expect(pickChoices(l, "courage", recent, () => 0.9, "backlit").styles).toEqual(["backlit"]);
     expect(learningsText(l)).toContain("Not enough posted yet");
   });
 
   it("goes with what's working once it has posts, and still tries the untried sometimes", () => {
-    const stats = [1, 2, 3].map((i) => stat({ day: `2026-10-0${i}`, style: "watercolor", likers: 4, commenters: 1 }));
-    stats.push(...[4, 5, 6].map((i) => stat({ day: `2026-10-0${i}`, style: "comic", likers: 0, stopped: 0 })));
+    const stats = [1, 2, 3].map((i) => stat({ day: `2026-10-0${i}`, style: "backlit", likers: 4, commenters: 1 }));
+    stats.push(...[4, 5, 6].map((i) => stat({ day: `2026-10-0${i}`, style: "two_frames", likers: 0, stopped: 0 })));
     const l = learnDailyVisuals(stats);
-    expect(pickChoices(l, "courage", [], () => 0.9).styles[0]).toBe("watercolor");
-    expect(pickChoices(l, "courage", [], () => 0.9).styles.at(-1)).toBe("comic");
-    expect(pickChoices(l, "courage", [], () => 0.01).styles[0]).not.toBe("watercolor");
-    expect(learningsText(l)).toContain("Best looks so far: watercolour");
+    expect(pickChoices(l, "courage", [], () => 0.9).styles[0]).toBe("backlit");
+    expect(pickChoices(l, "courage", [], () => 0.9).styles.at(-1)).toBe("two_frames");
+    expect(pickChoices(l, "courage", [], () => 0.01).styles[0]).not.toBe("backlit");
+    expect(learningsText(l)).toContain("Best shots so far: backlit");
   });
 
   it("a comment or a save counts more than a like, and stopping on it counts", () => {
@@ -327,5 +352,22 @@ describe("nothing is lost, and a post that's out changes in place", () => {
     expect(sql).toContain("$cmd$select public.community_publish_daily_visual(); select public.community_daily_visuals_kick(false);$cmd$");
     expect(readFileSync("src/routeTree.gen.ts", "utf8")).toContain("'/api/public/hooks/daily-visuals-tick'");
     expect(readFileSync("src/components/community/coach-weekly-posts.tsx", "utf8")).toContain("<DailyPicturesCard />");
+  });
+});
+
+describe("the 2D film look reaches every day, tested first", () => {
+  it("test posts run the whole pipeline and never touch a day or the feed", () => {
+    expect(server).toContain("export async function runDailyVisualTest(");
+    expect(server).toContain('await admin.from("community_daily_visual_tests").insert({ data: test });');
+    expect(film).toContain('CREATE POLICY "Staff read daily picture tests" ON public.community_daily_visual_tests');
+    expect(film).toContain("REVOKE INSERT, UPDATE, DELETE ON public.community_daily_visual_tests FROM anon, authenticated;");
+    expect(readFileSync("src/routes/api/public/hooks/daily-visuals-tick.ts", "utf8")).toContain("runDailyVisualTest(supabaseAdmin as any, body.test)");
+  });
+
+  it("every day there is gets its picture remade with its caption kept, the before kept as a version", () => {
+    expect(film).toContain("SET regen = CASE WHEN day = date '2026-11-05' THEN 'full' ELSE 'picture' END,");
+    expect(film).toContain("regen_reason = 'restyle'");
+    expect(film).toContain("AND coalesce(concept->>'look', '') <> '2d_film';");
+    expect(server).toContain('look: "2d_film",');
   });
 });
