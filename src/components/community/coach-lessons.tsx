@@ -25,9 +25,8 @@ import { LessonEditors, LessonStoryPlayer, StoryThumb, previewPost } from "@/com
 import { openCommunityPost } from "@/components/community/shared-comment";
 
 /**
- * The coach's lessons: the next two weeks planned from his library, one every
- * day (Wednesday's uncomfortable truth goes out beside Wins, Sunday's reset
- * beside the Recap).
+ * The coach's lessons: the next two weeks planned from his library, Monday
+ * and Thursday, the tracks taking turns week by week (`lessonTrackFor`).
  * While "Review each one" is on (the default), nothing goes out until he's
  * approved it; "Post on their own" lets the plan run. Every lesson can be
  * previewed as the crew will see it (the post and the story), reworded, given
@@ -208,7 +207,7 @@ export function CoachLessons() {
           <p data-lesson-coverage>
             <span className="font-bold text-foreground">Technique fixes, {monthName(month.month)}:</span>{" "}
             {LESSON_LEVELS.map((l) => `${LEVEL_LABEL[l]} ${month.levels[l] ? "✓" : "–"}`).join(" · ")}
-            {missing.length > 0 ? ". The planner fills the gaps on the Saturdays left." : ". All three levels this month."}
+            {missing.length > 0 ? ". The levels take turns on the technique fix Mondays." : ". All three levels this month."}
           </p>
         )}
       </div>
@@ -864,7 +863,7 @@ function ItemEditor({ item, defaultTrack, onClose }: { item: LessonItem | null; 
               <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Title (just for you and the story)</span>
               <input value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-[15px]" />
             </label>
-            <Select label="Day" value={track} onChange={(v) => setTrack(v as LessonTrack)} options={LESSON_TRACKS.map((t) => [t, `${LESSON_TRACK[t].day} · ${LESSON_TRACK[t].name}`])} />
+            <Select label="Lesson type" value={track} onChange={(v) => setTrack(v as LessonTrack)} options={LESSON_TRACKS.map((t) => [t, `${LESSON_TRACK[t].day} · ${LESSON_TRACK[t].name}`])} />
             <Select label="Lift" value={lift} onChange={(v) => setLift(v as LessonLift | "")} options={[["", "Any / none"], ...LESSON_LIFTS.map((l) => [l, LIFT_LABEL[l]] as [string, string])]} />
             {track === "fix" && <Select label="Level" value={level} onChange={(v) => setLevel(v as LessonLevel | "")} options={[["", "Pick one"], ...LESSON_LEVELS.map((l) => [l, LEVEL_LABEL[l]] as [string, string])]} />}
           </div>

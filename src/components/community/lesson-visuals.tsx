@@ -189,7 +189,7 @@ export function visualLabel(v: LessonVisual): string {
 }
 
 /* ======================================================================
- * Word cards: Wednesday's uncomfortable truth and Sunday's reset. Type, not
+ * Word cards: the uncomfortable truth and the Sunday reset. Type, not
  * drawings, so they wrap like text (any phone, any length, emoji) and still
  * take every colour from the theme.
  * ==================================================================== */

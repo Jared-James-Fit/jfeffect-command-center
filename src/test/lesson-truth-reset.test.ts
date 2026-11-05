@@ -21,10 +21,10 @@ const truths = lib.filter((l) => l.data.track === "truth");
 const resets = lib.filter((l) => l.data.track === "reset");
 
 describe("Wednesday's uncomfortable truth and Sunday's reset", () => {
-  it("a lesson every day: Wed truth, Sun reset, the other five unchanged", () => {
-    expect(LESSON_TRACKS.map((t) => LESSON_TRACK[t].isoDay)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(LESSON_TRACK.truth).toMatchObject({ name: "Uncomfortable truth", day: "Wed" });
-    expect(LESSON_TRACK.reset).toMatchObject({ name: "Sunday reset", day: "Sun" });
+  it("the truth and the reset tracks (now a Thursday turn, and not planned: lessons-twice-a-week.test.ts)", () => {
+    expect(LESSON_TRACKS.map((t) => LESSON_TRACK[t].isoDay)).toEqual([1, 1, 4, 4, 4, 1, null]);
+    expect(LESSON_TRACK.truth).toMatchObject({ name: "Uncomfortable truth", day: "Thu" });
+    expect(LESSON_TRACK.reset).toMatchObject({ name: "Sunday reset", day: "Not planned" });
     expect(sql).toContain("WHEN 1 THEN 'strength' WHEN 2 THEN 'hypertrophy' WHEN 3 THEN 'truth' WHEN 4 THEN 'methods'");
     expect(sql).toContain("WHEN 5 THEN 'mind' WHEN 6 THEN 'fix' WHEN 7 THEN 'reset' END");
     expect(sql).toContain("CHECK (track IN ('strength', 'hypertrophy', 'truth', 'methods', 'mind', 'fix', 'reset'))");

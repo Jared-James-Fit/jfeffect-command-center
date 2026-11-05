@@ -1,13 +1,15 @@
 /**
  * Coach lessons (20261129110000_community_lessons.sql): the educational posts
- * in the Crew. A lesson every day, each from the coach's own library, planned
- * two weeks ahead and reviewed by the coach before they go out. Wednesday's is
- * an uncomfortable truth (a belief most lifters hold, struck out, and what's
- * actually true) alongside Wednesday Wins, and Sunday's a short reset for the
- * week ahead alongside Sunday Recap (20261225090000_lesson_truth_reset.sql).
- * Saturday is the Powerlifting Technique & Troubleshooting series: problem →
- * why → fix → when it applies, by lift and by level, with a beginner, an
- * advanced and an elite post every month.
+ * in the Crew, each from the coach's own library, planned two weeks ahead and
+ * reviewed by the coach before they go out. Twice a week, Monday and Thursday
+ * (20270130090000_lessons_twice_a_week.sql), the tracks taking turns week by
+ * week (`lessonTrackFor`): Monday strength science, hypertrophy, technique
+ * fix; Thursday methods & cues, mind & recovery, an uncomfortable truth (a
+ * belief most lifters hold, struck out, and what's actually true). A lesson a
+ * day buried the crew's own posts. The Sunday reset isn't planned any more;
+ * its posts and library items stay. The technique fixes are the Powerlifting
+ * Technique & Troubleshooting series: problem → why → fix → when it applies,
+ * by lift and by level, the levels taking turns.
  *
  * Also the story stickers (poll, slider, question box) any post can carry:
  * lessons get theirs from the library, anyone can add one to their own story.
@@ -23,16 +25,32 @@ export const LESSON_TRACKS: LessonTrack[] = ["strength", "hypertrophy", "truth",
 export const LESSON_LEVELS: LessonLevel[] = ["beginner", "advanced", "elite"];
 export const LESSON_LIFTS: LessonLift[] = ["squat", "bench", "deadlift"];
 
-/** What each lesson day teaches (Winnipeg weekdays). */
-export const LESSON_TRACK: Record<LessonTrack, { name: string; day: string; isoDay: number; blurb: string }> = {
+/** What each track teaches and the day it goes out on (Winnipeg weekdays; `isoDay` null = not planned any more). */
+export const LESSON_TRACK: Record<LessonTrack, { name: string; day: string; isoDay: number | null; blurb: string }> = {
   strength: { name: "Strength science", day: "Mon", isoDay: 1, blurb: "Technique, biomechanics, strength curves, programming" },
-  hypertrophy: { name: "Hypertrophy", day: "Tue", isoDay: 2, blurb: "Bodybuilding technique and the science of growth" },
-  truth: { name: "Uncomfortable truth", day: "Wed", isoDay: 3, blurb: "Challenge an assumption, create tension, give them something worth thinking about" },
+  hypertrophy: { name: "Hypertrophy", day: "Mon", isoDay: 1, blurb: "Bodybuilding technique and the science of growth" },
+  truth: { name: "Uncomfortable truth", day: "Thu", isoDay: 4, blurb: "A belief most lifters hold, and what's actually true" },
   methods: { name: "Methods & cues", day: "Thu", isoDay: 4, blurb: "Bodybuilding cues and advanced methods" },
-  mind: { name: "Mind & recovery", day: "Fri", isoDay: 5, blurb: "Psychology, research, recovery, experiments" },
-  fix: { name: "Technique fix", day: "Sat", isoDay: 6, blurb: "Powerlifting troubleshooting: problem, why, fix, when" },
-  reset: { name: "Sunday reset", day: "Sun", isoDay: 7, blurb: "A short mental and practical reset for the next seven days" },
+  mind: { name: "Mind & recovery", day: "Thu", isoDay: 4, blurb: "Psychology, research, recovery, experiments" },
+  fix: { name: "Technique fix", day: "Mon", isoDay: 1, blurb: "Powerlifting troubleshooting: problem, why, fix, when" },
+  reset: { name: "Sunday reset", day: "Not planned", isoDay: null, blurb: "A short reset for the week ahead (not planned any more)" },
 };
+
+/** The lesson days and the tracks that take turns on them, week by week (community_lesson_track). */
+export const LESSON_ROTATION: Record<1 | 4, LessonTrack[]> = { 1: ["strength", "hypertrophy", "fix"], 4: ["methods", "mind", "truth"] };
+/** The Monday the turns count from (Nov 9 2026 is strength, Nov 12 methods). */
+const ROTATION_FROM = Date.UTC(2025, 11, 29);
+
+/** The track a day's lesson is in, or null on a day without one (the same as community_lesson_track). */
+export function lessonTrackFor(day: string): LessonTrack | null {
+  const t = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(t)) return null;
+  const dow = ((new Date(t).getUTCDay() + 6) % 7) + 1;
+  const tracks = LESSON_ROTATION[dow as 1 | 4];
+  if (!tracks) return null;
+  const week = Math.floor((t - ROTATION_FROM) / (7 * 86_400_000));
+  return tracks[((week % 3) + 3) % 3];
+}
 
 export const LEVEL_LABEL: Record<LessonLevel, string> = { beginner: "Beginner", advanced: "Advanced", elite: "Elite" };
 export const LIFT_LABEL: Record<LessonLift, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift" };
