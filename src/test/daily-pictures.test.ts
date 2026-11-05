@@ -584,6 +584,9 @@ describe("the 2D film look reaches every day, tested first", () => {
     expect(film).toContain('CREATE POLICY "Staff read daily picture tests" ON public.community_daily_visual_tests');
     expect(film).toContain("REVOKE INSERT, UPDATE, DELETE ON public.community_daily_visual_tests FROM anon, authenticated;");
     expect(readFileSync("src/routes/api/public/hooks/daily-visuals-tick.ts", "utf8")).toContain("runDailyVisualTest(supabaseAdmin as any, body.test)");
+    // a wrong theme or audience key answers with the allowed ones, never "reading 'idea'" of undefined
+    expect(server).toContain("if (!(DAILY_THEME_KEYS as string[]).includes(spec.theme))");
+    expect(server).toContain('if (!(["women", "men", "everyone"] as string[]).includes(spec.audience))');
   });
 
   it("every day there is gets its picture remade with its caption kept, the before kept as a version", () => {
