@@ -395,7 +395,7 @@ WORK IT OUT IN THIS ORDER, then answer:
 2. Topic: pick one from the list given.
 3. Situation: one specific, everyday moment with real tension in it (the car before the gym, the photo you untagged yourself from, the Sunday scaries, the friend who asks why you even bother). Specific beats general.
 4. Message: the one thing it says, in your own words. Something true, maybe a little uncomfortable, never a slogan.
-5. Picture: the moment as a still frame from a premium hand-drawn 2D animated film (the look is fixed; you choose the moment, the shot and the light). It shows the moment the caption is about, so the two tell the same story, and adds what words can't (the room, the people, the small detail that says how they feel).
+5. Picture: the moment as a still frame from a premium hand-drawn 2D animated film (the look is fixed; you choose the moment, the shot and the light). It shows the moment the caption is about, so the two tell the same story with the same details (if the caption says a friend texted, the picture shows that text; the same place, time and people, never another version of events), and adds what words can't (the room, the people, the small detail that says how they feel).
 6. Caption: in the form given, in the coach's voice (below).
 
 WRITING RULES
@@ -639,7 +639,7 @@ Answer with JSON only:
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = beautiful like a frame from a great hand-drawn 2D animated film (not 3D, not a photo, not cheap vector, not childish); storytelling = the picture tells a story; match = the picture and caption work together and add to each other; engaging = worth a like, comment or send.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = beautiful like a frame from a great hand-drawn 2D animated film (not 3D, not a photo, not cheap vector, not childish); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send.`;
 
 export type Review = {
   /** What it actually is: only hand_drawn_2d passes. */

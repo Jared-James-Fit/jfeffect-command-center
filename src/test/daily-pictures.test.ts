@@ -237,6 +237,8 @@ describe("the review: concrete checks before any score", () => {
     const { REVIEW_PROMPT } = await import("@/lib/daily-visuals");
     expect(REVIEW_PROMPT).toContain("Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer)");
     expect(REVIEW_PROMPT).toContain("4 = good enough to publish");
+    // the caption and the picture tell one story: a contradiction in the details fails match
+    expect(REVIEW_PROMPT).toContain("any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less");
   });
 
   it("reads the reviewer's JSON and averages its scores", () => {
