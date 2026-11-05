@@ -36,6 +36,7 @@ import {
   DAILY_FORMAT_KEYS,
   DAILY_PILLAR_KEYS,
   DAILY_STYLE_KEYS,
+  DAILY_THEME_KEYS,
   DAILY_TOPICS,
   DAILY_TOPIC_KEYS,
   EDITOR_FLAGS,
@@ -880,6 +881,11 @@ const NO_DAY = "00000000-0000-0000-0000-000000000000";
  * Nothing goes on a day or in the feed.
  */
 export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<Record<string, unknown>> {
+  // a wrong key answers with what's allowed, never a crash halfway through the writer
+  if (!(["women", "men", "everyone"] as string[]).includes(spec.audience))
+    return { error: `unknown audience "${spec.audience}": use women, men or everyone` };
+  if (!(DAILY_THEME_KEYS as string[]).includes(spec.theme))
+    return { error: `unknown theme "${spec.theme}": use one of ${DAILY_THEME_KEYS.join(", ")}` };
   const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
   const maker = makerFor(!!settings?.daily_visuals_lovable);
   if ("blocked" in maker) return { blocked: maker.blocked };
