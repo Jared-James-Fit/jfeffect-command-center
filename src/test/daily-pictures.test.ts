@@ -217,6 +217,8 @@ describe("the review: concrete checks before any score", () => {
     // an apostrophe the picture added is the same word, and words the planned scene names aren't stray
     expect(reviewVerdict(review({ text_seen: "who are you\nwhen it's quiet?\n5:30 AM" }), "who are you when its quiet?", "a phone alarm set for 5:30 AM").pass).toBe(true);
     expect(reviewVerdict(review({ text_seen: "who are you when its quiet? SALE" }), "who are you when its quiet?", "a phone alarm").image[0]).toContain("extra words in the picture");
+    // a phone's clock isn't stray text
+    expect(reviewVerdict(review({ text_seen: "boss: quick thing for monday?\n11:23 PM" }), "boss: quick thing for monday?", "").pass).toBe(true);
     expect(reviewVerdict(review({ defects: ["six fingers on the left hand"] }), "").image).toContain("six fingers on the left hand");
     const low = reviewVerdict(review({ scores: { ...review().scores, writing: 2, aesthetic: 3 }, fix_caption: "say it plainer" }), "");
     expect(low.pass).toBe(false);
