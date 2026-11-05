@@ -184,6 +184,20 @@ describe("captions read like a real person posting, never a rerun", () => {
       'borrows "that\'s progress too" from the voice example',
     );
     expect(motifRepeats("strength sneaks up on you", ["funny how training sneaks up on you"])).toEqual(["sneaks up"]);
+    // the first rewrite's misses (Nov 6 to 8): a story told as his own, a moral, the weekday trope
+    expect(captionProblems("called it a quick workout, left way later with new friends and one very unnecessary extra set.", { format: "one_liner" })).toContain(
+      "tells a story as his own (it never happened to him)",
+    );
+    expect(
+      captionProblems("rest days count.\n\nstrong isn't just how much you can grind. it's also how well you can switch off.", { format: "quick_take" }),
+    ).toContain('ends on a moral ("X isn\'t just Y. it\'s also Z")');
+    expect(captionProblems("the weights you used to circle are just tuesday now.", { format: "one_liner" })).toContain('the "it\'s just tuesday now" trope');
+    expect(motifRepeats("wild how fast a year goes", ["funny how that works", "wild how the bar moves"])).toEqual(["wild how"]);
+    // and the ones that read right still pass
+    expect(captionProblems("this week, don't worry about being ready. just keep walking through that door.", { format: "one_liner" })).toEqual([]);
+    expect(
+      captionProblems("what's one thing your training partner does that makes you lift better? asking so we can all steal each other's good habits.", { format: "question" }),
+    ).toEqual([]);
     expect(captionProblems('your "light" sets used to be your "heavy" ones.', { format: "one_liner" })).toContain("words in scare quotes");
     // the editor flags them too, and picks the most natural, not the most dramatic
     for (const k of ["natural:", "effortless:", "scripted:", "trying_too_hard:", "ai_phrasing:"]) expect(EDITOR_PROMPT, k).toContain(k);
@@ -434,7 +448,8 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
     expect(CONCEPT_PROMPT).toContain("lowercase, everyday words, contractions with apostrophes (don't, it's, you're, i'm)");
     expect(CONCEPT_PROMPT).toContain("Don't try to make it profound.");
     expect(CONCEPT_PROMPT).toContain("never an experience he didn't have");
-    expect(CONCEPT_PROMPT).toContain("No names at all: his name already shows on the post.");
+    expect(CONCEPT_PROMPT).toContain("no names at all: his name already shows on the post.");
+    expect(CONCEPT_PROMPT).toContain("Say what people tend to do, not what happened to him.");
     expect(CONCEPT_PROMPT).toContain("Bodies: never about fixing how someone looks.");
     expect(CONCEPT_PROMPT).toContain("Pick the most natural one first, not the most dramatic.");
     expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them.");
