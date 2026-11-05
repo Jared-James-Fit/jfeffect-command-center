@@ -690,10 +690,10 @@ ${NOT_HIS_VOICE}
 
 - lowercase, everyday words, contractions with apostrophes (don't, it's, you're, i'm), normal clear punctuation. No forced slang, no deliberate typos or missing apostrophes.
 - Say the thought plainly, the way he'd say it out loud. Short paragraphs, as short as the idea allows: one line is often enough, five short paragraphs at most.
-- Don't try to make it profound. A simple, true observation beats a big message. Stop when the thought is done: no punchline, kicker or moral tacked on the end (unless it's a joke).
+- Don't try to make it profound. A simple, true observation beats a big message. Stop when the thought is done: no punchline, kicker or moral tacked on the end (unless it's a joke), like "strong isn't just X. it's also Y" or "the old max is just tuesday now".
 - Talk with people, not at them: no lecturing, hype or speeches.
 - Never these shapes: "signs you're…" or any list post, "me: / my legs:" scripts, a little movie narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y", a setup line ending in a colon, words in scare quotes, slogans ("trust the process", "no excuses", "level up", "your future self"), AI phrases ("here's the thing", "the truth is", "let that sink in", "journey", "game changer", "secretly", "plot twist").
-- His opinions and what he's noticed are fine ("i think", "a lot of people…"), but never an experience he didn't have: no "yesterday a client told me", no "when i started lifting", no real people. No names at all: his name already shows on the post.
+- His opinions and what he's noticed are fine ("i think", "a lot of people…"), but never an experience he didn't have, with or without the "i": no "yesterday a client told me", no "when i started lifting", no "called it a quick workout, left two hours later". Say what people tend to do, not what happened to him. No real people, and no names at all: his name already shows on the post.
 - Advice: only well-known, safe basics, said simply; no numbers or studies.
 - Bodies: never about fixing how someone looks. Strength, confidence, how life feels.
 - No hashtags, @tags or Bible verses (the app adds Sunday's). One emoji at most, usually none.`;
@@ -869,7 +869,7 @@ Flags (true or false):
 - trying_too_hard: reaching to be profound, clever or inspirational
 - ai_phrasing: phrases or rhythms that give away an AI
 - lecturing: talks down or tells people what they're doing wrong
-- invented: a fact, number, study, name or personal experience it can't stand behind
+- invented: a fact, number, study, name or personal experience it can't stand behind (a story told as his own counts, even with the "i" left off: "called it a quick workout, left two hours later")
 - shaming: makes anyone feel bad about their body or themselves
 - negative: dwells on the bad without landing anywhere good
 
@@ -1126,6 +1126,14 @@ export function scriptedProblems(text: string): string[] {
   if (toYou >= 3) out.push(`narrates a scene to "you" (${toYou} sentences start with "you")`);
   if (/\b(?:that|this|it)(?:'s| is) not [^.!?\n]{1,40}[.!?]\s+(?:that|this|it)(?:'s| is) [^.!?\n]{1,40}[.!?]?\s*$/i.test(t))
     out.push('ends on a "that\'s not X. that\'s Y." kicker');
+  const last = sentencesOf(t).pop() ?? "";
+  const lastTwo = sentencesOf(t).slice(-2).join(". ");
+  if (/\b(?:isn't|is not|aren't|are not) (?:just|only) [^.!?]{1,60}[.!?,]?\s*(?:it's|it is|they're|they are)(?: also)? /i.test(lastTwo) || /\b(?:isn't|aren't) (?:just|only)\b.*\b(?:it's|they're) also\b/i.test(last))
+    out.push('ends on a moral ("X isn\'t just Y. it\'s also Z")');
+  if (/\bjust (?:a )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(t)) out.push('the "it\'s just tuesday now" trope');
+  // a story told as his own with the "i" dropped: "called it a quick workout, left way later…"
+  if (/^(?:called|told|said|went|walked|left|showed|decided|planned|tried|grabbed|hit|did|started|finished)\b[^.!?\n]*,\s*(?:left|ended|stayed|walked|did|hit|went|got|finished)\b/i.test(t.trim()))
+    out.push("tells a story as his own (it never happened to him)");
   if ((t.match(/!/g) ?? []).length >= 2) out.push("more than one exclamation mark");
   if ((t.match(/"[^"\n]{1,40}"/g) ?? []).length >= 2) out.push("words in scare quotes");
   if (captionSimilarity(t, VOICE_EXAMPLE) >= 0.25) out.push("copies the voice example (it's a reference, not a template)");
@@ -1240,8 +1248,12 @@ export const STOCK_MOTIFS = [
   "its friday",
   "no selfie",
   "no post",
-  // the new voice's own habit in its first test batch (3 of 10)
+  // the new voice's own habits in its first test batch and rewrite
   "sneaks up",
+  "funny how",
+  "wild how",
+  "crazy how",
+  "the shift is",
 ] as const;
 
 /** Stock moments in a caption that a recent post already used. */
