@@ -452,3 +452,21 @@ describe("a review never copies the picture into memory", () => {
     expect(server).not.toContain("image = dataUrl(");
   });
 });
+
+describe("the coach's two references set the look", () => {
+  it("each art direction is written from its reference, and the references are placed once, server only", async () => {
+    const { ART_STYLES } = await import("@/lib/daily-visuals");
+    expect(ART_STYLES.graphic.look).toContain("crisp dark ink outlines and flat cel shading");
+    expect(ART_STYLES.graphic.look).toContain("dramatic hard-edged shafts of sunlight");
+    expect(ART_STYLES.anime.look).toContain("a glowing golden-hour or sunset sky");
+    expect(ART_STYLES.anime.look).toContain("a bright rim light glowing along the hair and face");
+    const refs = readFileSync("src/lib/daily-style-refs.server.ts", "utf8");
+    expect(refs).toContain('import graphic from "@/assets/daily-style/graphic.jpg?inline";');
+    expect(refs).toContain('import anime from "@/assets/daily-style/anime.jpg?inline";');
+    // placed only where none is set, once, so the coach's own choice stays
+    expect(server).toContain("if (refs.seeded === STYLE_REFS_SEED || !data?.author_user_id) return [];");
+    expect(server).toContain("if (refs[art]) continue;");
+    // never a public file
+    expect(() => readFileSync("public/daily-style/graphic.jpg")).toThrow();
+  });
+});

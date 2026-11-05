@@ -523,6 +523,37 @@ async function applyMade(
   if (error) throw new Error(`Couldn't put it live: ${error.message}`);
 }
 
+/**
+ * The coach's two references (daily-style-refs.server.ts) placed as each art
+ * direction's reference, once: under the posting account in the Crew bucket,
+ * only where none is set, then marked seeded so a reference he later removes
+ * or replaces stays his choice.
+ */
+export async function seedStyleRefs(admin: Admin): Promise<string[]> {
+  const { DEFAULT_STYLE_REFS, STYLE_REFS_SEED } = await import("@/lib/daily-style-refs.server");
+  const { data } = await admin.from("community_series_settings").select("daily_visuals_refs, author_user_id").maybeSingle();
+  const refs = (data?.daily_visuals_refs ?? {}) as Record<string, string>;
+  if (refs.seeded === STYLE_REFS_SEED || !data?.author_user_id) return [];
+  const next: Record<string, string> = { ...refs, seeded: STYLE_REFS_SEED };
+  const placed: string[] = [];
+  for (const art of DAILY_ART_KEYS) {
+    if (refs[art]) continue;
+    const m = /^data:([^;]+);base64,(.+)$/.exec(DEFAULT_STYLE_REFS[art]);
+    if (!m) continue;
+    const bin = atob(m[2]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const path = `${data.author_user_id}/daily-style/${art}-${Date.now()}.jpg`;
+    const { error } = await admin.storage.from(BUCKET).upload(path, bytes, { contentType: m[1], upsert: false });
+    if (error) throw new Error(`Couldn't place the ${art} reference: ${error.message}`);
+    next[art] = path;
+    placed.push(art);
+  }
+  const { error } = await admin.from("community_series_settings").update({ daily_visuals_refs: next }).eq("id", true);
+  if (error) throw new Error(error.message);
+  return placed;
+}
+
 /** The coach's style reference for an art direction (community_series_settings.daily_visuals_refs), once per run. */
 const refCache = new Map<string, RefImage | null>();
 async function styleReference(admin: Admin, art: DailyArt | undefined): Promise<(RefImage & { path: string }) | null> {
@@ -673,6 +704,8 @@ export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promi
   const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
   const maker = makerFor(!!settings?.daily_visuals_lovable);
   const out: Record<string, unknown> = { today, openai: !!process.env.OPENAI_API_KEY, lovable: !!settings?.daily_visuals_lovable };
+  const seeded = await seedStyleRefs(admin).catch((e) => [`not placed: ${String(e?.message ?? e)}`]);
+  if (seeded.length) out.references = seeded;
 
   const { data: stats, error: statsError } = await admin.rpc("community_daily_visual_stats", { _days: 120 });
   if (statsError) throw new Error(`Couldn't read how the pictures did: ${statsError.message}`);
@@ -724,6 +757,7 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
   const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
   const maker = makerFor(!!settings?.daily_visuals_lovable);
   if ("blocked" in maker) return { blocked: maker.blocked };
+  await seedStyleRefs(admin);
   const { data: stats } = await admin.rpc("community_daily_visual_stats", { _days: 120 });
   const learned = learnDailyVisuals(Array.isArray(stats) ? (stats as VisualStat[]) : []);
   const r: DailyRow = {
