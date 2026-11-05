@@ -86,9 +86,9 @@ export function meetsStandard<T extends { id?: string | null; name: string }>(li
 export function withStandardStrategy<
   S extends {
     exercise_plan: {
-      retain: Array<{ exercise_id: string | null; name: string }>;
+      retain: Array<{ exercise_id?: string | null; name: string }>;
       add: Array<{ name: string }>;
-      replace: Array<{ with: string | null }>;
+      replace: Array<{ with?: string | null }>;
     };
   },
 >(s: S, keep: Ref[] = []): { strategy: S; removed: string[] } {
