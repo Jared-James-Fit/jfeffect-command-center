@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
-import { ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, HelpCircle, Loader2, LogOut, MessageCircle, RectangleVertical, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkoutView } from "@/lib/use-workout-view";
 import { formatElapsed, isSessionAbandoned, readWorkoutSession, sessionElapsedMs } from "@/components/workout-day/WorkoutTimer";
@@ -280,7 +280,6 @@ export function StoryChrome({
   finish,
   onJump,
   onExit,
-  onDone,
   onHelp,
   back,
 }: {
@@ -302,12 +301,11 @@ export function StoryChrome({
   onJump: (index: number, opts?: { instant?: boolean }) => void;
   /** The List button: back to the list, and the list is the saved choice again. */
   onExit: () => void;
-  /** "Back to the list" at the end of a finished workout: just for now. */
-  onDone: () => void;
   /** The ? in the top bar: how Focus works (the tips). */
   onHelp?: () => void;
-  /** Leaving the workout, like the list page's own back button (Focus stays the saved view). */
-  back?: { label: string; onBack: () => void };
+  /** Leaving the workout, like the list page's own back button (Focus stays the saved view):
+   *  the ← top left, and the last exercise's button once there's nothing left to finish. */
+  back: { label: string; onBack: () => void };
 }) {
   const count = names.length;
   const [rawIndex, setIndex] = useState(initialIndex);
@@ -639,13 +637,14 @@ export function StoryChrome({
     );
   } else {
     primary = (
+      // nothing left to finish: the way on is out of the workout (List is the top bar's)
       <button
         type="button"
-        data-testid="story-done"
-        onClick={onDone}
+        data-testid="story-leave"
+        onClick={back.onBack}
         className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-full bg-secondary px-4 text-sm font-bold text-foreground active:scale-[0.98]"
       >
-        <Rows3 className="h-4 w-4" /> Back to the list
+        <LogOut className="h-4 w-4" aria-hidden /> Exit to {back.label}
       </button>
     );
   }
@@ -705,18 +704,16 @@ export function StoryChrome({
           </div>
           {/* one row: the way out top left (like the list's back), where you are, then help and the switch to the list */}
           <div className="mt-1.5 flex h-10 items-center gap-2">
-            {back && (
-              <button
-                type="button"
-                data-testid="focus-leave"
-                onClick={back.onBack}
-                aria-label={`Leave the workout: back to ${back.label}`}
-                title={back.label}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-foreground transition active:scale-95"
-              >
-                <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
-              </button>
-            )}
+            <button
+              type="button"
+              data-testid="focus-leave"
+              onClick={back.onBack}
+              aria-label={`Leave the workout: back to ${back.label}`}
+              title={back.label}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-secondary text-foreground transition active:scale-95"
+            >
+              <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
+            </button>
             {/* where you are, whole on any phone; under it Done (it pops in once), the clock and the workout */}
             <div className="min-w-0 flex-1">
               <div data-testid="story-count" className="truncate text-[15px] font-bold leading-tight tabular-nums text-foreground">
@@ -747,7 +744,7 @@ export function StoryChrome({
                 data-testid="focus-help"
                 onClick={onHelp}
                 aria-label="How Focus works"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-secondary text-muted-foreground transition active:scale-95"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-secondary text-muted-foreground transition active:scale-95"
               >
                 <HelpCircle className="h-4 w-4" />
               </button>
@@ -757,7 +754,7 @@ export function StoryChrome({
               data-testid="focus-exit"
               onClick={onExit}
               aria-label="Back to the list of all exercises"
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3 text-[13px] font-bold text-foreground transition active:scale-95"
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3 text-[13px] font-bold text-foreground transition active:scale-95"
             >
               <Rows3 className="h-4 w-4" aria-hidden />
               List
