@@ -358,7 +358,7 @@ type Around = {
   format: string | null;
   topic: string | null;
   verse_ref: string | null;
-  concept: { light?: string; pillar?: string; mood?: string } | null;
+  concept: { light?: string; pillar?: string; mood?: string; typography?: string } | null;
 };
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
@@ -385,13 +385,16 @@ async function context(admin: Admin, r: DailyRow) {
     caption: lineOf(d),
   }));
   // the two posts before this one both ended on a question: this one doesn't
-  const before = days.filter((d) => d.day < r.day).sort((a, b) => a.day.localeCompare(b.day)).slice(-2).map(lineOf);
+  const lastTwo = days.filter((d) => d.day < r.day).sort((a, b) => a.day.localeCompare(b.day)).slice(-2);
+  const before = lastTwo.map(lineOf);
   const thrownOut = ((rejected ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf).filter(Boolean);
   // a remake must not come back as the one it replaces (or any earlier one of this day)
   const mine = [lineOf(r), ...((own ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf)].filter(Boolean);
   return {
     recent,
     asked: before.length === 2 && before.every((l) => l && endsWithQuestion(l)),
+    // words in a picture at most every third day: they're the joke or the point, never a habit
+    noWords: lastTwo.some((d) => !!d.concept?.typography?.trim()),
     near: days.filter((d) => daysApart(d.day, r.day) <= 3).map(lineOf).filter(Boolean),
     compareTo: [...days.map(lineOf).filter(Boolean), ...thrownOut, ...(r.regen === "picture" ? [] : mine)],
     rejected: thrownOut,
@@ -474,6 +477,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
         art: force.art ?? null,
         keep,
         editorNotes: attempt ? notes : undefined,
+        noWords: ctx.noWords && !keepPicture,
       }),
     );
     model = t.model;
@@ -483,7 +487,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
       continue;
     }
     const typography = keepPicture ? "" : parsed.typography;
-    const typo = typographyProblems(typography);
+    const typo = [...typographyProblems(typography), ...(ctx.noWords && typography ? ["words in the picture again (a post just before had some): leave them out today"] : [])];
     const style = keptStyle ?? parsed.style;
     if (keepCaption) {
       if (!typo.length) made = { ...parsed, style, typography, drafts: [lineOf(r)], caption: lineOf(r) };
