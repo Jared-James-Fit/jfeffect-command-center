@@ -60,7 +60,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
   const qc = useQueryClient();
   const closeOrBack = () => {
     if (onClose) onClose();
-    else navigate({ to: "/portal/check-ins" });
+    else navigate({ to: "/portal/messages" });
   };
 
   const { data: client } = useQuery({
@@ -366,7 +366,7 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
     return (
       <>
         {!embedded && (
-          <PageHeader title="Check-In unavailable" backTo="/portal/check-ins" backLabel="Back to Check-Ins" />
+          <PageHeader title="Check-In unavailable" backTo="/portal/messages" backLabel="Back to Messages" />
         )}
         <div className="mx-auto max-w-2xl p-4 md:p-8">
           <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
@@ -421,8 +421,8 @@ export function ClientFormRenderer({ formId, embedded = false, onClose }: Client
         </div>
       ) : (
         <PageHeader
-          backTo="/portal/check-ins"
-          backLabel="Back to Check-Ins"
+          backTo="/portal/messages"
+          backLabel="Back to Messages"
           title={form.title}
           subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
           actions={<Badge className={statusTone(submission.status) + " border"}>{statusLabel(submission.status)}</Badge>}
@@ -917,8 +917,8 @@ function ExternalFormView({
     <>
       {!embedded && (
         <PageHeader
-          backTo="/portal/check-ins"
-          backLabel="Back to Check-Ins"
+          backTo="/portal/messages"
+          backLabel="Back to Messages"
           title={form.title}
           subtitle={submission.period_start ? `Week of ${submission.period_start}` : undefined}
           actions={

@@ -758,7 +758,7 @@ function AssignmentsEditor({ formId, form, onFormChange }: { formId: string; for
       return;
     }
     impersonation.start({ id: client.id, user_id: client.user_id, full_name: client.full_name });
-    navigate({ to: "/portal/check-ins" });
+    navigate({ to: "/portal/messages" });
   }
 
   async function saveAssignmentChanges() {

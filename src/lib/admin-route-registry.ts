@@ -134,8 +134,6 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   { id: "warmup", label: "Warmup Protocols", to: "/admin/warmup-protocols",
     category: "Coaching", parent: "Admin → Coaching", roles: ADMIN_COACH, icon: Activity,
     keywords: ["warm up", "mobility", "prep"], hidden: true },
-  { id: "training-phases", label: "Training Phases", to: "/admin/training-phases",
-    category: "Coaching", parent: "Admin → Coaching", roles: ADMIN_COACH, icon: Layers, hidden: true },
 
   // ── PROGRAMMING / WORKOUTS / EXERCISES ──────────────────────────────
   { id: "programming", label: "Programming", to: "/admin/programming", category: "Programming",
@@ -174,8 +172,6 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
     keywords: ["agreement", "contract", "signed", "signnow"] },
   { id: "agreements-signed", label: "Signed Agreements", to: "/admin/agreements/signed",
     category: "Legal & Compliance", parent: "Admin → Forms → Agreements", roles: ADMIN, icon: FileSignature, hidden: true },
-  { id: "agreements-native", label: "Native Agreements", to: "/admin/agreements-native",
-    category: "Legal & Compliance", parent: "Admin → Forms", roles: ADMIN, icon: FileSignature, hidden: true },
 
   // ── COMMUNICATION ───────────────────────────────────────────────────
   { id: "communication", label: "Communication", to: "/admin/communication",

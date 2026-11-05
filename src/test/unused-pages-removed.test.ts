@@ -96,3 +96,88 @@ describe("pages nobody used are gone, and their old addresses never 404", () => 
     expect(popups).not.toContain('from("events")');
   });
 });
+
+// Round 3 (Nov 5 2026), from the data: native agreement packages 0 ever sent or
+// signed; Training Phases 7 rows all made Jun 9 and never touched; the client's
+// Check-Ins & Forms list only repeated what the coach chat sends, and its
+// "Check-In Responses" were last written Aug 13; the client's Agreements page was
+// Account's Coaching Agreement card again (its one SignNow record never sent).
+describe("round 3: dead pages gone, live forms still open", () => {
+  const REDIRECTS_3: Array<[file: string, to: string]> = [
+    ["_authenticated/portal/check-ins.tsx", "/portal/messages"],
+    ["_authenticated/portal/check-in.tsx", "/portal/messages"],
+    ["_authenticated/portal/media.tsx", "/portal/progress"],
+    ["_authenticated/portal/agreements-native.$packageId.tsx", "/portal/account"],
+    ["_authenticated/admin/training-phases.tsx", "/admin/programming"],
+    ["_authenticated/admin/agreements-native.index.tsx", "/admin/coaching-agreements"],
+    ["_authenticated/admin/agreements-native.new.tsx", "/admin/coaching-agreements"],
+    ["_authenticated/admin/agreements-native.$packageId.tsx", "/admin/coaching-agreements"],
+    ["sign.$token.tsx", "/"],
+  ];
+
+  it("each old address only redirects", () => {
+    for (const [file, to] of REDIRECTS_3) {
+      const src = read(`src/routes/${file}`);
+      expect(src, file).toContain(`throw redirect({ to: "${to}", replace: true });`);
+      expect(src, file).not.toContain("component:");
+    }
+  });
+
+  it("a form opens on its own page, not under the list (which had no outlet)", () => {
+    const form = read("src/routes/_authenticated/portal/check-ins_.$formId.tsx");
+    expect(form).toContain('createFileRoute("/_authenticated/portal/check-ins_/$formId")');
+    expect(form).toContain("<ClientFormRenderer formId={formId} />");
+    expect(existsSync("src/routes/_authenticated/portal/check-ins.$formId.tsx")).toBe(false);
+    const tree = read("src/routeTree.gen.ts");
+    expect(tree).not.toContain("AuthenticatedPortalCheckInsRouteWithChildren");
+    expect(read("src/components/forms/client-form-renderer.tsx")).not.toContain('"/portal/check-ins"');
+  });
+
+  it("/portal/agreements lands on Account's agreement and ?sign=1 still opens signing", () => {
+    const src = read("src/routes/_authenticated/portal/agreements.index.tsx");
+    expect(src).toContain('{ to: "/portal/account", hash: "coaching-agreement", replace: true }');
+    expect(src).toContain('if (search.sign !== "1") throw redirect(ACCOUNT_AGREEMENT);');
+    expect(src).toContain("if (needsSignature && canSign) openSignFlow();");
+  });
+
+  it("their code is deleted", () => {
+    for (const f of [
+      "src/route-pages/_authenticated/portal/check-ins.tsx",
+      "src/lib/training-phases.ts",
+      "src/components/phase-dialog.tsx",
+      "src/components/portal/training-block-card.tsx",
+      "src/lib/native-agreements.functions.ts",
+      "src/lib/native-agreement-client.functions.ts",
+      "src/lib/native-agreements-pdf.server.ts",
+      "src/lib/native-agreement-contract.ts",
+    ]) expect(existsSync(f), f).toBe(false);
+  });
+
+  it("the client app no longer reads tables nothing writes", () => {
+    const badges = read("src/hooks/use-client-nav-badges.ts");
+    expect(badges).not.toContain('"training_phases"');
+    expect(badges).not.toContain('"media_comments"');
+    expect(read("src/routes/_authenticated/portal/index.tsx")).not.toContain('"training_phases"');
+  });
+
+  it("menus drop them; set-once pages are search-only", () => {
+    const tos = clientNav.map((n) => n.to);
+    expect(tos).not.toContain("/portal/check-ins");
+    expect(tos).not.toContain("/portal/agreements");
+    const admin = buildInternalNavCollapsed("admin");
+    const listed = admin.flatMap((i) => [i.to, ...(i.children ?? []).filter((c) => !c.searchOnly).map((c) => c.to)]);
+    const found = admin.flatMap((i) => [i.to, ...(i.children ?? []).map((c) => c.to)]);
+    for (const to of [
+      "/admin/crm", "/admin/crm/contacts", "/admin/popups", "/admin/onboarding", "/admin/feature-flags", "/admin/archives",
+      "/admin/membership/billing-events", "/admin/membership/calendar", "/admin/membership/setup-links",
+      "/admin/membership/reset-links", "/admin/membership/onboarding-email", "/admin/membership/notifications",
+      "/admin/membership/access-checklist", "/admin/membership/signup-link",
+    ]) {
+      expect(listed, to).not.toContain(to);
+      expect(found, to).toContain(to);
+    }
+    const palette = read("src/lib/admin-route-registry.ts");
+    expect(palette).not.toContain('to: "/admin/training-phases"');
+    expect(palette).not.toContain('to: "/admin/agreements-native"');
+  });
+});

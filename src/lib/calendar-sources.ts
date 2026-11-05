@@ -470,7 +470,7 @@ export function useClientCalendarSources(
         startsAt: c.next_due_at,
         title: c.nf_forms?.title || "Check-In",
         subtitle: "Check-in due",
-        href: { to: "/portal/check-ins" },
+        href: { to: "/portal/messages" },
         raw: c,
       });
     }

@@ -150,7 +150,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     to: "client", category: "check_ins",
     title: () => "Check-in reviewed",
     body: (coach) => `${coach} left feedback on your check-in.`,
-    url: () => "/portal/check-in", rateMinutes: 60,
+    url: () => "/portal/messages", rateMinutes: 60,
   },
   lift_reviewed: {
     to: "client", category: "lift_reviews",

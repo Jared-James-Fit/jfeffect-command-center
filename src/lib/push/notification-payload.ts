@@ -140,7 +140,7 @@ export function notificationDeepLink(
     case "check_in":
       return staff && ids.clientId
         ? `/admin/clients/${ids.clientId}?tab=check-ins`
-        : "/portal/check-in";
+        : "/portal/messages";
     case "appointment":
       return staff ? "/admin/appointments" : "/portal/appointments";
     case "agreement":

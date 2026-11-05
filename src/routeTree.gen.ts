@@ -215,7 +215,7 @@ import { Route as AuthenticatedAdminSettingsNutritionAutomationRouteImport } fro
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
 import { Route as AuthenticatedPortalAgreementsNativePackageIdRouteImport } from './routes/_authenticated/portal/agreements-native.$packageId'
 import { Route as AuthenticatedPortalAgreementsIndexRouteImport } from './routes/_authenticated/portal/agreements.index'
-import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins.$formId'
+import { Route as AuthenticatedPortalCheckInsFormIdRouteImport } from './routes/_authenticated/portal/check-ins_.$formId'
 import { Route as AuthenticatedPortalEventsIndexRouteImport } from './routes/_authenticated/portal/events.index'
 import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
 import { Route as AuthenticatedPortalPlansIndexRouteImport } from './routes/_authenticated/portal/plans.index'
@@ -1455,9 +1455,9 @@ const AuthenticatedPortalAgreementsIndexRoute =
   } as any)
 const AuthenticatedPortalCheckInsFormIdRoute =
   AuthenticatedPortalCheckInsFormIdRouteImport.update({
-    id: '/$formId',
-    path: '/$formId',
-    getParentRoute: () => AuthenticatedPortalCheckInsRoute,
+    id: '/check-ins_/$formId',
+    path: '/check-ins/$formId',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
 const AuthenticatedPortalEventsIndexRoute =
   AuthenticatedPortalEventsIndexRouteImport.update({
@@ -1916,7 +1916,7 @@ export interface FileRoutesByFullPath {
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
-  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
+  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2176,7 +2176,7 @@ export interface FileRoutesByTo {
   '/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/portal/check-in': typeof AuthenticatedPortalCheckInRoute
-  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
+  '/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/portal/community': typeof AuthenticatedPortalCommunityRoute
   '/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2442,7 +2442,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/appointments': typeof AuthenticatedPortalAppointmentsRoute
   '/_authenticated/portal/calendar': typeof AuthenticatedPortalCalendarRoute
   '/_authenticated/portal/check-in': typeof AuthenticatedPortalCheckInRoute
-  '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRouteWithChildren
+  '/_authenticated/portal/check-ins': typeof AuthenticatedPortalCheckInsRoute
   '/_authenticated/portal/community': typeof AuthenticatedPortalCommunityRoute
   '/_authenticated/portal/exercises': typeof AuthenticatedPortalExercisesRoute
   '/_authenticated/portal/goals-setup': typeof AuthenticatedPortalGoalsSetupRoute
@@ -2515,7 +2515,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings_/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
   '/_authenticated/portal/agreements-native/$packageId': typeof AuthenticatedPortalAgreementsNativePackageIdRoute
-  '/_authenticated/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
+  '/_authenticated/portal/check-ins_/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
@@ -3306,7 +3306,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings_/nutrition-automation'
     | '/_authenticated/admin/settings_/sms'
     | '/_authenticated/portal/agreements-native/$packageId'
-    | '/_authenticated/portal/check-ins/$formId'
+    | '/_authenticated/portal/check-ins_/$formId'
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/plans/$planId'
     | '/_authenticated/portal/purchases/$id'
@@ -4895,12 +4895,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalAgreementsIndexRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
-    '/_authenticated/portal/check-ins/$formId': {
-      id: '/_authenticated/portal/check-ins/$formId'
-      path: '/$formId'
+    '/_authenticated/portal/check-ins_/$formId': {
+      id: '/_authenticated/portal/check-ins_/$formId'
+      path: '/check-ins/$formId'
       fullPath: '/portal/check-ins/$formId'
       preLoaderRoute: typeof AuthenticatedPortalCheckInsFormIdRouteImport
-      parentRoute: typeof AuthenticatedPortalCheckInsRoute
+      parentRoute: typeof AuthenticatedPortalRouteRoute
     }
     '/_authenticated/portal/events/': {
       id: '/_authenticated/portal/events/'
@@ -5771,21 +5771,6 @@ const AuthenticatedMRouteRouteChildren: AuthenticatedMRouteRouteChildren = {
 const AuthenticatedMRouteRouteWithChildren =
   AuthenticatedMRouteRoute._addFileChildren(AuthenticatedMRouteRouteChildren)
 
-interface AuthenticatedPortalCheckInsRouteChildren {
-  AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
-}
-
-const AuthenticatedPortalCheckInsRouteChildren: AuthenticatedPortalCheckInsRouteChildren =
-  {
-    AuthenticatedPortalCheckInsFormIdRoute:
-      AuthenticatedPortalCheckInsFormIdRoute,
-  }
-
-const AuthenticatedPortalCheckInsRouteWithChildren =
-  AuthenticatedPortalCheckInsRoute._addFileChildren(
-    AuthenticatedPortalCheckInsRouteChildren,
-  )
-
 interface AuthenticatedPortalPurchasesRouteChildren {
   AuthenticatedPortalPurchasesIdRoute: typeof AuthenticatedPortalPurchasesIdRoute
 }
@@ -5806,7 +5791,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAppointmentsRoute: typeof AuthenticatedPortalAppointmentsRoute
   AuthenticatedPortalCalendarRoute: typeof AuthenticatedPortalCalendarRoute
   AuthenticatedPortalCheckInRoute: typeof AuthenticatedPortalCheckInRoute
-  AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRouteWithChildren
+  AuthenticatedPortalCheckInsRoute: typeof AuthenticatedPortalCheckInsRoute
   AuthenticatedPortalCommunityRoute: typeof AuthenticatedPortalCommunityRoute
   AuthenticatedPortalExercisesRoute: typeof AuthenticatedPortalExercisesRoute
   AuthenticatedPortalGoalsSetupRoute: typeof AuthenticatedPortalGoalsSetupRoute
@@ -5824,6 +5809,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalUpgradeRoute: typeof AuthenticatedPortalUpgradeRoute
   AuthenticatedPortalIndexRoute: typeof AuthenticatedPortalIndexRoute
   AuthenticatedPortalAgreementsNativePackageIdRoute: typeof AuthenticatedPortalAgreementsNativePackageIdRoute
+  AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
   AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
   AuthenticatedPortalPlansPlanIdRoute: typeof AuthenticatedPortalPlansPlanIdRoute
   AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
@@ -5847,8 +5833,7 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalAppointmentsRoute: AuthenticatedPortalAppointmentsRoute,
     AuthenticatedPortalCalendarRoute: AuthenticatedPortalCalendarRoute,
     AuthenticatedPortalCheckInRoute: AuthenticatedPortalCheckInRoute,
-    AuthenticatedPortalCheckInsRoute:
-      AuthenticatedPortalCheckInsRouteWithChildren,
+    AuthenticatedPortalCheckInsRoute: AuthenticatedPortalCheckInsRoute,
     AuthenticatedPortalCommunityRoute: AuthenticatedPortalCommunityRoute,
     AuthenticatedPortalExercisesRoute: AuthenticatedPortalExercisesRoute,
     AuthenticatedPortalGoalsSetupRoute: AuthenticatedPortalGoalsSetupRoute,
@@ -5870,6 +5855,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
     AuthenticatedPortalIndexRoute: AuthenticatedPortalIndexRoute,
     AuthenticatedPortalAgreementsNativePackageIdRoute:
       AuthenticatedPortalAgreementsNativePackageIdRoute,
+    AuthenticatedPortalCheckInsFormIdRoute:
+      AuthenticatedPortalCheckInsFormIdRoute,
     AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
     AuthenticatedPortalPlansPlanIdRoute: AuthenticatedPortalPlansPlanIdRoute,
     AuthenticatedPortalRecipesRecipeIdRoute:
