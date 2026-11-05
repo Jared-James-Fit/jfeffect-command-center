@@ -204,6 +204,12 @@ describe("the review: concrete checks before any score", () => {
     expect(REVIEW_BARS.match).toBe(4);
   });
 
+  it("a defect is an objective error, never taste (taste is scored and goes in the fix)", async () => {
+    const { REVIEW_PROMPT } = await import("@/lib/daily-visuals");
+    expect(REVIEW_PROMPT).toContain("Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer)");
+    expect(REVIEW_PROMPT).toContain("4 = good enough to publish");
+  });
+
   it("reads the reviewer's JSON and averages its scores", () => {
     const r = parseReview('{"text_seen": "", "defects": [], "scores": {"relatable": 5, "original": 4, "writing": 4, "audience_fit": 4, "aesthetic": 5, "storytelling": 4, "match": 5, "engaging": 9}}');
     expect(r?.scores.engaging).toBe(5);
