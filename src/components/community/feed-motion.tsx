@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
+import { rollFeedAnchor } from "@/lib/feed-anchor";
 
 /**
  * A post that eases in (fade + small rise) the first time it scrolls into
@@ -82,6 +83,28 @@ export function CaughtUp({ action, more }: { action?: ReactNode; more?: ReactNod
 }
 
 /**
+ * Between what's new to you and the posts you'd already seen (Instagram's):
+ * the line says you're caught up, and the older posts carry on under it.
+ */
+export function CaughtUpLine({ more }: { more?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center px-6 pb-2 pt-7 text-center" data-caught-up-line>
+      <div className="grid h-12 w-12 place-items-center rounded-full border-2 border-success text-success">
+        <Check className="h-6 w-6" strokeWidth={3} />
+      </div>
+      <div className="mt-3 text-[15px] font-semibold">You're all caught up</div>
+      <p className="mt-0.5 text-[13px] text-muted-foreground">You've seen every new post from the past week.</p>
+      {more && <div className="mt-3">{more}</div>}
+      <div className="mt-6 flex w-full items-center gap-3 text-[12px] font-semibold text-muted-foreground">
+        <span className="h-px flex-1 bg-border" aria-hidden />
+        Earlier posts
+        <span className="h-px flex-1 bg-border" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+/**
  * New posts from the crew while you're scrolled down: a pill to jump up to
  * them (at the top they just slide in). Never your own posts.
  */
@@ -106,6 +129,8 @@ export function useNewPosts(enabled: boolean, myId: string | null) {
   }, [enabled, qc]);
   const show = () => {
     setCount(0);
+    // asking for the newest starts a new visit: what you've scrolled past drops under "You're all caught up"
+    rollFeedAnchor();
     window.scrollTo({ top: 0, behavior: "smooth" });
     void qc.invalidateQueries({ queryKey: ["community-feed"] });
   };

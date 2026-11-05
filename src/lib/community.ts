@@ -248,6 +248,8 @@ export type CommunityPost = {
   can_repost?: boolean;
   /** Where it sits in a list: its latest repost you may see (the feed), when you saved it (Saved), else when it was posted. */
   feed_at?: string;
+  /** The Crew feed: new to you this visit (it leads the feed, above "You're all caught up"). */
+  fresh?: boolean;
   /** The feed: who reposted it, people you follow first (up to 3, each with their note). */
   reposted_by?: Reposter[] | null;
   /** The feed: how many reposts of it you may see. */
@@ -631,7 +633,44 @@ export type CommunityActivity = { enabled: boolean; unseen: number; seen_at: str
 
 export const BIO_MAX = 150;
 
-export type CommunityFeedPage = { posts: CommunityPost[]; has_more: boolean };
+/**
+ * Where the Crew feed carries on (community_feed_ranked): the posts new to you
+ * by rank, then everything else by time, all against one moment (`seen_before`,
+ * when the visit started), so every page and refetch of a visit agrees.
+ */
+export type FeedCursor = { phase: "fresh" | "rest"; seen_before: string; score?: number; at?: string; id?: string };
+
+export type CommunityFeedPage = {
+  posts: CommunityPost[];
+  has_more: boolean;
+  /** The Crew feed only: the next page's cursor. */
+  cursor?: FeedCursor | null;
+  /** The Crew feed only: the moment "new to you" is measured against. */
+  seen_before?: string;
+  /** The Crew feed's first page: how many posts are new to you. */
+  fresh_total?: number | null;
+};
+
+/** The Crew feed's next page, or null at the end. */
+export function feedCursorOf(page: CommunityFeedPage): FeedCursor | null {
+  return page.has_more && page.cursor ? page.cursor : null;
+}
+
+/** Each post once, where it first came (the crew can like a post between two pages and move it up a place). */
+export function uniquePosts<T extends { id: string }>(posts: T[]): T[] {
+  const seen = new Set<string>();
+  return posts.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+}
+
+/**
+ * Where "You're all caught up" goes in the Crew feed: before the first post
+ * you'd already seen, when posts new to you came before it. null = no line
+ * (nothing new, or the new posts haven't run out yet).
+ */
+export function caughtUpAt(posts: { fresh?: boolean }[]): number | null {
+  const i = posts.findIndex((p) => p.fresh === false);
+  return i > 0 && posts.slice(0, i).some((p) => p.fresh) ? i : null;
+}
 
 export type CommentMedia = {
   /** A GIF's is its public link (from the GIF library). */
