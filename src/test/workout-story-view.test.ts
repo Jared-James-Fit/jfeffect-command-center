@@ -151,6 +151,7 @@ describe("story view: the choice is saved on the account", () => {
 
 describe("story view: the same cards as the list, never a second copy", () => {
   const day = read("src/components/workout-day/WorkoutDayView.tsx");
+  const story = read("src/components/workout-day/workout-story.tsx");
   it("one list of cards; story view only swaps its classes", () => {
     expect(day.match(/<ExerciseBlock\s*\n/g)).toHaveLength(1);
     expect(day).toContain('? "workout-story"');
@@ -165,7 +166,12 @@ describe("story view: the same cards as the list, never a second copy", () => {
   });
   it("its Finish uses the list's gate, and the end of a finished workout doesn't change the saved choice", () => {
     expect(day).toContain("!readonly && !workoutBodyError && !completion?.completed_at && !rowsIsError && authReady && rowsLoaded && (rows as any[]).length > 0\n      ? {");
-    expect(day).toContain("onDone={closeStory}");
+    // nothing left to finish: the last button leaves the workout like the ← (List stays the top bar's)
+    expect(day).not.toContain("onDone={closeStory}");
+    expect(story).toContain('data-testid="story-leave"');
+    expect(story).toContain("onClick={back.onBack}");
+    expect(story).toContain("Exit to {back.label}");
+    expect(story).not.toContain("<Rows3 className=\"h-4 w-4\" /> Back to the list");
     expect(day).toContain('onExit={() => chooseWorkoutView("list")}');
   });
   it("pull-to-refresh stays out of it, the bottom bar hides, and the card keeps its swipe to delete", () => {
@@ -278,7 +284,10 @@ describe("Focus view (stored as story): easy to read, sets by the thumb", () => 
     expect(css).toContain("padding: calc(var(--focus-top) + 86px) 12px");
     expect(story).toContain('data-testid="story-count" className="truncate text-[15px] font-bold');
     // the way out is the arrow alone (its name is in its label)
-    expect(story).toContain('<ArrowLeft className="h-[18px] w-[18px]" aria-hidden />\n              </button>');
+    expect(story).toContain('<ArrowLeft className="h-[18px] w-[18px]" aria-hidden />\n            </button>');
+    // every button in the row is a 40px tap, the row's own height
+    expect(story).toContain('data-testid="focus-leave"');
+    expect(story).not.toMatch(/h-9 w-9|inline-flex h-9 /);
   });
 });
 

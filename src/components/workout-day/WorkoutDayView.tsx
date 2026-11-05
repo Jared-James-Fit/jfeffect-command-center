@@ -2903,7 +2903,6 @@ function WorkoutDay({
           finish={storyFinish}
           onJump={jumpStory}
           onExit={() => chooseWorkoutView("list")}
-          onDone={closeStory}
           onHelp={() => setFocusTipsOpen(true)}
           back={{ label: "Workouts", onBack: leaveFromStory }}
         />
