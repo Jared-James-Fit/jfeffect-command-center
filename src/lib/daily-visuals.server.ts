@@ -31,37 +31,53 @@
  */
 import {
   CAPTION_FIX_PROMPT,
+  CONCEPT_PROMPT,
   DAILY_ART_KEYS,
   DAILY_FORMAT_KEYS,
-  DAILY_TOPICS,
-  FILM_LOOK_VERSION,
-  CONCEPT_PROMPT,
+  DAILY_PILLAR_KEYS,
   DAILY_STYLE_KEYS,
+  DAILY_TOPICS,
+  DAILY_TOPIC_KEYS,
+  EDITOR_FLAGS,
+  EDITOR_PROMPT,
+  EDITOR_SCORES,
+  FILM_LOOK_VERSION,
   REVIEW_BARS,
   REVIEW_PROMPT,
   captionFixPrompt,
   captionProblems,
   conceptPrompt,
+  crowdForDay,
+  editorPrompt,
+  editorScore,
+  editorVerdict,
+  endsWithQuestion,
   learnDailyVisuals,
   learningsText,
   parseCaption,
   parseConcept,
+  parseEditor,
   parseReview,
   pickChoices,
   pickVerse,
   picturePrompt,
+  pillarOf,
   reviewPrompt,
   reviewScore,
   reviewVerdict,
+  tidyCaption,
   typographyProblems,
   type DailyAudience,
   type DailyConcept,
   type DailyArt,
+  type DailyCrowd,
   type DailyFormat,
   type DailyLearnings,
+  type DailyPillar,
   type DailyStyle,
   type DailyTheme,
   type DailyTopic,
+  type EditorReview,
   type FaithVerse,
   type Recent,
   type Review,
@@ -90,6 +106,8 @@ export type Candidate = {
   learned?: Record<string, unknown>;
   /** What failed last, for the coach. */
   issues?: string[];
+  /** The editor's read of the caption (its scores, why, and whether it cleared every bar). */
+  editor?: { passed: boolean; score: number; scores: Record<string, number>; why: string; drafts: number } | null;
   /** A new day's best try so far (a picture with nothing wrong in it), used if nothing passes. */
   best?: { entry: Entry; provider: string; caption: string; concept: DailyConcept; review: Review; score: number } | null;
 };
@@ -340,7 +358,7 @@ type Around = {
   format: string | null;
   topic: string | null;
   verse_ref: string | null;
-  concept: { light?: string } | null;
+  concept: { light?: string; pillar?: string; mood?: string } | null;
 };
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
@@ -356,12 +374,24 @@ async function context(admin: Admin, r: DailyRow) {
     admin.from("community_daily_visual_versions").select("ai_line, coach_line").eq("visual_id", r.id),
   ]);
   const days = ((around ?? []) as Around[]).sort((a, b) => daysApart(b.day, r.day) - daysApart(a.day, r.day));
-  const recent: Recent[] = days.map((d) => ({ day: d.day, style: d.style, light: d.concept?.light ?? null, format: d.format, topic: d.topic, caption: lineOf(d) }));
+  const recent: Recent[] = days.map((d) => ({
+    day: d.day,
+    style: d.style,
+    light: d.concept?.light ?? null,
+    format: d.format,
+    topic: d.topic,
+    pillar: pillarOf({ pillar: d.concept?.pillar, topic: d.topic }),
+    mood: d.concept?.mood ?? null,
+    caption: lineOf(d),
+  }));
+  // the two posts before this one both ended on a question: this one doesn't
+  const before = days.filter((d) => d.day < r.day).sort((a, b) => a.day.localeCompare(b.day)).slice(-2).map(lineOf);
   const thrownOut = ((rejected ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf).filter(Boolean);
   // a remake must not come back as the one it replaces (or any earlier one of this day)
   const mine = [lineOf(r), ...((own ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf)].filter(Boolean);
   return {
     recent,
+    asked: before.length === 2 && before.every((l) => l && endsWithQuestion(l)),
     near: days.filter((d) => daysApart(d.day, r.day) <= 3).map(lineOf).filter(Boolean),
     compareTo: [...days.map(lineOf).filter(Boolean), ...thrownOut, ...(r.regen === "picture" ? [] : mine)],
     rejected: thrownOut,
@@ -390,60 +420,113 @@ function dataUrl(bytes: Uint8Array, mime: string): string {
 /* ------------------------------------------------------------------ */
 
 /** The concept and caption for a day (or a test), checked, not saved. */
-type Force = { topic?: DailyTopic | null; format?: DailyFormat | null; art?: DailyArt | null };
+type Force = { pillar?: DailyPillar | null; topic?: DailyTopic | null; format?: DailyFormat | null; art?: DailyArt | null; crowd?: DailyCrowd | null };
+
+/** Writer attempts per concept step (each one: a concept with three drafts, the hard checks, then the editor). */
+const WRITER_TRIES = 3;
+/** A brand-new day with nothing yet may take the editor's best near miss (no flag, nothing under 3) at this average. */
+const NEAR_MISS_SCORE = 3.8;
 
 async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate, force: Force = {}): Promise<Candidate> {
   const keepCaption = r.regen === "picture" && !!lineOf(r);
   const keepPicture = r.regen === "caption" && !!r.picture?.path;
   const ctx = await context(admin, r);
   const keptStyle = keepPicture ? ((DAILY_STYLE_KEYS as string[]).includes(r.style ?? "") ? (r.style as DailyStyle) : "medium_candid") : null;
-  const picked = pickChoices(learned, r.theme, ctx.recent, Math.random, keptStyle ?? r.regen_style);
-  const choices = { ...picked, topics: force.topic ? [force.topic] : picked.topics, formats: force.format ? [force.format] : picked.formats, art: force.art ?? null };
+  // a picture-only remake keeps the day's own pillar (its caption stays)
+  const keptPillar = keepCaption ? pillarOf({ pillar: r.concept?.pillar as string | undefined, topic: r.topic }) : null;
+  const pillar = force.pillar ?? (force.topic ? DAILY_TOPICS[force.topic].pillar : null) ?? keptPillar;
+  const picked = pickChoices(learned, { day: r.day, recent: ctx.recent, style: keptStyle ?? r.regen_style, pillar });
+  const choices = { ...picked, topics: force.topic ? [force.topic] : picked.topics, formats: force.format ? [force.format] : picked.formats };
+  const crowd: DailyCrowd = force.crowd ?? crowdForDay(r.day);
 
+  // his never-say lists, not his texting style: the feed reads like a social post, not a text
   const { loadCoachVoice } = await import("@/lib/coach-voice.functions");
-  const { buildVoicePrompt, casualize } = await import("@/lib/coach-voice");
-  const voice = buildVoicePrompt(await loadCoachVoice(admin), null, { group: true });
-  const prompt = conceptPrompt({
-    theme: r.theme,
-    audience: r.audience,
-    faith: r.faith,
-    choices,
-    learnings: learningsText(learned),
-    best: learned.best.map((s) => s.line).filter(Boolean),
-    worst: learned.worst.map((s) => s.line).filter(Boolean),
-    recent: ctx.recent,
-    rejected: ctx.rejected,
-    art: force.art ?? null,
-    keep: keepCaption
-      ? { caption: lineOf(r) }
-      : keepPicture
-        ? { picture: (r.concept?.visual as string | undefined) || r.shot || "the picture already on the post", style: keptStyle ?? undefined }
-        : null,
-  });
+  const voice = await loadCoachVoice(admin).catch(() => null);
+  const neverSay = [...(voice?.banned ?? []), ...(voice?.edgy ?? [])].filter(Boolean);
+  const keep = keepCaption
+    ? { caption: lineOf(r) }
+    : keepPicture
+      ? { picture: (r.concept?.visual as string | undefined) || r.shot || "the picture already on the post", style: keptStyle ?? undefined }
+      : null;
+  const recentCaptions = [...ctx.recent].sort((a, b) => a.day.localeCompare(b.day)).map((x) => x.caption ?? "").filter(Boolean);
 
   let made: DailyConcept | null = null;
+  let editor: Candidate["editor"] = null;
+  let nearMiss: { concept: DailyConcept; editor: NonNullable<Candidate["editor"]> } | null = null;
   let model = "";
-  let problems: string[] = [];
-  for (let attempt = 0; attempt < 3 && !made; attempt++) {
+  let notes: string[] = [];
+  for (let attempt = 0; attempt < WRITER_TRIES && !made; attempt++) {
     const t = await maker.json(
-      `${CONCEPT_PROMPT}\n\n${voice}`,
-      attempt === 0 ? prompt : `${prompt}\n\nYOUR LAST ONE DIDN'T WORK: ${problems.join("; ")}. Make a new one that fixes it.`,
+      CONCEPT_PROMPT,
+      conceptPrompt({
+        day: r.day,
+        theme: r.theme,
+        audience: r.audience,
+        crowd,
+        faith: r.faith,
+        choices,
+        learnings: learningsText(learned),
+        best: learned.best.map((x) => x.line).filter(Boolean),
+        worst: learned.worst.map((x) => x.line).filter(Boolean),
+        recent: ctx.recent,
+        rejected: ctx.rejected,
+        neverSay,
+        art: force.art ?? null,
+        keep,
+        editorNotes: attempt ? notes : undefined,
+      }),
     );
     model = t.model;
-    const parsed = parseConcept(t.text, choices);
+    const parsed = parseConcept(t.text, { ...choices, art: force.art ?? null, crowd });
     if (!parsed) {
-      problems = ["the answer wasn't the JSON asked for"];
+      notes = ["the answer wasn't the JSON asked for"];
       continue;
     }
-    const caption = keepCaption ? lineOf(r) : casualize(parsed.caption);
     const typography = keepPicture ? "" : parsed.typography;
-    problems = [
-      ...(keepCaption ? [] : captionProblems(caption, { format: parsed.format, recent: ctx.compareTo, near: ctx.near })),
-      ...typographyProblems(typography),
-    ];
-    if (!problems.length) made = { ...parsed, style: keptStyle ?? parsed.style, caption, typography };
+    const typo = typographyProblems(typography);
+    const style = keptStyle ?? parsed.style;
+    if (keepCaption) {
+      if (!typo.length) made = { ...parsed, style, typography, drafts: [lineOf(r)], caption: lineOf(r) };
+      else notes = typo;
+      continue;
+    }
+    const checks = { format: parsed.format, pillar: parsed.pillar, recent: ctx.compareTo, near: ctx.near, asked: ctx.asked, picture: typography };
+    const drafts = parsed.drafts.map(tidyCaption);
+    const ok = drafts.filter((d) => !captionProblems(d, checks).length);
+    if (typo.length || !ok.length) {
+      notes = [...typo, ...drafts.map((d, i) => `draft ${i + 1}: ${captionProblems(d, checks).join(", ")}`)].slice(0, 6);
+      continue;
+    }
+    // the editor: scores the drafts that passed, picks one and polishes it
+    const e = await maker.json(EDITOR_PROMPT, editorPrompt({ concept: parsed, audience: r.audience, drafts: ok, recent: recentCaptions }), { effort: "low" });
+    const ed: EditorReview | null = parseEditor(e.text, ok.length);
+    if (!ed) {
+      notes = ["the editor's answer wasn't readable"];
+      continue;
+    }
+    const chosen = ok[ed.best];
+    const polished = ed.polished ? tidyCaption(ed.polished) : "";
+    // the polish only stands when it still passes and is still the same caption (an editor never rewrites the idea)
+    const caption = polished && polished.length >= chosen.length * 0.5 && !captionProblems(polished, checks).length ? polished : chosen;
+    const verdict = editorVerdict(ed, parsed.pillar);
+    const pick = ed.drafts[ed.best];
+    const read = { passed: verdict.pass, score: editorScore(pick), scores: pick.scores, why: ed.why || pick.note, drafts: ok.length };
+    const concept = { ...parsed, style, typography, drafts, caption };
+    if (verdict.pass) {
+      made = concept;
+      editor = read;
+    } else {
+      notes = verdict.issues;
+      const clean = !EDITOR_FLAGS.some((f) => pick.flags[f]) && EDITOR_SCORES.every((k) => pick.scores[k] >= 3);
+      if (clean && (!nearMiss || read.score > nearMiss.editor.score)) nearMiss = { concept, editor: read };
+    }
   }
-  if (!made) throw new Error(`The caption didn't pass: ${problems.join("; ")}`);
+  // a brand-new day with nothing yet takes a clean near miss rather than no post at all
+  if (!made && nearMiss && !hasLive(r) && nearMiss.editor.score >= NEAR_MISS_SCORE) {
+    made = nearMiss.concept;
+    editor = nearMiss.editor;
+  }
+  if (!made) throw new Error(`The captions didn't pass: ${notes.join("; ")}`);
 
   const verse = r.faith ? (r.verse_ref && r.verse_text ? { ref: r.verse_ref, text: r.verse_text } : pickVerse(ctx.verses)) : null;
   return {
@@ -455,13 +538,16 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
     verse,
     model,
     fix: null,
+    editor,
     learned: {
       posts: learned.posts,
       text: learningsText(learned),
+      pillar: choices.pillar,
+      crowd,
+      topics: choices.topics.slice(0, 3),
+      formats: choices.formats.slice(0, 3),
       styles: choices.styles.slice(0, 4),
       lights: choices.lights.slice(0, 3),
-      formats: choices.formats.slice(0, 3),
-      topics: choices.topics.slice(0, 3),
     },
   };
 }
@@ -469,7 +555,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
 async function conceptStep(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate): Promise<string> {
   const next = await planConcept(admin, r, maker, learned, c);
   await saveCandidate(admin, r, next);
-  return `concept ${c.round} (${next.concept!.style}, ${next.concept!.light}, ${next.concept!.format}, ${next.concept!.topic})`;
+  return `concept ${c.round} (${next.concept!.pillar}, ${next.concept!.topic}, ${next.concept!.format}, ${next.concept!.style}, editor ${next.editor?.score ?? "-"})`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -513,6 +599,10 @@ async function applyMade(
       art: concept.art,
       look: FILM_LOOK_VERSION,
       round: c.round,
+      pillar: concept.pillar,
+      crowd: concept.crowd,
+      mood: concept.mood,
+      editor: c.editor ?? null,
     },
     review: { ...rev, score: reviewScore(rev), passed: verdict.passed, why: verdict.why ?? null, at: new Date().toISOString() },
     model: c.model,
@@ -617,17 +707,16 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
 
   const refUrls = ref ? [await pictureUrl(admin, ref.path, ref)] : [];
   let rev = await review(maker, r, concept, caption, image, refUrls);
-  let verdict = reviewVerdict(rev, concept.typography, concept.visual);
+  let verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
   // a caption the reviewer marked down gets one rewrite against this same picture
   if (!verdict.image.length && verdict.caption.length && !c.keepCaption) {
     const t = await maker.json(CAPTION_FIX_PROMPT, captionFixPrompt({ concept, caption, fix: verdict.caption }));
-    const { casualize } = await import("@/lib/coach-voice");
     const rewritten = parseCaption(t.text);
-    const fixed = rewritten ? casualize(rewritten) : null;
-    if (fixed && !captionProblems(fixed, { format: concept.format }).length) {
+    const fixed = rewritten ? tidyCaption(rewritten) : null;
+    if (fixed && !captionProblems(fixed, { format: concept.format, pillar: concept.pillar, picture: concept.typography }).length) {
       caption = fixed;
       rev = await review(maker, r, concept, caption, image, refUrls);
-      verdict = reviewVerdict(rev, concept.typography, concept.visual);
+      verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
     }
   }
   // one side of a one-side remake is the day's own, so only the other side is judged
@@ -758,7 +847,20 @@ export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promi
 /*  Test pictures: the whole pipeline, never a day or a post           */
 /* ------------------------------------------------------------------ */
 
-export type TestSpec = { audience: DailyAudience; theme: DailyTheme; style?: DailyStyle | null; topic?: DailyTopic | null; format?: DailyFormat | null; art?: DailyArt | null };
+export type TestSpec = {
+  audience: DailyAudience;
+  theme: DailyTheme;
+  /** The day it's for (its weekday mood, its crowd, the days around it), today if not given. */
+  day?: string | null;
+  style?: DailyStyle | null;
+  pillar?: DailyPillar | null;
+  topic?: DailyTopic | null;
+  format?: DailyFormat | null;
+  art?: DailyArt | null;
+  crowd?: DailyCrowd | null;
+  /** Just the writer and the editor: no picture, nothing saved (the result is the answer). */
+  captionOnly?: boolean;
+};
 const NO_DAY = "00000000-0000-0000-0000-000000000000";
 
 /**
@@ -776,7 +878,7 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
   const learned = learnDailyVisuals(Array.isArray(stats) ? (stats as VisualStat[]) : []);
   const r: DailyRow = {
     id: NO_DAY,
-    day: localDay(),
+    day: spec.day && /^\d{4}-\d{2}-\d{2}$/.test(spec.day) ? spec.day : localDay(),
     theme: spec.theme,
     audience: spec.audience,
     faith: false,
@@ -802,10 +904,32 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
   };
   const pick = <K extends string>(keys: readonly K[], v: unknown) => ((keys as readonly string[]).includes(v as string) ? (v as K) : null);
   let c = await planConcept(admin, r, maker, learned, { round: 1, pictures: 0 }, {
-    topic: pick(Object.keys(DAILY_TOPICS) as DailyTopic[], spec.topic),
+    pillar: pick(DAILY_PILLAR_KEYS, spec.pillar),
+    topic: pick(DAILY_TOPIC_KEYS, spec.topic),
     format: pick(DAILY_FORMAT_KEYS, spec.format),
     art: pick(DAILY_ART_KEYS, spec.art),
+    crowd: pick(["everyone", "beginners", "lifestyle", "lifters"] as const, spec.crowd),
   });
+  if (spec.captionOnly) {
+    const k = c.concept!;
+    return {
+      day: r.day,
+      audience: spec.audience,
+      pillar: k.pillar,
+      topic: k.topic,
+      crowd: k.crowd,
+      mood: k.mood,
+      format: k.format,
+      situation: k.situation,
+      idea: k.message,
+      visual: k.visual,
+      typography: k.typography,
+      drafts: k.drafts,
+      caption: c.caption,
+      editor: c.editor,
+      model: c.model,
+    };
+  }
   const tries: Record<string, unknown>[] = [];
   let d: Drawn | null = null;
   for (let i = 0; i < 2; i++) {
@@ -825,6 +949,10 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     look: FILM_LOOK_VERSION,
     format: concept.format,
     topic: concept.topic,
+    pillar: concept.pillar,
+    crowd: concept.crowd,
+    mood: concept.mood,
+    editor: c.editor ?? null,
     message: concept.message,
     visual: concept.visual,
     typography: concept.typography,

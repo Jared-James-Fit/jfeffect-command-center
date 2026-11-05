@@ -14,12 +14,11 @@ import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import {
-  DAILY_FORMATS,
   DAILY_LIGHTS,
+  DAILY_PILLARS,
   DAILY_STYLES,
   DAILY_STYLE_KEYS,
   DAILY_THEMES,
-  DAILY_TOPICS,
   ART_STYLES,
   DAILY_ART_KEYS,
   FILM_LOOK_VERSION,
@@ -27,6 +26,9 @@ import {
   LEGACY_STYLE_NAMES,
   type DailyArt,
   dailyCaption,
+  formatName,
+  pillarOf,
+  topicName,
   type DailyLight,
   type DailyStyle,
   type DailyTheme,
@@ -136,8 +138,11 @@ function dayLabel(day: string, today: string): string {
 const styleName = (s: string | null) => (s && s in DAILY_STYLES ? DAILY_STYLES[s as DailyStyle].name : s ? (LEGACY_STYLE_NAMES[s] ?? LEGACY_SHOT_NAMES[s] ?? null) : null);
 const lightName = (l: string | null) => (l && l in DAILY_LIGHTS ? DAILY_LIGHTS[l as DailyLight].name : l ? (LEGACY_SHOT_NAMES[l] ?? null) : null);
 const artName = (a: string | null | undefined) => (a && a in ART_STYLES ? ART_STYLES[a as DailyArt].name : null);
-const formatName = (f: string | null) => (f && f in DAILY_FORMATS ? DAILY_FORMATS[f as keyof typeof DAILY_FORMATS].name : null);
-const topicName = (t: string | null) => (t && t in DAILY_TOPICS ? DAILY_TOPICS[t as keyof typeof DAILY_TOPICS].split(" (")[0] : null);
+/** "Realization · Progress you stopped noticing": what the day is about. */
+const aboutName = (t: string | null) => {
+  const p = pillarOf({ topic: t });
+  return [p ? DAILY_PILLARS[p].name : null, topicName(t)].filter(Boolean).join(" · ") || null;
+};
 
 function parse<T>(raw: string | null): T | null {
   try {
@@ -398,10 +403,10 @@ function DaySheet({ d, today, off, onClose }: { d: Day | null; today: string; of
               <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1.5 text-[13px]">
                 <dt className="text-muted-foreground">For</dt>
                 <dd>{AUDIENCE[d.audience].replace("for ", "")}</dd>
-                {topicName(d.topic) && (
+                {aboutName(d.topic) && (
                   <>
-                    <dt className="text-muted-foreground">Topic</dt>
-                    <dd>{topicName(d.topic)}</dd>
+                    <dt className="text-muted-foreground">About</dt>
+                    <dd>{aboutName(d.topic)}</dd>
                   </>
                 )}
                 {(formatName(d.format) || styleName(d.style)) && (

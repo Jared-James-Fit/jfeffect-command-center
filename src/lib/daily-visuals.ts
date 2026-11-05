@@ -1,37 +1,42 @@
 /**
- * Daily pictures (series `daily_visual`): every morning a post that people
- * stop on because it says something true about their life, with a picture
- * that tells its own part of the story. Each day of the week has its own lens
- * (courage Monday … feelings & rest Sunday), the post speaks to women, men or
- * everyone in turn, and Sunday's carries a Bible verse (the weekly faith
- * post; the verse is only ever one of FAITH_VERSES, word for word).
+ * Daily posts (series `daily_visual`): every morning one post that makes the
+ * crew glad they opened the app. A picture and a caption made together, like
+ * something a real person would post: a realization that makes someone see
+ * their progress differently, a laugh they send to a friend, a moment of
+ * belonging, one useful idea, now and then a respectful challenge. Never a
+ * feed of AI motivation quotes, and never negativity as the default hook.
  *
- * How one is made (daily-visuals.server.ts), concept first:
- *   1. the concept: who it's for, a topic, a specific situation and its
- *      tension, the one thing it says, the caption's form, the art style that
- *      tells it best and the picture (CONCEPT_PROMPT), then the caption;
- *   2. the caption is held to `captionProblems` (plain words, his voice, no
- *      clichés, nothing close to a recent post), with a rewrite when it fails;
- *   3. the picture (`picturePrompt`): always a still frame from a premium
- *      hand-drawn 2D animated film (FILM_LOOK, never 3D, a photo or vector
- *      clip art: FILM_AVOID), the variety in the moment, the shot
- *      (DAILY_STYLES) and the light (DAILY_LIGHTS); any words in the scene (a
- *      text on a phone, a note, a speech bubble) say exactly what the story
- *      needs, spelled exactly;
- *   4. a review that looks at the picture with the caption (REVIEW_PROMPT):
- *      `reviewVerdict` passes it only on concrete checks (it reads as a
- *      hand-drawn 2D frame, the text in it is exactly what was asked, no
- *      defects) and high enough scores
- *      for match, look, relatability and writing; a failed picture is made
- *      again with the review's fix, a failed caption rewritten.
+ * What a day is about (`pickPillars`): five content pillars with a target mix
+ * (DAILY_PILLARS: realization 30%, humour 25%, community 20%, insight 15%,
+ * challenge 10%), kept by how far each is behind its share over the last few
+ * weeks, nudged by how the crew actually responds (`pillarShares`), never the
+ * same pillar two days running and a challenge at most once in 6 days (never
+ * on a Sunday). Each pillar has its angles (DAILY_TOPICS, stored as `topic`).
+ * Who it's for turns over too: women, men, everyone (`audienceForDay`) and,
+ * independently, beginners, lifestyle, serious lifters, everyone
+ * (`crowdForDay`). The weekday only sets a mood (DAILY_THEMES), and Sunday's
+ * carries a Bible verse (only ever one of FAITH_VERSES, word for word).
  *
- * It learns: every posted picture's likes, comments, saves and attention
- * (community_daily_visual_stats) rank the styles, caption forms, topics and
- * lengths (`learnDailyVisuals`); `pickChoices` offers the next concept the
- * ones that are working, never the ones used in the last few days, and
- * sometimes one that hasn't had a chance yet.
+ * How one is made (daily-visuals.server.ts):
+ *   1. the writer plans the moment and the picture first, then drafts three
+ *      captions for it (CONCEPT_PROMPT); `tidyCaption` and `captionProblems`
+ *      throw out any that break the hard rules (length, a body put down,
+ *      lecturing, slogans and AI phrases, a poem of one-line sentences, the
+ *      picture's words repeated, a question ending again, too close to a
+ *      recent post);
+ *   2. an editor scores the drafts (EDITOR_PROMPT: human, hook, clarity,
+ *      match, tight, mobile, relatable, fresh, shareable, feel-good, with
+ *      flags for shaming, lecturing, invented claims, generic and negative),
+ *      picks the best and polishes it; `editorVerdict` passes it only at every
+ *      bar with no flag, else the writer tries again with the editor's notes;
+ *   3. the picture: a bright, colourful frame from a premium hand-drawn 2D
+ *      animated film (FILM_LOOK), then a review that looks at the picture with
+ *      the caption (REVIEW_PROMPT / `reviewVerdict`).
+ * It learns from every posted day (likes, comments (more for real ones),
+ * saves, shares and reposts, and whether people stopped on it), by pillar,
+ * angle, form and shot.
  */
-import { plainCheck, voiceProblems } from "@/lib/plain-words";
+import { JARGON, readingGrade, longestSentence, voiceProblems, words as wordsOf } from "@/lib/plain-words";
 
 export type DailyTheme = "courage" | "patience" | "your_circle" | "self_reflection" | "encouragement" | "self_love" | "emotional";
 export type DailyAudience = "women" | "men" | "everyone";
@@ -62,20 +67,159 @@ export type DailyLight =
   | "neon_night";
 /** The two art directions (concept.art): A for energy, B for feeling. */
 export type DailyArt = "graphic" | "anime";
-export type DailyFormat = "one_liner" | "observation" | "short_story" | "humor" | "scenario" | "encouragement";
-export type DailyTopic =
-  | "confidence"
-  | "discipline"
-  | "body_image"
-  | "ambition"
-  | "relationships"
-  | "resilience"
-  | "burnout"
-  | "overwhelm"
-  | "identity"
-  | "small_wins"
-  | "hard_truths"
-  | "humor_shared";
+
+/* ------------------------------------------------------------------ */
+/*  What a day is about                                                */
+/* ------------------------------------------------------------------ */
+
+export type DailyPillar = "realization" | "humor" | "community" | "insight" | "challenge";
+export type DailyCrowd = "everyone" | "beginners" | "lifestyle" | "lifters";
+export type DailyMood = "uplifting" | "proud" | "funny" | "warm" | "curious" | "fired_up" | "thoughtful";
+export type DailyFormat = "one_liner" | "quick_take" | "short_story" | "dialogue" | "list" | "tip" | "question";
+
+/** The five content pillars and the mix they start at (a guide the learning nudges, never quotas). */
+export const DAILY_PILLARS: Record<DailyPillar, { name: string; share: number; goal: string; guide: string; moods: DailyMood[]; formats: DailyFormat[] }> = {
+  realization: {
+    name: "Realization",
+    share: 0.3,
+    goal: "a small epiphany that makes them see themselves, their progress or fitness differently, and feel good about it",
+    guide: "A genuine human observation, never an inspirational speech. Often it starts from an ordinary moment and turns it so they notice something they'd overlooked.",
+    moods: ["uplifting", "proud", "thoughtful"],
+    formats: ["one_liner", "quick_take", "short_story", "list"],
+  },
+  humor: {
+    name: "Humour",
+    share: 0.25,
+    goal: "a real laugh at something every lifter recognizes, the kind they send to a friend",
+    guide: "Affectionate, specific and true, never mean. Laughing with the crew, never at anyone's body.",
+    moods: ["funny"],
+    formats: ["one_liner", "dialogue", "list", "quick_take", "short_story"],
+  },
+  community: {
+    name: "Community",
+    share: 0.2,
+    goal: "they feel part of something: the people, the friendships, the shared moments",
+    guide: "The warmth of training with and around people. Make them want to cheer someone on or say hi to someone new.",
+    moods: ["warm", "funny", "uplifting"],
+    formats: ["quick_take", "short_story", "question", "one_liner", "list"],
+  },
+  insight: {
+    name: "Insight",
+    share: 0.15,
+    goal: "one useful idea that clicks and makes training, eating or recovering easier",
+    guide: "Explained so simply it feels obvious afterwards, with why it helps. Only well-known, safe basics, no numbers or studies.",
+    moods: ["curious", "uplifting"],
+    formats: ["tip", "quick_take", "list", "one_liner"],
+  },
+  challenge: {
+    name: "Challenge",
+    share: 0.1,
+    goal: "a respectful nudge or an honest truth that leaves them capable and fired up, never ashamed",
+    guide: "From someone who believes in them. It can be direct, but it's on their side and ends with something they can do.",
+    moods: ["fired_up", "thoughtful"],
+    formats: ["quick_take", "one_liner", "tip", "short_story"],
+  },
+};
+export const DAILY_PILLAR_KEYS = Object.keys(DAILY_PILLARS) as DailyPillar[];
+
+/** Each pillar's angles (stored as `topic`). */
+export const DAILY_TOPICS = {
+  progress_noticed: { pillar: "realization", name: "Progress you stopped noticing", idea: "the moment you notice how far you've come: the weight that used to be your max is your warm-up now, the stairs, the hike, the jeans" },
+  confidence_grown: { pillar: "realization", name: "Confidence", idea: "realizing you carry yourself differently: you walk into the gym like you belong, you try the new thing, you take up space" },
+  more_than_looks: { pillar: "realization", name: "More than looks", idea: "fitness paying off where the mirror can't see it: sleep, mood, patience, energy for the people you love, every grocery bag in one trip" },
+  actually_enjoy_it: { pillar: "realization", name: "Actually enjoying it", idea: "the day you realize training is something you look forward to now, not something you force yourself through" },
+  new_identity: { pillar: "realization", name: "Who you're becoming", idea: "becoming someone who trains without debating it; the old you would be surprised, and proud" },
+  small_milestones: { pillar: "realization", name: "Small milestones", idea: "a small first worth being proud of: the first pull-up, the first full week, the first time the bar felt light" },
+  whats_possible: { pillar: "realization", name: "What's possible", idea: "getting excited about what's next now that you're stronger: the race, the meet, the trip, the hike you wouldn't have tried a year ago" },
+  kinder_to_yourself: { pillar: "realization", name: "Kinder to yourself", idea: "noticing you talk to yourself better than you used to; a missed day isn't a disaster anymore, just a Tuesday" },
+  gym_floor_comedy: { pillar: "humor", name: "Gym floor comedy", idea: "a funny, true observation from the gym floor that every lifter recognizes (fresh, never the tired old gym jokes)" },
+  expectation_reality: { pillar: "humor", name: "Expectation vs reality", idea: "the plan versus what actually happens: the 5 am alarm, the 'quick' workout, meal prep Sunday" },
+  food_life: { pillar: "humor", name: "Food life", idea: "affectionate jokes about eating well: protein in everything, the snack negotiation, the container collection, never anyone's body" },
+  lifter_habits: { pillar: "humor", name: "Lifter habits", idea: "the habits only people who train have: the playlist ritual, stairs after leg day, judging every bench and chair as gym equipment" },
+  strong_in_real_life: { pillar: "humor", name: "Strong in real life", idea: "the funny moments when training shows up in normal life: opening every jar, carrying the couch, racing the kids" },
+  training_partners: { pillar: "community", name: "Training partners", idea: "the friend who makes you show up, spots you, hypes you, texts 'you up?' at 5:45" },
+  cheering_others: { pillar: "community", name: "Cheering for others", idea: "the joy of watching someone else hit a PR or show up for the first time; their win feels like yours" },
+  first_days: { pillar: "community", name: "Day one", idea: "being new, first-day nerves, and how fast the gym starts to feel like yours; then welcoming the next new person" },
+  gym_friendships: { pillar: "community", name: "Gym friendships", idea: "friendships that started with a shared rack or a nod between sets and turned into the real thing" },
+  crew_rituals: { pillar: "community", name: "Crew rituals", idea: "the little shared rituals: the coffee after, the Saturday session, the playlist argument, the high five after the last set" },
+  ask_the_crew: { pillar: "community", name: "Ask the crew", idea: "a fun, easy question everyone wants to answer: the song that never fails, the best post-workout meal, the first lift you were proud of" },
+  training_clicks: { pillar: "insight", name: "Training, explained", idea: "a training idea explained so it finally clicks: getting stronger in tiny steps, why rest days build you, why easier weeks help" },
+  eating_made_simple: { pillar: "insight", name: "Eating, made simple", idea: "a simple, unrestrictive food idea: protein at each meal, eating enough to train well, water, planning one meal ahead" },
+  recovery_wins: { pillar: "insight", name: "Recovery", idea: "how sleep, walks and rest days make you stronger, framed as part of the fun, not a chore" },
+  one_good_cue: { pillar: "insight", name: "One good cue", idea: "one well-known technique cue that makes a common exercise feel better right away" },
+  myth_busted: { pillar: "insight", name: "Myth, busted", idea: "a common fitness myth set straight in a friendly way (soreness isn't the goal, lifting won't suddenly make you bulky, cardio doesn't erase your gains)" },
+  friendly_nudge: { pillar: "challenge", name: "A friendly nudge", idea: "a warm nudge about showing up this week, from someone who believes they can" },
+  try_something_new: { pillar: "challenge", name: "Try something new", idea: "an invitation to try one new thing this week: a class, a heavier set with good form, a new route, training with a friend" },
+  honest_and_kind: { pillar: "challenge", name: "Honest, and kind", idea: "a fair, respectful truth about progress that leaves them capable and motivated, never ashamed" },
+  mini_challenge: { pillar: "challenge", name: "Mini challenge", idea: "a small, doable challenge for the week: a walk after dinner, one extra glass of water, bed 30 minutes earlier" },
+} as const satisfies Record<string, { pillar: DailyPillar; name: string; idea: string }>;
+export type DailyTopic = keyof typeof DAILY_TOPICS;
+export const DAILY_TOPIC_KEYS = Object.keys(DAILY_TOPICS) as DailyTopic[];
+export const topicsOf = (p: DailyPillar): DailyTopic[] => DAILY_TOPIC_KEYS.filter((k) => DAILY_TOPICS[k].pillar === p);
+
+/** The first version's topics and forms, for the names (and the pillar, for the learning) of days made before. */
+export const LEGACY_TOPICS: Record<string, { name: string; pillar: DailyPillar | null }> = {
+  confidence: { name: "Confidence and self-worth", pillar: "realization" },
+  discipline: { name: "Discipline and consistency", pillar: "challenge" },
+  body_image: { name: "Body image", pillar: null },
+  ambition: { name: "Ambition and growth", pillar: "realization" },
+  relationships: { name: "Relationships", pillar: "community" },
+  resilience: { name: "Resilience", pillar: "challenge" },
+  burnout: { name: "Stress and burnout", pillar: null },
+  overwhelm: { name: "Feeling overwhelmed", pillar: null },
+  identity: { name: "Who you're becoming", pillar: "realization" },
+  small_wins: { name: "Small wins", pillar: "realization" },
+  hard_truths: { name: "Hard truths", pillar: "challenge" },
+  humor_shared: { name: "Shared humour", pillar: "humor" },
+};
+export const LEGACY_FORMAT_NAMES: Record<string, string> = { observation: "Observation", humor: "Humour", scenario: "Relatable moment", encouragement: "Encouragement" };
+
+export const topicName = (t: string | null | undefined): string | null =>
+  !t ? null : t in DAILY_TOPICS ? DAILY_TOPICS[t as DailyTopic].name : (LEGACY_TOPICS[t]?.name ?? null);
+export const formatName = (f: string | null | undefined): string | null =>
+  !f ? null : f in DAILY_FORMATS ? DAILY_FORMATS[f as DailyFormat].name : (LEGACY_FORMAT_NAMES[f] ?? null);
+/** A day's pillar: the concept's own, else its angle's (the first version's topics map where they can). */
+export function pillarOf(o: { pillar?: string | null; topic?: string | null } | null | undefined): DailyPillar | null {
+  if (!o) return null;
+  if (o.pillar && o.pillar in DAILY_PILLARS) return o.pillar as DailyPillar;
+  if (o.topic && o.topic in DAILY_TOPICS) return DAILY_TOPICS[o.topic as DailyTopic].pillar;
+  return (o.topic && LEGACY_TOPICS[o.topic]?.pillar) || null;
+}
+
+/** How a caption is told, and how long it may run (characters). No minimum: a post is as long as the idea deserves. */
+export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; max: number; lines?: boolean }> = {
+  one_liner: { name: "One-liner", guide: "one or two sentences, and that's the whole post", max: 170 },
+  quick_take: { name: "Quick take", guide: "a short observation or realization in 2 to 4 sentences, in one or two short paragraphs", max: 360 },
+  short_story: { name: "Short story", guide: "a tiny scene in two or three short paragraphs that lands on the realization, the laugh or the warm moment", max: 580 },
+  dialogue: { name: "Dialogue", guide: "a funny exchange on 2 to 4 short lines ('me: …' / 'my legs: …'), one line each, nothing explained after", max: 240, lines: true },
+  list: { name: "List", guide: "a one-line setup, then 3 or 4 short items each on its own line (no bullets or numbers), maybe one closing line", max: 400, lines: true },
+  tip: { name: "Tip", guide: "one useful idea: what it is and why it helps, in 2 to 4 plain sentences, maybe how to try it this week", max: 440 },
+  question: { name: "Question", guide: "a fun, easy question for the crew with a line of context, the kind people actually answer", max: 240 },
+};
+export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
+
+/** Who it's for, besides women / men / everyone: where they are with training. */
+export const DAILY_CROWDS: Record<DailyCrowd, { name: string; guide: string }> = {
+  everyone: { name: "Everyone", guide: "anyone who trains, from week one to year ten" },
+  beginners: { name: "Beginners", guide: "people in their first months: a bit nervous, excited, learning the basics, surprised by their own progress" },
+  lifestyle: { name: "Lifestyle", guide: "people who train to feel good and live well, around work, family and a social life" },
+  lifters: { name: "Serious lifters", guide: "people who chase PRs, follow a program, know their numbers and love the details" },
+};
+const CROWD_ORDER: DailyCrowd[] = ["everyone", "beginners", "lifestyle", "lifters"];
+
+const dayIndex = (day: string) => Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse("2026-01-05T12:00:00Z")) / 86_400_000);
+
+/** Who a day's post is for: women, men, then everyone, so each weekday turns over every week. */
+export function audienceForDay(day: string): DailyAudience {
+  const days = dayIndex(day);
+  return (["women", "men", "everyone"] as const)[((days % 3) + 3) % 3];
+}
+
+/** Where they are with training, on its own 4-day turn (so with the 3-day one above, 12 different pairs). */
+export function crowdForDay(day: string): DailyCrowd {
+  const days = dayIndex(day);
+  return CROWD_ORDER[((days % 4) + 4) % 4];
+}
 
 /* ------------------------------------------------------------------ */
 /*  The week                                                           */
@@ -85,21 +229,21 @@ type ThemeSpec = {
   /** ISO weekday: Monday = 1 … Sunday = 7. */
   dow: number;
   name: string;
-  /** The day's lens, for the concept. */
+  /** The day's mood, a light touch on top of the pillar. */
   idea: string;
-  /** The topics that fit the day. */
-  topics: DailyTopic[];
+  /** Pillars that suit the day a little better (a small nudge in `pickPillars`). */
+  lean: Partial<Record<DailyPillar, number>>;
 };
 
-/** One lens a day, Monday first; Sunday's is the faith post. */
+/** A mood a day (Monday first; the keys are the database's, kept from the first version). Sunday's is the faith post. */
 export const DAILY_THEMES: Record<DailyTheme, ThemeSpec> = {
-  courage: { dow: 1, name: "Courage", idea: "doing the scary thing anyway, starting before you feel ready, wanting more for yourself", topics: ["confidence", "ambition", "identity", "hard_truths"] },
-  patience: { dow: 2, name: "Patience", idea: "slow progress, showing up when it's boring, trusting what you can't see yet", topics: ["discipline", "resilience", "small_wins", "body_image"] },
-  your_circle: { dow: 3, name: "Your circle", idea: "the people around you, who you train with, who you text, who you become around them", topics: ["relationships", "humor_shared", "confidence", "small_wins"] },
-  self_reflection: { dow: 4, name: "Self reflection", idea: "looking at yourself honestly, who you're becoming, the truth you've been avoiding", topics: ["identity", "hard_truths", "ambition", "burnout"] },
-  encouragement: { dow: 5, name: "Encouragement", idea: "the end of the week, the wins nobody claps for, getting through it", topics: ["small_wins", "humor_shared", "resilience", "discipline"] },
-  self_love: { dow: 6, name: "Self love", idea: "how you treat yourself, your body on a bad mirror day, rest without guilt", topics: ["body_image", "confidence", "burnout", "relationships"] },
-  emotional: { dow: 7, name: "Feelings & rest", idea: "when it's heavy, when you're tired of being strong, peace and a reset for the week", topics: ["overwhelm", "burnout", "resilience", "identity"] },
+  courage: { dow: 1, name: "Fresh start", idea: "Monday: a new week, a fresh start, something worth starting", lean: { realization: 0.3, challenge: 0.2 } },
+  patience: { dow: 2, name: "The long game", idea: "Tuesday: enjoying the process and the long game", lean: { insight: 0.3 } },
+  your_circle: { dow: 3, name: "Your people", idea: "Wednesday: the people you train with and around", lean: { community: 0.4 } },
+  self_reflection: { dow: 4, name: "How far you've come", idea: "Thursday: noticing how far you've come", lean: { realization: 0.3, insight: 0.1 } },
+  encouragement: { dow: 5, name: "Celebrate", idea: "Friday: celebrating the week and having fun with it", lean: { humor: 0.4, community: 0.1 } },
+  self_love: { dow: 6, name: "Enjoy it", idea: "Saturday: movement for fun, sunshine, friends, enjoying life", lean: { humor: 0.2, community: 0.2 } },
+  emotional: { dow: 7, name: "Rest & reset", idea: "Sunday: rest, gratitude and a calm reset for the week", lean: { realization: 0.3, community: 0.2 } },
 };
 
 export const DAILY_THEME_KEYS = Object.keys(DAILY_THEMES) as DailyTheme[];
@@ -108,49 +252,11 @@ export function themeForDow(dow: number): DailyTheme {
   return DAILY_THEME_KEYS.find((k) => DAILY_THEMES[k].dow === dow) ?? "encouragement";
 }
 
-/** Who a day's post is for: women, men, then everyone, so each weekday turns over every week. */
-export function audienceForDay(day: string): DailyAudience {
-  const days = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse("2026-01-05T12:00:00Z")) / 86_400_000);
-  return (["women", "men", "everyone"] as const)[((days % 3) + 3) % 3];
-}
-
-export const DAILY_TOPICS: Record<DailyTopic, string> = {
-  confidence: "confidence and self-worth",
-  discipline: "discipline and consistency",
-  body_image: "body image and fitness struggles (the mirror, photos, clothes, the scale, comparing)",
-  ambition: "ambition and personal growth",
-  relationships: "relationships and everyday life",
-  resilience: "mental resilience",
-  burnout: "stress and burnout",
-  overwhelm: "feeling overwhelmed",
-  identity: "building a stronger identity, who you're becoming",
-  small_wins: "celebrating small victories nobody else notices",
-  hard_truths: "an uncomfortable but relatable truth",
-  humor_shared: "humour and shared gym and life experiences",
-};
-
 export const DAILY_AUDIENCE_GUIDE: Record<DailyAudience, string> = {
-  women:
-    "Women in the crew. Their real lives: confidence, strength, independence, growth, relationships, the pressure of everything at once. Not every post is self-love, and nothing about how she should look.",
-  men: "Men in the crew. Their real lives: purpose, responsibility, standards, confidence, resilience, being honest when it's hard. Not every post is grind harder, and nothing macho or preachy.",
+  women: "Women in the crew: strong, busy, funny, ambitious, at every level. Confidence and strength, never how she should look.",
+  men: "Men in the crew: training, work, family, friends, at every level. Real and warm, never macho or preachy.",
   everyone: "Everyone in the crew: a moment anyone sees themselves in.",
 };
-
-/** How a caption is told, with its length (characters). */
-export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; min: number; max: number }> = {
-  one_liner: { name: "One line", guide: "one or two powerful sentences that land it", min: 20, max: 130 },
-  observation: { name: "Observation", guide: "a sharp, true observation or a new way to see it, in 2 to 4 short lines", min: 60, max: 280 },
-  short_story: {
-    name: "Short story",
-    guide: "a tiny, real-feeling moment told in 3 to 6 short lines, then the turn that makes it land. Told to 'you' or about 'someone', never a real named person",
-    min: 140,
-    max: 460,
-  },
-  humor: { name: "Humour", guide: "a relatable, funny take people tag a friend in, 1 to 4 short lines, the laugh first", min: 30, max: 240 },
-  scenario: { name: "Relatable moment", guide: "a specific everyday situation they'll recognise ('you know when…'), then what it really means", min: 80, max: 340 },
-  encouragement: { name: "Encouragement", guide: "talking straight to the person reading, warm and specific to the situation, never generic, in 2 to 5 short lines", min: 70, max: 380 },
-};
-export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
 
 /* ------------------------------------------------------------------ */
 /*  The look                                                           */
@@ -291,6 +397,7 @@ export function dailyCaption(line: string, verse?: FaithVerse | null): string {
   return verse ? `${words}\n\n“${verse.text.trim()}” ${verse.ref}` : words;
 }
 
+
 /* ------------------------------------------------------------------ */
 /*  Learning                                                           */
 /* ------------------------------------------------------------------ */
@@ -303,28 +410,39 @@ export type VisualStat = {
   style: DailyStyle | string;
   format?: DailyFormat | string | null;
   topic?: DailyTopic | string | null;
+  pillar?: DailyPillar | string | null;
+  crowd?: DailyCrowd | string | null;
+  mood?: DailyMood | string | null;
   line: string;
   shot?: string | null;
   viewers: number;
   likers: number;
   commenters: number;
+  /** Commenters who wrote something real (more than a few words or a reply), not just an emoji. */
+  meaningful?: number;
   savers: number;
+  /** Shared to a story or reposted. */
+  sharers?: number;
   reached: number;
   stopped: number;
   median_ms: number | null;
 };
 
-/** Below this many posts a style, form or topic is still a guess. */
+/** Below this many posts a pillar, angle, style or form is still a guess. */
 export const LEARN_MIN_POSTS = 3;
 /** How often the next post is offered something that hasn't proven itself yet, so it keeps finding out. */
 export const EXPLORE_SHARE = 0.25;
 /** A caption past this is "long" for the learning (several short paragraphs). */
-export const LONG_CAPTION = 160;
+export const LONG_CAPTION = 200;
 
-/** How well one did: reactions per person who saw it (comments and saves count more), plus how many stopped on it. */
+/**
+ * How well one did: what people did with it per person who saw it (a real
+ * comment, a save and a share count far more than a like: they're the
+ * satisfying interactions, not just a scroll-by), plus how many stopped on it.
+ */
 export function visualScore(s: VisualStat): number {
   const seen = Math.max(s.viewers, s.likers, 1);
-  const points = s.likers + 3 * s.commenters + 4 * s.savers;
+  const points = s.likers + 3 * s.commenters + 2 * (s.meaningful ?? 0) + 4 * s.savers + 5 * (s.sharers ?? 0);
   const hold = s.reached >= 3 ? s.stopped / s.reached : 0.5;
   // smoothed toward one reaction in three views, so a single like on two views isn't a landslide
   return (points + 0.33 * 3) / (seen + 3) + 0.5 * hold;
@@ -338,10 +456,12 @@ function arms<K extends string>(stats: VisualStat[], key: (s: VisualStat) => str
 
 export type DailyLearnings = {
   posts: number;
+  pillar: Record<DailyPillar, Arm>;
   style: Record<DailyStyle, Arm>;
   format: Record<DailyFormat, Arm>;
   topic: Record<DailyTopic, Arm>;
   audience: Record<DailyAudience, Arm>;
+  crowd: Record<DailyCrowd, Arm>;
   length: { short: Arm; long: Arm };
   best: VisualStat[];
   worst: VisualStat[];
@@ -351,10 +471,12 @@ export function learnDailyVisuals(stats: VisualStat[]): DailyLearnings {
   const ranked = [...stats].sort((a, b) => visualScore(b) - visualScore(a));
   return {
     posts: stats.length,
+    pillar: arms(stats, (s) => pillarOf(s), DAILY_PILLAR_KEYS),
     style: arms(stats, (s) => s.style, DAILY_STYLE_KEYS),
     format: arms(stats, (s) => s.format, DAILY_FORMAT_KEYS),
-    topic: arms(stats, (s) => s.topic, Object.keys(DAILY_TOPICS) as DailyTopic[]),
+    topic: arms(stats, (s) => s.topic, DAILY_TOPIC_KEYS),
     audience: arms(stats, (s) => s.audience, ["women", "men", "everyone"] as const),
+    crowd: arms(stats, (s) => s.crowd, CROWD_ORDER),
     length: { short: arm(stats.filter((s) => s.line.length <= LONG_CAPTION)), long: arm(stats.filter((s) => s.line.length > LONG_CAPTION)) },
     best: ranked.slice(0, 3),
     worst: ranked.length > 5 ? ranked.slice(-2) : [],
@@ -373,30 +495,104 @@ function rank<K extends string>(keys: K[], a: Record<K, Arm>, rand: number): K[]
   return rand < EXPLORE_SHARE ? [...spun, ...strong, ...weak] : [...strong, ...spun, ...weak];
 }
 
-export type Recent = { day: string; style?: string | null; light?: string | null; format?: string | null; topic?: string | null; caption?: string | null };
+/** How far the learning may move a pillar from its starting share, either way. */
+export const PILLAR_NUDGE = { min: 0.75, max: 1.3 } as const;
 
-export type Choices = { styles: DailyStyle[]; lights: DailyLight[]; formats: DailyFormat[]; topics: DailyTopic[] };
-
-/** What the next concept may use: shots, light, forms and topics not used in the last few days, best first. */
-export function pickChoices(l: DailyLearnings, theme: DailyTheme, recent: Recent[], rand: () => number = Math.random, forcedStyle?: DailyStyle | null): Choices {
-  const last = (n: number, f: (r: Recent) => string | null | undefined) => new Set(recent.slice(-n).map(f).filter(Boolean) as string[]);
-  const usedStyles = last(4, (r) => r.style);
-  const usedLights = last(3, (r) => r.light);
-  const usedFormats = last(2, (r) => r.format);
-  const usedTopics = last(10, (r) => r.topic);
-  const styles = forcedStyle ? [forcedStyle] : rank(DAILY_STYLE_KEYS.filter((s) => !usedStyles.has(s)), l.style, rand());
-  const spin = Math.floor(rand() * DAILY_LIGHT_KEYS.length);
-  const lights = DAILY_LIGHT_KEYS.filter((k) => !usedLights.has(k)).map((k, i, a) => a[(i + spin) % a.length]);
-  const formats = rank(DAILY_FORMAT_KEYS.filter((f) => !usedFormats.has(f)), l.format, rand());
-  const dayTopics = DAILY_THEMES[theme].topics;
-  const fresh = dayTopics.filter((t) => !usedTopics.has(t));
-  const topics = rank(fresh.length ? fresh : dayTopics, l.topic, rand());
-  return { styles, lights, formats, topics };
+/**
+ * The mix to aim for: the starting shares, each nudged (within PILLAR_NUDGE)
+ * by how its posts do against the others once it has LEARN_MIN_POSTS of them.
+ * A challenge never goes above its starting share: it's the seasoning.
+ */
+export function pillarShares(l: Pick<DailyLearnings, "pillar">): Record<DailyPillar, number> {
+  const proven = DAILY_PILLAR_KEYS.filter((k) => l.pillar[k].n >= LEARN_MIN_POSTS);
+  const avg = proven.length ? proven.reduce((t, k) => t + l.pillar[k].mean, 0) / proven.length : 0;
+  const raw = Object.fromEntries(
+    DAILY_PILLAR_KEYS.map((k) => {
+      const base = DAILY_PILLARS[k].share;
+      const m = proven.includes(k) && avg > 0 ? Math.min(PILLAR_NUDGE.max, Math.max(PILLAR_NUDGE.min, l.pillar[k].mean / avg)) : 1;
+      return [k, k === "challenge" ? Math.min(base, base * m) : base * m];
+    }),
+  ) as Record<DailyPillar, number>;
+  const total = DAILY_PILLAR_KEYS.reduce((t, k) => t + raw[k], 0);
+  return Object.fromEntries(DAILY_PILLAR_KEYS.map((k) => [k, raw[k] / total])) as Record<DailyPillar, number>;
 }
 
-/** What's worked, in plain words, for the concept and the coach's card. */
+/** The days a pillar's share is counted over. */
+export const PILLAR_WINDOW = 20;
+/** A challenge at most once in this many days. */
+export const CHALLENGE_GAP = 6;
+
+const dowOf = (day: string) => ((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+const gap = (a: string, b: string) => Math.abs(Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86_400_000;
+
+/**
+ * Today's pillar, best first: the one furthest behind its share over the
+ * days around it (PILLAR_WINDOW), plus the weekday's small lean. Never the
+ * same as the day before or after, and a challenge only when there's been
+ * none within CHALLENGE_GAP days, never on a Sunday.
+ */
+export function pickPillars(l: Pick<DailyLearnings, "pillar">, day: string, around: { day: string; pillar?: DailyPillar | string | null }[], rand: () => number = Math.random): DailyPillar[] {
+  const shares = pillarShares(l);
+  const others = around.filter((a) => a.day !== day && a.pillar && a.pillar in DAILY_PILLARS);
+  const window = others.filter((a) => gap(a.day, day) <= PILLAR_WINDOW);
+  const n = window.length + 1;
+  const count = (p: DailyPillar) => window.filter((a) => a.pillar === p).length;
+  const neighbours = new Set(others.filter((a) => gap(a.day, day) === 1).map((a) => a.pillar));
+  const recentChallenge = others.some((a) => a.pillar === "challenge" && gap(a.day, day) < CHALLENGE_GAP);
+  const dow = dowOf(day);
+  const lean = DAILY_THEMES[themeForDow(dow)].lean;
+  const allowed = DAILY_PILLAR_KEYS.filter((p) => !neighbours.has(p) && !(p === "challenge" && (dow === 7 || recentChallenge)));
+  const pool = allowed.length ? allowed : DAILY_PILLAR_KEYS.filter((p) => p !== "challenge");
+  const score = (p: DailyPillar) => shares[p] * n - count(p) + (lean[p] ?? 0) + rand() * 0.05;
+  return pool.map((p) => ({ p, s: score(p) })).sort((a, b) => b.s - a.s).map((x) => x.p);
+}
+
+export type Recent = {
+  day: string;
+  style?: string | null;
+  light?: string | null;
+  format?: string | null;
+  topic?: string | null;
+  pillar?: string | null;
+  mood?: string | null;
+  caption?: string | null;
+};
+
+export type Choices = { pillar: DailyPillar; topics: DailyTopic[]; formats: DailyFormat[]; styles: DailyStyle[]; lights: DailyLight[] };
+
+/**
+ * What the next concept may use: today's pillar (`pickPillars`, or the one
+ * asked for), its angles not used in the last 2 weeks, its forms not used in
+ * the last 2 days, shots not used in the last 4 and light not in the last 3,
+ * best first. `recent` is the days around, nearest last.
+ */
+export function pickChoices(
+  l: DailyLearnings,
+  o: { day: string; recent: Recent[]; rand?: () => number; style?: DailyStyle | null; pillar?: DailyPillar | null },
+): Choices {
+  const rand = o.rand ?? Math.random;
+  const near = (n: number) => o.recent.filter((r) => gap(r.day, o.day) <= n && r.day !== o.day);
+  const used = (n: number, f: (r: Recent) => string | null | undefined) => new Set(near(n).map(f).filter(Boolean) as string[]);
+  const pillar = o.pillar ?? pickPillars(l, o.day, o.recent.map((r) => ({ day: r.day, pillar: pillarOf(r) })), rand)[0];
+  const usedTopics = used(14, (r) => r.topic);
+  const all = topicsOf(pillar);
+  const fresh = all.filter((t) => !usedTopics.has(t));
+  const topics = rank(fresh.length ? fresh : all, l.topic, rand());
+  const usedFormats = used(2, (r) => r.format);
+  const fits = DAILY_PILLARS[pillar].formats;
+  const formatsFresh = fits.filter((f) => !usedFormats.has(f));
+  const formats = rank(formatsFresh.length ? formatsFresh : fits, l.format, rand());
+  const usedStyles = used(4, (r) => r.style);
+  const styles = o.style ? [o.style] : rank(DAILY_STYLE_KEYS.filter((s) => !usedStyles.has(s)), l.style, rand());
+  const usedLights = used(3, (r) => r.light);
+  const spin = Math.floor(rand() * DAILY_LIGHT_KEYS.length);
+  const lights = DAILY_LIGHT_KEYS.filter((k) => !usedLights.has(k)).map((k, i, a) => a[(i + spin) % a.length]);
+  return { pillar, topics, formats, styles: styles.length ? styles : DAILY_STYLE_KEYS, lights: lights.length ? lights : DAILY_LIGHT_KEYS };
+}
+
+/** What's worked, in plain words, for the writer and the coach's card. */
 export function learningsText(l: DailyLearnings): string {
-  if (l.posts < LEARN_MIN_POSTS) return "Not enough posted yet to tell what works. Trying a range of shots and forms.";
+  if (l.posts < LEARN_MIN_POSTS) return "Not enough posted yet to tell what works. Trying the full mix of pillars, shots and forms.";
   const best = <K extends string>(a: Record<K, Arm>, name: (k: K) => string) =>
     (Object.keys(a) as K[])
       .filter((k) => a[k].n >= 2)
@@ -404,26 +600,34 @@ export function learningsText(l: DailyLearnings): string {
       .slice(0, 2)
       .map(name);
   const out: string[] = [];
-  const styles = best(l.style, (k) => DAILY_STYLES[k as DailyStyle].name.toLowerCase());
-  if (styles.length) out.push(`Best shots so far: ${styles.join(", ")}.`);
+  const pillars = best(l.pillar, (k) => DAILY_PILLARS[k as DailyPillar].name.toLowerCase());
+  if (pillars.length) out.push(`Pillars landing best: ${pillars.join(", ")}.`);
+  const topics = best(l.topic, (k) => DAILY_TOPICS[k as DailyTopic].name.toLowerCase());
+  if (topics.length) out.push(`Angles landing: ${topics.join(", ")}.`);
   const formats = best(l.format, (k) => DAILY_FORMATS[k as DailyFormat].name.toLowerCase());
   if (formats.length) out.push(`Best caption forms: ${formats.join(", ")}.`);
-  const topics = best(l.topic, (k) => DAILY_TOPICS[k as DailyTopic].split(" (")[0]);
-  if (topics.length) out.push(`Topics landing: ${topics.join(", ")}.`);
+  const styles = best(l.style, (k) => DAILY_STYLES[k as DailyStyle].name.toLowerCase());
+  if (styles.length) out.push(`Best shots so far: ${styles.join(", ")}.`);
   const { short, long } = l.length;
   if (short.n >= LEARN_MIN_POSTS && long.n >= LEARN_MIN_POSTS)
     out.push(long.mean > short.mean ? "Longer captions are keeping people longer." : "Shorter captions are doing better.");
-  return out.length ? out.join(" ") : "Too close to call yet. Still trying a range of shots and forms.";
+  return out.length ? out.join(" ") : "Too close to call yet. Still trying the full mix.";
 }
 
 /* ------------------------------------------------------------------ */
-/*  The concept and the caption                                        */
+/*  The concept: the moment, the picture, three caption drafts          */
 /* ------------------------------------------------------------------ */
 
 export type DailyConcept = {
+  pillar: DailyPillar;
+  /** The angle (stored as `topic`). */
   topic: DailyTopic;
+  crowd: DailyCrowd;
+  mood: DailyMood;
   situation: string;
+  /** What makes it worth reading: the realization, the joke, the twist (kept for the first version's days). */
   tension: string;
+  /** The one idea it lands on. */
   message: string;
   format: DailyFormat;
   /** The shot. */
@@ -435,42 +639,58 @@ export type DailyConcept = {
   visual: string;
   /** Words in the scene (a text on a phone, a note, a speech bubble), exactly, or "" for none. */
   typography: string;
+  /** The writer's drafts (up to three), before the checks and the editor. */
+  drafts: string[];
+  /** The chosen, polished caption. */
   caption: string;
 };
 
-export const CONCEPT_PROMPT = `You create one daily post for a strength coach's private community feed: his clients, men and women of all ages who train with him. It's a picture with a caption. It should feel intentionally made by someone who gets their life, never auto-filled. People should think "that's literally me", "I needed that", "I never thought of it that way" or "I'm sending this to someone".
+export const CONCEPT_PROMPT = `You're the social editor of JF Effect, a strength coach's fitness community app: his clients and members, men and women, from first-week beginners to serious lifters. Every morning one post goes in the feed, a picture and a caption made together. It should read like something a real person would post on Instagram or Threads, and it should make the crew glad they opened the app.
 
-WORK IT OUT IN THIS ORDER, then answer:
-1. Audience: who it's for (given).
-2. Topic: pick one from the list given.
-3. Situation: one specific, everyday moment with real tension in it (the car before the gym, the photo you untagged yourself from, the Sunday scaries, the friend who asks why you even bother). Specific beats general.
-4. Message: the one thing it says, in your own words. Something true, maybe a little uncomfortable, never a slogan.
-5. Picture: the moment as a frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). It shows the moment the caption is about, so the two tell the same story with the same details (if the caption says a friend texted, the picture shows that text; the same place, time and people, never another version of events), and adds what words can't (the room, the people, the small detail that says how they feel).
-6. Caption: in the form given, in the coach's voice (below).
+THE FEELING
+After reading, people should think things like "that's so true", "I never thought of it that way", "I needed that", "this makes me want to train", "I can't believe how far I've come", "this is so me" or "I'm sending this to someone". Get there with real observations, humour, useful ideas, possibility and belonging, never fake positivity, generic motivation or constant reassurance. A post can start with a struggle, but it lands somewhere good: a realization, a laugh, a useful idea or a feeling of possibility. Most posts don't need a struggle at all.
 
-WRITING RULES
-- The first line shows alone under the picture, so it has to earn the tap: the moment, the tension or the laugh, never a warm-up.
-- Plain words a 10 year old knows, no sentence over 14 words. Lowercase like his texts.
-- Real and warm, sometimes funny, sometimes a little blunt. No empty motivation, no slogans, no clichés ("trust the process", "you got this", "keep going", "no excuses", "level up", "best version of yourself"), no hashtags, no quotation marks, no forced slang. At most one emoji, often none.
-- Never invent facts, studies, numbers, names or real people. A small made-up moment told to "you" is fine.
+WORK IT OUT IN THIS ORDER
+1. The pillar is given. Pick one angle from its list.
+2. The moment: one specific, everyday situation people recognize (the warm-up that used to be your top set, a friend texting "you up?" at 5:45, the first time someone asks you for gym advice). Specific beats general.
+3. The idea: the realization, the joke, the useful idea or the warm truth it lands on, in your own words.
+4. The picture, before any caption: it sets the scene and the feeling. The caption then expands it, adds a twist or says what the picture can't. Never just describe the picture or repeat words that are in it.
+5. Three caption drafts for that one picture, each a different shape and length (for example a one-liner, a quick take and a short story), in the form given or close to it.
+
+HOW THE CAPTIONS READ
+- Like a real person posting: natural, warm, confident, funny when it fits. Contractions with apostrophes (you're, don't, it's), normal capital letters and punctuation.
+- The first sentence is the hook and shows alone in the feed: the reason to keep reading, under 15 words. Never a warm-up ("So,", "Let's talk about", "Here's a reminder").
+- As long as the idea needs and no longer. A one-liner can be the whole post. Cut every sentence that doesn't earn its place.
+- Short paragraphs of 1 to 3 sentences with a blank line between them. Never one sentence per line like a poem (only the dialogue and list forms put things on their own lines).
+- Simple words, varied sentence lengths, easy to read on a phone.
+- Talk with them, not at them. No lecturing ("you need to", "stop making excuses", "be honest with yourself"), no speeches, no fake edginess, no forced slang, no drama.
+- Never: slogans or stock quotes ("trust the process", "no excuses", "consistency is key", "level up", "your future self"), AI phrases ("here's the thing", "the truth is", "real talk", "let that sink in", "read that again", "it's not about X, it's about Y", "journey", "game changer", "unlock"), hashtags, @tags, names (the coach's or anyone's), em dashes, semicolons, more than one emoji (often none).
+- A question only when it's a real invitation (the question form, or one that truly fits). Never tack "who can relate?" or "comment below" onto the end.
+- Humour is actually funny: a true, specific detail, a comparison or a twist people laugh at and send to a friend. Earnest isn't humour.
+- Bodies: never put a body down or make anyone feel judged for how they look (no stomachs, fat, flaws or "fixing" yourself). Strength, confidence and how life feels, not appearance anxiety.
+- Facts: only well-known, safe basics, said plainly; no numbers, studies or claims you can't stand behind. No made-up first-person stories ("I had a client who…") and no real people; a small scene told to "you" or about "someone" is fine.
 - Never write or mention a Bible verse (the app adds one on Sundays).
-- Don't echo anything in RECENT POSTS: not the topic angle, the situation, the message, the opening or the picture. Never lean on the stock moments (nobody clapping, the quiet win, the group chat, Friday night, a full sink, the couch): find a fresh, specific one.
-- A humour post is actually funny: a true, slightly absurd detail, a comparison or a twist people laugh at and tag a friend in. Earnest isn't humour.
+- Don't echo RECENT POSTS: not the angle, the moment, the opening, the shape or the ending. Never lean on stock moments (nobody clapping, the quiet win, the group chat, the couch).
 
-PICTURE RULES
-- Describe the frame: who is in it (adults, their age range, build, hair and clothes, people of different looks, fitting the audience and an everyday gym and life), what they're doing and feeling, where they are, what's around them.
-- Natural human moments full of life: training, laughing, connecting, moving, a small win, a funny moment. Bright, colourful and eye-catching (daytime, golden hour, vivid light); a night or quiet moment only when the story needs one, and then with vivid colour and one bright focal light.
-- When the caption is about a struggle, the picture shows the turn or the human side of it (walking in anyway, the friend who showed up, the laugh after), never someone miserable alone in a dark room or staring at a phone.
-- Body image stories show the person dressed and getting on with it (eating the meal, training, laughing with friends), never undressed, pinching or measuring their body, or on a scale.
+THE PICTURE
+- A frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). Same story and details as the captions: the same place, time and people.
+- Describe the frame: who's in it (adults, their age range, build, hair and clothes, people of different looks, fitting who it's for), what they're doing and feeling, where they are, what's around them.
+- Expressive, likeable characters in moments full of life: training, laughing, celebrating, cheering each other on, a milestone, friends, sunshine, a hike, a beach, a park, a kitchen with friends, coffee after the gym, a busy, bright gym. Bright and inviting (daytime, golden hour, vivid light); night only when the story needs it, and then with vivid colour and one bright focal light.
+- Never someone miserable alone in a dark room, staring at a phone, undressed, pinching or measuring their body, or on a scale. A struggle shows its turn or its human side (walking in anyway, the friend who showed up, the laugh after).
 - Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
-- Any words in the scene (a text message on a phone, a note, a speech bubble, a sign) say exactly what the story needs and are written word for word in "typography" (at most 12 words): only the words as they appear in the frame, never where they are or who's reading them (write "boss: quick thing for monday?", never "on his phone: boss: quick thing for monday?"). No other words anywhere. With no words in the scene, "typography" is "".
+- Any words in the scene (a text on a phone, a note, a speech bubble, a sign) are written word for word in "typography" (at most 12 words): only the words as they appear, never where they are or who's reading them. With no words in the scene, "typography" is "".
 
 Answer with JSON only:
-{"topic": "...", "situation": "...", "tension": "...", "message": "...", "format": "...", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "caption": "..."}`;
+{"topic": "the angle", "mood": "...", "situation": "...", "idea": "...", "format": "...", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": ["...", "...", "..."]}`;
+
+/** Ends on a question mark (a closing emoji aside). */
+export const endsWithQuestion = (s: string) => /\?\s*(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*\s*)?$/u.test(s.trim());
 
 export function conceptPrompt(o: {
+  day: string;
   theme: DailyTheme;
   audience: DailyAudience;
+  crowd: DailyCrowd;
   faith: boolean;
   choices: Choices;
   learnings: string;
@@ -479,37 +699,50 @@ export function conceptPrompt(o: {
   recent: Recent[];
   /** Captions the coach threw out: never write like these. */
   rejected?: string[];
+  /** The coach's own never-say words (his voice profile). */
+  neverSay?: string[];
   /** A remake of one side only: the caption to keep exactly, or the picture already made (its description). */
   keep?: { caption?: string; picture?: string; style?: DailyStyle } | null;
   /** The art direction to use (a test or the coach's pick), else the writer picks. */
   art?: DailyArt | null;
+  /** What the editor said about the last drafts. */
+  editorNotes?: string[];
 }): string {
   const t = DAILY_THEMES[o.theme];
+  const p = DAILY_PILLARS[o.choices.pillar];
+  const ordered = [...o.recent].sort((a, b) => a.day.localeCompare(b.day)).filter((r) => r.day !== o.day);
+  const before = ordered.filter((r) => r.day < o.day).slice(-2);
+  const asked = before.length === 2 && before.every((r) => r.caption && endsWithQuestion(r.caption));
   return [
-    `TODAY'S LENS: ${t.name}. ${t.idea}.`,
-    `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
-    o.faith ? "SUNDAY: a Bible verse goes under the caption. Make it sit well under a quiet verse about rest, hope or strength, without preaching." : null,
-    `TOPICS (pick one, best first): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k]}`).join("; ")}`,
-    `CAPTION FORMS (pick one, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (${DAILY_FORMATS[k].min}-${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
+    `TODAY: ${t.idea}.`,
+    `PILLAR: ${p.name}. The goal: ${p.goal}. ${p.guide}`,
+    `ANGLES, as "topic" (pick one, best first): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k].idea}`).join("; ")}`,
+    `MOOD, as "mood" (pick one): ${p.moods.join(", ")}`,
+    `WHO IT'S FOR: ${DAILY_AUDIENCE_GUIDE[o.audience]} Today especially ${DAILY_CROWDS[o.crowd].guide}.`,
+    o.faith ? "SUNDAY: a Bible verse goes under the caption. Make it sit well under a calm verse about rest, hope or strength, without preaching." : null,
+    `CAPTION FORMS, as "format" (pick one, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
     `COLOUR AND LIGHT, as "light" (pick the one that fits the moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
     o.art
       ? `ART DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
       : `ART DIRECTION, as "art" (pick the one that tells this story best): ${DAILY_ART_KEYS.map((k) => `${k} = ${ART_STYLES[k].name}, for ${ART_STYLES[k].use}`).join("; ")}`,
-    o.keep?.caption ? `KEEP THIS CAPTION EXACTLY, word for word, as "caption" (only plan a new picture for it): ${o.keep.caption}` : null,
+    o.keep?.caption ? `KEEP THIS CAPTION EXACTLY, word for word, as all three "captions" (only plan a new picture for it): ${o.keep.caption}` : null,
     o.keep?.picture
-      ? `KEEP THIS PICTURE (it's already made${o.keep.style ? `, ${DAILY_STYLES[o.keep.style].name.toLowerCase()}` : ""}): ${o.keep.picture}\nPlan the post around it and write a new caption for it. Describe it as it is in "visual"; "typography" is "".`
+      ? `KEEP THIS PICTURE (it's already made${o.keep.style ? `, ${DAILY_STYLES[o.keep.style].name.toLowerCase()}` : ""}): ${o.keep.picture}\nPlan the post around it and write the captions for it. Describe it as it is in "visual"; "typography" is "".`
       : null,
+    asked ? "The last two posts ended with a question: don't end with one." : null,
+    o.neverSay?.length ? `THE COACH NEVER SAYS: ${o.neverSay.join(", ")}` : null,
     `WHAT'S WORKED WITH THIS CREW: ${o.learnings}`,
-    o.best.length ? `POSTS THEY LIKED MOST:\n${o.best.map((l) => `- ${l}`).join("\n")}` : null,
-    o.worst.length ? `POSTS THAT FELL FLAT:\n${o.worst.map((l) => `- ${l}`).join("\n")}` : null,
+    o.best.length ? `POSTS THEY LIKED MOST:\n${o.best.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}` : null,
+    o.worst.length ? `POSTS THAT FELL FLAT:\n${o.worst.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}` : null,
     o.rejected?.length ? `THE COACH THREW THESE OUT (never write like them):\n${o.rejected.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 160)}`).join("\n")}` : null,
-    o.recent.length
-      ? `RECENT POSTS (make yours different in every way):\n${o.recent
+    ordered.length
+      ? `RECENT POSTS (make yours different in every way):\n${ordered
           .slice(-14)
-          .map((r) => `- ${r.day} · ${r.topic ?? "?"} · ${r.format ?? "?"} · ${r.style ?? "?"}${r.light ? ` · ${r.light}` : ""}: ${(r.caption ?? "").replace(/\s+/g, " ").slice(0, 160)}`)
+          .map((r) => `- ${r.day} · ${pillarOf(r) ?? "?"} · ${r.topic ?? "?"} · ${r.format ?? "?"} · ${r.style ?? "?"}: ${(r.caption ?? "").replace(/\s+/g, " ").slice(0, 160)}`)
           .join("\n")}`
       : null,
+    o.editorNotes?.length ? `THE EDITOR TURNED DOWN YOUR LAST DRAFTS: ${o.editorNotes.join("; ")}. Write new ones that fix it.` : null,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -517,40 +750,194 @@ export function conceptPrompt(o: {
 
 const isKey = <K extends string>(keys: readonly K[], v: unknown): v is K => typeof v === "string" && (keys as readonly string[]).includes(v);
 
-/** The concept's JSON (fenced or not), with its choices held to the lists. */
-/** The art direction a topic leans to when the writer doesn't pick one. */
-export function artForTopic(topic: DailyTopic): DailyArt {
-  return ["relationships", "body_image", "identity", "burnout", "overwhelm", "hard_truths"].includes(topic) ? "anime" : "graphic";
+/** The art direction a pillar leans to when the writer doesn't pick one. */
+export function artForPillar(p: DailyPillar): DailyArt {
+  return p === "realization" || p === "community" ? "anime" : "graphic";
 }
 
-export function parseConcept(text: string, allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null }): DailyConcept | null {
+/** The concept's JSON (fenced or not), with its choices held to the lists it was given. */
+export function parseConcept(
+  text: string,
+  allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null; crowd?: DailyCrowd },
+): DailyConcept | null {
   const m = /\{[\s\S]*\}/.exec(text ?? "");
   if (!m) return null;
   try {
     const j = JSON.parse(m[0]);
     const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+    const unquote = (s: string) => s.replace(/^["“]([\s\S]*)["”]$/, "$1");
+    const drafts = (Array.isArray(j.captions) ? j.captions : [j.caption])
+      .map((c: unknown) => unquote(str(c, 900)))
+      .filter(Boolean)
+      .slice(0, 3);
+    const pillar = allowed.pillar;
     const c: DailyConcept = {
+      pillar,
       topic: isKey(allowed.topics, j.topic) ? j.topic : allowed.topics[0],
+      crowd: allowed.crowd ?? "everyone",
+      mood: isKey(DAILY_PILLARS[pillar].moods, j.mood) ? j.mood : DAILY_PILLARS[pillar].moods[0],
       situation: str(j.situation, 500),
       tension: str(j.tension, 300),
-      message: str(j.message, 300),
+      message: str(j.idea ?? j.message, 300),
       format: isKey(allowed.formats, j.format) ? j.format : allowed.formats[0],
       style: isKey(allowed.styles, j.style) ? j.style : allowed.styles[0],
       light: isKey(DAILY_LIGHT_KEYS, j.light) ? j.light : (allowed.lights?.[0] ?? "golden_teal"),
-      art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForTopic(isKey(allowed.topics, j.topic) ? j.topic : allowed.topics[0])),
+      art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForPillar(pillar)),
       visual: str(j.visual, 1400),
       typography: str(j.typography, 100).replace(/^["“]|["”]$/g, ""),
-      caption: str(j.caption, 600).replace(/^["“]|["”]$/g, ""),
+      drafts,
+      caption: drafts[0] ?? "",
     };
-    return c.caption && c.visual && c.message ? c : null;
+    return c.drafts.length && c.visual && c.message ? c : null;
   } catch {
     return null;
   }
 }
 
 /* ------------------------------------------------------------------ */
+/*  The editor: scores the drafts, picks one, polishes it               */
+/* ------------------------------------------------------------------ */
+
+export const EDITOR_SCORES = ["human", "hook", "clarity", "match", "tight", "mobile", "relatable", "fresh", "shareable", "feel_good"] as const;
+export type EditorScore = (typeof EDITOR_SCORES)[number];
+export const EDITOR_FLAGS = ["shaming", "lecturing", "invented", "generic", "negative"] as const;
+export type EditorFlag = (typeof EDITOR_FLAGS)[number];
+
+/** Each score the chosen draft has to reach (a challenge post's feel-good bar is lower: motivated and respected is enough). */
+export const EDITOR_BARS: Record<EditorScore, number> = { human: 4, hook: 4, clarity: 4, match: 4, tight: 4, mobile: 4, relatable: 4, fresh: 3, shareable: 4, feel_good: 4 };
+
+export const EDITOR_PROMPT = `You're the editor of JF Effect's community feed: a strength coach's app where members, men and women from beginners to serious lifters, come to feel good about training and each other. You get the plan for today's post (one picture) and up to three caption drafts for it. Judge them like a sharp social media editor who wants people to enjoy opening the app every day.
+
+Score each draft 1 to 5 (5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor):
+- human: sounds like a real person posting, not an AI, a brand or a motivation account
+- hook: the first sentence makes you want to keep reading
+- clarity: you get it instantly
+- match: it fits the picture and adds to it (a twist, the feeling, what the picture can't say) without repeating its words or just describing it
+- tight: nothing you could cut
+- mobile: easy to read on a phone (short paragraphs, no wall of text, no poem of one-line sentences)
+- relatable: the people it's for would think "that's me"
+- fresh: different from the recent posts in angle, moment, opening and shape
+- shareable: someone would react, comment or send it to a friend
+- feel_good: they leave happier, more confident, entertained, connected or excited to train (a challenge post: motivated and respected, never ashamed)
+
+Flags (true or false):
+- shaming: makes anyone feel bad about their body or themselves
+- lecturing: talks down, preaches or tells people what they're doing wrong
+- invented: a fact, number, study, quote or first-person story it can't stand behind
+- generic: could be on any motivation account
+- negative: dwells on the bad without landing anywhere good
+
+Then pick the best draft and polish it: the same draft with only the edits that make it better (cut a word or a sentence, smoother wording, fix punctuation or a paragraph break). Never add a question, an emoji, a hashtag or a name, and never change the idea. If it's already right, return it unchanged.
+
+Answer with JSON only:
+{"drafts": [{"scores": {"human": 1-5, "hook": 1-5, "clarity": 1-5, "match": 1-5, "tight": 1-5, "mobile": 1-5, "relatable": 1-5, "fresh": 1-5, "shareable": 1-5, "feel_good": 1-5}, "flags": {"shaming": false, "lecturing": false, "invented": false, "generic": false, "negative": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
+
+export function editorPrompt(o: {
+  concept: Pick<DailyConcept, "pillar" | "topic" | "crowd" | "mood" | "situation" | "message" | "visual" | "typography" | "format">;
+  audience: DailyAudience;
+  drafts: string[];
+  recent: string[];
+}): string {
+  const p = DAILY_PILLARS[o.concept.pillar];
+  return [
+    `PILLAR: ${p.name}. The goal: ${p.goal}`,
+    `ANGLE: ${DAILY_TOPICS[o.concept.topic]?.idea ?? o.concept.topic}`,
+    `FOR: ${DAILY_AUDIENCE_GUIDE[o.audience]} Especially ${DAILY_CROWDS[o.concept.crowd]?.guide ?? "anyone who trains"}.`,
+    `MOOD: ${o.concept.mood}`,
+    `THE MOMENT: ${o.concept.situation}`,
+    `THE IDEA: ${o.concept.message}`,
+    `THE PICTURE: ${o.concept.visual}`,
+    o.concept.typography ? `WORDS IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE HAS NO WORDS IN IT.",
+    `THE FORM: ${DAILY_FORMATS[o.concept.format]?.guide ?? o.concept.format}`,
+    o.recent.length ? `RECENT POSTS:\n${o.recent.slice(-10).map((r) => `- ${r.replace(/\s+/g, " ").slice(0, 160)}`).join("\n")}` : null,
+    `THE DRAFTS:\n${o.drafts.map((d, i) => `[${i}]\n${d}`).join("\n\n")}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export type EditorDraft = { scores: Record<EditorScore, number>; flags: Record<EditorFlag, boolean>; note: string };
+export type EditorReview = { drafts: EditorDraft[]; best: number; polished: string; why: string };
+
+export function parseEditor(text: string, count: number): EditorReview | null {
+  const m = /\{[\s\S]*\}/.exec(text ?? "");
+  if (!m) return null;
+  try {
+    const j = JSON.parse(m[0]);
+    const n = (v: unknown) => Math.max(1, Math.min(5, Math.round(Number(v) || 1)));
+    const drafts: EditorDraft[] = (Array.isArray(j.drafts) ? j.drafts : []).slice(0, count).map((d: any) => ({
+      scores: Object.fromEntries(EDITOR_SCORES.map((k) => [k, n(d?.scores?.[k])])) as Record<EditorScore, number>,
+      flags: Object.fromEntries(EDITOR_FLAGS.map((k) => [k, d?.flags?.[k] === true])) as Record<EditorFlag, boolean>,
+      note: typeof d?.note === "string" ? d.note.trim().slice(0, 300) : "",
+    }));
+    if (!drafts.length) return null;
+    const best = Number.isInteger(j.best) && j.best >= 0 && j.best < drafts.length ? j.best : 0;
+    return { drafts, best, polished: typeof j.polished === "string" ? j.polished.trim().slice(0, 900) : "", why: typeof j.why === "string" ? j.why.trim().slice(0, 300) : "" };
+  } catch {
+    return null;
+  }
+}
+
+/** A draft's average editor score (1 to 5). */
+export const editorScore = (d: Pick<EditorDraft, "scores">) => Math.round((EDITOR_SCORES.reduce((t, k) => t + d.scores[k], 0) / EDITOR_SCORES.length) * 10) / 10;
+
+/** Does the editor's chosen draft clear every bar with no flag? What's short, if not. */
+export function editorVerdict(e: EditorReview, pillar: DailyPillar): { pass: boolean; issues: string[] } {
+  const d = e.drafts[e.best];
+  const issues: string[] = [];
+  for (const k of EDITOR_SCORES) {
+    const bar = k === "feel_good" && pillar === "challenge" ? 3 : EDITOR_BARS[k];
+    if (d.scores[k] < bar) issues.push(`${k.replace("_", " ")} ${d.scores[k]}/5`);
+  }
+  for (const f of EDITOR_FLAGS) if (d.flags[f]) issues.push(f);
+  if (issues.length && d.note) issues.push(d.note);
+  return { pass: !issues.length, issues };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Checks                                                             */
 /* ------------------------------------------------------------------ */
+
+const CONTRACTIONS: Record<string, string> = {
+  dont: "don't", cant: "can't", wont: "won't", isnt: "isn't", arent: "aren't", doesnt: "doesn't", didnt: "didn't", wasnt: "wasn't",
+  werent: "weren't", hasnt: "hasn't", havent: "haven't", couldnt: "couldn't", wouldnt: "wouldn't", shouldnt: "shouldn't",
+  youre: "you're", youve: "you've", youll: "you'll", youd: "you'd", theyre: "they're", theyve: "they've", thats: "that's",
+  whats: "what's", theres: "there's", heres: "here's", im: "I'm", ive: "I've", ill: "I'll", itll: "it'll", lets: "let's",
+};
+/** "lets" is also a word ("it lets you"), so it's only fixed where it starts a sentence. */
+const AMBIGUOUS = new Set(["lets", "ill", "wont", "cant"]);
+
+/**
+ * A caption as it should read in the feed: real apostrophes and capitals
+ * (the old texting style's "dont" and "im" fixed), no em dashes or "&",
+ * no stray spaces, at most one blank line between paragraphs, and never
+ * wrapped in quotes.
+ */
+export function tidyCaption(text: string): string {
+  let t = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  t = t.replace(/^["“]([\s\S]*)["”]$/, "$1").trim();
+  t = t.replace(/(\d)\s*[—–]\s*(\d)/g, "$1-$2");
+  t = t.replace(/\s*[—–]\s*/g, ", ");
+  t = t.replace(/\s+&\s+/g, " and ");
+  t = t.replace(/[’]/g, "'");
+  t = t.replace(/\b([A-Za-z]+)\b/g, (w, _x, i: number) => {
+    const fix = CONTRACTIONS[w.toLowerCase()];
+    if (!fix) return w;
+    const before = t.slice(0, i);
+    if (AMBIGUOUS.has(w.toLowerCase()) && !/(^|[.!?\n]\s*)$/.test(before)) return w;
+    return w[0] === w[0].toUpperCase() && fix[0] !== "I" ? fix[0].toUpperCase() + fix.slice(1) : fix;
+  });
+  t = t.replace(/\bi\b(?=[\s,.!?']|$)/g, "I");
+  // a capital at the start of the caption, each line and each sentence
+  t = t.replace(/(^|\n|[.!?]\s+)([a-z])/g, (_m, lead, ch) => `${lead}${ch.toUpperCase()}`);
+  t = t.replace(/ +([,.!?])/g, "$1");
+  t = t
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+  return t.trim();
+}
 
 /** Slogans that make a post read like an auto-filled motivation account. */
 export const GENERIC_PHRASES = [
@@ -573,11 +960,17 @@ export const GENERIC_PHRASES = [
   "hustle",
   "stay focused",
   "push through",
-  "small steps",
   "every day is a new",
   "you are stronger than you think",
   "finish strong",
-  // the writer's own clichés from the first weeks: never, not just not twice
+  "no days off",
+  "pain is weakness",
+  "comfort zone is",
+  "discipline is",
+  "motivation is",
+  "crush it",
+  "crushing it",
+  // the first weeks' own clichés: never, not just not twice
   "nobody claps",
   "no one claps",
   "no claps",
@@ -585,6 +978,64 @@ export const GENERIC_PHRASES = [
   "quiet win",
   "quiet choice",
 ] as const;
+
+/** Phrases that give away a writer, not a person. */
+export const AI_TELLS = [
+  "here's the thing",
+  "here's the truth",
+  "the truth is",
+  "real talk",
+  "let that sink in",
+  "read that again",
+  "be real:",
+  "let's be honest",
+  "let's talk about",
+  "reminder:",
+  "friendly reminder",
+  "remember this",
+  "game changer",
+  "game-changer",
+  "unlock your",
+  "embrace the",
+  "fuel your",
+  "it's not about",
+  "isn't about",
+  "journey",
+  "who can relate",
+  "comment below",
+  "drop a comment",
+  "tag someone",
+  "tag a friend",
+] as const;
+
+/** Talking at the reader, not with them. */
+const LECTURING = [
+  /\byou (need|have|got) to\b/i,
+  /\bstop (making|being|saying|pretending|waiting)\b/i,
+  /\bthe lie\b/i,
+  /\bbe honest with yourself\b/i,
+  /\bno one cares\b/i,
+  /\bnobody cares\b/i,
+  /\byou're (just )?(lazy|scared|weak)\b/i,
+];
+
+/** Putting a body down (any of these, anywhere, fails: the crew should never feel judged for how they look). */
+const BODY_PUTDOWN = [
+  /\b(stomach|love handles|muffin top|cellulite|flab|flabby|jiggly|chubby|fatty|overweight|double chin|thunder thighs|man boobs|moobs)\b/i,
+  // "fat" about a body, never "fat loss", "low-fat" or "healthy fats" (no lookbehind: it has to parse on older phones)
+  /(^|[^\w-])fat\b(?![\s-]*(loss|burning|free))/i,
+  /\b(ugly|hideous)\b/i,
+  /\bhate (your|my|their) (body|reflection|arms|legs|face|thighs)\b/i,
+  /\bskipp(ing|ed) (dinner|meals|lunch|breakfast)\b/i,
+];
+
+const NEGATIVE = /\b(hate|hated|worst|failure|failing|failed|lazy|quit|quitting|guilt|guilty|shame|ashamed|pathetic|weak|trash|miserable|exhausted|drained|dread|dreading|cringe|embarrass\w*|insecur\w*|excuses?|broken|stress(ed|ful)?|anxious|anxiety|overwhelm\w*|scared|afraid|alone|lonely|sad|depress\w*)\b/gi;
+const POSITIVE = /\b(proud|love|loved|enjoy\w*|fun|funny|laugh\w*|excit\w*|grateful|strong|stronger|easier|better|glad|happy|friend\w*|celebrat\w*|progress|win|wins|won|smil\w*|confiden\w*|look forward|favourite|favorite|best|cheer\w*|hype\w*|good)\b/gi;
+
+/** How the caption leans: negative words against positive ones (a challenge can lean a little more before it counts). */
+export function negativeLean(caption: string): { negative: number; positive: number } {
+  return { negative: (caption.match(NEGATIVE) ?? []).length, positive: (caption.match(POSITIVE) ?? []).length };
+}
 
 const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu;
 /** Words half of all captions start with ("you", "the"): two of them together are the opening that can repeat. */
@@ -606,7 +1057,7 @@ export function repeatsNearby(line: string, near: string[]): string | null {
 }
 
 const trigrams = (s: string) => {
-  const w = s.toLowerCase().replace(EMOJI_RE, " ").match(/[a-z']+/g) ?? [];
+  const w = s.toLowerCase().replace(/[’']/g, "").replace(EMOJI_RE, " ").match(/[a-z]+/g) ?? [];
   const out = new Set<string>();
   for (let i = 0; i + 2 < w.length; i++) out.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`);
   return out;
@@ -661,28 +1112,68 @@ export function motifRepeats(caption: string, recent: string[]): string[] {
 
 /** Past this share of three-word runs, a caption is a rerun. */
 export const SIMILAR_MAX = 0.3;
+/** The hook (the first sentence) shows alone in the feed's preview: past these it's cut mid-thought on a phone. */
+export const HOOK_MAX_WORDS = 18;
+export const HOOK_MAX_CHARS = 110;
+/** Plain enough to read in one pass on a phone (natural writing, not a 5th-grade drill). */
+export const DAILY_GRADE_MAX = 7;
+export const DAILY_SENTENCE_MAX = 24;
+/** Names that must never be dropped into a caption (the coach's own, and placeholders). */
+export const NO_NAMES = /\b(jared|jf effect|coach jared)\b|\[name\]|\{name\}|<name>/i;
 
-/** What's wrong with a caption (empty = it can go out). `recent` = earlier posts' captions, `near` = the days around it. */
-export function captionProblems(caption: string, o: { format: DailyFormat; recent?: string[]; near?: string[] }): string[] {
+const letters = (s: string) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+/** The first sentence (or line), the hook. */
+export function hookOf(caption: string): string {
+  const first = caption.trim().split("\n")[0] ?? "";
+  const m = /^.*?[.!?…](?=\s|$)/.exec(first);
+  return (m ? m[0] : first).trim();
+}
+
+/**
+ * What's wrong with a caption (empty = it can go out). `recent` = earlier
+ * posts' captions, `near` = the days around it, `asked` = the last two
+ * posts ended with a question, `picture` = the words in the picture.
+ */
+export function captionProblems(
+  caption: string,
+  o: { format: DailyFormat; pillar?: DailyPillar; recent?: string[]; near?: string[]; asked?: boolean; picture?: string },
+): string[] {
   const out: string[] = [];
-  const f = DAILY_FORMATS[o.format];
-  if (caption.length > f.max) out.push(`${caption.length} characters (a ${f.name.toLowerCase()} is ${f.max} at most)`);
-  if (caption.length < f.min) out.push(`${caption.length} characters (a ${f.name.toLowerCase()} needs ${f.min} or more)`);
-  if (caption.split("\n").filter((l) => l.trim()).length > 8) out.push("more than 8 lines");
-  if ((caption.match(EMOJI_RE) ?? []).length > 1) out.push("more than one emoji");
-  if (/#\w/.test(caption)) out.push("has a hashtag");
-  if (/@\w/.test(caption)) out.push("tags someone");
-  if (/["“”]/.test(caption)) out.push("has quotation marks");
-  if (BIBLE_REF.test(caption) || /\b(verse|scripture)\b/i.test(caption)) out.push("mentions a verse (the app adds it)");
-  const lower = ` ${caption.toLowerCase()} `;
+  const f = DAILY_FORMATS[o.format] ?? DAILY_FORMATS.quick_take;
+  const text = caption.trim();
+  if (!text) return ["empty"];
+  if (text.length > f.max) out.push(`${text.length} characters (a ${f.name.toLowerCase()} is ${f.max} at most)`);
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length > 4) out.push(`${paragraphs.length} paragraphs (4 at most)`);
+  if (!f.lines && paragraphs.some((p) => p.split("\n").length > 1)) out.push("line breaks inside a paragraph (write sentences, not a poem of one-line lines)");
+  if (f.lines && text.split("\n").filter((l) => l.trim()).length > 7) out.push("more than 7 lines");
+  const hook = hookOf(text);
+  if (wordsOf(hook).length > HOOK_MAX_WORDS || hook.length > HOOK_MAX_CHARS) out.push(`the first sentence runs long (${wordsOf(hook).length} words): it's the hook, keep it short`);
+  if ((text.match(EMOJI_RE) ?? []).length > 1) out.push("more than one emoji");
+  if (/#\w/.test(text)) out.push("has a hashtag");
+  if (/@\w/.test(text)) out.push("tags someone");
+  if (NO_NAMES.test(text)) out.push("drops in a name");
+  if (BIBLE_REF.test(text) || /\b(verse|scripture)\b/i.test(text)) out.push("mentions a verse (the app adds it)");
+  const lower = ` ${text.toLowerCase().replace(/[’]/g, "'")} `;
   for (const g of GENERIC_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (a slogan)`);
-  const near = o.near ?? [];
-  const repeat = repeatsNearby(caption, near);
+  for (const g of AI_TELLS) if (lower.includes(g)) out.push(`says "${g}" (reads like AI)`);
+  if (LECTURING.some((re) => re.test(text))) out.push("lectures the reader");
+  if (BODY_PUTDOWN.some((re) => re.test(text))) out.push("puts a body down");
+  const lean = negativeLean(text);
+  if (lean.negative >= (o.pillar === "challenge" ? 4 : 3) && lean.negative > lean.positive) out.push(`leans negative (${lean.negative} heavy words, ${lean.positive} light ones)`);
+  if (o.asked && endsWithQuestion(text)) out.push("ends on a question again (the last two did)");
+  const pic = letters(o.picture ?? "");
+  if (pic.split(" ").length >= 4 && o.format !== "dialogue" && letters(text).includes(pic)) out.push("repeats the words in the picture");
+  if (wordsOf(text).length >= 25 && readingGrade(text) > DAILY_GRADE_MAX) out.push(`hard to read (grade ${readingGrade(text)}, aim ${DAILY_GRADE_MAX} or under)`);
+  if (longestSentence(text) > DAILY_SENTENCE_MAX) out.push(`a ${longestSentence(text)}-word sentence (${DAILY_SENTENCE_MAX} at most)`);
+  for (const j of Object.keys(JARGON)) if (new RegExp(`[^\\p{L}]${j}s?[^\\p{L}]`, "iu").test(lower)) out.push(`"${j}" (say "${JARGON[j]}")`);
+  const repeat = repeatsNearby(text, o.near ?? []);
   if (repeat) out.push(repeat);
-  const close = (o.recent ?? []).find((r) => captionSimilarity(caption, r) >= SIMILAR_MAX);
+  const close = (o.recent ?? []).find((r) => captionSimilarity(text, r) >= SIMILAR_MAX);
   if (close) out.push(`too close to a recent post ("${close.slice(0, 50)}…")`);
-  for (const m of motifRepeats(caption, o.recent ?? [])) out.push(`uses "${m}" like a recent post (find a new moment)`);
-  for (const p of [...plainCheck(caption).problems, ...voiceProblems(caption)]) if (!out.includes(p)) out.push(p);
+  for (const m of motifRepeats(text, o.recent ?? [])) out.push(`uses "${m}" like a recent post (find a new moment)`);
+  for (const p of voiceProblems(text)) if (!out.includes(p)) out.push(p);
   return [...new Set(out)];
 }
 
@@ -705,14 +1196,26 @@ export function typographyProblems(text: string): string[] {
 export const STYLE_REFERENCE =
   "The attached image is the style reference. Match its art style exactly: its colour, saturation and lighting, its linework and cel shading, how its people are drawn and how detailed its background is. Draw a completely new scene from the description below; never copy the reference's people, place, objects or composition.";
 
-/** The image model's prompt: the look and art direction, the shot, the colour and light, the moment, the words in it (exactly) or none, and what it must never look like. */
+/** How each mood should feel in the frame. */
+const MOOD_LOOK: Record<DailyMood, string> = {
+  uplifting: "uplifting and hopeful, a sense of possibility",
+  proud: "quietly proud and glowing, a small personal victory",
+  funny: "funny and lively, the comedy readable in the faces and the moment",
+  warm: "warm and friendly, real connection between people",
+  curious: "bright and engaging, a little 'aha' in the moment",
+  fired_up: "energetic and determined, full of momentum",
+  thoughtful: "calm and reflective, still bright and hopeful",
+};
+
+/** The image model's prompt: the look and art direction, the shot, the colour and light, the moment and its mood, the words in it (exactly) or none, and what it must never look like. */
 export function picturePrompt(
-  c: Pick<DailyConcept, "style" | "visual" | "typography" | "message"> & { light?: DailyLight | string | null; art?: DailyArt | string | null },
+  c: Pick<DailyConcept, "style" | "visual" | "typography" | "message"> & { light?: DailyLight | string | null; art?: DailyArt | string | null; mood?: DailyMood | string | null },
   o: { faith?: boolean; fix?: string | null; reference?: boolean } = {},
 ): string {
   const shot = DAILY_STYLES[c.style as DailyStyle] ?? DAILY_STYLES.medium_candid;
   const light = c.light && c.light in DAILY_LIGHTS ? DAILY_LIGHTS[c.light as DailyLight] : null;
   const art = ART_STYLES[(c.art && c.art in ART_STYLES ? c.art : "graphic") as DailyArt];
+  const mood = c.mood && c.mood in MOOD_LOOK ? MOOD_LOOK[c.mood as DailyMood] : null;
   const words = c.typography.trim();
   return [
     o.reference ? STYLE_REFERENCE : null,
@@ -721,8 +1224,8 @@ export function picturePrompt(
     `The shot: ${shot.look}`,
     light ? `Colour and light: ${light.look}.` : null,
     `What happens in the frame: ${c.visual}`,
-    `The feeling: ${c.message}`,
-    "People are attractive, naturally proportioned adults with clean, sharp faces and clear, natural expressions, caught mid-moment, never posing or looking at the camera.",
+    `The feeling: ${c.message}${mood ? ` (${mood})` : ""}`,
+    "People are expressive, likeable, naturally proportioned adults with clean, sharp faces and clear, natural expressions, caught mid-moment, never posing or looking at the camera. The scene feels alive and inviting.",
     o.faith ? "Quiet and hopeful, still bright and colourful; any Bible stays closed with no readable writing on it." : null,
     words
       ? `The only words in the frame are exactly these, where the story puts them (a speech bubble, a note, a screen), spelled exactly and clearly readable: ${words}. No other letters, numbers or logos anywhere.`
@@ -739,7 +1242,7 @@ export function picturePrompt(
 /*  The review                                                         */
 /* ------------------------------------------------------------------ */
 
-export const REVIEW_PROMPT = `You review one daily post for a strength coach's community feed before it goes out: a picture and its caption, made for a planned message. Be an honest editor at a good magazine. Look closely at the picture.
+export const REVIEW_PROMPT = `You review one daily post for a strength coach's community feed before it goes out: a picture and its caption, made together for one idea. The feed should make members glad they opened the app. Be an honest editor at a good magazine. Look closely at the picture.
 
 Answer with JSON only:
 {
@@ -749,14 +1252,14 @@ Answer with JSON only:
  "clarity": "crisp (clean linework, sharp, well-drawn faces) or soft (blurry, smudged, grainy or painterly faces and lines)",
  "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
  "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
- "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5},
+ "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5, "uplift": 1-5},
  "fix_image": "what would make the picture better, or empty",
  "fix_caption": "what would make the caption better, or empty"
 }
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean (a caption meant as humour that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = reads like a real person posting (natural, warm, clean punctuation, no lecturing; a caption meant as humour that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other, the caption not just repeating the words in the picture (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send; uplift = the picture and caption together leave people feeling good (happier, more confident, entertained, connected or excited to train), never gloomy, shaming or heavy without a turn.`;
 
 export type Review = {
   /** What it actually is: only hand_drawn_2d passes. */
@@ -768,25 +1271,32 @@ export type Review = {
   description: string;
   text_seen: string;
   defects: string[];
-  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging", number>;
+  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging" | "uplift", number>;
   fix_image: string;
   fix_caption: string;
 };
 
 export function reviewPrompt(o: {
   caption: string;
-  concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style"> & { art?: DailyArt | string | null; format?: DailyFormat | string | null };
+  concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style"> & {
+    art?: DailyArt | string | null;
+    format?: DailyFormat | string | null;
+    pillar?: DailyPillar | string | null;
+    mood?: DailyMood | string | null;
+  };
   audience: DailyAudience;
   /** How many style references come before the picture. */
   references?: number;
 }): string {
   const art = o.concept.art && o.concept.art in ART_STYLES ? ART_STYLES[o.concept.art as DailyArt] : null;
+  const pillar = o.concept.pillar && o.concept.pillar in DAILY_PILLARS ? DAILY_PILLARS[o.concept.pillar as DailyPillar] : null;
   return [
     o.references
       ? `THE FIRST ${o.references === 1 ? "IMAGE IS THE STYLE REFERENCE" : `${o.references} IMAGES ARE THE STYLE REFERENCES`} THE COACH CHOSE. THE LAST IMAGE IS THE ONE TO REVIEW: judge its colour, light, linework and how its people are drawn against the reference.`
       : null,
     `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
-    `THE MESSAGE: ${o.concept.message}`,
+    pillar ? `THE KIND OF POST: ${pillar.name} (${pillar.goal})${o.concept.mood ? `, mood ${o.concept.mood}` : ""}` : null,
+    `THE IDEA: ${o.concept.message}`,
     o.concept.format && o.concept.format in DAILY_FORMATS ? `THE CAPTION'S FORM: ${DAILY_FORMATS[o.concept.format as DailyFormat].name} (${DAILY_FORMATS[o.concept.format as DailyFormat].guide})` : null,
     `THE SITUATION: ${o.concept.situation}`,
     `THE PICTURE WAS MEANT TO BE: a frame from a premium, colourful, hand-drawn 2D animated film, bright and crisp (never 3D, a photo, vector clip art, dark or muddy)${art ? `, ${art.name}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""} ${o.concept.visual}`,
@@ -824,6 +1334,8 @@ export function parseReview(text: string): Review | null {
         storytelling: n(s.storytelling),
         match: n(s.match),
         engaging: n(s.engaging),
+        // a review from before the uplift score counts as neutral, not a fail
+        uplift: s.uplift == null ? 4 : n(s.uplift),
       },
       fix_image: typeof j.fix_image === "string" ? j.fix_image.trim() : "",
       fix_caption: typeof j.fix_caption === "string" ? j.fix_caption.trim() : "",
@@ -833,19 +1345,17 @@ export function parseReview(text: string): Review | null {
   }
 }
 
-/** Words as letters only: "it's" and "its" are the same word, punctuation and line breaks don't count. */
-const letters = (s: string) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-
-/** Each score a post has to reach. */
-export const REVIEW_BARS: Review["scores"] = { relatable: 4, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3 };
-const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match"]);
+/** Each score a post has to reach (the caption already passed the editor, so its bars here only catch a picture that changed its meaning). */
+export const REVIEW_BARS: Review["scores"] = { relatable: 3, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3, uplift: 4 };
+const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match", "uplift"]);
 
 /**
  * Pass or fail, on concrete checks first: the words read off the picture are
  * exactly what was asked for (or none), no defects; then every score at its
- * bar. Says which side failed, so only that side is made again.
+ * bar (a challenge post's uplift bar is 3). Says which side failed, so only
+ * that side is made again.
  */
-export function reviewVerdict(r: Review, typography: string, scene = ""): { pass: boolean; image: string[]; caption: string[] } {
+export function reviewVerdict(r: Review, typography: string, scene = "", pillar?: DailyPillar | string | null): { pass: boolean; image: string[]; caption: string[] } {
   const image: string[] = [];
   const caption: string[] = [];
   const want = letters(typography);
@@ -866,7 +1376,8 @@ export function reviewVerdict(r: Review, typography: string, scene = ""): { pass
   if (r.clarity !== "crisp") image.push(`its faces and lines read as ${r.clarity || "unclear"}, not crisp`);
   for (const d of r.defects) image.push(d);
   for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
-    if (r.scores[k] >= REVIEW_BARS[k]) continue;
+    const bar = k === "uplift" && pillar === "challenge" ? 3 : REVIEW_BARS[k];
+    if (r.scores[k] >= bar) continue;
     (IMAGE_SCORES.has(k) ? image : caption).push(`${k} ${r.scores[k]}/5`);
   }
   if (image.length && r.fix_image) image.push(`fix: ${r.fix_image}`);
@@ -878,15 +1389,15 @@ export function reviewVerdict(r: Review, typography: string, scene = ""): { pass
 /*  A caption rewrite against the same picture                         */
 /* ------------------------------------------------------------------ */
 
-export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for a strength coach's community feed. The picture is already made and stays. Keep the post's message and form; fix only what the editor said. Same writing rules: plain words, lowercase like his texts, the first line earns the tap, no slogans, no hashtags, no quotation marks, at most one emoji, never a Bible verse. Answer with JSON only: {"caption": "..."}`;
+export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for a strength coach's community feed. The picture is already made and stays. Keep the post's idea and form; fix only what the editor said. The same rules: it reads like a real person posting (natural, warm, contractions with apostrophes, normal capitals and punctuation), the first sentence is a short hook, short paragraphs with a blank line between them, no lecturing, no slogans or AI phrases, no hashtags, no names, at most one emoji, never a Bible verse, never putting a body down. Answer with JSON only: {"caption": "..."}`;
 
 export function captionFixPrompt(o: { concept: Pick<DailyConcept, "message" | "situation" | "visual" | "format">; caption: string; fix: string[] }): string {
-  const f = DAILY_FORMATS[o.concept.format] ?? DAILY_FORMATS.observation;
+  const f = DAILY_FORMATS[o.concept.format] ?? DAILY_FORMATS.quick_take;
   return [
-    `THE MESSAGE: ${o.concept.message}`,
+    `THE IDEA: ${o.concept.message}`,
     `THE SITUATION: ${o.concept.situation}`,
     `THE PICTURE: ${o.concept.visual}`,
-    `THE FORM: ${f.guide} (${f.min}-${f.max} characters)`,
+    `THE FORM: ${f.guide} (up to ${f.max} characters)`,
     `THE CAPTION NOW:\n${o.caption}`,
     `WHAT TO FIX: ${o.fix.join("; ")}`,
   ].join("\n\n");
@@ -897,7 +1408,7 @@ export function parseCaption(text: string): string | null {
   if (!m) return null;
   try {
     const c = JSON.parse(m[0])?.caption;
-    return typeof c === "string" && c.trim() ? c.trim().replace(/^["“]|["”]$/g, "").slice(0, 600) : null;
+    return typeof c === "string" && c.trim() ? c.trim().replace(/^["“]|["”]$/g, "").slice(0, 900) : null;
   } catch {
     return null;
   }
