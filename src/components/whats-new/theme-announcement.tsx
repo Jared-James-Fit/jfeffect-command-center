@@ -18,15 +18,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { isNewsTo } from "@/lib/whats-new";
 
 export const THEME_FEATURE_KEY = "theme_toggle_2026_10";
+/** Accounts made from here on have had the toggle since day one (free sign-up opened Nov 5 2026). */
+export const THEME_NEW_SINCE = "2026-11-05T00:00:00Z";
 export const THEME_TOGGLE_HIGHLIGHT_EVENT = "jf-theme-toggle-highlight";
 
 const db = supabase as any;
 
 export function ThemeAnnouncementGate() {
   const { user } = useAuth();
-  const userId = user?.id ?? null;
+  // a member who joined after the toggle shipped has nothing new to hear about
+  const userId = user && isNewsTo(user.created_at, THEME_NEW_SINCE) ? user.id : null;
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [closed, setClosed] = useState(false);
