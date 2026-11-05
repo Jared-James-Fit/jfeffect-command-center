@@ -508,7 +508,7 @@ async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate
   }
 
   let rev = await review(maker, r, concept, caption, image);
-  let verdict = reviewVerdict(rev, concept.typography);
+  let verdict = reviewVerdict(rev, concept.typography, concept.visual);
   // a caption the reviewer marked down gets one rewrite against this same picture
   if (!verdict.image.length && verdict.caption.length && !c.keepCaption) {
     const t = await maker.json(CAPTION_FIX_PROMPT, captionFixPrompt({ concept, caption, fix: verdict.caption }));
@@ -518,7 +518,7 @@ async function pictureStep(admin: Admin, r: DailyRow, maker: Maker, c: Candidate
     if (fixed && !captionProblems(fixed, { format: concept.format }).length) {
       caption = fixed;
       rev = await review(maker, r, concept, caption, image);
-      verdict = reviewVerdict(rev, concept.typography);
+      verdict = reviewVerdict(rev, concept.typography, concept.visual);
     }
   }
   // one side of a one-side remake is the day's own, so only the other side is judged
