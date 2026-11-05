@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dumbbell, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { applyWeightUnitChoice, weightUnitSetupQuery } from "@/lib/weight-unit-pref";
 import { MEMBER_SETUP_STATUS_KEY, setupStillOpen } from "@/lib/member-setup-steps";
+import { useServiceTier } from "@/lib/service-tier";
 import type { WeightUnit } from "@/lib/weight-lifted";
 
 // Asked once per app open until answered; lb is used in the meantime.
@@ -33,6 +34,12 @@ export function WeightUnitPrompt() {
   const { user, role } = useAuth();
   const { isImpersonating } = useClientImpersonation();
   const qc = useQueryClient();
+  // the account's tier decides whether a setup gate is coming (read by the wait below)
+  const { loading: tierLoading, isSelfServe } = useServiceTier();
+  const tierRef = useRef({ loading: tierLoading, selfServe: isSelfServe });
+  useEffect(() => {
+    tierRef.current = { loading: tierLoading, selfServe: isSelfServe };
+  }, [tierLoading, isSelfServe]);
   const userId = user?.id ?? null;
   const enabled = !!userId && role === "client" && !isImpersonating;
   const [open, setOpen] = useState(false);
@@ -53,7 +60,7 @@ export function WeightUnitPrompt() {
     let timer = 0;
     const tick = () => {
       if (stopped) return;
-      if (uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY))) {
+      if (uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY), tierRef.current)) {
         try { sessionStorage.setItem(SESSION_KEY(userId), "1"); } catch { /* storage unavailable */ }
         setOpen(true);
         return;

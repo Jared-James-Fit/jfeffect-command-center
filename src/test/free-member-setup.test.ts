@@ -74,6 +74,17 @@ describe("a new member gets setup first, then one popup at a time", () => {
     expect(setupStillOpen({ status: "success", data: { complete: true, member } })).toBe(false);
     // no setup gate mounted (a coaching client), a failed read, or an admin's sandbox: nothing to wait for
     expect(setupStillOpen(undefined)).toBe(false);
+    // a brand-new account: nothing is decided until its tier is known, and a
+    // self-serve account's setup gate is about to load its state
+    expect(setupStillOpen(undefined, { loading: true, selfServe: false })).toBe(true);
+    expect(setupStillOpen(undefined, { loading: false, selfServe: true })).toBe(true);
+    expect(setupStillOpen(undefined, { loading: false, selfServe: false })).toBe(false);
+    expect(
+      setupStillOpen(
+        { status: "success", data: { complete: true, member } },
+        { loading: false, selfServe: true },
+      ),
+    ).toBe(false);
     expect(setupStillOpen({ status: "error" })).toBe(false);
     expect(
       setupStillOpen({
@@ -94,7 +105,7 @@ describe("a new member gets setup first, then one popup at a time", () => {
       "src/components/portal/weight-unit-prompt.tsx",
     ]) {
       expect(readFileSync(f, "utf8")).toContain(
-        "uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY))",
+        "uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY), tierRef.current)",
       );
     }
   });
