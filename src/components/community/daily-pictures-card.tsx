@@ -123,6 +123,7 @@ const AUDIENCE: Record<Audience, string> = { women: "for her", men: "for him", e
 const REASON: Record<string, string> = {
   rebuild: "The original, before the rebuild",
   restyle: "Before the 2D film look",
+  voice: "Before the new voice",
   coach: "Replaced when you asked for a new one",
   rejected: "You rejected it",
   edited: "Before your edit",
