@@ -14,6 +14,16 @@ import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { applyWeightUnitChoice, weightUnitSetupQuery } from "@/lib/weight-unit-pref";
+import type { WeightUnit } from "@/lib/weight-lifted";
+
+// Asked on the last step instead of a separate "Pounds or kilograms?" popup
+// right after setup (the answer stamps weight_unit_confirmed_at, which is what
+// keeps WeightUnitPrompt away).
+const UNIT_CHOICES: { unit: WeightUnit; label: string }[] = [
+  { unit: "lb", label: "Pounds (lb)" },
+  { unit: "kg", label: "Kilograms (kg)" },
+];
 
 const GOAL_OPTIONS = [
   "Get stronger",
@@ -54,6 +64,13 @@ export function MemberSetupWizard({
   const update = useServerFn(updateMyMemberProfile);
   const { data } = useQuery({ queryKey: ["m-setup-status"], queryFn: () => fetchStatus(), enabled: open });
   const m = data?.member as any;
+  const { data: unitRow } = useQuery({
+    ...weightUnitSetupQuery(user?.id),
+    enabled: open && !!user?.id,
+    staleTime: 5 * 60_000,
+  });
+  // never chosen: the last step asks, so no second popup follows setup
+  const unitNeeded = !!unitRow && !unitRow.weight_unit_confirmed_at;
 
   // a free account is asked two things (goal + experience, then days); the paid membership all five
   const free = isFreeAccount(m);
@@ -114,6 +131,7 @@ export function MemberSetupWizard({
     schedule: (() => {
       const missing: string[] = [];
       if (trainingDays.length === 0) missing.push("at least one training day");
+      if (unitNeeded && !form.weight_unit) missing.push("pounds or kilograms");
       return { ok: missing.length === 0, missing };
     })(),
   };
@@ -149,6 +167,9 @@ export function MemberSetupWizard({
           patch.committed_training_days = form.committed_training_days;
           patch.committed_training_frequency = form.committed_training_days.length;
         }
+      }
+      if (step === "schedule" && unitNeeded && form.weight_unit && unitRow && user?.id) {
+        await applyWeightUnitChoice(qc, user.id, unitRow, form.weight_unit as WeightUnit);
       }
       if (Object.keys(patch).length) {
         const r = await update({ data: patch });
@@ -324,6 +345,33 @@ export function MemberSetupWizard({
             <p className="text-xs text-muted-foreground">
               Selected: <span className="font-semibold text-foreground">{trainingDays.length}</span> day{trainingDays.length === 1 ? "" : "s"} per week
             </p>
+            {unitNeeded && (
+              <div className="space-y-2 pt-2">
+                <Label>
+                  Do you lift in pounds or kilograms? <span className="text-destructive">*</span>
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {UNIT_CHOICES.map((c) => {
+                    const on = form.weight_unit === c.unit;
+                    return (
+                      <button
+                        key={c.unit}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => set("weight_unit", c.unit)}
+                        className={cn(
+                          "h-11 rounded-lg border text-sm font-medium transition",
+                          on ? "border-foreground bg-secondary text-foreground" : "border-border hover:bg-secondary",
+                        )}
+                      >
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">Workouts, PRs and bodyweight use it. Change it any time in Account.</p>
+              </div>
+            )}
           </div>
         )}
 

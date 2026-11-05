@@ -26,11 +26,12 @@ describe("lb or kg is asked until answered", () => {
 
   it("every place that saves the unit stamps the choice", () => {
     expect(pref).toContain("weight_unit_confirmed_at: new Date().toISOString()");
-    expect(prompt).toContain("saveWeightUnitChoice({ clientId: row.id }, unit)");
+    expect(prompt).toContain("applyWeightUnitChoice(qc, userId, row, unit)");
+    expect(pref).toContain("saveWeightUnitChoice({ clientId: row.id }, unit)");
     expect(leagueUnit).toContain("saveWeightUnitChoice({ userId: portalUserId }, next)");
   });
 
   it("bodyweight follows the answer only when it has no unit of its own yet", () => {
-    expect(prompt).toContain('{ onConflict: "user_id", ignoreDuplicates: true }');
+    expect(pref).toContain('{ onConflict: "user_id", ignoreDuplicates: true }');
   });
 });

@@ -18,8 +18,21 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+
+      # bun.lock is the lockfile the published app is built from (Lovable).
+      # `npm install` ignored it and resolved newer versions from package.json's
+      # ranges, and vite-plugin-pwa then failed with "Could not resolve entry
+      # module index.html" on every push. Its tarball URLs point at Lovable's
+      # private npm mirror; the same files (same integrity hashes) are on the
+      # public registry, so they're rewritten for this runner only.
+      - name: Install dependencies (exactly as locked)
+        run: |
+          sed -i -E 's#https://europe-west[0-9]-npm\.pkg\.dev/lovable-core-prod/[a-z0-9-]+/#https://registry.npmjs.org/#g' bun.lock
+          bun install --frozen-lockfile --ignore-scripts
 
       - name: Build production app
         run: npm run build

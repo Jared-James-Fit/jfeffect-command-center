@@ -42,6 +42,7 @@ describe("free accounts", () => {
 
   it("a person a coach already set up is sent to their invite, never made a second record", () => {
     expect(freeJoinMessage("coach_account")?.title).toMatch(/coach already set you up/i);
+    expect(freeJoinMessage("coach_account")?.body).toMatch(/send your invite again/i);
     expect(freeJoinMessage("member")).toBeNull();
     expect(freeJoinMessage("athlete")).toBeNull();
   });
@@ -182,10 +183,10 @@ describe("athlete programs", () => {
     );
   });
 
-  it("the start server fn archives (never deletes) the program started before", () => {
+  it("starting asks before replacing and never deletes; the database archives the program started before", () => {
     const fn = read("src/lib/athlete-programs.functions.ts");
     expect(fn).toContain('rpc("athlete_program_start"');
-    expect(fn).toMatch(/status: "Archived",\s+archived: true/);
+    expect(fn).toContain("return { conflict: true as const, currentName: running[0].name };");
     expect(fn).not.toMatch(/\.delete\(/);
     expect(fn).toContain("includePinned: false");
   });
@@ -208,5 +209,78 @@ describe("Crew reports", () => {
     const menu = read("src/components/community/post-actions.tsx");
     expect(menu).toContain("const canReport = !mine && !viewerIsStaff;");
     expect(menu).toContain('<ReportSheet kind="post"');
+  });
+});
+
+describe("free platform hardening", () => {
+  const HARD = readFileSync(
+    "supabase/migrations/20270201090000_free_platform_hardening.sql",
+    "utf8",
+  );
+  const fn = (name: string) => {
+    const start = HARD.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start).toBeGreaterThan(-1);
+    return HARD.slice(start, HARD.indexOf("\n$$;", start));
+  };
+
+  it("a coaching applicant who joins free keeps their one record, linked before the member row makes another", () => {
+    const join = fn("_member_free_join");
+    expect(join).toContain("AND NOT (c.status = 'Lead' AND c.assigned_coach_id IS NULL)) THEN");
+    const link = join.indexOf("SET user_id = _uid");
+    const member = join.indexOf("INSERT INTO public.app_members");
+    expect(link).toBeGreaterThan(-1);
+    expect(link).toBeLessThan(member);
+    // runs as the server for that step only, then gives the caller back
+    expect(join).toContain("PERFORM set_config('request.jwt.claims', '', true);");
+    expect(join).toContain(
+      "PERFORM set_config('request.jwt.claims', coalesce(v_claims, ''), true);",
+    );
+  });
+
+  it("a self-made login is linked by the coach's invite only after its password is replaced", () => {
+    const clients = readFileSync("src/lib/clients.functions.ts", "utf8");
+    const claim = clients.slice(clients.indexOf("async function claimUnlinkedLogin"));
+    expect(claim.indexOf("updateUserById(login.id, { password: secret })")).toBeLessThan(
+      claim.indexOf(".update({ user_id: login.id"),
+    );
+    expect(clients).toContain("if (!client.user_id) await claimUnlinkedLogin(");
+  });
+
+  it("starts count once per person and replace the program they ran before, in the database", () => {
+    const start = fn("athlete_program_start");
+    expect(start).toContain(
+      "INSERT INTO public.athlete_program_starts (program_id, user_id) VALUES (p.id, v_uid) ON CONFLICT DO NOTHING;",
+    );
+    expect(start).toContain("UPDATE public.pl_blocks SET status = 'Archived', archived = true");
+    expect(start).toContain(">= 10 THEN");
+    expect(HARD).toContain("REVOKE ALL ON public.athlete_program_starts FROM anon, authenticated;");
+  });
+
+  it("reports can't keep a program down, and Duplicate can't bring one back up", () => {
+    expect(fn("community_report")).toContain("WHERE community_reports.status = 'open';");
+    expect(fn("community_report")).toContain("au.created_at < now() - interval '7 days'");
+    expect(fn("athlete_program_moderate")).toContain(
+      "WHERE target_kind = 'program' AND target_id = _id AND status = 'open';",
+    );
+    expect(fn("athlete_program_copy")).toContain("CASE WHEN v_own THEN p.hidden_at END");
+  });
+
+  it("browse reads the viewer once, blocks hide attribution, and visibility is internal", () => {
+    const browse = fn("athlete_programs_browse");
+    expect(browse).toContain("blocked AS MATERIALIZED");
+    expect(browse).toContain("followed AS MATERIALIZED");
+    expect(browse).not.toContain("athlete_program_visible(");
+    expect(fn("athlete_program_card")).toContain("public.community_blocked_authors()");
+    expect(HARD).toContain(
+      "REVOKE EXECUTE ON FUNCTION public.athlete_program_visible(uuid, text, timestamptz, timestamptz) FROM authenticated;",
+    );
+  });
+
+  it("exercises leaving the library are handled for programs people built", () => {
+    expect(HARD).toContain("AFTER INSERT ON public.exercise_dedupe_audit");
+    expect(fn("athlete_program_clean_days")).toContain("is no longer in the library");
+    expect(readFileSync("src/lib/exercise-admin.functions.ts", "utf8")).toContain(
+      '.contains("days", [{ exercises: [{ exercise_id: exerciseId }] }])',
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -107,6 +107,8 @@ export function usePrograms(scope: BrowseScope, f: BrowseFilters, enabled = true
     queryKey: programKeys.list(scope, f),
     enabled,
     staleTime: 60_000,
+    // a new search or filter keeps the last list up until its answer lands
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<ProgramCard[]> => {
       const { data, error } = await rpc("athlete_programs_browse", {
         _scope: scope,

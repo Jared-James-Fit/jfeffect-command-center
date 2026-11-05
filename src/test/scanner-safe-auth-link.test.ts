@@ -19,6 +19,15 @@ describe("scannerSafeAuthLink", () => {
     expect(scannerSafeAuthLink({ url: verify("recovery", "https://jfeffect.com/setup"), siteUrl: SITE }))
       .toBe("https://jfeffect.com/setup?token_hash=hash123&type=recovery");
   });
+  it("a free sign-up lands on /welcome, even when Supabase fell back to the site root", () => {
+    expect(scannerSafeAuthLink({ url: verify("signup", "https://jfeffect.com/welcome"), siteUrl: SITE }))
+      .toBe("https://jfeffect.com/welcome?token_hash=hash123&type=signup");
+    expect(scannerSafeAuthLink({ url: verify("signup", "https://jfeffect.com"), siteUrl: SITE }))
+      .toBe("https://jfeffect.com/welcome?token_hash=hash123&type=signup");
+    // invites still go to the coaching setup page
+    expect(scannerSafeAuthLink({ url: verify("invite", "https://jfeffect.com/"), siteUrl: SITE }))
+      .toBe("https://jfeffect.com/setup?token_hash=hash123&type=invite");
+  });
   it("prefers an explicit token hash and redirect", () => {
     expect(scannerSafeAuthLink({ url: verify("invite", "https://x.lovable.app/setup"), tokenHash: "h2", siteUrl: SITE }))
       .toBe("https://x.lovable.app/setup?token_hash=h2&type=invite");

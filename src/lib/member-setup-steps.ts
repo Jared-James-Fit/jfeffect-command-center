@@ -74,3 +74,26 @@ export function setupMissing(m: SetupMember): string[] {
     missing.push("committed_training_days");
   return missing;
 }
+
+/** The query MemberSetupGate and the setup wizard read (getMySetupStatus). */
+export const MEMBER_SETUP_STATUS_KEY = ["m-setup-status"] as const;
+
+/**
+ * Whether member setup is still in the way, from that query's state (pure):
+ * loading, or a JF member (not an admin sandbox) whose setup isn't complete.
+ * No state at all means no setup gate is mounted (a coaching client). The
+ * launch popups (Add to Home Screen, "Pounds or kilograms?") wait on it, so a
+ * new member gets setup first and never a popup stacked on it.
+ */
+export function setupStillOpen(
+  state: { status: string; data?: unknown } | undefined | null,
+): boolean {
+  if (!state) return false;
+  if (state.status === "pending") return true;
+  const d = state.data as
+    | { complete?: boolean; member?: { account_type?: string; is_admin_sandbox?: boolean } | null }
+    | undefined;
+  return (
+    d?.complete === false && d.member?.account_type === "jf_member" && !d.member?.is_admin_sandbox
+  );
+}

@@ -196,12 +196,12 @@ export function ProgramRoadmapCard({
               aria-label="Choose a program"
               className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left transition hover:bg-secondary/50"
             >
-              <ProgramTitle program={roadmap.program} browsing={browsing} />
+              <ProgramTitle program={roadmap.program} browsing={browsing} headline={headline} />
               <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", picking && "rotate-180")} />
             </button>
           ) : (
             <div className="flex min-w-0 items-center gap-1">
-              <ProgramTitle program={roadmap.program} browsing={browsing} />
+              <ProgramTitle program={roadmap.program} browsing={browsing} headline={headline} />
             </div>
           )}
           {meet ? (
@@ -302,11 +302,16 @@ function blockTitle(b: RoadmapBlockView): string {
   return b.label ?? blockNameParts(b.name)?.name ?? b.name;
 }
 
-/** The program's name, with Past / Upcoming only when it isn't today's. */
-function ProgramTitle({ program, browsing }: { program: ProgramSummary; browsing: boolean }) {
+/**
+ * The program's name, with Past / Upcoming only when it isn't today's. A
+ * one-block program is named by its block, which the headline already says,
+ * so the line over it is just "Your program" rather than the name twice.
+ */
+function ProgramTitle({ program, browsing, headline }: { program: ProgramSummary; browsing: boolean; headline: string }) {
+  const name = programName(program);
   return (
     <>
-      <span className="min-w-0 truncate text-[13px] font-semibold text-muted-foreground">{programName(program)}</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-muted-foreground">{name === headline ? "Your program" : name}</span>
       {browsing && program.status !== "active" && (
         <span className="shrink-0 rounded bg-secondary px-1.5 text-[11px] font-medium leading-5 text-muted-foreground">
           {program.status === "completed" ? "Past" : "Upcoming"}

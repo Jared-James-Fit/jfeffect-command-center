@@ -46,6 +46,39 @@ async function assertNotPrivilegedTarget(opts: { email?: string | null; userId?:
   }
 }
 
+/**
+ * The client's email already has a login nobody linked: they made a free
+ * account before the coach invited them (member_free_join answered
+ * "coach_account" and made nothing). Link it to this record, but first give it
+ * a random password, so only whoever opens the email we send next can get in:
+ * whoever typed the email at sign-up may not own it. Returns the login's id,
+ * or null when there's nothing to claim (no login, or it's already someone's
+ * athlete record).
+ */
+async function claimUnlinkedLogin(client: { id: string; email: string }): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const email = client.email.trim().toLowerCase();
+  const { data: profiles, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, email")
+    .ilike("email", email.replace(/[\\%_]/g, (c) => `\\${c}`));
+  if (error) throw new Error(error.message);
+  const login = (profiles ?? []).find((p: any) => String(p.email ?? "").trim().toLowerCase() === email);
+  if (!login) return null;
+  const { data: owned } = await supabaseAdmin.from("clients").select("id").eq("user_id", login.id).limit(1);
+  if (owned && owned.length) return null;
+  const secret = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const { error: pErr } = await supabaseAdmin.auth.admin.updateUserById(login.id, { password: secret });
+  if (pErr) throw new Error(pErr.message);
+  const { error: lErr } = await supabaseAdmin
+    .from("clients")
+    .update({ user_id: login.id, account_status: "Invite Sent" } as ClientUpdate)
+    .eq("id", client.id)
+    .is("user_id", null);
+  if (lErr) throw new Error(lErr.message);
+  return login.id;
+}
+
 export const inviteClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -81,6 +114,8 @@ export const inviteClient = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
     if (inviteErr) {
       // If user already exists, fall back to a password recovery email.
+      // A login they made themselves before this invite is linked first.
+      if (!client.user_id) await claimUnlinkedLogin({ id: client.id, email: client.email });
       // resetPasswordForEmail actually SENDS the email (admin.generateLink does not).
       const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
         client.email,
@@ -122,12 +157,21 @@ export const getSetupLink = createServerFn({ method: "POST" })
     if (!client?.email) throw new Error("Client has no email address");
     await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const linkType = client.user_id ? "magiclink" : "invite";
-    const { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
+    let linkType = client.user_id ? "magiclink" : "invite";
+    let { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
       type: linkType as any,
       email: client.email,
       options: { redirectTo: data.redirectTo },
     });
+    // They already made a login themselves: link it and send a set-password link instead.
+    if (lErr && !client.user_id && (await claimUnlinkedLogin({ id: client.id, email: client.email }))) {
+      linkType = "recovery";
+      ({ data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email: client.email,
+        options: { redirectTo: data.redirectTo },
+      }));
+    }
     if (lErr) throw new Error(lErr.message);
     // Build our own link using the hashed_token + type. The default
     // `action_link` is a one-time Supabase /verify URL — link prefetchers in

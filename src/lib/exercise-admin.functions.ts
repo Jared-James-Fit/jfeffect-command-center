@@ -50,6 +50,17 @@ async function countReferences(exerciseId: string): Promise<Record<string, numbe
     if (error) throw new Error(`Reference check failed on ${ref.table}: ${error.message}`);
     counts[ref.table] = count ?? 0;
   }
+  // Programs people build keep their exercises in a JSON list of days
+  // (athlete_programs.days[].exercises[].exercise_id); starting one writes
+  // pl_exercise_rows from it, so a deleted exercise would break every start.
+  {
+    const { count, error } = await supabaseAdmin
+      .from("athlete_programs" as any)
+      .select("id", { count: "exact", head: true })
+      .contains("days", [{ exercises: [{ exercise_id: exerciseId }] }]);
+    if (error) throw new Error(`Reference check failed on athlete_programs: ${error.message}`);
+    counts.athlete_programs = count ?? 0;
+  }
   return counts;
 }
 

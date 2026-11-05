@@ -6,6 +6,7 @@ import { Play, CheckCircle2, Share, Plus, Smartphone, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { MEMBER_SETUP_STATUS_KEY, setupStillOpen } from "@/lib/member-setup-steps";
 
 const sb = supabase as any;
 
@@ -23,6 +24,12 @@ function isIOS(): boolean {
 }
 
 const SESSION_KEY = "jf-setup-prompts-shown";
+
+function uiIsClear() {
+  return !document.querySelector(
+    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-vaul-drawer][data-state="open"]',
+  );
+}
 
 type Prompt = {
   id: string;
@@ -77,10 +84,23 @@ export function HomeScreenSetupGate() {
 
   useEffect(() => {
     if (!current || standalone) return;
-    if (sessionStorage.getItem(SESSION_KEY + ":" + current.id)) return;
-    setOpen(true);
-    try { sessionStorage.setItem(SESSION_KEY + ":" + current.id, "1"); } catch {}
-  }, [current, standalone]);
+    const key = SESSION_KEY + ":" + current.id;
+    try { if (sessionStorage.getItem(key)) return; } catch { /* storage unavailable */ }
+    // Never on top of another popup or a new member's setup: wait for both.
+    let stopped = false;
+    let timer = 0;
+    const tick = () => {
+      if (stopped) return;
+      if (uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY))) {
+        try { sessionStorage.setItem(key, "1"); } catch { /* storage unavailable */ }
+        setOpen(true);
+        return;
+      }
+      timer = window.setTimeout(tick, 1200);
+    };
+    timer = window.setTimeout(tick, 1500);
+    return () => { stopped = true; window.clearTimeout(timer); };
+  }, [current, standalone, qc]);
 
   async function upsertDismissal(status: "done" | "remind") {
     if (!current || !user?.id) return;
