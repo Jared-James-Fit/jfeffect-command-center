@@ -26,7 +26,7 @@ import { builtBlockSchema, setupSchema, strategySchema, type BuiltBlock, type Bu
 import { constructSystemPrompt, constructUserPrompt, PIPELINE_PROMPT_VERSION, repairUserPrompt, strategySystemPrompt, strategyUserPrompt } from "./generator-prompts";
 import { buildGeneratorIntel, type GeneratorIntel } from "./intelligence";
 import { privacySafeRecords } from "./export";
-import { isLowValueExercise, meetsStandard, withStandardSubstitutions } from "./exercise-standard";
+import { isLowValueExercise, meetsStandard, withStandardStrategy, withStandardSubstitutions } from "./exercise-standard";
 import { loadIntelRecords } from "./load";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
@@ -136,6 +136,20 @@ async function askChecked<T>(admin: Db, job: any, stage: string, system: string,
   return { value: p2.value, model: second.model, issues: check(p2.value) };
 }
 
+/**
+ * Exercises below the exercise standard that the strategy keeps, adds or swaps in: the model gets
+ * one retry to fix them, and whatever's left is taken out by `withStandardStrategy` rather than
+ * failing the run (it's the model's pick, not a mismatch with the coach's setup).
+ */
+export function strategyStandardIssues(s: Strategy, setup: Pick<GenerationSetup, "required">): string[] {
+  const required = new Set(setup.required.map((r) => r.name.toLowerCase()));
+  const names = [...s.exercise_plan.retain, ...s.exercise_plan.add].map((x) => x.name).concat(s.exercise_plan.replace.flatMap((r) => (r.with ? [r.with] : [])));
+  return [...new Set(names)]
+    .filter((n) => isLowValueExercise(n) && !required.has(n.toLowerCase()))
+    .map((n) => `${n} is below the exercise standard; replace it with a dumbbell, cable or machine exercise for the same muscle.`);
+}
+
+/** Where the strategy doesn't match the coach's setup: these stop the run. */
 export function strategyIssues(s: Strategy, setup: GenerationSetup): string[] {
   const out: string[] = [];
   if (s.structure.weeks !== setup.weeks) out.push(`structure.weeks is ${s.structure.weeks}; the coach's setup is ${setup.weeks} weeks.`);
@@ -146,9 +160,6 @@ export function strategyIssues(s: Strategy, setup: GenerationSetup): string[] {
   const names = JSON.stringify(s.exercise_plan).toLowerCase();
   for (const e of setup.excluded) if ([...s.exercise_plan.retain, ...s.exercise_plan.add].some((x) => x.name.toLowerCase() === e.name.toLowerCase())) out.push(`${e.name} is excluded by the coach but the plan keeps or adds it.`);
   for (const r of setup.required) if (!names.includes(r.name.toLowerCase())) out.push(`Required exercise ${r.name} isn't in exercise_plan (retain or add).`);
-  const required = new Set(setup.required.map((r) => r.name.toLowerCase()));
-  for (const x of [...s.exercise_plan.retain, ...s.exercise_plan.add, ...s.exercise_plan.replace.flatMap((r) => (r.with ? [{ name: r.with }] : []))])
-    if (isLowValueExercise(x.name) && !required.has(x.name.toLowerCase())) out.push(`${x.name} is below the exercise standard; replace it with a dumbbell, cable or machine exercise for the same muscle.`);
   return out;
 }
 
@@ -302,9 +313,13 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   const brain: Brain = setup.brain;
 
   if (stage === "strategy") {
-    const { value, model, issues } = await askChecked<Strategy>(admin, job, "strategy", strategySystemPrompt(brain), strategyUserPrompt(brief, setup), strategySchema, (v) => strategyIssues(v, setup));
+    const { value, model } = await askChecked<Strategy>(admin, job, "strategy", strategySystemPrompt(brain), strategyUserPrompt(brief, setup), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup)]);
+    const issues = strategyIssues(value, setup);
     if (issues.length) throw new Error(`The strategy didn't match your setup: ${issues.join(" ")}`);
-    result.strategy = value;
+    // anything still below the exercise standard after the retry comes out here, never fails the run
+    const clean = withStandardStrategy(value, setup.required);
+    if (clean.removed.length) result.standardRemoved = clean.removed;
+    result.strategy = clean.strategy;
     result.strategySource = "auto";
     stages = setStage(stages, "strategy", "done", `${value.decisions.length} decisions · ${model}`);
     if (kind === "strategy") {
