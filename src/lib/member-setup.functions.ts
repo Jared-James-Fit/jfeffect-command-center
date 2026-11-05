@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { setupMissing, type SetupMember } from "@/lib/member-setup-steps";
 
 const SetupPatch = z.object({
   avatar_url: z.string().min(1).optional(),
@@ -93,25 +94,13 @@ export const getMySetupStatus = createServerFn({ method: "GET" })
     const { supabase, userId } = context;
     const { data: m } = await supabase
       .from("app_members")
-      .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox, committed_training_days, committed_training_frequency")
+      .select("id, account_type, avatar_url, phone, sms_opt_out, sms_consent_at, date_of_birth, address_line1, address_city, address_state, address_zip, address_country, emergency_contact_name, emergency_contact_phone, goals, goals_tags, experience_level, training_background, full_name, setup_completed_at, is_admin_sandbox, committed_training_days, committed_training_frequency, subscription_status, stripe_subscription_id")
       .eq("user_id", userId)
       .maybeSingle();
     if (!m) return { member: null, complete: true, missing: [] as string[] };
     if (m.is_admin_sandbox) return { member: m, complete: true, missing: [] };
-    const missing: string[] = [];
-    if (!m.avatar_url) missing.push("avatar_url");
-    if (!m.phone) missing.push("phone");
-    if (m.sms_opt_out && !m.sms_consent_at) missing.push("sms_consent");
-    if (!m.date_of_birth) missing.push("date_of_birth");
-    if (!m.address_line1) missing.push("address_line1");
-    if (!m.emergency_contact_name) missing.push("emergency_contact_name");
-    if (!m.emergency_contact_phone) missing.push("emergency_contact_phone");
-    const hasGoals = !!m.goals || (Array.isArray(m.goals_tags) && m.goals_tags.length > 0);
-    if (!hasGoals) missing.push("goals");
-    const hasBackground = !!m.training_background || !!m.experience_level;
-    if (!hasBackground) missing.push("training_background");
-    const days = (m as any).committed_training_days as string[] | null | undefined;
-    if (!days || days.length === 0) missing.push("committed_training_days");
+    // a free account is asked only for its goal, experience and training days (member-setup-steps.ts)
+    const missing = setupMissing(m as SetupMember);
     return { member: m, complete: missing.length === 0, missing };
   });
 
