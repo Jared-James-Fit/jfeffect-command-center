@@ -193,6 +193,22 @@ describe("captions read like a real person posting, never a rerun", () => {
     ).toContain('ends on a moral ("X isn\'t just Y. it\'s also Z")');
     expect(captionProblems("the weights you used to circle are just tuesday now.", { format: "one_liner" })).toContain('the "it\'s just tuesday now" trope');
     expect(motifRepeats("wild how fast a year goes", ["funny how that works", "wild how the bar moves"])).toEqual(["wild how"]);
+    // the redo of Nov 6 still told one, without the comma: any story told as his own is refused
+    for (const story of [
+      "planned a quick 45 minute lift. now i'm checking the clock like how did this turn into my whole evening",
+      "i went in for a quick upper day and stayed two hours.",
+      "a lot of my clients say the warm-up is their favourite part.",
+      "my legs after leg day: absolutely not.",
+    ])
+      expect(captionProblems(story, { format: "one_liner" }), story).toContain("tells a story as his own (it never happened to him)");
+    // his opinions, what he notices and advice are fine
+    for (const ok of [
+      "i think a lot of people underrate how good a walk after dinner feels.",
+      "i've noticed the people who stick with it usually found one part they actually enjoy.",
+      "i'm convinced the best program is the one you look forward to.",
+      "hit the reps, leave one in the tank, go home.",
+    ])
+      expect(captionProblems(ok, { format: "quick_take" }), ok).not.toContain("tells a story as his own (it never happened to him)");
     // and the ones that read right still pass
     expect(captionProblems("this week, don't worry about being ready. just keep walking through that door.", { format: "one_liner" })).toEqual([]);
     expect(
