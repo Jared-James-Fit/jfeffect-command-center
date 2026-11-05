@@ -14,8 +14,11 @@ export const Route = createFileRoute("/api/public/hooks/daily-visuals-tick")({
         if (!(await authorizeHookRequest(request)))
           return new Response("unauthorized", { status: 401 });
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { runDailyVisualsTick } = await import("@/lib/daily-visuals.server");
+        const { runDailyVisualTest, runDailyVisualsTick } = await import("@/lib/daily-visuals.server");
+        // { test: { audience, theme, style? } } makes a test post for the coach's card, never a day or a post
+        const body = (await request.json().catch(() => null)) as { test?: any } | null;
         try {
+          if (body?.test?.audience && body?.test?.theme) return Response.json(await runDailyVisualTest(supabaseAdmin as any, body.test));
           return Response.json(await runDailyVisualsTick(supabaseAdmin as any));
         } catch (e: any) {
           return Response.json({ error: String(e?.message ?? e) }, { status: 500 });
