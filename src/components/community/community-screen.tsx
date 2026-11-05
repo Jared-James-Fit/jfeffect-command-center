@@ -27,13 +27,13 @@ import { BarBack, BarButton, BarTitle, CrewBar, CrewBrand, useBarHidden } from "
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
-import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
-import { inFeed, inFollowingFeed, storiesNeedMore, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
+import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
+import { caughtUpAt, inFeed, inFollowingFeed, storiesNeedMore, uniquePosts, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
 import { useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
 import { SwipeBack, SwipeBackTip } from "@/components/swipe-back";
-import { CaughtUp, FeedItem, NewPostsPill, useNewPosts } from "@/components/community/feed-motion";
+import { CaughtUp, CaughtUpLine, FeedItem, NewPostsPill, useNewPosts } from "@/components/community/feed-motion";
 import { ActivitySpinner } from "@/components/activity-spinner";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
@@ -136,12 +136,16 @@ export function CommunityScreen({
   const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
   const [flash, setFlash] = useState<string | null>(null);
 
+  // The crew's last day in time order: the story rail (and the read-ahead that fills it).
   const feed = useCommunityFeed(null);
   const posts = useMemo(() => feed.data?.pages.flatMap((p) => p.posts) ?? [], [feed.data]);
-  // The feed is the posts people made, newest first. A finished session that posted
-  // itself (a Pulse) is in that athlete's story instead (and on their profile), and
+  // The posts you scroll: what's new to you this visit first, ranked, then "You're all
+  // caught up" and everything else, newest first (useRankedFeed). A finished session that
+  // posted itself (a Pulse) is in that athlete's story instead (and on their profile), and
   // a story someone posted (STORY on the camera) is only in the story rail.
-  const ownPosts = useMemo(() => posts.filter(inFeed), [posts]);
+  const ranked = useRankedFeed();
+  const rankedPosts = useMemo(() => uniquePosts(ranked.data?.pages.flatMap((p) => p.posts) ?? []), [ranked.data]);
+  const ownPosts = useMemo(() => rankedPosts.filter(inFeed), [rankedPosts]);
   // All (the whole crew, like a Strava club) or Following (just the people you follow, and you).
   const { data: follows } = useFollowState(!hideTabs);
   const followingIds = useMemo(() => new Set(follows?.following ?? []), [follows]);
@@ -151,6 +155,8 @@ export function CommunityScreen({
     () => (following ? ownPosts.filter((p) => inFollowingFeed(p, followingIds)) : ownPosts),
     [following, ownPosts, followingIds],
   );
+  // "You're all caught up" goes before the first post you'd already seen, when new ones came first
+  const caughtUp = useMemo(() => caughtUpAt(feedPosts), [feedPosts]);
   // "Double-tap to like": a few seconds on the first post (a workout before a
   // note), once a visit, until the first double-tap, and only for the first
   // few visits either way. Remembered on the account, not the device.
@@ -159,7 +165,7 @@ export function CommunityScreen({
   const onDoubleTap = useCallback(() => markHint("double_tap"), [markHint]);
   const [tipDone, setTipDone] = useState(tipShownThisVisit);
   const tipVisit = hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
-  const hintId = scope.kind === "feed" && !tipDone && tipVisit && posts.length ? ((posts.find((p) => p.kind !== "note" && inFeed(p)) ?? posts.find(inFeed))?.id ?? null) : null;
+  const hintId = scope.kind === "feed" && !tipDone && tipVisit && feedPosts.length ? ((feedPosts.find((p) => p.kind !== "note") ?? feedPosts[0])?.id ?? null) : null;
   useEffect(() => {
     if (!hintId || !tipVisit || tipShownThisVisit) return;
     tipShownThisVisit = true;
@@ -171,22 +177,22 @@ export function CommunityScreen({
   const OPEN_HINT = "open_workout";
   const openHintId =
     scope.kind === "feed" && hints.data && !hints.data.includes(OPEN_HINT) && (tipDone || !tipVisit)
-      ? (posts.find((p) => p.kind !== "note" && !!p.stats)?.id ?? null)
+      ? (feedPosts.find((p) => p.kind !== "note" && !!p.stats)?.id ?? null)
       : null;
   const openPost = useCallback((post: CommunityPost) => {
     if (post.kind !== "note") markHint(OPEN_HINT);
     setDetailId(post.id);
   }, [markHint]);
-  const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? posts : []);
+  const { data: urls } = usePostMediaUrls(scope.kind === "feed" ? feedPosts : []);
 
   // Seeing the feed clears the "new posts" badge (server-side, every device). Only the
   // feed: opening on Rankings mustn't clear a count you haven't looked at.
   const markedRef = useRef(false);
   useEffect(() => {
-    if (markedRef.current || !feed.isSuccess || scope.kind !== "feed") return;
+    if (markedRef.current || !ranked.isSuccess || scope.kind !== "feed") return;
     markedRef.current = true;
     void markCommunitySeen(qc);
-  }, [feed.isSuccess, qc, scope.kind]);
+  }, [ranked.isSuccess, qc, scope.kind]);
 
   const { data: unit = "lb" } = useViewerUnit(user?.id);
 
@@ -306,7 +312,7 @@ export function CommunityScreen({
   };
   const [swipeTip, setSwipeTip] = useState(false);
   const swipeVisit = hints.data && !hints.data.includes("swipe_back") ? swipeTipKeys.find((k) => !hints.data!.includes(k)) : undefined;
-  const feedReady = feed.isSuccess || posts.length > 0;
+  const feedReady = ranked.isSuccess || feedPosts.length > 0;
   useEffect(() => {
     // after the double-tap tip (never both at once), once the feed is up
     if (!canSwipeBack || !swipeVisit || swipeTipShownThisVisit || !feedReady || hintId) return;
@@ -330,7 +336,7 @@ export function CommunityScreen({
   // Opened from Home on a post: scroll to it in the feed and flash it, so the rest of the
   // feed is right there. If it's older than what's loaded, open it on its own instead.
   useEffect(() => {
-    if (!jumpTo || (!feed.isSuccess && posts.length === 0)) return;
+    if (!jumpTo || (!ranked.isSuccess && feedPosts.length === 0)) return;
     history.replaceState(null, "", window.location.pathname + window.location.search);
     const el = document.querySelector(`[data-post-id="${jumpTo}"]`);
     if (el) {
@@ -339,7 +345,7 @@ export function CommunityScreen({
       window.setTimeout(() => setFlash(null), 1800);
     } else setDetailId(jumpTo);
     setJumpTo(null);
-  }, [jumpTo, feed.isSuccess, posts.length]);
+  }, [jumpTo, ranked.isSuccess, feedPosts.length]);
 
   // "See the post" on a shared comment opens the post it came from.
   useEffect(() => {
@@ -396,12 +402,12 @@ export function CommunityScreen({
 
   // Infinite scroll on the feed.
   const sentinel = useRef<HTMLDivElement | null>(null);
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
-  // The first page is small: on a busy day, read on until the story rail holds the whole last day
-  const readAhead = scope.kind === "feed" && feed.isSuccess && !feed.isError && storiesNeedMore(posts, !!hasNextPage, feed.data?.pages.length ?? 0);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = ranked;
+  // The story rail's first page is small: on a busy day, read on until it holds the whole last day
+  const readAhead = scope.kind === "feed" && feed.isSuccess && !feed.isError && storiesNeedMore(posts, !!feed.hasNextPage, feed.data?.pages.length ?? 0);
   useEffect(() => {
-    if (readAhead && !isFetchingNextPage) void fetchNextPage();
-  }, [readAhead, isFetchingNextPage, fetchNextPage]);
+    if (readAhead && !feed.isFetchingNextPage) void feed.fetchNextPage();
+  }, [readAhead, feed.isFetchingNextPage, feed.fetchNextPage]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const el = sentinel.current;
     if (!el || !hasNextPage || scope.kind !== "feed") return;
@@ -414,7 +420,7 @@ export function CommunityScreen({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, posts.length, scope.kind]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, feedPosts.length, scope.kind]);
 
   const openAuthor = (a: CommunityAuthor) => {
     rememberFeedPlace();
@@ -428,7 +434,7 @@ export function CommunityScreen({
     if (window.location.hash.includes("post=")) history.replaceState(null, "", window.location.pathname + window.location.search);
   };
 
-  const notAllowed = (feed.error as any)?.code === "42501";
+  const notAllowed = ((ranked.error ?? feed.error) as any)?.code === "42501";
 
   // Crew's one bar, per page. Find athletes keeps its own search field at the top instead.
   const crewBar = !ownBar ? null : scope.kind === "feed" ? (
@@ -553,7 +559,7 @@ export function CommunityScreen({
         <ProfileView userId={user.id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
       ) : scope.kind === "author" ? (
         <ProfileView userId={scope.author.user_id} unit={unit} onOpenPost={openPost} onOpenPerson={openAuthor} />
-      ) : feed.isLoading ? (
+      ) : ranked.isLoading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
             <Skeleton key={i} className="h-96 w-full rounded-3xl" />
@@ -561,14 +567,14 @@ export function CommunityScreen({
         </div>
       ) : notAllowed ? (
         <EmptyNote title="Community isn't available on this account" body="It's open to active coaching clients." />
-      ) : feed.isError ? (
+      ) : ranked.isError ? (
         <div className="rounded-3xl border border-border/80 bg-card p-6 text-center text-sm">
           <p className="text-muted-foreground">Couldn't load the community.</p>
-          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void feed.refetch()}>
+          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void ranked.refetch()}>
             Try again
           </Button>
         </div>
-      ) : posts.length === 0 ? (
+      ) : rankedPosts.length === 0 && posts.length === 0 ? (
         <EmptyNote
           title="Be the first one in"
           body={canShare ? "Share a session from this month. Your crew sees the work, your coach sees it too." : "When clients share a workout, it shows up here."}
@@ -593,6 +599,16 @@ export function CommunityScreen({
           )}
           {feedPosts.map((p, i) => (
             <Fragment key={p.id}>
+            {/* what's new to you is above, what you'd seen carries on below (Instagram's) */}
+            {i === caughtUp && (
+              <CaughtUpLine
+                more={previewOnly ? null : (
+                  <button type="button" onClick={() => openDiscover("feed")} className="text-[13px] font-bold text-primary active:opacity-70" data-caught-up-discover>
+                    Find people to follow
+                  </button>
+                )}
+              />
+            )}
             <FeedItem index={i} data-post-id={p.id} className={cn("scroll-mt-20 transition-shadow duration-700 sm:rounded-3xl", flash === p.id && "ring-2 ring-primary")}>
             <PostRow
               post={p}
@@ -625,7 +641,7 @@ export function CommunityScreen({
               <ActivitySpinner size={24} />
             </div>
           )}
-          {!hasNextPage && posts.length > 1 && (
+          {!hasNextPage && feedPosts.length > 1 && caughtUp === null && (
             <FeedItem index={0}>
               <CaughtUp
                 action={canShare ? <ShareWorkoutButton unit={unit} label="Share your session" previewOnly={previewOnly} /> : null}

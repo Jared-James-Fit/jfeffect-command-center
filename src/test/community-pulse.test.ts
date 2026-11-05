@@ -62,7 +62,7 @@ describe("No Activity bubble: a finished session is the athlete's own story", ()
     expect(existsSync("src/components/community/pulse-strip.tsx")).toBe(false);
     const screen = read("src/components/community/community-screen.tsx");
     // (inFeed: not a Pulse, and not a story someone posted)
-    expect(screen).toContain("const ownPosts = useMemo(() => posts.filter(inFeed), [posts]);");
+    expect(screen).toContain("const ownPosts = useMemo(() => rankedPosts.filter(inFeed), [rankedPosts]);");
     expect(screen).not.toMatch(/ActivitySheet|activityNeedsMore|activity=\{/);
     const rail = read("src/components/community/crew-stories.tsx");
     expect(rail).not.toMatch(/ActivityBubble|ActivityGlyph|ActivityCoverFrame|activityStoryGroup|onActivityList|group\.activity|data-story-activity-all/);
@@ -77,7 +77,7 @@ describe("No Activity bubble: a finished session is the athlete's own story", ()
     expect(storiesNeedMore([own("a", 1), own("b", 25)], true, 1, now)).toBe(false);
     expect(storiesNeedMore([own("a", 1)], false, 1, now)).toBe(false);
     expect(storiesNeedMore([own("a", 1)], true, STORY_READ_PAGES, now)).toBe(false);
-    expect(read("src/components/community/community-screen.tsx")).toContain("storiesNeedMore(posts, !!hasNextPage, feed.data?.pages.length ?? 0)");
+    expect(read("src/components/community/community-screen.tsx")).toContain("storiesNeedMore(posts, !!feed.hasNextPage, feed.data?.pages.length ?? 0)");
   });
   it("a PR rides on the athlete's own bubble (a small tag), and a PR story comes before a routine one", () => {
     const author = (id: string) => ({ user_id: id, name: id, avatar_url: null, is_coach: false });

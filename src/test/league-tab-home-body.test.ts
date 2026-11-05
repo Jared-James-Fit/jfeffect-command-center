@@ -40,7 +40,7 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(read("src/lib/push/app-events.server.ts")).toContain('url: () => "/portal/community#feed"');
   });
   it("only the feed clears the new-posts count (opening on Rankings doesn't)", () => {
-    expect(screen).toContain('if (markedRef.current || !feed.isSuccess || scope.kind !== "feed") return;');
+    expect(screen).toContain('if (markedRef.current || !ranked.isSuccess || scope.kind !== "feed") return;');
   });
   it("a profile's back button returns to the tab you came from", () => {
     expect(screen).toContain('{TAB_LABEL[youAsPage ? "feed" : tab]}');

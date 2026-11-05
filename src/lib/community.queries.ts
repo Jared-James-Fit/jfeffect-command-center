@@ -15,10 +15,12 @@ import {
   GRID_FIRST_PAGE,
   GRID_PAGE_SIZE,
   buildCommentPreview,
+  feedCursorOf,
   nextFeedCursor,
   votePoll,
   type CommunityComment,
   type CommunityFeedPage,
+  type FeedCursor,
   type CommunityActivity,
   type CommunityAuthor,
   type CommunitySeries,
@@ -48,6 +50,7 @@ import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
 import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
+import { feedAnchor } from "@/lib/feed-anchor";
 
 const db = supabase as any;
 
@@ -101,6 +104,41 @@ export function useCommunityFeed(authorUserId: string | null = null) {
       return (data ?? { posts: [], has_more: false }) as CommunityFeedPage;
     },
     getNextPageParam: (last) => nextFeedCursor(last),
+  });
+}
+
+/**
+ * The Crew feed (community_feed_ranked): what's new to you this visit first,
+ * ranked (someone's own post over an automated one, people you follow, what
+ * the crew liked), then "You're all caught up" and everything else, newest
+ * first. The first page is measured against the visit's moment (feedAnchor),
+ * and every later page carries it in its cursor. Under ["community-feed", …]
+ * so every post update, invalidation and optimistic like reaches it too. The
+ * story rail, Home's deck and profiles keep reading community_feed in time
+ * order (useCommunityFeed).
+ */
+export function useRankedFeed(enabled = true) {
+  const pov = usePovViewer();
+  const asClient = useCallback(
+    (d: InfiniteData<CommunityFeedPage>) => ({ ...d, pages: d.pages.map((pg) => ({ ...pg, posts: pg.posts.map((p) => seenAs(p, pov)) })) }),
+    [pov],
+  );
+  return useInfiniteQuery({
+    select: pov === null ? undefined : asClient,
+    queryKey: [...communityKeys.feed(null), "ranked"] as const,
+    enabled,
+    initialPageParam: null as FeedCursor | null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ pageParam }): Promise<CommunityFeedPage> => {
+      const { data, error } = await db.rpc(
+        "community_feed_ranked",
+        pageParam ? { _limit: FEED_PAGE_SIZE, _cursor: pageParam } : { _limit: FIRST_FEED_PAGE, _seen_before: feedAnchor() },
+      );
+      if (error) throw error;
+      return (data ?? { posts: [], has_more: false }) as CommunityFeedPage;
+    },
+    getNextPageParam: (last) => feedCursorOf(last),
   });
 }
 
