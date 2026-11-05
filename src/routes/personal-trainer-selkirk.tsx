@@ -409,7 +409,7 @@ function SelkirkPage() {
             More from JF Effect:{" "}
             <Link to="/coaching" className="underline underline-offset-4">Private Coaching</Link>
             {" · "}
-            <Link to="/join" className="underline underline-offset-4">Self-Guided Membership</Link>
+            <Link to="/join" className="underline underline-offset-4">Free JF Effect account</Link>
           </p>
         </div>
       </Section>

@@ -67,9 +67,7 @@ function AppEntry() {
             Open JF Effect
           </h1>
           <p className="text-sm text-muted-foreground">
-            {native
-              ? "An existing JF Effect account is required."
-              : "Sign in to continue your training, check-ins, and coaching chat."}
+            Sign in, or make a free account to start training.
           </p>
         </header>
 
@@ -80,12 +78,10 @@ function AppEntry() {
               Sign in
             </Link>
           </Button>
-          {/* Membership purchase is web-only — not available inside the Android app */}
-          {!native && (
-            <Button asChild variant="outline" className="w-full" size="lg">
-              <Link to="/membership">Become a member</Link>
-            </Button>
-          )}
+          {/* Free to join, so it's offered inside the app too (no purchase). */}
+          <Button asChild variant="outline" className="w-full" size="lg">
+            <Link to="/join">Create a free account</Link>
+          </Button>
         </Card>
 
         {!installed && (

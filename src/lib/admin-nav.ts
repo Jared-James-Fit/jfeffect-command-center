@@ -17,6 +17,7 @@ export const clientNav: NavItem[] = [
   // Appointments / Events / Schedule pages redirect here). Right after
   // Workouts, so it's easy to find in the menu.
   { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","appointments","sessions","events","booking","reschedule","cancel"] },
+  { to: "/portal/programs", label: "Programs", icon: BookOpen, keywords: ["programs","build","builder","share","copy","crew programs","templates","routines"] },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
@@ -48,7 +49,8 @@ export const selfServeNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
   { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","workouts","events"] },
-  { to: "/portal/plans", label: "Plan Library", icon: BookOpen, keywords: ["plans","programs","library","start","training"] },
+  { to: "/portal/programs", label: "Programs", icon: BookOpen, keywords: ["plans","programs","library","start","training","build","builder","share","copy","routines"] },
+  { to: "/portal/plans", label: "JF Effect plans", icon: BookOpen, keywords: ["plans","library","coach-written","start"] },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","compare"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","community","members","posts"] },

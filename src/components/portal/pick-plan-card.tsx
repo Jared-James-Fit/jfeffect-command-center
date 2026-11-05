@@ -30,14 +30,19 @@ export function PickPlanCard({ clientId }: { clientId: string }) {
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold leading-tight">Pick your plan</h3>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Coach-written plans for every goal. Pick one, choose your days, and Week 1 lands on your calendar.
+            Start a coach-written plan, or build your own. Pick your days and Week 1 lands on your calendar.
           </p>
           {/* a member with no plan: this is Home's one red action */}
-          <Button asChild className="mt-3 h-10">
-            <Link to="/portal/plans">
-              Browse plans <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-            </Link>
-          </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button asChild className="h-10">
+              <Link to="/portal/plans">
+                Browse plans <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" className="h-10">
+              <Link to="/portal/programs">Build or copy one</Link>
+            </Button>
+          </div>
         </div>
       </div>
     </Card>

@@ -9,7 +9,7 @@
  * taps "Continue", which a scanner never does.
  */
 
-const SAFE_PATHS = ["/setup", "/reset-password"] as const;
+const SAFE_PATHS = ["/setup", "/reset-password", "/welcome"] as const;
 const ALLOWED_HOSTS = [/(^|\.)jfeffect\.com$/i, /\.lovable\.app$/i, /^localhost$/i];
 const TYPES = new Set(["invite", "magiclink", "recovery", "signup"]);
 

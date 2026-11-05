@@ -94,6 +94,9 @@ export function useServiceTier() {
       let row = await read();
       let made = false;
       if (!row && !isImpersonating) {
+        // A free sign-up whose confirmation didn't make them a member yet
+        // (member_free_join is idempotent and does nothing for anyone else).
+        await (supabase as any).rpc("member_free_join").then(() => null, () => null);
         const { data: id } = await (supabase as any).rpc("ensure_my_member_client");
         if (id) {
           row = await read();

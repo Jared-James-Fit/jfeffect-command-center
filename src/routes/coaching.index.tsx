@@ -410,7 +410,7 @@ function CoachingPage() {
             </Surface>
             <p className="mt-6 text-[15px] text-muted-foreground">
               Prefer to go self-guided?{" "}
-              <Link to="/membership" className="font-medium text-primary hover:underline underline-offset-4">See JF Membership</Link>
+              <Link to="/join" className="font-medium text-primary hover:underline underline-offset-4">Start free with JF Effect</Link>
             </p>
           </div>
         </Block>

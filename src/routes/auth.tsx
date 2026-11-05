@@ -81,8 +81,8 @@ function AuthPage() {
       footer={
         <p className="text-[13px] text-muted-foreground">
           New here?{" "}
-          <Link to="/membership" className="font-medium text-primary active:opacity-60">
-            Join JF Membership
+          <Link to="/join" className="font-medium text-primary active:opacity-60">
+            Create a free account
           </Link>
         </p>
       }

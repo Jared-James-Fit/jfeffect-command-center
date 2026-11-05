@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { CalendarClock, Cake, ChevronDown, ChevronRight, Eye, Flame, MessageCircle, Plus } from "lucide-react";
+import { CalendarClock, Cake, ChevronDown, ChevronRight, Eye, Flag, Flame, MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
@@ -21,6 +21,7 @@ import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { CoachPostRow } from "@/components/community/community-entry";
 import { NoteEditor } from "@/components/community/note-editor";
 import { PostDetailDialog } from "@/components/community/post-detail";
+import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
 import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 
 /** "Today 7:00 pm" · "Tomorrow 9:00 am" · "Mon 8:00 am", in the coach's own clock. */
@@ -130,7 +131,10 @@ export function AdminCommunityHub() {
   const { data: pulse } = useCommunityPulse(!viewOnly);
   // a view-only login (finance) gets the feed alone: no queues, no tools
   const tab: HubTab = viewOnly ? "feed" : picked;
-  const counts = hubTabCounts(pulse);
+  const openReports = useOpenReports(!viewOnly).data?.length ?? 0;
+  const base = hubTabCounts(pulse);
+  // reports from the crew wait on the Feed tab, with what else is waiting
+  const counts = { ...base, feed: base.feed + openReports };
   // profiles and Activity live in the feed: open them there
   const onFeed = (open: () => void) => {
     if (tab === "feed") return open();
@@ -263,6 +267,8 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
   const feed = useCommunityFeed(null);
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [showProps, setShowProps] = useState(false);
+  const [showReports, setShowReports] = useState(false);
+  const reportCount = useOpenReports().data?.length ?? 0;
 
   // Shared workouts this week still waiting on a coach reaction (from the feed already loaded).
   const waiting = useMemo(() => {
@@ -273,7 +279,7 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
   if (!p) return null;
   const replies = groupReplies(p.to_reply);
   const lessons = p.lessons_review ?? 0;
-  const any = replies.length > 0 || p.waiting_props > 0 || lessons > 0 || p.birthday_review > 0 || p.paused;
+  const any = reportCount > 0 || replies.length > 0 || p.waiting_props > 0 || lessons > 0 || p.birthday_review > 0 || p.paused;
   if (!any) return null;
 
   return (
@@ -282,6 +288,15 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
         <Flame className="h-3.5 w-3.5" /> Needs you
       </div>
       <div className="divide-y divide-border/60">
+        {reportCount > 0 && (
+          <Row
+            icon={<Flag className="h-4 w-4" />}
+            title={`${reportCount} ${reportCount === 1 ? "report" : "reports"} from the crew`}
+            sub="Remove it or dismiss it"
+            hot
+            onClick={() => setShowReports(true)}
+          />
+        )}
         {replies.map((r) => (
           <Row
             key={r.post_id}
@@ -346,6 +361,14 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
         onClose={() => {
           setOpenPost(null);
           void refetch();
+        }}
+      />
+      <ReportsReviewSheet
+        open={showReports}
+        onOpenChange={setShowReports}
+        onOpenPost={(id) => {
+          setShowReports(false);
+          setOpenPost(id);
         }}
       />
     </section>

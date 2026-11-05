@@ -68,7 +68,7 @@ function SitemapPage() {
 
   const publicPages = [
     { to: "/", label: "Landing" },
-    { to: "/membership", label: "Membership" },
+    { to: "/join", label: "Join free" },
     { to: "/about", label: "About Jared" },
     { to: "/coaching", label: "Private Coaching" },
     { to: "/auth", label: "Sign in / Sign up" },

@@ -32,6 +32,7 @@ import { Route as SitemapRouteImport } from './routes/sitemap'
 import { Route as StaffSetupRouteImport } from './routes/staff-setup'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
+import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as AuthenticatedAdminRouteRouteImport } from './routes/_authenticated/admin/route'
 import { Route as AuthenticatedCoachRouteRouteImport } from './routes/_authenticated/coach/route'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
@@ -220,6 +221,9 @@ import { Route as AuthenticatedPortalEventsIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedPortalEventsIdRouteImport } from './routes/_authenticated/portal/events.$id'
 import { Route as AuthenticatedPortalPlansIndexRouteImport } from './routes/_authenticated/portal/plans.index'
 import { Route as AuthenticatedPortalPlansPlanIdRouteImport } from './routes/_authenticated/portal/plans.$planId'
+import { Route as AuthenticatedPortalProgramsIndexRouteImport } from './routes/_authenticated/portal/programs.index'
+import { Route as AuthenticatedPortalProgramsProgramIdRouteImport } from './routes/_authenticated/portal/programs.$programId'
+import { Route as AuthenticatedPortalProgramsNewRouteImport } from './routes/_authenticated/portal/programs.new'
 import { Route as AuthenticatedPortalPurchasesIdRouteImport } from './routes/_authenticated/portal/purchases.$id'
 import { Route as AuthenticatedPortalRecipesIndexRouteImport } from './routes/_authenticated/portal/recipes.index'
 import { Route as AuthenticatedPortalRecipesRecipeIdRouteImport } from './routes/_authenticated/portal/recipes.$recipeId'
@@ -385,6 +389,11 @@ const TermsRoute = TermsRouteImport.update({
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
   path: '/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRouteRoute = AuthenticatedAdminRouteRouteImport.update({
@@ -1483,6 +1492,24 @@ const AuthenticatedPortalPlansPlanIdRoute =
     path: '/plans/$planId',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const AuthenticatedPortalProgramsIndexRoute =
+  AuthenticatedPortalProgramsIndexRouteImport.update({
+    id: '/programs/',
+    path: '/programs/',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalProgramsProgramIdRoute =
+  AuthenticatedPortalProgramsProgramIdRouteImport.update({
+    id: '/programs/$programId',
+    path: '/programs/$programId',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
+const AuthenticatedPortalProgramsNewRoute =
+  AuthenticatedPortalProgramsNewRouteImport.update({
+    id: '/programs/new',
+    path: '/programs/new',
+    getParentRoute: () => AuthenticatedPortalRouteRoute,
+  } as any)
 const AuthenticatedPortalPurchasesIdRoute =
   AuthenticatedPortalPurchasesIdRouteImport.update({
     id: '/$id',
@@ -1818,6 +1845,7 @@ export interface FileRoutesByFullPath {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/welcome': typeof WelcomeRoute
   '/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/m': typeof AuthenticatedMRouteRouteWithChildren
@@ -1992,6 +2020,8 @@ export interface FileRoutesByFullPath {
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
+  '/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
+  '/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
@@ -2042,6 +2072,7 @@ export interface FileRoutesByFullPath {
   '/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
   '/portal/plans/': typeof AuthenticatedPortalPlansIndexRoute
+  '/portal/programs/': typeof AuthenticatedPortalProgramsIndexRoute
   '/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2082,6 +2113,7 @@ export interface FileRoutesByTo {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/welcome': typeof WelcomeRoute
   '/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/book': typeof BookRoute
   '/finance': typeof AuthenticatedFinanceRoute
@@ -2252,6 +2284,8 @@ export interface FileRoutesByTo {
   '/portal/check-ins/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
+  '/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
+  '/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
@@ -2302,6 +2336,7 @@ export interface FileRoutesByTo {
   '/portal/agreements': typeof AuthenticatedPortalAgreementsIndexRoute
   '/portal/events': typeof AuthenticatedPortalEventsIndexRoute
   '/portal/plans': typeof AuthenticatedPortalPlansIndexRoute
+  '/portal/programs': typeof AuthenticatedPortalProgramsIndexRoute
   '/portal/recipes': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2344,6 +2379,7 @@ export interface FileRoutesById {
   '/staff-setup': typeof StaffSetupRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/welcome': typeof WelcomeRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteRouteWithChildren
   '/_authenticated/coach': typeof AuthenticatedCoachRouteRouteWithChildren
   '/_authenticated/m': typeof AuthenticatedMRouteRouteWithChildren
@@ -2518,6 +2554,8 @@ export interface FileRoutesById {
   '/_authenticated/portal/check-ins_/$formId': typeof AuthenticatedPortalCheckInsFormIdRoute
   '/_authenticated/portal/events/$id': typeof AuthenticatedPortalEventsIdRoute
   '/_authenticated/portal/plans/$planId': typeof AuthenticatedPortalPlansPlanIdRoute
+  '/_authenticated/portal/programs/$programId': typeof AuthenticatedPortalProgramsProgramIdRoute
+  '/_authenticated/portal/programs/new': typeof AuthenticatedPortalProgramsNewRoute
   '/_authenticated/portal/purchases/$id': typeof AuthenticatedPortalPurchasesIdRoute
   '/_authenticated/portal/recipes/$recipeId': typeof AuthenticatedPortalRecipesRecipeIdRoute
   '/_authenticated/portal/resources/$slug': typeof AuthenticatedPortalResourcesSlugRoute
@@ -2568,6 +2606,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/agreements/': typeof AuthenticatedPortalAgreementsIndexRoute
   '/_authenticated/portal/events/': typeof AuthenticatedPortalEventsIndexRoute
   '/_authenticated/portal/plans/': typeof AuthenticatedPortalPlansIndexRoute
+  '/_authenticated/portal/programs/': typeof AuthenticatedPortalProgramsIndexRoute
   '/_authenticated/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/_authenticated/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -2610,6 +2649,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/unsubscribe'
+    | '/welcome'
     | '/admin'
     | '/coach'
     | '/m'
@@ -2784,6 +2824,8 @@ export interface FileRouteTypes {
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
     | '/portal/plans/$planId'
+    | '/portal/programs/$programId'
+    | '/portal/programs/new'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/resources/$slug'
@@ -2834,6 +2876,7 @@ export interface FileRouteTypes {
     | '/portal/agreements/'
     | '/portal/events/'
     | '/portal/plans/'
+    | '/portal/programs/'
     | '/portal/recipes/'
     | '/portal/resources/'
     | '/portal/workouts/'
@@ -2874,6 +2917,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/unsubscribe'
+    | '/welcome'
     | '/coach'
     | '/book'
     | '/finance'
@@ -3044,6 +3088,8 @@ export interface FileRouteTypes {
     | '/portal/check-ins/$formId'
     | '/portal/events/$id'
     | '/portal/plans/$planId'
+    | '/portal/programs/$programId'
+    | '/portal/programs/new'
     | '/portal/purchases/$id'
     | '/portal/recipes/$recipeId'
     | '/portal/resources/$slug'
@@ -3094,6 +3140,7 @@ export interface FileRouteTypes {
     | '/portal/agreements'
     | '/portal/events'
     | '/portal/plans'
+    | '/portal/programs'
     | '/portal/recipes'
     | '/portal/resources'
     | '/portal/workouts'
@@ -3135,6 +3182,7 @@ export interface FileRouteTypes {
     | '/staff-setup'
     | '/terms'
     | '/unsubscribe'
+    | '/welcome'
     | '/_authenticated/admin'
     | '/_authenticated/coach'
     | '/_authenticated/m'
@@ -3309,6 +3357,8 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/check-ins_/$formId'
     | '/_authenticated/portal/events/$id'
     | '/_authenticated/portal/plans/$planId'
+    | '/_authenticated/portal/programs/$programId'
+    | '/_authenticated/portal/programs/new'
     | '/_authenticated/portal/purchases/$id'
     | '/_authenticated/portal/recipes/$recipeId'
     | '/_authenticated/portal/resources/$slug'
@@ -3359,6 +3409,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/agreements/'
     | '/_authenticated/portal/events/'
     | '/_authenticated/portal/plans/'
+    | '/_authenticated/portal/programs/'
     | '/_authenticated/portal/recipes/'
     | '/_authenticated/portal/resources/'
     | '/_authenticated/portal/workouts/'
@@ -3401,6 +3452,7 @@ export interface RootRouteChildren {
   StaffSetupRoute: typeof StaffSetupRoute
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  WelcomeRoute: typeof WelcomeRoute
   BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
   BookSlugRoute: typeof BookSlugRoute
@@ -3612,6 +3664,13 @@ declare module '@tanstack/react-router' {
       path: '/unsubscribe'
       fullPath: '/unsubscribe'
       preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -4930,6 +4989,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalPlansPlanIdRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/_authenticated/portal/programs/': {
+      id: '/_authenticated/portal/programs/'
+      path: '/programs'
+      fullPath: '/portal/programs/'
+      preLoaderRoute: typeof AuthenticatedPortalProgramsIndexRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/programs/$programId': {
+      id: '/_authenticated/portal/programs/$programId'
+      path: '/programs/$programId'
+      fullPath: '/portal/programs/$programId'
+      preLoaderRoute: typeof AuthenticatedPortalProgramsProgramIdRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
+    '/_authenticated/portal/programs/new': {
+      id: '/_authenticated/portal/programs/new'
+      path: '/programs/new'
+      fullPath: '/portal/programs/new'
+      preLoaderRoute: typeof AuthenticatedPortalProgramsNewRouteImport
+      parentRoute: typeof AuthenticatedPortalRouteRoute
+    }
     '/_authenticated/portal/purchases/$id': {
       id: '/_authenticated/portal/purchases/$id'
       path: '/$id'
@@ -5812,6 +5892,8 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalCheckInsFormIdRoute: typeof AuthenticatedPortalCheckInsFormIdRoute
   AuthenticatedPortalEventsIdRoute: typeof AuthenticatedPortalEventsIdRoute
   AuthenticatedPortalPlansPlanIdRoute: typeof AuthenticatedPortalPlansPlanIdRoute
+  AuthenticatedPortalProgramsProgramIdRoute: typeof AuthenticatedPortalProgramsProgramIdRoute
+  AuthenticatedPortalProgramsNewRoute: typeof AuthenticatedPortalProgramsNewRoute
   AuthenticatedPortalRecipesRecipeIdRoute: typeof AuthenticatedPortalRecipesRecipeIdRoute
   AuthenticatedPortalResourcesSlugRoute: typeof AuthenticatedPortalResourcesSlugRoute
   AuthenticatedPortalWorkoutsDayIdRoute: typeof AuthenticatedPortalWorkoutsDayIdRoute
@@ -5820,6 +5902,7 @@ interface AuthenticatedPortalRouteRouteChildren {
   AuthenticatedPortalAgreementsIndexRoute: typeof AuthenticatedPortalAgreementsIndexRoute
   AuthenticatedPortalEventsIndexRoute: typeof AuthenticatedPortalEventsIndexRoute
   AuthenticatedPortalPlansIndexRoute: typeof AuthenticatedPortalPlansIndexRoute
+  AuthenticatedPortalProgramsIndexRoute: typeof AuthenticatedPortalProgramsIndexRoute
   AuthenticatedPortalRecipesIndexRoute: typeof AuthenticatedPortalRecipesIndexRoute
   AuthenticatedPortalResourcesIndexRoute: typeof AuthenticatedPortalResourcesIndexRoute
   AuthenticatedPortalWorkoutsIndexRoute: typeof AuthenticatedPortalWorkoutsIndexRoute
@@ -5859,6 +5942,9 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalCheckInsFormIdRoute,
     AuthenticatedPortalEventsIdRoute: AuthenticatedPortalEventsIdRoute,
     AuthenticatedPortalPlansPlanIdRoute: AuthenticatedPortalPlansPlanIdRoute,
+    AuthenticatedPortalProgramsProgramIdRoute:
+      AuthenticatedPortalProgramsProgramIdRoute,
+    AuthenticatedPortalProgramsNewRoute: AuthenticatedPortalProgramsNewRoute,
     AuthenticatedPortalRecipesRecipeIdRoute:
       AuthenticatedPortalRecipesRecipeIdRoute,
     AuthenticatedPortalResourcesSlugRoute:
@@ -5872,6 +5958,8 @@ const AuthenticatedPortalRouteRouteChildren: AuthenticatedPortalRouteRouteChildr
       AuthenticatedPortalAgreementsIndexRoute,
     AuthenticatedPortalEventsIndexRoute: AuthenticatedPortalEventsIndexRoute,
     AuthenticatedPortalPlansIndexRoute: AuthenticatedPortalPlansIndexRoute,
+    AuthenticatedPortalProgramsIndexRoute:
+      AuthenticatedPortalProgramsIndexRoute,
     AuthenticatedPortalRecipesIndexRoute: AuthenticatedPortalRecipesIndexRoute,
     AuthenticatedPortalResourcesIndexRoute:
       AuthenticatedPortalResourcesIndexRoute,
@@ -5943,6 +6031,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffSetupRoute: StaffSetupRoute,
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  WelcomeRoute: WelcomeRoute,
   BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
   BookSlugRoute: BookSlugRoute,

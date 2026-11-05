@@ -18,8 +18,9 @@ export type MemberAccessInput = {
   current_period_end?: string | Date | null;
 };
 
-// Billing writes these as "Active", "Trialing", "Complimentary" (any case).
-const ACTIVE_SUB_STATUSES = new Set(["active", "trialing", "admin_granted", "complimentary"]);
+// Billing writes these as "Active", "Trialing", "Complimentary" (any case);
+// "Free" is a free account (member_free_join). Same list as the SQL checks.
+const ACTIVE_SUB_STATUSES = new Set(["active", "trialing", "admin_granted", "complimentary", "free"]);
 // Cancelled, but the month is paid for: access until the period ends.
 // ("Hold Plan" and "Paused" stay locked on purpose: data kept, features off.)
 const CANCELS_AT_PERIOD_END = "active (cancels at period end)";
