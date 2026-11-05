@@ -4,11 +4,10 @@ import { Dumbbell, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { bodyweightUnitKey } from "@/lib/use-bodyweight-unit";
-import { saveWeightUnitChoice, weightUnitSetupKey } from "@/lib/weight-unit-pref";
+import { applyWeightUnitChoice, weightUnitSetupQuery } from "@/lib/weight-unit-pref";
+import { MEMBER_SETUP_STATUS_KEY, setupStillOpen } from "@/lib/member-setup-steps";
 import type { WeightUnit } from "@/lib/weight-lifted";
 
 // Asked once per app open until answered; lb is used in the meantime.
@@ -40,18 +39,9 @@ export function WeightUnitPrompt() {
   const [saving, setSaving] = useState<WeightUnit | null>(null);
 
   const { data: row, isSuccess } = useQuery({
-    queryKey: weightUnitSetupKey(userId),
+    ...weightUnitSetupQuery(userId),
     enabled,
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, preferred_weight_unit, weight_unit_confirmed_at")
-        .eq("user_id", userId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
   });
   const needsAnswer = enabled && isSuccess && !!row && !row.weight_unit_confirmed_at;
 
@@ -63,7 +53,7 @@ export function WeightUnitPrompt() {
     let timer = 0;
     const tick = () => {
       if (stopped) return;
-      if (uiIsClear()) {
+      if (uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY))) {
         try { sessionStorage.setItem(SESSION_KEY(userId), "1"); } catch { /* storage unavailable */ }
         setOpen(true);
         return;
@@ -72,7 +62,7 @@ export function WeightUnitPrompt() {
     };
     timer = window.setTimeout(tick, 1500);
     return () => { stopped = true; window.clearTimeout(timer); };
-  }, [needsAnswer, open, userId]);
+  }, [needsAnswer, open, userId, qc]);
 
   // Answered somewhere else (e.g. Account Settings) while open.
   useEffect(() => { if (open && !needsAnswer && !saving) setOpen(false); }, [open, needsAnswer, saving]);
@@ -83,21 +73,9 @@ export function WeightUnitPrompt() {
     if (!row || !userId || saving) return;
     setSaving(unit);
     try {
-      await saveWeightUnitChoice({ clientId: row.id }, unit);
-      // Bodyweight follows the same unit unless they've already picked one for it.
-      await supabase
-        .from("bodyweight_unit_prefs")
-        .upsert({ user_id: userId, unit, updated_at: new Date().toISOString() }, { onConflict: "user_id", ignoreDuplicates: true });
+      await applyWeightUnitChoice(qc, userId, row, unit);
       setOpen(false);
       toast.success(unit === "kg" ? "Weights will show in kg" : "Weights will show in lb");
-      if (unit !== row.preferred_weight_unit) {
-        // Workouts, maxes, analytics and the Crew all read the unit.
-        qc.invalidateQueries();
-      } else {
-        qc.invalidateQueries({ queryKey: weightUnitSetupKey(userId) });
-        qc.invalidateQueries({ queryKey: bodyweightUnitKey(userId) });
-        qc.invalidateQueries({ queryKey: ["my-client-account"] });
-      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save your unit. Try again.");
     } finally {

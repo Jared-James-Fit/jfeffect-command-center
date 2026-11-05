@@ -6,6 +6,7 @@ import {
   isFreeAccount,
   setupMissing,
   setupStepsFor,
+  setupStillOpen,
 } from "@/lib/member-setup-steps";
 
 const SQL = readFileSync("supabase/migrations/20270129120000_free_member_setup.sql", "utf8");
@@ -61,5 +62,40 @@ describe("a free account's setup is its training, nothing else", () => {
     expect(SQL).toContain("AND array_length(m.committed_training_days, 1) >= 1");
     const wizard = readFileSync("src/components/member/member-setup-wizard.tsx", "utf8");
     expect(wizard).toContain("const STEPS = setupStepsFor(m);");
+  });
+});
+
+describe("a new member gets setup first, then one popup at a time", () => {
+  const member = { account_type: "jf_member", is_admin_sandbox: false };
+
+  it("launch popups wait while setup is loading or unfinished", () => {
+    expect(setupStillOpen({ status: "pending" })).toBe(true);
+    expect(setupStillOpen({ status: "success", data: { complete: false, member } })).toBe(true);
+    expect(setupStillOpen({ status: "success", data: { complete: true, member } })).toBe(false);
+    // no setup gate mounted (a coaching client), a failed read, or an admin's sandbox: nothing to wait for
+    expect(setupStillOpen(undefined)).toBe(false);
+    expect(setupStillOpen({ status: "error" })).toBe(false);
+    expect(
+      setupStillOpen({
+        status: "success",
+        data: { complete: false, member: { ...member, is_admin_sandbox: true } },
+      }),
+    ).toBe(false);
+  });
+
+  it("pounds or kilograms is asked on setup's last step, and both launch popups wait for setup", () => {
+    const wizard = readFileSync("src/components/member/member-setup-wizard.tsx", "utf8");
+    expect(wizard).toContain(
+      "applyWeightUnitChoice(qc, user.id, unitRow, form.weight_unit as WeightUnit)",
+    );
+    expect(wizard).toContain('missing.push("pounds or kilograms")');
+    for (const f of [
+      "src/components/home-screen-setup-gate.tsx",
+      "src/components/portal/weight-unit-prompt.tsx",
+    ]) {
+      expect(readFileSync(f, "utf8")).toContain(
+        "uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY))",
+      );
+    }
   });
 });

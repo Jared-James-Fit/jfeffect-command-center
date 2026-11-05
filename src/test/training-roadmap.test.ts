@@ -177,6 +177,19 @@ describe("one program at a time", () => {
     const r = buildProgramRoadmap({ ...base, blocks: [...blocks, ...loose], weeks: [...weeks, { id: "xw1", block_id: "x", week_index: 1 }] })!;
     expect(r.blocks.map((b) => b.id)).toEqual(["o1", "o2"]);
     expect(r.programs.map((p) => p.id)).toContain("blocks:x");
+    // one block with no program record is called by its block, not "Program from Sep 2026"
+    expect(r.programs.find((p) => p.id === "blocks:x")?.title).toBe("Extra");
+  });
+
+  it("a program someone started on its own is named by its one block", () => {
+    const solo = [{ id: "s", name: "Upper Lower", start_date: "2026-11-02", end_date: "2026-11-29", weeks: 4, status: "Active" }];
+    const sw = Array.from({ length: 4 }, (_, i) => ({ id: `sw${i + 1}`, block_id: "s", week_index: i + 1 }));
+    const r = buildProgramRoadmap({ blocks: solo, weeks: sw, notes: [], preps: [], today: "2026-11-05" })!;
+    expect(r.program).toMatchObject({ id: "blocks:s", title: "Upper Lower", status: "active" });
+    // two loose blocks together have no one name
+    const two = [...solo, { id: "t", name: "Block 2 — Peak", start_date: "2026-11-30", end_date: "2026-12-20", weeks: 3 }];
+    const tw = [...sw, ...[1, 2, 3].map((i) => ({ id: `tw${i}`, block_id: "t", week_index: i }))];
+    expect(buildProgramRoadmap({ blocks: two, weeks: tw, notes: [], preps: [], today: "2026-11-05" })!.program.title).toBeNull();
   });
 });
 

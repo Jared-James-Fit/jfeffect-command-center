@@ -47,7 +47,7 @@ export function freeJoinMessage(
     case "coach_account":
       return {
         title: "Your coach already set you up",
-        body: "Use the invite your coach sent to this email to get in. Can't find it? Reset your password from the sign-in page.",
+        body: "Your coach already has an account set up for this email. Ask them to send your invite again: it lets you set your password and get straight in.",
       };
     case "unconfirmed":
       return {

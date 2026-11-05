@@ -75,7 +75,11 @@ export function FreeSignup() {
       }
       if (data.session) {
         // email confirmation is off on this project: they're in now
-        await (supabase as any).rpc("member_free_join").catch(() => null);
+        // the rpc builder is only then-able (no .catch): a failure here must not stop them going in
+        await (supabase as any).rpc("member_free_join").then(
+          () => null,
+          () => null,
+        );
         navigate({ href: "/app", replace: true });
         return;
       }

@@ -19,8 +19,8 @@ const StartInput = z.object({
  * A member puts a program they own (built, or copied from the crew) on their
  * calendar. The block itself is written by athlete_program_start, as the
  * member (it checks the program is theirs, they're self-serve and have
- * access); then, like starting a library plan, the plan they started before
- * is archived (never deleted) and the workouts go onto their training days.
+ * access, and archives the plan they ran before, never deleting it); then,
+ * like starting a library plan, the workouts go onto their training days.
  */
 export const startMyProgram = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -74,40 +74,8 @@ export const startMyProgram = createServerFn({ method: "POST" })
       _start: startDate,
     });
     if (error) throw new Error(error.message);
+    // athlete_program_start also archived the program they ran before (never deleted)
     const blockId = (res as any)?.block_id as string | undefined;
-
-    // the program they started before makes way (archived, history kept), never the new one
-    const old = running.filter((b) => b.id !== blockId);
-    if (old.length) {
-      const now = new Date().toISOString();
-      await supabaseAdmin
-        .from("pl_blocks")
-        .update({
-          status: "Archived",
-          archived: true,
-          archived_at: now,
-          archived_by: userId,
-        } as any)
-        .in(
-          "id",
-          old.map((b) => b.id),
-        );
-      const prepIds = Array.from(
-        new Set(old.map((b) => b.prep_id).filter((x): x is string => !!x)),
-      );
-      if (prepIds.length) {
-        await supabaseAdmin
-          .from("pl_preps")
-          .update({
-            status: "Archived",
-            archived: true,
-            archived_at: now,
-            archived_by: userId,
-          } as any)
-          .in("id", prepIds)
-          .eq("created_by", userId);
-      }
-    }
 
     let unplaced = 0;
     try {

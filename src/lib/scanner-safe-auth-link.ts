@@ -41,9 +41,11 @@ export function scannerSafeAuthLink(input: {
   let path = target.pathname.replace(/\/+$/, "") || "/";
   if (!(SAFE_PATHS as readonly string[]).includes(path)) {
     // Default redirect (site root) → the matching safe page. Anything more
-    // specific (member onboarding etc.) keeps the original link.
+    // specific (member onboarding etc.) keeps the original link. A sign-up is
+    // only ever the free /join (FreeSignup), so it lands on /welcome even when
+    // Supabase dropped its redirect, never on /setup's coaching password page.
     if (path !== "/") return null;
-    path = type === "recovery" ? "/reset-password" : "/setup";
+    path = type === "recovery" ? "/reset-password" : type === "signup" ? "/welcome" : "/setup";
   }
   const out = new URL(path, target.origin);
   out.searchParams.set("token_hash", tokenHash);

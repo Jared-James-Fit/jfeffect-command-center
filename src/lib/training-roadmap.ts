@@ -650,7 +650,11 @@ export function buildProgramRoadmap(input: {
             : "active";
     return {
       id,
-      title: programTitle(prep?.title, input.ownerName),
+      // A one-block program with no program record (a library plan or a
+      // program someone built, started on its own) is called by its block.
+      title:
+        programTitle(prep?.title, input.ownerName) ??
+        (!prep && bs.length === 1 && bs[0].name !== "Block" ? blockNameParts(bs[0].name)?.name ?? null : null),
       status,
       start: bs.find((b) => b.start)?.start ?? null,
       end: [...bs].reverse().find((b) => b.end)?.end ?? null,

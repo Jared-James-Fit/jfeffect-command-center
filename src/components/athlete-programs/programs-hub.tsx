@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
@@ -82,7 +82,13 @@ function CrewPrograms() {
   const [q, setQ] = useState("");
   const [goal, setGoal] = useState<ProgramGoal | null>(null);
   const [sort, setSort] = useState<"popular" | "new">("popular");
-  const filters: BrowseFilters = { q, goal, sort };
+  // one search per pause in typing, not one per key
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setSearch(q.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const filters: BrowseFilters = { q: search, goal, sort };
   const { data, isLoading, isError, refetch } = usePrograms("community", filters);
 
   return (
