@@ -18,8 +18,8 @@ import { isSpiritScene } from "@/components/community/spirit-scenes";
 
 type Admin = any;
 export type Picture = { bytes: Uint8Array; mime: string; width: number; height: number; provider: string };
-type Made = { ok: true; picture: Picture } | { ok: false; reason: string };
-export type PictureResult = { ok: true; path: string; provider: string } | { ok: false; reason: string };
+export type Made = { ok: true; picture: Picture } | { ok: false; reason: string };
+export type PictureResult = { ok: true; path: string; provider: string; queued?: boolean } | { ok: false; reason: string };
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const GATEWAY_MODELS = ["google/gemini-3-pro-image-preview", "google/gemini-2.5-flash-image", "google/gemini-2.5-flash-image-preview"];
@@ -48,26 +48,36 @@ function picture(bytes: Uint8Array, provider: string): Made {
   return { ok: true, picture: { bytes, ...size, provider } };
 }
 
+/** OpenAI's image models, newest first: one this key can't use is skipped for the next. */
+const OPENAI_IMAGE_MODELS = ["gpt-image-1.5", "gpt-image-1"];
+
 async function viaOpenAI(key: string, prompt: string): Promise<Made> {
-  const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
-  const res = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, prompt, size: "1024x1536", quality: "high", output_format: "jpeg", output_compression: 88, n: 1 }),
-    signal: AbortSignal.timeout(150_000),
-  });
-  if (!res.ok) {
-    let msg = `OpenAI said no (${res.status})`;
-    try {
-      const j = await res.json();
-      if (j?.error?.message) msg = `OpenAI: ${String(j.error.message).slice(0, 160)}`;
-    } catch {
-      // keep the status
+  const models = process.env.OPENAI_IMAGE_MODEL ? [process.env.OPENAI_IMAGE_MODEL] : OPENAI_IMAGE_MODELS;
+  let last = "OpenAI didn't answer";
+  for (const model of models) {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, prompt, size: "1024x1536", quality: "high", output_format: "jpeg", output_compression: 88, n: 1 }),
+      signal: AbortSignal.timeout(170_000),
+    });
+    if (!res.ok) {
+      let msg = `OpenAI said no (${res.status})`;
+      try {
+        const j = await res.json();
+        if (j?.error?.message) msg = `OpenAI: ${String(j.error.message).slice(0, 160)}`;
+      } catch {
+        // keep the status
+      }
+      last = msg;
+      // a model this key doesn't have is worth trying the next; anything else isn't
+      if (res.status === 404 || (res.status === 400 && /model/i.test(msg)) || (res.status === 403 && /model|verif/i.test(msg))) continue;
+      return { ok: false, reason: msg };
     }
-    return { ok: false, reason: msg };
+    const b64: string | undefined = (await res.json())?.data?.[0]?.b64_json;
+    return b64 ? picture(fromBase64(b64), `openai:${model}`) : { ok: false, reason: "OpenAI didn't send a picture back" };
   }
-  const b64: string | undefined = (await res.json())?.data?.[0]?.b64_json;
-  return b64 ? picture(fromBase64(b64), `openai:${model}`) : { ok: false, reason: "OpenAI didn't send a picture back" };
+  return { ok: false, reason: last };
 }
 
 /** The picture in a chat reply: `message.images[]`, or an image part / data URL in `content`. */
@@ -115,11 +125,16 @@ async function viaGateway(key: string, prompt: string): Promise<Made> {
   return { ok: false, reason: last };
 }
 
-/** One picture from the best image model the app has a key for. */
-export async function generatePicture(prompt: string): Promise<Made> {
+/**
+ * One picture from the best image model the app has a key for. `use.lovable:
+ * false` keeps it on OpenAI (the daily pictures, unless the coach allows
+ * Lovable AI).
+ */
+export async function generatePicture(prompt: string, use: { lovable?: boolean } = {}): Promise<Made> {
   const openai = process.env.OPENAI_API_KEY;
-  const lovable = process.env.LOVABLE_API_KEY;
-  if (!openai && !lovable) return { ok: false, reason: "No image model is set up (OPENAI_API_KEY or LOVABLE_API_KEY)." };
+  const lovable = use.lovable === false ? undefined : process.env.LOVABLE_API_KEY;
+  if (!openai && !lovable)
+    return { ok: false, reason: use.lovable === false ? "No OpenAI key (OPENAI_API_KEY) is set up, and Lovable AI is off for these." : "No image model is set up (OPENAI_API_KEY or LOVABLE_API_KEY)." };
   let first: Made | null = null;
   if (openai) {
     try {

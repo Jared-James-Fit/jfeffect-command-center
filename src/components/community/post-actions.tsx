@@ -78,6 +78,8 @@ export function PostActions({ post, viewerIsStaff, onGone, className, unit: show
     try {
       const r = await makePicture({ data: { postId: post.id } });
       if (!r.ok) return void toast.error("Couldn't make a picture", { id, description: r.reason });
+      // a daily picture is remade in the background, checked first, and swapped in place
+      if ("queued" in r && r.queued) return void toast.success("A new picture is being made", { id, description: "It replaces this one in a few minutes, once it passes its check." });
       for (const queryKey of POST_LIST_KEYS) await qc.invalidateQueries({ queryKey: [...queryKey] });
       void qc.invalidateQueries({ queryKey: ["community-post"] });
       toast.success("New picture is up", { id, description: "Not it? Tap New picture again." });
