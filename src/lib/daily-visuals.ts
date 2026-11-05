@@ -454,7 +454,8 @@ WRITING RULES
 - Real and warm, sometimes funny, sometimes a little blunt. No empty motivation, no slogans, no clichés ("trust the process", "you got this", "keep going", "no excuses", "level up", "best version of yourself"), no hashtags, no quotation marks, no forced slang. At most one emoji, often none.
 - Never invent facts, studies, numbers, names or real people. A small made-up moment told to "you" is fine.
 - Never write or mention a Bible verse (the app adds one on Sundays).
-- Don't echo anything in RECENT POSTS: not the topic angle, the situation, the message, the opening or the picture.
+- Don't echo anything in RECENT POSTS: not the topic angle, the situation, the message, the opening or the picture. Never lean on the stock moments (nobody clapping, the quiet win, the group chat, Friday night, a full sink, the couch): find a fresh, specific one.
+- A humour post is actually funny: a true, slightly absurd detail, a comparison or a twist people laugh at and tag a friend in. Earnest isn't humour.
 
 PICTURE RULES
 - Describe the frame: who is in it (adults, their age range, build, hair and clothes, people of different looks, fitting the audience and an everyday gym and life), what they're doing and feeling, where they are, what's around them.
@@ -615,6 +616,41 @@ export function captionSimilarity(a: string, b: string): number {
 const BIBLE_REF =
   /\b(?:[1-3]\s?)?(?:genesis|exodus|deuteronomy|joshua|psalms?|proverbs|ecclesiastes|isaiah|jeremiah|lamentations|micah|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|hebrews|james|peter|revelation)\s+\d{1,3}:\d{1,3}\b/i;
 
+/**
+ * Stock moments the writer falls back on (the first week used "nobody claps"
+ * and the quiet win four times): one used in a recent post can't come back.
+ */
+export const STOCK_MOTIFS = [
+  "no one claps",
+  "nobody claps",
+  "no one cheered",
+  "nobody cheered",
+  "no one notices",
+  "nobody notices",
+  "no one sees",
+  "nobody sees",
+  "quiet win",
+  "quiet choice",
+  "quiet rep",
+  "quiet truth",
+  "group chat",
+  "doomscroll",
+  "the sink",
+  "the couch",
+  "friday night",
+  "its friday",
+  "no selfie",
+  "no post",
+] as const;
+
+/** Stock moments in a caption that a recent post already used. */
+export function motifRepeats(caption: string, recent: string[]): string[] {
+  const norm = (t: string) => ` ${t.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ")} `;
+  const mine = norm(caption);
+  const theirs = recent.map(norm);
+  return STOCK_MOTIFS.filter((m) => mine.includes(` ${m} `) && theirs.some((t) => t.includes(` ${m} `)));
+}
+
 /** Past this share of three-word runs, a caption is a rerun. */
 export const SIMILAR_MAX = 0.3;
 
@@ -637,6 +673,7 @@ export function captionProblems(caption: string, o: { format: DailyFormat; recen
   if (repeat) out.push(repeat);
   const close = (o.recent ?? []).find((r) => captionSimilarity(caption, r) >= SIMILAR_MAX);
   if (close) out.push(`too close to a recent post ("${close.slice(0, 50)}…")`);
+  for (const m of motifRepeats(caption, o.recent ?? [])) out.push(`uses "${m}" like a recent post (find a new moment)`);
   for (const p of [...plainCheck(caption).problems, ...voiceProblems(caption)]) if (!out.includes(p)) out.push(p);
   return [...new Set(out)];
 }
@@ -711,7 +748,7 @@ Answer with JSON only:
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean (a caption meant as humour that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send.`;
 
 export type Review = {
   /** What it actually is: only hand_drawn_2d passes. */
@@ -730,7 +767,7 @@ export type Review = {
 
 export function reviewPrompt(o: {
   caption: string;
-  concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style"> & { art?: DailyArt | string | null };
+  concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style"> & { art?: DailyArt | string | null; format?: DailyFormat | string | null };
   audience: DailyAudience;
   /** How many style references come before the picture. */
   references?: number;
@@ -742,6 +779,7 @@ export function reviewPrompt(o: {
       : null,
     `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
     `THE MESSAGE: ${o.concept.message}`,
+    o.concept.format && o.concept.format in DAILY_FORMATS ? `THE CAPTION'S FORM: ${DAILY_FORMATS[o.concept.format as DailyFormat].name} (${DAILY_FORMATS[o.concept.format as DailyFormat].guide})` : null,
     `THE SITUATION: ${o.concept.situation}`,
     `THE PICTURE WAS MEANT TO BE: a frame from a premium, colourful, hand-drawn 2D animated film, bright and crisp (never 3D, a photo, vector clip art, dark or muddy)${art ? `, ${art.name}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""} ${o.concept.visual}`,
     o.concept.typography ? `WORDS MEANT TO BE IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE WAS MEANT TO HAVE NO WORDS IN IT.",
