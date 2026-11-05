@@ -475,13 +475,19 @@ export const GENERIC_PHRASES = [
 ] as const;
 
 const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu;
-const firstWord = (s: string) => s.trim().toLowerCase().match(/^[a-z']+/)?.[0] ?? "";
+/** Words half of all captions start with ("you", "the"): two of them together are the opening that can repeat. */
+const COMMON_OPENERS = new Set(["you", "your", "youre", "i", "im", "the", "a", "an", "its", "it", "this", "that", "thats", "when", "if", "we", "my", "and", "but", "so", "some", "nobody", "no", "every", "theres", "there", "to"]);
+/** The opening that would read as a template if it came back: the first word, or the first two when the first is a common one. */
+const opener = (s: string) => {
+  const w = s.trim().toLowerCase().replace(/[’']/g, "").match(/[a-z]+/g) ?? [];
+  return w[0] && COMMON_OPENERS.has(w[0]) ? w.slice(0, 2).join(" ") : (w[0] ?? "");
+};
 const lastEmoji = (s: string) => s.match(EMOJI_RE)?.pop() ?? "";
 
-/** A post that opens with the same word, or ends on the same emoji, as a day near it reads like a template. */
+/** A post that opens the same way, or ends on the same emoji, as a day near it reads like a template. */
 export function repeatsNearby(line: string, near: string[]): string | null {
-  const w = firstWord(line);
-  if (w && near.some((n) => firstWord(n) === w)) return `opens with "${w}" like a day near it`;
+  const w = opener(line);
+  if (w && near.some((n) => opener(n) === w)) return `opens with "${w}" like a day near it`;
   const e = lastEmoji(line);
   if (e && near.some((n) => lastEmoji(n) === e)) return `ends on ${e} like a day near it`;
   return null;
@@ -636,7 +642,8 @@ export function parseReview(text: string): Review | null {
   }
 }
 
-const letters = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/** Words as letters only: "it's" and "its" are the same word, punctuation and line breaks don't count. */
+const letters = (s: string) => s.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
 /** Each score a post has to reach. */
 export const REVIEW_BARS: Review["scores"] = { relatable: 4, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3 };
@@ -647,15 +654,19 @@ const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling
  * exactly what was asked for (or none), no defects; then every score at its
  * bar. Says which side failed, so only that side is made again.
  */
-export function reviewVerdict(r: Review, typography: string): { pass: boolean; image: string[]; caption: string[] } {
+export function reviewVerdict(r: Review, typography: string, scene = ""): { pass: boolean; image: string[]; caption: string[] } {
   const image: string[] = [];
   const caption: string[] = [];
   const want = letters(typography);
   const seen = letters(r.text_seen);
-  if (want) {
-    if (!seen.includes(want)) image.push(`the words in the picture read "${r.text_seen || "nothing"}", not "${typography}"`);
-    else if (seen.split(" ").length > want.split(" ").length + 2) image.push(`extra words in the picture: "${r.text_seen}"`);
-  } else if (seen) image.push(`words that shouldn't be there: "${r.text_seen}"`);
+  // words the planned scene itself names (an alarm's "5:30 AM", a note that says "tomorrow") aren't stray text
+  const planned = new Set([...letters(typography).split(" "), ...letters(scene).split(" ")].filter(Boolean));
+  const stray = seen
+    .replace(want, " ")
+    .split(" ")
+    .filter((w) => w && !planned.has(w));
+  if (want && !seen.includes(want)) image.push(`the words in the picture read "${r.text_seen || "nothing"}", not "${typography}"`);
+  else if (stray.length) image.push(`${want ? "extra words" : "words that shouldn't be there"} in the picture: "${r.text_seen}"`);
   for (const d of r.defects) image.push(d);
   for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
     if (r.scores[k] >= REVIEW_BARS[k]) continue;

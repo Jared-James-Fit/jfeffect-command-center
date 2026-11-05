@@ -127,7 +127,10 @@ describe("captions: relatable, plain, his voice, never a rerun", () => {
     const recent = ["you know that moment in the car before the gym when you nearly turn around"];
     expect(captionSimilarity(good, recent[0])).toBeGreaterThan(0.3);
     expect(captionProblems(good, { format: "scenario", recent })[0]).toContain("too close to a recent post");
-    expect(captionProblems(good, { format: "scenario", near: ["you showed up all week"] })).toContain('opens with "you" like a day near it');
+    expect(captionProblems(good, { format: "scenario", near: ["you know what the gym at 6 am feels like"] })).toContain('opens with "you know" like a day near it');
+    // a common first word alone isn't a template: "you know" and "you showed" open differently
+    expect(repeatsNearby(good, ["you showed up all week"])).toBeNull();
+    expect(repeatsNearby("honestly the crew carried me", ["honestly just show up"])).toContain('opens with "honestly"');
     expect(repeatsNearby("slow is still moving 🌱", ["honestly the crew 🤝"])).toBeNull();
   });
 
@@ -196,6 +199,9 @@ describe("the review: concrete checks before any score", () => {
   it("fails misspelled, missing or extra words, any defect, and scores under the bar, on the right side", () => {
     expect(reviewVerdict(review({ text_seen: "Stil heer" }), "still here").image[0]).toContain('read "Stil heer", not "still here"');
     expect(reviewVerdict(review({ text_seen: "SALE" }), "").image[0]).toContain("words that shouldn't be there");
+    // an apostrophe the picture added is the same word, and words the planned scene names aren't stray
+    expect(reviewVerdict(review({ text_seen: "who are you\nwhen it's quiet?\n5:30 AM" }), "who are you when its quiet?", "a phone alarm set for 5:30 AM").pass).toBe(true);
+    expect(reviewVerdict(review({ text_seen: "who are you when its quiet? SALE" }), "who are you when its quiet?", "a phone alarm").image[0]).toContain("extra words in the picture");
     expect(reviewVerdict(review({ defects: ["six fingers on the left hand"] }), "").image).toContain("six fingers on the left hand");
     const low = reviewVerdict(review({ scores: { ...review().scores, writing: 2, aesthetic: 3 }, fix_caption: "say it plainer" }), "");
     expect(low.pass).toBe(false);
