@@ -9,6 +9,11 @@ import {
   EDITOR_BARS,
   EDITOR_PROMPT,
   CONCEPT_PROMPT,
+  CAPTION_FIX_PROMPT,
+  NOT_HIS_VOICE,
+  VOICE_EXAMPLE,
+  VOICE_GUIDE,
+  namedPeople,
   DAILY_STYLES,
   DAILY_STYLE_KEYS,
   DAILY_THEMES,
@@ -105,13 +110,15 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
     expect(sql).toContain("SELECT (ARRAY['women', 'men', 'everyone'])[((((_day - date '2026-01-05') % 3) + 3) % 3) + 1]");
   });
 
-  it("twelve shots and seven caption forms, each as long as its idea needs and never longer", () => {
+  it("twelve shots and five natural caption forms, each as long as its idea needs and never longer", () => {
     // one look (a hand-drawn 2D film frame), the variety in the shot and the light
     expect(DAILY_STYLE_KEYS).toHaveLength(12);
     expect(Object.keys(DAILY_LIGHTS)).toHaveLength(9);
     for (const k of DAILY_STYLE_KEYS) expect(vivid, k).toContain(`'${k}'`);
-    expect(Object.keys(DAILY_FORMATS)).toEqual(["one_liner", "quick_take", "short_story", "dialogue", "list", "tip", "question"]);
-    expect(DAILY_FORMATS.one_liner.max).toBeLessThan(DAILY_FORMATS.short_story.max);
+    // the scripted shapes are retired: no list posts, "me: / my legs:" bits or scenes narrated to "you"
+    expect(Object.keys(DAILY_FORMATS)).toEqual(["one_liner", "quick_take", "tip", "funny", "question"]);
+    expect(DAILY_FORMATS.one_liner.max).toBeLessThan(DAILY_FORMATS.quick_take.max);
+    for (const p of DAILY_PILLAR_KEYS) for (const f of DAILY_PILLARS[p].formats) expect(Object.keys(DAILY_FORMATS), `${p} ${f}`).toContain(f);
     // the database holds 600 characters for a caption
     for (const f of Object.values(DAILY_FORMATS)) expect(f.max).toBeLessThanOrEqual(600);
     // no minimum: a one-line post is a post
@@ -145,26 +152,60 @@ describe("the faith post's verse is the Bible's words, never a model's", () => {
 describe("captions read like a real person posting, never a rerun", () => {
   const good = "Your warm-up used to be your whole workout.\n\nNobody hands you a certificate for that, but you should probably notice it anyway.";
 
-  it("passes a real moment told naturally, in any form", () => {
+  it("passes a thought said plainly, the way the coach wrote his own example", () => {
     expect(captionProblems(good, { format: "quick_take" })).toEqual([]);
-    expect(captionProblems("Me: one more set\nMy legs: we've talked about this\nMe: one more set", { format: "dialogue" })).toEqual([]);
-    expect(captionProblems("What's the one song that never fails you on a heavy set?", { format: "question" })).toEqual([]);
-    expect(captionProblems("Signs you've been training a while:\nYou judge every chair as a step-up box\nYour playlist has a leg day section\nStairs are a negotiation", { format: "list" })).toEqual([]);
+    expect(captionProblems(VOICE_EXAMPLE.replace("that's progress too.", "that counts."), { format: "quick_take" })).toContain(
+      "copies the voice example (it's a reference, not a template)",
+    );
+    expect(
+      captionProblems("a lot of people think rest days are wasted days.\n\nthey're actually when the work you did all week gets a chance to show up.", { format: "tip" }),
+    ).toEqual([]);
+    expect(captionProblems("what's the one song that never fails you on a heavy set?", { format: "question" })).toEqual([]);
+    expect(captionProblems("the warm-up i used to dread is now the part i look forward to most. not sure when that happened.", { format: "one_liner" })).toEqual([]);
   });
 
-  it("tidies the old texting style into real punctuation", () => {
-    expect(tidyCaption("you close the app & swear its fine — dont worry, im fine")).toBe("You close the app and swear its fine, don't worry, I'm fine");
-    expect(tidyCaption("“you showed up.\n\n\n\nthat counts”")).toBe("You showed up.\n\nThat counts");
+  it("refuses the scripted shapes the audit found: list posts, meme scripts, scenes narrated to you, kickers", () => {
+    // the post he pointed to (Nov 5's)
+    expect(captionProblems(NOT_HIS_VOICE, { format: "quick_take" })).toEqual(
+      expect.arrayContaining(["a setup line ending in a colon (reads like a list post)", 'says "the old you" (scripted)', 'says "the new you" (scripted)', 'says "signs you\'re" (scripted)']),
+    );
+    expect(captionProblems("me: one more set\nmy legs: we've talked about this", { format: "funny" })).toContain('a "me: / my legs:" script');
+    expect(
+      captionProblems("you load the bar and think, same numbers. you log the set and see the old max next to it. you smile and add a plate.", { format: "quick_take" })[0],
+    ).toContain('narrates a scene to "you"');
+    expect(captionProblems("now it's just a warm-up. that's not boring. that's proof.", { format: "one_liner" })).toContain(
+      'ends on a "that\'s not X. that\'s Y." kicker',
+    );
+    expect(captionProblems("your logbook is secretly your gratitude list.", { format: "one_liner" })).toContain('says "secretly" (scripted)');
+    expect(captionProblems("let's go!! new week!!", { format: "one_liner" })).toContain("more than one exclamation mark");
+    expect(captionProblems('your "light" sets used to be your "heavy" ones.', { format: "one_liner" })).toContain("words in scare quotes");
+    // the editor flags them too, and picks the most natural, not the most dramatic
+    for (const k of ["natural:", "effortless:", "scripted:", "trying_too_hard:", "ai_phrasing:"]) expect(EDITOR_PROMPT, k).toContain(k);
+    expect(EDITOR_PROMPT).toContain("pick the most natural draft (not the most dramatic or clever)");
+  });
+
+  it("names nobody: no crew member's first name lands in a daily post", () => {
+    expect(namedPeople("marc would love this one", ["marc", "fionna"])).toEqual(["marc"]);
+    expect(namedPeople("remarkable week for everyone", ["marc"])).toEqual([]);
+    expect(captionProblems("fionna, this one's for you.", { format: "one_liner", names: ["fionna"] })).toContain("names someone (fionna)");
+    expect(server).toContain("names: ctx.names");
+  });
+
+  it("tidies a caption into his casual lowercase with real apostrophes", () => {
+    expect(tidyCaption("You close the app & swear its fine — dont worry, im fine")).toBe("you close the app and swear its fine, don't worry, i'm fine");
+    expect(tidyCaption("“You showed up.\n\n\n\nThat counts”")).toBe("you showed up.\n\nthat counts");
     // "lets" is a word too: only fixed where it starts a sentence
-    expect(tidyCaption("it lets you rest. lets go")).toBe("It lets you rest. Let's go");
+    expect(tidyCaption("it lets you rest. lets go")).toBe("it lets you rest. let's go");
     // a model's non-breaking hyphens and curly quotes read like the rest of the caption
-    expect(tidyCaption("A quick after\u2011work lift, today\u2019s \u201clight\u201d sets")).toBe('A quick after-work lift, today\'s "light" sets');
+    expect(tidyCaption("A quick after\u2011work lift, today\u2019s \u201clight\u201d sets")).toBe('a quick after-work lift, today\'s "light" sets');
+    // "I" and the days go lowercase, acronyms stay
+    expect(tidyCaption("I think Monday is the best day for a PR. I'm sure of it.")).toBe("i think monday is the best day for a PR. i'm sure of it.");
   });
 
   it("refuses slogans, AI phrases, hashtags, tags, names, too many emojis and the wrong length for its form", () => {
     const p = captionProblems("Trust the process. Here's the thing #grind 💪🔥 @marc", { format: "one_liner" });
     expect(p).toEqual(expect.arrayContaining(['says "trust the process" (a slogan)', 'says "here\'s the thing" (reads like AI)', "has a hashtag", "tags someone", "more than one emoji"]));
-    expect(captionProblems("Jared says rest days count too.", { format: "one_liner" })).toContain("drops in a name");
+    expect(captionProblems("jared says rest days count too.", { format: "one_liner" })).toContain("drops in a name");
     expect(captionProblems(good, { format: "one_liner" })).toEqual([]);
     expect(captionProblems(`${good} ${good}`, { format: "one_liner" })[0]).toContain("a one-liner is 170 at most");
   });
@@ -274,16 +315,18 @@ describe("what a day is about: a mix that makes people glad they opened the app"
 
 describe("the editor reads every caption before a picture is made", () => {
   const draft = (o: Partial<Record<string, number>> = {}, flags: Partial<Record<string, boolean>> = {}) => ({
-    scores: { human: 5, hook: 4, clarity: 5, match: 4, tight: 4, mobile: 5, relatable: 4, fresh: 4, shareable: 4, feel_good: 5, ...o } as any,
-    flags: { shaming: false, lecturing: false, invented: false, generic: false, negative: false, ...flags } as any,
+    scores: { natural: 5, effortless: 4, clarity: 5, match: 4, fresh: 4, positive: 5, worth_it: 4, ...o } as any,
+    flags: { scripted: false, trying_too_hard: false, ai_phrasing: false, lecturing: false, invented: false, shaming: false, negative: false, ...flags } as any,
     note: "",
   });
 
-  it("asks the user's questions: human, hook, clear, matches the picture, tight, mobile, relatable, fresh, shareable, feel-good", () => {
-    for (const k of ["human:", "hook:", "clarity:", "match:", "tight:", "mobile:", "relatable:", "fresh:", "shareable:", "feel_good:", "shaming:", "lecturing:", "invented:", "generic:", "negative:"]) expect(EDITOR_PROMPT, k).toContain(k);
-    expect(EDITOR_PROMPT).toContain("Never add a question, an emoji, a hashtag or a name, and never change the idea.");
+  it("asks one question first: would he naturally write this as his own post?", () => {
+    for (const k of ["natural:", "effortless:", "clarity:", "match:", "fresh:", "positive:", "worth_it:", "scripted:", "trying_too_hard:", "ai_phrasing:", "lecturing:", "invented:", "shaming:", "negative:"]) expect(EDITOR_PROMPT, k).toContain(k);
+    expect(EDITOR_PROMPT).toContain("would Jared naturally write this as his own social post?");
+    expect(EDITOR_PROMPT).toContain("Never add a closing line, a question, an emoji or a name, and never change the thought.");
+    expect(EDITOR_PROMPT).toContain(VOICE_EXAMPLE);
     const p = editorPrompt({
-      concept: { pillar: "humor", topic: "lifter_habits", crowd: "lifters", mood: "funny", situation: "s", message: "m", visual: "v", typography: "", format: "dialogue" },
+      concept: { pillar: "humor", topic: "lifter_habits", crowd: "lifters", mood: "funny", situation: "s", message: "m", visual: "v", typography: "", format: "funny" },
       audience: "everyone",
       drafts: ["a", "b"],
       recent: ["older post"],
@@ -293,21 +336,22 @@ describe("the editor reads every caption before a picture is made", () => {
     expect(p).toContain("RECENT POSTS:\n- older post");
   });
 
-  it("passes only at every bar with no flag (a challenge's feel-good bar is 3)", () => {
+  it("passes only at every bar with no flag (a challenge's positive bar is 3)", () => {
     expect(editorVerdict({ drafts: [draft()], best: 0, polished: "", why: "" }, "humor")).toEqual({ pass: true, issues: [] });
-    expect(editorVerdict({ drafts: [draft({ hook: 3 })], best: 0, polished: "", why: "" }, "humor").issues).toContain("hook 3/5");
-    expect(editorVerdict({ drafts: [draft({}, { lecturing: true })], best: 0, polished: "", why: "" }, "realization").issues).toContain("lecturing");
-    expect(editorVerdict({ drafts: [draft({ feel_good: 3 })], best: 0, polished: "", why: "" }, "challenge").pass).toBe(true);
-    expect(editorVerdict({ drafts: [draft({ feel_good: 3 })], best: 0, polished: "", why: "" }, "humor").pass).toBe(false);
+    expect(editorVerdict({ drafts: [draft({ natural: 3 })], best: 0, polished: "", why: "" }, "humor").issues).toContain("natural 3/5");
+    expect(editorVerdict({ drafts: [draft({}, { scripted: true })], best: 0, polished: "", why: "" }, "realization").issues).toContain("scripted");
+    expect(editorVerdict({ drafts: [draft({}, { trying_too_hard: true })], best: 0, polished: "", why: "" }, "realization").pass).toBe(false);
+    expect(editorVerdict({ drafts: [draft({ positive: 3 })], best: 0, polished: "", why: "" }, "challenge").pass).toBe(true);
+    expect(editorVerdict({ drafts: [draft({ positive: 3 })], best: 0, polished: "", why: "" }, "humor").pass).toBe(false);
     expect(EDITOR_BARS.fresh).toBe(3);
   });
 
   it("reads the editor's JSON, holding its pick to the drafts it saw", () => {
-    const e = parseEditor('{"drafts": [{"scores": {"human": 9, "hook": 4}, "flags": {"generic": true}}, {"scores": {}}], "best": 7, "polished": "x", "why": "y"}', 2)!;
+    const e = parseEditor('{"drafts": [{"scores": {"natural": 9, "effortless": 4}, "flags": {"scripted": true}}, {"scores": {}}], "best": 7, "polished": "x", "why": "y"}', 2)!;
     expect(e.best).toBe(0);
-    expect(e.drafts[0].scores.human).toBe(5);
-    expect(e.drafts[0].scores.tight).toBe(1);
-    expect(e.drafts[0].flags.generic).toBe(true);
+    expect(e.drafts[0].scores.natural).toBe(5);
+    expect(e.drafts[0].scores.worth_it).toBe(1);
+    expect(e.drafts[0].flags.scripted).toBe(true);
     expect(parseEditor("no json", 2)).toBeNull();
   });
 
@@ -362,14 +406,15 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
       editorNotes: ["hook 3/5"],
     });
     expect(p).toContain("TODAY: Sunday: rest, gratitude and a calm reset for the week.");
-    expect(p).toContain("PILLAR: Realization. The goal: a small epiphany");
+    expect(p).toContain("PILLAR: Realization. The goal: something he's noticed about progress");
     expect(p).toContain('ANGLES, as "topic" (pick one, best first): progress_noticed = ');
     expect(p).toContain("Today especially people in their first months");
     expect(p).toContain("SUNDAY: a Bible verse goes under the caption.");
     expect(p).toContain("The last two posts ended with a question: don't end with one.");
     expect(p).toContain("THE COACH NEVER SAYS: fr");
-    expect(p).toContain("POSTS THEY LIKED MOST:\n- liked line");
-    expect(p).toContain("RECENT POSTS (make yours different in every way):\n- 2026-11-06 · humor · gym_floor_comedy · question · group: What's your song?");
+    // what landed is said as kinds of posts, never captions to copy (the early ones were in a retired voice)
+    expect(p).not.toContain("liked line");
+    expect(p).toContain("RECENT POSTS (pick a different angle, moment and opening; don't copy how they're written):\n- 2026-11-06 · humor · gym_floor_comedy · question · group: What's your song?");
     expect(p).toContain("THE COACH THREW THESE OUT (never write like them):\n- thrown out line");
     expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: hook 3/5.");
     expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } })).toContain(
@@ -377,15 +422,18 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
     );
   });
 
-  it("the writer is told how people should feel, and how a real post reads", () => {
-    expect(CONCEPT_PROMPT).toContain('"I never thought of it that way"');
-    expect(CONCEPT_PROMPT).toContain("A post can start with a struggle, but it lands somewhere good");
-    expect(CONCEPT_PROMPT).toContain("Contractions with apostrophes (you're, don't, it's), normal capital letters and punctuation.");
-    expect(CONCEPT_PROMPT).toContain("Never one sentence per line like a poem");
-    expect(CONCEPT_PROMPT).toContain("never put a body down");
-    expect(CONCEPT_PROMPT).toContain("No made-up first-person stories");
-    expect(CONCEPT_PROMPT).toContain("The picture, before any caption");
-    expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them at all.");
+  it("the writer writes as the coach: his own example, what isn't him, and how he writes", () => {
+    expect(CONCEPT_PROMPT).toContain(VOICE_EXAMPLE);
+    expect(CONCEPT_PROMPT).toContain(NOT_HIS_VOICE);
+    expect(CONCEPT_PROMPT).toContain("lowercase, everyday words, contractions with apostrophes (don't, it's, you're, i'm)");
+    expect(CONCEPT_PROMPT).toContain("Don't try to make it profound.");
+    expect(CONCEPT_PROMPT).toContain("never an experience he didn't have");
+    expect(CONCEPT_PROMPT).toContain("No names at all: his name already shows on the post.");
+    expect(CONCEPT_PROMPT).toContain("Bodies: never about fixing how someone looks.");
+    expect(CONCEPT_PROMPT).toContain("Pick the most natural one first, not the most dramatic.");
+    expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them.");
+    // the rewrite speaks the same voice
+    expect(CAPTION_FIX_PROMPT).toContain(VOICE_GUIDE);
     // and never two days in a row: a post just before had words, today's has none
     expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], noWords: true })).toContain('NO WORDS IN THE PICTURE TODAY');
     expect(server).toContain('noWords: lastTwo.some((d) => !!d.concept?.typography?.trim()),');
@@ -465,7 +513,7 @@ describe("the review: concrete checks before any score", () => {
 });
 
 describe("it learns what the crew likes, and never repeats itself", () => {
-  it("doesn't reuse a shot from the last 4 days, light from the last 3, a form from the last 2 or an angle from the last 2 weeks", () => {
+  it("doesn't reuse a shot from the last 4 days, light from the last 3 or an angle from the last 2 weeks, and offers a form from the last 2 days last", () => {
     const l = learnDailyVisuals([]);
     const recent = [
       { day: "2026-11-01", style: "backlit", light: "golden_teal", format: "quick_take", topic: "progress_noticed" },
@@ -477,7 +525,11 @@ describe("it learns what the crew likes, and never repeats itself", () => {
     expect(c.styles).not.toContain("two_frames");
     expect(c.lights).not.toContain("golden_teal");
     expect(c.lights).toHaveLength(7);
-    expect(c.formats).not.toContain("quick_take");
+    // both forms were used in the last 2 days: still offered (a pillar has few), in their order
+    expect(c.formats).toEqual(["quick_take", "one_liner"]);
+    // one used: the other comes first
+    expect(pickChoices(l, { day: "2026-11-03", recent: recent.slice(1), rand: () => 0.9, pillar: "realization" }).formats).toEqual(["quick_take", "one_liner"]);
+    expect(pickChoices(l, { day: "2026-11-03", recent: [{ ...recent[1], format: "quick_take" }], rand: () => 0.9, pillar: "realization" }).formats).toEqual(["one_liner", "quick_take"]);
     expect(c.formats.every((f) => DAILY_PILLARS.realization.formats.includes(f))).toBe(true);
     expect(c.topics).not.toContain("progress_noticed");
     expect(c.topics.every((t) => DAILY_TOPICS[t].pillar === "realization")).toBe(true);
@@ -654,8 +706,8 @@ describe("captions don't fall back on the same stock moments", () => {
       'uses "group chat" like a recent post (find a new moment)',
     );
     expect(REVIEW_PROMPT).toContain("a caption meant as humour that isn't actually funny is 3 or less");
-    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", format: "dialogue", pillar: "humor", mood: "funny" }, audience: "everyone" })).toContain("THE CAPTION'S FORM: Dialogue");
-    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", pillar: "humor", mood: "funny" }, audience: "everyone" })).toContain("THE KIND OF POST: Humour (a real laugh");
+    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", format: "funny", pillar: "humor", mood: "funny" }, audience: "everyone" })).toContain("THE CAPTION'S FORM: Funny");
+    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", pillar: "humor", mood: "funny" }, audience: "everyone" })).toContain("THE KIND OF POST: Humour (something genuinely funny");
   });
 });
 

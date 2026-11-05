@@ -75,49 +75,49 @@ export type DailyArt = "graphic" | "anime";
 export type DailyPillar = "realization" | "humor" | "community" | "insight" | "challenge";
 export type DailyCrowd = "everyone" | "beginners" | "lifestyle" | "lifters";
 export type DailyMood = "uplifting" | "proud" | "funny" | "warm" | "curious" | "fired_up" | "thoughtful";
-export type DailyFormat = "one_liner" | "quick_take" | "short_story" | "dialogue" | "list" | "tip" | "question";
+export type DailyFormat = "one_liner" | "quick_take" | "tip" | "funny" | "question";
 
 /** The five content pillars and the mix they start at (a guide the learning nudges, never quotas). */
 export const DAILY_PILLARS: Record<DailyPillar, { name: string; share: number; goal: string; guide: string; moods: DailyMood[]; formats: DailyFormat[] }> = {
   realization: {
     name: "Realization",
     share: 0.3,
-    goal: "a small epiphany that makes them see themselves, their progress or fitness differently, and feel good about it",
-    guide: "A genuine human observation, never an inspirational speech. Often it starts from an ordinary moment and turns it so they notice something they'd overlooked.",
+    goal: "something he's noticed about progress or training life that makes people see themselves a little differently, and feel good about it",
+    guide: "A simple, true observation said plainly. It doesn't need a big conclusion.",
     moods: ["uplifting", "proud", "thoughtful"],
-    formats: ["one_liner", "quick_take", "short_story", "list"],
+    formats: ["quick_take", "one_liner"],
   },
   humor: {
     name: "Humour",
     share: 0.25,
-    goal: "a real laugh at something every lifter recognizes, the kind they send to a friend",
-    guide: "Affectionate, specific and true, never mean. Laughing with the crew, never at anyone's body.",
+    goal: "something genuinely funny about training life, the kind of thing people send to a friend",
+    guide: "Told the way you'd tell a friend: the joke is in the observation. Affectionate, never at anyone's body.",
     moods: ["funny"],
-    formats: ["one_liner", "dialogue", "list", "quick_take", "short_story"],
+    formats: ["funny", "one_liner", "quick_take"],
   },
   community: {
     name: "Community",
     share: 0.2,
-    goal: "they feel part of something: the people, the friendships, the shared moments",
-    guide: "The warmth of training with and around people. Make them want to cheer someone on or say hi to someone new.",
+    goal: "the people side of training: training partners, gym friends, cheering each other on, feeling part of the crew",
+    guide: "Warm and easy. Sometimes a question he'd actually like the crew to answer.",
     moods: ["warm", "funny", "uplifting"],
-    formats: ["quick_take", "short_story", "question", "one_liner", "list"],
+    formats: ["quick_take", "question", "one_liner"],
   },
   insight: {
     name: "Insight",
     share: 0.15,
-    goal: "one useful idea that clicks and makes training, eating or recovering easier",
-    guide: "Explained so simply it feels obvious afterwards, with why it helps. Only well-known, safe basics, no numbers or studies.",
+    goal: "one useful thing about training, eating or recovery that makes it easier",
+    guide: "Explained the way he'd explain it to a client: plain, with why it helps. Only well-known, safe basics, no numbers or studies.",
     moods: ["curious", "uplifting"],
-    formats: ["tip", "quick_take", "list", "one_liner"],
+    formats: ["tip", "quick_take"],
   },
   challenge: {
     name: "Challenge",
     share: 0.1,
-    goal: "a respectful nudge or an honest truth that leaves them capable and fired up, never ashamed",
-    guide: "From someone who believes in them. It can be direct, but it's on their side and ends with something they can do.",
+    goal: "a friendly push or an honest thought from someone on their side, with something they can actually do",
+    guide: "Direct but kind. Never guilt or shame.",
     moods: ["fired_up", "thoughtful"],
-    formats: ["quick_take", "one_liner", "tip", "short_story"],
+    formats: ["quick_take", "one_liner", "tip"],
   },
 };
 export const DAILY_PILLAR_KEYS = Object.keys(DAILY_PILLARS) as DailyPillar[];
@@ -128,12 +128,12 @@ export const DAILY_TOPICS = {
   confidence_grown: { pillar: "realization", name: "Confidence", idea: "realizing you carry yourself differently: you walk into the gym like you belong, you try the new thing, you take up space" },
   more_than_looks: { pillar: "realization", name: "More than looks", idea: "fitness paying off where the mirror can't see it: sleep, mood, patience, energy for the people you love, every grocery bag in one trip" },
   actually_enjoy_it: { pillar: "realization", name: "Actually enjoying it", idea: "the day you realize training is something you look forward to now, not something you force yourself through" },
-  new_identity: { pillar: "realization", name: "Who you're becoming", idea: "becoming someone who trains without debating it; the old you would be surprised, and proud" },
+  new_identity: { pillar: "realization", name: "Who you're becoming", idea: "training stops being a big decision and just becomes part of your week" },
   small_milestones: { pillar: "realization", name: "Small milestones", idea: "a small first worth being proud of: the first pull-up, the first full week, the first time the bar felt light" },
   whats_possible: { pillar: "realization", name: "What's possible", idea: "getting excited about what's next now that you're stronger: the race, the meet, the trip, the hike you wouldn't have tried a year ago" },
-  kinder_to_yourself: { pillar: "realization", name: "Kinder to yourself", idea: "noticing you talk to yourself better than you used to; a missed day isn't a disaster anymore, just a Tuesday" },
+  kinder_to_yourself: { pillar: "realization", name: "Kinder to yourself", idea: "noticing you're easier on yourself than you used to be, and a missed day doesn't throw off the whole week anymore" },
   gym_floor_comedy: { pillar: "humor", name: "Gym floor comedy", idea: "a funny, true observation from the gym floor that every lifter recognizes (fresh, never the tired old gym jokes)" },
-  expectation_reality: { pillar: "humor", name: "Expectation vs reality", idea: "the plan versus what actually happens: the 5 am alarm, the 'quick' workout, meal prep Sunday" },
+  expectation_reality: { pillar: "humor", name: "Plans vs what happens", idea: "how training plans tend to go in real life: the early alarm, the workout that was meant to be quick, meal prep day" },
   food_life: { pillar: "humor", name: "Food life", idea: "affectionate jokes about eating well: protein in everything, the snack negotiation, the container collection, never anyone's body" },
   lifter_habits: { pillar: "humor", name: "Lifter habits", idea: "the habits only people who train have: the playlist ritual, stairs after leg day, judging every bench and chair as gym equipment" },
   strong_in_real_life: { pillar: "humor", name: "Strong in real life", idea: "the funny moments when training shows up in normal life: opening every jar, carrying the couch, racing the kids" },
@@ -172,7 +172,16 @@ export const LEGACY_TOPICS: Record<string, { name: string; pillar: DailyPillar |
   hard_truths: { name: "Hard truths", pillar: "challenge" },
   humor_shared: { name: "Shared humour", pillar: "humor" },
 };
-export const LEGACY_FORMAT_NAMES: Record<string, string> = { observation: "Observation", humor: "Humour", scenario: "Relatable moment", encouragement: "Encouragement" };
+export const LEGACY_FORMAT_NAMES: Record<string, string> = {
+  observation: "Observation",
+  humor: "Humour",
+  scenario: "Relatable moment",
+  encouragement: "Encouragement",
+  // retired Nov 5 2026: they read as scripted ("signs you're…" lists, "me: / my legs:" bits, scenes narrated to "you")
+  short_story: "Short story",
+  dialogue: "Dialogue",
+  list: "List",
+};
 
 export const topicName = (t: string | null | undefined): string | null =>
   !t ? null : t in DAILY_TOPICS ? DAILY_TOPICS[t as DailyTopic].name : (LEGACY_TOPICS[t]?.name ?? null);
@@ -187,14 +196,12 @@ export function pillarOf(o: { pillar?: string | null; topic?: string | null } | 
 }
 
 /** How a caption is told, and how long it may run (characters). No minimum: a post is as long as the idea deserves. */
-export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; max: number; lines?: boolean }> = {
+export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; max: number }> = {
   one_liner: { name: "One-liner", guide: "one or two sentences, and that's the whole post", max: 170 },
-  quick_take: { name: "Quick take", guide: "a short observation or realization in 2 to 4 sentences, in one or two short paragraphs", max: 360 },
-  short_story: { name: "Short story", guide: "a tiny scene in two or three short paragraphs that lands on the realization, the laugh or the warm moment", max: 580 },
-  dialogue: { name: "Dialogue", guide: "a funny exchange on 2 to 4 short lines ('me: …' / 'my legs: …'), one line each, nothing explained after", max: 240, lines: true },
-  list: { name: "List", guide: "a one-line setup, then 3 or 4 short items each on its own line (no bullets or numbers), maybe one closing line", max: 400, lines: true },
-  tip: { name: "Tip", guide: "one useful idea: what it is and why it helps, in 2 to 4 plain sentences, maybe how to try it this week", max: 440 },
-  question: { name: "Question", guide: "a fun, easy question for the crew with a line of context, the kind people actually answer", max: 240 },
+  quick_take: { name: "Thought", guide: "a thought or observation in a few short paragraphs, said the way he'd say it out loud", max: 420 },
+  tip: { name: "Advice", guide: "one useful thing and why it helps, the way he'd explain it to a client, in a few plain sentences", max: 440 },
+  funny: { name: "Funny", guide: "something funny about training life told plainly in a sentence or a few, never a script or a setup and punchline", max: 300 },
+  question: { name: "Question", guide: "something he'd actually like the crew to answer, with a line on why he's asking", max: 240 },
 };
 export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
 
@@ -580,8 +587,7 @@ export function pickChoices(
   const topics = rank(fresh.length ? fresh : all, l.topic, rand());
   const usedFormats = used(2, (r) => r.format);
   const fits = DAILY_PILLARS[pillar].formats;
-  const formatsFresh = fits.filter((f) => !usedFormats.has(f));
-  const formats = rank(formatsFresh.length ? formatsFresh : fits, l.format, rand());
+  const formats = [...rank(fits.filter((f) => !usedFormats.has(f)), l.format, rand()), ...fits.filter((f) => usedFormats.has(f))];
   const usedStyles = used(4, (r) => r.style);
   const styles = o.style ? [o.style] : rank(DAILY_STYLE_KEYS.filter((s) => !usedStyles.has(s)), l.style, rand());
   const usedLights = used(3, (r) => r.light);
@@ -647,43 +653,67 @@ export type DailyConcept = {
   caption: string;
 };
 
-export const CONCEPT_PROMPT = `You're the social editor of JF Effect, a strength coach's fitness community app: his clients and members, men and women, from first-week beginners to serious lifters. Every morning one post goes in the feed, a picture and a caption made together. It should read like something a real person would post on Instagram or Threads, and it should make the crew glad they opened the app.
+/**
+ * His voice, from the coach's own words (Nov 5 2026): the example he wrote to
+ * show how he'd post. A reference for the writer and the editor, never a
+ * template (it's checked against so it can't come back near word for word).
+ */
+export const VOICE_EXAMPLE = `one thing i think people overlook is when going to the gym starts feeling normal.
 
-THE FEELING
-After reading, people should think things like "that's so true", "I never thought of it that way", "I needed that", "this makes me want to train", "I can't believe how far I've come", "this is so me" or "I'm sending this to someone". Get there with real observations, humour, useful ideas, possibility and belonging, never fake positivity, generic motivation or constant reassurance. A post can start with a struggle, but it lands somewhere good: a realization, a laugh, a useful idea or a feeling of possibility. Most posts don't need a struggle at all.
+you don't have to hype yourself up or convince yourself to go anymore. it's just part of your day.
+
+it's easy to forget how much effort it used to take just to get started.
+
+that's progress too.`;
+
+/** What it must never sound like: the post he pointed to as scripted (Nov 5's). */
+export const NOT_HIS_VOICE = `Signs you're not "starting over" again, you're just a guy who trains now:
+
+Alarm goes off and you just stand up.
+You pack your bag before bed without thinking.
+The old you would be shocked. The new you just calls it Thursday.`;
+
+/** How he writes, said once for the writer, the editor and a rewrite. */
+export const VOICE_GUIDE = `HOW JARED WRITES
+This is him (a reference for the voice, not a template to copy):
+
+${VOICE_EXAMPLE}
+
+He sounds like someone casually sharing a thought with people he likes: something he's noticed, a realization, a useful bit of advice, something funny about training life, or a question he actually wants answered. Conversational, genuine, confident, easy to read, sometimes thought-provoking, often light. Some posts are a casual thought, some are funny, some are genuinely useful, some make you look at your own progress, some make you want to train, some just make you smile.
+
+This is NOT him (scripted copywriting, trying to sound clever):
+
+${NOT_HIS_VOICE}
+
+- lowercase, everyday words, contractions with apostrophes (don't, it's, you're, i'm), normal clear punctuation. No forced slang, no deliberate typos or missing apostrophes.
+- Say the thought plainly, the way he'd say it out loud. Short paragraphs, as short as the idea allows: one line is often enough, five short paragraphs at most.
+- Don't try to make it profound. A simple, true observation beats a big message. Stop when the thought is done: no punchline, kicker or moral tacked on the end (unless it's a joke).
+- Talk with people, not at them: no lecturing, hype or speeches.
+- Never these shapes: "signs you're…" or any list post, "me: / my legs:" scripts, a little movie narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y", a setup line ending in a colon, words in scare quotes, slogans ("trust the process", "no excuses", "level up", "your future self"), AI phrases ("here's the thing", "the truth is", "let that sink in", "journey", "game changer", "secretly", "plot twist").
+- His opinions and what he's noticed are fine ("i think", "a lot of people…"), but never an experience he didn't have: no "yesterday a client told me", no "when i started lifting", no real people. No names at all: his name already shows on the post.
+- Advice: only well-known, safe basics, said simply; no numbers or studies.
+- Bodies: never about fixing how someone looks. Strength, confidence, how life feels.
+- No hashtags, @tags or Bible verses (the app adds Sunday's). One emoji at most, usually none.`;
+
+export const CONCEPT_PROMPT = `You write the daily post for the JF Effect community feed, as Jared, the strength coach who runs it. The crew is men and women from first-week beginners to serious lifters. A post is a picture and a caption made together, and it should leave people glad they opened the app: a little happier, more confident, entertained, or keen to train.
+
+${VOICE_GUIDE}
 
 WORK IT OUT IN THIS ORDER
-1. The pillar is given. Pick one angle from its list.
-2. The moment: one specific, everyday situation people recognize (the warm-up that used to be your top set, a friend texting "you up?" at 5:45, the first time someone asks you for gym advice). Specific beats general.
-3. The idea: the realization, the joke, the useful idea or the warm truth it lands on, in your own words.
-4. The picture, before any caption: it sets the scene and the feeling. The caption then expands it, adds a twist or says what the picture can't. Never just describe the picture or repeat words that are in it.
-5. Three caption drafts for that one picture, each in a different one of the CAPTION FORMS given (for example a one-liner, a quick take and a short story), each labelled with its form.
-
-HOW THE CAPTIONS READ
-- Like a real person posting: natural, warm, confident, funny when it fits. Contractions with apostrophes (you're, don't, it's), normal capital letters and punctuation.
-- The first sentence is the hook and shows alone in the feed: the reason to keep reading, under 15 words. Never a warm-up ("So,", "Let's talk about", "Here's a reminder").
-- As long as the idea needs and no longer. A one-liner can be the whole post. Cut every sentence that doesn't earn its place.
-- Short paragraphs of 1 to 3 sentences with a blank line between them. Never one sentence per line like a poem (only the dialogue and list forms put things on their own lines).
-- Simple words, varied sentence lengths, easy to read on a phone.
-- Talk with them, not at them. No lecturing ("you need to", "stop making excuses", "be honest with yourself"), no speeches, no fake edginess, no forced slang, no drama.
-- Never: slogans or stock quotes ("trust the process", "no excuses", "consistency is key", "level up", "your future self"), AI phrases ("here's the thing", "the truth is", "real talk", "let that sink in", "read that again", "it's not about X, it's about Y", "journey", "game changer", "unlock"), hashtags, @tags, names (the coach's or anyone's), em dashes, semicolons, more than one emoji (often none).
-- A question only when it's a real invitation (the question form, or one that truly fits). Never tack "who can relate?" or "comment below" onto the end.
-- Humour is actually funny: a true, specific detail, a comparison or a twist people laugh at and send to a friend. Earnest isn't humour.
-- Bodies: never put a body down or make anyone feel judged for how they look (no stomachs, fat, flaws or "fixing" yourself). Strength, confidence and how life feels, not appearance anxiety.
-- Facts: only well-known, safe basics, said plainly; no numbers, studies or claims you can't stand behind. No made-up first-person stories ("I had a client who…") and no real people; a small scene told to "you" or about "someone" is fine.
-- Never write or mention a Bible verse (the app adds one on Sundays).
-- Don't echo RECENT POSTS: not the angle, the moment, the opening, the shape or the ending. Never lean on stock moments (nobody clapping, the quiet win, the group chat, the couch).
+1. The kind of post is given. Pick one angle from its list.
+2. The thought: what he'd actually want to say about it, in one plain sentence.
+3. The moment the picture shows: one specific, everyday moment that goes with the thought (it sets the scene; the caption never describes it or repeats words in it).
+4. Three different captions, three takes on the thought, each labelled with its form. Make at least one of them short. Pick the most natural one first, not the most dramatic.
 
 THE PICTURE
-- A frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). Same story and details as the captions: the same place, time and people.
+- A frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). It goes with the caption: the same kind of place, time and people.
 - Describe the frame: who's in it (adults, their age range, build, hair and clothes, people of different looks, fitting who it's for), what they're doing and feeling, where they are, what's around them.
-- Expressive, likeable characters in moments full of life: training, laughing, celebrating, cheering each other on, a milestone, friends, sunshine, a hike, a beach, a park, a kitchen with friends, coffee after the gym, a busy, bright gym. Bright and inviting (daytime, golden hour, vivid light); night only when the story needs it, and then with vivid colour and one bright focal light.
-- Never someone miserable alone in a dark room, staring at a phone, undressed, pinching or measuring their body, or on a scale. A struggle shows its turn or its human side (walking in anyway, the friend who showed up, the laugh after).
-- Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
-- Most pictures have no words in them at all. Put words in the scene (a text on a phone, a note, a speech bubble, a sign) only when they ARE the joke or the point, never as decoration or a label for the scene. Then write them word for word in "typography" (at most 12 words): only the words as they appear, never where they are or who's reading them. With no words in the scene, "typography" is "".
+- Likeable people in moments full of life: training, laughing, a milestone, friends, a sunny walk, coffee after the gym, a busy, bright gym. Bright and inviting; night only when the moment needs it, then with vivid colour and one bright light.
+- Never someone miserable alone in a dark room, staring at a phone, undressed, pinching or measuring their body, or on a scale. Never a poster, a pose or someone looking at the camera.
+- Most pictures have no words in them. Put words in the scene (a text on a phone, a note, a sign) only when they ARE the point, and then write exactly those words in "typography" (at most 12). With no words in the scene, "typography" is "".
 
 Answer with JSON only:
-{"topic": "the angle", "mood": "...", "situation": "...", "idea": "...", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
+{"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the thought, in one sentence", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
 
 /** Ends on a question mark (a closing emoji aside). */
 export const endsWithQuestion = (s: string) => /\?\s*(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*\s*)?$/u.test(s.trim());
@@ -724,7 +754,7 @@ export function conceptPrompt(o: {
     `MOOD, as "mood" (pick one): ${p.moods.join(", ")}`,
     `WHO IT'S FOR: ${DAILY_AUDIENCE_GUIDE[o.audience]} Today especially ${DAILY_CROWDS[o.crowd].guide}.`,
     o.faith ? "SUNDAY: a Bible verse goes under the caption. Make it sit well under a calm verse about rest, hope or strength, without preaching." : null,
-    `CAPTION FORMS, as each draft's "form" (three different ones when there are three, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
+    `CAPTION FORMS, as each draft's "form" (best first; two drafts can share one): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
     `COLOUR AND LIGHT, as "light" (pick the one that fits the moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
     o.art
@@ -737,12 +767,11 @@ export function conceptPrompt(o: {
     asked ? "The last two posts ended with a question: don't end with one." : null,
     o.noWords ? 'NO WORDS IN THE PICTURE TODAY (a post just before had some): "typography" is "".' : null,
     o.neverSay?.length ? `THE COACH NEVER SAYS: ${o.neverSay.join(", ")}` : null,
+    // what landed is said as kinds of posts, never as captions to copy (the early ones were in a voice he's retired)
     `WHAT'S WORKED WITH THIS CREW: ${o.learnings}`,
-    o.best.length ? `POSTS THEY LIKED MOST:\n${o.best.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}` : null,
-    o.worst.length ? `POSTS THAT FELL FLAT:\n${o.worst.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 200)}`).join("\n")}` : null,
     o.rejected?.length ? `THE COACH THREW THESE OUT (never write like them):\n${o.rejected.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 160)}`).join("\n")}` : null,
     ordered.length
-      ? `RECENT POSTS (make yours different in every way):\n${ordered
+      ? `RECENT POSTS (pick a different angle, moment and opening; don't copy how they're written):\n${ordered
           .slice(-14)
           .map((r) => `- ${r.day} · ${pillarOf(r) ?? "?"} · ${r.topic ?? "?"} · ${r.format ?? "?"} · ${r.style ?? "?"}: ${(r.caption ?? "").replace(/\s+/g, " ").slice(0, 160)}`)
           .join("\n")}`
@@ -811,39 +840,40 @@ export function parseConcept(
 /*  The editor: scores the drafts, picks one, polishes it               */
 /* ------------------------------------------------------------------ */
 
-export const EDITOR_SCORES = ["human", "hook", "clarity", "match", "tight", "mobile", "relatable", "fresh", "shareable", "feel_good"] as const;
+export const EDITOR_SCORES = ["natural", "effortless", "clarity", "match", "fresh", "positive", "worth_it"] as const;
 export type EditorScore = (typeof EDITOR_SCORES)[number];
-export const EDITOR_FLAGS = ["shaming", "lecturing", "invented", "generic", "negative"] as const;
+export const EDITOR_FLAGS = ["scripted", "trying_too_hard", "ai_phrasing", "lecturing", "invented", "shaming", "negative"] as const;
 export type EditorFlag = (typeof EDITOR_FLAGS)[number];
 
-/** Each score the chosen draft has to reach (a challenge post's feel-good bar is lower: motivated and respected is enough). */
-export const EDITOR_BARS: Record<EditorScore, number> = { human: 4, hook: 4, clarity: 4, match: 4, tight: 4, mobile: 4, relatable: 4, fresh: 3, shareable: 4, feel_good: 4 };
+/** Each score the chosen draft has to reach (a challenge can be a little less sunny: respected and keen is enough). */
+export const EDITOR_BARS: Record<EditorScore, number> = { natural: 4, effortless: 4, clarity: 4, match: 3, fresh: 3, positive: 4, worth_it: 4 };
 
-export const EDITOR_PROMPT = `You're the editor of JF Effect's community feed: a strength coach's app where members, men and women from beginners to serious lifters, come to feel good about training and each other. You get the plan for today's post (one picture) and up to three caption drafts for it. Judge them like a sharp social media editor who wants people to enjoy opening the app every day.
+export const EDITOR_PROMPT = `You're the editor of the JF Effect community feed, a strength coach's app. Every caption has to pass one test: would Jared naturally write this as his own social post? You get today's post plan (one picture) and up to three caption drafts.
+
+${VOICE_GUIDE}
 
 Score each draft 1 to 5 (5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor):
-- human: sounds like a real person posting, not an AI, a brand or a motivation account
-- hook: the first sentence makes you want to keep reading
-- clarity: you get it instantly
-- match: it fits the picture and adds to it (a twist, the feeling, what the picture can't say) without repeating its words or just describing it
-- tight: nothing you could cut
-- mobile: easy to read on a phone (short paragraphs, no wall of text, no poem of one-line sentences)
-- relatable: the people it's for would think "that's me"
-- fresh: different from the recent posts in angle, moment, opening and shape
-- shareable: someone would react, comment or send it to a friend
-- feel_good: they leave happier, more confident, entertained, connected or excited to train (a challenge post: motivated and respected, never ashamed)
+- natural: reads exactly like Jared casually posting, not a copywriter, a brand, a motivational speaker or an AI
+- effortless: easy to read and not trying hard: no forced depth, no punchline or moral tacked on, no clever structure
+- clarity: you get it on one read
+- match: it goes with the picture without describing it or repeating its words
+- fresh: different from the recent posts in angle, opening and shape
+- positive: people leave a little happier, more confident, entertained or keen to train (a challenge: respected and keen, never ashamed)
+- worth_it: someone would enjoy it, react or send it to a friend
 
 Flags (true or false):
+- scripted: a formula: a list post, a "me: / my legs:" bit, a scene narrated to "you", "the old you / the new you", "it's not X, it's Y", a kicker line at the end
+- trying_too_hard: reaching to be profound, clever or inspirational
+- ai_phrasing: phrases or rhythms that give away an AI
+- lecturing: talks down or tells people what they're doing wrong
+- invented: a fact, number, study, name or personal experience it can't stand behind
 - shaming: makes anyone feel bad about their body or themselves
-- lecturing: talks down, preaches or tells people what they're doing wrong
-- invented: a fact, number, study, quote or first-person story it can't stand behind
-- generic: could be on any motivation account
 - negative: dwells on the bad without landing anywhere good
 
-Then pick the best draft and polish it: the same draft with only the edits that make it better (cut a word or a sentence, smoother wording, fix punctuation or a paragraph break). Never add a question, an emoji, a hashtag or a name, and never change the idea. If it's already right, return it unchanged.
+Then pick the most natural draft (not the most dramatic or clever) and polish it: only edits that make it plainer and easier (cut a word or a sentence, simpler wording, fix punctuation or a paragraph break). Keep it lowercase. Never add a closing line, a question, an emoji or a name, and never change the thought. If it's already right, return it unchanged.
 
 Answer with JSON only:
-{"drafts": [{"scores": {"human": 1-5, "hook": 1-5, "clarity": 1-5, "match": 1-5, "tight": 1-5, "mobile": 1-5, "relatable": 1-5, "fresh": 1-5, "shareable": 1-5, "feel_good": 1-5}, "flags": {"shaming": false, "lecturing": false, "invented": false, "generic": false, "negative": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
+{"drafts": [{"scores": {"natural": 1-5, "effortless": 1-5, "clarity": 1-5, "match": 1-5, "fresh": 1-5, "positive": 1-5, "worth_it": 1-5}, "flags": {"scripted": false, "trying_too_hard": false, "ai_phrasing": false, "lecturing": false, "invented": false, "shaming": false, "negative": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
 
 export function editorPrompt(o: {
   concept: Pick<DailyConcept, "pillar" | "topic" | "crowd" | "mood" | "situation" | "message" | "visual" | "typography" | "format">;
@@ -902,7 +932,7 @@ export function editorVerdict(e: EditorReview, pillar: DailyPillar): { pass: boo
   const d = e.drafts[e.best];
   const issues: string[] = [];
   for (const k of EDITOR_SCORES) {
-    const bar = k === "feel_good" && pillar === "challenge" ? 3 : EDITOR_BARS[k];
+    const bar = k === "positive" && pillar === "challenge" ? 3 : EDITOR_BARS[k];
     if (d.scores[k] < bar) issues.push(`${k.replace("_", " ")} ${d.scores[k]}/5`);
   }
   for (const f of EDITOR_FLAGS) if (d.flags[f]) issues.push(f);
@@ -918,16 +948,17 @@ const CONTRACTIONS: Record<string, string> = {
   dont: "don't", cant: "can't", wont: "won't", isnt: "isn't", arent: "aren't", doesnt: "doesn't", didnt: "didn't", wasnt: "wasn't",
   werent: "weren't", hasnt: "hasn't", havent: "haven't", couldnt: "couldn't", wouldnt: "wouldn't", shouldnt: "shouldn't",
   youre: "you're", youve: "you've", youll: "you'll", youd: "you'd", theyre: "they're", theyve: "they've", thats: "that's",
-  whats: "what's", theres: "there's", heres: "here's", im: "I'm", ive: "I've", ill: "I'll", itll: "it'll", lets: "let's",
+  whats: "what's", theres: "there's", heres: "here's", im: "i'm", ive: "i've", ill: "i'll", itll: "it'll", lets: "let's",
 };
 /** "lets" is also a word ("it lets you"), so it's only fixed where it starts a sentence. */
 const AMBIGUOUS = new Set(["lets", "ill", "wont", "cant"]);
 
 /**
- * A caption as it should read in the feed: real apostrophes and capitals
- * (the old texting style's "dont" and "im" fixed), no em dashes or "&",
- * no stray spaces, at most one blank line between paragraphs, and never
- * wrapped in quotes.
+ * A caption as it should read in the feed, in his casual lowercase: real
+ * apostrophes ("dont" and "im" fixed, never dropped to look casual), "i"
+ * and a sentence's first word lowercase (an all-caps word like PR stays),
+ * days and months lowercase, no em dashes or "&", no stray spaces, at most
+ * one blank line between paragraphs, and never wrapped in quotes.
  */
 export function tidyCaption(text: string): string {
   let t = String(text ?? "").replace(/\r\n/g, "\n").trim();
@@ -944,11 +975,15 @@ export function tidyCaption(text: string): string {
     if (!fix) return w;
     const before = t.slice(0, i);
     if (AMBIGUOUS.has(w.toLowerCase()) && !/(^|[.!?\n]\s*)$/.test(before)) return w;
-    return w[0] === w[0].toUpperCase() && fix[0] !== "I" ? fix[0].toUpperCase() + fix.slice(1) : fix;
+    return fix;
   });
-  t = t.replace(/\bi\b(?=[\s,.!?']|$)/g, "I");
-  // a capital at the start of the caption, each line and each sentence
-  t = t.replace(/(^|\n|[.!?]\s+)([a-z])/g, (_m, lead, ch) => `${lead}${ch.toUpperCase()}`);
+  // his casual lowercase: "i" (and i'm, i've), the first word of a line or sentence, days and months
+  t = t.replace(/\bI\b/g, "i");
+  t = t.replace(/(^|\n|[.!?]\s+)([A-Z])(?![A-Z])/g, (_m, lead, ch) => `${lead}${ch.toLowerCase()}`);
+  t = t.replace(
+    /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|June|July|August|September|October|November|December)\b/g,
+    (w) => w.toLowerCase(),
+  );
   t = t.replace(/ +([,.!?])/g, "$1");
   t = t
     .split("\n")
@@ -1026,6 +1061,79 @@ export const AI_TELLS = [
   "tag someone",
   "tag a friend",
 ] as const;
+
+/**
+ * Kicker lines, meme slang and clickbait the writer reaches for (from the
+ * audit of Nov 2 to 8 and the test posts): none of them is how he writes.
+ */
+export const SCRIPTED_PHRASES = [
+  "the old you",
+  "the new you",
+  "secretly",
+  "plot twist",
+  "say less",
+  "main character",
+  "core memory",
+  "this is your sign",
+  "your sign to",
+  "this is your reminder",
+  "nobody talks about",
+  "no one talks about",
+  "things nobody tells you",
+  "hits different",
+  "lowkey",
+  "low-key",
+  "it's giving",
+  "rent free",
+  "pov:",
+  "normalize",
+  "chef's kiss",
+  "iykyk",
+  "the work worked",
+  "take the win",
+  "worse problems to have",
+  "you know you're a",
+  "signs you're",
+  "signs that you",
+  "unpopular opinion",
+  "hot take",
+  "in this economy",
+] as const;
+
+const sentencesOf = (text: string) =>
+  text
+    .split(/[.!?]+\s+|\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+/**
+ * The shapes that read as a script, not a person: a list post (a setup line
+ * ending in a colon), a "me: / my legs:" bit, a little movie narrated to
+ * "you", a "that's not X. that's Y." kicker, hype, scare quotes, or the
+ * coach's own example coming back near word for word.
+ */
+export function scriptedProblems(text: string): string[] {
+  const out: string[] = [];
+  const t = text.replace(/[’]/g, "'");
+  const lines = t.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.some((l, i) => /:\s*$/.test(l) && i < lines.length - 1)) out.push("a setup line ending in a colon (reads like a list post)");
+  if (lines.filter((l) => /^(me|you|also me|my [a-z' ]{1,20}|the [a-z ]{1,20}|everyone|them|coach)\s*:\s*\S/i.test(l)).length >= 2)
+    out.push('a "me: / my legs:" script');
+  const toYou = sentencesOf(t).filter((x) => /^you\s+\w/i.test(x)).length;
+  if (toYou >= 3) out.push(`narrates a scene to "you" (${toYou} sentences start with "you")`);
+  if (/\b(?:that|this|it)(?:'s| is) not [^.!?\n]{1,40}[.!?]\s+(?:that|this|it)(?:'s| is) [^.!?\n]{1,40}[.!?]?\s*$/i.test(t))
+    out.push('ends on a "that\'s not X. that\'s Y." kicker');
+  if ((t.match(/!/g) ?? []).length >= 2) out.push("more than one exclamation mark");
+  if ((t.match(/"[^"\n]{1,40}"/g) ?? []).length >= 2) out.push("words in scare quotes");
+  if (captionSimilarity(t, VOICE_EXAMPLE) >= 0.25) out.push("copies the voice example (it's a reference, not a template)");
+  return out;
+}
+
+/** A crew member's first name in a caption (their name shows on their own posts; a daily post names nobody). */
+export function namedPeople(text: string, names: readonly string[]): string[] {
+  const lower = ` ${text.toLowerCase().replace(/[^a-z']+/g, " ")} `;
+  return [...new Set(names.map((n) => n.trim().toLowerCase()).filter((n) => n.length >= 3 && lower.includes(` ${n} `)))];
+}
 
 /**
  * "It's not X, it's Y" said twice in one caption: the contrast every AI
@@ -1163,7 +1271,7 @@ export function hookOf(caption: string): string {
  */
 export function captionProblems(
   caption: string,
-  o: { format: DailyFormat; pillar?: DailyPillar; recent?: string[]; near?: string[]; asked?: boolean; picture?: string },
+  o: { format: DailyFormat; pillar?: DailyPillar; recent?: string[]; near?: string[]; asked?: boolean; picture?: string; names?: readonly string[] },
 ): string[] {
   const out: string[] = [];
   const f = DAILY_FORMATS[o.format] ?? DAILY_FORMATS.quick_take;
@@ -1171,19 +1279,21 @@ export function captionProblems(
   if (!text) return ["empty"];
   if (text.length > f.max) out.push(`${text.length} characters (a ${f.name.toLowerCase()} is ${f.max} at most)`);
   const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (paragraphs.length > 4) out.push(`${paragraphs.length} paragraphs (4 at most)`);
-  if (!f.lines && paragraphs.some((p) => p.split("\n").length > 1)) out.push("line breaks inside a paragraph (write sentences, not a poem of one-line lines)");
-  if (f.lines && text.split("\n").filter((l) => l.trim()).length > 7) out.push("more than 7 lines");
+  if (paragraphs.length > 5) out.push(`${paragraphs.length} paragraphs (5 at most)`);
+  if (paragraphs.some((p) => p.split("\n").length > 1)) out.push("line breaks inside a paragraph (write sentences, not a poem of one-line lines)");
   const hook = hookOf(text);
   if (wordsOf(hook).length > HOOK_MAX_WORDS || hook.length > HOOK_MAX_CHARS) out.push(`the first sentence runs long (${wordsOf(hook).length} words): it's the hook, keep it short`);
   if ((text.match(EMOJI_RE) ?? []).length > 1) out.push("more than one emoji");
   if (/#\w/.test(text)) out.push("has a hashtag");
   if (/@\w/.test(text)) out.push("tags someone");
   if (NO_NAMES.test(text)) out.push("drops in a name");
+  for (const n of namedPeople(text, o.names ?? [])) out.push(`names someone (${n})`);
   if (BIBLE_REF.test(text) || /\b(verse|scripture)\b/i.test(text)) out.push("mentions a verse (the app adds it)");
   const lower = ` ${text.toLowerCase().replace(/[’]/g, "'")} `;
   for (const g of GENERIC_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (a slogan)`);
   for (const g of AI_TELLS) if (lower.includes(g)) out.push(`says "${g}" (reads like AI)`);
+  for (const g of SCRIPTED_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (scripted)`);
+  for (const x of scriptedProblems(text)) out.push(x);
   if (LECTURING.some((re) => re.test(text))) out.push("lectures the reader");
   if (contrastCount(text) >= 2) out.push(`"it's not X, it's Y" ${contrastCount(text)} times (reads like AI)`);
   if (BODY_PUTDOWN.some((re) => re.test(text))) out.push("puts a body down");
@@ -1191,7 +1301,7 @@ export function captionProblems(
   if (lean.negative >= (o.pillar === "challenge" ? 4 : 3) && lean.negative > lean.positive) out.push(`leans negative (${lean.negative} heavy words, ${lean.positive} light ones)`);
   if (o.asked && endsWithQuestion(text)) out.push("ends on a question again (the last two did)");
   const pic = letters(o.picture ?? "");
-  if (pic.split(" ").length >= 4 && o.format !== "dialogue" && letters(text).includes(pic)) out.push("repeats the words in the picture");
+  if (pic.split(" ").length >= 4 && letters(text).includes(pic)) out.push("repeats the words in the picture");
   if (wordsOf(text).length >= 25 && readingGrade(text) > DAILY_GRADE_MAX) out.push(`hard to read (grade ${readingGrade(text)}, aim ${DAILY_GRADE_MAX} or under)`);
   if (longestSentence(text) > DAILY_SENTENCE_MAX) out.push(`a ${longestSentence(text)}-word sentence (${DAILY_SENTENCE_MAX} at most)`);
   for (const j of Object.keys(JARGON)) if (new RegExp(`[^\\p{L}]${j}s?[^\\p{L}]`, "iu").test(lower)) out.push(`"${j}" (say "${JARGON[j]}")`);
@@ -1286,7 +1396,7 @@ Answer with JSON only:
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = reads like a real person posting (natural, warm, clean punctuation, no lecturing; a caption meant as humour that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other, the caption not just repeating the words in the picture (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send; uplift = the picture and caption together leave people feeling good (happier, more confident, entertained, connected or excited to train), never gloomy, shaming or heavy without a turn.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = reads like the coach casually posting his own thought (plain, easy, lowercase with clear punctuation; scripted, trying hard to be profound, lecturing or AI-sounding is 3 or less; a caption meant as humour that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other, the caption not just repeating the words in the picture (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send; uplift = the picture and caption together leave people feeling good (happier, more confident, entertained, connected or excited to train), never gloomy, shaming or heavy without a turn.`;
 
 export type Review = {
   /** What it actually is: only hand_drawn_2d passes. */
@@ -1416,7 +1526,11 @@ export function reviewVerdict(r: Review, typography: string, scene = "", pillar?
 /*  A caption rewrite against the same picture                         */
 /* ------------------------------------------------------------------ */
 
-export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for a strength coach's community feed. The picture is already made and stays. Keep the post's idea and form; fix only what the editor said. The same rules: it reads like a real person posting (natural, warm, contractions with apostrophes, normal capitals and punctuation), the first sentence is a short hook, short paragraphs with a blank line between them, no lecturing, no slogans or AI phrases, no hashtags, no names, at most one emoji, never a Bible verse, never putting a body down. Answer with JSON only: {"caption": "..."}`;
+export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for the JF Effect community feed, as Jared. The picture is already made and stays. Keep the post's thought; fix only what the editor said, and make it plainer, never cleverer.
+
+${VOICE_GUIDE}
+
+Answer with JSON only: {"caption": "..."}`;
 
 export function captionFixPrompt(o: { concept: Pick<DailyConcept, "message" | "situation" | "visual" | "format">; caption: string; fix: string[] }): string {
   const f = DAILY_FORMATS[o.concept.format] ?? DAILY_FORMATS.quick_take;

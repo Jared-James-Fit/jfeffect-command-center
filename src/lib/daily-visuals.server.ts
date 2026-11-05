@@ -363,7 +363,17 @@ type Around = {
 };
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
+/** The crew's first names, once per run: a daily post names nobody (their names show on their own posts). */
+let crewNames: string[] | null = null;
+async function loadCrewNames(admin: Admin): Promise<string[]> {
+  if (crewNames) return crewNames;
+  const { data } = await admin.from("clients").select("first_name").not("first_name", "is", null).limit(2000);
+  crewNames = [...new Set(((data ?? []) as { first_name: string | null }[]).map((c) => (c.first_name ?? "").trim().split(/\s+/)[0]?.toLowerCase()).filter((n) => n && n.length >= 3))];
+  return crewNames;
+}
+
 async function context(admin: Admin, r: DailyRow) {
+  const names = await loadCrewNames(admin).catch(() => [] as string[]);
   const [{ data: around }, { data: rejected }, { data: own }] = await Promise.all([
     admin
       .from("community_daily_visuals")
@@ -393,6 +403,7 @@ async function context(admin: Admin, r: DailyRow) {
   const mine = [lineOf(r), ...((own ?? []) as { ai_line: string | null; coach_line: string | null }[]).map(lineOf)].filter(Boolean);
   return {
     recent,
+    names,
     asked: before.length === 2 && before.every((l) => l && endsWithQuestion(l)),
     // words in a picture at most every third day: they're the joke or the point, never a habit
     noWords: lastTwo.some((d) => !!d.concept?.typography?.trim()),
@@ -496,7 +507,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
       continue;
     }
     // each draft is held to its own form (a one-liner's length, a list's lines)
-    const base = { pillar: parsed.pillar, recent: ctx.compareTo, near: ctx.near, asked: ctx.asked, picture: typography };
+    const base = { pillar: parsed.pillar, recent: ctx.compareTo, near: ctx.near, asked: ctx.asked, picture: typography, names: ctx.names };
     const checksFor = (form: DailyFormat) => ({ ...base, format: form });
     const drafts = parsed.drafts.map(tidyCaption);
     const forms = drafts.map((_, i) => parsed.draftForms[i] ?? parsed.format);
@@ -724,7 +735,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     const t = await maker.json(CAPTION_FIX_PROMPT, captionFixPrompt({ concept, caption, fix: verdict.caption }));
     const rewritten = parseCaption(t.text);
     const fixed = rewritten ? tidyCaption(rewritten) : null;
-    if (fixed && !captionProblems(fixed, { format: concept.format, pillar: concept.pillar, picture: concept.typography }).length) {
+    if (fixed && !captionProblems(fixed, { format: concept.format, pillar: concept.pillar, picture: concept.typography, names: crewNames ?? [] }).length) {
       caption = fixed;
       rev = await review(maker, r, concept, caption, image, refUrls);
       verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
