@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Heart, History, ImageIcon, Loader2, MessageCircle, RefreshCcw, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NoteEditor } from "@/components/community/note-editor";
+import { useAuth } from "@/lib/auth";
+import { compressImage } from "@/lib/image-compress";
+import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import {
   DAILY_FORMATS,
@@ -17,7 +20,12 @@ import {
   DAILY_STYLE_KEYS,
   DAILY_THEMES,
   DAILY_TOPICS,
+  ART_STYLES,
+  DAILY_ART_KEYS,
+  FILM_LOOK_VERSION,
+  LEGACY_SHOT_NAMES,
   LEGACY_STYLE_NAMES,
+  type DailyArt,
   dailyCaption,
   type DailyLight,
   type DailyStyle,
@@ -37,6 +45,8 @@ type Day = {
   faith: boolean;
   style: string | null;
   light: string | null;
+  art: string | null;
+  look: string | null;
   format: string | null;
   topic: string | null;
   message: string | null;
@@ -69,11 +79,15 @@ type Test = {
   theme: DailyTheme;
   style: string;
   light: string | null;
+  art?: string | null;
+  look?: string | null;
   caption: string;
   picture: string;
   passed: boolean;
   score: number;
   medium: string;
+  colour?: string;
+  reference?: boolean;
 };
 type Overview = {
   on: boolean;
@@ -82,6 +96,7 @@ type Overview = {
   today: string;
   learned: string | null;
   maker: string | null;
+  refs?: Partial<Record<DailyArt, string>>;
   tests?: Test[];
   days: Day[];
 };
@@ -118,8 +133,9 @@ function dayLabel(day: string, today: string): string {
   if (day === today) return "Today";
   return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${day}T12:00:00Z`));
 }
-const styleName = (s: string | null) => (s && s in DAILY_STYLES ? DAILY_STYLES[s as DailyStyle].name : s ? (LEGACY_STYLE_NAMES[s] ?? null) : null);
-const lightName = (l: string | null) => (l && l in DAILY_LIGHTS ? DAILY_LIGHTS[l as DailyLight].name : null);
+const styleName = (s: string | null) => (s && s in DAILY_STYLES ? DAILY_STYLES[s as DailyStyle].name : s ? (LEGACY_STYLE_NAMES[s] ?? LEGACY_SHOT_NAMES[s] ?? null) : null);
+const lightName = (l: string | null) => (l && l in DAILY_LIGHTS ? DAILY_LIGHTS[l as DailyLight].name : l ? (LEGACY_SHOT_NAMES[l] ?? null) : null);
+const artName = (a: string | null | undefined) => (a && a in ART_STYLES ? ART_STYLES[a as DailyArt].name : null);
 const formatName = (f: string | null) => (f && f in DAILY_FORMATS ? DAILY_FORMATS[f as keyof typeof DAILY_FORMATS].name : null);
 const topicName = (t: string | null) => (t && t in DAILY_TOPICS ? DAILY_TOPICS[t as keyof typeof DAILY_TOPICS].split(" (")[0] : null);
 
@@ -240,7 +256,11 @@ export function DailyPicturesCard() {
         ))}
       </ul>
 
+      <StyleReferences refs={data.refs ?? {}} />
+
       {(data.tests?.length ?? 0) > 0 && <Tests tests={data.tests!} />}
+
+      <ApproveLook days={data.days} />
 
       {learned && (
         <div className="border-t border-border px-4 py-3 text-[13px] text-muted-foreground" data-daily-learned>
@@ -387,7 +407,7 @@ function DaySheet({ d, today, off, onClose }: { d: Day | null; today: string; of
                 {(formatName(d.format) || styleName(d.style)) && (
                   <>
                     <dt className="text-muted-foreground">Made as</dt>
-                    <dd>{[formatName(d.format), styleName(d.style), lightName(d.light)].filter(Boolean).join(" · ")}</dd>
+                    <dd>{[formatName(d.format), artName(d.art), styleName(d.style), lightName(d.light)].filter(Boolean).join(" · ")}</dd>
                   </>
                 )}
                 {d.message && (
@@ -560,13 +580,130 @@ function Tests({ tests }: { tests: Test[] }) {
           <li key={t.id} className="min-w-0">
             <Thumb path={t.picture} className="w-full" />
             <div className="mt-1 truncate text-[11px] text-muted-foreground">
-              {AUDIENCE[t.audience]} · {styleName(t.style)}
+              {AUDIENCE[t.audience]} · {artName(t.art) ?? styleName(t.style)}
             </div>
-            <div className={cn("text-[11px]", t.passed ? "text-success" : "text-warning")}>{t.passed ? `Passed · ${t.score}/5` : `Didn't pass · ${t.score}/5`}</div>
+            <div className={cn("text-[11px]", t.passed ? "text-success" : "text-warning")}>
+              {t.passed ? `Passed · ${t.score}/5` : `Didn't pass · ${t.score}/5`}
+              {t.reference ? " · matched your reference" : ""}
+            </div>
             <p className="line-clamp-3 text-[12px] leading-snug">{t.caption}</p>
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * The style references: one picture per art direction that the image model
+ * matches and the review judges against (community_daily_visuals_set_ref).
+ */
+function StyleReferences({ refs }: { refs: Partial<Record<DailyArt, string>> }) {
+  return (
+    <div className="border-t border-border px-4 py-3" data-daily-refs>
+      <div className="text-[13px] font-semibold">Style references</div>
+      <p className="mb-2 text-[12px] text-muted-foreground">
+        A picture whose look you want each art direction to match. Its style is copied, never its people or scene.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {DAILY_ART_KEYS.map((art) => (
+          <ReferenceSlot key={art} art={art} path={refs[art] ?? null} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReferenceSlot({ art, path }: { art: DailyArt; path: string | null }) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const input = useRef<HTMLInputElement>(null);
+  const save = useMutation({
+    mutationFn: async (file: File | null) => {
+      let stored: string | null = null;
+      if (file) {
+        if (!user?.id) throw new Error("Sign in again to upload");
+        const small = await compressImage(file, { maxDimension: 1536, quality: 0.9, skipUnder: 0 });
+        const up = await uploadLiftFileToStorage({
+          file: small instanceof File ? small : new File([small], `style-${art}.jpg`, { type: small.type || "image/jpeg" }),
+          userId: user.id,
+          bucket: "community-media",
+        });
+        stored = up.path;
+      }
+      const { error } = await db.rpc("community_daily_visuals_set_ref", { _art: art, _path: stored });
+      if (error) throw error;
+      return !!file;
+    },
+    onSuccess: (added) => {
+      void qc.invalidateQueries({ queryKey: KEY });
+      toast.success(added ? "Reference saved" : "Reference removed", { description: added ? "New pictures match its look." : undefined });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save it"),
+  });
+  return (
+    <div className="min-w-0">
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        disabled={save.isPending}
+        className="block w-full"
+        aria-label={`${path ? "Replace" : "Add"} the reference for ${ART_STYLES[art].name}`}
+      >
+        <Thumb path={path} busy={save.isPending} className="w-full" />
+      </button>
+      <div className="mt-1 truncate text-[12px] font-medium">{ART_STYLES[art].name}</div>
+      <div className="flex gap-3 text-[12px]">
+        <button type="button" className="min-h-[32px] text-muted-foreground underline-offset-2 hover:underline" disabled={save.isPending} onClick={() => input.current?.click()}>
+          {path ? "Replace" : "Add picture"}
+        </button>
+        {path && (
+          <button type="button" className="min-h-[32px] text-muted-foreground underline-offset-2 hover:underline" disabled={save.isPending} onClick={() => save.mutate(null)}>
+            Remove
+          </button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) save.mutate(f);
+        }}
+      />
+    </div>
+  );
+}
+
+/** The coach's yes to a new look: every day still in an older one gets its picture remade, captions kept (community_daily_visuals_restyle). */
+function ApproveLook({ days }: { days: Day[] }) {
+  const qc = useQueryClient();
+  const older = days.filter((d) => d.picture && (d.status === "ready" || d.status === "posted") && !d.regen && d.look !== FILM_LOOK_VERSION).length;
+  const run = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await db.rpc("community_daily_visuals_restyle", { _look: FILM_LOOK_VERSION });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (n) => {
+      void qc.invalidateQueries({ queryKey: KEY });
+      toast.success(`${n} ${n === 1 ? "picture is" : "pictures are"} being remade`, { description: "Same posts, captions, likes and comments. The old pictures stay in Versions." });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't start it"),
+  });
+  if (!older) return null;
+  return (
+    <div className="border-t border-border px-4 py-3" data-daily-approve-look>
+      <div className="text-[13px] font-semibold">Like the test pictures?</div>
+      <p className="mb-2 text-[12px] text-muted-foreground">
+        {older} {older === 1 ? "day is" : "days are"} still in the older look. Approving remakes their pictures in the new one, captions kept, the old ones in Versions.
+      </p>
+      <Button className="w-full" disabled={run.isPending} onClick={() => run.mutate()}>
+        Approve this look for {older} {older === 1 ? "day" : "days"}
+      </Button>
     </div>
   );
 }

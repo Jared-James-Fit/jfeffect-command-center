@@ -40,15 +40,28 @@ export type DailyStyle =
   | "wide_moment"
   | "medium_candid"
   | "two_people"
+  | "group"
+  | "in_action"
   | "close_detail"
   | "over_shoulder"
   | "low_angle"
   | "framed_view"
   | "backlit"
   | "overhead"
-  | "two_frames"
-  | "phone_story";
-export type DailyLight = "golden_hour" | "blue_hour" | "morning_window" | "warm_lamp" | "overcast" | "gym_morning" | "rainy_evening" | "night_city" | "sunrise";
+  | "two_frames";
+/** The colour and light: vivid pairings, never a muddy or gloomy grade. */
+export type DailyLight =
+  | "golden_teal"
+  | "coral_turquoise"
+  | "sunset_violet"
+  | "blue_amber"
+  | "green_peach"
+  | "morning_sun"
+  | "clear_noon"
+  | "gym_glow"
+  | "neon_night";
+/** The two art directions (concept.art): A for energy, B for feeling. */
+export type DailyArt = "graphic" | "anime";
 export type DailyFormat = "one_liner" | "observation" | "short_story" | "humor" | "scenario" | "encouragement";
 export type DailyTopic =
   | "confidence"
@@ -144,45 +157,80 @@ export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
 /* ------------------------------------------------------------------ */
 
 /**
- * The one look: a still frame from a premium hand-drawn 2D animated film for
- * grown-ups, so the feed reads as one curated account. Variety comes from the
- * moment, the shot and the light, never from switching to another medium.
+ * The look: a frame from a premium, colourful, hand-drawn 2D animated film,
+ * bright and crisp enough to stop someone scrolling. Two art directions share
+ * it (ART_STYLES: A vibrant graphic 2D, B cinematic 2D anime), picked for the
+ * story; variety comes from the moment, the shot and the colour and light.
+ * When the coach has given style references (Crew → Posts → Daily pictures),
+ * the image model gets the one for the art direction to match.
+ * FILM_LOOK_VERSION marks which days are in this look (concept.look).
  */
-export const FILM_LOOK =
-  "A still frame from a premium hand-drawn 2D animated feature film for grown-ups, a mature slice-of-life film. Beautiful hand-drawn 2D animation: subtle, confident linework, textured painterly shading, soft painted backgrounds with atmospheric depth, beautiful motivated lighting, a warm, cohesive, sophisticated colour palette. Characters are expressive but naturally proportioned adults, drawn and painted by hand. Composed like a cinematographer framed it, telling a story in one frame.";
+export const FILM_LOOK_VERSION = "film_v2";
 
-/** What it must never look like. */
+export const FILM_LOOK =
+  "A frame from a premium, colourful, hand-drawn 2D animated feature film. Crisp, confident, clean linework; refined cel shading with clean, crisp shadow shapes; rich, vibrant, saturated colour with strong warm-versus-cool contrast; bright, luminous light with glowing highlights; a detailed, beautifully illustrated background with depth; expressive, attractive, naturally proportioned adult characters with clean, sharp, well-drawn faces and clear expressions; a clear focal point and a strong, intentional composition. Polished, bright and striking, made to stop someone scrolling.";
+
+export const ART_STYLES: Record<DailyArt, { name: string; look: string; use: string }> = {
+  graphic: {
+    name: "A · Vibrant graphic 2D",
+    look: "Art direction A, vibrant graphic 2D animation: bold colour blocking, punchy complementary colours, dynamic dramatic lighting, crisp ink outlines, energetic camera angles and motion.",
+    use: "fitness, ambition, confidence, discipline, humour and exciting everyday moments",
+  },
+  anime: {
+    name: "B · Cinematic 2D anime",
+    look: "Art direction B, beautiful cinematic 2D anime: a luminous sky and glowing light (sunsets, golden hour, bright city light), refined cel shading, soft glowing rim light on the characters, richly detailed environments, expressive faces with natural proportions.",
+    use: "relationships, self-worth, lifestyle, personal growth, reflection and relatable everyday life",
+  },
+};
+export const DAILY_ART_KEYS = Object.keys(ART_STYLES) as DailyArt[];
+
+/** What it must never look like (the muddy, dark first tries included). */
 export const FILM_AVOID =
-  "Not a 3D render, not CGI, not Pixar-style or any 3D animated look, no plastic or glossy skin, no volumetric 3D models, not photorealistic, not a photograph, not flat vector clip art, not a childish cartoon, no exaggerated anime expressions or giant eyes, not a motivational poster, no logos or watermarks.";
+  "Avoid: brown or grey colour grading, desaturated or muted colour, a dark, gloomy or murky scene, heavy film grain or dirty textures, low contrast, flat lifeless colour, blurry, smudged or painterly faces, watercolour or oil-painting looks, photorealism or a photograph, 3D, CGI or Pixar-like rendering, plastic skin, childish cartoon proportions, exaggerated anime expressions or giant eyes, a motivational poster, logos or watermarks.";
 
 export const DAILY_STYLES: Record<DailyStyle, { name: string; look: string }> = {
-  wide_moment: { name: "Wide scene", look: "a wide shot, the person small in a beautifully painted place that sets the mood (a quiet gym at dawn, a city street, a kitchen at night, a park path)." },
-  medium_candid: { name: "Candid moment", look: "a medium shot caught mid-moment, what they're doing and how they feel reading from their posture, face and hands." },
-  two_people: { name: "Two people", look: "two people together (friends, a couple, training partners, a parent and grown child), the relationship in how they stand and look at each other." },
-  close_detail: { name: "Close-up detail", look: "a close-up on hands and the things that tell the story (chalk on fingers, a phone, a shaker, untied shoes, a meal), the person partly in frame." },
-  over_shoulder: { name: "Over the shoulder", look: "over the shoulder, seeing what they see: a phone, a mirror, the bar on the floor, a calendar on the fridge." },
-  low_angle: { name: "Low angle", look: "a low angle looking up at them, a quiet moment of confidence, sky or ceiling lights behind them." },
-  framed_view: { name: "Framed view", look: "framed through a doorway, a window or the edge of a mirror, as if we're quietly watching a private moment." },
-  backlit: { name: "Backlit", look: "backlit by a window or a low sun, a soft rim of light around the person, long shadows across the floor." },
-  overhead: { name: "From above", look: "a top-down view of the moment (a gym floor, a bed, a kitchen table with a meal and a notebook)." },
+  wide_moment: { name: "Wide scene", look: "a wide shot, the person in a beautifully illustrated place full of life and colour (a busy gym, a city street, a park, a beach path, a rooftop)." },
+  medium_candid: { name: "Candid moment", look: "a medium shot caught mid-moment, what they're doing and how they feel reading clearly from their posture, face and hands." },
+  two_people: { name: "Two people", look: "two people together (friends, a couple, training partners, a parent and grown child), the relationship in how they stand, laugh and look at each other." },
+  group: { name: "Group", look: "a few people together (a gym crew, friends at brunch, teammates), the energy and humour between them." },
+  in_action: { name: "In action", look: "mid-action with motion and energy: a heavy lift, a sprint, a laugh, a high five, a jump into the lake." },
+  close_detail: { name: "Close-up detail", look: "a close-up on hands and the things that tell the story (chalk on fingers, the knurl of a barbell, laced shoes, a shared meal), the person partly in frame." },
+  over_shoulder: { name: "Over the shoulder", look: "over the shoulder, seeing what they see: the bar waiting on the platform, a friend waving them over, the city from a rooftop." },
+  low_angle: { name: "Low angle", look: "a low angle looking up at them, a moment of confidence, bright sky or glowing lights behind them." },
+  framed_view: { name: "Framed view", look: "framed through a doorway, a window or the edge of a mirror, as if we're watching a moment we weren't meant to see." },
+  backlit: { name: "Backlit", look: "backlit by a big window or a low sun, a glowing rim of light around the person, long colourful shadows." },
+  overhead: { name: "From above", look: "a top-down view of the moment (a gym floor, a picnic blanket, a kitchen table with a meal and a notebook)." },
   two_frames: { name: "Two frames", look: "two frames side by side like a storyboard, the same person in two moments (expectation and reality, before and after, Monday and Friday), the joke or the change living between them." },
-  phone_story: { name: "Phone story", look: "the story told through the phone in their hand: the screen shows the message or app the story is about, readable, the person and the room soft around it." },
 };
 export const DAILY_STYLE_KEYS = Object.keys(DAILY_STYLES) as DailyStyle[];
 
-/** The light and time of day, so a week never has the same mood twice. */
+/** The colour and light, so a week never has the same mood twice, and never a dull one. */
 export const DAILY_LIGHTS: Record<DailyLight, { name: string; look: string }> = {
-  golden_hour: { name: "Golden hour", look: "warm low golden-hour sun, long soft shadows" },
-  blue_hour: { name: "Blue hour", look: "the cool blue of dusk, the first warm lights coming on inside" },
-  morning_window: { name: "Morning window", look: "soft morning light through a window, dust in the air" },
-  warm_lamp: { name: "Warm lamp", look: "a warm lamp in a dark room at night, everything else in deep shadow" },
-  overcast: { name: "Overcast", look: "soft, even overcast daylight, muted and calm" },
-  gym_morning: { name: "Gym morning", look: "an early quiet gym, big windows letting in pale morning light over the racks" },
-  rainy_evening: { name: "Rainy evening", look: "a rainy evening, wet streets or windows reflecting warm lights" },
-  night_city: { name: "Night city", look: "the city at night, street lights and shop signs glowing softly (no readable words)" },
-  sunrise: { name: "Sunrise", look: "a pale pink and gold sunrise, cool air, the day just starting" },
+  golden_teal: { name: "Golden and teal", look: "golden-hour sun with deep teal shadows, glowing warm highlights" },
+  coral_turquoise: { name: "Coral and turquoise", look: "coral-orange light against a turquoise sky or water" },
+  sunset_violet: { name: "Sunset pink and violet", look: "a sunset sky of pink and violet, warm golden rim light on the people" },
+  blue_amber: { name: "Blue and amber", look: "bright blue daylight with warm amber lights and accents" },
+  green_peach: { name: "Green and peach", look: "fresh greens and soft peach morning sunlight" },
+  morning_sun: { name: "Morning sun", look: "bright morning sun pouring through big windows, crisp shadows, clean warm highlights" },
+  clear_noon: { name: "Clear noon", look: "a clear, saturated blue sky with crisp white clouds, bright midday colour" },
+  gym_glow: { name: "Gym glow", look: "a gym lit by warm golden spotlights and cool blue window light, strong contrast" },
+  neon_night: { name: "Neon night", look: "a night lit by vivid neon pink and electric blue, strong contrast and one bright focal light" },
 };
 export const DAILY_LIGHT_KEYS = Object.keys(DAILY_LIGHTS) as DailyLight[];
+
+/** Shots and lights from earlier looks, for the names of days made before. */
+export const LEGACY_SHOT_NAMES: Record<string, string> = {
+  phone_story: "Phone story",
+  golden_hour: "Golden hour",
+  blue_hour: "Blue hour",
+  morning_window: "Morning window",
+  warm_lamp: "Warm lamp",
+  overcast: "Overcast",
+  gym_morning: "Gym morning",
+  rainy_evening: "Rainy evening",
+  night_city: "Night city",
+  sunrise: "Sunrise",
+};
 
 /** The first version's media, for the names of days made before the 2D film look. */
 export const LEGACY_STYLE_NAMES: Record<string, string> = {
@@ -381,6 +429,8 @@ export type DailyConcept = {
   /** The shot. */
   style: DailyStyle;
   light: DailyLight;
+  /** The art direction: A graphic or B anime. */
+  art: DailyArt;
   /** The frame: who's in it, what they're doing and feeling, where, what's around them. */
   visual: string;
   /** Words in the scene (a text on a phone, a note, a speech bubble), exactly, or "" for none. */
@@ -395,7 +445,7 @@ WORK IT OUT IN THIS ORDER, then answer:
 2. Topic: pick one from the list given.
 3. Situation: one specific, everyday moment with real tension in it (the car before the gym, the photo you untagged yourself from, the Sunday scaries, the friend who asks why you even bother). Specific beats general.
 4. Message: the one thing it says, in your own words. Something true, maybe a little uncomfortable, never a slogan.
-5. Picture: the moment as a still frame from a premium hand-drawn 2D animated film (the look is fixed; you choose the moment, the shot and the light). It shows the moment the caption is about, so the two tell the same story with the same details (if the caption says a friend texted, the picture shows that text; the same place, time and people, never another version of events), and adds what words can't (the room, the people, the small detail that says how they feel).
+5. Picture: the moment as a frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). It shows the moment the caption is about, so the two tell the same story with the same details (if the caption says a friend texted, the picture shows that text; the same place, time and people, never another version of events), and adds what words can't (the room, the people, the small detail that says how they feel).
 6. Caption: in the form given, in the coach's voice (below).
 
 WRITING RULES
@@ -408,11 +458,13 @@ WRITING RULES
 
 PICTURE RULES
 - Describe the frame: who is in it (adults, their age range, build, hair and clothes, people of different looks, fitting the audience and an everyday gym and life), what they're doing and feeling, where they are, what's around them.
-- Natural human moments: everyday life, humour, relationships, confidence, fitness, growth. Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
+- Natural human moments full of life: training, laughing, connecting, moving, a small win, a funny moment. Bright, colourful and eye-catching (daytime, golden hour, vivid light); a night or quiet moment only when the story needs one, and then with vivid colour and one bright focal light.
+- When the caption is about a struggle, the picture shows the turn or the human side of it (walking in anyway, the friend who showed up, the laugh after), never someone miserable alone in a dark room or staring at a phone.
+- Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
 - Any words in the scene (a text message on a phone, a note, a speech bubble, a sign) say exactly what the story needs and are written word for word in "typography" (at most 12 words): only the words as they appear in the frame, never where they are or who's reading them (write "boss: quick thing for monday?", never "on his phone: boss: quick thing for monday?"). No other words anywhere. With no words in the scene, "typography" is "".
 
 Answer with JSON only:
-{"topic": "...", "situation": "...", "tension": "...", "message": "...", "format": "...", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "caption": "..."}`;
+{"topic": "...", "situation": "...", "tension": "...", "message": "...", "format": "...", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "caption": "..."}`;
 
 export function conceptPrompt(o: {
   theme: DailyTheme;
@@ -427,6 +479,8 @@ export function conceptPrompt(o: {
   rejected?: string[];
   /** A remake of one side only: the caption to keep exactly, or the picture already made (its description). */
   keep?: { caption?: string; picture?: string; style?: DailyStyle } | null;
+  /** The art direction to use (a test or the coach's pick), else the writer picks. */
+  art?: DailyArt | null;
 }): string {
   const t = DAILY_THEMES[o.theme];
   return [
@@ -436,7 +490,10 @@ export function conceptPrompt(o: {
     `TOPICS (pick one, best first): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k]}`).join("; ")}`,
     `CAPTION FORMS (pick one, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (${DAILY_FORMATS[k].min}-${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
-    `LIGHT (pick the one that fits the moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
+    `COLOUR AND LIGHT, as "light" (pick the one that fits the moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
+    o.art
+      ? `ART DIRECTION, as "art": ${o.art} (${ART_STYLES[o.art].name})`
+      : `ART DIRECTION, as "art" (pick the one that tells this story best): ${DAILY_ART_KEYS.map((k) => `${k} = ${ART_STYLES[k].name}, for ${ART_STYLES[k].use}`).join("; ")}`,
     o.keep?.caption ? `KEEP THIS CAPTION EXACTLY, word for word, as "caption" (only plan a new picture for it): ${o.keep.caption}` : null,
     o.keep?.picture
       ? `KEEP THIS PICTURE (it's already made${o.keep.style ? `, ${DAILY_STYLES[o.keep.style].name.toLowerCase()}` : ""}): ${o.keep.picture}\nPlan the post around it and write a new caption for it. Describe it as it is in "visual"; "typography" is "".`
@@ -459,7 +516,12 @@ export function conceptPrompt(o: {
 const isKey = <K extends string>(keys: readonly K[], v: unknown): v is K => typeof v === "string" && (keys as readonly string[]).includes(v);
 
 /** The concept's JSON (fenced or not), with its choices held to the lists. */
-export function parseConcept(text: string, allowed: Omit<Choices, "lights"> & { lights?: DailyLight[] }): DailyConcept | null {
+/** The art direction a topic leans to when the writer doesn't pick one. */
+export function artForTopic(topic: DailyTopic): DailyArt {
+  return ["relationships", "body_image", "identity", "burnout", "overwhelm", "hard_truths"].includes(topic) ? "anime" : "graphic";
+}
+
+export function parseConcept(text: string, allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null }): DailyConcept | null {
   const m = /\{[\s\S]*\}/.exec(text ?? "");
   if (!m) return null;
   try {
@@ -472,7 +534,8 @@ export function parseConcept(text: string, allowed: Omit<Choices, "lights"> & { 
       message: str(j.message, 300),
       format: isKey(allowed.formats, j.format) ? j.format : allowed.formats[0],
       style: isKey(allowed.styles, j.style) ? j.style : allowed.styles[0],
-      light: isKey(DAILY_LIGHT_KEYS, j.light) ? j.light : (allowed.lights?.[0] ?? "morning_window"),
+      light: isKey(DAILY_LIGHT_KEYS, j.light) ? j.light : (allowed.lights?.[0] ?? "golden_teal"),
+      art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForTopic(isKey(allowed.topics, j.topic) ? j.topic : allowed.topics[0])),
       visual: str(j.visual, 1400),
       typography: str(j.typography, 100).replace(/^["“]|["”]$/g, ""),
       caption: str(j.caption, 600).replace(/^["“]|["”]$/g, ""),
@@ -593,24 +656,31 @@ export function typographyProblems(text: string): string[] {
 /*  The picture                                                        */
 /* ------------------------------------------------------------------ */
 
-/** The image model's prompt: the 2D film look, the shot, the light, the moment, the words in it (exactly) or none, and what it must never look like. */
+/** Put first when the image model gets a style reference with the prompt. */
+export const STYLE_REFERENCE =
+  "The attached image is the style reference. Match its art style exactly: its colour, saturation and lighting, its linework and cel shading, how its people are drawn and how detailed its background is. Draw a completely new scene from the description below; never copy the reference's people, place, objects or composition.";
+
+/** The image model's prompt: the look and art direction, the shot, the colour and light, the moment, the words in it (exactly) or none, and what it must never look like. */
 export function picturePrompt(
-  c: Pick<DailyConcept, "style" | "visual" | "typography" | "message"> & { light?: DailyLight | string | null },
-  o: { faith?: boolean; fix?: string | null } = {},
+  c: Pick<DailyConcept, "style" | "visual" | "typography" | "message"> & { light?: DailyLight | string | null; art?: DailyArt | string | null },
+  o: { faith?: boolean; fix?: string | null; reference?: boolean } = {},
 ): string {
   const shot = DAILY_STYLES[c.style as DailyStyle] ?? DAILY_STYLES.medium_candid;
   const light = c.light && c.light in DAILY_LIGHTS ? DAILY_LIGHTS[c.light as DailyLight] : null;
+  const art = ART_STYLES[(c.art && c.art in ART_STYLES ? c.art : "graphic") as DailyArt];
   const words = c.typography.trim();
   return [
+    o.reference ? STYLE_REFERENCE : null,
     FILM_LOOK,
+    art.look,
     `The shot: ${shot.look}`,
-    light ? `The light: ${light.look}.` : null,
+    light ? `Colour and light: ${light.look}.` : null,
     `What happens in the frame: ${c.visual}`,
     `The feeling: ${c.message}`,
-    "People are adults drawn by hand with natural proportions, real hands and subtle, believable expressions, caught mid-moment, never posing or looking at the camera.",
-    o.faith ? "Quiet and reverent; any Bible stays closed with no readable writing on it." : null,
+    "People are attractive, naturally proportioned adults with clean, sharp faces and clear, natural expressions, caught mid-moment, never posing or looking at the camera.",
+    o.faith ? "Quiet and hopeful, still bright and colourful; any Bible stays closed with no readable writing on it." : null,
     words
-      ? `The only words in the frame are exactly these, where the story puts them (the phone screen, the note, the speech bubble), spelled exactly and clearly readable: ${words}. No other letters, numbers or logos anywhere.`
+      ? `The only words in the frame are exactly these, where the story puts them (a speech bubble, a note, a screen), spelled exactly and clearly readable: ${words}. No other letters, numbers or logos anywhere.`
       : "No words, letters, numbers, signs, logos or watermarks anywhere in the frame; any screen shows no readable text.",
     "Vertical portrait. Keep the subject and any words well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
     FILM_AVOID,
@@ -630,6 +700,8 @@ Answer with JSON only:
 {
  "medium": "what the picture actually is: hand_drawn_2d (a hand-drawn, painted 2D animated-film frame), 3d_render (CGI, Pixar-like, plastic skin, volumetric 3D models), photo (a photograph or photorealistic), vector (flat clip art or a cheap vector illustration) or other",
  "description": "two sentences: what the picture shows and how it's drawn",
+ "colour": "vibrant (rich, saturated, luminous colour with strong warm-versus-cool contrast), muted (desaturated, brown or grey grading, flat) or dark (dark, gloomy or low-contrast)",
+ "clarity": "crisp (clean linework, sharp, well-drawn faces) or soft (blurry, smudged, grainy or painterly faces and lines)",
  "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
  "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
  "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5},
@@ -639,11 +711,15 @@ Answer with JSON only:
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = beautiful like a frame from a great hand-drawn 2D animated film (not 3D, not a photo, not cheap vector, not childish); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send.`;
 
 export type Review = {
   /** What it actually is: only hand_drawn_2d passes. */
   medium: string;
+  /** Only vibrant passes. */
+  colour: string;
+  /** Only crisp passes. */
+  clarity: string;
   description: string;
   text_seen: string;
   defects: string[];
@@ -652,15 +728,27 @@ export type Review = {
   fix_caption: string;
 };
 
-export function reviewPrompt(o: { caption: string; concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style">; audience: DailyAudience }): string {
+export function reviewPrompt(o: {
+  caption: string;
+  concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style"> & { art?: DailyArt | string | null };
+  audience: DailyAudience;
+  /** How many style references come before the picture. */
+  references?: number;
+}): string {
+  const art = o.concept.art && o.concept.art in ART_STYLES ? ART_STYLES[o.concept.art as DailyArt] : null;
   return [
+    o.references
+      ? `THE FIRST ${o.references === 1 ? "IMAGE IS THE STYLE REFERENCE" : `${o.references} IMAGES ARE THE STYLE REFERENCES`} THE COACH CHOSE. THE LAST IMAGE IS THE ONE TO REVIEW: judge its colour, light, linework and how its people are drawn against the reference.`
+      : null,
     `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
     `THE MESSAGE: ${o.concept.message}`,
     `THE SITUATION: ${o.concept.situation}`,
-    `THE PICTURE WAS MEANT TO BE: a still frame from a premium hand-drawn 2D animated film (never 3D, a photo or vector clip art), ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""} ${o.concept.visual}`,
+    `THE PICTURE WAS MEANT TO BE: a frame from a premium, colourful, hand-drawn 2D animated film, bright and crisp (never 3D, a photo, vector clip art, dark or muddy)${art ? `, ${art.name}` : ""}. ${DAILY_STYLES[o.concept.style as DailyStyle]?.look ?? ""} ${o.concept.visual}`,
     o.concept.typography ? `WORDS MEANT TO BE IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE WAS MEANT TO HAVE NO WORDS IN IT.",
     `THE CAPTION:\n${o.caption}`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function parseReview(text: string): Review | null {
@@ -670,9 +758,14 @@ export function parseReview(text: string): Review | null {
     const j = JSON.parse(m[0]);
     const s = j.scores ?? {};
     const n = (v: unknown) => Math.max(1, Math.min(5, Math.round(Number(v) || 1)));
-    const medium = typeof j.medium === "string" ? j.medium.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") : "";
+    const word = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") : "");
+    const medium = word(j.medium);
+    const colour = word(j.colour ?? j.color).split("_")[0];
+    const clarity = word(j.clarity).split("_")[0];
     return {
       medium: /^hand_?drawn(_2d)?$|^2d$/.test(medium) ? "hand_drawn_2d" : medium,
+      colour,
+      clarity,
       description: typeof j.description === "string" ? j.description.trim().slice(0, 600) : "",
       text_seen: typeof j.text_seen === "string" ? j.text_seen.trim() : "",
       defects: Array.isArray(j.defects) ? j.defects.filter((d: unknown) => typeof d === "string" && d.trim()).map((d: string) => d.trim()) : [],
@@ -722,6 +815,9 @@ export function reviewVerdict(r: Review, typography: string, scene = ""): { pass
   else if (stray.length) image.push(`${want ? "extra words" : "words that shouldn't be there"} in the picture: "${r.text_seen}"`);
   // the look is fixed: a frame that reads as 3D, a photo or vector clip art fails whatever its scores
   if (r.medium !== "hand_drawn_2d") image.push(`it reads as ${(r.medium || "something else").replace(/_/g, " ")}, not a hand-drawn 2D film frame`);
+  // bright and crisp, never the muddy, dark or soft look of the first tries
+  if (r.colour !== "vibrant") image.push(`its colour reads as ${r.colour || "unclear"}, not vibrant`);
+  if (r.clarity !== "crisp") image.push(`its faces and lines read as ${r.clarity || "unclear"}, not crisp`);
   for (const d of r.defects) image.push(d);
   for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
     if (r.scores[k] >= REVIEW_BARS[k]) continue;

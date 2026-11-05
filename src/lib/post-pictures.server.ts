@@ -154,6 +154,53 @@ export async function generatePicture(prompt: string, use: { lovable?: boolean }
   return first ?? { ok: false, reason: "No picture" };
 }
 
+export type RefImage = { bytes: Uint8Array; mime: string };
+
+/**
+ * A picture drawn to match style references: OpenAI's image edits endpoint
+ * with the references as its input images (gpt-image models take several).
+ * Only OpenAI; the caller falls back to the prompt alone when it fails.
+ */
+export async function generatePictureWithRefs(prompt: string, refs: RefImage[]): Promise<Made> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return { ok: false, reason: "No OpenAI key (OPENAI_API_KEY) is set up." };
+  if (!refs.length) return { ok: false, reason: "No style reference" };
+  const models = process.env.OPENAI_IMAGE_MODEL ? [process.env.OPENAI_IMAGE_MODEL] : OPENAI_IMAGE_MODELS;
+  let last = "OpenAI didn't answer";
+  for (const model of models) {
+    const form = new FormData();
+    form.append("model", model);
+    form.append("prompt", prompt);
+    refs.forEach((r, i) => form.append("image[]", new Blob([r.bytes as BlobPart], { type: r.mime }), `reference-${i + 1}.${r.mime === "image/png" ? "png" : r.mime === "image/webp" ? "webp" : "jpg"}`));
+    form.append("size", "1024x1536");
+    form.append("quality", "high");
+    form.append("output_format", "jpeg");
+    form.append("output_compression", "88");
+    form.append("n", "1");
+    const res = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}` },
+      body: form,
+      signal: AbortSignal.timeout(170_000),
+    });
+    if (!res.ok) {
+      let msg = `OpenAI said no (${res.status})`;
+      try {
+        const j = await res.json();
+        if (j?.error?.message) msg = `OpenAI: ${String(j.error.message).slice(0, 160)}`;
+      } catch {
+        // keep the status
+      }
+      last = msg;
+      if (res.status === 404 || (res.status === 400 && /model/i.test(msg)) || (res.status === 403 && /model|verif/i.test(msg))) continue;
+      return { ok: false, reason: msg };
+    }
+    const b64: string | undefined = (await res.json())?.data?.[0]?.b64_json;
+    return b64 ? picture(fromBase64(b64), `openai:${model}+ref`) : { ok: false, reason: "OpenAI didn't send a picture back" };
+  }
+  return { ok: false, reason: last };
+}
+
 /** Saves a picture to the post photos bucket under its owner (so it edits like any photo of theirs). */
 export async function storePicture(admin: Admin, ownerId: string, name: string, pic: Picture) {
   const ext = pic.mime === "image/jpeg" ? "jpg" : pic.mime === "image/webp" ? "webp" : "png";

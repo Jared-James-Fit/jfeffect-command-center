@@ -31,6 +31,10 @@
  */
 import {
   CAPTION_FIX_PROMPT,
+  DAILY_ART_KEYS,
+  DAILY_FORMAT_KEYS,
+  DAILY_TOPICS,
+  FILM_LOOK_VERSION,
   CONCEPT_PROMPT,
   DAILY_STYLE_KEYS,
   REVIEW_BARS,
@@ -52,6 +56,7 @@ import {
   typographyProblems,
   type DailyAudience,
   type DailyConcept,
+  type DailyArt,
   type DailyFormat,
   type DailyLearnings,
   type DailyStyle,
@@ -62,7 +67,7 @@ import {
   type Review,
   type VisualStat,
 } from "@/lib/daily-visuals";
-import { generatePicture, storePicture, type Made } from "@/lib/post-pictures.server";
+import { generatePicture, generatePictureWithRefs, storePicture, type Made, type RefImage } from "@/lib/post-pictures.server";
 
 type Admin = any;
 type Entry = { path: string; type: string; width: number; height: number };
@@ -163,8 +168,9 @@ let openAiTextModel: string | null = null;
 type Maker = {
   provider: "openai" | "lovable";
   /** A JSON answer, optionally looking at a picture (a data URL). */
-  json: (system: string, prompt: string, o?: { image?: string; effort?: "low" | "medium" }) => Promise<{ text: string; model: string }>;
-  picture: (prompt: string) => Promise<Made>;
+  json: (system: string, prompt: string, o?: { images?: string[]; effort?: "low" | "medium" }) => Promise<{ text: string; model: string }>;
+  /** A picture from the prompt, matching the style references when there are any (OpenAI only). */
+  picture: (prompt: string, refs?: RefImage[]) => Promise<Made>;
 };
 
 async function errorText(res: Response, who: string): Promise<string> {
@@ -177,11 +183,11 @@ async function errorText(res: Response, who: string): Promise<string> {
   }
 }
 
-function userContent(prompt: string, image?: string) {
-  return image ? [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image, detail: "high" } }] : prompt;
+function userContent(prompt: string, images?: string[]) {
+  return images?.length ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url", image_url: { url, detail: "high" } }))] : prompt;
 }
 
-async function openAiJson(key: string, system: string, prompt: string, o: { image?: string; effort?: "low" | "medium" } = {}) {
+async function openAiJson(key: string, system: string, prompt: string, o: { images?: string[]; effort?: "low" | "medium" } = {}) {
   const models = process.env.OPENAI_TEXT_MODEL ? [process.env.OPENAI_TEXT_MODEL] : openAiTextModel ? [openAiTextModel] : OPENAI_TEXT_MODELS;
   let last = "OpenAI didn't answer";
   for (const model of models) {
@@ -193,7 +199,7 @@ async function openAiJson(key: string, system: string, prompt: string, o: { imag
         model,
         messages: [
           { role: "system", content: system },
-          { role: "user", content: userContent(prompt, o.image) },
+          { role: "user", content: userContent(prompt, o.images) },
         ],
         response_format: { type: "json_object" },
         ...(reasoning ? { reasoning_effort: o.effort ?? "medium" } : { temperature: 0.9 }),
@@ -217,7 +223,7 @@ async function openAiJson(key: string, system: string, prompt: string, o: { imag
 }
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-async function lovableJson(key: string, system: string, prompt: string, o: { image?: string } = {}) {
+async function lovableJson(key: string, system: string, prompt: string, o: { images?: string[] } = {}) {
   const { DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
   const res = await fetch(GATEWAY, {
     method: "POST",
@@ -226,7 +232,7 @@ async function lovableJson(key: string, system: string, prompt: string, o: { ima
       model: DEFAULT_AI_MODEL,
       messages: [
         { role: "system", content: system },
-        { role: "user", content: userContent(prompt, o.image) },
+        { role: "user", content: userContent(prompt, o.images) },
       ],
     }),
     signal: AbortSignal.timeout(120_000),
@@ -244,7 +250,7 @@ export function makerFor(allowLovable: boolean, env: Record<string, string | und
     return {
       provider: "openai",
       json: (s, p, o) => openAiJson(openai, s, p, o),
-      picture: (p) => generatePicture(p, { lovable: false }),
+      picture: (p, refs) => (refs?.length ? generatePictureWithRefs(p, refs) : generatePicture(p, { lovable: false })),
     };
   const lovable = allowLovable ? env.LOVABLE_API_KEY : undefined;
   if (lovable)
@@ -384,12 +390,15 @@ function dataUrl(bytes: Uint8Array, mime: string): string {
 /* ------------------------------------------------------------------ */
 
 /** The concept and caption for a day (or a test), checked, not saved. */
-async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate): Promise<Candidate> {
+type Force = { topic?: DailyTopic | null; format?: DailyFormat | null; art?: DailyArt | null };
+
+async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: DailyLearnings, c: Candidate, force: Force = {}): Promise<Candidate> {
   const keepCaption = r.regen === "picture" && !!lineOf(r);
   const keepPicture = r.regen === "caption" && !!r.picture?.path;
   const ctx = await context(admin, r);
   const keptStyle = keepPicture ? ((DAILY_STYLE_KEYS as string[]).includes(r.style ?? "") ? (r.style as DailyStyle) : "medium_candid") : null;
-  const choices = pickChoices(learned, r.theme, ctx.recent, Math.random, keptStyle ?? r.regen_style);
+  const picked = pickChoices(learned, r.theme, ctx.recent, Math.random, keptStyle ?? r.regen_style);
+  const choices = { ...picked, topics: force.topic ? [force.topic] : picked.topics, formats: force.format ? [force.format] : picked.formats, art: force.art ?? null };
 
   const { loadCoachVoice } = await import("@/lib/coach-voice.functions");
   const { buildVoicePrompt, casualize } = await import("@/lib/coach-voice");
@@ -404,6 +413,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
     worst: learned.worst.map((s) => s.line).filter(Boolean),
     recent: ctx.recent,
     rejected: ctx.rejected,
+    art: force.art ?? null,
     keep: keepCaption
       ? { caption: lineOf(r) }
       : keepPicture
@@ -466,8 +476,8 @@ async function conceptStep(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
 /*  Step 2: the picture, the review, and live                          */
 /* ------------------------------------------------------------------ */
 
-async function review(maker: Maker, r: DailyRow, concept: DailyConcept, caption: string, image: string): Promise<Review> {
-  const t = await maker.json(REVIEW_PROMPT, reviewPrompt({ caption, concept, audience: r.audience }), { image, effort: "low" });
+async function review(maker: Maker, r: DailyRow, concept: DailyConcept, caption: string, image: string, refs: string[] = []): Promise<Review> {
+  const t = await maker.json(REVIEW_PROMPT, reviewPrompt({ caption, concept, audience: r.audience, references: refs.length }), { images: [...refs, image], effort: "low" });
   const parsed = parseReview(t.text);
   if (!parsed) throw new Error("The review didn't come back as the JSON asked for");
   return parsed;
@@ -500,7 +510,8 @@ async function applyMade(
       visual: concept.visual,
       typography: concept.typography,
       light: concept.light,
-      look: "2d_film",
+      art: concept.art,
+      look: FILM_LOOK_VERSION,
       round: c.round,
     },
     review: { ...rev, score: reviewScore(rev), passed: verdict.passed, why: verdict.why ?? null, at: new Date().toISOString() },
@@ -510,6 +521,23 @@ async function applyMade(
   };
   const { error } = await admin.rpc("community_daily_visual_apply", { _id: r.id, _patch: JSON.parse(JSON.stringify(patch)) });
   if (error) throw new Error(`Couldn't put it live: ${error.message}`);
+}
+
+/** The coach's style reference for an art direction (community_series_settings.daily_visuals_refs), once per run. */
+const refCache = new Map<string, RefImage | null>();
+async function styleReference(admin: Admin, art: DailyArt | undefined): Promise<RefImage | null> {
+  if (!art) return null;
+  const { data } = await admin.from("community_series_settings").select("daily_visuals_refs").maybeSingle();
+  const path = (data?.daily_visuals_refs as Record<string, string> | null)?.[art];
+  if (!path) return null;
+  if (!refCache.has(path)) {
+    try {
+      refCache.set(path, await bytesOf(admin, path));
+    } catch {
+      refCache.set(path, null);
+    }
+  }
+  return refCache.get(path) ?? null;
 }
 
 type Drawn = { entry: Entry; provider: string; rev: Review; verdict: ReturnType<typeof reviewVerdict>; caption: string; imageIssues: string[]; captionIssues: string[]; madeHere: boolean };
@@ -522,13 +550,16 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
   let provider: string;
   let image: string;
   let madeHere = false;
+  const ref = c.keepPicture ? null : await styleReference(admin, concept.art);
   if (c.keepPicture && r.picture?.path) {
     const { bytes, mime } = await bytesOf(admin, r.picture.path);
     entry = r.picture;
     provider = r.picture_provider ?? "";
     image = dataUrl(bytes, mime);
   } else {
-    const made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));
+    // with the coach's style reference for this art direction when there is one, else (or if that fails) the words alone
+    let made = ref ? await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix, reference: true }), [ref]) : null;
+    if (!made?.ok) made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));
     if (!made.ok) throw new Error(made.reason);
     const { width, height } = made.picture;
     if (Math.min(width, height) < MIN_SIDE) throw new Error(`The picture came back too small (${width}×${height})`);
@@ -541,7 +572,8 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     madeHere = true;
   }
 
-  let rev = await review(maker, r, concept, caption, image);
+  const refUrls = ref ? [dataUrl(ref.bytes, ref.mime)] : [];
+  let rev = await review(maker, r, concept, caption, image, refUrls);
   let verdict = reviewVerdict(rev, concept.typography, concept.visual);
   // a caption the reviewer marked down gets one rewrite against this same picture
   if (!verdict.image.length && verdict.caption.length && !c.keepCaption) {
@@ -551,7 +583,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     const fixed = rewritten ? casualize(rewritten) : null;
     if (fixed && !captionProblems(fixed, { format: concept.format }).length) {
       caption = fixed;
-      rev = await review(maker, r, concept, caption, image);
+      rev = await review(maker, r, concept, caption, image, refUrls);
       verdict = reviewVerdict(rev, concept.typography, concept.visual);
     }
   }
@@ -667,7 +699,7 @@ export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promi
 /*  Test pictures: the whole pipeline, never a day or a post           */
 /* ------------------------------------------------------------------ */
 
-export type TestSpec = { audience: DailyAudience; theme: DailyTheme; style?: DailyStyle | null };
+export type TestSpec = { audience: DailyAudience; theme: DailyTheme; style?: DailyStyle | null; topic?: DailyTopic | null; format?: DailyFormat | null; art?: DailyArt | null };
 const NO_DAY = "00000000-0000-0000-0000-000000000000";
 
 /**
@@ -708,7 +740,12 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     candidate: null,
     post_id: null,
   };
-  let c = await planConcept(admin, r, maker, learned, { round: 1, pictures: 0 });
+  const pick = <K extends string>(keys: readonly K[], v: unknown) => ((keys as readonly string[]).includes(v as string) ? (v as K) : null);
+  let c = await planConcept(admin, r, maker, learned, { round: 1, pictures: 0 }, {
+    topic: pick(Object.keys(DAILY_TOPICS) as DailyTopic[], spec.topic),
+    format: pick(DAILY_FORMAT_KEYS, spec.format),
+    art: pick(DAILY_ART_KEYS, spec.art),
+  });
   const tries: Record<string, unknown>[] = [];
   let d: Drawn | null = null;
   for (let i = 0; i < 2; i++) {
@@ -724,6 +761,8 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     theme: spec.theme,
     style: concept.style,
     light: concept.light,
+    art: concept.art,
+    look: FILM_LOOK_VERSION,
     format: concept.format,
     topic: concept.topic,
     message: concept.message,
@@ -735,6 +774,9 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     passed: !d!.imageIssues.length && !d!.captionIssues.length,
     score: reviewScore(d!.rev),
     medium: d!.rev.medium,
+    colour: d!.rev.colour,
+    clarity: d!.rev.clarity,
+    reference: d!.provider.endsWith("+ref"),
     description: d!.rev.description,
     text_seen: d!.rev.text_seen,
     issues: [...d!.imageIssues, ...d!.captionIssues],
