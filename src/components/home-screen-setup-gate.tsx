@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { MEMBER_SETUP_STATUS_KEY, setupStillOpen } from "@/lib/member-setup-steps";
+import { useServiceTier } from "@/lib/service-tier";
 
 const sb = supabase as any;
 
@@ -48,6 +49,12 @@ type Prompt = {
 export function HomeScreenSetupGate() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  // the account's tier decides whether a setup gate is coming (read by the wait below)
+  const { loading: tierLoading, isSelfServe } = useServiceTier();
+  const tierRef = useRef({ loading: tierLoading, selfServe: isSelfServe });
+  useEffect(() => {
+    tierRef.current = { loading: tierLoading, selfServe: isSelfServe };
+  }, [tierLoading, isSelfServe]);
   const standalone = useMemo(() => isStandalone(), []);
   const ios = useMemo(() => isIOS(), []);
   const [open, setOpen] = useState(false);
@@ -91,7 +98,7 @@ export function HomeScreenSetupGate() {
     let timer = 0;
     const tick = () => {
       if (stopped) return;
-      if (uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY))) {
+      if (uiIsClear() && !setupStillOpen(qc.getQueryState(MEMBER_SETUP_STATUS_KEY), tierRef.current)) {
         try { sessionStorage.setItem(key, "1"); } catch { /* storage unavailable */ }
         setOpen(true);
         return;
