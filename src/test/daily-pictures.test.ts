@@ -157,6 +157,8 @@ describe("captions read like a real person posting, never a rerun", () => {
     expect(tidyCaption("“you showed up.\n\n\n\nthat counts”")).toBe("You showed up.\n\nThat counts");
     // "lets" is a word too: only fixed where it starts a sentence
     expect(tidyCaption("it lets you rest. lets go")).toBe("It lets you rest. Let's go");
+    // a model's non-breaking hyphens and curly quotes read like the rest of the caption
+    expect(tidyCaption("A quick after\u2011work lift, today\u2019s \u201clight\u201d sets")).toBe('A quick after-work lift, today\'s "light" sets');
   });
 
   it("refuses slogans, AI phrases, hashtags, tags, names, too many emojis and the wrong length for its form", () => {
