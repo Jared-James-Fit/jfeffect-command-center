@@ -165,7 +165,7 @@ export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
  * the image model gets the one for the art direction to match.
  * FILM_LOOK_VERSION marks which days are in this look (concept.look).
  */
-export const FILM_LOOK_VERSION = "film_v2";
+export const FILM_LOOK_VERSION = "film_v3";
 
 export const FILM_LOOK =
   "A frame from a premium, colourful, hand-drawn 2D animated feature film. Crisp, confident, clean linework; refined cel shading with clean, crisp shadow shapes; rich, vibrant, saturated colour with strong warm-versus-cool contrast; bright, luminous light with glowing highlights; a detailed, beautifully illustrated background with depth; expressive, attractive, naturally proportioned adult characters with clean, sharp, well-drawn faces and clear expressions; a clear focal point and a strong, intentional composition. Polished, bright and striking, made to stop someone scrolling.";
@@ -173,12 +173,12 @@ export const FILM_LOOK =
 export const ART_STYLES: Record<DailyArt, { name: string; look: string; use: string }> = {
   graphic: {
     name: "A · Vibrant graphic 2D",
-    look: "Art direction A, vibrant graphic 2D animation: bold colour blocking, punchy complementary colours, dynamic dramatic lighting, crisp ink outlines, energetic camera angles and motion.",
+    look: "Art direction A, vibrant graphic 2D illustration like a premium animated film's key art: crisp dark ink outlines and flat cel shading with clean, hard-edged shadow shapes and a light hatched texture; a warm coral-red, terracotta and golden-yellow palette set against teal and blue-grey shadows; dramatic hard-edged shafts of sunlight beaming through windows across the scene, dust glowing in them; a dense, lived-in environment where every object is drawn (plates, racks, shelves, tools, plants); bold, deep one-point compositions with a bright window or doorway behind the subject.",
     use: "fitness, ambition, confidence, discipline, humour and exciting everyday moments",
   },
   anime: {
     name: "B · Cinematic 2D anime",
-    look: "Art direction B, beautiful cinematic 2D anime: a luminous sky and glowing light (sunsets, golden hour, bright city light), refined cel shading, soft glowing rim light on the characters, richly detailed environments, expressive faces with natural proportions.",
+    look: "Art direction B, beautiful cinematic 2D anime like a frame from a modern anime film: thin, clean, confident linework; two-tone cel shading with one soft shadow tone; a glowing golden-hour or sunset sky with soft painted clouds and silhouetted buildings and trees; warm sunlight flooding the frame and a bright rim light glowing along the hair and face; complementary colours in the clothes and scene (orange against teal, gold against blue); calm, expressive faces in profile or three-quarter view; intimate medium close-ups.",
     use: "relationships, self-worth, lifestyle, personal growth, reflection and relatable everyday life",
   },
 };
