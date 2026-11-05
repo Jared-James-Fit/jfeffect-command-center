@@ -430,3 +430,17 @@ describe("the vivid look: bright, colourful, crisp 2D film frames", () => {
     expect(readFileSync("src/components/community/daily-pictures-card.tsx", "utf8")).toContain('db.rpc("community_daily_visuals_restyle", { _look: FILM_LOOK_VERSION })');
   });
 });
+
+describe("captions don't fall back on the same stock moments", () => {
+  it("a stock moment a recent post used can't come back, and humour has to be funny", async () => {
+    const { motifRepeats, REVIEW_PROMPT, reviewPrompt } = await import("@/lib/daily-visuals");
+    const recent = ["nobody cheered when you walked into the gym tonight", "the group chat is out and you hit seen"];
+    expect(motifRepeats("you pack your bag and nobody cheered. thats fine", recent)).toEqual(["nobody cheered"]);
+    expect(motifRepeats("your mom asks if you live at the gym now", recent)).toEqual([]);
+    expect(captionProblems("you check the group chat and laugh at your own form video from last week", { format: "humor", recent })).toContain(
+      'uses "group chat" like a recent post (find a new moment)',
+    );
+    expect(REVIEW_PROMPT).toContain("a caption meant as humour that isn't actually funny is 3 or less");
+    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", format: "humor" }, audience: "everyone" })).toContain("THE CAPTION'S FORM: Humour");
+  });
+});
