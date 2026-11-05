@@ -54,7 +54,8 @@ describe("sent links show a short, clean card", () => {
 
   it("every card's title is short and plain: no place names, keywords or separators", () => {
     const titles = routes.flatMap(({ p, s }) => [...s.matchAll(/shareMeta\(\{\s*title:\s*"([^"]+)"/g)].map((m) => ({ p, t: m[1] })));
-    expect(titles.length).toBeGreaterThanOrEqual(20);
+    // 19 since the native agreements' guest sign page (/sign/$token) became a redirect
+    expect(titles.length).toBeGreaterThanOrEqual(19);
     for (const { p, t } of titles) {
       expect(t.length, `${p}: ${t}`).toBeLessThanOrEqual(SHARE_TITLE_MAX);
       expect(t, p).not.toMatch(/Selkirk|Winnipeg|Manitoba|\bMB\b|\||—|:/);

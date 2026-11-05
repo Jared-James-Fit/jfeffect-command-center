@@ -47,7 +47,6 @@ export const COACHING_ONLY_PATHS = [
   "/portal/check-ins",
   "/portal/check-in",
   "/portal/agreements",
-  "/portal/agreements-native",
   "/portal/goals-setup",
   "/portal/purchases",
   "/portal/lift-videos",

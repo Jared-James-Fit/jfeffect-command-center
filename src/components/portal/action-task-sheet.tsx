@@ -20,7 +20,7 @@ function targetForTask(item: ActionCentreItem): TaskTarget {
       const formId = meta.form_id as string | undefined;
       return formId
         ? { label: "Open form", to: "/portal/check-ins/$formId", params: { formId } }
-        : { label: "Open check-ins", to: "/portal/check-ins" };
+        : { label: "Open Messages", to: "/portal/messages" };
     }
     case "progress_photos":
       return { label: "Upload photos", to: "/portal/progress" };

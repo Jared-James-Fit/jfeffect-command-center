@@ -74,7 +74,6 @@ describe("loading screens explain a slow open", () => {
     for (const f of [
       "src/routes/reset-password.tsx",
       "src/routes/setup.tsx",
-      "src/routes/sign.$token.tsx",
       "src/routes/staff-setup.tsx",
       "src/routes/m.welcome.tsx",
       "src/components/booking/booking-page.tsx",

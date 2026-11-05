@@ -101,7 +101,7 @@ function occurrenceTarget(occ: ActionCentreItem): { to: string; params?: Record<
       const formId = meta.form_id as string | undefined;
       return formId
         ? { to: "/portal/check-ins/$formId", params: { formId } }
-        : { to: "/portal/check-ins" };
+        : { to: "/portal/messages" };
     }
     case "progress_photos":
       return { to: "/portal/progress", search: { action: "photos" } };
@@ -233,7 +233,7 @@ export function ActionCentre({ items, clientId }: { items: ActionItem[]; clientI
       id = picked?.id ?? null;
     }
     if (!id) {
-      navigate({ to: "/portal/check-ins" });
+      navigate({ to: "/portal/messages" });
       return;
     }
     // External (Fillout) forms open directly in a real browser tab — no

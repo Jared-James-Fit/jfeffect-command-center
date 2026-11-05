@@ -215,7 +215,7 @@ function ClientPurchase() {
                   </a>
                 ) : (
                   <Button size="sm" variant="outline" className="w-full mt-2" asChild>
-                    <Link to="/portal/agreements">View my agreement</Link>
+                    <Link to="/portal/account" hash="coaching-agreement">View my agreement</Link>
                   </Button>
                 )}
               </>

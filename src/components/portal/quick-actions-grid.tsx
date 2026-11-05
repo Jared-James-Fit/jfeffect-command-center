@@ -30,7 +30,7 @@ export function QuickActionsGrid({
 }) {
   const checkInTo = weeklyCheckInFormId
     ? `/portal/check-ins/${weeklyCheckInFormId}`
-    : "/portal/check-ins";
+    : "/portal/messages";
   const tiles: Tile[] = [
     { to: "/portal/workouts", label: "Workouts", icon: Activity, emphasis: true },
     { to: "/portal/messages", label: "Message Coach", icon: MessageCircle, badge: messageBadge },

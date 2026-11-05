@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -144,11 +144,6 @@ function FormCompletePage() {
           <Button variant="outline" onClick={() => navigate({ to: "/portal" })}>
             <Home className="mr-1 h-4 w-4" /> Return Home
           </Button>
-          {isSubmitted && (
-            <Button variant="ghost" asChild>
-              <Link to="/portal/check-ins">View Responses</Link>
-            </Button>
-          )}
         </div>
       </div>
     </>

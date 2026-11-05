@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, CreditCard, Package, Dumbbell, Calendar,
-  Settings, Apple, ClipboardCheck, MessageCircle, FileSignature, BookOpen,
+  Settings, Apple, MessageCircle, BookOpen,
   Activity, Wrench, HelpCircle, Trophy, UsersRound, Target, Camera,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
@@ -19,12 +19,11 @@ export const clientNav: NavItem[] = [
   { to: "/portal/calendar", label: "Calendar", icon: Calendar, keywords: ["calendar","schedule","appointments","sessions","events","booking","reschedule","cancel"] },
   { to: "/portal/progress", label: "Progress", icon: Camera, keywords: ["progress","photos","videos","bodyweight","measurements","check-in","compare"] },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple, keywords: ["nutrition","macros","targets","recipes","meals"] },
-  { to: "/portal/check-ins", label: "Check-Ins & Forms", icon: ClipboardCheck },
   { to: "/portal/community", label: "Crew", icon: UsersRound, keywords: ["crew","feed","rankings","league","rank","leaderboard","hall of strength","strength","community","members","shared workouts","posts","photos","reactions","activity"] },
   { to: "/portal/exercises", label: "Exercises", icon: Dumbbell },
   { to: "/portal/purchases", label: "My Purchases", icon: Package },
-  { to: "/portal/agreements", label: "Agreements", icon: FileSignature },
-  { to: "/portal/account", label: "Account Settings", icon: Settings },
+  // The Coaching Agreement is a section of Account (the old Agreements page lands there).
+  { to: "/portal/account", label: "Account Settings", icon: Settings, keywords: ["account","settings","agreement","coaching agreement","contract","signed","password","units","notifications","privacy"] },
 ];
 
 // Mobile bottom-tab nav for the client portal: five destinations, Crew as the

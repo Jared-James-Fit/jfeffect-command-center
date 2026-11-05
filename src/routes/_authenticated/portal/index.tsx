@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalUserId } from "@/lib/client-impersonation";
 import { isGoalsSetupComplete, type ClientGoalsSetupRow } from "@/lib/client-goals/schema";
-import type { TrainingPhase } from "@/lib/training-phases";
 import { toast } from "sonner";
 import type { WeightUnit } from "@/lib/progress-metrics";
 import { HomeScreenSetupTracker } from "@/components/home-screen-setup-card";
@@ -93,9 +92,7 @@ function PortalHome() {
   }, [persistTz]);
 
   // Bootstrap query — collapses the dashboard startup waterfall.
-  // Previously each dependent query (training_phases, client_goals_setup, etc.)
-  // waited on the client row in series. This single query fetches the client,
-  // then runs the two heaviest dependents in parallel and primes the React
+  // Fetches the client, then its Goals & Setup row, and primes the React
   // Query cache under their existing keys so the per-section useQuery hooks
   // render from cache immediately on first paint.
   useQuery({
@@ -106,19 +103,12 @@ function PortalHome() {
       const { data: clientRow } = await supabase
         .from("clients").select("*").eq("user_id", portalUserId!).maybeSingle();
       qc.setQueryData(["my-client", portalUserId], clientRow ?? null);
-      if (!clientRow?.id) return { client: null, phases: [] as TrainingPhase[], goalsSetup: null as ClientGoalsSetupRow | null };
-      const [phasesRes, goalsRes] = await Promise.all([
-        supabase
-          .from("training_phases").select("*").eq("client_id", clientRow.id)
-          .order("start_date", { ascending: false }),
-        (supabase as any)
-          .from("client_goals_setup").select("*").eq("client_id", clientRow.id).maybeSingle(),
-      ]);
-      const phases = (phasesRes.data ?? []) as TrainingPhase[];
+      if (!clientRow?.id) return { client: null, goalsSetup: null as ClientGoalsSetupRow | null };
+      const goalsRes = await (supabase as any)
+        .from("client_goals_setup").select("*").eq("client_id", clientRow.id).maybeSingle();
       const goalsSetup = (goalsRes.data ?? null) as ClientGoalsSetupRow | null;
-      qc.setQueryData(["my-phases", clientRow.id], phases);
       qc.setQueryData(["client-goals-setup", clientRow.id], goalsSetup);
-      return { client: clientRow, phases, goalsSetup };
+      return { client: clientRow, goalsSetup };
     },
   });
 

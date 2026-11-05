@@ -104,7 +104,7 @@ describe("role-aware deep links", () => {
     ["message", "/admin/messages?client=" + UUID, "/portal/messages"],
     ["group_message", `/admin/communication?tab=groups#group=${UUID}`, `/portal/messages?tab=groups#group=${UUID}`],
     ["workout_review", "/admin/lift-videos", "/portal/lift-videos"],
-    ["check_in", `/admin/clients/${UUID}?tab=check-ins`, "/portal/check-in"],
+    ["check_in", `/admin/clients/${UUID}?tab=check-ins`, "/portal/messages"],
     ["appointment", "/admin/appointments", "/portal/appointments"],
     ["agreement", `/admin/clients/${UUID}?tab=agreements`, "/portal/agreements"],
     ["payment", "/admin/payments", "/portal/purchases"],

@@ -1,184 +1,31 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ActionButton } from "@/components/action-button";
-import { AgreementStatusBadge } from "@/components/agreement-status-badge";
-import { FileText, ExternalLink, CheckCircle2, Download } from "lucide-react";
-import type { Agreement } from "@/lib/agreements";
-import { useServerFn } from "@tanstack/react-start";
-import { usePovFn } from "@/lib/client-pov-args";
-import { getSignedAgreementUrl } from "@/lib/agreements.functions";
-import { listClientNativeAgreements } from "@/lib/native-agreement-client.functions";
-import { toast } from "sonner";
-import { usePortalUserId } from "@/lib/client-impersonation";
-import { AgreementAccountCard } from "@/components/coaching-agreement/agreement-account-card";
+import { FullPageLoader } from "@/components/full-page-loader";
 import { useCoachingAgreement } from "@/components/coaching-agreement/agreement-context";
 
+// Removed page: the Coaching Agreement lives in Account (the same card), so this
+// address only lands there. It never listed anything else: no native agreement
+// was ever sent and the one old SignNow record was never sent either.
+// `?sign=1` (the "please sign" push and email) still opens the signing flow,
+// which is app-wide and stays open over Account.
+const ACCOUNT_AGREEMENT = { to: "/portal/account", hash: "coaching-agreement", replace: true } as const;
+
 export const Route = createFileRoute("/_authenticated/portal/agreements/")({
-  // `?sign=1` is the deep link used by the "please sign" push notification and email.
   validateSearch: (search: Record<string, unknown>): { sign?: "1" } =>
     search.sign === "1" || search.sign === 1 ? { sign: "1" } : {},
-  component: PortalAgreementsPage,
+  beforeLoad: ({ search }) => {
+    if (search.sign !== "1") throw redirect(ACCOUNT_AGREEMENT);
+  },
+  component: SignThenAccount,
 });
 
-function PortalAgreementsPage() {
-  const { sign } = Route.useSearch();
+function SignThenAccount() {
   const navigate = useNavigate();
-  const { state: agreementState, needsSignature, canSign, openSignFlow } = useCoachingAgreement();
-  // Arriving from "please sign" opens the signing flow straight away, once the status has loaded.
+  const { state, isLoading, needsSignature, canSign, openSignFlow } = useCoachingAgreement();
   useEffect(() => {
-    if (sign !== "1" || !agreementState) return;
+    if (isLoading && !state) return;
     if (needsSignature && canSign) openSignFlow();
-    navigate({ to: "/portal/agreements", search: {}, replace: true });
-  }, [sign, agreementState, needsSignature, canSign, openSignFlow, navigate]);
-  const getUrl = useServerFn(getSignedAgreementUrl);
-  const listNative = usePovFn(useServerFn(listClientNativeAgreements));
-  const portalUserId = usePortalUserId();
-  const downloadSigned = async (id: string) => {
-    const r: any = await getUrl({ data: { id } });
-    if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-    else throw new Error("No signed copy available yet.");
-  };
-  // Defense-in-depth: explicitly scope the query to this user's client row.
-  // RLS already enforces this, but an explicit filter prevents any accidental
-  // cross-client read if a policy ever regresses.
-  const { data: clientRow } = useQuery({
-    queryKey: ["portal-agreements-client-id", portalUserId],
-    enabled: !!portalUserId,
-    queryFn: async () =>
-      (await supabase.from("clients").select("id").eq("user_id", portalUserId!).maybeSingle()).data,
-  });
-  const clientId = clientRow?.id ?? null;
-  const { data = [], isLoading } = useQuery({
-    queryKey: ["portal-agreements", clientId],
-    enabled: !!clientId,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("agreements")
-        .select("*")
-        .eq("client_id", clientId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Agreement[];
-    },
-  });
-
-  const { data: nativeAgreements = [] } = useQuery({
-    queryKey: ["portal-native-agreements", portalUserId ?? null],
-    queryFn: () => listNative(),
-  });
-
-  const completedStatuses = ["Signed", "Completed", "Verified"];
-  const NEEDS_PRIORITY: Record<string, number> = {
-    "Needs Manual Verification": 0,
-    "Needs Resend": 1,
-    "Manual Action Needed": 2,
-    "Waiting on Client": 3,
-    "Opened": 4,
-    "Sent": 5,
-    "Not Sent": 6,
-  };
-  const needsAction = data
-    .filter((a) => !completedStatuses.includes(a.status as string) && !["Cancelled", "Declined", "Expired", "Not Sent"].includes(a.status as string))
-    .sort((a, b) => {
-      const pa = NEEDS_PRIORITY[a.status as string] ?? 99;
-      const pb = NEEDS_PRIORITY[b.status as string] ?? 99;
-      if (pa !== pb) return pa - pb;
-      return (b.sent_at ?? b.created_at ?? "").localeCompare(a.sent_at ?? a.created_at ?? "");
-    });
-  const completed = data
-    .filter((a) => completedStatuses.includes(a.status as string))
-    .sort((a, b) => {
-      const ta = a.signed_at ?? a.completed_at ?? a.updated_at ?? "";
-      const tb = b.signed_at ?? b.completed_at ?? b.updated_at ?? "";
-      return tb.localeCompare(ta);
-    });
-
-  return (
-    <>
-      <PageHeader
-        title="Agreements"
-        subtitle="Your Coaching Agreement and any other documents you've signed."
-      />
-      <div className="p-6 md:p-8 space-y-6">
-        <AgreementAccountCard />
-        {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : (
-          <>
-            {needsAction.length > 0 && (
-              <section className="space-y-2">
-                <h2 className="text-sm font-semibold text-muted-foreground">Needs your signature</h2>
-                {needsAction.map((a) => (
-                  <Card key={a.id} className="border-border bg-card p-4 flex items-center gap-3 flex-wrap">
-                    <FileText className="h-5 w-5 text-amber-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{(a as any).custom_title ?? a.agreement_type ?? a.template_name}</p>
-                      <p className="text-xs text-muted-foreground">Sent {a.sent_at ? new Date(a.sent_at).toLocaleDateString() : "—"}</p>
-                    </div>
-                    <AgreementStatusBadge status={a.status} />
-                    {a.signnow_signing_link ? (
-                      <Button size="sm" asChild>
-                        <a href={a.signnow_signing_link} target="_blank" rel="noreferrer">Review & sign <ExternalLink className="h-3 w-3 ml-1" /></a>
-                      </Button>
-                    ) : (
-                      <Button size="sm" disabled>Waiting on signing link</Button>
-                    )}
-                  </Card>
-                ))}
-              </section>
-            )}
-            {completed.length > 0 && (
-              <section className="space-y-2">
-                <h2 className="text-sm font-semibold text-muted-foreground">Completed</h2>
-                {completed.map((a) => (
-                  <Card key={a.id} className="border-border bg-card p-4 flex items-center gap-3 flex-wrap">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{(a as any).custom_title ?? a.agreement_type ?? a.template_name}</p>
-                      <p className="text-xs text-muted-foreground">Signed {a.signed_at ? new Date(a.signed_at).toLocaleDateString() : "—"}</p>
-                    </div>
-                    {a.signed_copy_storage_path ? (
-                      <ActionButton size="sm" variant="outline" onAction={() => downloadSigned(a.id)} loadingLabel="Loading…" successLabel="Opened">
-                        Download signed copy <Download className="h-3 w-3 ml-1" />
-                      </ActionButton>
-                    ) : a.signed_copy_url ? (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={a.signed_copy_url} target="_blank" rel="noreferrer">View signed copy <ExternalLink className="h-3 w-3 ml-1" /></a>
-                      </Button>
-                    ) : a.signnow_completed_link ? (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={a.signnow_completed_link} target="_blank" rel="noreferrer">Open in SignNow <ExternalLink className="h-3 w-3 ml-1" /></a>
-                      </Button>
-                    ) : null}
-                  </Card>
-                ))}
-              </section>
-            )}
-            {nativeAgreements.length > 0 && (
-              <section className="space-y-2">
-                <h2 className="text-sm font-semibold text-muted-foreground">Native agreements</h2>
-                {(nativeAgreements as any[]).map((agreement) => {
-                  const complete = agreement.status === "completed";
-                  const ready = agreement.artifact_status === "ready";
-                  return <Card key={agreement.id} className="border-border bg-card p-4 flex items-center gap-3 flex-wrap">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{agreement.custom_title ?? "JF Effect Coaching Agreement"}</p>
-                      <p className="text-xs text-muted-foreground">Native v1 · {complete ? "Completed" : "Needs your signature"}</p>
-                    </div>
-                    {complete ? <span className="text-xs text-muted-foreground">{ready ? "Signed copy ready" : "Signed copy preparing"}</span> : <Button size="sm" asChild><a href={`/portal/agreements-native/${agreement.id}`}>Review & sign</a></Button>}
-                  </Card>;
-                })}
-              </section>
-            )}
-            {data.length === 0 && nativeAgreements.length === 0 && (
-              <Card className="border-border bg-card p-10 text-center text-sm text-muted-foreground">You don't have any agreements yet.</Card>
-            )}
-          </>
-        )}
-      </div>
-    </>
-  );
+    navigate(ACCOUNT_AGREEMENT);
+  }, [state, isLoading, needsSignature, canSign, openSignFlow, navigate]);
+  return <FullPageLoader />;
 }
