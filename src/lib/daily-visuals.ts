@@ -1131,9 +1131,7 @@ export function scriptedProblems(text: string): string[] {
   if (/\b(?:isn't|is not|aren't|are not) (?:just|only) [^.!?]{1,60}[.!?,]?\s*(?:it's|it is|they're|they are)(?: also)? /i.test(lastTwo) || /\b(?:isn't|aren't) (?:just|only)\b.*\b(?:it's|they're) also\b/i.test(last))
     out.push('ends on a moral ("X isn\'t just Y. it\'s also Z")');
   if (/\bjust (?:a )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(t)) out.push('the "it\'s just tuesday now" trope');
-  // a story told as his own with the "i" dropped: "called it a quick workout, left way later…"
-  if (/^(?:called|told|said|went|walked|left|showed|decided|planned|tried|grabbed|hit|did|started|finished)\b[^.!?\n]*,\s*(?:left|ended|stayed|walked|did|hit|went|got|finished)\b/i.test(t.trim()))
-    out.push("tells a story as his own (it never happened to him)");
+  if (firstPersonStory(t)) out.push("tells a story as his own (it never happened to him)");
   if ((t.match(/!/g) ?? []).length >= 2) out.push("more than one exclamation mark");
   if ((t.match(/"[^"\n]{1,40}"/g) ?? []).length >= 2) out.push("words in scare quotes");
   if (captionSimilarity(t, VOICE_EXAMPLE) >= 0.25) out.push("copies the voice example (it's a reference, not a template)");
@@ -1142,6 +1140,23 @@ export function scriptedProblems(text: string): string[] {
   for (const line of EXAMPLE_LINES) if (plain.includes(` ${line} `)) out.push(`borrows "${line}" from the voice example`);
   return out;
 }
+
+/**
+ * A story told as the coach's own: something he did or that happened to him
+ * ("i'm checking the clock", "i went", "my legs", "a lot of my clients"), or
+ * the same with the "i" dropped at the start of a sentence ("planned a quick
+ * lift.", "called it a quick workout"). His opinions and what he notices are
+ * fine ("i think", "i've noticed", "i'm convinced"), and so is advice ("hit
+ * the reps").
+ */
+const FIRST_PERSON_STORY = [
+  /\bi'm (?!(?:not |just |still )?(?:saying|talking|guessing|telling|thinking|convinced|sure|curious|a big|a fan|all for)\b)\w+ing\b/i,
+  /\bi (?:was|went|did|had|got|planned|tried|spent|walked|left|showed|took|finished|started|ran|lifted|ate|sat|woke|remember)\b/i,
+  /\bi've (?:been|got|had|done|hit|spent|tried)\b/i,
+  /\bmy (?:legs|arms|back|workout|session|squat|bench|deadlift|lift|gym|program|clients?|wife|kids|son|daughter|husband|girlfriend|boyfriend|friends?|buddy|partner|coach|mom|dad|brother|sister)\b/i,
+  /(?:^|[.!?]\s+|\n)(?:called|told|said|went|walked|left|showed|decided|planned|tried|grabbed|started|finished|spent|took|woke|realized)\b/i,
+];
+export const firstPersonStory = (text: string): boolean => FIRST_PERSON_STORY.some((re) => re.test(text.replace(/[’]/g, "'")));
 
 /** A crew member's first name in a caption (their name shows on their own posts; a daily post names nobody). */
 export function namedPeople(text: string, names: readonly string[]): string[] {
