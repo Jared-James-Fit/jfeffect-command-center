@@ -409,7 +409,7 @@ WRITING RULES
 PICTURE RULES
 - Describe the frame: who is in it (adults, their age range, build, hair and clothes, people of different looks, fitting the audience and an everyday gym and life), what they're doing and feeling, where they are, what's around them.
 - Natural human moments: everyday life, humour, relationships, confidence, fitness, growth. Never a poster, a pose or someone looking at the camera, and never a scene like one in RECENT POSTS.
-- Any words in the scene (a text message on a phone, a note, a speech bubble, a sign) say exactly what the story needs and are written word for word in "typography" (at most 12 words). No other words anywhere. With no words in the scene, "typography" is "".
+- Any words in the scene (a text message on a phone, a note, a speech bubble, a sign) say exactly what the story needs and are written word for word in "typography" (at most 12 words): only the words as they appear in the frame, never where they are or who's reading them (write "boss: quick thing for monday?", never "on his phone: boss: quick thing for monday?"). No other words anywhere. With no words in the scene, "typography" is "".
 
 Answer with JSON only:
 {"topic": "...", "situation": "...", "tension": "...", "message": "...", "format": "...", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "caption": "..."}`;
@@ -713,10 +713,11 @@ export function reviewVerdict(r: Review, typography: string, scene = ""): { pass
   const seen = letters(r.text_seen);
   // words the planned scene itself names (an alarm's "5:30 AM", a note that says "tomorrow") aren't stray text
   const planned = new Set([...letters(typography).split(" "), ...letters(scene).split(" ")].filter(Boolean));
+  // a phone's clock or a date ("11:23", "6 am") can't be misspelled and tells no other story
   const stray = seen
     .replace(want, " ")
     .split(" ")
-    .filter((w) => w && !planned.has(w));
+    .filter((w) => w && !planned.has(w) && !/^(\d+|am|pm)$/.test(w));
   if (want && !seen.includes(want)) image.push(`the words in the picture read "${r.text_seen || "nothing"}", not "${typography}"`);
   else if (stray.length) image.push(`${want ? "extra words" : "words that shouldn't be there"} in the picture: "${r.text_seen}"`);
   // the look is fixed: a frame that reads as 3D, a photo or vector clip art fails whatever its scores
