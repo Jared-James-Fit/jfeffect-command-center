@@ -1,191 +1,181 @@
 /**
- * Daily pictures (series `daily_visual`): every morning a picture post that
- * speaks without saying much. Each day of the week has its own theme (courage
- * Monday … feelings & rest Sunday), the picture speaks to women one day and
- * men the next, and Sunday's carries a Bible verse (the weekly faith post).
+ * Daily pictures (series `daily_visual`): every morning a post that people
+ * stop on because it says something true about their life, with a picture
+ * that tells its own part of the story. Each day of the week has its own lens
+ * (courage Monday … feelings & rest Sunday), the post speaks to women, men or
+ * everyone in turn, and Sunday's carries a Bible verse (the weekly faith
+ * post; the verse is only ever one of FAITH_VERSES, word for word).
  *
- * The words are one short line in the coach's voice, written by AI in the
- * background (daily-visuals.server.ts) and held to plainCheck; a verse is
- * only ever one of FAITH_VERSES, quoted word for word (KJV, public domain),
- * never written by a model. The picture comes from the image model
- * (post-pictures.server.ts generatePicture).
+ * How one is made (daily-visuals.server.ts), concept first:
+ *   1. the concept: who it's for, a topic, a specific situation and its
+ *      tension, the one thing it says, the caption's form, the art style that
+ *      tells it best and the picture (CONCEPT_PROMPT), then the caption;
+ *   2. the caption is held to `captionProblems` (plain words, his voice, no
+ *      clichés, nothing close to a recent post), with a rewrite when it fails;
+ *   3. the picture (`picturePrompt`), in one of DAILY_STYLES under one JF
+ *      Effect look (JF_LOOK), words in it only when they help, spelled exactly;
+ *   4. a review that looks at the picture with the caption (REVIEW_PROMPT):
+ *      `reviewVerdict` passes it only on concrete checks (the text in the
+ *      picture is exactly what was asked, no defects) and high enough scores
+ *      for match, look, relatability and writing; a failed picture is made
+ *      again with the review's fix, a failed caption rewritten.
  *
  * It learns: every posted picture's likes, comments, saves and attention
- * (community_daily_visual_stats) feed `learnDailyVisuals`, which picks the
- * look (photo or drawing) and the length of the next one, mostly the one
- * that's doing better and sometimes the other so it keeps finding out, and
- * shows the writer what's worked and what hasn't.
+ * (community_daily_visual_stats) rank the styles, caption forms, topics and
+ * lengths (`learnDailyVisuals`); `pickChoices` offers the next concept the
+ * ones that are working, never the ones used in the last few days, and
+ * sometimes one that hasn't had a chance yet.
  */
 import { plainCheck, voiceProblems } from "@/lib/plain-words";
 
-export type DailyTheme =
-  | "courage"
-  | "patience"
-  | "your_circle"
-  | "self_reflection"
-  | "encouragement"
-  | "self_love"
-  | "emotional";
-export type DailyAudience = "women" | "men";
-export type DailyStyle = "photo" | "illustration";
+export type DailyTheme = "courage" | "patience" | "your_circle" | "self_reflection" | "encouragement" | "self_love" | "emotional";
+export type DailyAudience = "women" | "men" | "everyone";
+export type DailyStyle =
+  | "cinematic_photo"
+  | "minimal_illustration"
+  | "pencil_sketch"
+  | "ink_drawing"
+  | "watercolor"
+  | "vintage_fitness"
+  | "editorial_illustration"
+  | "conceptual"
+  | "comic"
+  | "typography"
+  | "mixed_media"
+  | "graphic_design";
+export type DailyFormat = "one_liner" | "observation" | "short_story" | "humor" | "scenario" | "encouragement";
+export type DailyTopic =
+  | "confidence"
+  | "discipline"
+  | "body_image"
+  | "ambition"
+  | "relationships"
+  | "resilience"
+  | "burnout"
+  | "overwhelm"
+  | "identity"
+  | "small_wins"
+  | "hard_truths"
+  | "humor_shared";
+
+/* ------------------------------------------------------------------ */
+/*  The week                                                           */
+/* ------------------------------------------------------------------ */
 
 type ThemeSpec = {
   /** ISO weekday: Monday = 1 … Sunday = 7. */
   dow: number;
   name: string;
-  /** What the day is about, for the writer. */
+  /** The day's lens, for the concept. */
   idea: string;
-  /** Picture ideas to start from (the writer makes a fresh one), per who it speaks to. */
-  shots: Record<DailyAudience, string[]>;
+  /** The topics that fit the day. */
+  topics: DailyTopic[];
 };
 
-/** One theme a day, Monday first; Sunday's is the faith post. */
+/** One lens a day, Monday first; Sunday's is the faith post. */
 export const DAILY_THEMES: Record<DailyTheme, ThemeSpec> = {
-  courage: {
-    dow: 1,
-    name: "Courage",
-    idea: "doing the scary thing anyway: the first set, the first meet, walking into a new gym, starting before you feel ready",
-    shots: {
-      women: [
-        "a woman chalking her hands beside a loaded barbell, seen from the side, calm and focused",
-        "a woman standing at the edge of a still lake at sunrise, about to step into the cold water, seen from behind",
-        "a woman walking up to a loaded barbell on a quiet lifting platform, seen from behind",
-      ],
-      men: [
-        "a man at the bottom of a long, steep stone staircase at dawn, seen from behind",
-        "a man's chalked hands gripping a loaded barbell, chalk dust in the morning light",
-        "a man standing on a rock above the sea at sunrise, looking out, seen from behind",
-      ],
-    },
-  },
-  patience: {
-    dow: 2,
-    name: "Patience",
-    idea: "progress is slow and that's normal, trusting the process, staying calm while you wait for results",
-    shots: {
-      women: [
-        "a woman watering a small green plant on a sunny windowsill, side view",
-        "a woman waiting by a coffee pour-over in soft morning light, side view",
-        "a woman stretching slowly on a mat in a quiet, sunlit room",
-      ],
-      men: [
-        "a man's hands in rich soil planting a seedling in a small garden, morning light",
-        "a man sitting on a wooden dock with a fishing rod at sunrise, seen from behind",
-        "a man resting between sets on a bench in an empty gym, side view, soft window light",
-      ],
-    },
-  },
-  your_circle: {
-    dow: 3,
-    name: "Your circle",
-    idea: "the people around you: training partners, friends who push you, being that person for someone else",
-    shots: {
-      women: [
-        "two women laughing together on a gym floor after a workout, seen from the side",
-        "a group of friends walking a forest trail together at golden hour, seen from behind",
-        "one woman's hand helping another woman up off a gym floor",
-      ],
-      men: [
-        "two men bumping fists after a heavy set, seen from the side",
-        "a training partner's hands hovering under a bench press bar, spotting",
-        "a group of friends around a campfire at dusk, seen from behind",
-      ],
-    },
-  },
-  self_reflection: {
-    dow: 4,
-    name: "Self reflection",
-    idea: "looking back honestly: what's working, what isn't, who you're becoming, writing it down",
-    shots: {
-      women: [
-        "a woman writing in a journal by a bright window, side profile",
-        "a woman looking out of a train window, her reflection soft in the glass",
-        "a woman sitting on a beach at sunrise hugging her knees, seen from behind",
-      ],
-      men: [
-        "a man writing in a training journal on a gym bench, over-the-shoulder view, the pages blurred",
-        "a man sitting on a hilltop at sunrise looking over a valley, seen from behind",
-        "a man's reflection in a perfectly still lake at dawn",
-      ],
-    },
-  },
-  encouragement: {
-    dow: 5,
-    name: "Encouragement",
-    idea: "you're doing better than you think, keep going, finish the week strong, be proud of showing up",
-    shots: {
-      women: [
-        "a woman finishing a morning run, arms up at the top of a hill, seen from behind",
-        "a friend's hand on a woman's shoulder after a hard set, both seen from the side",
-        "a woman tying her running shoes on a porch step at sunrise",
-      ],
-      men: [
-        "a man reaching the top of a long hill climb at sunrise, seen from behind",
-        "a coach's hand on an athlete's shoulder after a set, seen from the side",
-        "a man lacing his lifting shoes on a gym bench in early light",
-      ],
-    },
-  },
-  self_love: {
-    dow: 6,
-    name: "Self love",
-    idea: "treat yourself like someone you care about: rest, good food, kind self-talk, your body is on your side",
-    shots: {
-      women: [
-        "a woman's hands making a colourful, healthy breakfast bowl in a sunny kitchen",
-        "a woman wrapped in a soft blanket with a cup of tea by a bright window, seen from the side",
-        "a woman on a yoga mat with her eyes closed, smiling, side view, morning light",
-      ],
-      men: [
-        "a man cooking a good meal in a bright kitchen, side view",
-        "a man stretching after a workout in soft morning light, seen from the side",
-        "a man reading on a sunny balcony with a coffee, seen from behind",
-      ],
-    },
-  },
-  emotional: {
-    dow: 7,
-    name: "Feelings & rest",
-    idea: "it's ok not to be ok, feelings are allowed, rest and reset for the week, peace",
-    shots: {
-      women: [
-        "a woman sitting quietly on a wooden bench in a sunlit field, seen from behind",
-        "a woman's hands around a warm mug beside a closed old Bible on a wooden table, morning light",
-        "a woman walking alone on a calm beach at sunrise",
-      ],
-      men: [
-        "a man sitting in an empty, sunlit chapel pew, seen from behind",
-        "a man's hands resting on a closed old Bible next to a morning coffee on a wooden table",
-        "a man sitting on a mountain top at sunrise, quiet and still, seen from behind",
-      ],
-    },
-  },
+  courage: { dow: 1, name: "Courage", idea: "doing the scary thing anyway, starting before you feel ready, wanting more for yourself", topics: ["confidence", "ambition", "identity", "hard_truths"] },
+  patience: { dow: 2, name: "Patience", idea: "slow progress, showing up when it's boring, trusting what you can't see yet", topics: ["discipline", "resilience", "small_wins", "body_image"] },
+  your_circle: { dow: 3, name: "Your circle", idea: "the people around you, who you train with, who you text, who you become around them", topics: ["relationships", "humor_shared", "confidence", "small_wins"] },
+  self_reflection: { dow: 4, name: "Self reflection", idea: "looking at yourself honestly, who you're becoming, the truth you've been avoiding", topics: ["identity", "hard_truths", "ambition", "burnout"] },
+  encouragement: { dow: 5, name: "Encouragement", idea: "the end of the week, the wins nobody claps for, getting through it", topics: ["small_wins", "humor_shared", "resilience", "discipline"] },
+  self_love: { dow: 6, name: "Self love", idea: "how you treat yourself, your body on a bad mirror day, rest without guilt", topics: ["body_image", "confidence", "burnout", "relationships"] },
+  emotional: { dow: 7, name: "Feelings & rest", idea: "when it's heavy, when you're tired of being strong, peace and a reset for the week", topics: ["overwhelm", "burnout", "resilience", "identity"] },
 };
 
 export const DAILY_THEME_KEYS = Object.keys(DAILY_THEMES) as DailyTheme[];
 
-/** The theme for an ISO weekday (Monday = 1). */
 export function themeForDow(dow: number): DailyTheme {
   return DAILY_THEME_KEYS.find((k) => DAILY_THEMES[k].dow === dow) ?? "encouragement";
 }
 
-/** Who a day's picture speaks to: women and men turn about, so each weekday swaps every week. */
+/** Who a day's post is for: women, men, then everyone, so each weekday turns over every week. */
 export function audienceForDay(day: string): DailyAudience {
-  const days = Math.round(
-    (Date.parse(`${day}T12:00:00Z`) - Date.parse("2026-01-05T12:00:00Z")) / 86_400_000,
-  );
-  return ((days % 2) + 2) % 2 === 0 ? "men" : "women";
+  const days = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse("2026-01-05T12:00:00Z")) / 86_400_000);
+  return (["women", "men", "everyone"] as const)[((days % 3) + 3) % 3];
 }
+
+export const DAILY_TOPICS: Record<DailyTopic, string> = {
+  confidence: "confidence and self-worth",
+  discipline: "discipline and consistency",
+  body_image: "body image and fitness struggles (the mirror, photos, clothes, the scale, comparing)",
+  ambition: "ambition and personal growth",
+  relationships: "relationships and everyday life",
+  resilience: "mental resilience",
+  burnout: "stress and burnout",
+  overwhelm: "feeling overwhelmed",
+  identity: "building a stronger identity, who you're becoming",
+  small_wins: "celebrating small victories nobody else notices",
+  hard_truths: "an uncomfortable but relatable truth",
+  humor_shared: "humour and shared gym and life experiences",
+};
+
+export const DAILY_AUDIENCE_GUIDE: Record<DailyAudience, string> = {
+  women:
+    "Women in the crew. Their real lives: confidence, strength, independence, growth, relationships, the pressure of everything at once. Not every post is self-love, and nothing about how she should look.",
+  men: "Men in the crew. Their real lives: purpose, responsibility, standards, confidence, resilience, being honest when it's hard. Not every post is grind harder, and nothing macho or preachy.",
+  everyone: "Everyone in the crew: a moment anyone sees themselves in.",
+};
+
+/** How a caption is told, with its length (characters). */
+export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; min: number; max: number }> = {
+  one_liner: { name: "One line", guide: "one or two powerful sentences that land it", min: 20, max: 130 },
+  observation: { name: "Observation", guide: "a sharp, true observation or a new way to see it, in 2 to 4 short lines", min: 60, max: 280 },
+  short_story: {
+    name: "Short story",
+    guide: "a tiny, real-feeling moment told in 3 to 6 short lines, then the turn that makes it land. Told to 'you' or about 'someone', never a real named person",
+    min: 140,
+    max: 460,
+  },
+  humor: { name: "Humour", guide: "a relatable, funny take people tag a friend in, 1 to 4 short lines, the laugh first", min: 30, max: 240 },
+  scenario: { name: "Relatable moment", guide: "a specific everyday situation they'll recognise ('you know when…'), then what it really means", min: 80, max: 340 },
+  encouragement: { name: "Encouragement", guide: "talking straight to the person reading, warm and specific to the situation, never generic, in 2 to 5 short lines", min: 70, max: 380 },
+};
+export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
+
+/* ------------------------------------------------------------------ */
+/*  The look                                                           */
+/* ------------------------------------------------------------------ */
+
+/** One look over every style, so the feed reads as one curated account. */
+export const JF_LOOK =
+  "The look of a premium lifestyle publication: calm, curated, editorial. A warm natural palette (soft off-white, sand, warm greys, charcoal) with at most one muted accent (a deep brick red, used sparingly). Clean composition with generous negative space. Never neon, glossy CGI, oversaturated, cluttered or stock-photo.";
+
+export const DAILY_STYLES: Record<DailyStyle, { name: string; look: string }> = {
+  cinematic_photo: {
+    name: "Cinematic photo",
+    look: "A cinematic lifestyle photograph: full-frame camera, 35–50mm lens, soft natural or window light, gentle film grain, true-to-life colour, shallow depth of field, a real moment caught candidly.",
+  },
+  minimal_illustration: { name: "Minimal illustration", look: "A minimalist illustration: a few simple shapes and confident lines, flat muted colour, lots of empty space, quiet and elegant." },
+  pencil_sketch: { name: "Pencil sketch", look: "A hand-drawn graphite pencil sketch on warm paper: visible strokes and soft shading, unfinished edges, intimate like a page from an artist's sketchbook." },
+  ink_drawing: { name: "Ink drawing", look: "A black ink drawing with a fine pen and brush on off-white paper: expressive line, cross-hatching, bold blacks, one touch of muted red at most." },
+  watercolor: { name: "Watercolour", look: "A loose watercolour painting: soft washes and blooms of muted colour, white paper showing through, gentle and emotional." },
+  vintage_fitness: { name: "Vintage fitness art", look: "Vintage strength-culture artwork in the style of a 1950s physical culture magazine: halftone texture, aged paper, two or three muted ink colours, classic and bold." },
+  editorial_illustration: { name: "Editorial illustration", look: "A modern editorial illustration like a magazine's feature art: a clever, simple visual idea, textured shapes, a limited palette." },
+  conceptual: { name: "Conceptual art", look: "Symbolic, conceptual artwork: one striking visual metaphor that makes the idea click on sight, clean and surreal but calm, photographic or painterly." },
+  comic: { name: "Comic", look: "A relatable comic: one to three clean panels with simple characters and expressive faces, clean line art, muted colours, the joke readable at a glance." },
+  typography: {
+    name: "Typography",
+    look: "An elegant typographic composition: the words are the art, set in refined modern type with beautiful spacing and hierarchy on a textured off-white or sand background, maybe one small graphic mark.",
+  },
+  mixed_media: { name: "Mixed media", look: "A mixed-media collage: a torn photograph with paper textures, a few pencil marks and a strip of tape, layered and tactile, quietly artistic." },
+  graphic_design: { name: "Graphic design", look: "A modern minimalist graphic: bold simple geometric shapes and a strong idea, Swiss-style, flat colour, crisp." },
+};
+export const DAILY_STYLE_KEYS = Object.keys(DAILY_STYLES) as DailyStyle[];
+
+/** Styles that tell their story with people in them, who must look like real people. */
+const PEOPLE_STYLES = new Set<DailyStyle>(["cinematic_photo", "mixed_media"]);
+
+/* ------------------------------------------------------------------ */
+/*  The faith post                                                     */
+/* ------------------------------------------------------------------ */
 
 /** A Bible verse for the weekly faith post: the King James words exactly (public domain), never a model's. */
 export type FaithVerse = { ref: string; text: string };
 
 export const FAITH_VERSES: FaithVerse[] = [
   { ref: "Psalm 46:10", text: "Be still, and know that I am God" },
-  {
-    ref: "Matthew 11:28",
-    text: "Come unto me, all ye that labour and are heavy laden, and I will give you rest.",
-  },
+  { ref: "Matthew 11:28", text: "Come unto me, all ye that labour and are heavy laden, and I will give you rest." },
   { ref: "Psalm 30:5", text: "weeping may endure for a night, but joy cometh in the morning." },
   { ref: "Psalm 34:18", text: "The LORD is nigh unto them that are of a broken heart" },
   { ref: "1 Peter 5:7", text: "Casting all your care upon him; for he careth for you." },
@@ -193,31 +183,16 @@ export const FAITH_VERSES: FaithVerse[] = [
   { ref: "Isaiah 40:31", text: "they that wait upon the LORD shall renew their strength" },
   { ref: "Joshua 1:9", text: "Be strong and of a good courage; be not afraid" },
   { ref: "Psalm 139:14", text: "I am fearfully and wonderfully made" },
-  {
-    ref: "Galatians 6:9",
-    text: "let us not be weary in well doing: for in due season we shall reap, if we faint not.",
-  },
-  {
-    ref: "Proverbs 27:17",
-    text: "Iron sharpeneth iron; so a man sharpeneth the countenance of his friend.",
-  },
-  {
-    ref: "Psalm 118:24",
-    text: "This is the day which the LORD hath made; we will rejoice and be glad in it.",
-  },
-  {
-    ref: "Matthew 6:34",
-    text: "Take therefore no thought for the morrow: for the morrow shall take thought for the things of itself.",
-  },
+  { ref: "Galatians 6:9", text: "let us not be weary in well doing: for in due season we shall reap, if we faint not." },
+  { ref: "Proverbs 27:17", text: "Iron sharpeneth iron; so a man sharpeneth the countenance of his friend." },
+  { ref: "Psalm 118:24", text: "This is the day which the LORD hath made; we will rejoice and be glad in it." },
+  { ref: "Matthew 6:34", text: "Take therefore no thought for the morrow: for the morrow shall take thought for the things of itself." },
   { ref: "Psalm 23:1", text: "The LORD is my shepherd; I shall not want." },
   { ref: "Proverbs 24:16", text: "For a just man falleth seven times, and riseth up again" },
-  {
-    ref: "2 Timothy 1:7",
-    text: "For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind.",
-  },
+  { ref: "2 Timothy 1:7", text: "For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind." },
 ];
 
-/** The verse used least recently (never one of the last `recent`), so a quarter of a year goes by before one repeats. */
+/** The verse used least recently (`used` oldest first), so every verse goes once before one comes back. */
 export function pickVerse(used: string[]): FaithVerse {
   const last = new Map<string, number>();
   used.forEach((ref, i) => last.set(ref, i));
@@ -226,7 +201,7 @@ export function pickVerse(used: string[]): FaithVerse {
   return [...FAITH_VERSES].sort((a, b) => (last.get(a.ref) ?? -1) - (last.get(b.ref) ?? -1))[0];
 }
 
-/** The post's words: his line, and on Sunday the verse under it with where it's from. */
+/** The post's words: the caption, and on Sunday the verse under it with where it's from (the same as the SQL caption). */
 export function dailyCaption(line: string, verse?: FaithVerse | null): string {
   const words = line.trim();
   return verse ? `${words}\n\n“${verse.text.trim()}” ${verse.ref}` : words;
@@ -241,7 +216,9 @@ export type VisualStat = {
   day: string;
   theme: DailyTheme;
   audience: DailyAudience;
-  style: DailyStyle;
+  style: DailyStyle | string;
+  format?: DailyFormat | string | null;
+  topic?: DailyTopic | string | null;
   line: string;
   shot?: string | null;
   viewers: number;
@@ -253,17 +230,14 @@ export type VisualStat = {
   median_ms: number | null;
 };
 
-/** Short lines stop at this; a long one may run to LONG_LINE_MAX when the crew stays for it. */
-export const SHORT_LINE_MAX = 70;
-export const LONG_LINE_MAX = 150;
-/** How often it tries the length that isn't winning, so it keeps learning. */
-export const EXPLORE_SHARE = 0.25;
-/** How often it tries the look that isn't winning (a drawing, to start: the coach asked for clean photos first). */
-export const DRAWING_SHARE = 0.15;
-/** Below this many posts on each side the numbers are a guess, so it keeps the default. */
+/** Below this many posts a style, form or topic is still a guess. */
 export const LEARN_MIN_POSTS = 3;
+/** How often the next post is offered something that hasn't proven itself yet, so it keeps finding out. */
+export const EXPLORE_SHARE = 0.25;
+/** A caption past this is "long" for the learning (several short paragraphs). */
+export const LONG_CAPTION = 160;
 
-/** How well one picture did: reactions per person who saw it (comments and saves count more), plus how many stopped on it. */
+/** How well one did: reactions per person who saw it (comments and saves count more), plus how many stopped on it. */
 export function visualScore(s: VisualStat): number {
   const seen = Math.max(s.viewers, s.likers, 1);
   const points = s.likers + 3 * s.commenters + 4 * s.savers;
@@ -272,210 +246,239 @@ export function visualScore(s: VisualStat): number {
   return (points + 0.33 * 3) / (seen + 3) + 0.5 * hold;
 }
 
-type Arm = { n: number; mean: number };
-const arm = (xs: VisualStat[]): Arm => ({
-  n: xs.length,
-  mean: xs.length ? xs.reduce((t, s) => t + visualScore(s), 0) / xs.length : 0,
-});
+export type Arm = { n: number; mean: number };
+const arm = (xs: VisualStat[]): Arm => ({ n: xs.length, mean: xs.length ? xs.reduce((t, s) => t + visualScore(s), 0) / xs.length : 0 });
+function arms<K extends string>(stats: VisualStat[], key: (s: VisualStat) => string | null | undefined, keys: readonly K[]): Record<K, Arm> {
+  return Object.fromEntries(keys.map((k) => [k, arm(stats.filter((s) => key(s) === k))])) as Record<K, Arm>;
+}
 
 export type DailyLearnings = {
   posts: number;
   style: Record<DailyStyle, Arm>;
-  length: { short: Arm; long: Arm };
+  format: Record<DailyFormat, Arm>;
+  topic: Record<DailyTopic, Arm>;
   audience: Record<DailyAudience, Arm>;
-  theme: Partial<Record<DailyTheme, Arm>>;
+  length: { short: Arm; long: Arm };
   best: VisualStat[];
   worst: VisualStat[];
 };
 
 export function learnDailyVisuals(stats: VisualStat[]): DailyLearnings {
-  const by = <K extends string>(key: (s: VisualStat) => K, keys: readonly K[]) =>
-    Object.fromEntries(keys.map((k) => [k, arm(stats.filter((s) => key(s) === k))])) as Record<
-      K,
-      Arm
-    >;
   const ranked = [...stats].sort((a, b) => visualScore(b) - visualScore(a));
   return {
     posts: stats.length,
-    style: by((s) => s.style, ["photo", "illustration"] as const),
-    length: {
-      short: arm(stats.filter((s) => s.line.length <= SHORT_LINE_MAX)),
-      long: arm(stats.filter((s) => s.line.length > SHORT_LINE_MAX)),
-    },
-    audience: by((s) => s.audience, ["women", "men"] as const),
-    theme: by((s) => s.theme, DAILY_THEME_KEYS),
+    style: arms(stats, (s) => s.style, DAILY_STYLE_KEYS),
+    format: arms(stats, (s) => s.format, DAILY_FORMAT_KEYS),
+    topic: arms(stats, (s) => s.topic, Object.keys(DAILY_TOPICS) as DailyTopic[]),
+    audience: arms(stats, (s) => s.audience, ["women", "men", "everyone"] as const),
+    length: { short: arm(stats.filter((s) => s.line.length <= LONG_CAPTION)), long: arm(stats.filter((s) => s.line.length > LONG_CAPTION)) },
     best: ranked.slice(0, 3),
     worst: ranked.length > 5 ? ranked.slice(-2) : [],
   };
 }
 
-/** The winner of two, once both have enough posts to say; else the default. Sometimes (`explore`) the other one, on purpose. */
-function choose<T>(
-  a: { key: T; arm: Arm },
-  b: { key: T; arm: Arm },
-  fallback: T,
-  rand: number,
-  explore: number,
-): { pick: T; why: string } {
-  const known = a.arm.n >= LEARN_MIN_POSTS && b.arm.n >= LEARN_MIN_POSTS;
-  const best = !known ? fallback : a.arm.mean >= b.arm.mean ? a.key : b.key;
-  const other = best === a.key ? b.key : a.key;
-  if (rand < explore) return { pick: other, why: "trying the other one" };
-  return {
-    pick: best,
-    why: known ? "doing better so far" : "the default until there's enough to tell",
-  };
+/** Proven ones first (best mean), then the untried, then the proven-weak; `rand` < EXPLORE_SHARE puts an untried one first. */
+function rank<K extends string>(keys: K[], a: Record<K, Arm>, rand: number): K[] {
+  const proven = keys.filter((k) => a[k].n >= LEARN_MIN_POSTS).sort((x, y) => a[y].mean - a[x].mean);
+  const avg = proven.length ? proven.reduce((t, k) => t + a[k].mean, 0) / proven.length : 0;
+  const strong = proven.filter((k) => a[k].mean >= avg);
+  const weak = proven.filter((k) => a[k].mean < avg);
+  const untried = keys.filter((k) => a[k].n < LEARN_MIN_POSTS);
+  // a stable spin of the untried, so the same one isn't always offered first
+  const spun = untried.map((k, i) => ({ k, o: (i * 7 + Math.floor(rand * 997)) % untried.length })).sort((x, y) => x.o - y.o).map((x) => x.k);
+  return rand < EXPLORE_SHARE ? [...spun, ...strong, ...weak] : [...strong, ...spun, ...weak];
 }
 
-/** The look and length of the next picture, from what's worked (rand: 0–1, injectable for tests). */
-export function nextChoices(
+export type Recent = { day: string; style?: string | null; format?: string | null; topic?: string | null; caption?: string | null };
+
+/** What the next concept may use: styles, forms and topics not used in the last few days, best first. */
+export function pickChoices(
   l: DailyLearnings,
+  theme: DailyTheme,
+  recent: Recent[],
   rand: () => number = Math.random,
-): {
-  style: DailyStyle;
-  maxChars: number;
-  why: { style: string; length: string };
-} {
-  // photos lead (the coach asked for clean photos first), drawings get tried and keep their place only if they earn it
-  const style = choose(
-    { key: "photo" as DailyStyle, arm: l.style.photo },
-    { key: "illustration" as DailyStyle, arm: l.style.illustration },
-    "photo",
-    rand(),
-    DRAWING_SHARE,
-  );
-  // short first: posts were reading too long; longer lines only while the crew stays for them
-  const length = choose(
-    { key: SHORT_LINE_MAX, arm: l.length.short },
-    { key: LONG_LINE_MAX, arm: l.length.long },
-    SHORT_LINE_MAX,
-    rand(),
-    EXPLORE_SHARE,
-  );
-  return {
-    style: style.pick,
-    maxChars: length.pick,
-    why: { style: style.why, length: length.why },
-  };
+  forcedStyle?: DailyStyle | null,
+): { styles: DailyStyle[]; formats: DailyFormat[]; topics: DailyTopic[] } {
+  const last = (n: number, f: (r: Recent) => string | null | undefined) => new Set(recent.slice(-n).map(f).filter(Boolean) as string[]);
+  const usedStyles = last(4, (r) => r.style);
+  const usedFormats = last(2, (r) => r.format);
+  const usedTopics = last(10, (r) => r.topic);
+  const styles = forcedStyle ? [forcedStyle] : rank(DAILY_STYLE_KEYS.filter((s) => !usedStyles.has(s)), l.style, rand());
+  const formats = rank(DAILY_FORMAT_KEYS.filter((f) => !usedFormats.has(f)), l.format, rand());
+  const dayTopics = DAILY_THEMES[theme].topics;
+  const fresh = dayTopics.filter((t) => !usedTopics.has(t));
+  const topics = rank(fresh.length ? fresh : dayTopics, l.topic, rand());
+  return { styles, formats, topics };
 }
 
-/** What's worked, in plain words, for the writer (and the coach's card). */
+/** What's worked, in plain words, for the concept and the coach's card. */
 export function learningsText(l: DailyLearnings): string {
-  if (l.posts < LEARN_MIN_POSTS)
-    return "Not enough posted yet to tell what works. Keep it short, simple and real.";
-  const pct = (a: Arm, b: Arm) => (b.mean > 0 ? Math.round(((a.mean - b.mean) / b.mean) * 100) : 0);
+  if (l.posts < LEARN_MIN_POSTS) return "Not enough posted yet to tell what works. Trying a range of styles and forms.";
+  const best = <K extends string>(a: Record<K, Arm>, name: (k: K) => string) =>
+    (Object.keys(a) as K[])
+      .filter((k) => a[k].n >= 2)
+      .sort((x, y) => a[y].mean - a[x].mean)
+      .slice(0, 2)
+      .map(name);
   const out: string[] = [];
+  const styles = best(l.style, (k) => DAILY_STYLES[k as DailyStyle].name.toLowerCase());
+  if (styles.length) out.push(`Best looks so far: ${styles.join(", ")}.`);
+  const formats = best(l.format, (k) => DAILY_FORMATS[k as DailyFormat].name.toLowerCase());
+  if (formats.length) out.push(`Best caption forms: ${formats.join(", ")}.`);
+  const topics = best(l.topic, (k) => DAILY_TOPICS[k as DailyTopic].split(" (")[0]);
+  if (topics.length) out.push(`Topics landing: ${topics.join(", ")}.`);
   const { short, long } = l.length;
-  if (short.n >= LEARN_MIN_POSTS && long.n >= LEARN_MIN_POSTS) {
-    const d = pct(short, long);
-    out.push(
-      d >= 0
-        ? `Short lines are doing ${d}% better than longer ones.`
-        : `Longer lines are doing ${-d}% better than short ones.`,
-    );
-  }
-  const { photo, illustration } = l.style;
-  if (photo.n >= LEARN_MIN_POSTS && illustration.n >= LEARN_MIN_POSTS) {
-    const d = pct(photo, illustration);
-    out.push(
-      d >= 0
-        ? `Photos are doing ${d}% better than drawings.`
-        : `Drawings are doing ${-d}% better than photos.`,
-    );
-  }
-  const themes = DAILY_THEME_KEYS.map((k) => ({ k, a: l.theme[k] })).filter(
-    (t): t is { k: DailyTheme; a: Arm } => !!t.a && t.a.n >= 2,
-  );
-  if (themes.length >= 3) {
-    themes.sort((a, b) => b.a.mean - a.a.mean);
-    out.push(
-      `Best themes so far: ${themes
-        .slice(0, 2)
-        .map((t) => DAILY_THEMES[t.k].name.toLowerCase())
-        .join(", ")}.`,
-    );
-  }
-  return out.length ? out.join(" ") : "Too close to call yet. Keep it short, simple and real.";
+  if (short.n >= LEARN_MIN_POSTS && long.n >= LEARN_MIN_POSTS)
+    out.push(long.mean > short.mean ? "Longer captions are keeping people longer." : "Shorter captions are doing better.");
+  return out.length ? out.join(" ") : "Too close to call yet. Still trying a range of styles and forms.";
 }
 
 /* ------------------------------------------------------------------ */
-/*  The writer and the picture                                         */
+/*  The concept and the caption                                        */
 /* ------------------------------------------------------------------ */
 
-export const DAILY_WRITER_PROMPT = `You write the words for a daily picture post in a strength coach's private community feed (his clients, all ages, men and women). The picture does the talking: your words are one short line that lands the feeling, like a caption a real person would post under a photo on Instagram.
+export type DailyConcept = {
+  topic: DailyTopic;
+  situation: string;
+  tension: string;
+  message: string;
+  format: DailyFormat;
+  style: DailyStyle;
+  /** The picture: the scene or composition, the medium's choices, what it says on its own. */
+  visual: string;
+  /** Words set in the picture (short), or "" for none. */
+  typography: string;
+  caption: string;
+};
 
-RULES
-1. One line, two at most. Say one thing. The first words are the point.
-2. Plain words a 10 year old knows. No sentence over 12 words.
-3. Sound like the coach texting his crew (his voice is below). Real, warm, a little blunt. Not a quote account, not a greeting card, not a therapist.
-4. Never invent facts, studies, numbers, names or stories. No hashtags. No quotes from anyone. Never write a Bible verse or mention a verse yourself (the app adds the verse on Sundays).
-5. An emoji only if it fits, one at most, from his list.
-6. You may end with a tiny question that invites a reply ("who's yours?"), only if it's natural.
-7. Don't repeat or closely echo any line in RECENT LINES, and vary it: don't open with the same word or end on the same emoji as the ones around it (no "honestly" every day, no 🤝 every day). Often no emoji at all is best.
+export const CONCEPT_PROMPT = `You create one daily post for a strength coach's private community feed: his clients, men and women of all ages who train with him. It's a picture with a caption. It should feel intentionally made by someone who gets their life, never auto-filled. People should think "that's literally me", "I needed that", "I never thought of it that way" or "I'm sending this to someone".
 
-Also write the PICTURE: one specific, calm scene that shows the theme without any words in it, with the person described in the brief (a woman or a man) seen from behind, from the side or as hands, never looking at the camera. Say the setting, the light, what they're doing and the mood in one or two sentences. Make it different from RECENT PICTURES.
+WORK IT OUT IN THIS ORDER, then answer:
+1. Audience: who it's for (given).
+2. Topic: pick one from the list given.
+3. Situation: one specific, everyday moment with real tension in it (the car before the gym, the photo you untagged yourself from, the Sunday scaries, the friend who asks why you even bother). Specific beats general.
+4. Message: the one thing it says, in your own words. Something true, maybe a little uncomfortable, never a slogan.
+5. Picture: the strongest way to tell it visually in one of the styles given. The picture should add something the caption doesn't say (a metaphor, the moment itself, the feeling), not repeat it.
+6. Caption: in the form given, in the coach's voice (below).
 
-Answer with JSON only: {"line": "...", "picture": "..."}`;
+WRITING RULES
+- The first line shows alone under the picture, so it has to earn the tap: the moment, the tension or the laugh, never a warm-up.
+- Plain words a 10 year old knows, no sentence over 14 words. Lowercase like his texts.
+- Real and warm, sometimes funny, sometimes a little blunt. No empty motivation, no slogans, no clichés ("trust the process", "you got this", "keep going", "no excuses", "level up", "best version of yourself"), no hashtags, no quotation marks, no forced slang. At most one emoji, often none.
+- Never invent facts, studies, numbers, names or real people. A small made-up moment told to "you" is fine.
+- Never write or mention a Bible verse (the app adds one on Sundays).
+- Don't echo anything in RECENT POSTS: not the topic angle, the situation, the message, the opening or the picture.
 
-export function dailyWriterPrompt(o: {
+PICTURE RULES
+- Describe the scene, its composition and the medium's specific choices (light, line, texture). The person or people in it fit the audience.
+- Words in the picture only if they make it better (a typography piece, a comic's speech bubble, a note on a fridge): at most 7 words, written in "typography". Otherwise "typography" is "".
+
+Answer with JSON only:
+{"topic": "...", "situation": "...", "tension": "...", "message": "...", "format": "...", "style": "...", "visual": "...", "typography": "...", "caption": "..."}`;
+
+export function conceptPrompt(o: {
   theme: DailyTheme;
   audience: DailyAudience;
-  style: DailyStyle;
-  maxChars: number;
   faith: boolean;
+  choices: { styles: DailyStyle[]; formats: DailyFormat[]; topics: DailyTopic[] };
   learnings: string;
   best: string[];
   worst: string[];
-  recentLines: string[];
-  recentShots: string[];
+  recent: Recent[];
+  /** Captions the coach threw out: never write like these. */
+  rejected?: string[];
+  /** A remake of one side only: the caption to keep exactly, or the picture already made (its description). */
+  keep?: { caption?: string; picture?: string; style?: DailyStyle } | null;
 }): string {
   const t = DAILY_THEMES[o.theme];
   return [
-    `THEME: ${t.name}. ${t.idea}.`,
-    `THE PICTURE SPEAKS TO: ${o.audience === "women" ? "women (the person in it is a woman)" : "men (the person in it is a man)"}. The words still work for anyone reading.`,
-    o.faith
-      ? "SUNDAY: a Bible verse goes under your line. Your line should sit well with a quiet, faith-filled verse about rest, hope or strength, without preaching."
+    `TODAY'S LENS: ${t.name}. ${t.idea}.`,
+    `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
+    o.faith ? "SUNDAY: a Bible verse goes under the caption. Make it sit well under a quiet verse about rest, hope or strength, without preaching." : null,
+    `TOPICS (pick one, best first): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k]}`).join("; ")}`,
+    `CAPTION FORMS (pick one, best first): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (${DAILY_FORMATS[k].min}-${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
+    `STYLES (pick the one that tells this message best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].name}`).join("; ")}`,
+    o.keep?.caption ? `KEEP THIS CAPTION EXACTLY, word for word, as "caption" (only plan a new picture for it): ${o.keep.caption}` : null,
+    o.keep?.picture
+      ? `KEEP THIS PICTURE (it's already made, in the ${o.keep.style ? DAILY_STYLES[o.keep.style].name.toLowerCase() : "same"} style): ${o.keep.picture}\nPlan the post around it and write a new caption for it. Describe it as it is in "visual"; "typography" is "".`
       : null,
-    `LOOK: ${o.style === "photo" ? "a real, clean photograph" : "a clean, minimal drawing"}.`,
-    `LENGTH: ${o.maxChars} characters at most for the line.`,
-    `IDEAS FOR THE PICTURE (make your own, don't copy): ${t.shots[o.audience].join(" | ")}`,
-    `WHAT'S WORKED: ${o.learnings}`,
-    o.best.length ? `LINES THE CREW LIKED MOST:\n${o.best.map((l) => `- ${l}`).join("\n")}` : null,
-    o.worst.length ? `LINES THAT FELL FLAT:\n${o.worst.map((l) => `- ${l}`).join("\n")}` : null,
-    o.recentLines.length
-      ? `RECENT LINES (don't repeat):\n${o.recentLines.map((l) => `- ${l}`).join("\n")}`
-      : null,
-    o.recentShots.length
-      ? `RECENT PICTURES (make yours different):\n${o.recentShots.map((l) => `- ${l}`).join("\n")}`
+    `WHAT'S WORKED WITH THIS CREW: ${o.learnings}`,
+    o.best.length ? `POSTS THEY LIKED MOST:\n${o.best.map((l) => `- ${l}`).join("\n")}` : null,
+    o.worst.length ? `POSTS THAT FELL FLAT:\n${o.worst.map((l) => `- ${l}`).join("\n")}` : null,
+    o.rejected?.length ? `THE COACH THREW THESE OUT (never write like them):\n${o.rejected.map((l) => `- ${l.replace(/\s+/g, " ").slice(0, 160)}`).join("\n")}` : null,
+    o.recent.length
+      ? `RECENT POSTS (make yours different in every way):\n${o.recent
+          .slice(-14)
+          .map((r) => `- ${r.day} · ${r.topic ?? "?"} · ${r.format ?? "?"} · ${r.style ?? "?"}: ${(r.caption ?? "").replace(/\s+/g, " ").slice(0, 160)}`)
+          .join("\n")}`
       : null,
   ]
     .filter(Boolean)
     .join("\n\n");
 }
 
-/** The writer's JSON (it sometimes wraps it in a code fence). */
-export function parseDailyWriter(text: string): { line: string; picture: string } | null {
+const isKey = <K extends string>(keys: readonly K[], v: unknown): v is K => typeof v === "string" && (keys as readonly string[]).includes(v);
+
+/** The concept's JSON (fenced or not), with its choices held to the lists. */
+export function parseConcept(text: string, allowed: { styles: DailyStyle[]; formats: DailyFormat[]; topics: DailyTopic[] }): DailyConcept | null {
   const m = /\{[\s\S]*\}/.exec(text ?? "");
   if (!m) return null;
   try {
     const j = JSON.parse(m[0]);
-    const line = typeof j.line === "string" ? j.line.trim().replace(/^["“]|["”]$/g, "") : "";
-    const picture = typeof j.picture === "string" ? j.picture.trim() : "";
-    return line && picture ? { line, picture } : null;
+    const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+    const c: DailyConcept = {
+      topic: isKey(allowed.topics, j.topic) ? j.topic : allowed.topics[0],
+      situation: str(j.situation, 500),
+      tension: str(j.tension, 300),
+      message: str(j.message, 300),
+      format: isKey(allowed.formats, j.format) ? j.format : allowed.formats[0],
+      style: isKey(allowed.styles, j.style) ? j.style : allowed.styles[0],
+      visual: str(j.visual, 1400),
+      typography: str(j.typography, 80).replace(/^["“]|["”]$/g, ""),
+      caption: str(j.caption, 600).replace(/^["“]|["”]$/g, ""),
+    };
+    return c.caption && c.visual && c.message ? c : null;
   } catch {
     return null;
   }
 }
 
-const EMOJI_RE = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*/gu;
+/* ------------------------------------------------------------------ */
+/*  Checks                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Slogans that make a post read like an auto-filled motivation account. */
+export const GENERIC_PHRASES = [
+  "trust the process",
+  "you got this",
+  "keep going",
+  "keep pushing",
+  "never give up",
+  "no excuses",
+  "consistency is key",
+  "level up",
+  "best version of yourself",
+  "your future self",
+  "one day or day one",
+  "rise and grind",
+  "beast mode",
+  "believe in yourself",
+  "dream big",
+  "the grind",
+  "hustle",
+  "stay focused",
+  "push through",
+  "small steps",
+  "every day is a new",
+  "you are stronger than you think",
+  "finish strong",
+] as const;
+
+const EMOJI_RE = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu;
 const firstWord = (s: string) => s.trim().toLowerCase().match(/^[a-z']+/)?.[0] ?? "";
 const lastEmoji = (s: string) => s.match(EMOJI_RE)?.pop() ?? "";
 
-/**
- * A line that opens with the same word, or ends on the same emoji, as a day
- * near it reads like a template ("honestly … 🤝" three days running): what's
- * repeated, or null. `near` = the lines of the days around it.
- */
+/** A post that opens with the same word, or ends on the same emoji, as a day near it reads like a template. */
 export function repeatsNearby(line: string, near: string[]): string | null {
   const w = firstWord(line);
   if (w && near.some((n) => firstWord(n) === w)) return `opens with "${w}" like a day near it`;
@@ -484,57 +487,213 @@ export function repeatsNearby(line: string, near: string[]): string | null {
   return null;
 }
 
-/** What's wrong with a written line (empty = it can go out). The verse is the app's, so only his line is checked. */
-export function dailyLineProblems(line: string, maxChars: number): string[] {
+const trigrams = (s: string) => {
+  const w = s.toLowerCase().replace(EMOJI_RE, " ").match(/[a-z']+/g) ?? [];
+  const out = new Set<string>();
+  for (let i = 0; i + 2 < w.length; i++) out.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`);
+  return out;
+};
+/** How much two captions share (word three-grams, 0 to 1). */
+export function captionSimilarity(a: string, b: string): number {
+  const x = trigrams(a);
+  const y = trigrams(b);
+  if (!x.size || !y.size) return 0;
+  let both = 0;
+  for (const g of x) if (y.has(g)) both++;
+  return both / Math.min(x.size, y.size);
+}
+/** "Psalm 46:10", "1 peter 5:7": a verse named in a caption (a time like "5:30" isn't one). */
+const BIBLE_REF =
+  /\b(?:[1-3]\s?)?(?:genesis|exodus|deuteronomy|joshua|psalms?|proverbs|ecclesiastes|isaiah|jeremiah|lamentations|micah|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|hebrews|james|peter|revelation)\s+\d{1,3}:\d{1,3}\b/i;
+
+/** Past this share of three-word runs, a caption is a rerun. */
+export const SIMILAR_MAX = 0.3;
+
+/** What's wrong with a caption (empty = it can go out). `recent` = earlier posts' captions, `near` = the days around it. */
+export function captionProblems(caption: string, o: { format: DailyFormat; recent?: string[]; near?: string[] }): string[] {
   const out: string[] = [];
-  if (line.length > maxChars) out.push(`${line.length} characters (${maxChars} at most)`);
-  if (line.split("\n").filter((l) => l.trim()).length > 2) out.push("more than two lines");
-  if (/#\w/.test(line)) out.push("has a hashtag");
-  if (/\b\d?\s?[A-Z][a-z]+ \d{1,3}:\d{1,3}\b/.test(line) || /\b(verse|scripture)\b/i.test(line))
-    out.push("mentions a verse (the app adds it)");
-  if (/["“”]/.test(line)) out.push("has a quote");
-  for (const p of [...plainCheck(line).problems, ...voiceProblems(line)])
-    if (!out.includes(p)) out.push(p);
+  const f = DAILY_FORMATS[o.format];
+  if (caption.length > f.max) out.push(`${caption.length} characters (a ${f.name.toLowerCase()} is ${f.max} at most)`);
+  if (caption.length < f.min) out.push(`${caption.length} characters (a ${f.name.toLowerCase()} needs ${f.min} or more)`);
+  if (caption.split("\n").filter((l) => l.trim()).length > 8) out.push("more than 8 lines");
+  if ((caption.match(EMOJI_RE) ?? []).length > 1) out.push("more than one emoji");
+  if (/#\w/.test(caption)) out.push("has a hashtag");
+  if (/@\w/.test(caption)) out.push("tags someone");
+  if (/["“”]/.test(caption)) out.push("has quotation marks");
+  if (BIBLE_REF.test(caption) || /\b(verse|scripture)\b/i.test(caption)) out.push("mentions a verse (the app adds it)");
+  const lower = ` ${caption.toLowerCase()} `;
+  for (const g of GENERIC_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (a slogan)`);
+  const near = o.near ?? [];
+  const repeat = repeatsNearby(caption, near);
+  if (repeat) out.push(repeat);
+  const close = (o.recent ?? []).find((r) => captionSimilarity(caption, r) >= SIMILAR_MAX);
+  if (close) out.push(`too close to a recent post ("${close.slice(0, 50)}…")`);
+  for (const p of [...plainCheck(caption).problems, ...voiceProblems(caption)]) if (!out.includes(p)) out.push(p);
   return [...new Set(out)];
 }
 
-/** How a daily picture looks: one clean, premium style per look, so the feed reads as one account. */
-export const DAILY_LOOK: Record<DailyStyle, string> = {
-  photo: [
-    "A real editorial lifestyle photograph for a premium strength coach's Instagram, the kind that stops a scroll.",
-    "Shot on a full-frame camera with a 50mm lens: soft natural light, true-to-life colours with a gentle warm film tone, crisp detail, shallow depth of field, clean and uncluttered with calm negative space.",
-    "Bright and airy, never dark, moody, neon or over-edited. Not CGI, not an illustration, not a stock-photo pose.",
-  ].join(" "),
-  illustration: [
-    "A clean, modern editorial illustration for a premium wellness brand: a few confident lines and simple shapes, a soft muted palette on warm off-white paper, subtle paper grain, elegant and calm.",
-    "Not cartoonish, not clip art, not 3D, not a photo.",
-  ].join(" "),
-};
+/** Words set in the picture: a few, plain letters, nothing an image model will mangle. */
+export function typographyProblems(text: string): string[] {
+  const t = text.trim();
+  if (!t) return [];
+  const out: string[] = [];
+  if (t.split(/\s+/).length > 7) out.push("more than 7 words in the picture");
+  if (t.length > 48) out.push("too many letters in the picture");
+  if (/[^A-Za-z0-9 ,.!?'’&-]/.test(t)) out.push("characters in the picture an image model gets wrong");
+  return out;
+}
 
-/** The image model's prompt for a day: the look, the person, the scene, the rules every picture keeps. */
-export function dailyPicturePrompt(o: {
-  theme: DailyTheme;
-  audience: DailyAudience;
-  style: DailyStyle;
-  shot: string;
-  faith: boolean;
-}): string {
-  const who =
-    o.audience === "women"
-      ? "The person is a woman in her twenties or thirties, fit and real, dressed simply."
-      : "The person is a man in his twenties or thirties, fit and real, dressed simply.";
+/* ------------------------------------------------------------------ */
+/*  The picture                                                        */
+/* ------------------------------------------------------------------ */
+
+/** The image model's prompt: the JF Effect look, the style, the scene, the words in it (exactly) or none. */
+export function picturePrompt(c: Pick<DailyConcept, "style" | "visual" | "typography" | "message">, o: { faith?: boolean; fix?: string | null } = {}): string {
+  const style = DAILY_STYLES[c.style] ?? DAILY_STYLES.cinematic_photo;
+  const words = c.typography.trim();
   return [
-    DAILY_LOOK[o.style],
-    `The feeling: ${DAILY_THEMES[o.theme].name.toLowerCase()} (${DAILY_THEMES[o.theme].idea}).`,
-    `The scene: ${o.shot}`,
-    who,
-    "People are seen from behind, from the side or as hands, candid, never posing or looking at the camera, no close-up faces.",
-    o.faith
-      ? "Quiet and reverent, warm morning light; any Bible stays closed and no writing is visible."
-      : null,
-    "Vertical 4:5 portrait framing, the subject a little off centre with room above, nothing important near the edges.",
-    "Absolutely no text, letters, numbers, signs, logos or watermarks anywhere in the image.",
+    style.look,
+    JF_LOOK,
+    `What it shows: ${c.visual}`,
+    `What it should make someone feel: ${c.message}`,
+    PEOPLE_STYLES.has(c.style)
+      ? "People look like real adults: natural skin, hands and proportions, candid, caught mid-moment, never posing or looking at the camera, faces never the close-up focus."
+      : "Any people are drawn in the style, with natural, correct proportions and hands.",
+    o.faith ? "Quiet and reverent; any Bible stays closed with no readable writing on it." : null,
+    words
+      ? `The only text in the image is exactly this, spelled exactly, clean and fully legible: ${words}. No other letters, numbers or logos anywhere.`
+      : "Absolutely no text, letters, numbers, signs, logos or watermarks anywhere in the image.",
+    "Vertical portrait. Keep the subject and any words well inside the middle 80% of the height and away from every edge (the feed crops the top and bottom).",
+    o.fix ? `Fix from the last try: ${o.fix}` : null,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/* ------------------------------------------------------------------ */
+/*  The review                                                         */
+/* ------------------------------------------------------------------ */
+
+export const REVIEW_PROMPT = `You review one daily post for a strength coach's community feed before it goes out: a picture and its caption, made for a planned message. Be a strict, honest editor. Look closely at the picture.
+
+Answer with JSON only:
+{
+ "text_seen": "every word you can read in the image, exactly as written, or empty",
+ "defects": ["each visible problem: wrong or extra fingers, warped faces or bodies, melted objects, garbled or misspelled text, watermarks, artefacts, an artificial or stock-photo look, cut-off subject or words at the edges"],
+ "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5},
+ "fix_image": "what to change in the picture, or empty",
+ "fix_caption": "what to change in the caption, or empty"
+}
+relatable = would someone think "that's me"; original = not a cliché or slogan; writing = natural, human, clean; audience_fit = right for who it's for; aesthetic = premium and beautiful; storytelling = the picture tells a story; match = the picture and caption work together and add to each other; engaging = worth a like, comment or send.`;
+
+export type Review = {
+  text_seen: string;
+  defects: string[];
+  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging", number>;
+  fix_image: string;
+  fix_caption: string;
+};
+
+export function reviewPrompt(o: { caption: string; concept: Pick<DailyConcept, "message" | "situation" | "visual" | "typography" | "style">; audience: DailyAudience }): string {
+  return [
+    `AUDIENCE: ${DAILY_AUDIENCE_GUIDE[o.audience]}`,
+    `THE MESSAGE: ${o.concept.message}`,
+    `THE SITUATION: ${o.concept.situation}`,
+    `THE PICTURE WAS MEANT TO BE: ${DAILY_STYLES[o.concept.style]?.name ?? o.concept.style}. ${o.concept.visual}`,
+    o.concept.typography ? `WORDS MEANT TO BE IN THE PICTURE: ${o.concept.typography}` : "THE PICTURE WAS MEANT TO HAVE NO WORDS IN IT.",
+    `THE CAPTION:\n${o.caption}`,
+  ].join("\n\n");
+}
+
+export function parseReview(text: string): Review | null {
+  const m = /\{[\s\S]*\}/.exec(text ?? "");
+  if (!m) return null;
+  try {
+    const j = JSON.parse(m[0]);
+    const s = j.scores ?? {};
+    const n = (v: unknown) => Math.max(1, Math.min(5, Math.round(Number(v) || 1)));
+    return {
+      text_seen: typeof j.text_seen === "string" ? j.text_seen.trim() : "",
+      defects: Array.isArray(j.defects) ? j.defects.filter((d: unknown) => typeof d === "string" && d.trim()).map((d: string) => d.trim()) : [],
+      scores: {
+        relatable: n(s.relatable),
+        original: n(s.original),
+        writing: n(s.writing),
+        audience_fit: n(s.audience_fit),
+        aesthetic: n(s.aesthetic),
+        storytelling: n(s.storytelling),
+        match: n(s.match),
+        engaging: n(s.engaging),
+      },
+      fix_image: typeof j.fix_image === "string" ? j.fix_image.trim() : "",
+      fix_caption: typeof j.fix_caption === "string" ? j.fix_caption.trim() : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+const letters = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/** Each score a post has to reach. */
+export const REVIEW_BARS: Review["scores"] = { relatable: 4, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3 };
+const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match"]);
+
+/**
+ * Pass or fail, on concrete checks first: the words read off the picture are
+ * exactly what was asked for (or none), no defects; then every score at its
+ * bar. Says which side failed, so only that side is made again.
+ */
+export function reviewVerdict(r: Review, typography: string): { pass: boolean; image: string[]; caption: string[] } {
+  const image: string[] = [];
+  const caption: string[] = [];
+  const want = letters(typography);
+  const seen = letters(r.text_seen);
+  if (want) {
+    if (!seen.includes(want)) image.push(`the words in the picture read "${r.text_seen || "nothing"}", not "${typography}"`);
+    else if (seen.split(" ").length > want.split(" ").length + 2) image.push(`extra words in the picture: "${r.text_seen}"`);
+  } else if (seen) image.push(`words that shouldn't be there: "${r.text_seen}"`);
+  for (const d of r.defects) image.push(d);
+  for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
+    if (r.scores[k] >= REVIEW_BARS[k]) continue;
+    (IMAGE_SCORES.has(k) ? image : caption).push(`${k} ${r.scores[k]}/5`);
+  }
+  if (image.length && r.fix_image) image.push(`fix: ${r.fix_image}`);
+  if (caption.length && r.fix_caption) caption.push(`fix: ${r.fix_caption}`);
+  return { pass: !image.length && !caption.length, image, caption };
+}
+
+/* ------------------------------------------------------------------ */
+/*  A caption rewrite against the same picture                         */
+/* ------------------------------------------------------------------ */
+
+export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for a strength coach's community feed. The picture is already made and stays. Keep the post's message and form; fix only what the editor said. Same writing rules: plain words, lowercase like his texts, the first line earns the tap, no slogans, no hashtags, no quotation marks, at most one emoji, never a Bible verse. Answer with JSON only: {"caption": "..."}`;
+
+export function captionFixPrompt(o: { concept: Pick<DailyConcept, "message" | "situation" | "visual" | "format">; caption: string; fix: string[] }): string {
+  const f = DAILY_FORMATS[o.concept.format] ?? DAILY_FORMATS.observation;
+  return [
+    `THE MESSAGE: ${o.concept.message}`,
+    `THE SITUATION: ${o.concept.situation}`,
+    `THE PICTURE: ${o.concept.visual}`,
+    `THE FORM: ${f.guide} (${f.min}-${f.max} characters)`,
+    `THE CAPTION NOW:\n${o.caption}`,
+    `WHAT TO FIX: ${o.fix.join("; ")}`,
+  ].join("\n\n");
+}
+
+export function parseCaption(text: string): string | null {
+  const m = /\{[\s\S]*\}/.exec(text ?? "");
+  if (!m) return null;
+  try {
+    const c = JSON.parse(m[0])?.caption;
+    return typeof c === "string" && c.trim() ? c.trim().replace(/^["“]|["”]$/g, "").slice(0, 600) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The review's average score (1 to 5), for the coach's card and the learning. */
+export function reviewScore(r: Pick<Review, "scores">): number {
+  const s = Object.values(r.scores);
+  return Math.round((s.reduce((t, n) => t + n, 0) / s.length) * 10) / 10;
 }

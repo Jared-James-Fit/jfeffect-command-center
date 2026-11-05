@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 /**
- * Daily pictures (pg_cron job community-daily-visuals wakes it when a day is
- * missing its words or picture): one line and one picture per run, learning
- * from how the last ones did. See src/lib/daily-visuals.server.ts.
+ * Daily pictures (pg_cron job community-daily-visuals, or the coach, wakes it
+ * when a day is queued to be made): one step per run (the concept and
+ * caption, or the picture and its review), learning from how the last ones
+ * did, and it wakes the next run itself. See src/lib/daily-visuals.server.ts.
  */
 export const Route = createFileRoute("/api/public/hooks/daily-visuals-tick")({
   server: {
