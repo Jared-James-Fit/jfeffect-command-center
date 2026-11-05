@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { MentionText } from "@/components/community/mentions";
 import { captionBreaks, withHandles, type CommunityAuthor, type CommunityMention } from "@/lib/community";
+import { cutPreview, previewLine } from "@/lib/caption-preview";
 
 /** Up to this many lines, a coach post's words show whole in the feed. */
 export const NOTE_SHOW_ALL_LINES = 12;
@@ -83,13 +84,13 @@ export function NoteCaption({
     let best = -1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      if (lines(text.slice(0, breaks[mid]).trimEnd() + "… more") <= limits.cut) {
+      if (lines(previewLine(text, breaks[mid])) <= limits.cut) {
         best = breaks[mid];
         lo = mid + 1;
       } else hi = mid - 1;
     }
     // stopping after a line or two hides the point (a long note): cut by lines instead
-    setCut(best > 0 && lines(text.slice(0, best).trimEnd() + "… more") >= limits.min ? best : -1);
+    setCut(best > 0 && lines(previewLine(text, best)) >= limits.min ? best : -1);
   }, [text, width, open, clamp, lead, limits]);
 
   const more = (
@@ -105,7 +106,8 @@ export function NoteCaption({
       more
     </button>
   );
-  const shown = cut !== null && cut > 0 ? text.slice(0, cut).trimEnd() : text;
+  const preview = cut !== null && cut > 0 ? cutPreview(text, cut) : null;
+  const shown = preview ? preview.shown : text;
 
   return (
     <div ref={box} className="relative">
@@ -117,7 +119,7 @@ export function NoteCaption({
         <MentionText text={shown} mentions={mentions} onOpen={onOpenPerson} />
         {cut !== null && cut > 0 && (
           <>
-            <span className="text-muted-foreground">… </span>
+            <span className="text-muted-foreground">{preview?.gap}… </span>
             {more}
           </>
         )}
