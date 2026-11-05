@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useLocation } from "@tanstack/react-router";
 import { getMySetupStatus } from "@/lib/member-setup.functions";
 import { MemberSetupWizard } from "./member-setup-wizard";
+import { isFreeAccount } from "@/lib/member-setup-steps";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
@@ -23,6 +24,7 @@ export function MemberSetupGate() {
   const member = data?.member as any;
   const isJfMember = member?.account_type === "jf_member";
   const isSandbox = !!member?.is_admin_sandbox;
+  const free = isFreeAccount(member);
   const needsSetup = !!member && isJfMember && !isSandbox && data?.complete === false;
   const isAllowed = ALLOW.some((p) => location.pathname.startsWith(p));
 
@@ -41,9 +43,11 @@ export function MemberSetupGate() {
               <div className="flex items-start gap-3">
                 <AlertCircle className="mt-0.5 h-5 w-5 text-amber-500" />
                 <div>
-                  <div className="font-semibold">Finish your membership setup</div>
+                  <div className="font-semibold">{free ? "Set up your training" : "Finish your membership setup"}</div>
                   <div className="text-sm text-muted-foreground">
-                    A few quick details unlock your full membership: profile photo, phone, basic info, and your goals.
+                    {free
+                      ? "Two quick questions: your goal and the days you train."
+                      : "A few quick details unlock your full membership: profile photo, phone, basic info, and your goals."}
                   </div>
                 </div>
               </div>

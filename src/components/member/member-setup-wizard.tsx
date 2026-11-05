@@ -33,10 +33,10 @@ const EXPERIENCE_OPTIONS = [
   { value: "advanced", label: "Advanced", hint: "5+ yrs" },
 ] as const;
 
-type Step = "photo" | "contact" | "basics" | "goals" | "schedule";
-const STEPS: Step[] = ["photo", "contact", "basics", "goals", "schedule"];
+type Step = SetupStep;
 
 import { WEEK_DAYS, SHORT_DAY } from "@/lib/training-schedule";
+import { isFreeAccount, setupStepsFor, type SetupStep } from "@/lib/member-setup-steps";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { useServiceTier } from "@/lib/service-tier";
 
@@ -55,7 +55,11 @@ export function MemberSetupWizard({
   const { data } = useQuery({ queryKey: ["m-setup-status"], queryFn: () => fetchStatus(), enabled: open });
   const m = data?.member as any;
 
-  const [step, setStep] = useState<Step>("photo");
+  // a free account is asked two things (goal + experience, then days); the paid membership all five
+  const free = isFreeAccount(m);
+  const STEPS = setupStepsFor(m);
+  const [picked, setStep] = useState<Step | null>(null);
+  const step: Step = picked && STEPS.includes(picked) ? picked : STEPS[0];
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<any>({});
 
@@ -104,7 +108,7 @@ export function MemberSetupWizard({
       const missing: string[] = [];
       if (goalsTags.length === 0 && !goalsText) missing.push("a goal");
       if (!v("experience_level")) missing.push("lifting experience");
-      if (!v("training_background")) missing.push("training background");
+      if (!free && !v("training_background")) missing.push("training background");
       return { ok: missing.length === 0, missing };
     })(),
     schedule: (() => {
@@ -180,9 +184,11 @@ export function MemberSetupWizard({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Finish setting up your membership</DialogTitle>
+          <DialogTitle>{free ? "Set up your training" : "Finish setting up your membership"}</DialogTitle>
           <DialogDescription>
-            We need a few details before you get full access — same as our coaching clients.
+            {free
+              ? "Two quick questions so the plans you see fit you."
+              : "We need a few details before you get full access — same as our coaching clients."}
           </DialogDescription>
         </DialogHeader>
         <Progress value={progress} className="h-1.5" />
@@ -276,7 +282,7 @@ export function MemberSetupWizard({
         )}
 
         {step === "goals" && (
-          <GoalsStep form={form} setForm={setForm} member={m} />
+          <GoalsStep form={form} setForm={setForm} member={m} backgroundOptional={free} />
         )}
 
         {step === "schedule" && (
@@ -296,6 +302,8 @@ export function MemberSetupWizard({
                   <button
                     key={d}
                     type="button"
+                    aria-pressed={on}
+                    aria-label={d}
                     onClick={() => {
                       const cur = trainingDays;
                       const next = on ? cur.filter((x) => x !== d) : [...cur, d];
@@ -355,10 +363,13 @@ function GoalsStep({
   form,
   setForm,
   member,
+  backgroundOptional = false,
 }: {
   form: any;
   setForm: (updater: any) => void;
   member: any;
+  /** a free account: the experience level is enough */
+  backgroundOptional?: boolean;
 }) {
   const selected: string[] = form.goals_tags ?? member?.goals_tags ?? [];
   const level: string = form.experience_level ?? member?.experience_level ?? "";
@@ -439,7 +450,10 @@ function GoalsStep({
       </div>
 
       <div>
-        <Label>Training background <span className="text-destructive">*</span></Label>
+        <Label>
+          Training background{" "}
+          {backgroundOptional ? <span className="font-normal text-muted-foreground">(optional)</span> : <span className="text-destructive">*</span>}
+        </Label>
         <Textarea
           rows={3}
           className="mt-2"
