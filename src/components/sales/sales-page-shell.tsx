@@ -22,22 +22,25 @@ export function SalesPageShell({
   const isAbout = pathname === "/about" || pathname.startsWith("/about/");
   const isAuth = pathname === "/auth" || pathname.startsWith("/auth/");
   const navButtonClass = "px-2.5 text-[14px] font-medium text-muted-foreground transition-colors hover:text-foreground sm:px-3 sm:text-[15px]";
-  const activeNavClass = "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary";
+  const activeNavClass = "bg-secondary text-foreground hover:bg-secondary hover:text-foreground";
   return (
     <div
       className={`min-h-screen bg-background text-foreground ${themeClass}`}
       data-page-id={pageId}
       data-theme={theme}
     >
+      {/* Opaque (no blur: iOS reads a blurred top bar as several colours), and in the
+          floating style the band around the card is the page's own colour too, so the
+          page never shows through above or beside the bar while scrolling. */}
       <header
-        className={`fixed left-0 right-0 top-0 z-40 bg-background/80 backdrop-blur-xl backdrop-saturate-150 ${
-          floatingHeader
-            ? "mx-3 mt-3 rounded-2xl ring-1 ring-border/70 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)]"
-            : "border-b border-border/70"
-        }`}
-        style={floatingHeader ? undefined : { paddingTop: "env(safe-area-inset-top)" }}
+        className={`fixed left-0 right-0 top-0 z-40 bg-background ${floatingHeader ? "px-3 pt-3" : "border-b border-border/70"}`}
+        style={{ paddingTop: floatingHeader ? "calc(env(safe-area-inset-top) + 0.75rem)" : "env(safe-area-inset-top)" }}
       >
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2.5">
+        <div
+          className={`mx-auto flex max-w-5xl items-center justify-between gap-2 px-4 py-2.5 ${
+            floatingHeader ? "rounded-2xl bg-background ring-1 ring-border/70" : ""
+          }`}
+        >
           <Link to="/" className="text-[17px] font-semibold tracking-[-0.01em]">JF Effect</Link>
           <nav className="flex items-center gap-1 sm:gap-2">
             {!hideMarketingNav && (
@@ -66,7 +69,7 @@ export function SalesPageShell({
               <Button
                 size="sm"
                 variant={isAuth ? "default" : "outline"}
-                className={`rounded-full px-3.5 text-[14px] font-medium transition-colors sm:text-[15px] ${isAuth ? "shadow-sm" : ""}`}
+                className="rounded-full px-3.5 text-[14px] font-medium transition-colors sm:text-[15px]"
               >
                 Sign In
               </Button>
@@ -74,7 +77,11 @@ export function SalesPageShell({
           </nav>
         </div>
       </header>
-      <main className={floatingHeader ? "pt-20" : "pt-16"}>{children}</main>
+      <main
+        style={{ paddingTop: floatingHeader ? "calc(env(safe-area-inset-top) + 5rem)" : "calc(env(safe-area-inset-top) + 4rem)" }}
+      >
+        {children}
+      </main>
       <footer className="mt-8 border-t border-border/70 px-5 py-10 text-center text-[13px] text-muted-foreground">
         <nav aria-label="Footer" className="mb-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
           <Link to="/coaching" className="hover:text-foreground">Coaching</Link>

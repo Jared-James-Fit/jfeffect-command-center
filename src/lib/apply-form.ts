@@ -62,6 +62,12 @@ export const APPLY_STEPS: readonly ApplyStep[] = [
   },
 ];
 
+/** A goal handed over in the link from the coaching page (`/coaching/apply?goal=fat_loss`), or null when it isn't one of ours. */
+export function goalFromLink(raw: string | null | undefined): string | null {
+  const v = String(raw ?? "").trim();
+  return APPLY_GOALS.some((g) => g.v === v) ? v : null;
+}
+
 export const EMPTY_ANSWERS: ApplyAnswers = {
   full_name: "", main_goal: "", target_outcome: "", timeline: "", email: "", phone: "", instagram: "",
 };

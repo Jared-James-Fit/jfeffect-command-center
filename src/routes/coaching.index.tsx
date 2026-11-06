@@ -1,10 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, ClipboardCheck, Heart, MessageCircle, MessageSquare, Quote, Repeat, Target, Users, Utensils, XCircle, Eye } from "lucide-react";
-import { getPublicSalesPage } from "@/lib/sales-pages.functions";
+import { CheckCircle2, ChevronRight, MessageSquare, Quote, XCircle } from "lucide-react";
 import { SalesPageShell } from "@/components/sales/sales-page-shell";
-import { CoachingHero } from "@/components/sales/coaching-hero";
+import { CoachingHero, PhoneShot } from "@/components/sales/coaching-hero";
 import { StickyMobileCta } from "@/components/sales/sticky-mobile-cta";
 import { Reveal } from "@/components/sales/reveal";
 import { TRANSFORMATION_PHOTOS } from "@/components/sales/transformations-strip";
@@ -12,7 +9,12 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Block, Group, Heading, IconTile, PrimaryCta, Rail, SocialLinks, Stat, Surface, TextLink } from "@/components/sales/apple";
 import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
 import { COACH_NAME, INQUIRY_DM_URL } from "@/lib/social-links";
+import { APPLY_GOALS } from "@/lib/apply-form";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
+import shotLogger from "@/assets/coaching/app-workout-logger.webp";
+import shotProgram from "@/assets/coaching/app-program.webp";
+import shotChat from "@/assets/coaching/app-coach-chat.webp";
+import shotNutrition from "@/assets/coaching/app-nutrition.webp";
 import { shareMeta } from "@/lib/share-meta";
 
 export const Route = createFileRoute("/coaching/")({
@@ -69,22 +71,82 @@ export const Route = createFileRoute("/coaching/")({
   }),
 });
 
-const APPLY_TO = "/coaching/apply";
+const APPLY_TO = "/coaching/apply" as const;
+const CTA = "Apply for coaching";
 
-// The questions people quietly ask themselves before they apply. Answered up front,
-// in plain words, so nobody has to guess or feel talked into anything.
-const OBJECTIONS: Array<{ q: string; a: string }> = [
+/*
+ * The coaching sales page. Its words live here, not in Sales → Sales pages:
+ * that editor's coaching copy had gone stale (FAQs still sold "JF
+ * Membership"), and one place to change the page is easier to keep honest.
+ *
+ * Order follows how someone decides: what it is and the one button, proof,
+ * why it hasn't worked before, exactly what they get (shown with real app
+ * screens), how it starts, who's coaching them, who it's for, their questions,
+ * then the first question of the application itself.
+ */
+
+/** What you get, each shown with the screen it lives on. Screenshots: a demo athlete, no client data. */
+const OFFER: Array<{ title: string; body: string; src: string; alt: string }> = [
+  {
+    title: "A program written for you",
+    body: "Built around your goal, your schedule and the equipment you have. Every block has a purpose, and you always know what today's workout is.",
+    src: shotProgram,
+    alt: "The Workouts screen: this week's training days, today's workout and where you are in the program",
+  },
+  {
+    title: "A coach who reads your check-in",
+    body: "You check in from the app every week. Your coach reads it, tells you what's changing and why, and adjusts the plan. Questions in between? Message anytime.",
+    src: shotChat,
+    alt: "A weekly check-in and the coach's reply in the app's chat",
+  },
+  {
+    title: "Nutrition you can actually follow",
+    body: "Calories and macros for training and rest days, plus a simple meal plan you can shop for and prep. No crash diets.",
+    src: shotNutrition,
+    alt: "The Nutrition screen: a training-day meal plan with each meal's foods and macros",
+  },
+];
+
+/** The application's goals, most asked-for first ("Other" is the "Something else" link). */
+const GOAL_ORDER = ["fat_loss", "build_muscle", "powerlifting", "general_fitness"] as const;
+
+const ALSO_INCLUDED = [
+  "Lift video reviews in the chat",
+  "How-to videos for your exercises",
+  "PRs, bodyweight and progress photos in one place",
+  "The JF Effect Crew: train alongside other athletes",
+];
+
+const STEPS: Array<{ title: string; body: string }> = [
+  { title: "Apply", body: "Seven quick questions about you and your goal. Free, no card." },
+  { title: "Book your call", body: "Pick a time right after you apply. We talk through your goal and whether coaching is the right fit. No pressure." },
+  { title: "Start training", body: "If it's a fit, you're set up in the app with your program, your nutrition and your first check-in." },
+];
+
+const FOR_YOU = [
+  "You'll follow a plan if someone builds it for you",
+  "You want someone checking your progress every week",
+  "You're done guessing and starting over",
+];
+const NOT_FOR_YOU = [
+  "You want a quick fix",
+  "You won't check in or follow the plan",
+  "You only want a PDF program",
+];
+
+// The questions people quietly ask themselves before they apply, answered straight.
+const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "I've tried before and it didn't stick. Why would this be different?",
-    a: "Most plans fail for two reasons: they're generic, and nobody is watching. Here your plan is built around your schedule and your life, a real coach reviews your check-ins every week, and the plan gets adjusted when life happens. That mix of structure and accountability is usually what's missing.",
+    a: "Most plans fail for two reasons: they're generic, and nobody is watching. Here your plan is built around your schedule and your life, your coach reads your check-in every week, and the plan changes when life happens.",
   },
   {
     q: "I'm busy. Can I make this work?",
-    a: "That's who it's built for. Your plan is designed around your real schedule, and when a week goes sideways we adjust it instead of letting one rough week turn into a lost month.",
+    a: "That's who it's built for. Your plan fits the days and time you actually have, and when a week goes sideways we adjust it instead of letting one rough week turn into a lost month.",
   },
   {
-    q: "I'm a beginner, or I'm out of shape. Is that okay?",
-    a: "Yes, as long as you'll commit to the plan. You don't need to be fit to start. The plan begins where you are right now.",
+    q: "I'm a beginner, or out of shape. Is that okay?",
+    a: "Yes. You don't need to be fit to start. The plan starts where you are right now.",
   },
   {
     q: "Do I need a gym?",
@@ -92,66 +154,45 @@ const OBJECTIONS: Array<{ q: string; a: string }> = [
   },
   {
     q: "How is this different from an app or a PDF program?",
-    a: "An app or a PDF gives you a plan. Coaching gives you a person: someone who looks at your numbers and check-ins, changes the plan when it needs changing, and holds the standard when motivation dips.",
+    a: "An app or a PDF gives you a plan. Coaching gives you a person: someone who looks at your numbers and check-ins, changes the plan when it needs changing, and holds you to it when motivation dips.",
   },
   {
-    q: "What does it cost, and do I have to pay to apply?",
-    a: "Applying is free and takes about a minute. There's no payment and no card. Coaching itself is a paid, application-only service, and we go over the options and pricing with you on your call, before you commit to anything.",
+    q: "What does it cost?",
+    a: "Applying is free and there's no card. Coaching is a paid service, and we go over the options and the price on your call, before you commit to anything.",
   },
   {
     q: "What if it isn't a good fit?",
-    a: "Then we'll tell you honestly. We only take on people we're confident we can help. The call is to see if it's a fit, not a pressure pitch.",
+    a: "Then we'll tell you. We only take on people we're confident we can help. The call is to find that out, not a pressure pitch.",
   },
 ];
-// Questions already covered by the list above (so editing the FAQ in admin never shows duplicates).
-const COVERED = new Set(["can i start if i am busy?", "is coaching customized?"]);
+
+function CheckList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-2.5 text-[15px]">
+      {items.map((t) => (
+        <li key={t} className="flex items-start gap-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden />
+          <span>{t}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function CoachingPage() {
-  const fetchPage = useServerFn(getPublicSalesPage);
-  const { data: p } = useQuery({
-    queryKey: ["public-sales-page", "coaching"],
-    queryFn: () => fetchPage({ data: { page_key: "coaching" } }),
-    staleTime: 5 * 60_000,
-  });
-
-  const s = (p?.sections ?? {}) as Record<string, any>;
-
-  const whoFor: string[] = Array.isArray(s.who_for) && s.who_for.length > 0 ? s.who_for : [
-    "You want structure and will do the work",
-    "You want accountability",
-    "You are tired of guessing",
-  ];
-  const notFor: string[] = Array.isArray(s.not_for) && s.not_for.length > 0 ? s.not_for : [
-    "You want a shortcut or a quick fix",
-    "You won't follow a plan or check in",
-    "You just want a generic PDF program",
-  ];
-  const steps: Array<{ step: number; title: string; body: string }> =
-    Array.isArray(s.how_it_works) && s.how_it_works.length > 0
-      ? s.how_it_works
-      : [
-          { step: 1, title: "Apply", body: "Tell us your goal. Takes about a minute." },
-          { step: 2, title: "We read it ourselves", body: "A real person reviews every application." },
-          { step: 3, title: "Strategy call", body: "We map the plan together and make sure it's a fit." },
-          { step: 4, title: "Get set up in the app", body: "Training, nutrition, check-ins and messaging in one place." },
-          { step: 5, title: "Start coaching", body: "Train, check in, adjust, repeat." },
-        ];
-  const cmsFaq: Array<{ q: string; a: string }> = Array.isArray(s.faq) ? s.faq : [];
-  const faqItems = [...OBJECTIONS, ...cmsFaq.filter((f) => f?.q && !COVERED.has(String(f.q).trim().toLowerCase()))];
-  const ctaLabel = p?.primary_cta_label || "Apply for Coaching";
-
   return (
-    <SalesPageShell pageId="coaching" floatingHeader>
+    <SalesPageShell pageId="coaching">
+      {/* 1 — What it is, and the one button */}
       <CoachingHero
-        eyebrow="Private coaching · By application"
-        headline="Coaching for people who are done settling."
-        sub="A plan built around your life. A coach who actually reads your check-ins. Real progress, held to a standard."
-        primary={<PrimaryCta to={APPLY_TO}>{ctaLabel}</PrimaryCta>}
-        secondary={<TextLink href="#how">See how it works</TextLink>}
-        note="Takes about a minute · No payment to apply · A real person reads every application"
+        eyebrow="1:1 online coaching · By application"
+        headline="Get stronger and leaner without guessing what to do."
+        sub="Training and nutrition written for you, a coach who reads your check-in every week, and one app that holds it all."
+        primary={<PrimaryCta to={APPLY_TO}>{CTA}</PrimaryCta>}
+        note="Free · 7 quick questions · Pick your call time right after"
+        image={{ src: shotLogger, alt: "A workout in the JF Effect app: the coach's sets, reps and RPE, logged set by set" }}
       />
 
-      {/* 1 — Credibility, fast: who is this person and why listen */}
+      {/* 2 — Why listen */}
       <div className="mx-auto max-w-5xl px-5">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border/70 ring-1 ring-border/70 md:grid-cols-4">
           {[
@@ -167,65 +208,16 @@ function CoachingPage() {
         </div>
       </div>
 
-      {/* 2 — Name the problem: empathy before the pitch */}
-      <Reveal>
-        <Block narrow>
-          <Heading eyebrow="Sound familiar?" title="It's rarely a motivation problem." sub="Most people who come to me have tried hard, more than once. What was missing wasn't effort." />
-          <Group>
-            {[
-              { Icon: Repeat, title: "You start strong, then it fades", body: "No plan survives a busy month without someone adjusting it with you." },
-              { Icon: Eye, title: "You're guessing", body: "What to lift, what to eat, whether it's working. Guessing is exhausting." },
-              { Icon: Users, title: "Nobody is watching the details", body: "Apps hand you numbers. They don't notice when things drift." },
-              { Icon: Heart, title: "Life keeps getting in the way", body: "Work, family, travel, stress. A good plan bends without breaking." },
-            ].map(({ Icon, title, body }) => (
-              <div key={title} className="flex items-start gap-4 px-5 py-4">
-                <IconTile><Icon className="h-5 w-5" aria-hidden /></IconTile>
-                <div className="min-w-0">
-                  <div className="text-[17px] font-semibold leading-snug">{title}</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
-                </div>
-              </div>
-            ))}
-          </Group>
-          <p className="mt-5 text-center text-[17px] font-medium leading-relaxed">
-            That's a structure problem, and structure is exactly what coaching fixes.
-          </p>
-        </Block>
-      </Reveal>
-
-      {/* 3 — The solution */}
-      <Reveal>
-        <Block tint narrow>
-          <Heading eyebrow="What you get" title="Built for you. Run with you." />
-          <Group>
-            {[
-              { Icon: Target, title: "A plan built for you", body: "Your body, your schedule, your equipment. Not pulled from a library." },
-              { Icon: ClipboardCheck, title: "Weekly check-ins", body: "Reviewed by your coach and adjusted around your real progress." },
-              { Icon: Utensils, title: "Nutrition that fits your life", body: "Clear targets made to last, not a crash diet." },
-              { Icon: MessageCircle, title: "A coach in your corner", body: "Direct messaging with your dedicated coach inside the app." },
-            ].map(({ Icon, title, body }) => (
-              <div key={title} className="flex items-start gap-4 px-5 py-4">
-                <IconTile><Icon className="h-5 w-5" aria-hidden /></IconTile>
-                <div className="min-w-0">
-                  <div className="text-[17px] font-semibold leading-snug">{title}</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
-                </div>
-              </div>
-            ))}
-          </Group>
-        </Block>
-      </Reveal>
-
-      {/* 4 — Proof: photos, then real words */}
+      {/* 3 — Proof first */}
       <Reveal>
         <Block>
-          <Heading eyebrow="Real results" title="100+ clients coached." sub="Members and 1:1 clients who showed up and did the work. Swipe to see more." />
+          <Heading eyebrow="Real results" title="People who did the work." sub="A few of the 100+ people I've coached. Swipe to see more." />
           <Rail label="Client transformations">
             {TRANSFORMATION_PHOTOS.slice(0, 12).map((photo, i) => (
               <div key={i} className="w-[68vw] max-w-[280px] shrink-0 snap-start overflow-hidden rounded-2xl bg-muted ring-1 ring-border/70">
                 <img
                   src={photo.url}
-                  alt="Client transformation — before and after"
+                  alt="Client before and after"
                   loading="lazy"
                   decoding="async"
                   width={400}
@@ -235,10 +227,10 @@ function CoachingPage() {
               </div>
             ))}
           </Rail>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="-mx-5 mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
             {CLIENT_QUOTES.map((c) => (
-              <Surface key={c.name} className="flex flex-col p-5">
-                <Quote className="h-5 w-5 text-primary" aria-hidden />
+              <Surface key={c.name} className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col p-5 md:w-auto md:max-w-none">
+                <Quote className="h-5 w-5 text-muted-foreground" aria-hidden />
                 <p className="mt-3 flex-1 text-[15px] leading-relaxed">“{c.quote}”</p>
                 <div className="mt-4 border-t border-border/70 pt-3">
                   <div className="text-[15px] font-semibold">{c.name}</div>
@@ -250,63 +242,60 @@ function CoachingPage() {
           <p className="mt-4 text-center text-[12px] leading-relaxed text-muted-foreground">
             Results vary with starting point, consistency and effort and are not guaranteed.
           </p>
-          <div className="mt-6 flex justify-center">
-            <PrimaryCta to={APPLY_TO}>{ctaLabel}</PrimaryCta>
+        </Block>
+      </Reveal>
+
+      {/* 4 — Why it hasn't worked yet, in one breath */}
+      <Reveal>
+        <Block tint narrow>
+          <div className="text-center">
+            <div className="text-[13px] font-semibold text-muted-foreground">Why it hasn't stuck</div>
+            <h2 className="mt-1.5 text-balance text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] md:text-[40px]">
+              You don't need more motivation.
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
+              Most people who come to me have tried hard, more than once. What they were missing was a plan made for them, someone adjusting it as they go, and someone who notices when they slip.
+            </p>
+            <p className="mx-auto mt-3 max-w-xl text-[17px] font-medium leading-relaxed">That's what coaching is.</p>
           </div>
         </Block>
       </Reveal>
 
-      {/* 5 — The person behind it */}
+      {/* 5 — Exactly what they get, shown on the real screens */}
       <Reveal>
-        <Block tint narrow>
-          <Surface className="overflow-hidden">
-            <img
-              src={jaredAsset.url}
-              alt={`${COACH_NAME} representing Canada in international powerlifting`}
-              loading="lazy"
-              decoding="async"
-              className="aspect-[4/3] w-full object-cover object-[center_20%]"
-            />
-            <div className="p-6">
-              <div className="text-[13px] font-semibold text-primary">Your coach</div>
-              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
-              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× International Champion</p>
-              <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
-                I coach from both sides of the bar: responsible for other people's progress, and still competing under pressure myself. JF Effect is built on one belief: structure and standards outlast motivation.
-              </p>
-              <ul className="mt-4 space-y-2 text-[15px]">
-                {[
-                  "Personal trainer since 2017, full-time coaching since 2021",
-                  "Certified: GLPTI, DTS Level 1, ISSA CPT",
-                  "Drug-tested athlete. I hold myself to what I ask of clients",
-                ].map((t) => (
-                  <li key={t} className="flex items-start gap-3">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
-                    <span>{t}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
-                <TextLink to="/about">Read my full story</TextLink>
+        <Block id="what-you-get">
+          <Heading eyebrow="What you get" title="Here's exactly what you get." sub="All of it lives in the JF Effect app, on your phone." />
+          <div className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-5 px-5 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 md:pb-0 [&::-webkit-scrollbar]:hidden">
+            {OFFER.map((o) => (
+              <div key={o.title} className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none">
+                <PhoneShot src={o.src} alt={o.alt} className="max-w-[230px]" />
+                <h3 className="mt-5 text-[19px] font-semibold leading-snug tracking-[-0.01em]">{o.title}</h3>
+                <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{o.body}</p>
               </div>
-              <div className="mt-4">
-                <div className="mb-2 text-[13px] text-muted-foreground">See the work and how I coach:</div>
-                <SocialLinks />
-              </div>
+            ))}
+          </div>
+          <Surface className="mx-auto mt-10 max-w-3xl p-5 md:p-6">
+            <div className="text-[15px] font-semibold">Also included</div>
+            <div className="mt-3 grid gap-x-8 gap-y-2.5 md:grid-cols-2">
+              <CheckList items={ALSO_INCLUDED.slice(0, 2)} />
+              <CheckList items={ALSO_INCLUDED.slice(2)} />
             </div>
           </Surface>
+          <div className="mt-8 flex justify-center">
+            <PrimaryCta to={APPLY_TO} className="w-full sm:w-auto sm:min-w-[280px]">{CTA}</PrimaryCta>
+          </div>
         </Block>
       </Reveal>
 
-      {/* 6 — Remove uncertainty: exactly what happens */}
+      {/* 6 — How it starts */}
       <Reveal>
-        <Block id="how" narrow>
-          <Heading eyebrow="How it works" title="Here's exactly what happens." sub="No pressure and no payment to apply. A real person reads every application." />
+        <Block id="how" tint narrow>
+          <Heading eyebrow="How it works" title="Three steps to start." sub="Applying takes about a minute." />
           <Group>
-            {steps.map((st, i) => (
-              <div key={st.step ?? i} className="flex items-start gap-4 px-5 py-4">
-                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-[14px] font-semibold text-primary-foreground">
-                  {st.step ?? i + 1}
+            {STEPS.map((st, i) => (
+              <div key={st.title} className="flex items-start gap-4 px-5 py-4">
+                <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-[14px] font-semibold text-foreground">
+                  {i + 1}
                 </span>
                 <div className="min-w-0">
                   <div className="text-[17px] font-semibold leading-snug">{st.title}</div>
@@ -318,43 +307,54 @@ function CoachingPage() {
         </Block>
       </Reveal>
 
-      {/* 7 — Objections, answered honestly */}
+      {/* 7 — The person behind it */}
       <Reveal>
-        <Block tint narrow>
-          <Heading eyebrow="Still thinking it over?" title="Fair. Straight answers." sub="What people ask before they apply." />
-          <Group>
-            <Accordion type="single" collapsible>
-              {faqItems.map((it, i) => (
-                <AccordionItem key={i} value={`faq-${i}`} className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70">
-                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
-                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{it.a}</AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </Group>
+        <Block narrow>
+          <Surface className="overflow-hidden">
+            <img
+              src={jaredAsset.url}
+              alt={`${COACH_NAME} representing Canada in international powerlifting`}
+              loading="lazy"
+              decoding="async"
+              className="aspect-[4/3] w-full object-cover object-[center_20%]"
+            />
+            <div className="p-6">
+              <div className="text-[13px] font-semibold text-muted-foreground">Your coach</div>
+              <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
+              <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× International Champion</p>
+              <p className="mt-4 text-[17px] leading-relaxed text-muted-foreground">
+                I coach from both sides of the bar: responsible for other people's progress, and still competing under pressure myself. JF Effect is built on one belief: structure and standards outlast motivation.
+              </p>
+              <div className="mt-4">
+                <CheckList
+                  items={[
+                    "Personal trainer since 2017, full-time coaching since 2021",
+                    "Certified: GLPTI, DTS Level 1, ISSA CPT",
+                    "Drug-tested athlete. I hold myself to what I ask of clients",
+                  ]}
+                />
+              </div>
+              <div className="mt-5">
+                <TextLink to="/about">Read my full story</TextLink>
+              </div>
+            </div>
+          </Surface>
         </Block>
       </Reveal>
 
       {/* 8 — Honest fit check */}
       <Reveal>
-        <Block>
-          <Heading eyebrow="Is it for you?" title="Selective by design." sub="Coaching works when both sides take it seriously. Better to know now." />
+        <Block tint>
+          <Heading eyebrow="Is it for you?" title="Coaching isn't for everyone." sub="It works when both sides take it seriously. Better to know now." />
           <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
             <Surface className="p-5">
-              <div className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">This is for you if</div>
-              <ul className="mt-3 space-y-3">
-                {whoFor.map((line) => (
-                  <li key={line} className="flex items-start gap-3 text-[15px]">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
-                    <span>{line}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="mb-3 text-[15px] font-semibold">This is for you if</div>
+              <CheckList items={FOR_YOU} />
             </Surface>
             <Surface className="p-5">
-              <div className="text-[13px] font-semibold text-muted-foreground">This is not for you if</div>
-              <ul className="mt-3 space-y-3">
-                {notFor.map((line) => (
+              <div className="mb-3 text-[15px] font-semibold text-muted-foreground">This is not for you if</div>
+              <ul className="space-y-2.5">
+                {NOT_FOR_YOU.map((line) => (
                   <li key={line} className="flex items-start gap-3 text-[15px] text-muted-foreground">
                     <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground/60" aria-hidden />
                     <span>{line}</span>
@@ -366,58 +366,80 @@ function CoachingPage() {
         </Block>
       </Reveal>
 
-      {/* 9 — Low-risk final ask, with a softer path for people who aren't ready */}
+      {/* 9 — Their questions, answered straight */}
       <Reveal>
         <Block narrow>
-          <div id="cta" className="text-center">
+          <Heading eyebrow="Questions" title="Straight answers." sub="What people ask before they apply." />
+          <Group>
+            <Accordion type="single" collapsible>
+              {FAQ.map((it, i) => (
+                <AccordionItem key={it.q} value={`faq-${i}`} className="border-0 px-5 [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70">
+                  <AccordionTrigger className="py-4 text-left text-[17px] font-medium hover:no-underline">{it.q}</AccordionTrigger>
+                  <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{it.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </Group>
+        </Block>
+      </Reveal>
+
+      {/* 10 — The application's first question, right here */}
+      <Reveal>
+        <Block id="start" tint narrow>
+          <div className="text-center">
             <h2 className="text-balance text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] md:text-[40px]">
-              {s.final_cta?.headline ?? "If you already know you need coaching, stop waiting."}
+              What do you want help with?
             </h2>
             <p className="mx-auto mt-3 max-w-md text-[17px] leading-relaxed text-muted-foreground">
-              Your first step costs nothing and commits you to nothing.
-            </p>
-            <ul className="mx-auto mt-5 max-w-sm space-y-2.5 text-left text-[15px]">
-              {[
-                "Free to apply: no payment, no card",
-                "A real person reads it, not an auto-reply",
-                "A no-pressure call, and we only move forward if it's a fit",
-              ].map((t) => (
-                <li key={t} className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
-                  <span>{t}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-7 flex flex-col items-stretch gap-4 sm:items-center">
-              <PrimaryCta to={APPLY_TO} className="sm:min-w-[280px]">{s.final_cta?.primary_label ?? ctaLabel}</PrimaryCta>
-              <p className="text-[13px] text-muted-foreground">By application · Limited spots</p>
-            </div>
-
-            <Surface className="mt-10 p-5 text-left">
-              <div className="flex items-start gap-4">
-                <IconTile><MessageSquare className="h-5 w-5" aria-hidden /></IconTile>
-                <div className="min-w-0">
-                  <div className="text-[17px] font-semibold leading-snug">Not ready to apply? Ask me first.</div>
-                  <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
-                    Got a question before you decide? Send me a message on Instagram, or take a look at how I train and coach on YouTube.
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3">
-                    <TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink>
-                  </div>
-                  <div className="mt-3"><SocialLinks /></div>
-                </div>
-              </div>
-            </Surface>
-            <p className="mt-6 text-[15px] text-muted-foreground">
-              Prefer to go self-guided?{" "}
-              <Link to="/join" className="font-medium text-primary hover:underline underline-offset-4">Start free with JF Effect</Link>
+              Pick one to start your application. It takes about a minute.
             </p>
           </div>
+          <div className="mx-auto mt-7 grid max-w-md gap-3 sm:grid-cols-2">
+            {GOAL_ORDER.map((v) => APPLY_GOALS.find((g) => g.v === v)!).map((g) => (
+              <Link
+                key={g.v}
+                to={`${APPLY_TO}?goal=${g.v}` as typeof APPLY_TO}
+                className="flex h-14 items-center justify-between rounded-2xl bg-card px-5 text-[17px] font-semibold ring-1 ring-border/70 transition hover:ring-foreground/30 active:scale-[0.985]"
+              >
+                {g.l}
+                <ChevronRight className="h-5 w-5 text-muted-foreground" aria-hidden />
+              </Link>
+            ))}
+          </div>
+          <div className="mt-4 text-center">
+            <Link to={APPLY_TO} className="text-[15px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+              Something else
+            </Link>
+          </div>
+          <div className="mx-auto mt-8 max-w-sm">
+            <CheckList
+              items={[
+                "Free to apply: no payment, no card",
+                "A real person reads it, not an auto-reply",
+                "A no-pressure call, and we only start if it's a fit",
+              ]}
+            />
+          </div>
+          <p className="mt-6 text-center text-[13px] text-muted-foreground">By application · Spots are limited</p>
+
+          <Surface className="mt-10 p-5">
+            <div className="flex items-start gap-4">
+              <IconTile><MessageSquare className="h-5 w-5" aria-hidden /></IconTile>
+              <div className="min-w-0">
+                <div className="text-[17px] font-semibold leading-snug">Want to ask something first?</div>
+                <p className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground">
+                  Message me on Instagram, or see how I train and coach on YouTube.
+                </p>
+                <div className="mt-3"><TextLink href={INQUIRY_DM_URL}>Message me on Instagram</TextLink></div>
+                <div className="mt-3"><SocialLinks /></div>
+              </div>
+            </div>
+          </Surface>
         </Block>
       </Reveal>
 
       <div className="pb-24 md:pb-0" />
-      <StickyMobileCta label={ctaLabel} href={APPLY_TO} />
+      <StickyMobileCta label={CTA} href={APPLY_TO} />
     </SalesPageShell>
   );
 }

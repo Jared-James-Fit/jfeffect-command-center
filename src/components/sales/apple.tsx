@@ -45,7 +45,7 @@ export function Heading({
 }) {
   return (
     <div className={cn("mb-8 md:mb-10", align === "center" ? "mx-auto max-w-2xl text-center" : "max-w-2xl")}>
-      {eyebrow && <div className="text-[13px] font-semibold text-primary">{eyebrow}</div>}
+      {eyebrow && <div className="text-[13px] font-semibold text-muted-foreground">{eyebrow}</div>}
       <h2 className="mt-1.5 text-balance text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] md:text-[40px]">{title}</h2>
       {sub && <p className="mt-3 text-[17px] leading-relaxed text-muted-foreground">{sub}</p>}
     </div>
@@ -53,7 +53,7 @@ export function Heading({
 }
 
 const PRIMARY =
-  "inline-flex h-[54px] items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-[17px] font-semibold text-primary-foreground shadow-[0_8px_24px_-10px_color-mix(in_oklab,var(--primary)_70%,transparent)] transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "inline-flex h-[54px] items-center justify-center gap-2 rounded-2xl bg-primary px-7 text-[17px] font-semibold text-primary-foreground transition active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 /** The one button per screen. Pass `to` for a route or `onClick` for an action. */
 export function PrimaryCta({
@@ -118,10 +118,10 @@ export function Surface({ children, className }: { children: ReactNode; classNam
   return <div className={cn("rounded-2xl bg-card ring-1 ring-border/70", className)}>{children}</div>;
 }
 
-/** Soft icon tile used in lists. */
+/** Neutral icon tile used in lists. */
 export function IconTile({ children }: { children: ReactNode }) {
   return (
-    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-primary/10 text-primary">{children}</span>
+    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-muted text-foreground">{children}</span>
   );
 }
 
@@ -143,7 +143,7 @@ export function Rail({ children, label }: { children: ReactNode; label: string }
 export function Stat({ value, label, detail }: { value: string; label: string; detail?: string }) {
   return (
     <div className="px-4 py-5 text-center">
-      <div className="text-[28px] font-semibold leading-none tracking-[-0.02em] text-primary md:text-[34px]">{value}</div>
+      <div className="text-[28px] font-semibold leading-none tracking-[-0.02em] md:text-[34px]">{value}</div>
       <div className="mt-2 text-[13px] font-semibold">{label}</div>
       {detail && <div className="mt-1 text-[12px] leading-snug text-muted-foreground">{detail}</div>}
     </div>

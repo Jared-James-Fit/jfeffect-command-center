@@ -88,6 +88,12 @@ export function SalesPageEditor({ pageKey }: { pageKey: PageKey }) {
 
       <ShareToolbar slug={pageKey} promoMessage={draft.promo_message} />
 
+      {pageKey === "coaching" && (
+        <Card className="p-4 text-sm text-muted-foreground">
+          The /coaching page's words and screenshots are set in the app's code now (src/routes/coaching.index.tsx), so changes saved here don't show on it. Only the share text above is used.
+        </Card>
+      )}
+
       {/* Hero */}
       <Card className="p-5 space-y-3">
         <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Hero</div>
