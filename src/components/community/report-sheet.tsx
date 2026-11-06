@@ -82,6 +82,10 @@ export function ReportSheet({
       return;
     }
     setDone(true);
+    // tell the team (never who reported it); a failed push never fails the report
+    void import("@/lib/push/events.functions")
+      .then(({ notifyCommunityReport }) => notifyCommunityReport({ data: { kind, targetId } }))
+      .catch(() => null);
   };
 
   return (
