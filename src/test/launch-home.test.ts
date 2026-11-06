@@ -120,7 +120,6 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
     const entries = [
       "src/components/client-pov-quick-picker.tsx",
       "src/routes/_authenticated/admin/client-pov.tsx",
-      "src/route-pages/_authenticated/admin/clients.$id.tsx",
       "src/route-pages/_authenticated/admin/messages.tsx",
       "src/components/pov-quick-toggle.tsx",
       "src/components/members/members-directory.tsx",
@@ -132,6 +131,10 @@ describe("a fresh launch opens Crew; mid-workout it goes back to the workout", (
       expect(src, f).toContain("navigate({ to: CLIENT_VIEW_HOME });");
       expect(src, f).not.toContain('navigate({ to: "/portal" });');
     }
+    // The client profile enters through the shared hook, which lands on CLIENT_VIEW_HOME unless told a screen.
+    const profile = read("src/route-pages/_authenticated/admin/clients.$id.tsx");
+    expect(profile).toContain("const pov = useEnterClientPov();");
+    expect(profile).toContain("void pov.enter(id, { fallbackName: form.full_name });");
   });
 
   it("signing in, an old member link, a wrong area and a notification with nowhere specific all open Crew too", () => {

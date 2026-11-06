@@ -39,9 +39,12 @@ describe("client profile header is not cluttered", () => {
     expect(header).not.toContain('onClick={save}><Save');
   });
 
-  it("keeps Training program and Program history reachable from More", () => {
-    expect(header).toContain("Training program");
-    expect(header).toContain("Program history");
+  it("keeps Training program and Program history reachable from More, one menu for both headers", () => {
+    const menu = page.slice(page.indexOf("const moreMenu = ("), page.indexOf("const links = ["));
+    expect(menu).toContain("Training program");
+    expect(menu).toContain("Program history");
+    expect(header).toContain("{moreMenu}");
+    expect(page).toContain("moreMenu={moreMenu}");
   });
 });
 

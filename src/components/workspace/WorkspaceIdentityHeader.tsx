@@ -79,7 +79,7 @@ export function WorkspaceIdentityHeader({
               <Button variant="outline" size="sm" onClick={onMessage} className="hidden sm:inline-flex">
                 <MessageSquare className="mr-2 h-4 w-4" />Message
               </Button>
-              <Button variant="ghost" size="icon" onClick={onMessage} className="sm:hidden" aria-label="Message">
+              <Button variant="ghost" size="icon" onClick={onMessage} className="h-10 w-10 sm:hidden" aria-label="Message">
                 <MessageSquare className="h-5 w-5" />
               </Button>
             </>

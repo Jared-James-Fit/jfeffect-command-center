@@ -79,7 +79,7 @@ describe("where the block stands", () => {
 
 describe("the row: one clear way in", () => {
   const row = read("src/components/clients/client-row.tsx");
-  it("View Profile and ⋯ only: no quick actions, no arrow", () => {
+  it("View Profile, Workout and ⋯: no quick-actions menu, no arrow", () => {
     expect(row).toContain(">View Profile</ClientNameLink>");
     expect(row).not.toContain("QuickActionsMenu");
     expect(row).not.toContain("ChevronRight");

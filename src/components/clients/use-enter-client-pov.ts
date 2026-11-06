@@ -4,6 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
+import { todayLocalISO } from "@/lib/today";
+
+/**
+ * Client view straight onto a day's workout (today by default): the Workouts
+ * page opens it when that day holds exactly one, else shows that day, where a
+ * workout can be picked or moved. Logging there saves as the client.
+ */
+export function clientWorkoutHref(date: string = todayLocalISO()): string {
+  return `/portal/workouts?open=${date}`;
+}
 
 /**
  * Open the app as a client ("View as client"), landing on `to` (default
