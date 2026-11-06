@@ -26,7 +26,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Calculator, ChevronDown, ChevronLeft, ChevronRight, Gauge, Hash, Minus, Pause, Play, Plus, RotateCcw, Timer as TimerIcon, Volume2, VolumeX, Watch } from "lucide-react";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { CardMenuItem } from "@/components/workout-day/card-menu";
 import {
   type StopwatchState,
   type TimerState,
@@ -742,7 +742,7 @@ export function CardToolsRow({ unit }: { unit?: WarmupUnit }) {
       <div className="px-2 pb-1 pt-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tools</div>
       <div className="grid grid-cols-5 gap-0.5">
         {CARD_TOOLS.map(({ key, label, icon }) => (
-          <DropdownMenuItem
+          <CardMenuItem
             key={key}
             data-testid={`card-tool-${key}`}
             aria-label={`${TOOLS[key].title}: ${TOOLS[key].desc}`}
@@ -752,7 +752,7 @@ export function CardToolsRow({ unit }: { unit?: WarmupUnit }) {
             {icon}
             <span>{label}</span>
             {status?.active === key && <span aria-hidden data-testid="card-tool-running" className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />}
-          </DropdownMenuItem>
+          </CardMenuItem>
         ))}
       </div>
     </div>

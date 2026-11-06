@@ -95,6 +95,7 @@ import { ActiveRestTimerProvider, useRestTimer } from "@/components/active-rest-
 import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
+import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
 import {
   DeferredExerciseHistoryButton,
   DeferredQuickSwapSheet,
@@ -4288,19 +4289,19 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         hasNote={hasNote}
         onOpenNote={() => setNotesOpen(true)}
         moreMenu={(
-          <DropdownMenuContent align="start" collisionPadding={8} className="w-80 max-w-[calc(100vw-16px)] rounded-xl p-1.5">
+          <>
             {/* Workout Tools, one tap each, over the workout (list or Focus) */}
             {toolsActions && (
               <>
                 <CardToolsRow unit={activeUnit} />
-                <DropdownMenuSeparator />
+                <CardMenuSeparator />
               </>
             )}
             {!readonly && clientId && (
               <>
                 {/* Undo / Redo stay open so a few taps walk back several steps. */}
                 <div className="grid grid-cols-2 gap-1">
-                  <DropdownMenuItem
+                  <CardMenuItem
                     data-testid="card-undo"
                     disabled={!cardHistory.canUndo || cardHistory.busy}
                     onSelect={(e) => { e.preventDefault(); void runCardHistory("undo"); }}
@@ -4308,8 +4309,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     className="h-10 justify-center rounded-lg font-semibold"
                   >
                     <Undo2 className="mr-1.5 h-4 w-4" /> Undo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
+                  </CardMenuItem>
+                  <CardMenuItem
                     data-testid="card-redo"
                     disabled={!cardHistory.canRedo || cardHistory.busy}
                     onSelect={(e) => { e.preventDefault(); void runCardHistory("redo"); }}
@@ -4317,9 +4318,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     className="h-10 justify-center rounded-lg font-semibold"
                   >
                     <Redo2 className="mr-1.5 h-4 w-4" /> Redo
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 </div>
-                <DropdownMenuItem
+                <CardMenuItem
                   data-testid="card-reset"
                   disabled={!cardHistory.canReset || cardHistory.busy}
                   onSelect={() => void runCardHistory("reset")}
@@ -4330,49 +4331,49 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     <span>Reset exercise</span>
                     <span className="text-[11px] text-muted-foreground">Clear everything logged here</span>
                   </span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                </CardMenuItem>
+                <CardMenuSeparator />
               </>
             )}
-            <DropdownMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
+            <CardMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
               <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
-            </DropdownMenuItem>
+            </CardMenuItem>
             {cues && (
-              <DropdownMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
+              <CardMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
                 {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
                 {cuesOpen ? "Hide cues" : "Show cues"}
-              </DropdownMenuItem>
+              </CardMenuItem>
             )}
-            <DropdownMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
+            <CardMenuItem onSelect={() => setHelpOpen(true)} className="rounded-lg">
               <HelpCircle className="mr-2 h-4 w-4" /> Training help
-            </DropdownMenuItem>
+            </CardMenuItem>
             {(canMoveUp || canMoveDown || (moveCount ?? 0) > 1) && (
               <>
-                <DropdownMenuSeparator />
+                <CardMenuSeparator />
                 <div className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   Exercise {movePosition} of {moveCount}
                 </div>
                 <div className="grid grid-cols-2 gap-1">
-                  <DropdownMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
+                  <CardMenuItem disabled={!canMoveUp} onSelect={onMoveUp} aria-label="Move exercise up" className="h-10 justify-center rounded-lg">
                     <ArrowUp className="mr-1.5 h-4 w-4" /> Up
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
+                  </CardMenuItem>
+                  <CardMenuItem disabled={!canMoveDown} onSelect={onMoveDown} aria-label="Move exercise down" className="h-10 justify-center rounded-lg">
                     <ArrowDown className="mr-1.5 h-4 w-4" /> Down
-                  </DropdownMenuItem>
+                  </CardMenuItem>
                 </div>
                 {(moveCount ?? 0) > 2 && (
                   <>
                     <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Move to position</div>
                     <div className="grid grid-cols-4 gap-1 p-1">
                       {Array.from({ length: moveCount ?? 0 }, (_, i) => i + 1).map((position) => (
-                        <DropdownMenuItem
+                        <CardMenuItem
                           key={position}
                           disabled={position === movePosition}
                           onSelect={() => onMoveTo?.(position)}
                           className="h-10 justify-center rounded-lg p-0 font-semibold"
                         >
                           {position}
-                        </DropdownMenuItem>
+                        </CardMenuItem>
                       ))}
                     </div>
                   </>
@@ -4381,8 +4382,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             )}
             {onRemove && (
               <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
+                <CardMenuSeparator />
+                <CardMenuItem
                   data-testid="card-remove"
                   onSelect={onRemove}
                   className="items-start rounded-lg py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
@@ -4392,10 +4393,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                     <span className="font-semibold">Remove from this workout</span>
                     <span className="text-[11px] text-muted-foreground">Only this workout. You can undo it.</span>
                   </span>
-                </DropdownMenuItem>
+                </CardMenuItem>
               </>
             )}
-          </DropdownMenuContent>
+          </>
         )}
         rest={(exerciseId || name) ? (
           <RestTimerButton

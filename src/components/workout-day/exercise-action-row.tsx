@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { MoreHorizontal, StickyNote } from "lucide-react";
+import { StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { CardMenu } from "@/components/workout-day/card-menu";
 
 /**
  * The How To · Note · More · Rest row on every workout exercise card.
@@ -23,7 +23,8 @@ export function ExerciseActionRow({
   howTo: ReactNode | null;
   hasNote: boolean;
   onOpenNote: () => void;
-  /** DropdownMenuContent for "More" (undo / redo / reset, swap, cues, calculator, help, reorder). */
+  /** The items for More (CardMenuItem / CardMenuSeparator: tools, undo / redo / reset, swap, cues, help, reorder):
+   *  a bottom sheet on a phone, a dropdown elsewhere (card-menu.tsx). */
   moreMenu: ReactNode;
   rest: ReactNode | null;
 }) {
@@ -46,14 +47,7 @@ export function ExerciseActionRow({
             <span aria-hidden className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
           )}
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" size="sm" variant="ghost" data-no-swipe className={round} aria-label={`More options for ${name}`}>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          {moreMenu}
-        </DropdownMenu>
+        <CardMenu name={name} buttonClassName={round}>{moreMenu}</CardMenu>
         {rest && <div className="ml-auto flex min-w-0 shrink-0 justify-end">{rest}</div>}
       </div>
     </div>
