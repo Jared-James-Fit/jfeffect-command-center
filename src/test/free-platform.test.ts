@@ -301,3 +301,16 @@ describe("Crew reports reach the team", () => {
     expect(sheet).toContain("notifyCommunityReport({ data: { kind, targetId } })");
   });
 });
+
+describe("legal status reads its documents", () => {
+  it("every embedded legal_documents → current version link uses the real foreign key", () => {
+    const legal = readFileSync("src/lib/legal.functions.ts", "utf8");
+    const types = readFileSync("src/integrations/supabase/types.ts", "utf8");
+    // the constraint is fk_legal_documents_current_version; a wrong hint made
+    // listMyLegalStatus (Account → Legal & Safety, the acceptance gate) error for everyone
+    expect(types).toContain('foreignKeyName: "fk_legal_documents_current_version"');
+    const hints = [...legal.matchAll(/legal_document_versions!(\w+)\(/g)].map((m) => m[1]);
+    expect(hints.length).toBeGreaterThan(0);
+    for (const h of hints) expect(h).toBe("fk_legal_documents_current_version");
+  });
+});
