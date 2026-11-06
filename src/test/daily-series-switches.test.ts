@@ -48,7 +48,7 @@ describe("the five daily series, back on the coach's switches", () => {
     expect(ov).toContain("WHERE r.series_key = 'holiday:' || h.key || ':' || extract(year FROM h.d)::int))");
   });
 
-  it("each of the five has a switch that flips at once, and Wins and Recap stay always on", () => {
+  it("each of the five has a switch that flips at once, and Wins stays always on", () => {
     expect(queries).toContain('db.rpc("community_series_set_on", { _series: a.series, _on: a.on })');
     expect(queries).toContain('if (a.kind !== "series_on") return undefined;');
     expect(queries).toContain('if (a.kind === "series_on") qc.invalidateQueries({ queryKey: ["community-lessons"] });');

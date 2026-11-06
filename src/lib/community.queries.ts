@@ -1105,14 +1105,16 @@ export type SeriesOverview = {
   this_week: Record<CommunitySeries, boolean>;
   /** Wednesday Wins is written from last week's training: what it would say right now. */
   wins_preview: { body: string; featured: number; trainers: number; week_of: string; next_week: boolean; stats?: WinsStats | null } | null;
-  /** The library series the coach turned on (they post alongside that day's lesson). Wins and Recap are always on. */
-  series_on?: LibrarySeries[];
+  /** The series the coach turned on: any of the five library ones and the Recap. Wins is always on. */
+  series_on?: SwitchedSeries[];
   /** Holiday posts coming up in the next ~4 months (9 am on the day), soonest first. */
   holidays?: { key: string; name: string; date: string; body: string; posted: boolean }[];
 };
 
 /** The five series written from a library (the other two come from the crew's logs). */
 export type LibrarySeries = Extract<CommunitySeries, "monday_motivation" | "tuesday_tips" | "try_it_thursday" | "finish_strong_friday" | "saturday_spirit">;
+/** The series with an on / off switch: the five library ones and the Sunday Recap (20270205090000_one_weekly_crew_post.sql). */
+export type SwitchedSeries = LibrarySeries | Extract<CommunitySeries, "sunday_recap">;
 
 export function useSeriesOverview(enabled: boolean) {
   return useQuery({
@@ -1161,7 +1163,8 @@ export type CommunityPulse = {
   to_reply: { post_id: string; comment_id: string; created_at: string; body: string; name: string; avatar_url: string | null }[];
   top_post: { post_id: string; series: CommunitySeries | null; name: string; line: string; reactions: number; comments: number } | null;
   paused: boolean;
-  next: { series: CommunitySeries; at: string; title?: string | null; needs_ok?: boolean } | null;
+  /** The next coach post on its own (`community_next_post`): a lesson, a series that's on, or the daily picture. */
+  next: { series: CommunitySeries | "daily_visual"; at: string; title?: string | null; needs_ok?: boolean } | null;
   /** Lessons in the next week still waiting on the coach's OK (review mode). */
   lessons_review?: number;
   birthday_review: number;
@@ -1188,7 +1191,7 @@ export function useSeriesAction() {
     mutationFn: async (
       a:
         | { kind: "pause"; paused: boolean }
-        | { kind: "series_on"; series: LibrarySeries; on: boolean }
+        | { kind: "series_on"; series: SwitchedSeries; on: boolean }
         | { kind: "publish"; series: CommunitySeries }
         | { kind: "item"; id: string; body: string; active?: boolean; media?: PostSlide[] }
         | { kind: "note"; body: string; poll?: string[] | null; media?: PostSlide[] },
