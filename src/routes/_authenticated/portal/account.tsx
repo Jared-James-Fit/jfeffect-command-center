@@ -308,7 +308,9 @@ function AccountPage() {
   };
 
   // ── Row summaries ──
-  const missing = profileMissing(client, goalsStatus, goalsOn);
+  // a member's profile asks only what member setup asks (no coach intake)
+  const coachingIntake = tier !== "self_serve";
+  const missing = profileMissing(client, goalsStatus, goalsOn, coachingIntake);
   const basicMissing = missing.filter((m) => m.section === "basic-information").length;
   const unitsOk = !!client?.weight_unit_confirmed_at;
   const scheduleOk = !!client?.training_schedule_completed;
@@ -320,7 +322,7 @@ function AccountPage() {
       : { text: `${client?.preferred_weight_unit === "kg" ? "kg" : "lb"} · ${days.length} day${days.length === 1 ? "" : "s"} a week` };
   const photoOk = !!form.profile_picture_url && !form.profile_picture_needs_update;
   const photoSummary: Summary = !form.profile_picture_url
-    ? { text: "Add a photo", warn: true }
+    ? { text: "Add a photo", warn: coachingIntake }
     : !photoOk
       ? { text: "Needs a new photo", warn: true }
       : form.profile_picture_updated_at
@@ -697,10 +699,17 @@ type MissingItem = { key: string; label: string; section: SectionId | "goals" };
  * instead of a vague "Information Missing". Goals & Setup only for a coaching
  * client (it's the coach's onboarding).
  */
+/**
+ * What's left to fill in. A coaching client's profile is their coach's intake
+ * (identity, contact, height, address, emergency contact, a photo); a JF member
+ * (self-serve) is asked only what their own setup asks, the unit and their
+ * training days: the rest stays in Account for them to add, never "to finish".
+ */
 function profileMissing(
   client: any,
   goalsStatus: { completed_at: string | null; main_goal: string | null } | null | undefined,
   goalsOn: boolean,
+  coachingIntake = true,
 ): MissingItem[] {
   if (!client) return [];
   const goalsOk = !!(goalsStatus?.completed_at || goalsStatus?.main_goal);
@@ -710,6 +719,12 @@ function profileMissing(
   const isFilled = (v: any) => v !== null && v !== undefined && String(v).trim() !== "";
   const missing: MissingItem[] = [];
   const basic = "basic-information" as const;
+
+  if (!coachingIntake) {
+    if (!unitsOk) missing.push({ key: "units", label: "Weight units (lb or kg)", section: "units" });
+    if (!scheduleOk) missing.push({ key: "schedule", label: "Training schedule", section: "units" });
+    return missing;
+  }
 
   if (!isFilled(client.first_name)) missing.push({ key: "first_name", label: "First name", section: basic });
   if (!isFilled(client.last_name)) missing.push({ key: "last_name", label: "Last name", section: basic });
