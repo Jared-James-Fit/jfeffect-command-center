@@ -171,10 +171,12 @@ describe("the plan and how lessons go out", () => {
     expect(missingLevels({ beginner: 1, advanced: 0, elite: 2 })).toEqual(["advanced"]);
   });
 
-  it("plans in Winnipeg time, daylight saving included", () => {
+  it("plans in Winnipeg time: UTC-5 all year from Nov 1 2026, the old fall-back before it", () => {
     expect(coachInstant("2026-10-15", "17:00")).toBe("2026-10-15T22:00:00.000Z"); // CDT
-    expect(coachInstant("2026-11-10", "17:00")).toBe("2026-11-10T23:00:00.000Z"); // CST
-    expect(coachClock("2026-11-10T23:00:00.000Z")).toEqual({ date: "2026-11-10", time: "17:00" });
+    // Manitoba kept UTC-5 when the clocks would have fallen back on Nov 1 2026
+    expect(coachInstant("2026-11-10", "17:00")).toBe("2026-11-10T22:00:00.000Z");
+    expect(coachClock("2026-11-10T22:00:00.000Z")).toEqual({ date: "2026-11-10", time: "17:00" });
+    expect(coachInstant("2025-11-10", "17:00")).toBe("2025-11-10T23:00:00.000Z"); // CST, 2025
   });
 
   it("nudges the coach once, the day before, only while he's reviewing", () => {

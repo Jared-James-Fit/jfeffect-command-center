@@ -32,10 +32,14 @@ function session(over: Partial<ReminderSession> = {}): ReminderSession {
 const at = (date: string, time: string) => wallTimeToUtc(date, time, TZ);
 
 describe("schedule time math", () => {
-  it("turns local wall time into the right instant across DST", () => {
+  it("turns local wall time into the right instant, Manitoba's UTC-5 from Nov 1 2026 included", () => {
     expect(wallTimeToUtc("2026-10-12", "11:00", TZ).toISOString()).toBe("2026-10-12T16:00:00.000Z"); // CDT
-    expect(wallTimeToUtc("2026-12-01", "11:00", TZ).toISOString()).toBe("2026-12-01T17:00:00.000Z"); // CST
-    expect(wallTimeToUtc("2026-11-01", "09:00", TZ).toISOString()).toBe("2026-11-01T15:00:00.000Z"); // DST ends 2am
+    // Manitoba kept UTC-5 instead of falling back on Nov 1 2026
+    expect(wallTimeToUtc("2026-12-01", "11:00", TZ).toISOString()).toBe("2026-12-01T16:00:00.000Z");
+    expect(wallTimeToUtc("2026-11-01", "09:00", TZ).toISOString()).toBe("2026-11-01T14:00:00.000Z");
+    // the last real fall-back, Nov 2 2025
+    expect(wallTimeToUtc("2025-12-01", "11:00", TZ).toISOString()).toBe("2025-12-01T17:00:00.000Z"); // CST
+    expect(wallTimeToUtc("2025-11-02", "09:00", TZ).toISOString()).toBe("2025-11-02T15:00:00.000Z"); // DST ended 2am
   });
   it("reads local dates and does plain date math", () => {
     expect(localDateISO(new Date("2026-10-13T03:30:00Z"), TZ)).toBe("2026-10-12");
