@@ -309,16 +309,24 @@ function CoachingPage() {
 
       {/* 7 — The person behind it */}
       <Reveal>
-        <Block narrow>
-          <Surface className="overflow-hidden">
-            <img
-              src={jaredAsset.url}
-              alt={`${COACH_NAME} representing Canada in international powerlifting`}
-              loading="lazy"
-              decoding="async"
-              className="aspect-[4/3] w-full object-cover object-[center_20%]"
-            />
-            <div className="p-6">
+        <Block>
+          {/* The photo is a 4:5 portrait: shown square from 31% down it keeps the Canada
+              Powerlifting / IPF banner and the whole lift, head to plates to feet. From md up
+              it sits beside the words and fills the card's height (the words set it), so the
+              square never becomes a page-tall block. */}
+          <Surface className="mx-auto max-w-4xl overflow-hidden md:grid md:grid-cols-2">
+            <div className="relative md:min-h-[420px]">
+              <img
+                src={jaredAsset.url}
+                alt={`${COACH_NAME} deadlifting for Team Canada at an IPF competition`}
+                loading="lazy"
+                decoding="async"
+                width={1536}
+                height={1536}
+                className="aspect-square h-auto w-full object-cover object-[center_31%] md:absolute md:inset-0 md:aspect-auto md:h-full"
+              />
+            </div>
+            <div className="p-6 md:self-center md:p-8">
               <div className="text-[13px] font-semibold text-muted-foreground">Your coach</div>
               <h2 className="mt-1 text-[26px] font-semibold leading-tight tracking-[-0.02em]">{COACH_NAME}</h2>
               <p className="mt-1 text-[15px] text-muted-foreground">Team Canada powerlifter · 2× International Champion</p>
