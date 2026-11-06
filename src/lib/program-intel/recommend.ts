@@ -243,15 +243,22 @@ export function recommendSetup(x: {
     why.weeks = { source: "Default", reason: `A typical ${BRAIN_LABEL[brain].toLowerCase()} cycle.`, confidence: "low" };
   }
 
-  // Session length: as long as their sessions actually take, within their stated limit.
-  const cap = ctx.session.goalsMinutes ?? null;
+  // Session length: as long as their sessions actually take, within their stated limit, and for a
+  // client who trains in booked PT sessions within that hour (warm-up, lifting and cardio all inside it).
+  const pt = ctx.session.ptMinutes ?? null;
+  const stated = ctx.session.goalsMinutes ?? null;
+  const cap = pt != null && (stated == null || pt <= stated) ? pt : stated;
+  const capIsPt = cap != null && cap === pt;
+  const capName = capIsPt ? `their ${pt}-min PT session` : "Goals & Setup";
   let sessionMinutes: number | null;
   if (ctx.session.entries >= 4 && ctx.session.observedMedian != null) {
     sessionMinutes = cap ? Math.min(cap, roundUp5(ctx.session.observedMedian)) : roundUp5(ctx.session.observedMedian);
-    why.sessionMinutes = { source: "Logged sessions", reason: `Their sessions took ${ctx.session.observedMedian} min (median of ${ctx.session.entries})${cap ? `; Goals & Setup allows ${cap}` : ""}.`, confidence: "high" };
+    why.sessionMinutes = { source: "Logged sessions", reason: `Their sessions took ${ctx.session.observedMedian} min (median of ${ctx.session.entries})${cap ? `; ${capName} allows ${cap}` : ""}.`, confidence: "high" };
   } else if (cap) {
     sessionMinutes = cap;
-    why.sessionMinutes = { source: "Goals & Setup", reason: "Their stated session length.", confidence: "medium" };
+    why.sessionMinutes = capIsPt
+      ? { source: "Booked PT sessions", reason: `They train in ${cap}-min PT sessions: the whole workout fits the hour.`, confidence: "high" }
+      : { source: "Goals & Setup", reason: "Their stated session length.", confidence: "medium" };
   } else {
     sessionMinutes = baseline.estMinutesPerSession ? roundUp5(baseline.estMinutesPerSession) : null;
     why.sessionMinutes = { source: sessionMinutes ? "Last program (estimated)" : "Not on file", reason: sessionMinutes ? "Estimated from the last program's prescription." : "No session length on file.", confidence: "low" };
@@ -260,7 +267,9 @@ export function recommendSetup(x: {
   if (sessionMinutes != null) sessionMinutes = Math.min(240, Math.max(15, sessionMinutes));
   let maxSessionMinutes = cap ?? (ctx.session.observedP80 ? roundUp5(ctx.session.observedP80) : null);
   if (maxSessionMinutes != null) maxSessionMinutes = Math.min(300, Math.max(15, maxSessionMinutes));
-  why.maxSessionMinutes = cap ? { source: "Goals & Setup", reason: "Their stated maximum session length.", confidence: "medium" } : maxSessionMinutes ? { source: "Logged sessions", reason: "The longest typical session (80th percentile).", confidence: "medium" } : { source: "Not on file", reason: "No limit on file.", confidence: "low" };
+  why.maxSessionMinutes = capIsPt
+    ? { source: "Booked PT sessions", reason: `They book ${cap}-min PT sessions (${ctx.session.ptBooked ?? 0} from 8 weeks back to 4 ahead): the warm-up, the lifting and the cardio after it all fit inside${stated != null && stated > cap ? `, though Goals & Setup says ${stated}` : ""}.`, confidence: "high" }
+    : cap ? { source: "Goals & Setup", reason: "Their stated maximum session length.", confidence: "medium" } : maxSessionMinutes ? { source: "Logged sessions", reason: "The longest typical session (80th percentile).", confidence: "medium" } : { source: "Not on file", reason: "No limit on file.", confidence: "low" };
 
   // Cardio: their plan (the app adds its training-day session to every workout), or, with none on
   // file, one proposed from the goal that becomes their plan on Assign. Lifting leaves room for it.
@@ -467,6 +476,18 @@ export function findConflicts(setup: GenerationSetup, ctx: AthleteContext, basel
   const blockWeeks = setup.blocks.reduce((n, b) => n + b.weeks, 0);
   if (setup.blocks.length && blockWeeks !== setup.weeks) out.push({ id: "blocks-weeks", severity: "blocker", title: `The blocks add up to ${blockWeeks} weeks, not ${setup.weeks}`, detail: setup.blocks.map((b) => `${b.name} ${b.weeks}`).join(" + "), options: ["Adjust the blocks", "Reset the blocks to the recommendation"] });
   for (const f of setup.frequency) if (f.perWeek > setup.daysPerWeek) out.push({ id: `freq:${f.target}`, severity: "warning", title: `${f.target} ${f.perWeek}×/week is more than ${setup.daysPerWeek} training days`, detail: "It will be capped at one exposure per day.", options: [`${f.target} ${setup.daysPerWeek}×/week`] });
+  const ptMin = ctx.session.ptMinutes ?? null;
+  const walk = setup.cardio?.trainingDay?.minutes ?? 0;
+  if (ptMin && walk > ptMin / 4) {
+    const keep = Math.max(10, Math.round(ptMin / 6 / 5) * 5);
+    out.push({
+      id: "pt-cardio",
+      severity: "warning",
+      title: `The ${walk}-min cardio after lifting takes ${Math.round((walk / ptMin) * 100)}% of their ${ptMin}-min PT session`,
+      detail: `That leaves about ${ptMin - walk} minutes to warm up and lift. Cut the after-workout cardio to ${keep} min in their cardio plan and add the rest to their days off: the week's cardio stays the same and the session gets the time.`,
+      options: [`${keep} min after lifting, the rest on days off (in their cardio plan)`, "Keep it"],
+    });
+  }
   if (setup.sessionMinutes && setup.maxSessionMinutes && setup.sessionMinutes > setup.maxSessionMinutes) out.push({ id: "minutes", severity: "warning", title: `Target session ${setup.sessionMinutes} min is over the ${setup.maxSessionMinutes}-min maximum`, detail: "", options: [] });
   const red = redistribution(setup, baseline);
   if (red && !red.fits) out.push({ id: "redistribution", severity: "warning", title: `The last program's volume won't fit ${setup.daysPerWeek} sessions of ${red.cap} min`, detail: red.lines.join(" "), options: [`Trim to about ${red.trimToSets} sets a week (lowest priority first)`, `Allow ${red.estMinutesAfter}-minute sessions`] });

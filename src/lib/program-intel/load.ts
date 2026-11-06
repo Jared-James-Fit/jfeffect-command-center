@@ -10,7 +10,7 @@ import type { RawCardioCompletion, RawCardioTarget } from "./cardio";
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { localDate } from "./core";
 import { answeredQuestions } from "@/lib/form-answer-text";
-import type { IntelRecords, IntelScope, IntelScopeRequest, RawBlock, RawCheckin, RawIntelProfile, RawObservation } from "./types";
+import type { IntelRecords, IntelScope, IntelScopeRequest, RawBlock, RawCheckin, RawIntelProfile, RawObservation, RawPtSession } from "./types";
 
 function addDaysIso(iso: string, n: number): string {
   return new Date(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
@@ -313,6 +313,23 @@ export async function loadIntelRecords(
     [],
   );
 
+  // Booked PT sessions around now: a client who trains with the coach trains inside that hour.
+  const ptSessions = await optional<RawPtSession[]>(
+    "PT sessions",
+    async () =>
+      fetchAll<RawPtSession>((f, t) =>
+        sb
+          .from("pt_sessions")
+          .select("starts_at, ends_at, status")
+          .eq("client_id", clientId)
+          .gte("starts_at", `${addDaysIso(today, -56)}T00:00:00Z`)
+          .lte("starts_at", `${addDaysIso(today, 28)}T23:59:59Z`)
+          .order("starts_at")
+          .range(f, t),
+      ),
+    [],
+  );
+
   return {
     client: {
       id: client.id,
@@ -365,6 +382,7 @@ export async function loadIntelRecords(
     profile,
     cardioTargets,
     cardioCompletions,
+    ptSessions,
     settings: {
       e1rmFormula: settingsRow?.e1rm_formula === "brzycki" ? "brzycki" : "epley",
       workingRpeMin: Number(settingsRow?.working_set_rpe_min ?? 6) || 6,

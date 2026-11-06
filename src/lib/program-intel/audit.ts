@@ -165,7 +165,7 @@ export function auditProgram(x: AuditInput): AuditResult {
           }
           const hard = !rx.rpe || (rpeRange(rx.rpe)?.[1] ?? 10) >= 6;
           if (hard) for (const mu of musclesOf(m)) dayMuscle.set(mu.group, (dayMuscle.get(mu.group) ?? 0) + mu.weight * rx.sets);
-          timed.push({ name: e.exercise_name, equipment: m?.equipment ?? null, sets: rx.sets, reps: rx.reps, restSeconds: e.rest_seconds ?? null });
+          timed.push({ name: e.exercise_name, equipment: m?.equipment ?? null, sets: rx.sets, reps: rx.reps, restSeconds: e.rest_seconds ?? null, superset: e.superset ?? null });
         }
         for (const l of dayLift) lifts[l].days++;
         for (const [mu, n] of dayMuscle) {

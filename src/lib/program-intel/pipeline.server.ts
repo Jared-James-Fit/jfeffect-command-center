@@ -517,7 +517,7 @@ export async function insertDraftProgram(admin: Db, x: { clientId: string; creat
           if (w === 1) firstDayIds.push(day.id);
           const rows = d.exercises.map((ex, i) => {
             const m = ex.exercise_id ? meta.get(ex.exercise_id) : null;
-            const row = exerciseRow(ex, w, i);
+            const row = exerciseRow(ex, w, i, d.exercises);
             return {
               day_id: day.id,
               time_profile: inferTimeProfileFromExercise(m ?? { name: ex.exercise_name }),
