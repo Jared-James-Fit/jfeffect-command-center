@@ -1595,3 +1595,21 @@ export function reviewScore(r: Pick<Review, "scores">): number {
   const s = Object.values(r.scores);
   return Math.round((s.reduce((t, n) => t + n, 0) / s.length) * 10) / 10;
 }
+
+/** What goes out on one day of the coming week (`community_daily_visuals_overview().week`): null = the daily picture. */
+export type CoachPostDay = { day: string; post: string | null };
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/**
+ * The days the picture goes out this week, Monday first ("Fri, Sat and Sun"):
+ * one coach post a day, so the picture takes only the days nothing else does
+ * (`community_coach_post_day`; Sunday's always runs, it carries the verse).
+ */
+export function pictureDaysLabel(week: CoachPostDay[] | null | undefined): string | null {
+  const days = [...new Set((week ?? []).filter((d) => d.post == null).map((d) => new Date(`${d.day}T12:00:00Z`).getUTCDay()))]
+    .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+    .map((n) => WEEKDAY_SHORT[n]);
+  if (!days.length) return null;
+  return days.length === 1 ? days[0] : `${days.slice(0, -1).join(", ")} and ${days[days.length - 1]}`;
+}

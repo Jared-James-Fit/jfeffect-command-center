@@ -37,6 +37,8 @@ const DAYS: Record<LibrarySeries, string> = {
   saturday_spirit: "Saturdays",
 };
 const isLibrary = (s: DailySeries): s is LibrarySeries => !(s === "wednesday_wins" || s === "sunday_recap");
+/** Monday and Thursday are the lessons' days: a series on one of them makes it two coach posts. */
+const LESSON_DAY = new Set<LibrarySeries>(["monday_motivation", "try_it_thursday"]);
 
 /** What the "Up next" label calls a library post. */
 function itemName(series: LibrarySeries, item: Pick<SeriesItem, "mentor" | "data">): string {
@@ -59,7 +61,9 @@ function holidayDay(day: string): string {
  * Wednesday Wins and Sunday Recap are written from the crew's logs and always
  * run. The other five (Monday Motivation, Tuesday Tips, Try it Thursday,
  * Finish Strong Friday, Saturday Spirit) post from their libraries, each on
- * its own switch, alongside that day's lesson. Each day shows what goes out
+ * its own switch. One coach post a day: a series that's on takes its day from
+ * the daily picture (community_coach_post_day), and Monday's and Thursday's
+ * share theirs with the lesson, so only Tuesday's is on by default (20270204090000_one_coach_post_a_day.sql). Each day shows what goes out
  * next (library posts can be edited first) or what it'd say right now, and can
  * be posted early. Pausing coach posts (the Lessons card) stops all of it.
  */
@@ -109,7 +113,9 @@ export function CoachWeeklyPosts() {
       {
         onSuccess: () =>
           toast.success(on ? `${SERIES_LABEL[series].name} is on` : `${SERIES_LABEL[series].name} is off`, {
-            description: on ? `${DAYS[series]} at ${WHEN[series].split(" · ")[1]}, alongside that day's lesson.` : undefined,
+            description: on
+              ? `${DAYS[series]} at ${WHEN[series].split(" · ")[1]}, ${LESSON_DAY.has(series) ? "the same day as a lesson, so two coach posts that day" : "in place of that day's picture"}.`
+              : undefined,
           }),
         onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
       },
@@ -124,7 +130,7 @@ export function CoachWeeklyPosts() {
           <CalendarClock className="h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-bold">Daily series</div>
-            <div className="truncate text-[11px] text-muted-foreground">Alongside the lessons · Winnipeg time</div>
+            <div className="truncate text-[11px] text-muted-foreground">One coach post a day · Winnipeg time</div>
           </div>
         </header>
 
