@@ -336,6 +336,9 @@ export type IntelSettings = {
   muscleTargets: Record<string, { mev?: number; mav?: number; mrv?: number }>;
 };
 
+/** A booked PT session's time (pt_sessions), for how long the hour they train in is. */
+export type RawPtSession = { starts_at: string | null; ends_at: string | null; status: string | null };
+
 export type IntelRecords = {
   client: RawClient;
   goals: RawGoals | null;
@@ -364,6 +367,8 @@ export type IntelRecords = {
   /** The client's cardio plan (cardio_targets) and the last weeks of its log. */
   cardioTargets?: import("./cardio").RawCardioTarget[];
   cardioCompletions?: import("./cardio").RawCardioCompletion[];
+  /** Their booked PT sessions, 8 weeks back to 4 ahead: the hour they train in, when they train with the coach. */
+  ptSessions?: RawPtSession[];
   settings: IntelSettings;
   scope: IntelScope;
   /** yyyy-mm-dd "today" in the athlete's time zone. */

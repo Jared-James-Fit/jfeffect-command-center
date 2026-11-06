@@ -8,7 +8,7 @@
 import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
 import { daysBetween, localDate, mean, round } from "./core";
 import type { EquipmentResolution } from "./equipment";
-import type { IntelRecords, IntelReport, Unit } from "./types";
+import type { IntelRecords, IntelReport, RawPtSession, Unit } from "./types";
 
 export type ProgramSummary = {
   blockIds: string[];
@@ -56,7 +56,15 @@ export type AthleteContext = {
     updatedAt: string | null;
     observedWeekdays: string[];
   };
-  session: { goalsMinutes: number | null; observedMedian: number | null; observedP80: number | null; entries: number };
+  session: {
+    goalsMinutes: number | null;
+    observedMedian: number | null;
+    observedP80: number | null;
+    entries: number;
+    /** The PT session they book (minutes, median), when 4+ are booked 8 weeks back to 4 ahead: the whole workout fits inside it. */
+    ptMinutes?: number | null;
+    ptBooked?: number;
+  };
   /** Their cardio plan (the app adds its training-day session to every workout), or none. */
   cardio: CardioPlan;
   equipment: EquipmentResolution;
@@ -80,6 +88,19 @@ function quantile(xs: number[], q: number): number | null {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.min(s.length - 1, Math.floor(q * s.length))];
+}
+
+/**
+ * How long the PT session they book is: the median length of their booked
+ * sessions (cancelled and rescheduled ones left out), once 4 or more are
+ * booked; null when they don't train in booked sessions.
+ */
+export function bookedSessionLength(sessions: RawPtSession[] | null | undefined): { minutes: number | null; booked: number } {
+  const mins = (sessions ?? [])
+    .filter((x) => !/cancel|resched/i.test(x.status ?? ""))
+    .map((x) => (x.starts_at && x.ends_at ? Math.round((Date.parse(x.ends_at) - Date.parse(x.starts_at)) / 60_000) : null))
+    .filter((n): n is number => n != null && Number.isFinite(n) && n >= 20 && n <= 180);
+  return { minutes: mins.length >= 4 ? Math.round(median(mins) as number) : null, booked: mins.length };
 }
 
 /** One program's shape and how it went, from its own report. */
@@ -151,6 +172,7 @@ export function buildAthleteContext(x: {
   void tz;
 
   const durations = trainedDays.map((d) => d.durationMin).filter((n): n is number => n != null && n >= 10 && n <= 240);
+  const booked = bookedSessionLength(rec.ptSessions);
   const stated = [g?.injuries_has ? g.injuries_details || "Injury noted in Goals & Setup (no details)" : null, rec.client.injuries, rec.client.intake_injuries].filter((s): s is string => !!s?.trim()).map((s) => s.trim());
   const pain = x.history.recovery.painReports.filter((p) => !p.date || !firstDate || p.date >= (x.prev?.coverage.firstDate ?? firstDate) || daysBetween(p.date, today) <= 120);
   const areas = [...new Set(pain.map((p) => (p.area ?? "").toLowerCase().trim()).filter(Boolean))];
@@ -214,7 +236,14 @@ export function buildAthleteContext(x: {
       updatedAt: rec.client.schedule_updated_at ?? null,
       observedWeekdays,
     },
-    session: { goalsMinutes: g?.workout_length_minutes ?? null, observedMedian: median(durations), observedP80: quantile(durations, 0.8), entries: durations.length },
+    session: {
+      goalsMinutes: g?.workout_length_minutes ?? null,
+      observedMedian: median(durations),
+      observedP80: quantile(durations, 0.8),
+      entries: durations.length,
+      ptMinutes: booked.minutes,
+      ptBooked: booked.booked,
+    },
     cardio: cardioPlanFromTargets(x.rec.cardioTargets ?? [], x.rec.cardioCompletions ?? [], x.rec.today),
     equipment: x.equipment,
     injuries: { stated, painReports: pain, areas },

@@ -170,12 +170,12 @@ export function withoutCardioRows<B extends { days: Array<{ exercises: Array<{ e
   return { block: removed.length ? { ...block, days } : block, removed };
 }
 
-export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number): Record<string, unknown> {
+export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number, day?: readonly BuiltExercise[] | null): Record<string, unknown> {
   const rx = rxForWeek(ex, week);
   // A walk or a bike is logged as time: "10" from the model is ten minutes, never ten reps.
   if (isTimedCardio(ex.exercise_name)) {
     const minutes = cardioMinutes(rx.reps) ?? 10;
-    const notes = athleteNotes(ex, week);
+    const notes = athleteNotes(ex, week, day);
     return {
       sets: Math.max(1, Math.min(3, Number(rx.sets) || 1)),
       reps_text: null,
@@ -191,7 +191,7 @@ export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number):
       purpose_label: ex.role ?? null,
     };
   }
-  const notes = athleteNotes(ex, week);
+  const notes = athleteNotes(ex, week, day);
   const row = rxToRow({
     sets: rx.sets,
     reps: rx.reps,
