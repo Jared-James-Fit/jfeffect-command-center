@@ -88,12 +88,29 @@ type SetupEmailClient = {
   invite_sent_at: string | null;
 };
 
+/** The /setup page every setup link opens, carrying the client's invite (setup-invite.ts). */
+async function setupPageFor(clientId: string, setupPage: string): Promise<string> {
+  const { signSetupInvite } = await import("@/lib/setup-invite.server");
+  return setupInviteUrl(setupPage, signSetupInvite(clientId));
+}
+
+async function appSetupPage(): Promise<string> {
+  const { appOrigin } = await import("@/lib/pt-session-gcal.server");
+  return `${appOrigin()}/setup`;
+}
+
 /**
  * Send the setup email to the client's email on file: an invite for a new
- * login, else (they already have one) a set-password email, linking a login
- * they made themselves first. Stamps when it went out.
+ * login (re-sent while it's unconfirmed), else a set-password email, linking a
+ * login they made themselves first. Stamps when it went out. `selfEntered`
+ * marks an email the client typed on the invite page: it can't sign anyone in
+ * until its code or link proves it's theirs (`emailUnverified`).
  */
-async function sendSetupEmailFor(client: SetupEmailClient, redirectTo: string | undefined) {
+async function sendSetupEmailFor(
+  client: SetupEmailClient,
+  redirectTo: string | undefined,
+  opts: { selfEntered?: boolean } = {},
+) {
   await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -101,7 +118,7 @@ async function sendSetupEmailFor(client: SetupEmailClient, redirectTo: string | 
   const { data: invited, error: inviteErr } =
     await supabaseAdmin.auth.admin.inviteUserByEmail(client.email, {
       redirectTo,
-      data: { full_name: client.full_name },
+      data: { full_name: client.full_name, ...(opts.selfEntered ? { setup_self_entered_email: true } : {}) },
     });
 
   const now = new Date().toISOString();
@@ -126,14 +143,47 @@ async function sendSetupEmailFor(client: SetupEmailClient, redirectTo: string | 
   }
 
   const patch: ClientUpdate = {
-    invite_sent_at: now,
     invite_last_resent_at: now,
     invite_expires_at: null,
     account_status: "Invite Sent",
   };
-  if (invited.user) patch.user_id = invited.user.id;
+  if (!client.invite_sent_at) patch.invite_sent_at = now;
   await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
+  if (invited.user) {
+    await supabaseAdmin.from("clients").update({ user_id: invited.user.id } as ClientUpdate).eq("id", client.id).is("user_id", null);
+  }
   return { ok: true, resent: false };
+}
+
+/**
+ * A one-time sign-in for the client's email on file, for the setup page to
+ * exchange right away: an invite for a new login, a magic link for an
+ * existing one, or a set-password link for a login they made themselves.
+ */
+async function mintSetupToken(client: { id: string; email: string; user_id: string | null }) {
+  await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const redirectTo = await appSetupPage();
+  let type: "invite" | "magiclink" | "recovery" = client.user_id ? "magiclink" : "invite";
+  let { data: link, error } = await supabaseAdmin.auth.admin.generateLink({
+    type: type as any,
+    email: client.email,
+    options: { redirectTo },
+  });
+  if (error && type === "invite") {
+    // A login with this email already exists: link one they made themselves, then sign in.
+    await claimUnlinkedLogin({ id: client.id, email: client.email });
+    type = "magiclink";
+    ({ data: link, error } = await supabaseAdmin.auth.admin.generateLink({ type: "magiclink", email: client.email, options: { redirectTo } }));
+  }
+  if (error) throw new Error(error.message);
+  const tokenHash = (link as any)?.properties?.hashed_token as string | undefined;
+  if (!tokenHash) throw new Error("Could not start your setup. Try again.");
+  const userId = (link as any)?.user?.id as string | undefined;
+  if (userId) {
+    await supabaseAdmin.from("clients").update({ user_id: userId } as ClientUpdate).eq("id", client.id).is("user_id", null);
+  }
+  return { tokenHash, type };
 }
 
 export const inviteClient = createServerFn({ method: "POST" })
@@ -156,12 +206,14 @@ export const inviteClient = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .single();
     if (cErr) throw new Error(cErr.message);
-    if (!client?.email) throw new Error("Client has no email address. Copy or text the setup link instead: they add their email when they open it.");
+    if (!client?.email) throw new Error("No email on file. Text or copy the setup link instead: they add their email when they open it.");
 
-    return sendSetupEmailFor(client as SetupEmailClient, data.redirectTo);
+    // The email's link carries the invite too, so it still works once its own token has expired.
+    const redirectTo = data.redirectTo ? await setupPageFor(client.id, data.redirectTo) : undefined;
+    return sendSetupEmailFor(client as SetupEmailClient, redirectTo);
   });
 
-// Generate a setup link without sending an email — for copy-to-clipboard.
+// The client's setup link, for copy-to-clipboard: the same link a text sends.
 export const getSetupLink = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -171,64 +223,27 @@ export const getSetupLink = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
     const { data: client, error } = await supabase
-      .from("clients").select("id, email, user_id").eq("id", data.clientId).single();
+      .from("clients").select("id, email, user_id, invite_sent_at").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
+    // Say so now if the email belongs to staff, not when the client opens the link.
+    if (client.email) await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    if (!client?.email) {
-      // No email yet: a link that asks for it, then sends the setup email there (setup-invite.ts).
-      const { signSetupInvite } = await import("@/lib/setup-invite.server");
-      const now = new Date().toISOString();
-      await supabaseAdmin.from("clients").update({
-        invite_sent_at: now,
-        invite_last_resent_at: now,
-        invite_expires_at: null,
-        account_status: "Invite Sent",
-      } as ClientUpdate).eq("id", client.id);
-      return { url: setupInviteUrl(data.redirectTo, signSetupInvite(client.id)), asksForEmail: true };
-    }
-    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
-    let linkType = client.user_id ? "magiclink" : "invite";
-    let { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
-      type: linkType as any,
-      email: client.email,
-      options: { redirectTo: data.redirectTo },
-    });
-    // They already made a login themselves: link it and send a set-password link instead.
-    if (lErr && !client.user_id && (await claimUnlinkedLogin({ id: client.id, email: client.email }))) {
-      linkType = "recovery";
-      ({ data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
-        type: "recovery",
-        email: client.email,
-        options: { redirectTo: data.redirectTo },
-      }));
-    }
-    if (lErr) throw new Error(lErr.message);
-    // Build our own link using the hashed_token + type. The default
-    // `action_link` is a one-time Supabase /verify URL — link prefetchers in
-    // iMessage/WhatsApp/Gmail consume the token before the recipient clicks,
-    // making the link appear expired. Our /setup page exchanges the token via
-    // verifyOtp on user click, which prefetchers cannot trigger.
-    const hashedToken = (link as any)?.properties?.hashed_token as string | undefined;
-    if (!hashedToken) throw new Error("Could not generate setup link token");
-    const url = new URL(data.redirectTo);
-    url.searchParams.set("token_hash", hashedToken);
-    url.searchParams.set("type", linkType);
     const now = new Date().toISOString();
-    await supabaseAdmin.from("clients").update({
-      invite_sent_at: now,
-      invite_last_resent_at: now,
-      invite_expires_at: null,
-      account_status: client.user_id ? "Account Created" : "Invite Sent",
-    }).eq("id", client.id);
-    return { url: url.toString(), asksForEmail: false };
+    const patch: ClientUpdate = { invite_last_resent_at: now, invite_expires_at: null };
+    if (!client.invite_sent_at) patch.invite_sent_at = now;
+    if (!client.user_id) patch.account_status = "Invite Sent";
+    await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
+    return { url: await setupPageFor(client.id, data.redirectTo), asksForEmail: !client.email };
   });
 
 /* ============================================================
- * No-email setup link (setup-invite.ts): public, the signed token is the
- * only key, and it only ever sends the setup email.
+ * The setup page (setup-invite.ts): public, the signed invite is the only
+ * key. A coach-entered email signs in with one tap; an email the client typed
+ * signs in only with the code (or link) we email to it.
  * ============================================================ */
 
 const InviteTokenSchema = z.object({ token: z.string().min(10).max(120) });
+const CodeSchema = z.string().trim().regex(/^\d{6,10}$/, "Enter the code from the email.");
 
 async function clientForInvite(token: string) {
   const { verifySetupInvite } = await import("@/lib/setup-invite.server");
@@ -243,55 +258,175 @@ async function clientForInvite(token: string) {
   return data as any;
 }
 
-/** What the invite page shows: their first name and, when there's one on file, a masked email. */
+/** The client's login is one made from an email they typed here and haven't proven yet. */
+async function emailUnverified(client: { user_id?: string | null } | null): Promise<boolean> {
+  if (!client?.user_id) return false;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin.auth.admin.getUserById(client.user_id);
+  const u = data?.user as any;
+  return !!u && !u.email_confirmed_at && u.user_metadata?.setup_self_entered_email === true;
+}
+
+async function inviteView(token: string) {
+  const client = await clientForInvite(token);
+  const view = setupInviteState(client, { emailUnverified: await emailUnverified(client) });
+  return { client, view };
+}
+
+const TAKEN = "That email already has a JF Effect account. Ask your coach to connect it.";
+
+/** An email typed on the setup page: valid and not on any login or other client yet. */
+async function newEmailFor(clientId: string, raw: string | undefined): Promise<string> {
+  const typed = cleanInviteEmail(raw);
+  if (!typed) throw new Error("Enter a valid email address.");
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: otherClient, error: ocErr } = await supabaseAdmin
+    .from("clients").select("id").eq("normalized_email", typed).neq("id", clientId).limit(1);
+  if (ocErr) throw new Error(ocErr.message);
+  if (otherClient?.length) throw new Error(TAKEN);
+  const { data: logins, error: lgErr } = await supabaseAdmin
+    .from("profiles").select("id, email").ilike("email", typed.replace(/[\\%_]/g, (c) => `\\${c}`));
+  if (lgErr) throw new Error(lgErr.message);
+  if ((logins ?? []).some((p: any) => String(p.email ?? "").trim().toLowerCase() === typed)) throw new Error(TAKEN);
+  return typed;
+}
+
+/** Save a typed email on a record with none and email its code. */
+async function sendCodeToNewEmail(client: any, typed: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  // Only while the record still has no email: a coach who just added one wins.
+  let save = supabaseAdmin.from("clients").update({ email: typed } as ClientUpdate).eq("id", client.id);
+  save = client.email === null ? save.is("email", null) : save.eq("email", client.email);
+  const { data: saved, error } = await save.select("id").maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!saved) throw new Error("Your coach just updated your account. Open the link again.");
+  const setupPage = await setupPageFor(client.id, await appSetupPage());
+  await sendSetupEmailFor(
+    { id: client.id, email: typed, full_name: client.full_name ?? null, user_id: null, invite_sent_at: client.invite_sent_at ?? null },
+    setupPage,
+    { selfEntered: true },
+  );
+}
+
+function refuse(view: SetupInviteState): never {
+  if (view.state === "signed_in_before") throw new Error("You already have an account. Sign in, or tap Forgot password.");
+  throw new Error("This setup link doesn't work anymore. Ask your coach for a new one.");
+}
+
+/** What the setup page shows: their first name, the step they're on and, when there's one on file, a masked email. */
 export const peekSetupInvite = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InviteTokenSchema.parse(input))
-  .handler(async ({ data }): Promise<SetupInviteState> => setupInviteState(await clientForInvite(data.token)));
+  .handler(async ({ data }): Promise<SetupInviteState> => (await inviteView(data.token)).view);
+
+export type SetupStartResult =
+  | { kind: "session"; tokenHash: string; type: "invite" | "magiclink" | "recovery" }
+  | { kind: "code"; sentTo: string | null };
 
 /**
- * Send the setup email from an invite link: to the email on file, or, for a
- * record with none, to the email they type, which must be new to JF Effect
- * (an email that already has an account is the coach's to connect).
+ * Continue from the setup page: a coach-entered email signs in now (the page
+ * exchanges the token); a typed email (step "email") or one waiting on its
+ * code (step "code", a resend) gets the code emailed.
  */
-export const requestSetupFromInvite = createServerFn({ method: "POST" })
+export const startSetupFromInvite = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     InviteTokenSchema.extend({ email: z.string().max(254).optional() }).parse(input),
   )
-  .handler(async ({ data }) => {
-    const client = await clientForInvite(data.token);
-    const state = setupInviteState(client);
-    if (state.state === "invalid") throw new Error("This setup link doesn't work anymore. Ask your coach for a new one.");
-    if (state.state === "signed_in_before") throw new Error("You already have an account. Sign in, or tap Forgot password.");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    let email: string | null = (client.email ?? "").trim() || null;
-    if (!email) {
-      const typed = cleanInviteEmail(data.email);
-      if (!typed) throw new Error("Enter a valid email address.");
-      const taken = "That email already has a JF Effect account. Ask your coach to connect it.";
-      const { data: otherClient, error: ocErr } = await supabaseAdmin
-        .from("clients").select("id").eq("normalized_email", typed).neq("id", client.id).limit(1);
-      if (ocErr) throw new Error(ocErr.message);
-      if (otherClient?.length) throw new Error(taken);
-      const { data: logins, error: lgErr } = await supabaseAdmin
-        .from("profiles").select("id, email").ilike("email", typed.replace(/[\\%_]/g, (c) => `\\${c}`));
-      if (lgErr) throw new Error(lgErr.message);
-      if ((logins ?? []).some((p: any) => String(p.email ?? "").trim().toLowerCase() === typed)) throw new Error(taken);
-      // Only while the record still has no email: a coach who just added one wins.
-      let save = supabaseAdmin.from("clients").update({ email: typed } as ClientUpdate).eq("id", client.id);
-      save = client.email === null ? save.is("email", null) : save.eq("email", client.email);
-      const { data: saved, error: sErr } = await save.select("id").maybeSingle();
-      if (sErr) throw new Error(sErr.message);
-      if (!saved) throw new Error("Your coach just updated your account. Open the link again.");
-      email = typed;
+  .handler(async ({ data }): Promise<SetupStartResult> => {
+    const { client, view } = await inviteView(data.token);
+    if (view.state !== "ok") refuse(view);
+    if (view.step === "continue") {
+      return { kind: "session", ...(await mintSetupToken({ id: client.id, email: client.email, user_id: client.user_id ?? null })) };
     }
-
-    const { appOrigin } = await import("@/lib/pt-session-gcal.server");
+    if (view.step === "email") {
+      const typed = await newEmailFor(client.id, data.email);
+      await sendCodeToNewEmail(client, typed);
+      return { kind: "code", sentTo: maskEmail(typed) };
+    }
+    // step "code": send it again (re-invites the unconfirmed login).
     await sendSetupEmailFor(
-      { id: client.id, email, full_name: client.full_name ?? null, user_id: client.user_id ?? null, invite_sent_at: client.invite_sent_at ?? null },
-      `${appOrigin()}/setup`,
+      { id: client.id, email: client.email, full_name: client.full_name ?? null, user_id: client.user_id ?? null, invite_sent_at: client.invite_sent_at ?? null },
+      await setupPageFor(client.id, await appSetupPage()),
+      { selfEntered: true },
     );
-    return { ok: true, sentTo: maskEmail(email) };
+    return { kind: "code", sentTo: maskEmail(client.email) };
+  });
+
+/** The code from the email: proves the email is theirs and signs them in. */
+export const verifySetupCode = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => InviteTokenSchema.extend({ code: CodeSchema }).parse(input))
+  .handler(async ({ data }) => {
+    const { client, view } = await inviteView(data.token);
+    if (view.state !== "ok") refuse(view);
+    if (view.step !== "code" || !client.email) throw new Error("Open the link again to continue.");
+    const { createClient } = await import("@supabase/supabase-js");
+    // The same project and public key the app's own sign-in uses (integrations/supabase/client.ts).
+    const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const anon = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !anon) throw new Error("Sign-in isn't available right now. Tap the button in the email instead.");
+    const auth = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } }).auth;
+    // An invite code, or a set-password code when the invite fell back to one (sendSetupEmailFor).
+    for (const type of ["invite", "recovery"] as const) {
+      const { data: v } = await auth.verifyOtp({ email: client.email, token: data.code, type });
+      if (v?.session) {
+        return { accessToken: v.session.access_token, refreshToken: v.session.refresh_token };
+      }
+    }
+    throw new Error("That code didn't work. Check it, or tap Send a new code.");
+  });
+
+/** A typo: drop the unproven email (and the login made for it) and send the code to another. */
+export const changeSetupEmail = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => InviteTokenSchema.extend({ email: z.string().max(254) }).parse(input))
+  .handler(async ({ data }): Promise<SetupStartResult> => {
+    const { client, view } = await inviteView(data.token);
+    if (view.state !== "ok") refuse(view);
+    if (view.step !== "code") throw new Error("Open the link again to continue.");
+    const typed = await newEmailFor(client.id, data.email);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const oldUser = client.user_id as string;
+    const { data: cleared, error } = await supabaseAdmin
+      .from("clients")
+      .update({ email: null, user_id: null } as ClientUpdate)
+      .eq("id", client.id)
+      .eq("user_id", oldUser)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!cleared) throw new Error("Your coach just updated your account. Open the link again.");
+    // The login was never confirmed and holds nothing: best effort, it can't sign in either way.
+    await supabaseAdmin.auth.admin.deleteUser(oldUser).catch(() => {});
+    await sendCodeToNewEmail({ ...client, email: null, user_id: null }, typed);
+    return { kind: "code", sentTo: maskEmail(typed) };
+  });
+
+/**
+ * "This link has expired": send a fresh setup email to a client who hasn't
+ * signed in yet, or a password reset to anyone else. Always the same answer,
+ * so it never says whether an email is on an account.
+ */
+export const requestNewSetupLink = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ email: z.string().max(254) }).parse(input))
+  .handler(async ({ data }) => {
+    const email = cleanInviteEmail(data.email);
+    if (!email) throw new Error("Enter a valid email address.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    try {
+      const { data: rows } = await supabaseAdmin
+        .from("clients")
+        .select("id, email, full_name, first_name, preferred_name, user_id, archived, status, portal_access_disabled, last_signed_in_at, invite_sent_at")
+        .eq("normalized_email", email)
+        .limit(2);
+      const client = rows?.length === 1 ? (rows[0] as any) : null;
+      if (client && setupInviteState(client).state === "ok") {
+        await sendSetupEmailFor(client as SetupEmailClient, await setupPageFor(client.id, await appSetupPage()));
+      } else {
+        const { appOrigin } = await import("@/lib/pt-session-gcal.server");
+        await supabaseAdmin.auth.resetPasswordForEmail(email, { redirectTo: `${appOrigin()}/reset-password` });
+      }
+    } catch (e: any) {
+      console.warn("[setup] new link request failed:", e?.message ?? e);
+    }
+    return { ok: true };
   });
 
 // Send a password reset email.

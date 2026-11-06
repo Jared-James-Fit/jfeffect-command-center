@@ -160,17 +160,18 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
     const settings = await loadSmsSettings(supabase);
     const { client, toPhone } = await loadClientForSms(supabase, data.clientId);
     let url: string;
-    if (client.email) {
+    if (data.kind === "setup") {
+      // The client's setup link (setup-invite.ts): works for SETUP_INVITE_DAYS until they've
+      // signed in, with or without an email on file.
+      const { signSetupInvite } = await import("@/lib/setup-invite.server");
+      url = setupInviteUrl(data.redirectTo, signSetupInvite(client.id));
+    } else if (client.email) {
       url = await generateAuthLink({
         clientEmail: client.email,
         clientUserId: client.user_id ?? null,
         kind: data.kind,
         redirectTo: data.redirectTo,
       });
-    } else if (data.kind === "setup") {
-      // No email yet: a link that asks for it, then sends the setup email there (setup-invite.ts).
-      const { signSetupInvite } = await import("@/lib/setup-invite.server");
-      url = setupInviteUrl(data.redirectTo, signSetupInvite(client.id));
     } else {
       throw new Error("Client has no email on file. Add one first, or text them a setup link.");
     }
@@ -180,8 +181,8 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
     const label =
       data.kind === "reset" ? "reset your password"
       : data.kind === "magic" ? "sign in to your coaching app"
-      : "finish setting up your coaching account";
-    const expiry = client.email ? "The link is single-use and expires soon." : `The link works for ${SETUP_INVITE_DAYS} days.`;
+      : "set up your coaching app";
+    const expiry = data.kind === "setup" ? `The link works for ${SETUP_INVITE_DAYS} days.` : "The link is single-use and expires soon.";
     const body = `Hi ${first}, this is ${brand}. Tap to ${label}: ${url}\n\n${expiry} Reply STOP to opt out.`;
 
     try {

@@ -1,19 +1,18 @@
 /**
- * A setup link for a client record with no email yet.
+ * Every setup link (texted, copied or emailed) opens `/setup?invite=<signed
+ * token>` (setup-invite.server.ts), so it works for SETUP_INVITE_DAYS until the
+ * client has signed in, not only for the life of one sign-in token.
  *
- * The coach can always get someone into the app from just their name: Copy or
- * Text setup link gives `/setup?invite=<signed token>` (setup-invite.server.ts),
- * the person opens it, adds their email, and we send the usual setup email to
- * it. Their email is proven by that email's link, never by typing it, so a
- * forwarded or mistyped link can't hand a coaching record to someone else.
- * When the record has an email, the link only sends to that one (shown masked).
+ * - Email on file (the coach's): Continue signs them in at once and they pick a
+ *   password. An emailed link also carries a one-time token; when that has
+ *   expired or been used, the invite takes over instead of "link expired".
+ * - No email: they type theirs and we email it a code (and a link). Only the
+ *   code or the link signs them in, so an email typed by mistake, or by
+ *   whoever a link was forwarded to, never gets into the account.
  */
 
-/** How long a no-email setup link stays usable. It dies sooner once the record has a login. */
+/** How long a setup link stays usable. It stops once the client has signed in. */
 export const SETUP_INVITE_DAYS = 14;
-
-/** A short wait between setup emails asked for from one link. */
-export const SETUP_INVITE_RESEND_MS = 60_000;
 
 /** The `/setup` address carrying an invite token. */
 export function setupInviteUrl(setupPage: string, token: string): string {
@@ -43,11 +42,25 @@ export function cleanInviteEmail(raw: string | null | undefined): string | null 
   return e;
 }
 
-/** What the invite page can offer for a client record. */
+/** A token carried on a setup link (uuid.expiry.signature): anything else is dropped. */
+export function cleanInviteParam(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").trim();
+  return /^[0-9a-f-]{36}\.\d{9,11}\.[0-9a-f]{32}$/i.test(v) ? v : null;
+}
+
+/**
+ * Where the setup page starts for this client:
+ * - "continue": an email the coach entered, one tap signs them in;
+ * - "email": no email yet, they type theirs;
+ * - "code": they typed one and it's waiting on the emailed code.
+ */
+export type SetupStep = "continue" | "email" | "code";
+
+/** What the setup page can offer for a client record. */
 export type SetupInviteState =
   | { state: "invalid" }
   | { state: "signed_in_before" }
-  | { state: "ok"; firstName: string | null; emailHint: string | null };
+  | { state: "ok"; firstName: string | null; emailHint: string | null; step: SetupStep };
 
 export function setupInviteState(
   client: {
@@ -60,6 +73,7 @@ export function setupInviteState(
     portal_access_disabled?: boolean | null;
     last_signed_in_at?: string | null;
   } | null | undefined,
+  opts: { emailUnverified?: boolean } = {},
 ): SetupInviteState {
   if (!client || client.archived || client.portal_access_disabled || client.status === "Deactivated" || client.status === "Archived") {
     return { state: "invalid" };
@@ -71,5 +85,7 @@ export function setupInviteState(
     (client.first_name ?? "").trim() ||
     (client.full_name ?? "").trim().split(/\s+/)[0] ||
     null;
-  return { state: "ok", firstName, emailHint: maskEmail(client.email) };
+  const email = (client.email ?? "").trim() || null;
+  const step: SetupStep = !email ? "email" : opts.emailUnverified ? "code" : "continue";
+  return { state: "ok", firstName, emailHint: maskEmail(email), step };
 }

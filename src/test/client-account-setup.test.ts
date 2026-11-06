@@ -3,7 +3,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { profileChanges, rebaseProfileForm, PROFILE_READ_ONLY_FIELDS } from "@/lib/client-profile-form";
 import { assignedCoachOf, isAssignedCoachOf, withAssignedCoach } from "@/lib/sms-identity";
-import { cleanInviteEmail, maskEmail, setupInviteState, setupInviteUrl } from "@/lib/setup-invite";
+import { cleanInviteEmail, cleanInviteParam, maskEmail, setupInviteState, setupInviteUrl } from "@/lib/setup-invite";
+import { scannerSafeAuthLink } from "@/lib/scanner-safe-auth-link";
 
 // ---------------------------------------------------------------------------
 // The client profile's Save (admin/clients.$id): only what the coach changed.
@@ -160,14 +161,73 @@ describe("setup invite link", () => {
     expect(cleanInviteEmail("")).toBeNull();
   });
 
-  it("works for a record that hasn't signed in, never for an archived or deactivated one", () => {
-    expect(setupInviteState({ first_name: "Devin", full_name: "Devin B" })).toEqual({ state: "ok", firstName: "Devin", emailHint: null });
-    expect(setupInviteState({ preferred_name: "Dev", first_name: "Devin", email: "devin@gmail.com" })).toEqual({ state: "ok", firstName: "Dev", emailHint: "d•••n@gmail.com" });
+  it("starts on the right step, never for an archived or deactivated record", () => {
+    // The coach's email: one tap signs them in.
+    expect(setupInviteState({ preferred_name: "Dev", first_name: "Devin", email: "devin@gmail.com" })).toEqual({
+      state: "ok", firstName: "Dev", emailHint: "d•••n@gmail.com", step: "continue",
+    });
+    // No email: they type theirs.
+    expect(setupInviteState({ first_name: "Devin", full_name: "Devin B" })).toEqual({
+      state: "ok", firstName: "Devin", emailHint: null, step: "email",
+    });
+    // An email they typed that hasn't been proven: only the code signs in.
+    expect(setupInviteState({ first_name: "Devin", email: "devin@gmail.com" }, { emailUnverified: true }).state === "ok" &&
+      (setupInviteState({ first_name: "Devin", email: "devin@gmail.com" }, { emailUnverified: true }) as any).step).toBe("code");
     expect(setupInviteState({ full_name: "Devin B", last_signed_in_at: "2026-11-06T00:00:00Z" })).toEqual({ state: "signed_in_before" });
     expect(setupInviteState({ full_name: "Devin B", archived: true }).state).toBe("invalid");
     expect(setupInviteState({ full_name: "Devin B", status: "Deactivated" }).state).toBe("invalid");
     expect(setupInviteState({ full_name: "Devin B", portal_access_disabled: true }).state).toBe("invalid");
     expect(setupInviteState(null).state).toBe("invalid");
+  });
+
+  it("keeps only a well-formed invite on a link", () => {
+    const t = "11111111-2222-3333-4444-555555555555.1794000000.0123456789abcdef0123456789abcdef";
+    expect(cleanInviteParam(t)).toBe(t);
+    expect(cleanInviteParam("javascript:alert(1)")).toBeNull();
+    expect(cleanInviteParam(null)).toBeNull();
+  });
+
+  it("an emailed setup link keeps the invite, so it outlives its one-time token", () => {
+    const invite = "11111111-2222-3333-4444-555555555555.1794000000.0123456789abcdef0123456789abcdef";
+    const out = scannerSafeAuthLink({
+      tokenHash: "abc123",
+      actionType: "invite",
+      redirectTo: `https://jfeffect.com/setup?invite=${invite}`,
+      siteUrl: "https://jfeffect.com",
+    });
+    const url = new URL(out!);
+    expect(url.pathname).toBe("/setup");
+    expect(url.searchParams.get("token_hash")).toBe("abc123");
+    expect(url.searchParams.get("invite")).toBe(invite);
+    // Never on another page, and never a junk value.
+    const reset = new URL(scannerSafeAuthLink({
+      tokenHash: "abc123", actionType: "recovery",
+      redirectTo: `https://jfeffect.com/reset-password?invite=${invite}`, siteUrl: "https://jfeffect.com",
+    })!);
+    expect(reset.searchParams.get("invite")).toBeNull();
+    const junk = new URL(scannerSafeAuthLink({
+      tokenHash: "abc123", actionType: "invite",
+      redirectTo: "https://jfeffect.com/setup?invite=<script>", siteUrl: "https://jfeffect.com",
+    })!);
+    expect(junk.searchParams.get("invite")).toBeNull();
+  });
+
+  it("the setup page is one password and straight in: no confirm box, no socials step", () => {
+    const page = readFileSync("src/routes/setup.tsx", "utf8");
+    expect(page).not.toMatch(/Confirm password/);
+    expect(page).not.toMatch(/SocialHandlesEditor/);
+    expect(page).toMatch(/autoComplete="new-password"/);
+    // An expired emailed token falls back to the invite instead of a dead end.
+    expect(page).toMatch(/setAutoContinue\(true\)/);
+  });
+
+  it("texts and copies the same 14-day link, never a one-time token", () => {
+    const sms = readFileSync("src/lib/sms-links.functions.ts", "utf8");
+    expect(sms).toMatch(/if \(data\.kind === "setup"\) \{[\s\S]*?signSetupInvite/);
+    const fns = readFileSync("src/lib/clients.functions.ts", "utf8");
+    const getSetup = fns.slice(fns.indexOf("export const getSetupLink"), fns.indexOf("/* ====", fns.indexOf("export const getSetupLink")));
+    expect(getSetup).toMatch(/setupPageFor\(client\.id/);
+    expect(getSetup).not.toMatch(/generateLink/);
   });
 
   it("signs a token that names one client and can't be edited or outlive its expiry", async () => {

@@ -11,12 +11,13 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { acceptCoachInvite } from "@/lib/coaches.functions";
-import { SocialHandlesEditor } from "@/components/social-handles-editor";
-import { SOCIAL_FIELDS } from "@/lib/social-handles";
+import { requestNewSetupLink } from "@/lib/clients.functions";
 import { FileSignature } from "lucide-react";
 import { getAgreementSigningContext } from "@/lib/coaching-agreement.functions";
 import { shareMeta } from "@/lib/share-meta";
 import { SetupInviteStep } from "@/components/setup-invite-step";
+import { cleanInviteParam } from "@/lib/setup-invite";
+import type { User } from "@supabase/supabase-js";
 
 // The signing flow carries the full agreement text, so it only loads when this step is reached.
 const AgreementSignFlow = lazyWithRetry(() =>
@@ -33,18 +34,18 @@ export const Route = createFileRoute("/setup")({
 function SetupPage() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<
-    "loading" | "invite" | "confirm" | "ready" | "agreement" | "social" | "expired" | "done"
+    "loading" | "invite" | "confirm" | "ready" | "agreement" | "expired" | "done"
   >("loading");
-  // A link sent before the client had an email on file: they add it here (setup-invite.ts).
+  // Every setup link carries the client's invite (setup-invite.ts): it starts the
+  // setup, and takes over when an emailed one-time token has run out.
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [autoContinue, setAutoContinue] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
   const [isCoachInvite, setIsCoachInvite] = useState(false);
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [socials, setSocials] = useState<Record<string, string | null>>({});
   const acceptCoachFn = useServerFn(acceptCoachInvite);
   const getAgreementContext = useServerFn(getAgreementSigningContext);
   const [signOpen, setSignOpen] = useState(false);
@@ -61,6 +62,8 @@ function SetupPage() {
     (async () => {
       const params = new URLSearchParams(window.location.search);
       const tokenHash = params.get("token_hash");
+      const invite = cleanInviteParam(params.get("invite"));
+      if (invite && !cancelled) setInviteToken(invite);
       const hash = window.location.hash || "";
       const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
       const hashType = hashParams.get("type");
@@ -70,15 +73,7 @@ function SetupPage() {
 
       if (!tokenHash && !hasInviteHash) {
         await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-        const invite = params.get("invite");
-        if (!cancelled) {
-          if (invite) {
-            setInviteToken(invite);
-            setPhase("invite");
-          } else {
-            setPhase("expired");
-          }
-        }
+        if (!cancelled) setPhase(invite ? "invite" : "expired");
         return;
       }
 
@@ -117,13 +112,25 @@ function SetupPage() {
     await supabase.auth.signOut({ scope: "local" }).catch(() => {});
     const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     setVerifying(false);
-    if (error) { setPhase("expired"); return; }
-    if (data.user) {
-      setEmail(data.user.email ?? "");
-      setFullName((data.user.user_metadata as any)?.full_name ?? "");
-      setIsCoachInvite(((data.user.user_metadata as any)?.invite_role) === "coach");
-      setPhase("ready");
+    if (error || !data.user) {
+      // Expired or already used (an email scanner, an earlier tap): the invite carries on.
+      if (inviteToken) {
+        window.history.replaceState({}, "", `${window.location.pathname}?invite=${encodeURIComponent(inviteToken)}`);
+        setAutoContinue(true);
+        setPhase("invite");
+      } else {
+        setPhase("expired");
+      }
+      return;
     }
+    signedIn(data.user);
+  };
+
+  const signedIn = (user: User) => {
+    setEmail(user.email ?? "");
+    setFullName((user.user_metadata as any)?.full_name ?? "");
+    setIsCoachInvite(((user.user_metadata as any)?.invite_role) === "coach");
+    setPhase("ready");
     // Clean the URL so a refresh doesn't try to re-use a now-spent token.
     window.history.replaceState({}, "", window.location.pathname);
   };
@@ -131,7 +138,6 @@ function SetupPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return toast.error("Please enter a password");
-    if (password !== confirm) return toast.error("Passwords don't match");
     // SECURITY: confirm we're operating on the user we verified, not some
     // pre-existing session.
     const { data: u } = await supabase.auth.getUser();
@@ -168,35 +174,13 @@ function SetupPage() {
     } catch {
       /* not a client, or unavailable: carry on */
     }
-    setPhase("social");
+    finishToPortal();
   };
 
   const finishToPortal = () => {
     setPhase("done");
     toast.success("Welcome to JF Effect.");
     setTimeout(() => navigate({ to: "/portal", replace: true }), 500);
-  };
-
-  const saveSocialsAndContinue = async () => {
-    setBusy(true);
-    const { data: sessionData } = await supabase.auth.getSession();
-    const uid = sessionData.session?.user?.id;
-    if (!uid) { setBusy(false); finishToPortal(); return; }
-    const patch: Record<string, string | null> = {};
-    let hasAny = false;
-    for (const f of SOCIAL_FIELDS) {
-      const v = (socials[f] ?? "").toString().trim();
-      if (v) { patch[f] = v; hasAny = true; } else { patch[f] = null; }
-    }
-    if (hasAny) {
-      const { error } = await supabase.from("clients").update(patch as any).eq("user_id", uid);
-      if (error) {
-        setBusy(false);
-        return toast.error(error.message);
-      }
-    }
-    setBusy(false);
-    finishToPortal();
   };
 
   return (
@@ -209,7 +193,12 @@ function SetupPage() {
             )}
 
       {phase === "invite" && inviteToken && (
-        <SetupInviteStep token={inviteToken} onInvalid={() => setPhase("expired")} />
+        <SetupInviteStep
+          token={inviteToken}
+          autoContinue={autoContinue}
+          onInvalid={() => setPhase("expired")}
+          onSignedIn={signedIn}
+        />
       )}
 
       {phase === "confirm" && (
@@ -228,44 +217,36 @@ function SetupPage() {
         </div>
       )}
 
-      {phase === "expired" && (
-        <div className="space-y-4 text-center">
-          <h2 className="text-xl font-bold">This setup link has expired</h2>
-          <p className="text-sm text-muted-foreground">
-            Please contact Coach Jared or request a new setup link.
-          </p>
-          <a href="mailto:jaredjamesfit@gmail.com?subject=New%20setup%20link%20request">
-            <Button className="w-full bg-primary font-semibold">
-              Request new setup link
-            </Button>
-          </a>
-        </div>
-      )}
+      {phase === "expired" && <NewLinkForm />}
 
       {phase === "ready" && (
         <>
           <div className="text-center">
-            <h2 className="text-xl font-bold tracking-tight">
+            <h2 className="text-xl font-semibold tracking-tight">
               {fullName ? `Welcome, ${fullName.split(" ")[0]}` : "Welcome"}
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Set a password for your private coaching dashboard.
+            <p className="mt-1 text-sm text-muted-foreground">
+              Pick a password. You'll use it with {email || "your email"} to sign in.
             </p>
           </div>
           <form onSubmit={submit} className="mt-6 w-full space-y-4">
+            {/* The email rides along hidden so the phone's password manager saves the pair. */}
+            <input type="email" name="email" autoComplete="username" value={email} readOnly hidden />
             <div>
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Email</Label>
-              <Input value={email} disabled className="mt-1.5" />
+              <Label htmlFor="setup-password">Password</Label>
+              <PasswordInput
+                id="setup-password"
+                name="password"
+                autoComplete="new-password"
+                autoFocus
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1.5 h-12 text-base"
+                placeholder="Pick any password"
+              />
             </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Create password</Label>
-              <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" placeholder="Pick any password" />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Confirm password</Label>
-              <PasswordInput required value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1.5" />
-            </div>
-            <Button type="submit" disabled={busy} className="w-full bg-primary py-6 text-sm font-semibold">
+            <Button type="submit" disabled={busy} className="min-h-[48px] w-full font-semibold">
               {busy ? "Creating…" : "Create my account"}
             </Button>
           </form>
@@ -274,7 +255,7 @@ function SetupPage() {
 
       {phase === "agreement" && (
         <div className="space-y-5 text-center">
-          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-muted">
             <FileSignature className="h-7 w-7" />
           </div>
           <div>
@@ -295,46 +276,14 @@ function SetupPage() {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setPhase("social")}
-              className="w-full"
+              onClick={finishToPortal}
+              className="min-h-10 w-full"
             >
               I'll do this later
             </Button>
           </div>
           <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
             You'll see a reminder in the app until it's signed.
-          </p>
-        </div>
-      )}
-
-      {phase === "social" && (
-        <div className="space-y-5">
-          <div className="text-center">
-            <h2 className="text-xl font-bold tracking-tight">Social Media (optional)</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Add just your username/handle for any platform you use. Skip any you don't.
-            </p>
-          </div>
-          <SocialHandlesEditor
-            disabled={busy}
-            values={socials}
-            onChange={(k, v) => setSocials((s) => ({ ...s, [k]: v }))}
-          />
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              onClick={saveSocialsAndContinue}
-              disabled={busy}
-              className="w-full bg-primary py-6 text-sm font-semibold"
-            >
-              {busy ? "Saving…" : "Save & continue"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={finishToPortal} disabled={busy} className="w-full">
-              Skip for now
-            </Button>
-          </div>
-          <p className="text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
-            You can update these anytime in Account Settings.
           </p>
         </div>
       )}
@@ -350,13 +299,77 @@ function SetupPage() {
             }}
             onOpenChange={(next) => {
               setSignOpen(next);
-              // Once signed and closed, carry on to the next setup step.
-              if (!next && signedRef.current) setPhase("social");
+              // Once signed and closed, straight into the app.
+              if (!next && signedRef.current) finishToPortal();
             }}
           />
         </Suspense>
       )}
     </Shell>
+  );
+}
+
+/**
+ * A setup link that has run out: they ask for a fresh one by email. Always the
+ * same answer, so it never says whether an email is on an account.
+ */
+function NewLinkForm() {
+  const request = useServerFn(requestNewSetupLink);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await request({ data: { email: email.trim() } });
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.message ?? "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (sent) {
+    return (
+      <div className="space-y-3 text-center">
+        <h2 className="text-xl font-semibold tracking-tight">Check your email</h2>
+        <p className="text-sm text-muted-foreground">
+          If {email.trim()} is on a JF Effect account, a new link is on its way. Not there in a minute? Check Junk or Spam.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold tracking-tight">This link has run out</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Enter your email and we'll send you a new one.</p>
+      </div>
+      <div>
+        <Label htmlFor="new-link-email">Email</Label>
+        <Input
+          id="new-link-email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="mt-1.5 h-12 text-base"
+        />
+      </div>
+      <Button type="submit" disabled={busy} className="min-h-[48px] w-full font-semibold">
+        {busy ? "Sending…" : "Email me a new link"}
+      </Button>
+      {error && <p className="text-center text-sm text-destructive" role="alert">{error}</p>}
+      <p className="text-center text-xs text-muted-foreground">Or ask your coach to text you a new one.</p>
+    </form>
   );
 }
 

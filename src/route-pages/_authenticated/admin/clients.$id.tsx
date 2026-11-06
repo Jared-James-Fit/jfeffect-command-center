@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { profileChanges, rebaseProfileForm } from "@/lib/client-profile-form";
+import { SETUP_INVITE_DAYS } from "@/lib/setup-invite";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -1116,7 +1117,7 @@ export function ClientProfileWorkspace({
                       <p className="text-xs text-muted-foreground">
                         {recovery
                           ? "Locked out? Send a password reset by email or text."
-                          : "Send the setup link by email and text. It opens a Continue screen, so email scanners can't burn it. Links work once and last 24 hours — resend anytime."}
+                          : `Text them their setup link: one tap opens their account and they pick a password. It works for ${SETUP_INVITE_DAYS} days until they've signed in, and sending it again never breaks the last one.`}
                       </p>
                     </div>
 
@@ -1132,17 +1133,32 @@ export function ClientProfileWorkspace({
                       ))}
                     </ol>
 
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <ActionButton className="min-h-[48px]" disabled={noEmail} onAction={recovery ? sendReset : sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
-                        {recovery ? "Email reset link" : lastSetup ? "Resend email" : "Email setup link"}
-                      </ActionButton>
-                      <ActionButton className="min-h-[48px]" variant="outline" disabled={noPhone || (recovery && noEmail)} onAction={smsLink(recovery ? "reset" : "setup")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
-                        {recovery ? "Text reset link" : "Text setup link"}
-                      </ActionButton>
-                      <ActionButton className="min-h-[48px]" variant="outline" disabled={recovery && noEmail} onAction={recovery ? copyResetLink : copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
-                        {recovery ? "Copy reset link" : "Copy setup link"}
-                      </ActionButton>
-                    </div>
+                    {recovery ? (
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <ActionButton className="min-h-[48px]" disabled={noEmail} onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                          Email reset link
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant="outline" disabled={noPhone || noEmail} onAction={smsLink("reset")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
+                          Text reset link
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                          Copy reset link
+                        </ActionButton>
+                      </div>
+                    ) : (
+                      // Text first: it's read within minutes and never lands in Junk.
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <ActionButton className="min-h-[48px]" variant={noPhone ? "outline" : "default"} disabled={noPhone} onAction={smsLink("setup")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
+                          {lastSetup ? "Text it again" : "Text setup link"}
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant={noPhone ? "default" : "outline"} onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                          Copy setup link
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                          {lastSetup ? "Email it again" : "Email setup link"}
+                        </ActionButton>
+                      </div>
+                    )}
 
                     <div className="grid gap-1.5 rounded-md bg-secondary/30 p-3 text-xs sm:grid-cols-2">
                       <div className="flex min-w-0 items-center gap-2">
@@ -1151,13 +1167,13 @@ export function ClientProfileWorkspace({
                       </div>
                       <div className="flex min-w-0 items-center gap-2">
                         <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className={noPhone ? "text-muted-foreground" : "truncate"}>{form.phone || "No phone — add one to text links"}</span>
+                        <span className={noPhone ? "text-muted-foreground" : "truncate"}>{form.phone || "No phone yet: copy the link or email it"}</span>
                       </div>
                       {!recovery && (
                         <p className="text-muted-foreground sm:col-span-2">
                           {noEmail
-                            ? "No email needed: copy or text the link and they add their email when they open it."
-                            : "Hotmail or Outlook? Text or copy the link too, those inboxes often send it to Junk."}
+                            ? "No email needed: they add theirs when they open the link and confirm it with a code."
+                            : "Emailing a Hotmail or Outlook address? Text it too, those inboxes often send it to Junk."}
                         </p>
                       )}
                     </div>
