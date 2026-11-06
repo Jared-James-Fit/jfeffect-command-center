@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { saveApplicationDraft, submitCoachingApplication } from "@/lib/coaching-applications.functions";
 import {
-  APPLY_STEPS, EMPTY_ANSWERS, OUTCOME_MAX, answeredCount, clip, firstUnanswered, hasContact, stepError,
+  APPLY_STEPS, EMPTY_ANSWERS, OUTCOME_MAX, answeredCount, clip, firstUnanswered, goalFromLink, hasContact, stepError,
   type ApplyAnswers,
 } from "@/lib/apply-form";
 import { bookOnline, getBookingPage, getBookingSlots } from "@/lib/booking.functions";
@@ -88,6 +88,8 @@ function QuestionFlow() {
   const moved = useRef(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  /** The goal they tapped on the coaching page (`?goal=`): already answered, so Next steps over it (Back still reaches it). */
+  const goalPicked = useRef(false);
 
   const total = APPLY_STEPS.length;
   const current = APPLY_STEPS[step]!;
@@ -96,12 +98,20 @@ function QuestionFlow() {
 
   useEffect(() => {
     const saved = loadSavedApply();
+    const params = new URLSearchParams(window.location.search);
+    const linkedGoal = goalFromLink(params.get("goal"));
     draftId.current = saved?.draftId ?? newDraftId();
-    if (saved) {
-      setAnswers({ ...EMPTY_ANSWERS, ...saved.answers });
-      setStep(Math.max(0, Math.min(total - 1, Number(saved.step) || 0)));
+    if (saved || linkedGoal) {
+      const base = { ...EMPTY_ANSWERS, ...(saved?.answers ?? {}) };
+      // The goal they just picked wins over one from an older visit.
+      if (linkedGoal) {
+        base.main_goal = linkedGoal;
+        goalPicked.current = true;
+      }
+      setAnswers(base);
     }
-    sourcePage.current = clip(new URLSearchParams(window.location.search).get("from") || "coaching_apply", 80);
+    if (saved) setStep(Math.max(0, Math.min(total - 1, Number(saved.step) || 0)));
+    sourcePage.current = clip(params.get("from") || "coaching_apply", 80);
     ready.current = true;
   }, [total]);
 
@@ -185,7 +195,11 @@ function QuestionFlow() {
   const next = () => {
     const problem = stepError(current.key, value);
     if (problem) return fail(problem);
-    if (!last) return goTo(step + 1, 1);
+    if (!last) {
+      const after = step + 1;
+      const skipGoal = goalPicked.current && APPLY_STEPS[after]?.key === "main_goal" && !stepError("main_goal", answers.main_goal);
+      return goTo(skipGoal ? Math.min(after + 1, total - 1) : after, 1);
+    }
     // Everything is checked again before sending (answers can come back from an older visit).
     const missing = firstUnanswered(answers);
     if (missing >= 0) {

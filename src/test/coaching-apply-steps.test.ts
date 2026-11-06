@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  APPLY_GOALS, APPLY_STEPS, APPLY_TIMELINES, EMPTY_ANSWERS, answeredCount, clip, emailOk, firstUnanswered, hasContact,
+  APPLY_GOALS, APPLY_STEPS, APPLY_TIMELINES, EMPTY_ANSWERS, answeredCount, clip, emailOk, firstUnanswered, goalFromLink, hasContact,
   instagramHandle, phoneOk, stepError, type ApplyAnswers,
 } from "@/lib/apply-form";
 import { publicCoachingApplicationSchema } from "@/lib/coaching-applications.functions";
@@ -114,5 +114,17 @@ describe("the page", () => {
     expect(sql).toContain("REVOKE ALL ON public.coaching_application_drafts FROM PUBLIC, anon, authenticated;");
     expect(sql).toContain("GRANT SELECT ON public.coaching_application_drafts TO authenticated;");
     expect(sql).toContain("CHECK (email IS NOT NULL OR phone IS NOT NULL)");
+  });
+
+  it("the coaching page's goal picker starts the application with that goal answered", () => {
+    for (const g of APPLY_GOALS) expect(goalFromLink(g.v)).toBe(g.v);
+    expect(goalFromLink(" fat_loss ")).toBe("fat_loss");
+    for (const bad of [null, undefined, "", "Fat Loss", "<script>", "fat_loss_x"]) expect(goalFromLink(bad)).toBeNull();
+    const page = read("src/routes/coaching.index.tsx");
+    expect(page).toContain("to={`${APPLY_TO}?goal=${g.v}` as typeof APPLY_TO}");
+    const apply = read("src/routes/coaching.apply.tsx");
+    expect(apply).toContain('goalFromLink(params.get("goal"))');
+    // Next steps over the goal they already picked; Back can still reach it.
+    expect(apply).toContain('APPLY_STEPS[after]?.key === "main_goal"');
   });
 });

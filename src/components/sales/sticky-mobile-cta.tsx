@@ -27,7 +27,7 @@ export function StickyMobileCta({ label, onClick, href, disabled, paused }: { la
       variant={paused ? "secondary" : "default"}
       className={cn(
         "h-12 w-full text-base font-bold",
-        paused ? "opacity-90" : "shadow-2xl shadow-primary/30",
+        paused && "opacity-90",
       )}
     >
       {label}
@@ -37,7 +37,7 @@ export function StickyMobileCta({ label, onClick, href, disabled, paused }: { la
     <div
       aria-hidden={!visible}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 p-3 backdrop-blur transition-all duration-300 md:hidden",
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background p-3 transition-all duration-300 md:hidden",
         visible
           ? "pointer-events-auto translate-y-0 opacity-100"
           : "pointer-events-none translate-y-full opacity-0",
