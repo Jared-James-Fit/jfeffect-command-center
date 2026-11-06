@@ -88,7 +88,7 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data: docs, error: e1 } = await context.supabase
       .from("legal_documents")
-      .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!legal_documents_current_version_id_fkey(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
+      .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!fk_legal_documents_current_version(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
       .eq("archived", false);
     if (e1) throw new Error(e1.message);
     const published = (docs ?? []).filter((d: any) => d.current_version && d.current_version.status === "published" && !d.current_version.needs_legal_review);
