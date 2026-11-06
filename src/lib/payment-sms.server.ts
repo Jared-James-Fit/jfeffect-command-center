@@ -16,7 +16,7 @@ export function buildPaymentSmsBody(i: { firstName?: string | null; brand?: stri
   return `Hi ${first}, it's ${brand}. I sent you a message in the app about setting up your payment. Open your messages when you get a minute. Reply STOP to opt out.`;
 }
 
-import { CLIENT_COACH_EMBED, resolveCoachName, smsSender } from "@/lib/sms-identity";
+import { assignedCoachOf, resolveCoachName, smsSender } from "@/lib/sms-identity";
 
 export type PaymentSmsDeps = {
   sendSms: (toPhone: string, fromPhone: string, body: string) => Promise<{ sid: string }>;
@@ -55,12 +55,11 @@ export async function runPaymentSmsSweep(
     const { data: claimed } = await supabaseAdmin.rpc("claim_payment_sms", { p_purchase_id: row.o_purchase_id });
     if (!claimed) { skipped++; continue; }
 
-    const { data: coachOf } = await supabaseAdmin
-      .from("clients").select(CLIENT_COACH_EMBED).eq("id", row.o_client_id).maybeSingle();
+    const coachOf = await assignedCoachOf(supabaseAdmin, { clientId: row.o_client_id });
     const body = buildPaymentSmsBody({
       firstName: row.o_first_name,
       brand: settings.brand_name,
-      coach: resolveCoachName((coachOf as any)?.coach, settings.default_coach_name),
+      coach: resolveCoachName(coachOf, settings.default_coach_name),
     });
     try {
       const { sid } = await deps.sendSms(toPhone, settings.from_phone, body);

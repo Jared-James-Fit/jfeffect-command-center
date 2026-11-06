@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { CLIENT_COACH_EMBED, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
+import { assignedCoachOf, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -104,9 +104,7 @@ export const sendSetupReminder = createServerFn({ method: "POST" })
             const brand = settings.brand_name || "JF Effect";
             let coachRow: any = null;
             if (member.user_id) {
-              const { data: linked } = await (supabaseAdmin as any)
-                .from("clients").select(CLIENT_COACH_EMBED).eq("user_id", member.user_id).limit(1).maybeSingle();
-              coachRow = (linked as any)?.coach ?? null;
+              coachRow = await assignedCoachOf(supabaseAdmin, { userId: member.user_id });
             }
             const coach = resolveCoachName(coachRow, settings.default_coach_name);
             const body = `${first}, finish setting up your ${brand} app: ${origin}/install${coach ? ` — ${coach}` : ""}`;

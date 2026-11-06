@@ -13,7 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { sendBulkSms } from "@/lib/sms.functions";
 import { toast } from "sonner";
 import { Search, Send, Users, AlertTriangle } from "lucide-react";
-import { CLIENT_COACH_EMBED, renderSmsTemplate as render, resolveCoachName } from "@/lib/sms-identity";
+import { renderSmsTemplate as render, resolveCoachName, withAssignedCoach } from "@/lib/sms-identity";
 
 export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const send = useServerFn(sendBulkSms);
@@ -31,9 +31,13 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   const { data: clients } = useQuery({
     queryKey: ["sms-personal-clients"],
-    queryFn: async () => (await (supabase as any).from("clients")
-      .select(`id, full_name, first_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
-      .eq("archived", false).order("full_name")).data ?? [],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("clients")
+        .select("id, full_name, first_name, phone, sms_opt_out, assigned_coach_id")
+        .eq("archived", false).order("full_name");
+      if (error) throw error;
+      return withAssignedCoach(supabase, data ?? []);
+    },
     enabled: open,
   });
 

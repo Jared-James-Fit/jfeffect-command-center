@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, Suspense, Fragment, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense, Fragment, type ComponentType } from "react";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app-shell";
@@ -31,7 +31,8 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
-import { omitScheduleFields } from "@/lib/committed-schedule-realign";
+import { profileChanges, rebaseProfileForm } from "@/lib/client-profile-form";
+import { SETUP_INVITE_DAYS } from "@/lib/setup-invite";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SocialIcons } from "@/components/social-icons";
@@ -179,6 +180,9 @@ export function ClientProfileWorkspace({
   const pov = useEnterClientPov();
   const canPov = pov.canPov;
   const [form, setForm] = useState<any>(null);
+  // The server row the form's untouched fields came from (client-profile-form.ts).
+  const baseRef = useRef<any>(null);
+  const [base, setBase] = useState<any>(null);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
   const [bookingLinkOpen, setBookingLinkOpen] = useState(false);
@@ -215,26 +219,29 @@ export function ClientProfileWorkspace({
     },
   });
 
-  // Seed local form state from server data on initial load only. Subsequent
-  // background refetches must not overwrite in-flight edits made by the admin.
+  // Every server refetch (a setup link sent, a login linked, a card that saved
+  // itself) moves the fields the coach hasn't touched; the coach's own edits stay.
   useEffect(() => {
-    if (data && form === null) setForm(data);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!data) return;
+    const prev = baseRef.current;
+    baseRef.current = data;
+    setBase(data);
+    setForm((f: any) => (f === null ? data : rebaseProfileForm(f, prev, data as any)));
   }, [data]);
 
-  // Compare current form state to the last server snapshot to know when to
-  // show the sticky Save bar. Must run before any early return to keep hook
-  // order stable across renders.
-  const isDirty = useMemo(() => {
-    if (!data || !form) return false;
-    try {
-      // Schedule columns are owned by the Training Schedule card, which saves
-      // them itself; they must not make the profile look "unsaved".
-      return JSON.stringify(omitScheduleFields(form)) !== JSON.stringify(omitScheduleFields(data));
-    } catch {
-      return false;
-    }
-  }, [form, data]);
+  // The sticky Save bar shows only for fields the coach actually changed.
+  // Must run before any early return to keep hook order stable across renders.
+  const changes = useMemo(() => profileChanges(form, base), [form, base]);
+  const isDirty = Object.keys(changes).length > 0;
+
+  // A section that saved itself: the form and its server copy both take the
+  // saved values, so it never reads as "Unsaved changes".
+  const markSaved = (patch: Record<string, any>) => {
+    const next = { ...(baseRef.current ?? {}), ...patch };
+    baseRef.current = next;
+    setBase(next);
+    setForm((f: any) => ({ ...(f ?? {}), ...patch }));
+  };
 
   if (!form) {
     return (
@@ -260,15 +267,16 @@ export function ClientProfileWorkspace({
     if (saving) return;
     setSaving(true);
     try {
-      // Never write the schedule columns back from this (possibly stale) copy
-      // of the row — that would undo a schedule change without realigning the
-      // client's workouts. The Training Schedule card owns those fields.
-      // Same for sex: the client can answer it any time (Home prompt, nutrition
-      // form), and the Personal Details card writes it on its own.
-      const { id: _id, created_at, updated_at, sex: _sex, sex_updated_at: _sexAt, ...rest } = form;
-      const patch = omitScheduleFields(rest) as any;
-      const { error } = await supabase.from("clients").update(patch).eq("id", id);
+      // Only what the coach changed: never the whole (possibly stale) row, the
+      // columns the database computes, the schedule or sex (client-profile-form.ts).
+      const patch = profileChanges(form, baseRef.current);
+      if (!Object.keys(patch).length) {
+        toast.success("Saved");
+        return;
+      }
+      const { error } = await supabase.from("clients").update(patch as any).eq("id", id);
       if (error) return toast.error(error.message);
+      markSaved(patch);
       toast.success("Saved");
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
@@ -284,8 +292,13 @@ export function ClientProfileWorkspace({
     if (embedded) onClose?.(); else navigate({ to: "/admin/clients" });
   };
 
+  // Each handler throws after its toast, so the button shows it failed instead of
+  // "Sent" / "Copied" / "Texted" (the buttons don't toast errors themselves).
   const sendSetup = async () => {
-    if (!form.email) return toast.error("Add an email first");
+    if (!form.email) {
+      toast.error("No email on file. Copy or text the setup link: they add their email when they open it.");
+      throw new Error("No email on file");
+    }
     const t = toast.loading("Sending setup link…");
     try {
       const redirectTo = `${window.location.origin}/setup`;
@@ -294,24 +307,28 @@ export function ClientProfileWorkspace({
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
+      throw e;
     }
   };
 
   const copySetupLink = async () => {
-    if (!form.email) return toast.error("Add an email first");
     const t = toast.loading("Generating link…");
     try {
-      const { url } = await getSetupLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/setup` } });
+      const { url, asksForEmail } = await getSetupLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/setup` } });
       await navigator.clipboard.writeText(url);
-      toast.success("Setup link copied", { id: t });
+      toast.success(asksForEmail ? "Setup link copied. They'll add their email when they open it." : "Setup link copied", { id: t });
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
+      throw e;
     }
   };
 
   const sendReset = async () => {
-    if (!form.email) return toast.error("Add an email first");
+    if (!form.email) {
+      toast.error("Add an email first");
+      throw new Error("No email on file");
+    }
     const t = toast.loading("Sending reset link…");
     try {
       await sendResetFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
@@ -319,11 +336,15 @@ export function ClientProfileWorkspace({
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
+      throw e;
     }
   };
 
   const copyResetLink = async () => {
-    if (!form.email) return toast.error("Add an email first");
+    if (!form.email) {
+      toast.error("Add an email first");
+      throw new Error("No email on file");
+    }
     const t = toast.loading("Generating reset link…");
     try {
       const { url } = await getResetLinkFn({ data: { clientId: id, redirectTo: `${window.location.origin}/reset-password` } });
@@ -332,12 +353,20 @@ export function ClientProfileWorkspace({
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
+      throw e;
     }
   };
 
   const smsLink = (kind: "setup" | "magic" | "reset") => async () => {
-    if (!form.phone) return toast.error("Add a phone number first");
-    if (!form.email) return toast.error("Add an email first (used to mint the link)");
+    if (!form.phone) {
+      toast.error("Add a phone number first");
+      throw new Error("No phone on file");
+    }
+    // A setup link works without an email (they add it when they open it); a reset needs one.
+    if (kind !== "setup" && !form.email) {
+      toast.error("Add an email first");
+      throw new Error("No email on file");
+    }
     const redirectTo = kind === "reset"
       ? `${window.location.origin}/reset-password`
       : `${window.location.origin}/setup`;
@@ -348,6 +377,7 @@ export function ClientProfileWorkspace({
       qc.invalidateQueries({ queryKey: ["client", id] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed", { id: t });
+      throw e;
     }
   };
 
@@ -434,8 +464,7 @@ export function ClientProfileWorkspace({
       .eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["client", id] });
-    setForm({
-      ...form,
+    markSaved({
       profile_picture_url: path,
       profile_picture_needs_update: false,
       profile_picture_needs_update_at: null,
@@ -460,8 +489,7 @@ export function ClientProfileWorkspace({
     if (error) return toast.error(error.message);
     toast.success("Client will be asked to update their profile picture on next login.");
     qc.invalidateQueries({ queryKey: ["client", id] });
-    setForm({
-      ...form,
+    markSaved({
       profile_picture_needs_update: true,
       profile_picture_needs_update_at: new Date().toISOString(),
       profile_picture_needs_update_reason: reason || "Please take a new clear headshot.",
@@ -928,7 +956,7 @@ export function ClientProfileWorkspace({
                 const { error } = await supabase.from("clients").update(fullPatch).eq("id", id);
                 if (error) throw new Error(error.message);
                 toast.success("Saved");
-                setForm({ ...form, ...fullPatch });
+                markSaved(fullPatch);
                 qc.invalidateQueries({ queryKey: ["client", id] });
                 qc.invalidateQueries({ queryKey: ["clients"] });
               };
@@ -999,7 +1027,7 @@ export function ClientProfileWorkspace({
                   set("call_access_enabled", v);
                   const { error } = await supabase.from("clients").update({ call_access_enabled: v }).eq("id", id);
                   if (error) { toast.error(error.message); set("call_access_enabled", !v); }
-                  else { toast.success(v ? "Call access enabled" : "Call access disabled"); qc.invalidateQueries({ queryKey: ["client", id] }); qc.invalidateQueries({ queryKey: ["clients-min"] }); }
+                  else { markSaved({ call_access_enabled: v }); toast.success(v ? "Call access enabled" : "Call access disabled"); qc.invalidateQueries({ queryKey: ["client", id] }); qc.invalidateQueries({ queryKey: ["clients-min"] }); }
                 }}
               />
               <CommsToggleRow
@@ -1010,7 +1038,7 @@ export function ClientProfileWorkspace({
                   set("sms_opt_out", v);
                   const { error } = await supabase.from("clients").update({ sms_opt_out: v }).eq("id", id);
                   if (error) { toast.error(error.message); set("sms_opt_out", !v); }
-                  else { toast.success(v ? "SMS opted out" : "SMS enabled"); qc.invalidateQueries({ queryKey: ["client", id] }); }
+                  else { markSaved({ sms_opt_out: v }); toast.success(v ? "SMS opted out" : "SMS enabled"); qc.invalidateQueries({ queryKey: ["client", id] }); }
                 }}
               />
               <CommsToggleRow
@@ -1021,7 +1049,7 @@ export function ClientProfileWorkspace({
                   set("coach_call_access_enabled", v);
                   const { error } = await supabase.from("clients").update({ coach_call_access_enabled: v } as any).eq("id", id);
                   if (error) { toast.error(error.message); set("coach_call_access_enabled", !v); }
-                  else { toast.success(v ? "Client can call their coach" : "Client can no longer call their coach"); qc.invalidateQueries({ queryKey: ["client", id] }); }
+                  else { markSaved({ coach_call_access_enabled: v }); toast.success(v ? "Client can call their coach" : "Client can no longer call their coach"); qc.invalidateQueries({ queryKey: ["client", id] }); }
                 }}
               />
               <CommsToggleRow
@@ -1032,7 +1060,7 @@ export function ClientProfileWorkspace({
                   set("coach_sms_access_enabled", v);
                   const { error } = await supabase.from("clients").update({ coach_sms_access_enabled: v } as any).eq("id", id);
                   if (error) { toast.error(error.message); set("coach_sms_access_enabled", !v); }
-                  else { toast.success(v ? "Client can SMS their coach" : "Client can no longer SMS their coach"); qc.invalidateQueries({ queryKey: ["client", id] }); }
+                  else { markSaved({ coach_sms_access_enabled: v }); toast.success(v ? "Client can SMS their coach" : "Client can no longer SMS their coach"); qc.invalidateQueries({ queryKey: ["client", id] }); }
                 }}
               />
             </div>
@@ -1089,7 +1117,7 @@ export function ClientProfileWorkspace({
                       <p className="text-xs text-muted-foreground">
                         {recovery
                           ? "Locked out? Send a password reset by email or text."
-                          : "Send the setup link by email and text. It opens a Continue screen, so email scanners can't burn it. Links work once and last 24 hours — resend anytime."}
+                          : `Text them their setup link: one tap opens their account and they pick a password. It works for ${SETUP_INVITE_DAYS} days until they've signed in, and sending it again never breaks the last one.`}
                       </p>
                     </div>
 
@@ -1105,30 +1133,47 @@ export function ClientProfileWorkspace({
                       ))}
                     </ol>
 
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <ActionButton className="min-h-[48px]" disabled={noEmail} onAction={recovery ? sendReset : sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
-                        {recovery ? "Email reset link" : lastSetup ? "Resend email" : "Email setup link"}
-                      </ActionButton>
-                      <ActionButton className="min-h-[48px]" variant="outline" disabled={noPhone || noEmail} onAction={smsLink(recovery ? "reset" : "setup")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
-                        {recovery ? "Text reset link" : "Text setup link"}
-                      </ActionButton>
-                      <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={recovery ? copyResetLink : copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
-                        {recovery ? "Copy reset link" : "Copy setup link"}
-                      </ActionButton>
-                    </div>
+                    {recovery ? (
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <ActionButton className="min-h-[48px]" disabled={noEmail} onAction={sendReset} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                          Email reset link
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant="outline" disabled={noPhone || noEmail} onAction={smsLink("reset")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
+                          Text reset link
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={copyResetLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                          Copy reset link
+                        </ActionButton>
+                      </div>
+                    ) : (
+                      // Text first: it's read within minutes and never lands in Junk.
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <ActionButton className="min-h-[48px]" variant={noPhone ? "outline" : "default"} disabled={noPhone} onAction={smsLink("setup")} loadingLabel="Texting…" successLabel="Texted" successToast={false} errorToast={false} icon={<MessageSquare className="h-4 w-4" />}>
+                          {lastSetup ? "Text it again" : "Text setup link"}
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant={noPhone ? "default" : "outline"} onAction={copySetupLink} loadingLabel="Copying…" successLabel="Copied" successToast={false} errorToast={false} icon={<Copy className="h-4 w-4" />}>
+                          Copy setup link
+                        </ActionButton>
+                        <ActionButton className="min-h-[48px]" variant="outline" disabled={noEmail} onAction={sendSetup} loadingLabel="Sending…" successLabel="Sent" successToast={false} errorToast={false} icon={<Mail className="h-4 w-4" />}>
+                          {lastSetup ? "Email it again" : "Email setup link"}
+                        </ActionButton>
+                      </div>
+                    )}
 
                     <div className="grid gap-1.5 rounded-md bg-secondary/30 p-3 text-xs sm:grid-cols-2">
                       <div className="flex min-w-0 items-center gap-2">
                         <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className={noEmail ? "text-warning" : "truncate"}>{form.email || "No email — add one in Info"}</span>
+                        <span className={noEmail ? "text-muted-foreground" : "truncate"}>{form.email || "No email yet"}</span>
                       </div>
                       <div className="flex min-w-0 items-center gap-2">
                         <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className={noPhone ? "text-muted-foreground" : "truncate"}>{form.phone || "No phone — add one to text links"}</span>
+                        <span className={noPhone ? "text-muted-foreground" : "truncate"}>{form.phone || "No phone yet: copy the link or email it"}</span>
                       </div>
                       {!recovery && (
                         <p className="text-muted-foreground sm:col-span-2">
-                          Hotmail / Outlook client? Text or copy the link too — those inboxes often send it to Junk.
+                          {noEmail
+                            ? "No email needed: they add theirs when they open the link and confirm it with a code."
+                            : "Emailing a Hotmail or Outlook address? Text it too, those inboxes often send it to Junk."}
                         </p>
                       )}
                     </div>

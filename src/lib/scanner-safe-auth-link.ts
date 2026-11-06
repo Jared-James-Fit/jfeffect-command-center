@@ -9,6 +9,8 @@
  * taps "Continue", which a scanner never does.
  */
 
+import { cleanInviteParam } from "@/lib/setup-invite";
+
 const SAFE_PATHS = ["/setup", "/reset-password", "/welcome"] as const;
 const ALLOWED_HOSTS = [/(^|\.)jfeffect\.com$/i, /\.lovable\.app$/i, /^localhost$/i];
 const TYPES = new Set(["invite", "magiclink", "recovery", "signup"]);
@@ -50,5 +52,9 @@ export function scannerSafeAuthLink(input: {
   const out = new URL(path, target.origin);
   out.searchParams.set("token_hash", tokenHash);
   out.searchParams.set("type", type);
+  // A setup email's link keeps the client's invite (setup-invite.ts), so once
+  // this one-time token has expired or been spent the page carries on anyway.
+  const invite = path === "/setup" ? cleanInviteParam(target.searchParams.get("invite")) : null;
+  if (invite) out.searchParams.set("invite", invite);
   return out.toString();
 }

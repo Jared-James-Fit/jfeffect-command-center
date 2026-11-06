@@ -7,7 +7,7 @@ import {
   reminderLookbackMs,
   SMS_CLIENT_COOLDOWN_MS,
 } from "@/lib/sms-reminder-rules";
-import { CLIENT_COACH_EMBED, renderSmsTemplate, resolveCoachName, smsSender, withLinkHeadsUp } from "@/lib/sms-identity";
+import { coachById, isAssignedCoachOf, renderSmsTemplate, resolveCoachName, smsSender, withAssignedCoach, withLinkHeadsUp } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -28,13 +28,7 @@ async function assertCanMessage(supabase: any, userId: string, clientId: string)
   const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
   if (isAdmin) return { isAdmin: true };
-  const { data: assigned } = await supabase
-    .from("clients")
-    .select("id, coaches!clients_assigned_coach_id_fkey(user_id)")
-    .eq("id", clientId)
-    .maybeSingle();
-  const coachUid = (assigned as any)?.coaches?.user_id;
-  if (coachUid !== userId) throw new Error("Forbidden: not assigned to this client");
+  if (!(await isAssignedCoachOf(supabase, userId, clientId))) throw new Error("Forbidden: not assigned to this client");
   return { isAdmin: false };
 }
 
@@ -229,9 +223,10 @@ export async function runReminderSweep(supabaseAdmin: any) {
     if (!next) continue;
 
     // Get client
-    const { data: client } = await supabaseAdmin
-      .from("clients").select(`id, phone, sms_opt_out, first_name, full_name, timezone, ${CLIENT_COACH_EMBED}`).eq("id", msg.client_id).maybeSingle();
-    if (!client) continue;
+    const { data: clientRow } = await supabaseAdmin
+      .from("clients").select("id, phone, sms_opt_out, first_name, full_name, timezone, assigned_coach_id").eq("id", msg.client_id).maybeSingle();
+    if (!clientRow) continue;
+    const client = { ...clientRow, coach: await coachById(supabaseAdmin, (clientRow as any).assigned_coach_id) };
     if (client.sms_opt_out) {
       await supabaseAdmin.from("sms_log").insert({
         client_id: msg.client_id, message_id: msg.id, to_phone: "", body: "", kind: "reminder",
@@ -337,11 +332,12 @@ export const sendBulkSms = createServerFn({ method: "POST" })
     if (!settings.enabled) throw new Error("SMS sending is disabled in settings");
     if (!settings.from_phone) throw new Error("Set a Twilio From phone number in SMS settings first");
 
-    const { data: clients, error: cErr } = await supabase
+    const { data: clientRows, error: cErr } = await supabase
       .from("clients")
-      .select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
+      .select("id, first_name, full_name, phone, sms_opt_out, assigned_coach_id")
       .in("id", data.client_ids);
     if (cErr) throw new Error(cErr.message);
+    const clients = await withAssignedCoach(supabase, (clientRows ?? []) as any[]);
 
     let sent = 0, skipped = 0, failed = 0;
     const results: Array<{ client_id: string; status: string; reason?: string }> = [];
