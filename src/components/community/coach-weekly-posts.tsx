@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { SERIES_LABEL, TIP_KIND_LABEL, isRecapStats, postTimeLabel, type CommunityPost, type CommunitySeries, type CrewCompare } from "@/lib/community";
-import { useFullMediaUrl, useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem } from "@/lib/community.queries";
+import { useFullMediaUrl, useSeriesAction, useSeriesOverview, useSeriesPreview, useViewerUnit, type LibrarySeries, type SeriesItem, type SwitchedSeries } from "@/lib/community.queries";
 import { makePostPicture } from "@/lib/post-pictures.functions";
 import { picturedByItself } from "@/lib/post-pictures";
 import { useAuth } from "@/lib/auth";
@@ -29,16 +29,32 @@ const WHEN: Record<DailySeries, string> = {
   sunday_recap: "Sun · 7 pm",
 };
 const SOURCE: Partial<Record<DailySeries, string>> = { wednesday_wins: "last week's logs", sunday_recap: "this week's logs" };
-const DAYS: Record<LibrarySeries, string> = {
+const DAYS: Record<SwitchedSeries, string> = {
   monday_motivation: "Mondays",
   tuesday_tips: "Tuesdays",
   try_it_thursday: "Thursdays",
   finish_strong_friday: "Fridays",
   saturday_spirit: "Saturdays",
+  sunday_recap: "Sundays",
 };
 const isLibrary = (s: DailySeries): s is LibrarySeries => !(s === "wednesday_wins" || s === "sunday_recap");
 /** Monday and Thursday are the lessons' days: a series on one of them makes it two coach posts. */
-const LESSON_DAY = new Set<LibrarySeries>(["monday_motivation", "try_it_thursday"]);
+const LESSON_DAY = new Set<SwitchedSeries>(["monday_motivation", "try_it_thursday"]);
+/** A series with a switch: the five library ones and the Recap (Wins always runs). */
+const isSwitched = (s: DailySeries): s is SwitchedSeries => isLibrary(s) || s === "sunday_recap";
+/** What a series does to its day when it's on (one coach post a day, community_coach_post_day). */
+function onNote(series: SwitchedSeries): string {
+  if (series === "sunday_recap") return "the evening after the morning's picture, and Wins leaves the week's numbers to it";
+  return LESSON_DAY.has(series) ? "the same day as a lesson, so two coach posts that day" : "in place of that day's picture";
+}
+/** What its day gets while it's off. */
+function offNote(series: SwitchedSeries): string {
+  if (series === "sunday_recap") return "Off: Wednesday Wins carries the week's numbers. Post a recap by hand when a week's worth one.";
+  if (LESSON_DAY.has(series)) return `Off: ${DAYS[series]} get the lesson only. Turn it on and this goes out too.`;
+  return series === "tuesday_tips"
+    ? "Off: Tuesdays get the daily picture. Turn it on and the tip (or the crew's own numbers, when they hold) goes out instead."
+    : `Off: ${DAYS[series]} get the daily picture. Turn it on and this goes out instead.`;
+}
 
 /** What the "Up next" label calls a library post. */
 function itemName(series: LibrarySeries, item: Pick<SeriesItem, "mentor" | "data">): string {
@@ -58,8 +74,11 @@ function holidayDay(day: string): string {
  * series, one per day, the daily pictures (DailyPicturesCard) and the
  * holidays coming up.
  *
- * Wednesday Wins and Sunday Recap are written from the crew's logs and always
- * run. The other five (Monday Motivation, Tuesday Tips, Try it Thursday,
+ * Wednesday Wins is written from the crew's logs and always runs. The Sunday
+ * Recap is too, but posts on its own only while it's switched on: it reported
+ * the same week as Wins, so with it off Wins carries the week's numbers card
+ * (20270205090000_one_weekly_crew_post.sql), and Post now sends one by hand.
+ * The other five (Monday Motivation, Tuesday Tips, Try it Thursday,
  * Finish Strong Friday, Saturday Spirit) post from their libraries, each on
  * its own switch. One coach post a day: a series that's on takes its day from
  * the daily picture (community_coach_post_day), and Monday's and Thursday's
@@ -76,7 +95,7 @@ export function CoachWeeklyPosts() {
   // every day starts closed (Crew → Posts has "Next: …" at the top); tap one to see or edit it
   const [open, setOpen] = useState<DailySeries | null>(null);
 
-  const isOn = (s: DailySeries) => !isLibrary(s) || (data?.series_on ?? []).includes(s);
+  const isOn = (s: DailySeries) => !isSwitched(s) || (data?.series_on ?? []).includes(s);
   const tuesday = useSeriesPreview("tuesday_tips", open === "tuesday_tips" && isOn("tuesday_tips"));
   const thursday = useSeriesPreview("try_it_thursday", open === "try_it_thursday");
   const sunday = useSeriesPreview("sunday_recap", open === "sunday_recap");
@@ -107,14 +126,14 @@ export function CoachWeeklyPosts() {
       },
     );
 
-  const flip = (series: LibrarySeries, on: boolean) =>
+  const flip = (series: SwitchedSeries, on: boolean) =>
     act.mutate(
       { kind: "series_on", series, on },
       {
         onSuccess: () =>
           toast.success(on ? `${SERIES_LABEL[series].name} is on` : `${SERIES_LABEL[series].name} is off`, {
             description: on
-              ? `${DAYS[series]} at ${WHEN[series].split(" · ")[1]}, ${LESSON_DAY.has(series) ? "the same day as a lesson, so two coach posts that day" : "in place of that day's picture"}.`
+              ? `${DAYS[series]} at ${WHEN[series].split(" · ")[1]}, ${onNote(series)}.`
               : undefined,
           }),
         onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
@@ -154,12 +173,17 @@ export function CoachWeeklyPosts() {
                     <div className="min-w-0">
                       <div className={cn("truncate text-[13px] font-bold", !on && "text-muted-foreground")}>{SERIES_LABEL[series].name}</div>
                       <div className="truncate text-[11px] text-muted-foreground">
-                        {WHEN[series]} · {library ? (done ? "posted this week" : on ? `${data.library?.[series] ?? 0} in rotation` : "off") : `always on · ${SOURCE[series]}`}
+                        {WHEN[series]} ·{" "}
+                        {library
+                          ? done ? "posted this week" : on ? `${data.library?.[series] ?? 0} in rotation` : "off"
+                          : series === "sunday_recap"
+                            ? done ? "posted this week" : on ? `on · ${SOURCE[series]}` : "off · post one by hand"
+                            : `always on · ${SOURCE[series]}`}
                       </div>
                     </div>
                     <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
                   </button>
-                  {library ? (
+                  {isSwitched(series) ? (
                     <Switch checked={on} disabled={act.isPending} onCheckedChange={(v) => flip(series, v)} aria-label={`${SERIES_LABEL[series].name} on`} />
                   ) : done ? (
                     <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
@@ -179,12 +203,7 @@ export function CoachWeeklyPosts() {
 
                 {expanded && (
                   <div className="space-y-2 px-4 pb-3">
-                    {library && !on && (
-                      <p className="text-[11px] leading-snug text-muted-foreground">
-                        Off: {DAYS[series]} only get the lesson.{" "}
-                        {series === "tuesday_tips" ? "Turn it on and the crew's own numbers post here (when they hold) instead of in Tuesday's lesson." : "Turn it on and this goes out too."}
-                      </p>
-                    )}
+                    {isSwitched(series) && !on && <p className="text-[11px] leading-snug text-muted-foreground">{offNote(series)}</p>}
                     {obs && (
                       <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
                         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Goes out instead · from the crew's data</div>
@@ -247,7 +266,7 @@ export function CoachWeeklyPosts() {
                         )}
                       </div>
                     )}
-                    {library && !done && next && (
+                    {(series === "sunday_recap" ? !done && !!recapNow : library && !done && next) && (
                       <button
                         type="button"
                         disabled={!canPost}
