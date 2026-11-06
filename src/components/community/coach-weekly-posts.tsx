@@ -94,6 +94,7 @@ export function CoachWeeklyPosts() {
   const [editing, setEditing] = useState<{ series: LibrarySeries; item: SeriesItem } | null>(null);
   // every day starts closed (Crew → Posts has "Next: …" at the top); tap one to see or edit it
   const [open, setOpen] = useState<DailySeries | null>(null);
+  const [showOff, setShowOff] = useState(false);
 
   const isOn = (s: DailySeries) => !isSwitched(s) || (data?.series_on ?? []).includes(s);
   const tuesday = useSeriesPreview("tuesday_tips", open === "tuesday_tips" && isOn("tuesday_tips"));
@@ -141,6 +142,136 @@ export function CoachWeeklyPosts() {
     );
 
   const recent = data.history.filter((h) => ORDER.includes(h.series as DailySeries));
+  const running = ORDER.filter((s) => isOn(s));
+  const switchedOff = ORDER.filter((s) => !isOn(s));
+  // one row of the week: its switch or Post now, and what goes out next when tapped open
+  const renderRow = (series: DailySeries) => {
+    const library = isLibrary(series);
+    const on = isOn(series);
+    const wins = series === "wednesday_wins";
+    const next = library ? data.next?.[series] : undefined;
+    const preview = wins ? data.wins_preview : null;
+    const done = data.this_week?.[series];
+    const expanded = open === series;
+    const obs = series === "tuesday_tips" && on ? tuesday.data : null;
+    const stat = series === "try_it_thursday" ? (thursday.data as CrewCompare | null | undefined) : null;
+    const recapNow = series === "sunday_recap" ? sunday.data : null;
+    const canPost = !act.isPending && !data.paused && (wins ? !!preview : library ? !!next : true);
+    return (
+      <div key={series} data-daily-series={series}>
+        <div className="flex items-center justify-between gap-2 px-4 py-3">
+          <button type="button" onClick={() => setOpen(expanded ? null : series)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={expanded}>
+            <div className="min-w-0">
+              <div className={cn("truncate text-[13px] font-bold", !on && "text-muted-foreground")}>{SERIES_LABEL[series].name}</div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {WHEN[series]} ·{" "}
+                {library
+                  ? done ? "posted this week" : on ? `${data.library?.[series] ?? 0} in rotation` : "off"
+                  : series === "sunday_recap"
+                    ? done ? "posted this week" : on ? `on · ${SOURCE[series]}` : "off · post one by hand"
+                    : `always on · ${SOURCE[series]}`}
+              </div>
+            </div>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+          </button>
+          {isSwitched(series) ? (
+            <Switch checked={on} disabled={act.isPending} onCheckedChange={(v) => flip(series, v)} aria-label={`${SERIES_LABEL[series].name} on`} />
+          ) : done ? (
+            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+              <Check className="h-3 w-3" /> Posted
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={!canPost}
+              onClick={() => post(series)}
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 py-1 text-[11px] font-bold disabled:opacity-50"
+            >
+              <Send className="h-3 w-3" /> Post now
+            </button>
+          )}
+        </div>
+
+        {expanded && (
+          <div className="space-y-2 px-4 pb-3">
+            {isSwitched(series) && !on && <p className="text-[11px] leading-snug text-muted-foreground">{offNote(series)}</p>}
+            {obs && (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Goes out instead · from the crew's data</div>
+                <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{obs.caption}</div>
+                <CompareBars compare={obs as CrewCompare} className="mt-2.5" />
+              </div>
+            )}
+            {library && next && (
+              <button type="button" onClick={() => setEditing({ series, item: next })} className={cn("block w-full rounded-xl bg-muted/60 px-3 py-2.5 text-left", obs && "opacity-70")}>
+                <div className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  <span className="truncate">
+                    {obs ? "Then next tip" : "Up next"} · {itemName(series, next)}
+                  </span>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-primary">
+                    <PenLine className="h-3 w-3" /> Edit
+                  </span>
+                </div>
+                {next.quote && <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold">“{next.quote}”</div>}
+                <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">{next.body}</div>
+                {!!next.media?.length && series !== "saturday_spirit" && (
+                  <div className="mt-1.5 text-[11px] font-bold text-primary">
+                    + {next.media.length} {next.media.length === 1 ? "photo" : "photos / videos"}
+                  </div>
+                )}
+              </button>
+            )}
+            {library && next && picturedByItself(series) && <NextPicture item={next} series={series} on={on} />}
+            {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
+            {series === "try_it_thursday" && next?.data?.habit && (
+              <div className="rounded-xl bg-muted/60 px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  {thursday.isLoading ? "Checking the crew's numbers…" : stat ? "Adds this from the crew's data" : "Posts without a number (not a big enough gap right now)"}
+                </div>
+                {stat && <CompareBars compare={stat} className="mt-2.5" />}
+              </div>
+            )}
+            {wins && (
+              <div className="rounded-xl bg-muted/60 px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  {preview ? `${preview.next_week ? "Next week so far" : "Goes out"} · ${preview.featured} featured · ${preview.trainers} trained` : "Nobody has logged a session yet"}
+                </div>
+                {preview && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{preview.body}</div>}
+              </div>
+            )}
+            {series === "sunday_recap" && (
+              <div className="rounded-xl bg-muted/60 px-3 py-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  {sunday.isLoading ? "Adding up the week…" : recapNow ? "This week so far" : "Nobody has trained this week yet"}
+                </div>
+                {recapNow?.caption && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{recapNow.caption}</div>}
+                {/* the picture it goes out with, as it'd be right now (the one the feed and Instagram get) */}
+                {isRecapStats(recapNow?.stats) && (
+                  <PostArtImage
+                    post={{ id: `recap-preview-${recapNow!.stats.week_of}`, created_at: new Date().toISOString(), kind: "note", series: "sunday_recap", series_data: recapNow!.stats, caption: recapNow!.caption ?? null, mentions: [] } as unknown as CommunityPost}
+                    card="recap"
+                    unit={unit}
+                    eager
+                    className="mt-2.5 max-w-[260px] rounded-xl"
+                  />
+                )}
+              </div>
+            )}
+            {(series === "sunday_recap" ? !done && !!recapNow : library && !done && next) && (
+              <button
+                type="button"
+                disabled={!canPost}
+                onClick={() => post(series)}
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 py-1 text-[11px] font-bold disabled:opacity-50"
+              >
+                <Send className="h-3 w-3" /> Post now
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
   const holidays = data.holidays ?? [];
   return (
     <section className="w-full space-y-3">
@@ -153,135 +284,22 @@ export function CoachWeeklyPosts() {
           </div>
         </header>
 
-        <div className="divide-y divide-border/60">
-          {ORDER.map((series) => {
-            const library = isLibrary(series);
-            const on = isOn(series);
-            const wins = series === "wednesday_wins";
-            const next = library ? data.next?.[series] : undefined;
-            const preview = wins ? data.wins_preview : null;
-            const done = data.this_week?.[series];
-            const expanded = open === series;
-            const obs = series === "tuesday_tips" && on ? tuesday.data : null;
-            const stat = series === "try_it_thursday" ? (thursday.data as CrewCompare | null | undefined) : null;
-            const recapNow = series === "sunday_recap" ? sunday.data : null;
-            const canPost = !act.isPending && !data.paused && (wins ? !!preview : library ? !!next : true);
-            return (
-              <div key={series} data-daily-series={series}>
-                <div className="flex items-center justify-between gap-2 px-4 py-3">
-                  <button type="button" onClick={() => setOpen(expanded ? null : series)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={expanded}>
-                    <div className="min-w-0">
-                      <div className={cn("truncate text-[13px] font-bold", !on && "text-muted-foreground")}>{SERIES_LABEL[series].name}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">
-                        {WHEN[series]} ·{" "}
-                        {library
-                          ? done ? "posted this week" : on ? `${data.library?.[series] ?? 0} in rotation` : "off"
-                          : series === "sunday_recap"
-                            ? done ? "posted this week" : on ? `on · ${SOURCE[series]}` : "off · post one by hand"
-                            : `always on · ${SOURCE[series]}`}
-                      </div>
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} />
-                  </button>
-                  {isSwitched(series) ? (
-                    <Switch checked={on} disabled={act.isPending} onCheckedChange={(v) => flip(series, v)} aria-label={`${SERIES_LABEL[series].name} on`} />
-                  ) : done ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                      <Check className="h-3 w-3" /> Posted
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!canPost}
-                      onClick={() => post(series)}
-                      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 py-1 text-[11px] font-bold disabled:opacity-50"
-                    >
-                      <Send className="h-3 w-3" /> Post now
-                    </button>
-                  )}
-                </div>
-
-                {expanded && (
-                  <div className="space-y-2 px-4 pb-3">
-                    {isSwitched(series) && !on && <p className="text-[11px] leading-snug text-muted-foreground">{offNote(series)}</p>}
-                    {obs && (
-                      <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Goes out instead · from the crew's data</div>
-                        <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{obs.caption}</div>
-                        <CompareBars compare={obs as CrewCompare} className="mt-2.5" />
-                      </div>
-                    )}
-                    {library && next && (
-                      <button type="button" onClick={() => setEditing({ series, item: next })} className={cn("block w-full rounded-xl bg-muted/60 px-3 py-2.5 text-left", obs && "opacity-70")}>
-                        <div className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          <span className="truncate">
-                            {obs ? "Then next tip" : "Up next"} · {itemName(series, next)}
-                          </span>
-                          <span className="inline-flex shrink-0 items-center gap-1 text-primary">
-                            <PenLine className="h-3 w-3" /> Edit
-                          </span>
-                        </div>
-                        {next.quote && <div className="mt-1.5 line-clamp-2 text-[13px] font-semibold">“{next.quote}”</div>}
-                        <div className="mt-1 line-clamp-3 whitespace-pre-line text-[12px] text-muted-foreground">{next.body}</div>
-                        {!!next.media?.length && series !== "saturday_spirit" && (
-                          <div className="mt-1.5 text-[11px] font-bold text-primary">
-                            + {next.media.length} {next.media.length === 1 ? "photo" : "photos / videos"}
-                          </div>
-                        )}
-                      </button>
-                    )}
-                    {library && next && picturedByItself(series) && <NextPicture item={next} series={series} on={on} />}
-                    {library && !next && <p className="text-[12px] text-muted-foreground">Nothing left in this one's library.</p>}
-                    {series === "try_it_thursday" && next?.data?.habit && (
-                      <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          {thursday.isLoading ? "Checking the crew's numbers…" : stat ? "Adds this from the crew's data" : "Posts without a number (not a big enough gap right now)"}
-                        </div>
-                        {stat && <CompareBars compare={stat} className="mt-2.5" />}
-                      </div>
-                    )}
-                    {wins && (
-                      <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          {preview ? `${preview.next_week ? "Next week so far" : "Goes out"} · ${preview.featured} featured · ${preview.trainers} trained` : "Nobody has logged a session yet"}
-                        </div>
-                        {preview && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{preview.body}</div>}
-                      </div>
-                    )}
-                    {series === "sunday_recap" && (
-                      <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          {sunday.isLoading ? "Adding up the week…" : recapNow ? "This week so far" : "Nobody has trained this week yet"}
-                        </div>
-                        {recapNow?.caption && <div className="mt-1.5 line-clamp-6 whitespace-pre-line text-[12px] text-muted-foreground">{recapNow.caption}</div>}
-                        {/* the picture it goes out with, as it'd be right now (the one the feed and Instagram get) */}
-                        {isRecapStats(recapNow?.stats) && (
-                          <PostArtImage
-                            post={{ id: `recap-preview-${recapNow!.stats.week_of}`, created_at: new Date().toISOString(), kind: "note", series: "sunday_recap", series_data: recapNow!.stats, caption: recapNow!.caption ?? null, mentions: [] } as unknown as CommunityPost}
-                            card="recap"
-                            unit={unit}
-                            eager
-                            className="mt-2.5 max-w-[260px] rounded-xl"
-                          />
-                        )}
-                      </div>
-                    )}
-                    {(series === "sunday_recap" ? !done && !!recapNow : library && !done && next) && (
-                      <button
-                        type="button"
-                        disabled={!canPost}
-                        onClick={() => post(series)}
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 py-1 text-[11px] font-bold disabled:opacity-50"
-                      >
-                        <Send className="h-3 w-3" /> Post now
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <div className="divide-y divide-border/60">{running.map(renderRow)}</div>
+        {/* switched-off series fold away: the card shows the week that actually goes out */}
+        {switchedOff.length > 0 && (
+          <div className="border-t border-border/60" data-series-off>
+            <button
+              type="button"
+              onClick={() => setShowOff((v) => !v)}
+              aria-expanded={showOff}
+              className="flex min-h-[44px] w-full items-center justify-between gap-2 px-4 py-2 text-left text-[12px] font-semibold text-muted-foreground"
+            >
+              <span className="truncate">Switched off · {switchedOff.map((s) => SERIES_LABEL[s].short).join(", ")}</span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", showOff && "rotate-180")} />
+            </button>
+            {showOff && <div className="divide-y divide-border/60 border-t border-border/60">{switchedOff.map(renderRow)}</div>}
+          </div>
+        )}
 
         {recent.length > 0 && (
           <div className="border-t border-border/60 px-4 py-3">

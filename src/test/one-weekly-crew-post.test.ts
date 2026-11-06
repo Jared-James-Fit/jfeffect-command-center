@@ -50,4 +50,13 @@ describe("one weekly crew post", () => {
     expect(coach).toContain("Off: Wednesday Wins carries the week's numbers. Post a recap by hand when a week's worth one.");
     expect(coach).toContain('{(series === "sunday_recap" ? !done && !!recapNow : library && !done && next) && (');
   });
+
+  it("Crew → Posts shows the week that goes out; switched-off series fold under one line", () => {
+    expect(coach).toContain("const running = ORDER.filter((s) => isOn(s));");
+    expect(coach).toContain("{running.map(renderRow)}");
+    expect(coach).toContain("data-series-off");
+    expect(coach).toContain("{showOff && <div className=\"divide-y divide-border/60 border-t border-border/60\">{switchedOff.map(renderRow)}</div>}");
+    // folded, never removed: each still has its switch
+    expect(coach).toContain("onCheckedChange={(v) => flip(series, v)}");
+  });
 });
