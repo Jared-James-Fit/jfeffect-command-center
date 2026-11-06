@@ -78,7 +78,7 @@ describe("one menu row per page", () => {
     const row = (label: string) => admin.find((i) => i.label === label)!;
     // tabs of one page are that page's row, not entries of their own
     for (const label of ["Messages", "Calendar", "Team"]) expect(listed(row(label))).toEqual([]);
-    expect(listed(row("Crew")).map((c) => c.to)).toEqual(["/admin/community", "/admin/league", "/admin/athlete-records"]);
+    expect(listed(row("Crew")).map((c) => c.to)).toEqual(["/admin/community", "/admin/league", "/admin/athlete-records", "/admin/challenges"]);
     expect(listed(row("Coaching")).map((c) => c.to)).toEqual(["/admin/coaching", "/admin/forms", "/admin/programming"]);
     // Athlete Records sits under the League, not at the top
     expect(admin.some((i) => i.to === "/admin/athlete-records")).toBe(false);

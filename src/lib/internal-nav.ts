@@ -111,6 +111,10 @@ const REGISTRY: Entry[] = [
     keywords: ["league", "leaderboard", "standings", "crew goal", "hall of strength", "final-week boost"] },
   { to: "/admin/athlete-records", label: "Athlete Records", icon: Trophy, group: "Crew",
     visibleTo: ["admin", "coach"], keywords: ["rankings", "leaderboard", "powerlifting", "dots", "gl points", "squat", "bench", "deadlift", "records", "competition level", "meet results", "athlete profiles"] },
+  // Live in-person challenges (Winnipeg 225…): builder, event console, results and prizes.
+  { to: "/admin/challenges", label: "Challenges", icon: Trophy, group: "Crew",
+    visibleTo: ["admin", "coach"],
+    keywords: ["challenges", "competition", "event", "winnipeg 225", "bench challenge", "leaderboard", "judging", "prizes", "live event"] },
 
   // ── CALENDAR ─────────────────────────────────────────────────────────
   // One Calendar page with tabs; the old paths redirect into it.

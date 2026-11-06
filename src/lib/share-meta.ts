@@ -31,6 +31,7 @@ export function shareMeta({
   title,
   description = DEFAULT_SHARE_DESCRIPTION,
   path,
+  image,
 }: {
   /** What the card says, e.g. "Book a time with JF Effect". */
   title: string;
@@ -38,6 +39,8 @@ export function shareMeta({
   description?: string;
   /** The page's own address ("/book/discovery-call"), so a share is that page, never the home page. */
   path?: string;
+  /** A page's own picture (a challenge's cover) in place of the logo. */
+  image?: { url: string; width: number; height: number; alt: string } | null;
 }): MetaTag[] {
   const tags: MetaTag[] = [
     { property: "og:title", content: title },
@@ -46,6 +49,15 @@ export function shareMeta({
     { name: "twitter:description", content: description },
   ];
   if (path) tags.push({ property: "og:url", content: `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}` });
+  if (image) {
+    tags.push(
+      { property: "og:image", content: image.url },
+      { property: "og:image:width", content: String(image.width) },
+      { property: "og:image:height", content: String(image.height) },
+      { property: "og:image:alt", content: image.alt },
+      { name: "twitter:image", content: image.url },
+    );
+  }
   return tags;
 }
 
