@@ -1398,3 +1398,24 @@ html[data-holding] *:not(input):not(textarea):not([contenteditable="true"]) {
   opacity: 0.25;
   pointer-events: none;
 }
+
+/* Live challenges: a row that moved up on the board flashes once, a new
+   leader's banner slides in, and the live dot breathes. Opacity / colour only. */
+@keyframes jf-board-flash {
+  0% { background-color: color-mix(in oklab, var(--warning) 22%, transparent); }
+  100% { background-color: transparent; }
+}
+.jf-board-flash { animation: jf-board-flash 1.8s ease-out both; }
+@keyframes jf-live-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.jf-live-dot { animation: jf-live-dot 1.6s ease-in-out infinite; }
+@keyframes jf-moment-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+.jf-moment-in { animation: jf-moment-in 260ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .jf-board-flash, .jf-live-dot, .jf-moment-in { animation: none; }
+}

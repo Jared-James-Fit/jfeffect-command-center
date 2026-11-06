@@ -29,7 +29,7 @@ import {
   Layers, Briefcase, Archive, UserPlus, UserCog, Settings, AlertCircle,
   FileSignature, ShoppingBag, Library, KeyRound, BarChart3, RefreshCw,
   Link as LinkIcon, Trophy, ShieldCheck, UsersRound, Contact,
-  ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon,
+  ListChecks, FileText, PowerOff, Landmark, Wallet, BadgeCheck, Image as ImageIcon, Swords,
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
@@ -111,6 +111,8 @@ const REGISTRY: Entry[] = [
     keywords: ["league", "leaderboard", "standings", "crew goal", "hall of strength", "final-week boost"] },
   { to: "/admin/athlete-records", label: "Athlete Records", icon: Trophy, group: "Crew",
     visibleTo: ["admin", "coach"], keywords: ["rankings", "leaderboard", "powerlifting", "dots", "gl points", "squat", "bench", "deadlift", "records", "competition level", "meet results", "athlete profiles"] },
+  { to: "/admin/challenges", label: "Challenges", icon: Swords, group: "Crew",
+    visibleTo: ["admin"], keywords: ["challenge", "competition", "event", "bench 225", "winnipeg 225", "leaderboard", "judge", "registration", "prizes", "sponsors", "live event"] },
 
   // ── CALENDAR ─────────────────────────────────────────────────────────
   // One Calendar page with tabs; the old paths redirect into it.
