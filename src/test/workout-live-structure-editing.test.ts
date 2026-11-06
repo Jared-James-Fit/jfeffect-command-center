@@ -34,8 +34,11 @@ describe("live workout structure editing", () => {
   it("keeps exercise insertion subtle and collapses secondary card actions", () => {
     expect(picker).toContain('aria-label="Add exercise here"');
     expect(picker).not.toContain('>\n            Add\n');
-    expect(actionRow).toContain("More options for");
-    expect(actionRow).toContain("<MoreHorizontal");
+    // the ⋯ and its menu (a bottom sheet on a phone) live in card-menu.tsx
+    expect(actionRow).toContain("<CardMenu name={name} buttonClassName={round}>{moreMenu}</CardMenu>");
+    const cardMenu = readFileSync("src/components/workout-day/card-menu.tsx", "utf8");
+    expect(cardMenu).toContain("More options for");
+    expect(cardMenu).toContain("<MoreHorizontal");
     expect(actionRow).not.toContain("GripVertical");
     expect(logger).toContain("<DropdownMenuSeparator");
     expect(logger).toContain("Move to position");
