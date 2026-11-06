@@ -11,8 +11,8 @@ import { CLIENT_QUOTES } from "@/components/sales/client-quotes";
 import { COACH_NAME, INQUIRY_DM_URL } from "@/lib/social-links";
 import { APPLY_GOALS } from "@/lib/apply-form";
 import jaredAsset from "@/assets/athletes/jared-napf-2026.jpg.asset.json";
-import shotLogger from "@/assets/coaching/app-workout-logger.webp";
-import shotProgram from "@/assets/coaching/app-program.webp";
+import shotProgress from "@/assets/coaching/app-analytics-progress.webp";
+import shotPrs from "@/assets/coaching/app-analytics-prs.webp";
 import shotChat from "@/assets/coaching/app-coach-chat.webp";
 import shotNutrition from "@/assets/coaching/app-nutrition.webp";
 import { shareMeta } from "@/lib/share-meta";
@@ -89,9 +89,9 @@ const CTA = "Apply for coaching";
 const OFFER: Array<{ title: string; body: string; src: string; alt: string }> = [
   {
     title: "A program written for you",
-    body: "Built around your goal, your schedule and the equipment you have. Every block has a purpose, and you always know what today's workout is.",
-    src: shotProgram,
-    alt: "The Workouts screen: this week's training days, today's workout and where you are in the program",
+    body: "Built around your goal, your schedule and the equipment you have. Every set you log counts, so your PRs and estimated maxes are tracked for you and you can see it working.",
+    src: shotPrs,
+    alt: "Recent PRs in the app's training analytics: each lift's new estimated max and the best it beat",
   },
   {
     title: "A coach who reads your check-in",
@@ -189,7 +189,7 @@ function CoachingPage() {
         sub="Training and nutrition written for you, a coach who reads your check-in every week, and one app that holds it all."
         primary={<PrimaryCta to={APPLY_TO}>{CTA}</PrimaryCta>}
         note="Free · 7 quick questions · Pick your call time right after"
-        image={{ src: shotLogger, alt: "A workout in the JF Effect app: the coach's sets, reps and RPE, logged set by set" }}
+        image={{ src: shotProgress, alt: "Training analytics in the JF Effect app: an athlete's back squat estimated max climbing week by week over 12 weeks" }}
       />
 
       {/* 2 — Why listen */}

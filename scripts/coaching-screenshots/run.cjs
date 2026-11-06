@@ -32,7 +32,6 @@ const common = {
 };
 F.fixtures.coaches = [{ id: COACH_ID, user_id: F.COACH_USER, full_name: "Jared McIntyre", name: "Jared McIntyre", first_name: "Jared", profile_picture_url: "https://demo.local/jared.jpg", phone: null, active: true }];
 F.fixtures.conversation_state = [{ client_id: F.CLIENT_ID, client_last_read_at: "2026-11-06T00:00:00Z", admin_last_read_at: "2026-11-06T00:00:00Z" }];
-F.fixtures.workout_view_prefs = [{ user_id: F.USER_ID, view: "story", tried_at: "2026-10-01T00:00:00Z", focus_tips_at: "2026-11-05T00:00:00Z", intro_dismissed: 1, intro_shown: 1, intro_last_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }];
 
 // A demo check-in exchange: how a week of coaching reads in the chat.
 const msg = (i, role, at, body, attachments = []) => ({
@@ -89,15 +88,26 @@ const PLAN = {
 };
 F.fixtures.nutrition_targets = [{ id: "t1", client_id: F.CLIENT_ID, status: "Active", visible_to_client: true, phase: "Fat loss", updated_at: PLAN.updated_at, last_updated_at: PLAN.updated_at, start_date: PLAN.start_date, end_date: PLAN.end_date, nutrition_target_days: PLAN.days }];
 
-// The workout clock reads 18 minutes in, as it would mid-session.
-const clockScript = `(() => { try { const day = ${JSON.stringify(F.todayDayId)}; sessionStorage.setItem('workout-runtime-id','demo-rt'); const now = Date.now();
-  localStorage.setItem('wsession:' + day, JSON.stringify({ startedAt: now - (18*60+42)*1000, pausedMs: 0, pausedAt: null, carriedMs: 0, runtimeId: 'demo-rt', lastSeenAt: now, stoppedAt: null }));
-  localStorage.setItem('workout-active-day', day); } catch (e) {} })()`;
 const blur = async (p) => { await p.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur()); await p.waitForTimeout(500); };
 
+/** Training Analytics over the last 12 weeks, scrolled so `heading` sits at the top of the screen. */
+const analyticsAt = (heading, lift) => async (p) => {
+  await p.getByRole("button", { name: "Last 12W", exact: true }).click();
+  await p.waitForTimeout(2500);
+  if (lift) { await p.getByRole("button", { name: lift, exact: true }).first().click(); await p.waitForTimeout(2000); }
+  const y = await p.evaluate((h) => {
+    const el = [...document.querySelectorAll("h2,h3,div,span")].find((e) => e.textContent.trim() === h);
+    return el ? el.getBoundingClientRect().top + window.scrollY : 0;
+  }, heading);
+  await p.evaluate((yy) => window.scrollTo(0, yy), Math.max(0, y - 16));
+  await p.waitForTimeout(1500);
+  await blur(p);
+};
+
 const SHOTS = [
-  { name: "app-workout-logger", path: `/portal/workouts/${F.todayDayId}`, initScript: clockScript, afterLoad: blur },
-  { name: "app-program", path: "/portal/workouts", list: true },
+  // The squat's estimated max climbing week by week, from what was logged.
+  { name: "app-analytics-progress", path: "/portal/workouts/analytics", afterLoad: analyticsAt("Lift Progress", "Back Squat") },
+  { name: "app-analytics-prs", path: "/portal/workouts/analytics", afterLoad: analyticsAt("Recent ATPRs") },
   { name: "app-coach-chat", path: "/portal/messages", fixtures: { messages: MESSAGES }, serverFnMocks: { getMessengerCheckin: { id: SUB_ID, status: "completed", answers: {}, ai_analysis: null, reviewed_at: "2026-11-02T14:12:00Z" }, ensureDueMessengerCheckins: { ok: true } }, afterLoad: blur },
   { name: "app-nutrition", path: "/portal/nutrition-targets", serverFnMocks: { getCoachAssignedMealPlan: PLAN, getMyRecentAdherenceFn: null } },
 ];
@@ -141,8 +151,7 @@ async function composeWebp(browser, pngPath, outPath) {
   const browser = await chromium.launch();
   for (const s of SHOTS) {
     const raw = path.join(TMP, `${s.name}.png`);
-    F.fixtures.workout_view_prefs[0].view = s.list ? "list" : "story";
-    await run({ ...common, path: s.path, out: raw, fixtures: { ...F.fixtures, ...(s.fixtures ?? {}) }, serverFnMocks: s.serverFnMocks ?? {}, initScript: s.initScript, afterLoad: s.afterLoad });
+    await run({ ...common, path: s.path, out: raw, fixtures: { ...F.fixtures, ...(s.fixtures ?? {}) }, serverFnMocks: s.serverFnMocks ?? {}, afterLoad: s.afterLoad });
     const out = path.join(OUT, `${s.name}.webp`);
     await composeWebp(browser, raw, out);
     console.log(`${s.name}.webp  ${Math.round(fs.statSync(out).size / 1024)} KB`);
