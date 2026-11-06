@@ -40,8 +40,10 @@ import { Route as AuthenticatedMRouteRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPortalRouteRouteImport } from './routes/_authenticated/portal/route'
 import { Route as ApiDriveUploadRouteImport } from './routes/api/drive-upload'
+import { Route as AthletesHandleRouteImport } from './routes/athletes.$handle'
 import { Route as BookRouteImport } from './routes/book.'
 import { Route as BookSlugRouteImport } from './routes/book.$slug'
+import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
 import { Route as CoachingIndexRouteImport } from './routes/coaching.index'
 import { Route as CoachingApplyRouteImport } from './routes/coaching.apply'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
@@ -154,6 +156,10 @@ import { Route as ApiPublicBulkExerciseImportRouteImport } from './routes/api/pu
 import { Route as ApiPublicCalendarFeedRouteImport } from './routes/api/public/calendar-feed'
 import { Route as ApiPublicSignnowWebhookRouteImport } from './routes/api/public/signnow-webhook'
 import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as ChallengesSlugIndexRouteImport } from './routes/challenges.$slug.index'
+import { Route as ChallengesSlugDisplayRouteImport } from './routes/challenges.$slug.display'
+import { Route as ChallengesSlugJoinRouteImport } from './routes/challenges.$slug.join'
+import { Route as ChallengesSlugRunRouteImport } from './routes/challenges.$slug.run'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as AuthenticatedAdminAgreementsNativeIndexRouteImport } from './routes/_authenticated/admin/agreements-native.index'
 import { Route as AuthenticatedAdminAgreementsNativePackageIdRouteImport } from './routes/_authenticated/admin/agreements-native.$packageId'
@@ -162,6 +168,9 @@ import { Route as AuthenticatedAdminAgreementsIndexRouteImport } from './routes/
 import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes/_authenticated/admin/agreements.signed'
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminBroadcastsBroadcastIdRouteImport } from './routes/_authenticated/admin/broadcasts.$broadcastId'
+import { Route as AuthenticatedAdminChallengesIndexRouteImport } from './routes/_authenticated/admin/challenges.index'
+import { Route as AuthenticatedAdminChallengesIdRouteImport } from './routes/_authenticated/admin/challenges.$id'
+import { Route as AuthenticatedAdminChallengesNewRouteImport } from './routes/_authenticated/admin/challenges.new'
 import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId_'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
 import { Route as AuthenticatedAdminClientsIdRouteImport } from './routes/_authenticated/admin/clients.$id'
@@ -258,6 +267,7 @@ import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api
 import { Route as ApiPublicHooksTrainingRoadmapTickRouteImport } from './routes/api/public/hooks/training-roadmap-tick'
 import { Route as ApiPublicHooksWearablesSyncRouteImport } from './routes/api/public/hooks/wearables-sync'
 import { Route as ApiPublicPushSubscriptionChangeRouteImport } from './routes/api/public/push/subscription-change'
+import { Route as ChallengesSlugRCodeRouteImport } from './routes/challenges.$slug.r.$code'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
@@ -433,6 +443,11 @@ const ApiDriveUploadRoute = ApiDriveUploadRouteImport.update({
   path: '/api/drive-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AthletesHandleRoute = AthletesHandleRouteImport.update({
+  id: '/athletes/$handle',
+  path: '/athletes/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookRoute = BookRouteImport.update({
   id: '/book/',
   path: '/book/',
@@ -441,6 +456,11 @@ const BookRoute = BookRouteImport.update({
 const BookSlugRoute = BookSlugRouteImport.update({
   id: '/book/$slug',
   path: '/book/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallengesIndexRoute = ChallengesIndexRouteImport.update({
+  id: '/challenges/',
+  path: '/challenges/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoachingIndexRoute = CoachingIndexRouteImport.update({
@@ -1091,6 +1111,26 @@ const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
   path: '/api/public/stripe-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChallengesSlugIndexRoute = ChallengesSlugIndexRouteImport.update({
+  id: '/challenges/$slug/',
+  path: '/challenges/$slug/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallengesSlugDisplayRoute = ChallengesSlugDisplayRouteImport.update({
+  id: '/challenges/$slug/display',
+  path: '/challenges/$slug/display',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallengesSlugJoinRoute = ChallengesSlugJoinRouteImport.update({
+  id: '/challenges/$slug/join',
+  path: '/challenges/$slug/join',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChallengesSlugRunRoute = ChallengesSlugRunRouteImport.update({
+  id: '/challenges/$slug/run',
+  path: '/challenges/$slug/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
   id: '/lovable/email/suppression',
   path: '/lovable/email/suppression',
@@ -1137,6 +1177,24 @@ const AuthenticatedAdminBroadcastsBroadcastIdRoute =
     id: '/$broadcastId',
     path: '/$broadcastId',
     getParentRoute: () => AuthenticatedAdminBroadcastsRoute,
+  } as any)
+const AuthenticatedAdminChallengesIndexRoute =
+  AuthenticatedAdminChallengesIndexRouteImport.update({
+    id: '/challenges/',
+    path: '/challenges/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminChallengesIdRoute =
+  AuthenticatedAdminChallengesIdRouteImport.update({
+    id: '/challenges/$id',
+    path: '/challenges/$id',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminChallengesNewRoute =
+  AuthenticatedAdminChallengesNewRouteImport.update({
+    id: '/challenges/new',
+    path: '/challenges/new',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
 const AuthenticatedAdminClientProgramsClientIdRoute =
   AuthenticatedAdminClientProgramsClientIdRouteImport.update({
@@ -1713,6 +1771,11 @@ const ApiPublicPushSubscriptionChangeRoute =
     path: '/api/public/push/subscription-change',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ChallengesSlugRCodeRoute = ChallengesSlugRCodeRouteImport.update({
+  id: '/challenges/$slug/r/$code',
+  path: '/challenges/$slug/r/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
   id: '/lovable/email/auth/preview',
   path: '/lovable/email/auth/preview',
@@ -1854,6 +1917,7 @@ export interface FileRoutesByFullPath {
   '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/athletes/$handle': typeof AthletesHandleRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -1863,6 +1927,7 @@ export interface FileRoutesByFullPath {
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
+  '/challenges/': typeof ChallengesIndexRoute
   '/coaching/': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -1964,15 +2029,21 @@ export interface FileRoutesByFullPath {
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/challenges/$slug/display': typeof ChallengesSlugDisplayRoute
+  '/challenges/$slug/join': typeof ChallengesSlugJoinRoute
+  '/challenges/$slug/run': typeof ChallengesSlugRunRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/m/': typeof AuthenticatedMIndexRoute
   '/portal/': typeof AuthenticatedPortalIndexRoute
+  '/challenges/$slug/': typeof ChallengesSlugIndexRoute
   '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
   '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
+  '/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdRoute
+  '/admin/challenges/new': typeof AuthenticatedAdminChallengesNewRoute
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRouteWithChildren
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
@@ -2053,6 +2124,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
+  '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -2060,6 +2132,7 @@ export interface FileRoutesByFullPath {
   '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
   '/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
+  '/admin/challenges/': typeof AuthenticatedAdminChallengesIndexRoute
   '/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/admin/crm/': typeof AuthenticatedAdminCrmIndexRoute
@@ -2119,6 +2192,7 @@ export interface FileRoutesByTo {
   '/finance': typeof AuthenticatedFinanceRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/athletes/$handle': typeof AthletesHandleRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2128,6 +2202,7 @@ export interface FileRoutesByTo {
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
+  '/challenges': typeof ChallengesIndexRoute
   '/coaching': typeof CoachingIndexRoute
   '/admin/account': typeof AuthenticatedAdminAccountRoute
   '/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2228,15 +2303,21 @@ export interface FileRoutesByTo {
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/challenges/$slug/display': typeof ChallengesSlugDisplayRoute
+  '/challenges/$slug/join': typeof ChallengesSlugJoinRoute
+  '/challenges/$slug/run': typeof ChallengesSlugRunRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/m': typeof AuthenticatedMIndexRoute
   '/portal': typeof AuthenticatedPortalIndexRoute
+  '/challenges/$slug': typeof ChallengesSlugIndexRoute
   '/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
   '/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
+  '/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdRoute
+  '/admin/challenges/new': typeof AuthenticatedAdminChallengesNewRoute
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRouteWithChildren
   '/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
@@ -2317,6 +2398,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
+  '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -2324,6 +2406,7 @@ export interface FileRoutesByTo {
   '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
   '/admin/agreements-native': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/admin/agreements': typeof AuthenticatedAdminAgreementsIndexRoute
+  '/admin/challenges': typeof AuthenticatedAdminChallengesIndexRoute
   '/admin/clients': typeof AuthenticatedAdminClientsIndexRoute
   '/admin/coaches': typeof AuthenticatedAdminCoachesIndexRoute
   '/admin/crm': typeof AuthenticatedAdminCrmIndexRoute
@@ -2388,6 +2471,7 @@ export interface FileRoutesById {
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/api/drive-upload': typeof ApiDriveUploadRoute
+  '/athletes/$handle': typeof AthletesHandleRoute
   '/book/$slug': typeof BookSlugRoute
   '/coaching/apply': typeof CoachingApplyRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -2397,6 +2481,7 @@ export interface FileRoutesById {
   '/personal-trainer-selkirk/apply': typeof PersonalTrainerSelkirkApplyRoute
   '/sign/$token': typeof SignTokenRoute
   '/signup/jf': typeof SignupJfRoute
+  '/challenges/': typeof ChallengesIndexRoute
   '/coaching/': typeof CoachingIndexRoute
   '/_authenticated/admin/account': typeof AuthenticatedAdminAccountRoute
   '/_authenticated/admin/appointments': typeof AuthenticatedAdminAppointmentsRoute
@@ -2498,15 +2583,21 @@ export interface FileRoutesById {
   '/api/public/calendar-feed': typeof ApiPublicCalendarFeedRoute
   '/api/public/signnow-webhook': typeof ApiPublicSignnowWebhookRoute
   '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/challenges/$slug/display': typeof ChallengesSlugDisplayRoute
+  '/challenges/$slug/join': typeof ChallengesSlugJoinRoute
+  '/challenges/$slug/run': typeof ChallengesSlugRunRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/m/': typeof AuthenticatedMIndexRoute
   '/_authenticated/portal/': typeof AuthenticatedPortalIndexRoute
+  '/challenges/$slug/': typeof ChallengesSlugIndexRoute
   '/_authenticated/admin/agreements-native/$packageId': typeof AuthenticatedAdminAgreementsNativePackageIdRoute
   '/_authenticated/admin/agreements-native/new': typeof AuthenticatedAdminAgreementsNativeNewRoute
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/_authenticated/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
+  '/_authenticated/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdRoute
+  '/_authenticated/admin/challenges/new': typeof AuthenticatedAdminChallengesNewRoute
   '/_authenticated/admin/client-programs/$clientId_': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRouteWithChildren
   '/_authenticated/admin/coaches/$id': typeof AuthenticatedAdminCoachesIdRoute
@@ -2587,6 +2678,7 @@ export interface FileRoutesById {
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
   '/api/public/hooks/wearables-sync': typeof ApiPublicHooksWearablesSyncRoute
   '/api/public/push/subscription-change': typeof ApiPublicPushSubscriptionChangeRoute
+  '/challenges/$slug/r/$code': typeof ChallengesSlugRCodeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -2594,6 +2686,7 @@ export interface FileRoutesById {
   '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
   '/_authenticated/admin/agreements-native/': typeof AuthenticatedAdminAgreementsNativeIndexRoute
   '/_authenticated/admin/agreements/': typeof AuthenticatedAdminAgreementsIndexRoute
+  '/_authenticated/admin/challenges/': typeof AuthenticatedAdminChallengesIndexRoute
   '/_authenticated/admin/clients/': typeof AuthenticatedAdminClientsIndexRoute
   '/_authenticated/admin/coaches/': typeof AuthenticatedAdminCoachesIndexRoute
   '/_authenticated/admin/crm/': typeof AuthenticatedAdminCrmIndexRoute
@@ -2658,6 +2751,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/notifications'
     | '/api/drive-upload'
+    | '/athletes/$handle'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -2667,6 +2761,7 @@ export interface FileRouteTypes {
     | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
+    | '/challenges/'
     | '/coaching/'
     | '/admin/account'
     | '/admin/appointments'
@@ -2768,15 +2863,21 @@ export interface FileRouteTypes {
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
+    | '/challenges/$slug/display'
+    | '/challenges/$slug/join'
+    | '/challenges/$slug/run'
     | '/lovable/email/suppression'
     | '/admin/'
     | '/m/'
     | '/portal/'
+    | '/challenges/$slug/'
     | '/admin/agreements-native/$packageId'
     | '/admin/agreements-native/new'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
+    | '/admin/challenges/$id'
+    | '/admin/challenges/new'
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
@@ -2857,6 +2958,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/training-roadmap-tick'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
+    | '/challenges/$slug/r/$code'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -2864,6 +2966,7 @@ export interface FileRouteTypes {
     | '/lovable/email/transactional/send'
     | '/admin/agreements-native/'
     | '/admin/agreements/'
+    | '/admin/challenges/'
     | '/admin/clients/'
     | '/admin/coaches/'
     | '/admin/crm/'
@@ -2923,6 +3026,7 @@ export interface FileRouteTypes {
     | '/finance'
     | '/notifications'
     | '/api/drive-upload'
+    | '/athletes/$handle'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -2932,6 +3036,7 @@ export interface FileRouteTypes {
     | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
+    | '/challenges'
     | '/coaching'
     | '/admin/account'
     | '/admin/appointments'
@@ -3032,15 +3137,21 @@ export interface FileRouteTypes {
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
+    | '/challenges/$slug/display'
+    | '/challenges/$slug/join'
+    | '/challenges/$slug/run'
     | '/lovable/email/suppression'
     | '/admin'
     | '/m'
     | '/portal'
+    | '/challenges/$slug'
     | '/admin/agreements-native/$packageId'
     | '/admin/agreements-native/new'
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
+    | '/admin/challenges/$id'
+    | '/admin/challenges/new'
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
     | '/admin/coaches/$id'
@@ -3121,6 +3232,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/training-roadmap-tick'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
+    | '/challenges/$slug/r/$code'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -3128,6 +3240,7 @@ export interface FileRouteTypes {
     | '/lovable/email/transactional/send'
     | '/admin/agreements-native'
     | '/admin/agreements'
+    | '/admin/challenges'
     | '/admin/clients'
     | '/admin/coaches'
     | '/admin/crm'
@@ -3191,6 +3304,7 @@ export interface FileRouteTypes {
     | '/_authenticated/finance'
     | '/_authenticated/notifications'
     | '/api/drive-upload'
+    | '/athletes/$handle'
     | '/book/$slug'
     | '/coaching/apply'
     | '/email/unsubscribe'
@@ -3200,6 +3314,7 @@ export interface FileRouteTypes {
     | '/personal-trainer-selkirk/apply'
     | '/sign/$token'
     | '/signup/jf'
+    | '/challenges/'
     | '/coaching/'
     | '/_authenticated/admin/account'
     | '/_authenticated/admin/appointments'
@@ -3301,15 +3416,21 @@ export interface FileRouteTypes {
     | '/api/public/calendar-feed'
     | '/api/public/signnow-webhook'
     | '/api/public/stripe-webhook'
+    | '/challenges/$slug/display'
+    | '/challenges/$slug/join'
+    | '/challenges/$slug/run'
     | '/lovable/email/suppression'
     | '/_authenticated/admin/'
     | '/_authenticated/m/'
     | '/_authenticated/portal/'
+    | '/challenges/$slug/'
     | '/_authenticated/admin/agreements-native/$packageId'
     | '/_authenticated/admin/agreements-native/new'
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
     | '/_authenticated/admin/broadcasts/$broadcastId'
+    | '/_authenticated/admin/challenges/$id'
+    | '/_authenticated/admin/challenges/new'
     | '/_authenticated/admin/client-programs/$clientId_'
     | '/_authenticated/admin/clients/$id'
     | '/_authenticated/admin/coaches/$id'
@@ -3390,6 +3511,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/training-roadmap-tick'
     | '/api/public/hooks/wearables-sync'
     | '/api/public/push/subscription-change'
+    | '/challenges/$slug/r/$code'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
     | '/lovable/email/queue/process'
@@ -3397,6 +3519,7 @@ export interface FileRouteTypes {
     | '/lovable/email/transactional/send'
     | '/_authenticated/admin/agreements-native/'
     | '/_authenticated/admin/agreements/'
+    | '/_authenticated/admin/challenges/'
     | '/_authenticated/admin/clients/'
     | '/_authenticated/admin/coaches/'
     | '/_authenticated/admin/crm/'
@@ -3455,6 +3578,7 @@ export interface RootRouteChildren {
   WelcomeRoute: typeof WelcomeRoute
   BookRoute: typeof BookRoute
   ApiDriveUploadRoute: typeof ApiDriveUploadRoute
+  AthletesHandleRoute: typeof AthletesHandleRoute
   BookSlugRoute: typeof BookSlugRoute
   CoachingApplyRoute: typeof CoachingApplyRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -3463,12 +3587,17 @@ export interface RootRouteChildren {
   PayTokenRoute: typeof PayTokenRoute
   SignTokenRoute: typeof SignTokenRoute
   SignupJfRoute: typeof SignupJfRoute
+  ChallengesIndexRoute: typeof ChallengesIndexRoute
   CoachingIndexRoute: typeof CoachingIndexRoute
   ApiPublicBulkExerciseImportRoute: typeof ApiPublicBulkExerciseImportRoute
   ApiPublicCalendarFeedRoute: typeof ApiPublicCalendarFeedRoute
   ApiPublicSignnowWebhookRoute: typeof ApiPublicSignnowWebhookRoute
   ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ChallengesSlugDisplayRoute: typeof ChallengesSlugDisplayRoute
+  ChallengesSlugJoinRoute: typeof ChallengesSlugJoinRoute
+  ChallengesSlugRunRoute: typeof ChallengesSlugRunRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
+  ChallengesSlugIndexRoute: typeof ChallengesSlugIndexRoute
   ApiPublicHooksActionCentreTickRoute: typeof ApiPublicHooksActionCentreTickRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
@@ -3494,6 +3623,7 @@ export interface RootRouteChildren {
   ApiPublicHooksTrainingRoadmapTickRoute: typeof ApiPublicHooksTrainingRoadmapTickRoute
   ApiPublicHooksWearablesSyncRoute: typeof ApiPublicHooksWearablesSyncRoute
   ApiPublicPushSubscriptionChangeRoute: typeof ApiPublicPushSubscriptionChangeRoute
+  ChallengesSlugRCodeRoute: typeof ChallengesSlugRCodeRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -3722,6 +3852,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDriveUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/athletes/$handle': {
+      id: '/athletes/$handle'
+      path: '/athletes/$handle'
+      fullPath: '/athletes/$handle'
+      preLoaderRoute: typeof AthletesHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/book/': {
       id: '/book/'
       path: '/book'
@@ -3734,6 +3871,13 @@ declare module '@tanstack/react-router' {
       path: '/book/$slug'
       fullPath: '/book/$slug'
       preLoaderRoute: typeof BookSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challenges/': {
+      id: '/challenges/'
+      path: '/challenges'
+      fullPath: '/challenges/'
+      preLoaderRoute: typeof ChallengesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/coaching/': {
@@ -4520,6 +4664,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/challenges/$slug/': {
+      id: '/challenges/$slug/'
+      path: '/challenges/$slug'
+      fullPath: '/challenges/$slug/'
+      preLoaderRoute: typeof ChallengesSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challenges/$slug/display': {
+      id: '/challenges/$slug/display'
+      path: '/challenges/$slug/display'
+      fullPath: '/challenges/$slug/display'
+      preLoaderRoute: typeof ChallengesSlugDisplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challenges/$slug/join': {
+      id: '/challenges/$slug/join'
+      path: '/challenges/$slug/join'
+      fullPath: '/challenges/$slug/join'
+      preLoaderRoute: typeof ChallengesSlugJoinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/challenges/$slug/run': {
+      id: '/challenges/$slug/run'
+      path: '/challenges/$slug/run'
+      fullPath: '/challenges/$slug/run'
+      preLoaderRoute: typeof ChallengesSlugRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/suppression': {
       id: '/lovable/email/suppression'
       path: '/lovable/email/suppression'
@@ -4575,6 +4747,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/broadcasts/$broadcastId'
       preLoaderRoute: typeof AuthenticatedAdminBroadcastsBroadcastIdRouteImport
       parentRoute: typeof AuthenticatedAdminBroadcastsRoute
+    }
+    '/_authenticated/admin/challenges/': {
+      id: '/_authenticated/admin/challenges/'
+      path: '/challenges'
+      fullPath: '/admin/challenges/'
+      preLoaderRoute: typeof AuthenticatedAdminChallengesIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/challenges/$id': {
+      id: '/_authenticated/admin/challenges/$id'
+      path: '/challenges/$id'
+      fullPath: '/admin/challenges/$id'
+      preLoaderRoute: typeof AuthenticatedAdminChallengesIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/challenges/new': {
+      id: '/_authenticated/admin/challenges/new'
+      path: '/challenges/new'
+      fullPath: '/admin/challenges/new'
+      preLoaderRoute: typeof AuthenticatedAdminChallengesNewRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/admin/client-programs/$clientId_': {
       id: '/_authenticated/admin/client-programs/$clientId_'
@@ -5248,6 +5441,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicPushSubscriptionChangeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/challenges/$slug/r/$code': {
+      id: '/challenges/$slug/r/$code'
+      path: '/challenges/$slug/r/$code'
+      fullPath: '/challenges/$slug/r/$code'
+      preLoaderRoute: typeof ChallengesSlugRCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/auth/preview': {
       id: '/lovable/email/auth/preview'
       path: '/lovable/email/auth/preview'
@@ -5614,6 +5814,8 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAgreementsNativeNewRoute: typeof AuthenticatedAdminAgreementsNativeNewRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminBlocksBlockIdRoute: typeof AuthenticatedAdminBlocksBlockIdRoute
+  AuthenticatedAdminChallengesIdRoute: typeof AuthenticatedAdminChallengesIdRoute
+  AuthenticatedAdminChallengesNewRoute: typeof AuthenticatedAdminChallengesNewRoute
   AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRouteWithChildren
   AuthenticatedAdminCoachesIdRoute: typeof AuthenticatedAdminCoachesIdRoute
@@ -5635,6 +5837,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
   AuthenticatedAdminAgreementsNativeIndexRoute: typeof AuthenticatedAdminAgreementsNativeIndexRoute
   AuthenticatedAdminAgreementsIndexRoute: typeof AuthenticatedAdminAgreementsIndexRoute
+  AuthenticatedAdminChallengesIndexRoute: typeof AuthenticatedAdminChallengesIndexRoute
   AuthenticatedAdminClientsIndexRoute: typeof AuthenticatedAdminClientsIndexRoute
   AuthenticatedAdminCoachesIndexRoute: typeof AuthenticatedAdminCoachesIndexRoute
   AuthenticatedAdminCrmIndexRoute: typeof AuthenticatedAdminCrmIndexRoute
@@ -5756,6 +5959,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAgreementsSignedRoute:
       AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminBlocksBlockIdRoute: AuthenticatedAdminBlocksBlockIdRoute,
+    AuthenticatedAdminChallengesIdRoute: AuthenticatedAdminChallengesIdRoute,
+    AuthenticatedAdminChallengesNewRoute: AuthenticatedAdminChallengesNewRoute,
     AuthenticatedAdminClientProgramsClientIdRoute:
       AuthenticatedAdminClientProgramsClientIdRoute,
     AuthenticatedAdminClientsIdRoute:
@@ -5791,6 +5996,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminAgreementsNativeIndexRoute,
     AuthenticatedAdminAgreementsIndexRoute:
       AuthenticatedAdminAgreementsIndexRoute,
+    AuthenticatedAdminChallengesIndexRoute:
+      AuthenticatedAdminChallengesIndexRoute,
     AuthenticatedAdminClientsIndexRoute: AuthenticatedAdminClientsIndexRoute,
     AuthenticatedAdminCoachesIndexRoute: AuthenticatedAdminCoachesIndexRoute,
     AuthenticatedAdminCrmIndexRoute: AuthenticatedAdminCrmIndexRoute,
@@ -6034,6 +6241,7 @@ const rootRouteChildren: RootRouteChildren = {
   WelcomeRoute: WelcomeRoute,
   BookRoute: BookRoute,
   ApiDriveUploadRoute: ApiDriveUploadRoute,
+  AthletesHandleRoute: AthletesHandleRoute,
   BookSlugRoute: BookSlugRoute,
   CoachingApplyRoute: CoachingApplyRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
@@ -6042,12 +6250,17 @@ const rootRouteChildren: RootRouteChildren = {
   PayTokenRoute: PayTokenRoute,
   SignTokenRoute: SignTokenRoute,
   SignupJfRoute: SignupJfRoute,
+  ChallengesIndexRoute: ChallengesIndexRoute,
   CoachingIndexRoute: CoachingIndexRoute,
   ApiPublicBulkExerciseImportRoute: ApiPublicBulkExerciseImportRoute,
   ApiPublicCalendarFeedRoute: ApiPublicCalendarFeedRoute,
   ApiPublicSignnowWebhookRoute: ApiPublicSignnowWebhookRoute,
   ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ChallengesSlugDisplayRoute: ChallengesSlugDisplayRoute,
+  ChallengesSlugJoinRoute: ChallengesSlugJoinRoute,
+  ChallengesSlugRunRoute: ChallengesSlugRunRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
+  ChallengesSlugIndexRoute: ChallengesSlugIndexRoute,
   ApiPublicHooksActionCentreTickRoute: ApiPublicHooksActionCentreTickRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
@@ -6082,6 +6295,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksTrainingRoadmapTickRoute,
   ApiPublicHooksWearablesSyncRoute: ApiPublicHooksWearablesSyncRoute,
   ApiPublicPushSubscriptionChangeRoute: ApiPublicPushSubscriptionChangeRoute,
+  ChallengesSlugRCodeRoute: ChallengesSlugRCodeRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,

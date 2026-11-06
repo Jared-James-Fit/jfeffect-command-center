@@ -71,6 +71,7 @@ function SitemapPage() {
     { to: "/join", label: "Join free" },
     { to: "/about", label: "About Jared" },
     { to: "/coaching", label: "Private Coaching" },
+    { to: "/challenges", label: "Challenges" },
     { to: "/auth", label: "Sign in / Sign up" },
     { to: "/sitemap", label: "Sitemap (this page)" },
   ];
