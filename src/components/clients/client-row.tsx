@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { UserAvatar } from "@/components/user-avatar";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { MoreHorizontal, CheckCircle2, Plus, Bell, Loader2, AlertTriangle, ListChecks } from "lucide-react";
+import { MoreHorizontal, CheckCircle2, Plus, Bell, Loader2, AlertTriangle, ListChecks, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { blockEnd } from "./clients-status";
 import { rowMetaLine, rowStatusSummary, type RowAction, type RowStatus } from "./row-status";
@@ -17,7 +17,7 @@ import { ClientMoreMenu } from "./quick-actions";
 import { ClientQuickSheet, type QuickPanelKind } from "./client-quick-sheet";
 import { AssignProgramDialog } from "./assign-program-dialog";
 import { useAuth } from "@/lib/auth";
-import { useEnterClientPov } from "@/components/clients/use-enter-client-pov";
+import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { toast } from "sonner";
 import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 
@@ -151,7 +151,8 @@ function nextBlockWhen(iso: string | null) {
 /**
  * One client in the Clients list: photo and name, one plain line of facts, at most one status chip
  * (the most important thing waiting on the coach, "+N" for the rest), the program's dates and
- * progress, then View Profile and ⋯ (which holds every action, View as client included).
+ * progress, then View Profile, Workout (client view on today's workout, to log or move it in a
+ * session) and ⋯ (which holds every other action, View as client included).
  */
 export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow; onArchive?: (r: DirectoryRow) => void; showCoach?: boolean }) {
   const { primary, more } = rowStatusSummary(r);
@@ -160,6 +161,10 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
   const isAdmin = role === "admin";
   const pov = useEnterClientPov();
   const enterPov = () => pov.enter(r.id, { fallbackName: r.full_name });
+  // Mid-session: straight into today's workout as the client sees it (the same
+  // way in as a session's "Open …'s workout"). Only with a program to open.
+  const canOpenWorkout = pov.canPov && !!(r.block_id || r.next_block_id);
+  const openWorkout = () => pov.enter(r.id, { to: clientWorkoutHref(), fallbackName: r.full_name });
   const [sheet, setSheet] = useState<QuickPanelKind | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const openAssign = () => setAssignOpen(true);
@@ -198,11 +203,24 @@ export function ClientRow({ r, onArchive, showCoach = false }: { r: DirectoryRow
       {/* Program: what's running, its dates and how far through */}
       <ProgramSummary r={r} onSchedule={() => setSheet("program-view")} onAssign={openAssign} />
 
-      {/* View Profile is the way in; everything else is in ⋯ */}
+      {/* View Profile is the way in, Workout the way into today's session; everything else is in ⋯ */}
       <div className="flex items-center justify-end gap-1.5 max-xl:w-full">
-        <Button asChild variant="secondary" size="sm" className="h-10 min-w-[8rem] flex-1 font-semibold xl:flex-none">
+        <Button asChild variant="secondary" size="sm" className="h-10 min-w-[7rem] flex-1 font-semibold xl:flex-none">
           <ClientNameLink clientId={r.id}>View Profile</ClientNameLink>
         </Button>
+        {canOpenWorkout && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-10 min-w-[7rem] flex-1 font-semibold xl:flex-none"
+            disabled={pov.busy}
+            onClick={openWorkout}
+            aria-label={`Open ${r.full_name ?? "the client"}'s workout for today, as they see it`}
+          >
+            {pov.busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Dumbbell className="h-4 w-4" aria-hidden />}
+            Workout
+          </Button>
+        )}
         <ClientMoreMenu
           r={r}
           onArchive={onArchive}

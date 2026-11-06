@@ -1,5 +1,4 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, Suspense, Fragment, type ComponentType } from "react";
@@ -43,8 +42,7 @@ import { ManualCheckInReviewComposer } from "@/components/manual-check-in-review
 import { ClientCheckInConversations } from "@/components/client-check-in-conversations";
 import { Send } from "lucide-react";
 import { FolderOpen, Eye } from "lucide-react";
-import { useClientImpersonation } from "@/lib/client-impersonation";
-import { useAuth } from "@/lib/auth";
+import { useEnterClientPov, clientWorkoutHref } from "@/components/clients/use-enter-client-pov";
 import { Checkbox } from "@/components/ui/checkbox";
 import { listForms as listNativeForms, type NfForm } from "@/lib/native-forms";
 import { replaceClientNativeFormAssignments } from "@/lib/native-forms.functions";
@@ -176,9 +174,10 @@ export function ClientProfileWorkspace({
   };
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { role } = useAuth();
-  const impersonation = useClientImpersonation();
-  const canPov = role === "admin" || role === "coach";
+  // Client view (and today's workout in it) through the one shared way in:
+  // never for a view-only login, and a full page load so the portal starts as them.
+  const pov = useEnterClientPov();
+  const canPov = pov.canPov;
   const [form, setForm] = useState<any>(null);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [priceCardOpen, setPriceCardOpen] = useState(false);
@@ -469,6 +468,66 @@ export function ClientProfileWorkspace({
     });
   };
 
+  // An empty preview helps nobody: client view needs their login.
+  const needsLogin = () => {
+    if (form.user_id) return false;
+    toast.error("Client has no account yet — send a setup link first.");
+    return true;
+  };
+  const enterPov = () => {
+    if (!needsLogin()) void pov.enter(id, { fallbackName: form.full_name });
+  };
+  // Mid-session: today's workout as they see it, to log sets or move it.
+  const openTodaysWorkout = () => {
+    if (!needsLogin()) void pov.enter(id, { to: clientWorkoutHref(), fallbackName: form.full_name });
+  };
+
+  // One ⋯ for both headers (the page and the overlay opened from Clients).
+  const moreMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" aria-label="More actions" className="max-sm:h-10 max-sm:w-10 max-sm:px-0">
+          <MoreHorizontal className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">More</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel>Training</DropdownMenuLabel>
+        {canPov && (
+          <DropdownMenuItem disabled={pov.busy} onSelect={openTodaysWorkout}>
+            <Dumbbell className="mr-2 h-4 w-4" />Today's workout
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId", params: { clientId: id } })}>
+          <Dumbbell className="mr-2 h-4 w-4" />Training program
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId/history", params: { clientId: id } })}>
+          <Calendar className="mr-2 h-4 w-4" />Program history
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
+        {form.drive_folder_link && (
+          <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
+            <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
+        {form.status === "Deactivated" ? (
+          <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
+          <Trash2 className="mr-2 h-4 w-4" />Delete client
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const links = [
     ["Program Sheet", form.program_sheet_link],
     ["Drive Folder", form.drive_folder_link],
@@ -511,56 +570,13 @@ export function ClientProfileWorkspace({
                 variant="outline"
                 size="sm"
                 aria-label="View as client"
-                onClick={() => {
-                  if (!form.user_id) {
-                    toast.error("Client has no account yet — send a setup link first.");
-                    return;
-                  }
-                  impersonation.start(
-                    { id, user_id: form.user_id, full_name: form.full_name },
-                    typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
-                  );
-                  navigate({ to: CLIENT_VIEW_HOME });
-                }}
+                disabled={pov.busy}
+                onClick={enterPov}
               >
                 <Eye className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">View as client</span>
               </Button>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" aria-label="More actions"><MoreHorizontal className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">More</span></Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Training</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId", params: { clientId: id } })}>
-                  <Dumbbell className="mr-2 h-4 w-4" />Training program
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => navigate({ to: "/admin/client-programs/$clientId/history", params: { clientId: id } })}>
-                  <Calendar className="mr-2 h-4 w-4" />Program history
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
-                {form.drive_folder_link && (
-                  <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
-                    <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
-                {form.status === "Deactivated" ? (
-                  <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
-                )}
-                <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
-                  <Trash2 className="mr-2 h-4 w-4" />Delete client
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {moreMenu}
           </>
         }
       />}
@@ -568,51 +584,14 @@ export function ClientProfileWorkspace({
         <EmbeddedIdentityHeader
           form={form}
           canPov={canPov}
+          povBusy={pov.busy}
           onClose={onClose}
           onMessage={openMessages}
-          onPov={() => {
-            if (!form.user_id) {
-              toast.error("Client has no account yet — send a setup link first.");
-              return;
-            }
-            impersonation.start(
-              { id, user_id: form.user_id, full_name: form.full_name },
-              typeof window !== "undefined" ? window.location.pathname + window.location.search : `/admin/clients/${id}`,
-            );
-            navigate({ to: CLIENT_VIEW_HOME });
-          }}
+          onPov={enterPov}
           onSave={save}
           isDirty={isDirty}
           saving={saving}
-          moreMenu={(
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm"><MoreHorizontal className="mr-2 h-4 w-4" />More</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Scheduling & Offers</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => setQuickBookOpen(true)}><Calendar className="mr-2 h-4 w-4" />Book 1:1</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setBookingLinkOpen(true)}><Link2 className="mr-2 h-4 w-4" />Send booking link</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setPriceCardOpen(true)}><Tag className="mr-2 h-4 w-4" />Assign offer / price card</DropdownMenuItem>
-                {form.drive_folder_link && (
-                  <DropdownMenuItem onSelect={() => window.open(form.drive_folder_link, "_blank", "noreferrer")}>
-                    <FolderOpen className="mr-2 h-4 w-4" />Open Drive folder
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Lifecycle</DropdownMenuLabel>
-                {form.status === "Deactivated" ? (
-                  <DropdownMenuItem onSelect={() => setReactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Reactivate</DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem onSelect={() => setDeactivateOpen(true)}><Eye className="mr-2 h-4 w-4" />Deactivate</DropdownMenuItem>
-                )}
-                <DropdownMenuItem onSelect={archive}><Archive className="mr-2 h-4 w-4" />{form.archived ? "Restore" : "Archive"}</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteStep(1)}>
-                  <Trash2 className="mr-2 h-4 w-4" />Delete client
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          moreMenu={moreMenu}
         />
       )}
       <div className={cn(WORKSPACE_CONTAINER_CLASS, embedded && "px-3 py-3 md:px-6 md:py-4")}>
@@ -1754,6 +1733,7 @@ function PowerlifterSection({ form, set }: { form: any; set: (k: string, v: any)
 function EmbeddedIdentityHeader({
   form,
   canPov,
+  povBusy,
   onClose,
   onMessage,
   onPov,
@@ -1764,6 +1744,7 @@ function EmbeddedIdentityHeader({
 }: {
   form: any;
   canPov: boolean;
+  povBusy?: boolean;
   onClose?: () => void;
   onMessage: () => void;
   onPov: () => void;
@@ -1800,16 +1781,16 @@ function EmbeddedIdentityHeader({
       isDirty={isDirty}
       saving={saving}
       primaryAction={
+        // View as client at every width: on a phone the eye alone, beside Message.
         canPov ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onPov}
-            className="hidden sm:inline-flex"
-            aria-label="View as client (POV)"
-          >
-            <Eye className="mr-2 h-4 w-4" />View as client
-          </Button>
+          <>
+            <Button variant="outline" size="sm" onClick={onPov} disabled={povBusy} className="hidden sm:inline-flex">
+              <Eye className="mr-2 h-4 w-4" />View as client
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onPov} disabled={povBusy} className="h-10 w-10 sm:hidden" aria-label="View as client">
+              <Eye className="h-5 w-5" />
+            </Button>
+          </>
         ) : null
       }
       moreMenu={moreMenu}
