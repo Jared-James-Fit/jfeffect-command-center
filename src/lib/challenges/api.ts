@@ -4,7 +4,14 @@
  * staff writes go through their own functions, which check the caller's role.
  */
 import { useEffect, useRef } from "react";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { listenChannel } from "@/lib/realtime-channel";
 import type {
@@ -15,6 +22,14 @@ import type {
   HubChallenge,
   StaffBoard,
 } from "@/lib/challenges/model";
+import {
+  BOARD_PAGE_SIZE,
+  type Around,
+  type BoardPage,
+  type Dashboard,
+  type OnPlatform,
+  type RankRow,
+} from "@/lib/challenges/board";
 
 // The generated client types don't know these functions yet; one loose handle.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,6 +155,145 @@ export function useStaffBoard(id: string | undefined) {
     enabled: !!id,
     staleTime: 3_000,
     refetchInterval: 20_000,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  The leaderboard, page by page                                      */
+/* ------------------------------------------------------------------ */
+
+type PageParam = { offset: number; limit: number };
+
+export const fetchBoardPage = (slug: string, division: string | null, p: PageParam) =>
+  rpc<BoardPage | null>("challenge_board_page", {
+    p_slug: slug,
+    p_division: division,
+    p_offset: p.offset,
+    p_limit: p.limit,
+  });
+export const findAthletes = (slug: string, q: string, division: string | null) =>
+  rpc<RankRow[] | null>("challenge_board_find", { p_slug: slug, p_q: q, p_division: division });
+export const fetchAround = (slug: string, code: string, division: string | null, radius = 2) =>
+  rpc<Around | null>("challenge_board_around", {
+    p_slug: slug,
+    p_code: code,
+    p_division: division,
+    p_radius: radius,
+  });
+export const fetchOnPlatform = (slug: string) =>
+  rpc<OnPlatform | null>("challenge_now_public", { p_slug: slug });
+export const fetchDashboard = (id: string) =>
+  rpc<Dashboard>("challenge_dashboard", { p_challenge: id });
+/** A judge calls an athlete up, with their live count so far. */
+export const setOnPlatform = (challengeId: string, entryId: string, value: number | null) =>
+  rpc<void>("challenge_set_now", { p_challenge: challengeId, p_entry: entryId, p_value: value });
+/** Takes this athlete off the platform (another judge's athlete stays up). */
+export const clearOnPlatform = (challengeId: string, entryId: string) =>
+  rpc<void>("challenge_clear_now", { p_challenge: challengeId, p_entry: entryId });
+
+/**
+ * The ranked board from `start` (0 = the top, or just above an athlete you
+ * jumped to), loading more as you scroll in either direction.
+ */
+export function useBoardPages(
+  slug: string,
+  division: string | null,
+  start: number,
+  status: string | undefined,
+  enabled = true,
+) {
+  return useInfiniteQuery({
+    queryKey: ["challenges", "board-page", slug, division ?? "all", start] as const,
+    queryFn: ({ pageParam }) => fetchBoardPage(slug, division, pageParam),
+    initialPageParam: { offset: start, limit: BOARD_PAGE_SIZE } as PageParam,
+    getNextPageParam: (last): PageParam | undefined =>
+      last && last.offset + last.rows.length < last.total && last.rows.length > 0
+        ? { offset: last.offset + last.rows.length, limit: BOARD_PAGE_SIZE }
+        : undefined,
+    getPreviousPageParam: (first): PageParam | undefined =>
+      first && first.offset > 0
+        ? {
+            offset: Math.max(0, first.offset - BOARD_PAGE_SIZE),
+            limit: Math.min(BOARD_PAGE_SIZE, first.offset),
+          }
+        : undefined,
+    enabled,
+    staleTime: 5_000,
+    refetchInterval: pollMs(status),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Search the whole event (not just what's loaded): name or bib, typos forgiven. */
+export function useFindAthletes(slug: string, q: string, division: string | null) {
+  const t = q.trim();
+  return useQuery({
+    queryKey: ["challenges", "find", slug, division ?? "all", t.toLowerCase()] as const,
+    queryFn: () => findAthletes(slug, t, division),
+    enabled: t.length >= 2 || /^#?\d+$/.test(t),
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useAround(slug: string, code: string | null, division: string | null) {
+  return useQuery({
+    queryKey: ["challenges", "around", slug, code ?? "", division ?? "all"] as const,
+    queryFn: () => fetchAround(slug, code!, division, 2),
+    enabled: !!code,
+    staleTime: 5_000,
+  });
+}
+
+/**
+ * Who's on the platform and the judge's count so far. Realtime on
+ * challenge_now (it changes every rep, so it has its own table, not the
+ * version counter); polling is the backup.
+ */
+export function useOnPlatform(slug: string, challengeId: string | null | undefined, status?: string) {
+  const qc = useQueryClient();
+  const enabled = !!challengeId && (status === "live" || status === "draft");
+  const key = ["challenges", "now", slug] as const;
+  useEffect(() => {
+    if (!enabled || !challengeId || typeof window === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const channel = listenChannel(`challenge-now-${challengeId}`)
+      .on(
+        "postgres_changes" as never,
+        {
+          event: "*",
+          schema: "public",
+          table: "challenge_now",
+          filter: `challenge_id=eq.${challengeId}`,
+        },
+        () => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => void qc.invalidateQueries({ queryKey: key }), 120);
+        },
+      )
+      .subscribe();
+    return () => {
+      if (timer) clearTimeout(timer);
+      void supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challengeId, enabled, qc, slug]);
+  return useQuery({
+    queryKey: key,
+    queryFn: () => fetchOnPlatform(slug),
+    enabled,
+    staleTime: 2_000,
+    refetchInterval: status === "live" ? 8_000 : false,
+  });
+}
+
+export function useDashboard(id: string | undefined) {
+  return useQuery({
+    queryKey: ["challenges", "dashboard", id ?? ""] as const,
+    queryFn: () => fetchDashboard(id!),
+    enabled: !!id,
+    staleTime: 3_000,
+    refetchInterval: 30_000,
   });
 }
 

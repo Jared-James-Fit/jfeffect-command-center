@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronLeft,
   ClipboardList,
   Copy,
   Download,
@@ -10,6 +11,7 @@ import {
   Mail,
   MessageSquare,
   MonitorPlay,
+  Pencil,
   Phone,
   Plus,
   Trash2,
@@ -33,11 +35,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { AthleteAvatar, QrImage, ScoreText, StatusPill } from "@/components/challenges/ui";
-import {
-  ChallengeBuilder,
-  type ChallengeRow,
-} from "@/components/challenges/admin/challenge-builder";
+import { AthleteAvatar, QrImage, ScoreText, StatusPill, ago } from "@/components/challenges/ui";
+import { isUntitled, missingItems, type ChallengeRow } from "@/lib/challenges/wizard";
+import { activityText } from "@/lib/challenges/board";
 import {
   MEDIA_BUCKET,
   addStaff,
@@ -57,12 +57,12 @@ import {
   removeStaff,
   resetPractice,
   setStatus,
+  useDashboard,
   useLiveChallenge,
 } from "@/lib/challenges/api";
 import {
   eventWhen,
   formatScore,
-  publishMissing,
   rankBadge,
   statusActions,
   type StaffEntry,
@@ -72,12 +72,11 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-type Tab = "overview" | "details" | "entries" | "prizes" | "team" | "insights";
+type Tab = "dashboard" | "athletes" | "prizes" | "team" | "insights";
 const TABS: [Tab, string][] = [
-  ["overview", "Overview"],
-  ["entries", "Entries"],
+  ["dashboard", "Dashboard"],
+  ["athletes", "Athletes"],
   ["prizes", "Prizes"],
-  ["details", "Details"],
   ["team", "Team"],
   ["insights", "Insights"],
 ];
@@ -107,7 +106,10 @@ function useAdminChallenge(id: string) {
       if (error) throw error;
       return c
         ? {
-            c: c as Full,
+            c: {
+              ...(c as Full),
+              rules: ((c as Full).rules ?? []) as string[],
+            } as Full,
             divisions: (divs ?? []) as { id: string; name: string; load_label: string | null }[],
           }
         : null;
@@ -117,7 +119,7 @@ function useAdminChallenge(id: string) {
 
 export function AdminChallengeManage({ id }: { id: string }) {
   const q = useAdminChallenge(id);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("dashboard");
   useLiveChallenge(id);
   if (q.isLoading) {
     return (
@@ -129,13 +131,27 @@ export function AdminChallengeManage({ id }: { id: string }) {
   }
   if (!q.data) return <p className="p-6 text-sm text-muted-foreground">Challenge not found.</p>;
   const { c, divisions } = q.data;
+  const when = eventWhen(c.starts_at, c.timezone, { withYear: true });
+  const tabs = TABS.filter(([t]) => !c.is_template || t === "dashboard");
   return (
     <div className="mx-auto max-w-3xl px-4 py-4">
-      <Link to="/admin/challenges" className="text-sm text-muted-foreground hover:text-foreground">
-        ‹ Challenges
-      </Link>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold">{c.title}</h1>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          to="/admin/challenges"
+          className="-ml-1 flex h-10 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" /> Challenges
+        </Link>
+        <Button asChild variant="outline" className="h-10">
+          <Link to="/admin/challenges/$id/edit" params={{ id: c.id }} search={{ step: 1 }}>
+            <Pencil className="mr-1.5 h-4 w-4" /> Edit
+          </Link>
+        </Button>
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <h1 className="min-w-0 text-2xl font-semibold">
+          {isUntitled(c.title) ? "New challenge" : c.title}
+        </h1>
         {c.is_template ? (
           <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">Template</span>
         ) : (
@@ -143,14 +159,14 @@ export function AdminChallengeManage({ id }: { id: string }) {
         )}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        {eventWhen(c.starts_at, c.timezone, { withYear: true }) ?? "No date yet"}
+        {when ?? "No date yet"}
         {c.venue_name ? ` · ${c.venue_name}` : ""}
       </p>
 
-      <div className="sticky top-0 z-20 -mx-4 mt-4 overflow-x-auto border-b border-border bg-background px-4">
-        <div className="flex gap-1" role="tablist">
-          {TABS.filter(([t]) => !c.is_template || t === "details" || t === "overview").map(
-            ([t, label]) => (
+      {tabs.length > 1 ? (
+        <div className="sticky top-0 z-20 -mx-4 mt-4 overflow-x-auto border-b border-border bg-background px-4">
+          <div className="flex gap-1" role="tablist">
+            {tabs.map(([t, label]) => (
               <button
                 key={t}
                 type="button"
@@ -166,29 +182,14 @@ export function AdminChallengeManage({ id }: { id: string }) {
               >
                 {label}
               </button>
-            ),
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="pt-5">
-        {tab === "overview" ? <Overview c={c} /> : null}
-        {tab === "details" ? (
-          <ChallengeBuilder
-            existing={{
-              ...c,
-              rules: (c.rules ?? []) as string[],
-              acknowledgments: (c.acknowledgments ?? []) as string[],
-            }}
-            existingDivisions={divisions.map((d) => ({
-              id: d.id,
-              name: d.name,
-              load_label: d.load_label ?? "",
-            }))}
-            onSaved={() => void q.refetch()}
-          />
-        ) : null}
-        {tab === "entries" ? <Entries c={c} divisions={divisions} /> : null}
+        {tab === "dashboard" ? <Dashboard c={c} /> : null}
+        {tab === "athletes" ? <Entries c={c} divisions={divisions} /> : null}
         {tab === "prizes" ? <Prizes c={c} divisions={divisions} /> : null}
         {tab === "team" ? <Team c={c} /> : null}
         {tab === "insights" ? <Insights c={c} /> : null}
@@ -198,26 +199,42 @@ export function AdminChallengeManage({ id }: { id: string }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Overview                                                           */
+/*  Dashboard: where the event is, what's next, what just happened      */
 /* ------------------------------------------------------------------ */
 
-function Overview({ c }: { c: Full }) {
+const LIFECYCLE = [
+  { key: "draft", label: "Draft" },
+  { key: "upcoming", label: "Published" },
+  { key: "live", label: "Live" },
+  { key: "done", label: "Completed" },
+] as const;
+
+function lifecycleIndex(status: string): number {
+  if (status === "draft") return 0;
+  if (status === "upcoming") return 1;
+  if (status === "live" || status === "paused" || status === "verifying") return 2;
+  return 3;
+}
+
+function Dashboard({ c }: { c: Full }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const dash = useDashboard(c.is_template ? undefined : c.id);
+  const d = dash.data;
   const [confirm, setConfirm] = useState<StatusAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [ties, setTies] = useState<{ place: number; title: string; names: string[] }[] | null>(
     null,
   );
   const [announcement, setAnnouncement] = useState(c.announcement ?? "");
-  const missing = publishMissing({
-    starts_at: c.starts_at,
-    venue_name: c.venue_name,
-    rules: (c.rules ?? []) as string[],
-  });
+  const missing = missingItems({ ...c, rules: (c.rules ?? []) as string[] });
   const actions = c.is_template ? [] : statusActions(c.status as never);
+  const primary = actions.find((a) => a.tone === "primary");
+  const secondary = actions.filter((a) => a !== primary);
   const page = challengeUrl(c.slug);
   const join = joinUrl(c.slug, "qr");
+  const shape = { measure: c.measure, unit: c.unit, relative: c.relative_to_bodyweight };
+  const live = c.status === "live" || c.status === "paused";
 
   const run = async (a: StatusAction) => {
     setBusy(true);
@@ -240,33 +257,63 @@ function Overview({ c }: { c: Full }) {
       setConfirm(null);
     }
   };
+  const ask = (a: StatusAction) => (a.confirm ? setConfirm(a) : void run(a));
+
+  if (c.is_template) {
+    return (
+      <div className="space-y-4">
+        <p className="rounded-2xl bg-muted p-4 text-sm">
+          A template. New challenges can start from it (New challenge → Or start from).
+        </p>
+        <MoreActions c={c} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {c.status === "draft" && !c.is_template && missing.length ? (
-        <div className="rounded-2xl border border-border p-4 text-sm">
-          <p className="font-medium">Before you publish</p>
-          <p className="mt-1 text-muted-foreground">
-            Add {missing.join(", ")} in Details. Nothing is public until you publish.
-          </p>
-        </div>
-      ) : null}
+      {/* where it is */}
+      <ol className="grid grid-cols-4 gap-1.5" aria-label="Event stage">
+        {LIFECYCLE.map((s, i) => {
+          const at = lifecycleIndex(c.status);
+          return (
+            <li key={s.key} aria-current={i === at ? "step" : undefined}>
+              <span
+                className={cn(
+                  "block h-1 rounded-full",
+                  i < at ? "bg-foreground/35" : i === at ? "bg-foreground" : "bg-muted",
+                )}
+              />
+              <span
+                className={cn(
+                  "mt-1.5 block truncate text-xs",
+                  i === at ? "font-semibold" : "text-muted-foreground",
+                )}
+              >
+                {s.label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
 
-      {actions.length ? (
-        <div className="flex flex-wrap gap-2">
-          {actions.map((a) => (
-            <Button
-              key={a.to}
-              variant={
-                a.tone === "primary" ? "default" : a.tone === "destructive" ? "ghost" : "outline"
-              }
-              className={cn("h-11", a.tone === "destructive" && "text-destructive")}
-              disabled={busy || (a.to === "upcoming" && missing.length > 0)}
-              onClick={() => (a.confirm ? setConfirm(a) : void run(a))}
+      {/* what's next */}
+      {c.status === "draft" && missing.length ? (
+        <div className="rounded-2xl border border-border p-4">
+          <p className="text-sm font-semibold">Finish setting it up</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Still needed: {missing.map((m) => m.text.toLowerCase()).join(", ")}. Nothing is public
+            until you publish.
+          </p>
+          <Button asChild className="mt-3 h-12 w-full text-base">
+            <Link
+              to="/admin/challenges/$id/edit"
+              params={{ id: c.id }}
+              search={{ step: missing[0]!.step }}
             >
-              {a.label}
-            </Button>
-          ))}
+              Continue setup
+            </Link>
+          </Button>
         </div>
       ) : null}
 
@@ -282,55 +329,112 @@ function Overview({ c }: { c: Full }) {
         </div>
       ) : null}
 
-      {!c.is_template ? (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button asChild variant="outline" className="h-12 justify-start">
+      <div className="space-y-2">
+        {live ? (
+          <Button asChild className="h-12 w-full text-base">
             <Link to="/challenges/$slug/run" params={{ slug: c.slug }}>
-              <ClipboardList className="mr-2 h-4 w-4" /> Run event (register + judge)
+              <ClipboardList className="mr-2 h-4 w-4" /> Open judging
             </Link>
           </Button>
-          <Button asChild variant="outline" className="h-12 justify-start">
-            <Link to="/challenges/$slug/display" params={{ slug: c.slug }}>
-              <MonitorPlay className="mr-2 h-4 w-4" /> Big screen
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-12 justify-start">
-            <Link to="/challenges/$slug" params={{ slug: c.slug }} search={{}}>
-              <ExternalLink className="mr-2 h-4 w-4" /> Public page
-            </Link>
-          </Button>
+        ) : null}
+        {primary && !(c.status === "draft" && missing.length) ? (
           <Button
-            variant="outline"
-            className="h-12 justify-start"
+            variant={live ? "outline" : "default"}
+            className="h-12 w-full text-base"
+            disabled={busy}
             onClick={() =>
-              navigator.clipboard.writeText(page).then(
-                () => toast.success("Link copied"),
-                () => toast.error("Couldn't copy"),
-              )
+              primary.to === "upcoming"
+                ? navigate({ to: "/admin/challenges/$id/edit", params: { id: c.id }, search: { step: 4 } })
+                : ask(primary)
             }
           >
-            <Copy className="mr-2 h-4 w-4" /> Copy link
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {primary.to === "upcoming" ? "Review & publish" : primary.label}
           </Button>
+        ) : null}
+        {secondary.length ? (
+          <div className="flex flex-wrap gap-2">
+            {secondary.map((a) => (
+              <Button
+                key={a.to}
+                variant={a.tone === "destructive" ? "ghost" : "outline"}
+                className={cn("h-10", a.tone === "destructive" && "text-destructive")}
+                disabled={busy}
+                onClick={() => ask(a)}
+              >
+                {a.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* the numbers */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="Registered" value={d?.registered} />
+        <Stat label="Checked in" value={d?.checked_in} />
+        <Stat label="Scored" value={d?.scored} />
+        <Stat label="Waiting to lift" value={d?.waiting} hint="Checked in, no score" />
+      </div>
+      {d?.leaders.length ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-border p-4">
+          <AthleteAvatar name={d.leaders[0]!.name} photo={d.leaders[0]!.photo} size={44} medal={1} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground">
+              {c.results_final_at ? "Winner" : d.leaders.length > 1 ? "Tied for first" : "Leading"}
+            </p>
+            <p className="truncate font-semibold">{d.leaders.map((l) => l.name).join(", ")}</p>
+          </div>
+          <ScoreText value={d.leaders[0]!.score} shape={shape} className="text-2xl" />
         </div>
       ) : null}
 
-      {!c.is_template ? (
-        <section className="rounded-2xl border border-border p-4">
-          <h2 className="text-base font-semibold">Sign-up QR code</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Print it for the venue. Scans are counted separately from link visits.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-4">
-            <QrImage value={join} size={160} label="Scan to sign up" />
-            <div className="space-y-2">
-              <p className="break-all text-xs text-muted-foreground">{join}</p>
-              <DownloadQr url={join} name={`${c.slug}-signup-qr.png`} />
-            </div>
-          </div>
-        </section>
-      ) : null}
+      {/* where people go */}
+      <div className="grid grid-cols-2 gap-2">
+        <QuickLink to="/challenges/$slug" slug={c.slug} icon={ExternalLink} label="Public page" />
+        <QuickLink to="/challenges/$slug/display" slug={c.slug} icon={MonitorPlay} label="Big screen" />
+        {!live ? (
+          <QuickLink to="/challenges/$slug/run" slug={c.slug} icon={ClipboardList} label="Judging & desk" />
+        ) : null}
+        <Button
+          variant="outline"
+          className="h-12 justify-start"
+          onClick={() =>
+            navigator.clipboard.writeText(page).then(
+              () => toast.success("Link copied"),
+              () => toast.error("Couldn't copy"),
+            )
+          }
+        >
+          <Copy className="mr-2 h-4 w-4" /> Copy link
+        </Button>
+      </div>
 
-      {!c.is_template && c.status !== "draft" ? (
+      {/* what just happened */}
+      <section>
+        <h2 className="mb-2 text-base font-semibold">Recent activity</h2>
+        {dash.isPending ? (
+          <Skeleton className="h-32 w-full rounded-2xl" />
+        ) : d?.recent.length ? (
+          <ul className="divide-y divide-border rounded-2xl border border-border">
+            {d.recent.map((a, i) => (
+              <li key={i} className="flex items-start gap-3 px-4 py-2.5 text-sm">
+                <span className="min-w-0 flex-1">
+                  {activityText(a, shape)}
+                  {a.by ? <span className="block text-xs text-muted-foreground">by {a.by}</span> : null}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">{ago(a.at)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+            Nothing yet. Sign-ups, scores and changes show up here as they happen.
+          </p>
+        )}
+      </section>
+
+      {c.status !== "draft" ? (
         <section className="rounded-2xl border border-border p-4">
           <h2 className="text-base font-semibold">Update on the page</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -343,102 +447,39 @@ function Overview({ c }: { c: Full }) {
             maxLength={280}
             className="mt-2"
           />
-          <div className="mt-2 flex gap-2">
-            <Button
-              className="h-10"
-              onClick={async () => {
-                const { error } = await db
-                  .from("challenges")
-                  .update({
-                    announcement: announcement.trim() || null,
-                    announcement_at: announcement.trim() ? new Date().toISOString() : null,
-                  })
-                  .eq("id", c.id);
-                if (error) toast.error(errorText(error));
-                else {
-                  toast.success(announcement.trim() ? "Update posted" : "Update removed");
-                  invalidateChallenge(qc);
-                }
-              }}
-            >
-              Post update
-            </Button>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="space-y-2">
-        <h2 className="text-base font-semibold">More</h2>
-        <div className="flex flex-wrap gap-2">
           <Button
+            className="mt-2 h-10"
             variant="outline"
-            className="h-10"
             onClick={async () => {
-              try {
-                const nid = await duplicateChallenge(c.id, false);
+              const { error } = await db
+                .from("challenges")
+                .update({
+                  announcement: announcement.trim() || null,
+                  announcement_at: announcement.trim() ? new Date().toISOString() : null,
+                })
+                .eq("id", c.id);
+              if (error) toast.error(errorText(error));
+              else {
+                toast.success(announcement.trim() ? "Update posted" : "Update removed");
                 invalidateChallenge(qc);
-                toast.success("Copied as a new draft");
-                navigate({ to: "/admin/challenges/$id", params: { id: nid } });
-              } catch (e) {
-                toast.error(errorText(e));
               }
             }}
           >
-            Duplicate
+            Post update
           </Button>
-          {!c.is_template ? (
-            <Button
-              variant="outline"
-              className="h-10"
-              onClick={async () => {
-                try {
-                  await duplicateChallenge(c.id, true, `${c.title} (template)`);
-                  invalidateChallenge(qc);
-                  toast.success("Saved as a template");
-                } catch (e) {
-                  toast.error(errorText(e));
-                }
-              }}
-            >
-              Save as template
-            </Button>
-          ) : null}
-          {c.status === "draft" && !c.is_template ? (
-            <Button
-              variant="outline"
-              className="h-10"
-              onClick={async () => {
-                try {
-                  const r = await resetPractice(c.id);
-                  invalidateChallenge(qc);
-                  toast.success(`Practice run cleared (${r.cleared} entries)`);
-                } catch (e) {
-                  toast.error(errorText(e));
-                }
-              }}
-            >
-              Clear practice run
-            </Button>
-          ) : null}
-          {c.status === "draft" || c.is_template ? (
-            <Button
-              variant="ghost"
-              className="h-10 text-destructive"
-              onClick={async () => {
-                if (!window.confirm("Delete this draft? This can't be undone.")) return;
-                const { error } = await db.from("challenges").delete().eq("id", c.id);
-                if (error) toast.error(errorText(error));
-                else {
-                  invalidateChallenge(qc);
-                  navigate({ to: "/admin/challenges" });
-                }
-              }}
-            >
-              <Trash2 className="mr-1.5 h-4 w-4" /> Delete draft
-            </Button>
-          ) : null}
+        </section>
+      ) : null}
+
+      <section className="rounded-2xl border border-border p-4">
+        <h2 className="text-base font-semibold">Sign-up QR code</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Print it for the venue.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <QrImage value={join} size={140} label="Scan to sign up" />
+          <DownloadQr url={join} name={`${c.slug}-signup-qr.png`} />
         </div>
       </section>
+
+      <MoreActions c={c} />
 
       <AlertDialog open={!!confirm} onOpenChange={(v) => !v && setConfirm(null)}>
         <AlertDialogContent>
@@ -455,6 +496,115 @@ function Overview({ c }: { c: Full }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function Stat({ label, value, hint }: { label: string; value: number | undefined; hint?: string }) {
+  return (
+    <div className="rounded-2xl border border-border p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-display text-3xl tabular-nums leading-none">{value ?? "–"}</p>
+      {hint ? <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function QuickLink({
+  to,
+  slug,
+  icon: Icon,
+  label,
+}: {
+  to: "/challenges/$slug" | "/challenges/$slug/display" | "/challenges/$slug/run";
+  slug: string;
+  icon: typeof ExternalLink;
+  label: string;
+}) {
+  return (
+    <Button asChild variant="outline" className="h-12 justify-start">
+      <Link to={to} params={{ slug }}>
+        <Icon className="mr-2 h-4 w-4" /> {label}
+      </Link>
+    </Button>
+  );
+}
+
+function MoreActions({ c }: { c: Full }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  return (
+    <section className="space-y-2">
+      <h2 className="text-base font-semibold">More</h2>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={async () => {
+            try {
+              const nid = await duplicateChallenge(c.id, false);
+              invalidateChallenge(qc);
+              toast.success("Copied as a new draft");
+              navigate({ to: "/admin/challenges/$id/edit", params: { id: nid }, search: { step: 1 } });
+            } catch (e) {
+              toast.error(errorText(e));
+            }
+          }}
+        >
+          Duplicate
+        </Button>
+        {!c.is_template && c.status === "draft" ? (
+          <Button
+            variant="outline"
+            className="h-10"
+            onClick={async () => {
+              try {
+                await duplicateChallenge(c.id, true, `${c.title} (template)`);
+                invalidateChallenge(qc);
+                toast.success("Saved as a template");
+              } catch (e) {
+                toast.error(errorText(e));
+              }
+            }}
+          >
+            Save as template
+          </Button>
+        ) : null}
+        {c.status === "draft" && !c.is_template ? (
+          <Button
+            variant="outline"
+            className="h-10"
+            onClick={async () => {
+              try {
+                const r = await resetPractice(c.id);
+                invalidateChallenge(qc);
+                toast.success(`Practice run cleared (${r.cleared} entries)`);
+              } catch (e) {
+                toast.error(errorText(e));
+              }
+            }}
+          >
+            Clear practice run
+          </Button>
+        ) : null}
+        {c.status === "draft" || c.is_template ? (
+          <Button
+            variant="ghost"
+            className="h-10 text-destructive"
+            onClick={async () => {
+              if (!window.confirm("Delete this draft? This can't be undone.")) return;
+              const { error } = await db.from("challenges").delete().eq("id", c.id);
+              if (error) toast.error(errorText(error));
+              else {
+                invalidateChallenge(qc);
+                navigate({ to: "/admin/challenges" });
+              }
+            }}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" /> Delete draft
+          </Button>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

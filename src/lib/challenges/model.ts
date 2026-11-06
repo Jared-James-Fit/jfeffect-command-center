@@ -85,6 +85,12 @@ export type ChallengePublic = ChallengeCard & {
   announcement: string | null;
   announcement_at: string | null;
   my_role: StaffRole | null;
+  /** The signed-in person's own entry here ("Find my ranking"); never anyone else's. */
+  my_code?: string | null;
+  registration_opens_at?: string | null;
+  registration_closes_at?: string | null;
+  /** Self sign-up is open right now (status, window and spots), as the database decides it. */
+  registration_open?: boolean;
   version: number | null;
   registered: number;
   divisions: Division[];

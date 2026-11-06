@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusPill } from "@/components/challenges/ui";
 import { fetchAdminList, keys } from "@/lib/challenges/api";
 import { eventWhen } from "@/lib/challenges/model";
+import { isUntitled } from "@/lib/challenges/wizard";
 
 /** Admin → Challenges: every challenge with its headline numbers, side by side. */
 export function AdminChallengesList() {
@@ -50,7 +51,9 @@ export function AdminChallengesList() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-semibold">{c.title}</span>
+                      <span className="truncate font-semibold">
+                        {isUntitled(c.title) ? "New challenge (unnamed draft)" : c.title}
+                      </span>
                       <StatusPill status={c.status} final={c.final} className="h-6" />
                       {c.is_test ? (
                         <span className="rounded-full bg-warning/15 px-2 text-xs text-warning">
@@ -98,7 +101,9 @@ export function AdminChallengesList() {
                       params={{ id: c.id }}
                       className="flex items-center justify-between rounded-2xl border border-border p-4 hover:bg-muted/40"
                     >
-                      <span className="font-medium">{c.title}</span>
+                      <span className="font-medium">
+                        {isUntitled(c.title) ? "New challenge (unnamed draft)" : c.title}
+                      </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </Link>
                   </li>

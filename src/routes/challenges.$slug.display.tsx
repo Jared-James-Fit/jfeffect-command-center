@@ -9,26 +9,29 @@ import {
   ScoreText,
   initialsOf,
   useNow,
-  useRankedRows,
 } from "@/components/challenges/ui";
 import {
   challengeUrl,
   joinUrl,
   mediaUrl,
   track,
-  useBoard,
+  useBoardPages,
   useChallenge,
   useLiveChallenge,
+  useOnPlatform,
 } from "@/lib/challenges/api";
+import { isFresh, type RankRow } from "@/lib/challenges/board";
 import {
   STATUS_META,
-  boardMoments,
   defaultDivision,
   formatScore,
+  placeLabel,
   rankBadge,
+  scoreUnit,
+  scoreValue,
   selfSignupOpen,
-  type BoardMoment,
-  type BoardRow,
+  type ChallengePublic,
+  type RecentAttempt,
 } from "@/lib/challenges/model";
 
 /**
@@ -73,13 +76,13 @@ function Display() {
   const { slug } = Route.useParams();
   const q = useChallenge(slug);
   const c = q.data;
-  const board = useBoard(slug, c?.status, !!c);
   const [division, setDivision] = useState<string | null>(null);
-  const [moment, setMoment] = useState<BoardMoment | null>(null);
-  const prev = useRef<BoardRow[] | undefined>(undefined);
+  const pages = useBoardPages(slug, division, 0, c?.status, !!c);
+  const page = pages.data?.pages[0] ?? null;
+  const now = useOnPlatform(slug, c?.id, c?.status);
   useLiveChallenge(c?.id);
   useWakeLock();
-  useNow(1000);
+  const clock = useNow(1000);
 
   useEffect(() => {
     if (c) setDivision((d) => d ?? defaultDivision(c));
@@ -99,19 +102,13 @@ function Display() {
     }, 20_000);
     return () => clearInterval(t);
   }, [c?.separate_divisions, c?.divisions]);
-  useEffect(() => {
-    const rows = board.data?.rows;
-    if (!rows) return;
-    const m = boardMoments(prev.current, rows);
-    prev.current = rows;
-    if (m.length) {
-      setMoment(m.find((x) => x.kind === "new_leader") ?? m[0]!);
-      const t = setTimeout(() => setMoment(null), 8000);
-      return () => clearTimeout(t);
-    }
-  }, [board.data?.rows]);
 
-  const rows = useRankedRows(board.data?.rows, division);
+  const rows = page?.rows ?? [];
+  const leaderMoment = useNewLeaderName(rows);
+  const recent = (page?.recent ?? []).filter(
+    (r) => !r.tiebreak && (!division || r.division_id === division),
+  );
+  const flash = useFreshResult(recent[0] ?? null);
 
   if (!c) {
     return (
@@ -121,199 +118,307 @@ function Display() {
     );
   }
   const shape = { measure: c.measure, unit: c.unit, relative: c.relative };
-  const leader = rows[0];
-  const latest = board.data?.recent?.find(
-    (r) => !r.tiebreak && (!division || r.division_id === division),
-  );
-  const signup = selfSignupOpen(c);
+  const signup = c.registration_open ?? selfSignupOpen(c);
   const qrUrl = signup ? joinUrl(slug, "display") : challengeUrl(slug, { src: "display" });
   const divisionLabel = c.divisions.find((d) => d.id === division);
+  const up = now.data && isFresh(now.data, clock) ? now.data : null;
+  const leader = rows.find((r) => (division ? r.rank_div : r.rank) === 1) ?? null;
 
   return (
     <div
-      className="dark min-h-dvh overflow-hidden bg-[#0b0b0d] p-[2.5vw] text-white"
-      style={{ fontSize: "clamp(12px, 1.1vw, 28px)" }}
+      className="dark flex h-dvh flex-col overflow-hidden bg-[#0b0b0d] p-[1.6vw] text-white"
+      // sized by whichever runs out first, width or height, so a 16:9 TV shows everything
+      style={{ fontSize: "clamp(10px, min(1vw, 1.75vh), 30px)" }}
     >
       <button
         type="button"
         onClick={() => void document.documentElement.requestFullscreen?.().catch(() => undefined)}
-        className="fixed right-3 top-3 z-10 rounded-lg bg-white/10 p-2 text-white/70 hover:bg-white/20"
+        className="fixed right-3 top-3 z-10 rounded-lg bg-white/10 p-2 text-white/60 opacity-0 transition-opacity hover:bg-white/20 hover:opacity-100 focus:opacity-100"
         aria-label="Full screen"
       >
         <Maximize className="h-4 w-4" />
       </button>
 
-      {/* header */}
-      <div className="flex items-start gap-[2vw]">
+      {/* header: one line */}
+      <header className="flex items-center gap-[1.5vw]">
+        <img src="/logo.png" alt="JF Effect" className="h-[3.2vw] w-[3.2vw] rounded-lg" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-[0.8vw]">
-            <img src="/logo.png" alt="" className="h-[3vw] w-[3vw] rounded-lg" />
-            <span className="text-[1.3em] font-black uppercase tracking-[0.3em] text-white/70">
-              JF Effect
-            </span>
-            <span
-              className={cn(
-                "ml-[1vw] inline-flex items-center gap-[0.5vw] rounded-full px-[1vw] py-[0.3vw] text-[1.2em] font-bold uppercase",
-                c.status === "live" ? "bg-[#ef3340] text-white" : "bg-white/10 text-white/80",
-              )}
-            >
-              {c.status === "live" ? (
-                <span className="jf-live-dot h-[0.7vw] w-[0.7vw] rounded-full bg-white" />
-              ) : null}
-              {c.final ? "Final results" : STATUS_META[c.status].label}
-            </span>
-          </div>
-          <h1 className="mt-[1vw] font-display text-[5.2em] uppercase leading-[0.9] tracking-wide">
+          <h1 className="truncate font-display text-[3.4em] uppercase leading-none tracking-wide">
             {c.title}
           </h1>
-          <p className="mt-[0.5vw] text-[1.6em] text-white/60">
-            {[c.load_label, c.objective, divisionLabel ? divisionLabel.name : null]
-              .filter(Boolean)
-              .join(" · ")}
+          <p className="mt-[0.3vw] truncate text-[1.4em] text-white/55">
+            {[c.load_label, c.objective, divisionLabel?.name].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <div className="flex shrink-0 items-start gap-[1.5vw]">
-          {c.status === "upcoming" && c.starts_at ? (
-            <Countdown to={c.starts_at} label="Starts in" size="xl" />
-          ) : null}
-          {c.status === "live" && c.ends_at ? (
-            <Countdown to={c.ends_at} label="Ends in" size="xl" />
-          ) : null}
-          <div className="text-center">
-            <QrImage
-              value={qrUrl}
-              size={Math.round(
-                Math.min(220, (typeof window !== "undefined" ? window.innerWidth : 1600) * 0.11),
-              )}
-              label={signup ? "Scan to enter" : "Scan for the live board"}
-            />
-            <p className="mt-[0.4vw] text-[1.2em] font-semibold text-white/80">
-              {signup ? "Scan to enter" : "Scan for the live board"}
-            </p>
-          </div>
+        <StatusBadge c={c} />
+        <div className="flex items-center gap-[0.8vw] rounded-[0.8vw] bg-white p-[0.4vw] pr-[1vw] text-black">
+          <QrImage value={qrUrl} size={Math.round(Math.min(150, 0.065 * viewportWidth()))} className="p-0" />
+          <span className="max-w-[9vw] text-[1.15em] font-semibold leading-tight">
+            {signup ? "Scan to enter" : "Scan for live rankings"}
+          </span>
         </div>
-      </div>
+      </header>
 
-      {moment ? (
-        <div className="jf-moment-in mt-[1.5vw] flex items-center gap-[1vw] rounded-[1vw] bg-[#f5b301] px-[2vw] py-[1vw] text-[2.4em] font-black uppercase text-black">
-          <Trophy className="h-[2.4vw] w-[2.4vw]" />
-          {moment.kind === "new_leader"
-            ? `New leader: ${moment.name}`
-            : `${moment.name} moves into the top three`}
+      {leaderMoment ? (
+        <div className="jf-moment-in mt-[1.2vw] flex items-center gap-[1vw] rounded-[1vw] bg-[#f5b301] px-[2vw] py-[0.8vw] text-[2.2em] font-bold text-black">
+          <Trophy className="h-[2.2vw] w-[2.2vw]" /> New leader: {leaderMoment}
         </div>
       ) : null}
 
-      <div className="mt-[2vw] grid grid-cols-[1fr_1.35fr] gap-[2vw]">
-        {/* leader + latest */}
-        <div className="space-y-[2vw]">
-          <div className="rounded-[1.5vw] bg-white/[0.06] p-[2vw]">
-            <p className="flex items-center gap-[0.6vw] text-[1.4em] font-bold uppercase tracking-wider text-[#f5b301]">
-              <Trophy className="h-[1.6vw] w-[1.6vw]" />{" "}
-              {c.final ? (leader?.shared ? "Co-champion" : "Champion") : "Leader"}
-            </p>
-            {leader ? (
-              <div className="mt-[1vw] flex items-center gap-[1.5vw]">
-                <BigAvatar name={leader.name} photo={leader.photo} />
-                <div className="min-w-0">
-                  <p className="truncate text-[3.4em] font-bold leading-tight">{leader.name}</p>
-                  <ScoreText
-                    value={leader.score}
-                    shape={shape}
-                    className="text-[6em] leading-none"
-                    unitClassName="text-white/60"
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className="mt-[1vw] text-[2.2em] text-white/50">Waiting for the first score</p>
-            )}
-          </div>
-          {latest ? (
-            <div className="rounded-[1.5vw] bg-white/[0.06] p-[2vw]">
-              <p className="text-[1.3em] font-bold uppercase tracking-wider text-white/50">
-                Just verified
+      <main className="mt-[1.4em] grid min-h-0 flex-1 grid-cols-[1fr_1.25fr] gap-[2em]">
+        {/* left: who's lifting now, else the latest result, else the leader */}
+        <section className="flex min-h-0 flex-col gap-[1.2em] overflow-hidden">
+          {up ? (
+            <Hero label="On the platform" live>
+              <BigAvatar name={up.name} photo={up.photo} />
+              <p className="mt-[0.4em] max-w-full truncate text-[2.8em] font-semibold leading-tight">{up.name}</p>
+              <p className="text-[1.5em] text-white/50">
+                #{up.bib}
+                {c.attempts_allowed > 1 ? ` · Attempt ${up.attempt_no} of ${c.attempts_allowed}` : ""}
               </p>
-              <div className="mt-[0.8vw] flex items-center gap-[1vw]">
-                <AthleteAvatar name={latest.name} photo={latest.photo} size={64} />
-                <p className="flex-1 truncate text-[2.4em] font-semibold">{latest.name}</p>
-                <p className="text-[2.8em] font-display">
-                  {latest.valid ? formatScore(latest.value, shape) : "No lift"}
+              {up.live_value != null ? (
+                <p className="mt-[0.3em] font-display text-[9em] tabular-nums leading-[0.9]">
+                  {scoreValue(up.live_value, shape)}
+                  <span className="ml-[0.6vw] align-baseline font-sans text-[0.14em] font-medium text-white/50">
+                    {scoreUnit(up.live_value, shape)} so far
+                  </span>
                 </p>
-              </div>
+              ) : (
+                <p className="mt-[1vw] text-[2.4em] text-white/60">Lifting now</p>
+              )}
+            </Hero>
+          ) : flash ? (
+            <Hero label="Just verified">
+              <BigAvatar name={flash.name} photo={flash.photo} />
+              <p className="mt-[0.4em] max-w-full truncate text-[2.8em] font-semibold leading-tight">{flash.name}</p>
+              <p className="mt-[0.3em] font-display text-[6.5em] tabular-nums leading-[0.9]">
+                {flash.valid ? formatScore(flash.value, shape) : "No lift"}
+              </p>
+              {flash.valid ? <FlashRank rows={rows} code={flash.code} division={division} /> : null}
+            </Hero>
+          ) : leader ? (
+            <Hero label={c.final ? (leader.tied ? "Co-champion" : "Champion") : "Leader"} gold>
+              <BigAvatar name={leader.name} photo={leader.photo} gold />
+              <p className="mt-[0.4em] max-w-full truncate text-[2.8em] font-semibold leading-tight">{leader.name}</p>
+              <ScoreText
+                value={leader.score}
+                shape={shape}
+                className="mt-[0.3em] text-[6.5em] leading-none"
+                unitClassName="text-white/50"
+              />
+            </Hero>
+          ) : (
+            <Hero label={c.status === "upcoming" ? "Starting soon" : "Leaderboard"}>
+              {c.status === "upcoming" && c.starts_at ? (
+                <Countdown to={c.starts_at} label="Starts in" size="xl" />
+              ) : (
+                <p className="text-[2.4em] text-white/60">Waiting for the first score</p>
+              )}
+              <p className="mt-[1.5vw] text-[1.8em] text-white/50">
+                {page?.registered ?? c.registered} registered
+              </p>
+            </Hero>
+          )}
+
+          {recent.length ? (
+            <div className="shrink-0 rounded-[1.2em] bg-white/[0.05] p-[1.2em]">
+              <p className="text-[1.3em] font-medium text-white/50">Recent results</p>
+              <ul className="mt-[0.6vw] space-y-[0.4vw]">
+                {recent.slice(0, 3).map((r) => (
+                  <li key={r.id} className="flex items-center gap-[0.6em] text-[1.6em]">
+                    <AthleteAvatar name={r.name} photo={r.photo} size={32} />
+                    <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                    <span className="font-display tabular-nums">
+                      {r.valid ? formatScore(r.value, shape) : "No lift"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
+        </section>
+
+        {/* right: the top ten */}
+        <section className="flex min-h-0 flex-col overflow-hidden">
+          <div className="mb-[0.6vw] flex items-baseline justify-between text-white/50">
+            <p className="text-[1.4em] font-medium">
+              {c.final ? "Final results" : "Top 10"}
+              {divisionLabel ? ` · ${divisionLabel.name}` : ""}
+            </p>
+            <p className="text-[1.2em]">
+              {page ? `${page.total} ranked · ${page.registered} registered` : ""}
+            </p>
+          </div>
+          <ol className="grid min-h-0 flex-1 grid-rows-[repeat(10,minmax(0,1fr))] gap-[0.45em]">
+            {rows.slice(0, 10).map((r) => {
+              const place = (division ? r.rank_div : r.rank) ?? 0;
+              const shared = division ? r.tied_div : r.tied;
+              const isUp = up?.code === r.code;
+              return (
+                <li
+                  key={r.code}
+                  className={cn(
+                    "flex min-h-0 items-center gap-[1em] rounded-[0.8em] px-[1.2em]",
+                    isUp ? "bg-white/[0.16]" : place <= 3 ? "bg-white/[0.09]" : "bg-white/[0.04]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "w-[2.4em] font-display text-[2.2em] tabular-nums",
+                      place === 1 ? "text-[#f5b301]" : place <= 3 ? "text-white" : "text-white/45",
+                    )}
+                  >
+                    {rankBadge(place, shared)}
+                  </span>
+                  <AthleteAvatar name={r.name} photo={r.photo} size={40} medal={place <= 3 ? place : null} />
+                  <span className="min-w-0 flex-1 truncate text-[1.9em] font-medium">{r.name}</span>
+                  <ScoreText
+                    value={r.score}
+                    shape={shape}
+                    className="text-[2.4em]"
+                    unitClassName="text-white/45"
+                  />
+                </li>
+              );
+            })}
+            {!rows.length ? (
+              <li className="row-span-2 rounded-[0.8em] bg-white/[0.04] p-[1.2em] text-[1.6em] text-white/50">
+                The board fills in as judges record scores.
+              </li>
+            ) : null}
+          </ol>
           {c.sponsors.length ? (
-            <div className="flex flex-wrap items-center gap-[1.5vw] opacity-80">
-              <span className="text-[1.2em] uppercase tracking-wider text-white/50">
-                Supported by
-              </span>
+            <div className="mt-auto flex flex-wrap items-center gap-[1.5vw] pt-[1.2vw] opacity-80">
+              <span className="text-[1.1em] text-white/45">Supported by</span>
               {c.sponsors.map((s) =>
                 s.logo_path ? (
                   <img
                     key={s.name}
                     src={mediaUrl(s.logo_path) ?? ""}
                     alt={s.name}
-                    className="h-[3vw] w-auto rounded bg-white p-[0.3vw]"
+                    className="h-[2.6vw] w-auto rounded bg-white p-[0.3vw]"
                   />
                 ) : (
-                  <span key={s.name} className="text-[1.6em] font-semibold">
+                  <span key={s.name} className="text-[1.4em] font-semibold">
                     {s.name}
                   </span>
                 ),
               )}
             </div>
           ) : null}
-        </div>
-
-        {/* top ten */}
-        <ol className="space-y-[0.6vw]">
-          {rows.slice(0, 8).map((r) => (
-            <li
-              key={r.code}
-              className={cn(
-                "flex items-center gap-[1.2vw] rounded-[1vw] px-[1.5vw] py-[0.45vw]",
-                r.place <= 3 ? "bg-white/[0.1]" : "bg-white/[0.04]",
-              )}
-            >
-              <span
-                className={cn(
-                  "w-[4vw] text-[2.4em] font-black tabular-nums",
-                  r.place === 1 ? "text-[#f5b301]" : r.place <= 3 ? "text-white" : "text-white/50",
-                )}
-              >
-                {rankBadge(r.place, r.shared)}
-              </span>
-              <AthleteAvatar name={r.name} photo={r.photo} size={56} />
-              <span className="min-w-0 flex-1 truncate text-[2.2em] font-semibold">{r.name}</span>
-              <ScoreText
-                value={r.score}
-                shape={shape}
-                className="text-[3em]"
-                unitClassName="text-white/50"
-              />
-            </li>
-          ))}
-          {!rows.length ? (
-            <li className="rounded-[1vw] bg-white/[0.04] p-[2vw] text-[2em] text-white/50">
-              The board fills in as judges record scores.
-            </li>
-          ) : null}
-          {rows.length > 8 ? (
-            <li className="px-[1.5vw] text-[1.6em] text-white/50">
-              + {rows.length - 8} more on the board · {board.data?.registered ?? 0} registered
-            </li>
-          ) : null}
-        </ol>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
 
-function BigAvatar({ name, photo }: { name: string; photo: string | null }) {
+function viewportWidth() {
+  return typeof window !== "undefined" ? window.innerWidth : 1600;
+}
+
+function StatusBadge({ c }: { c: ChallengePublic }) {
+  const live = c.status === "live";
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-[0.5vw] rounded-full px-[1.1vw] py-[0.35vw] text-[1.3em] font-semibold",
+        live ? "bg-[#ef3340] text-white" : "bg-white/10 text-white/80",
+      )}
+    >
+      {live ? <span className="jf-live-dot h-[0.7vw] w-[0.7vw] rounded-full bg-white" /> : null}
+      {c.final ? "Final results" : c.status === "verifying" ? "Checking scores" : STATUS_META[c.status].label}
+    </span>
+  );
+}
+
+function Hero({
+  label,
+  live,
+  gold,
+  children,
+}: {
+  label: string;
+  live?: boolean;
+  gold?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden rounded-[1.4em] bg-white/[0.06] p-[1.6em] text-center">
+      <p
+        className={cn(
+          "mb-[0.8em] flex items-center gap-[0.5em] text-[1.4em] font-semibold",
+          gold ? "text-[#f5b301]" : "text-white/60",
+        )}
+      >
+        {live ? <span className="jf-live-dot h-[0.8vw] w-[0.8vw] rounded-full bg-[#ef3340]" /> : null}
+        {gold ? <Trophy className="h-[1.5vw] w-[1.5vw]" /> : null}
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function FlashRank({ rows, code, division }: { rows: RankRow[]; code: string; division: string | null }) {
+  const r = rows.find((x) => x.code === code);
+  const place = r ? (division ? r.rank_div : r.rank) : null;
+  if (!place) return null;
+  const shared = division ? r!.tied_div : r!.tied;
+  return <p className="mt-[0.8vw] text-[2.4em] text-white/70">{placeLabel(place, shared)} on the board</p>;
+}
+
+/** A result that just landed stays big for a few seconds. */
+function useFreshResult(latest: RecentAttempt | null): RecentAttempt | null {
+  const seen = useRef<string | null>(null);
+  const [shown, setShown] = useState<RecentAttempt | null>(null);
+  useEffect(() => {
+    if (!latest) return;
+    if (seen.current === null) {
+      seen.current = latest.id; // the first load isn't news
+      return;
+    }
+    if (latest.id === seen.current) return;
+    seen.current = latest.id;
+    setShown(latest);
+    const t = setTimeout(() => setShown(null), 12_000);
+    return () => clearTimeout(t);
+  }, [latest]);
+  return shown;
+}
+
+function useNewLeaderName(rows: RankRow[]): string | null {
+  const prev = useRef<Set<string> | null>(null);
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!rows.length) return;
+    const leaders = rows.filter((r) => r.rank === 1);
+    const codes = new Set(leaders.map((r) => r.code));
+    const before = prev.current;
+    prev.current = codes;
+    if (!before) return;
+    const fresh = leaders.find((r) => !before.has(r.code));
+    if (!fresh) return;
+    setName(fresh.name);
+    const t = setTimeout(() => setName(null), 8000);
+    return () => clearTimeout(t);
+  }, [rows]);
+  return name;
+}
+
+function BigAvatar({ name, photo, gold }: { name: string; photo: string | null; gold?: boolean }) {
   const url = mediaUrl(photo);
   return (
-    <span className="flex h-[9vw] w-[9vw] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 font-display text-[3.6em] text-white/70 ring-[0.35vw] ring-[#f5b301]">
-      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : initialsOf(name)}
+    <span
+      className={cn(
+        "flex h-[8em] w-[8em] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 font-display text-white/70",
+        gold && "ring-[0.35vw] ring-[#f5b301]",
+      )}
+    >
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="text-[3em] leading-none">{initialsOf(name)}</span>
+      )}
     </span>
   );
 }
