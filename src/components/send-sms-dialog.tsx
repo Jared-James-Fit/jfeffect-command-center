@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { CLIENT_COACH_EMBED, renderSmsTemplate as render, resolveCoachName } from "@/lib/sms-identity";
+import { assignedCoachOf, renderSmsTemplate as render, resolveCoachName } from "@/lib/sms-identity";
 
 export function SendSmsDialog({
   open, onOpenChange, clientId, clientName, firstName, phone,
@@ -33,10 +33,7 @@ export function SendSmsDialog({
   });
   const { data: coachRow, isFetched: coachFetched } = useQuery({
     queryKey: ["sms-client-coach", clientId],
-    queryFn: async () => {
-      const { data } = await (supabase as any).from("clients").select(CLIENT_COACH_EMBED).eq("id", clientId).maybeSingle();
-      return (data as any)?.coach ?? null;
-    },
+    queryFn: () => assignedCoachOf(supabase, { clientId: clientId! }),
     enabled: open && !!clientId,
   });
 

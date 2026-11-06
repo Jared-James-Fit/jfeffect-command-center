@@ -16,6 +16,7 @@ import { SOCIAL_FIELDS } from "@/lib/social-handles";
 import { FileSignature } from "lucide-react";
 import { getAgreementSigningContext } from "@/lib/coaching-agreement.functions";
 import { shareMeta } from "@/lib/share-meta";
+import { SetupInviteStep } from "@/components/setup-invite-step";
 
 // The signing flow carries the full agreement text, so it only loads when this step is reached.
 const AgreementSignFlow = lazyWithRetry(() =>
@@ -32,8 +33,10 @@ export const Route = createFileRoute("/setup")({
 function SetupPage() {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<
-    "loading" | "confirm" | "ready" | "agreement" | "social" | "expired" | "done"
+    "loading" | "invite" | "confirm" | "ready" | "agreement" | "social" | "expired" | "done"
   >("loading");
+  // A link sent before the client had an email on file: they add it here (setup-invite.ts).
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [email, setEmail] = useState<string>("");
   const [fullName, setFullName] = useState<string>("");
@@ -67,7 +70,15 @@ function SetupPage() {
 
       if (!tokenHash && !hasInviteHash) {
         await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-        if (!cancelled) setPhase("expired");
+        const invite = params.get("invite");
+        if (!cancelled) {
+          if (invite) {
+            setInviteToken(invite);
+            setPhase("invite");
+          } else {
+            setPhase("expired");
+          }
+        }
         return;
       }
 
@@ -196,6 +207,10 @@ function SetupPage() {
                 <SlowLoadHint />
               </div>
             )}
+
+      {phase === "invite" && inviteToken && (
+        <SetupInviteStep token={inviteToken} onInvalid={() => setPhase("expired")} />
+      )}
 
       {phase === "confirm" && (
         <div className="space-y-4 text-center">

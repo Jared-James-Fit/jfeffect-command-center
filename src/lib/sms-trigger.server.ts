@@ -8,7 +8,7 @@
  * Safe to import from server routes and server functions only.
  */
 
-import { CLIENT_COACH_EMBED, renderSmsTemplate, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
+import { assignedCoachOf, coachById, renderSmsTemplate, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
@@ -145,9 +145,7 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
       const { data: m } = await supabaseAdmin
         .from("app_members").select("id, user_id, full_name, email, phone, sms_opt_out").eq("id", ctx.memberId).maybeSingle();
       if (m?.user_id) {
-        const { data: linked } = await supabaseAdmin
-          .from("clients").select(CLIENT_COACH_EMBED).eq("user_id", m.user_id).limit(1).maybeSingle();
-        coachRow = (linked as any)?.coach ?? null;
+        coachRow = await assignedCoachOf(supabaseAdmin, { userId: m.user_id });
       }
       if (m) {
         if (!toPhone) toPhone = normalizePhone(m.phone);
@@ -158,9 +156,9 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
       }
     } else if (ctx.clientId) {
       const { data: c } = await supabaseAdmin
-        .from("clients").select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`).eq("id", ctx.clientId).maybeSingle();
+        .from("clients").select("id, first_name, full_name, phone, sms_opt_out, assigned_coach_id").eq("id", ctx.clientId).maybeSingle();
       if (c) {
-        coachRow = (c as any).coach ?? null;
+        coachRow = await coachById(supabaseAdmin, (c as any).assigned_coach_id);
         if (!toPhone) toPhone = normalizePhone(c.phone);
         fullName = c.full_name ?? "";
         firstName = c.first_name ?? c.full_name?.split(" ")[0] ?? "there";

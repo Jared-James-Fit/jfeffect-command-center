@@ -9,7 +9,7 @@ import {
   type ReminderSession,
 } from "@/lib/pt-session-reminders";
 import { appOrigin } from "@/lib/pt-session-gcal.server";
-import { CLIENT_COACH_EMBED, resolveCoachName } from "@/lib/sms-identity";
+import { coachById, resolveCoachName, withAssignedCoach } from "@/lib/sms-identity";
 
 type Admin = SupabaseClient<any, any, any>;
 
@@ -54,11 +54,15 @@ export async function runPtSessionReminders(admin: Admin, now: Date = new Date()
   result.considered = (rows ?? []).length;
   if (!due.length) return result;
 
-  const { data: clients } = await admin
+  // A failed read stops the run before anything is claimed: claiming and then
+  // skipping as "no_client" would lose those evening-before texts for good.
+  const { data: clientRows, error: clientsErr } = await admin
     .from("clients")
-    .select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
+    .select("id, first_name, full_name, phone, sms_opt_out, assigned_coach_id")
     .in("id", Array.from(new Set(due.map((r) => r.client_id))));
-  const clientById = new Map(((clients ?? []) as any[]).map((c) => [c.id, c]));
+  if (clientsErr) throw new Error(clientsErr.message);
+  const clients = await withAssignedCoach(admin, (clientRows ?? []) as any[]);
+  const clientById = new Map(clients.map((c) => [c.id, c]));
   const { normalizePhone, sendViaTwilio } = await import("@/lib/sms.functions");
   const link = scheduleLinkForSms();
 
@@ -149,9 +153,10 @@ export async function textSessionChange(
   if (!cfg) return { texted: false, reason: "sms_disabled" };
   const { data: c } = await admin
     .from("clients")
-    .select(`id, first_name, full_name, phone, sms_opt_out, ${CLIENT_COACH_EMBED}`)
+    .select("id, first_name, full_name, phone, sms_opt_out, assigned_coach_id")
     .eq("id", (s as any).client_id)
     .maybeSingle();
+  const coach = await coachById(admin, (c as any)?.assigned_coach_id);
   const { normalizePhone, sendViaTwilio } = await import("@/lib/sms.functions");
   const to = normalizePhone((c as any)?.phone);
   if ((c as any)?.sms_opt_out) return { texted: false, reason: "opted_out" };
@@ -160,7 +165,7 @@ export async function textSessionChange(
     kind,
     firstName: (c as any).first_name ?? (c as any).full_name?.split(" ")[0],
     brand: cfg.brand,
-    coach: resolveCoachName((c as any).coach, cfg.coach),
+    coach: resolveCoachName(coach, cfg.coach),
     title: (s as any).title,
     tz: (s as any).timezone,
     startsAt: new Date((s as any).starts_at),

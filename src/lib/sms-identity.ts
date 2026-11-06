@@ -72,8 +72,84 @@ export function smsSegments(text: string): number {
   return text.length <= single ? 1 : Math.ceil(text.length / multi);
 }
 
-/** Supabase embed that pulls a client's assigned coach alongside the client row. */
-export const CLIENT_COACH_EMBED = "coach:coaches!clients_assigned_coach_id_fkey(first_name, full_name, archived, status)";
+/**
+ * A client's assigned coach is looked up on its own, never embedded in the clients
+ * select: `clients.assigned_coach_id` has no foreign key to `coaches`, so an embed like
+ * `coaches!clients_assigned_coach_id_fkey(...)` fails the whole query ("Could not find a
+ * relationship between 'clients' and 'coaches'") and every text that used it failed with it.
+ */
+export const COACH_LOOKUP_COLUMNS = "id, user_id, first_name, full_name, archived, status";
+
+export type CoachLookupRow = {
+  id: string;
+  user_id: string | null;
+  first_name: string | null;
+  full_name: string | null;
+  archived: boolean | null;
+  status: string | null;
+};
+
+/**
+ * Coaches by id, in one query. The coach only names who a text is from, so a lookup that
+ * fails leaves the map empty (the text falls back to the default name) instead of failing
+ * the text.
+ */
+export async function loadCoachesById(
+  db: any,
+  ids: Array<string | null | undefined>,
+): Promise<Map<string, CoachLookupRow>> {
+  const unique = Array.from(new Set(ids.filter((v): v is string => typeof v === "string" && v.length > 0)));
+  if (!unique.length) return new Map();
+  try {
+    const { data, error } = await db.from("coaches").select(COACH_LOOKUP_COLUMNS).in("id", unique);
+    if (error) throw error;
+    return new Map(((data ?? []) as CoachLookupRow[]).map((c) => [c.id, c]));
+  } catch (e: any) {
+    console.warn("[sms-identity] coach lookup failed:", e?.message ?? e);
+    return new Map();
+  }
+}
+
+/** One coach by id (a client row's `assigned_coach_id`), or null. */
+export async function coachById(db: any, id: string | null | undefined): Promise<CoachLookupRow | null> {
+  if (!id) return null;
+  return (await loadCoachesById(db, [id])).get(id) ?? null;
+}
+
+/** Client rows (selected with `assigned_coach_id`) with their assigned coach as `coach`. */
+export async function withAssignedCoach<T extends { assigned_coach_id?: string | null }>(
+  db: any,
+  rows: T[],
+): Promise<Array<T & { coach: CoachLookupRow | null }>> {
+  const coaches = await loadCoachesById(db, rows.map((r) => r.assigned_coach_id));
+  return rows.map((r) => ({ ...r, coach: (r.assigned_coach_id && coaches.get(r.assigned_coach_id)) || null }));
+}
+
+/** One client's assigned coach (by client id or by the client's login), or null. */
+export async function assignedCoachOf(
+  db: any,
+  by: { clientId: string } | { userId: string },
+): Promise<CoachLookupRow | null> {
+  try {
+    const q = db.from("clients").select("assigned_coach_id");
+    const { data, error } = await ("clientId" in by
+      ? q.eq("id", by.clientId).maybeSingle()
+      : q.eq("user_id", by.userId).limit(1).maybeSingle());
+    if (error || !data?.assigned_coach_id) return null;
+    return coachById(db, data.assigned_coach_id);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether this login is the client's assigned coach. Used for permission checks, so
+ * anything it can't read means no.
+ */
+export async function isAssignedCoachOf(db: any, userId: string, clientId: string): Promise<boolean> {
+  const coach = await assignedCoachOf(db, { clientId });
+  return !!coach?.user_id && coach.user_id === userId;
+}
 
 /** Said wherever we send someone a link: a cold open can be slow, so they don't give up. */
 export const LINK_HEADS_UP = "The link can take up to a minute to load.";

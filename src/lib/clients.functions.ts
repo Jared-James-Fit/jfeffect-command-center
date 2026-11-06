@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { cleanInviteEmail, maskEmail, setupInviteState, setupInviteUrl, type SetupInviteState } from "@/lib/setup-invite";
 
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 
@@ -79,6 +80,62 @@ async function claimUnlinkedLogin(client: { id: string; email: string }): Promis
   return login.id;
 }
 
+type SetupEmailClient = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  user_id: string | null;
+  invite_sent_at: string | null;
+};
+
+/**
+ * Send the setup email to the client's email on file: an invite for a new
+ * login, else (they already have one) a set-password email, linking a login
+ * they made themselves first. Stamps when it went out.
+ */
+async function sendSetupEmailFor(client: SetupEmailClient, redirectTo: string | undefined) {
+  await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
+
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: invited, error: inviteErr } =
+    await supabaseAdmin.auth.admin.inviteUserByEmail(client.email, {
+      redirectTo,
+      data: { full_name: client.full_name },
+    });
+
+  const now = new Date().toISOString();
+  if (inviteErr) {
+    // If user already exists, fall back to a password recovery email.
+    // A login they made themselves before this invite is linked first.
+    if (!client.user_id) await claimUnlinkedLogin({ id: client.id, email: client.email });
+    // resetPasswordForEmail actually SENDS the email (admin.generateLink does not).
+    const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
+      client.email,
+      { redirectTo },
+    );
+    if (resetErr) throw new Error(resetErr.message);
+    const patch: ClientUpdate = {
+      invite_last_resent_at: now,
+      invite_expires_at: null,
+      account_status: client.user_id ? "Password Reset Sent" : "Invite Sent",
+    };
+    if (!client.invite_sent_at) patch.invite_sent_at = now;
+    await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
+    return { ok: true, resent: true, actionLink: null };
+  }
+
+  const patch: ClientUpdate = {
+    invite_sent_at: now,
+    invite_last_resent_at: now,
+    invite_expires_at: null,
+    account_status: "Invite Sent",
+  };
+  if (invited.user) patch.user_id = invited.user.id;
+  await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
+  return { ok: true, resent: false };
+}
+
 export const inviteClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -99,47 +156,9 @@ export const inviteClient = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .single();
     if (cErr) throw new Error(cErr.message);
-    if (!client?.email) throw new Error("Client has no email address");
+    if (!client?.email) throw new Error("Client has no email address. Copy or text the setup link instead: they add their email when they open it.");
 
-    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: invited, error: inviteErr } =
-      await supabaseAdmin.auth.admin.inviteUserByEmail(client.email, {
-        redirectTo: data.redirectTo,
-        data: { full_name: client.full_name },
-      });
-
-    const now = new Date().toISOString();
-    if (inviteErr) {
-      // If user already exists, fall back to a password recovery email.
-      // A login they made themselves before this invite is linked first.
-      if (!client.user_id) await claimUnlinkedLogin({ id: client.id, email: client.email });
-      // resetPasswordForEmail actually SENDS the email (admin.generateLink does not).
-      const { error: resetErr } = await supabaseAdmin.auth.resetPasswordForEmail(
-        client.email,
-        { redirectTo: data.redirectTo },
-      );
-      if (resetErr) throw new Error(resetErr.message);
-      const patch: ClientUpdate = {
-        invite_last_resent_at: now,
-        invite_expires_at: null,
-        account_status: client.user_id ? "Password Reset Sent" : "Invite Sent",
-      };
-      if (!client.invite_sent_at) patch.invite_sent_at = now;
-      await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
-      return { ok: true, resent: true, actionLink: null };
-    }
-
-    const patch: ClientUpdate = {
-      invite_sent_at: now,
-      invite_expires_at: null,
-      account_status: "Invite Sent",
-    };
-    if (invited.user) patch.user_id = invited.user.id;
-    await supabaseAdmin.from("clients").update(patch).eq("id", client.id);
-    return { ok: true, resent: false };
+    return sendSetupEmailFor(client as SetupEmailClient, data.redirectTo);
   });
 
 // Generate a setup link without sending an email — for copy-to-clipboard.
@@ -154,9 +173,20 @@ export const getSetupLink = createServerFn({ method: "POST" })
     const { data: client, error } = await supabase
       .from("clients").select("id, email, user_id").eq("id", data.clientId).single();
     if (error) throw new Error(error.message);
-    if (!client?.email) throw new Error("Client has no email address");
-    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (!client?.email) {
+      // No email yet: a link that asks for it, then sends the setup email there (setup-invite.ts).
+      const { signSetupInvite } = await import("@/lib/setup-invite.server");
+      const now = new Date().toISOString();
+      await supabaseAdmin.from("clients").update({
+        invite_sent_at: now,
+        invite_last_resent_at: now,
+        invite_expires_at: null,
+        account_status: "Invite Sent",
+      } as ClientUpdate).eq("id", client.id);
+      return { url: setupInviteUrl(data.redirectTo, signSetupInvite(client.id)), asksForEmail: true };
+    }
+    await assertNotPrivilegedTarget({ email: client.email, userId: client.user_id });
     let linkType = client.user_id ? "magiclink" : "invite";
     let { data: link, error: lErr } = await supabaseAdmin.auth.admin.generateLink({
       type: linkType as any,
@@ -190,7 +220,78 @@ export const getSetupLink = createServerFn({ method: "POST" })
       invite_expires_at: null,
       account_status: client.user_id ? "Account Created" : "Invite Sent",
     }).eq("id", client.id);
-    return { url: url.toString() };
+    return { url: url.toString(), asksForEmail: false };
+  });
+
+/* ============================================================
+ * No-email setup link (setup-invite.ts): public, the signed token is the
+ * only key, and it only ever sends the setup email.
+ * ============================================================ */
+
+const InviteTokenSchema = z.object({ token: z.string().min(10).max(120) });
+
+async function clientForInvite(token: string) {
+  const { verifySetupInvite } = await import("@/lib/setup-invite.server");
+  const clientId = verifySetupInvite(token);
+  if (!clientId) return null;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("clients")
+    .select("id, email, first_name, preferred_name, full_name, user_id, archived, status, portal_access_disabled, last_signed_in_at, invite_sent_at")
+    .eq("id", clientId)
+    .maybeSingle();
+  return data as any;
+}
+
+/** What the invite page shows: their first name and, when there's one on file, a masked email. */
+export const peekSetupInvite = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => InviteTokenSchema.parse(input))
+  .handler(async ({ data }): Promise<SetupInviteState> => setupInviteState(await clientForInvite(data.token)));
+
+/**
+ * Send the setup email from an invite link: to the email on file, or, for a
+ * record with none, to the email they type, which must be new to JF Effect
+ * (an email that already has an account is the coach's to connect).
+ */
+export const requestSetupFromInvite = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    InviteTokenSchema.extend({ email: z.string().max(254).optional() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const client = await clientForInvite(data.token);
+    const state = setupInviteState(client);
+    if (state.state === "invalid") throw new Error("This setup link doesn't work anymore. Ask your coach for a new one.");
+    if (state.state === "signed_in_before") throw new Error("You already have an account. Sign in, or tap Forgot password.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let email: string | null = (client.email ?? "").trim() || null;
+    if (!email) {
+      const typed = cleanInviteEmail(data.email);
+      if (!typed) throw new Error("Enter a valid email address.");
+      const taken = "That email already has a JF Effect account. Ask your coach to connect it.";
+      const { data: otherClient, error: ocErr } = await supabaseAdmin
+        .from("clients").select("id").eq("normalized_email", typed).neq("id", client.id).limit(1);
+      if (ocErr) throw new Error(ocErr.message);
+      if (otherClient?.length) throw new Error(taken);
+      const { data: logins, error: lgErr } = await supabaseAdmin
+        .from("profiles").select("id, email").ilike("email", typed.replace(/[\\%_]/g, (c) => `\\${c}`));
+      if (lgErr) throw new Error(lgErr.message);
+      if ((logins ?? []).some((p: any) => String(p.email ?? "").trim().toLowerCase() === typed)) throw new Error(taken);
+      // Only while the record still has no email: a coach who just added one wins.
+      let save = supabaseAdmin.from("clients").update({ email: typed } as ClientUpdate).eq("id", client.id);
+      save = client.email === null ? save.is("email", null) : save.eq("email", client.email);
+      const { data: saved, error: sErr } = await save.select("id").maybeSingle();
+      if (sErr) throw new Error(sErr.message);
+      if (!saved) throw new Error("Your coach just updated your account. Open the link again.");
+      email = typed;
+    }
+
+    const { appOrigin } = await import("@/lib/pt-session-gcal.server");
+    await sendSetupEmailFor(
+      { id: client.id, email, full_name: client.full_name ?? null, user_id: client.user_id ?? null, invite_sent_at: client.invite_sent_at ?? null },
+      `${appOrigin()}/setup`,
+    );
+    return { ok: true, sentTo: maskEmail(email) };
   });
 
 // Send a password reset email.

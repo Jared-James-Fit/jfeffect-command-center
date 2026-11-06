@@ -4,7 +4,8 @@ import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertPermission } from "@/lib/permissions.server";
-import { CLIENT_COACH_EMBED, resolveCoachName, smsSender, withLinkHeadsUp } from "@/lib/sms-identity";
+import { coachById, isAssignedCoachOf, resolveCoachName, smsSender, withLinkHeadsUp } from "@/lib/sms-identity";
+import { SETUP_INVITE_DAYS, setupInviteUrl } from "@/lib/setup-invite";
 
 /* ============================================================
  * Shared helpers (duplicated from sms.functions.ts to keep this
@@ -56,7 +57,7 @@ async function loadSmsSettings(supabase: any) {
 async function loadClientForSms(supabase: any, clientId: string) {
   const { data, error } = await supabase
     .from("clients")
-    .select(`id, email, phone, sms_opt_out, first_name, full_name, user_id, assigned_coach_id, ${CLIENT_COACH_EMBED}`)
+    .select("id, email, phone, sms_opt_out, first_name, preferred_name, full_name, user_id, assigned_coach_id, archived, status")
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -64,7 +65,8 @@ async function loadClientForSms(supabase: any, clientId: string) {
   if (data.sms_opt_out) throw new Error("This client is opted out of SMS");
   const toPhone = normalizePhone(data.phone);
   if (!toPhone) throw new Error("Client has no valid phone number on file");
-  return { client: data, toPhone };
+  const coach = await coachById(supabase, data.assigned_coach_id);
+  return { client: { ...data, coach }, toPhone };
 }
 
 /**
@@ -87,13 +89,7 @@ async function assertAdminOrAssignedCoach(supabase: any, userId: string, clientI
   const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
   if (isAdmin) return { isAdmin: true };
-  const { data: assigned } = await supabase
-    .from("clients")
-    .select("id, coaches!clients_assigned_coach_id_fkey(user_id)")
-    .eq("id", clientId)
-    .maybeSingle();
-  const coachUid = (assigned as any)?.coaches?.user_id;
-  if (coachUid !== userId) throw new Error("Forbidden: not assigned to this client");
+  if (!(await isAssignedCoachOf(supabase, userId, clientId))) throw new Error("Forbidden: not assigned to this client");
   return { isAdmin: false };
 }
 
@@ -163,22 +159,30 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
     await assertAdminOrAssignedCoach(supabase, userId, data.clientId);
     const settings = await loadSmsSettings(supabase);
     const { client, toPhone } = await loadClientForSms(supabase, data.clientId);
-    if (!client.email) throw new Error("Client has no email on file (required to mint link)");
+    let url: string;
+    if (client.email) {
+      url = await generateAuthLink({
+        clientEmail: client.email,
+        clientUserId: client.user_id ?? null,
+        kind: data.kind,
+        redirectTo: data.redirectTo,
+      });
+    } else if (data.kind === "setup") {
+      // No email yet: a link that asks for it, then sends the setup email there (setup-invite.ts).
+      const { signSetupInvite } = await import("@/lib/setup-invite.server");
+      url = setupInviteUrl(data.redirectTo, signSetupInvite(client.id));
+    } else {
+      throw new Error("Client has no email on file. Add one first, or text them a setup link.");
+    }
 
-    const url = await generateAuthLink({
-      clientEmail: client.email,
-      clientUserId: client.user_id ?? null,
-      kind: data.kind,
-      redirectTo: data.redirectTo,
-    });
-
-    const first = client.first_name ?? client.full_name?.split(" ")[0] ?? "there";
+    const first = client.preferred_name || client.first_name || client.full_name?.split(" ")[0] || "there";
     const brand = smsSender(resolveCoachName((client as any).coach, settings.default_coach_name), settings.brand_name);
     const label =
       data.kind === "reset" ? "reset your password"
       : data.kind === "magic" ? "sign in to your coaching app"
       : "finish setting up your coaching account";
-    const body = `Hi ${first}, this is ${brand}. Tap to ${label}: ${url}\n\nThe link is single-use and expires soon. Reply STOP to opt out.`;
+    const expiry = client.email ? "The link is single-use and expires soon." : `The link works for ${SETUP_INVITE_DAYS} days.`;
+    const body = `Hi ${first}, this is ${brand}. Tap to ${label}: ${url}\n\n${expiry} Reply STOP to opt out.`;
 
     try {
       const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);

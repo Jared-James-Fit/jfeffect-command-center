@@ -7,6 +7,7 @@ import {
   type SessionRequest,
 } from "@/lib/session-requests";
 import { DEFAULT_TZ, minutesBetweenHM, wallTimeToUtc } from "@/lib/schedule-time";
+import { isAssignedCoachOf } from "@/lib/sms-identity";
 
 /**
  * Session requests (see session-requests.ts). Clients never write the table themselves:
@@ -37,9 +38,7 @@ async function myClient(supabase: any, userId: string) {
 async function assertStaffFor(supabase: any, userId: string, clientId: string) {
   const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
   if ((roles ?? []).some((r: any) => r.role === "admin")) return;
-  const { data } = await supabase
-    .from("clients").select("id, coaches!clients_assigned_coach_id_fkey(user_id)").eq("id", clientId).maybeSingle();
-  if ((data as any)?.coaches?.user_id !== userId) throw new Error("Only the client's coach can answer this request.");
+  if (!(await isAssignedCoachOf(supabase, userId, clientId))) throw new Error("Only the client's coach can answer this request.");
 }
 
 async function notify(db: any, event: "session_requested" | "session_request_answered", clientId: string, sourceId: string, actor: string) {

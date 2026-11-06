@@ -53,7 +53,7 @@ export function AddClientDialog({
           toast.warning(`Client created, but the setup email failed: ${e?.message ?? "unknown error"}. Use “Send setup link” on their profile.`);
         }
       } else {
-        toast.success("Client created — add an email to send their setup link");
+        toast.success("Client created. Copy or text their setup link from their profile: they add their email when they open it.");
       }
       onOpenChange(false);
       setName(""); setEmail("");
@@ -78,7 +78,7 @@ export function AddClientDialog({
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" autoFocus />
           </div>
           <div>
-            <Label>Email <span className="font-normal text-muted-foreground">(setup email is sent automatically)</span></Label>
+            <Label>Email <span className="font-normal text-muted-foreground">(optional, the setup email goes out automatically)</span></Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" />
           </div>
           <div>

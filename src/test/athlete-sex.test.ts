@@ -134,9 +134,11 @@ describe("one field, kept honest", () => {
   });
 
   it("no screen can erase an answer with a stale copy", () => {
+    // The profile's Save sends only what the coach changed, never sex (client-profile-form.ts).
     expect(read("src/route-pages/_authenticated/admin/clients.$id.tsx")).toContain(
-      "sex: _sex, sex_updated_at: _sexAt, ...rest",
+      "const patch = profileChanges(form, baseRef.current);",
     );
+    expect(read("src/lib/client-profile-form.ts")).toMatch(/"sex",\s*\n\s*"sex_updated_at",/);
     expect(read("src/components/portal/setup-step-sheet.tsx")).toContain(
       "if (form?.sex) patch.sex = form.sex;",
     );
