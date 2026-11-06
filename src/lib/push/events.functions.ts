@@ -310,3 +310,72 @@ export const notifyCrewInvite = createServerFn({ method: "POST" })
     return { results };
   });
 
+
+const REPORTED_THING: Record<"post" | "comment" | "program" | "profile", string> = {
+  post: "A post",
+  comment: "A comment",
+  program: "A program",
+  profile: "An account",
+};
+
+/**
+ * Something in Crew was reported (community_report): tell the team (admins and
+ * coaches) so it's looked at quickly. Content-free, and never who reported it
+ * (the reporter is private even from staff). Only someone with an open report
+ * on that thing can fire it; each staff login hears once per reported thing
+ * (however many people report it) and at most once every 30 minutes overall.
+ * The report itself waits in Crew → Feed → Needs you.
+ */
+export const notifyCommunityReport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) =>
+    z
+      .object({
+        kind: z.enum(["post", "comment", "program", "profile"]),
+        targetId: z.string().uuid(),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { sendWebPushToUser } = await import("@/lib/push/push.server");
+    const { data: rep } = await (supabaseAdmin as any)
+      .from("community_reports")
+      .select("id, status")
+      .eq("reporter_id", userId)
+      .eq("target_kind", data.kind)
+      .eq("target_id", data.targetId)
+      .maybeSingle();
+    if (!rep || rep.status !== "open") return { skipped: "no_open_report" };
+    const { data: staff } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .in("role", ["admin", "coach"]);
+    const recipients = [...new Set((staff ?? []).map((s: any) => s.user_id as string))].filter(
+      (u) => u && u !== userId,
+    );
+    let sent = 0;
+    for (const uid of recipients) {
+      const r = await sendWebPushToUser(
+        supabaseAdmin as any,
+        uid,
+        {
+          title: `🚩 ${REPORTED_THING[data.kind]} in Crew was reported`,
+          body: "It's waiting in Crew under Needs you.",
+          url: "/admin/community",
+          tag: "crew_report",
+          data: { kind: "crew_report" },
+        },
+        {
+          category: "community",
+          eventKey: `crew_report:${data.kind}:${data.targetId}:${uid}`,
+          rateKey: "crew_report",
+          rateWindowMinutes: 30,
+          priority: "normal",
+        },
+      );
+      sent += r.sent;
+    }
+    return { sent };
+  });

@@ -284,3 +284,20 @@ describe("free platform hardening", () => {
     );
   });
 });
+
+describe("Crew reports reach the team", () => {
+  const events = readFileSync("src/lib/push/events.functions.ts", "utf8");
+  const fn = events.slice(events.indexOf("export const notifyCommunityReport"));
+  const sheet = readFileSync("src/components/community/report-sheet.tsx", "utf8");
+
+  it("a report pushes admins and coaches, once per reported thing, never naming who reported", () => {
+    // only someone with an open report on that thing can fire it
+    expect(fn).toContain('.eq("reporter_id", userId)');
+    expect(fn).toContain('rep.status !== "open"');
+    expect(fn).toContain('.in("role", ["admin", "coach"])');
+    expect(fn).toContain("eventKey: `crew_report:${data.kind}:${data.targetId}:${uid}`");
+    // the push carries nothing about the reporter or the content
+    expect(fn).not.toMatch(/full_name|first_name|display_name|details|reason/);
+    expect(sheet).toContain("notifyCommunityReport({ data: { kind, targetId } })");
+  });
+});
