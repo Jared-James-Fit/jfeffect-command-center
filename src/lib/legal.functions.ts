@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { assertAdminView, readClientFor } from "@/lib/permissions.server";
+import { legalDocApplies, type LegalViewer } from "@/lib/legal-applies";
+import { IN_APP_SIGNING_FROM_VERSION } from "@/lib/membership-agreement.functions";
 
 // ============================================================================
 // Legal & Safety — server functions
@@ -91,7 +93,22 @@ export const listMyLegalStatus = createServerFn({ method: "GET" })
       .select("id, doc_type, slug, title, audience, is_required, is_optional_consent, enforcement_mode, enforcement_enabled, emergency_disabled, effective_at, grace_period_days, current_version_id, current_version:legal_document_versions!fk_legal_documents_current_version(id, version_number, title, summary, body, signature_method, requires_reacceptance, effective_date, status, needs_legal_review)")
       .eq("archived", false);
     if (e1) throw new Error(e1.message);
-    const published = (docs ?? []).filter((d: any) => d.current_version && d.current_version.status === "published" && !d.current_version.needs_legal_review);
+    // who's asking decides which member documents apply (legal-applies.ts)
+    const [{ data: me }, { data: membership }] = await Promise.all([
+      context.supabase.from("clients").select("service_tier").eq("user_id", context.userId).maybeSingle(),
+      context.supabase.from("app_members").select("stripe_subscription_id").eq("user_id", context.userId).maybeSingle(),
+    ]);
+    const viewer: LegalViewer = {
+      tier: (me as any)?.service_tier === "self_serve" ? "self_serve" : (me as any)?.service_tier ? "coaching" : null,
+      paidMembership: !!(membership as any)?.stripe_subscription_id,
+    };
+    const published = (docs ?? []).filter(
+      (d: any) =>
+        d.current_version &&
+        d.current_version.status === "published" &&
+        !d.current_version.needs_legal_review &&
+        legalDocApplies({ slug: d.slug, version_number: d.current_version.version_number }, viewer, IN_APP_SIGNING_FROM_VERSION),
+    );
 
     const versionIds = published.map((d: any) => d.current_version.id);
     let acceptances: any[] = [];

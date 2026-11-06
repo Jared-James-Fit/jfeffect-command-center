@@ -144,7 +144,7 @@ describe("open times", () => {
     expect(labels(slots)).toEqual(["12:00", "12:15", "12:30"]);
   });
 
-  it("holds the wall clock across the November time change", () => {
+  it("holds the wall clock after Nov 1 2026, when Manitoba stays on UTC-5", () => {
     const after = computeSlots({
       hours: [{ day_of_week: 1, start_time: "06:00", end_time: "07:00" }],
       rules: rules(),
@@ -153,7 +153,8 @@ describe("open times", () => {
       to: "2026-11-02",
       now: NOW,
     });
-    expect(after[0].start).toBe("2026-11-02T12:00:00.000Z"); // 6 AM CST
+    // Manitoba kept UTC-5 instead of falling back (AGENTS: local_to_instant), so 6 AM is 11:00Z
+    expect(after[0].start).toBe("2026-11-02T11:00:00.000Z");
   });
 
   it("only accepts a booking for an exact open time", () => {
