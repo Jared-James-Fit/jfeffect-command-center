@@ -178,8 +178,9 @@ beforeEach(() => {
 });
 
 describe("Stripe webhook — recurring billing sync", () => {
-  it("customer.subscription.updated (active) stores status and next_billing_date", async () => {
-    const periodEnd = Math.floor(new Date("2027-01-15T00:00:00Z").getTime() / 1000);
+  it("customer.subscription.updated (active) stores status and the renewal to the minute", async () => {
+    // 6:47 PM in Winnipeg: UTC is already Jan 16, the renewal is still Jan 15.
+    const periodEnd = Math.floor(new Date("2027-01-15T23:47:33Z").getTime() / 1000);
     const res = await postEvent({
       id: "evt_sub_upd_active",
       type: "customer.subscription.updated",
@@ -195,6 +196,25 @@ describe("Stripe webhook — recurring billing sync", () => {
     expect(p.stripe_subscription_status).toBe("active");
     expect(p.cancel_at_period_end).toBe(false);
     expect(p.next_billing_date).toBe("2027-01-15");
+    expect(p.next_billing_at).toBe("2027-01-15T23:47:33.000Z");
+  });
+
+  it("customer.subscription.updated reads the period end from its items on newer Stripe APIs", async () => {
+    // 8:30 PM Jan 15 in Winnipeg is 01:30 Jan 16 UTC: the day is Winnipeg's.
+    const periodEnd = Math.floor(new Date("2027-01-16T01:30:00Z").getTime() / 1000);
+    const res = await postEvent({
+      id: "evt_sub_upd_items",
+      type: "customer.subscription.updated",
+      livemode: false,
+      data: { object: {
+        id: "sub_test", customer: "cus_test", status: "active", cancel_at_period_end: false, metadata: {},
+        items: { data: [{ current_period_end: periodEnd }] },
+      } },
+    });
+    expect(res.status).toBe(200);
+    const p = lastPurchaseUpdate();
+    expect(p.next_billing_date).toBe("2027-01-15");
+    expect(p.next_billing_at).toBe("2027-01-16T01:30:00.000Z");
   });
 
   it("customer.subscription.updated with cancel_at_period_end=true keeps status but clears next_billing_date", async () => {
@@ -213,6 +233,7 @@ describe("Stripe webhook — recurring billing sync", () => {
     expect(p.cancel_at_period_end).toBe(true);
     expect(p.stripe_subscription_status).toBe("active");
     expect(p.next_billing_date).toBeNull();
+    expect(p.next_billing_at).toBeNull();
   });
 
   it("customer.subscription.deleted marks cancelled and clears next_billing_date", async () => {
@@ -227,6 +248,7 @@ describe("Stripe webhook — recurring billing sync", () => {
     expect(p.stripe_subscription_status).toBe("canceled");
     expect(p.payment_status).toBe("Cancelled");
     expect(p.next_billing_date).toBeNull();
+    expect(p.next_billing_at).toBeNull();
     expect(p.cancel_at_period_end).toBe(false);
   });
 
@@ -257,7 +279,7 @@ describe("Stripe webhook — recurring billing sync", () => {
   });
 
   it("invoice.payment_succeeded rolls next_billing_date forward and does not duplicate purchases", async () => {
-    const periodEnd = Math.floor(new Date("2027-03-10T00:00:00Z").getTime() / 1000);
+    const periodEnd = Math.floor(new Date("2027-03-10T14:00:00Z").getTime() / 1000);
     const res = await postEvent({
       id: "evt_inv_ok",
       type: "invoice.payment_succeeded",
@@ -272,6 +294,7 @@ describe("Stripe webhook — recurring billing sync", () => {
     expect(res.status).toBe(200);
     const p = lastPurchaseUpdate();
     expect(p.next_billing_date).toBe("2027-03-10");
+    expect(p.next_billing_at).toBe("2027-03-10T14:00:00.000Z");
     expect(p.payment_status).toBe("Active Subscription");
     // No new purchase_records inserts.
     expect(inserts.filter((i) => i.table === "purchase_records")).toHaveLength(0);

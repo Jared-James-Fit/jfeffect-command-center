@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, CalendarClock, AlertTriangle, Send, RefreshCw } from "lucide-react";
 import type { BillingSummary, RenewalLine } from "@/lib/client-billing-summary";
 import { formatMoney } from "@/lib/payment-display";
+import { chargeTimeText, renewalInstant } from "@/lib/stripe-renewal";
 
 const money = (cents: number, currency: string) => formatMoney(cents / 100, currency);
 
@@ -18,6 +19,13 @@ function day(iso: string | null | undefined): string | null {
   if (Number.isNaN(d.getTime())) return null;
   const sameYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleDateString("en-CA", { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
+/** "Nov 6", or "Nov 6, around 7:47 PM" when Stripe gave the renewal's time (the card is charged about an hour after it). */
+function nextWhen(next: { date: string; at: string | null }): string | null {
+  const renewsAt = renewalInstant(next.at);
+  const d = day(next.date);
+  return d && renewsAt ? `${d}, ${chargeTimeText(renewsAt)}` : d;
 }
 
 function range(from: string | null, to: string | null): string | null {
@@ -123,7 +131,7 @@ export function ClientBalanceCard({ summary, currency = "CAD", onRenew, renewing
               <dt className="text-[11px] uppercase tracking-widest text-muted-foreground">Next payment</dt>
               <dd className="font-semibold tabular-nums">
                 {next.cents != null ? money(next.cents, currency) : "—"}
-                <span className="block text-xs font-normal text-muted-foreground">{day(next.date)}</span>
+                <span className="block text-xs font-normal text-muted-foreground">{nextWhen(next)}</span>
               </dd>
             </div>
           )}

@@ -46,6 +46,15 @@ describe("one sale's money, in the dollars the client pays", () => {
     expect(m).toMatchObject({ kind: "subscription", state: "renews", per: "month", priceCents: 13650, priceNote: "$130.00 + tax", leftCents: 0, next: { cents: 13650, date: "2026-11-06" } });
   });
 
+  it("a renewing subscription carries Stripe's exact renewal time, only against the day it came with", () => {
+    const at = "2026-11-06T23:47:33.000Z";
+    expect(saleMoney({ ...monthly, next_billing_at: at }, [pay(13650, 650, "2026-10-06")]).next).toEqual({ cents: 13650, date: "2026-11-06", at });
+    // A day written without its time (an older sync) shows no time.
+    expect(saleMoney({ ...monthly, next_billing_date: "2026-12-06", next_billing_at: at }, [pay(13650, 650, "2026-10-06")]).next?.at).toBeNull();
+    // Cancelling at period end: no charge, so no charge time.
+    expect(saleMoney({ ...monthly, cancel_at_period_end: true, next_billing_at: at }, [pay(13650, 650, "2026-10-06")]).next?.at).toBeNull();
+  });
+
   it("a cancelled monthly subscription has ended, with what came in", () => {
     const vicky = {
       id: "v", offer_name: "Online Coaching — Legacy $130", currency: "CAD", payment_status: "Cancelled", is_recurring: false,

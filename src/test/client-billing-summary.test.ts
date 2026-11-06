@@ -52,7 +52,7 @@ describe("a client's balance in real dollars", () => {
       },
     ]);
     expect(s.waiting).toEqual([]);
-    expect(s.next).toEqual({ cents: 16800, date: "2026-10-30", name: "Personal Training — 16 Sessions / 4 Weeks" });
+    expect(s.next).toEqual({ cents: 16800, date: "2026-10-30", at: null, name: "Personal Training — 16 Sessions / 4 Weeks" });
   });
 
   it("once the renewal is added it's a sale like any other, owed while it's trained on", () => {

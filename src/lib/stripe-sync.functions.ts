@@ -26,6 +26,7 @@ import {
   invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
 import { assertAdminView } from "@/lib/permissions.server";
+import { renewalColumns, sameInstant, subscriptionPeriodEnd } from "@/lib/stripe-renewal";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -312,10 +313,7 @@ export const syncStripePayments = createServerFn({ method: "POST" })
           patch.is_recurring = true;
           patch.stripe_subscription_status = sub?.status ?? null;
           patch.cancel_at_period_end = !!sub?.cancel_at_period_end;
-          patch.next_billing_date =
-            sub?.cancel_at_period_end || !sub?.current_period_end
-              ? null
-              : new Date(sub.current_period_end * 1000).toISOString();
+          Object.assign(patch, renewalColumns(sub?.cancel_at_period_end ? null : subscriptionPeriodEnd(sub)));
         } catch (e: any) {
           entries.push({ ...base, purchase_id: purchase.id, client_id: purchase.client_id, action: "skipped", reason: `Subscription lookup failed: ${e?.message ?? "unknown"}` });
           continue;
@@ -325,7 +323,8 @@ export const syncStripePayments = createServerFn({ method: "POST" })
       const unchanged =
         purchase.payment_status === patch.payment_status &&
         purchase.stripe_checkout_session_id === patch.stripe_checkout_session_id &&
-        String(purchase.next_billing_date ?? "") === String(patch.next_billing_date ?? "");
+        String(purchase.next_billing_date ?? "") === String(patch.next_billing_date ?? "") &&
+        sameInstant(purchase.next_billing_at, patch.next_billing_at);
 
       if (!unchanged) {
         const { error: upErr } = await supabase.from("purchase_records").update(patch).eq("id", purchase.id);
@@ -662,10 +661,9 @@ export const reconcilePurchaseWithStripe = createServerFn({ method: "POST" })
       patch.is_recurring = true;
       patch.stripe_subscription_status = status;
       patch.cancel_at_period_end = !!sub?.cancel_at_period_end;
-      patch.next_billing_date =
-        sub?.cancel_at_period_end || !sub?.current_period_end || !["active", "trialing"].includes(status ?? "")
-          ? null
-          : new Date(sub.current_period_end * 1000).toISOString().split("T")[0];
+      Object.assign(patch, renewalColumns(
+        sub?.cancel_at_period_end || !["active", "trialing"].includes(status ?? "") ? null : subscriptionPeriodEnd(sub),
+      ));
       patch.payment_status =
         status === "active" || status === "trialing" ? "Active Subscription"
         : status === "past_due" || status === "unpaid" ? "Overdue"

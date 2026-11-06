@@ -16,6 +16,7 @@ import {
 } from "@/lib/stripe-invoice-refs";
 import { matchPurchase, type MatchResult } from "@/lib/stripe-purchase-match";
 import { resolveInstallmentPlan } from "@/lib/installment-plan";
+import { renewalColumns, subscriptionPeriodEnd } from "@/lib/stripe-renewal";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -741,10 +742,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   // client/admin surfaces don't re-query Stripe.
                   stripe_subscription_status: obj.status ?? null,
                   cancel_at_period_end: !!obj.cancel_at_period_end,
-                  next_billing_date:
-                    obj.current_period_end && (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
-                      ? new Date(obj.current_period_end * 1000).toISOString().split("T")[0]
+                  // The exact renewal instant and its Winnipeg day (stripe-renewal.ts).
+                  ...renewalColumns(
+                    (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
+                      ? subscriptionPeriodEnd(obj)
                       : null,
+                  ),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -812,10 +815,12 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     : {}),
                   stripe_subscription_status: obj.status ?? null,
                   cancel_at_period_end: !!obj.cancel_at_period_end,
-                  next_billing_date:
-                    obj.current_period_end && (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
-                      ? new Date(obj.current_period_end * 1000).toISOString().split("T")[0]
+                  // The exact renewal instant and its Winnipeg day (stripe-renewal.ts).
+                  ...renewalColumns(
+                    (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
+                      ? subscriptionPeriodEnd(obj)
                       : null,
+                  ),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -864,6 +869,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   stripe_subscription_status: "canceled",
                   cancel_at_period_end: false,
                   next_billing_date: null,
+                  next_billing_at: null,
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -1027,10 +1033,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   stripe_receipt_url: obj.hosted_invoice_url ?? purchase.stripe_receipt_url,
                   ...(invSubId ? { stripe_subscription_id: invSubId } : {}),
                   ...(obj.customer ? { stripe_customer_id: obj.customer } : {}),
-                  // Roll next_billing_date forward from the invoice line period end.
-                  ...(obj.lines?.data?.[0]?.period?.end
-                    ? { next_billing_date: new Date(obj.lines.data[0].period.end * 1000).toISOString().split("T")[0] }
-                    : {}),
+                  // Roll a subscription's renewal forward to the invoice line's
+                  // period end, to the minute (a one-time invoice has no renewal).
+                  ...(invSubId && obj.lines?.data?.[0]?.period?.end ? renewalColumns(obj.lines.data[0].period.end) : {}),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);

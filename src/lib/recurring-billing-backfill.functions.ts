@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { stripeFetch, getStripeKeyForMode, type StripeMode } from "@/lib/stripe.server";
+import { renewalColumns, sameInstant, subscriptionPeriodEnd } from "@/lib/stripe-renewal";
 
 async function assertAdmin(supabase: any, userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -16,11 +17,13 @@ type BackfillEntry = {
   reason?: string;
   before?: {
     next_billing_date: string | null;
+    next_billing_at: string | null;
     stripe_subscription_status: string | null;
     cancel_at_period_end: boolean | null;
   };
   after?: {
     next_billing_date: string | null;
+    next_billing_at: string | null;
     stripe_subscription_status: string | null;
     cancel_at_period_end: boolean | null;
   };
@@ -28,7 +31,7 @@ type BackfillEntry = {
 
 /**
  * Idempotent backfill for recurring purchase_records missing
- * next_billing_date / stripe_subscription_status / cancel_at_period_end.
+ * next_billing_date / next_billing_at / stripe_subscription_status / cancel_at_period_end.
  *
  * Rules:
  *  - Only recurring rows with a stripe_subscription_id are considered.
@@ -50,7 +53,7 @@ export const backfillRecurringBilling = createServerFn({ method: "POST" })
     const { data: rows, error } = await supabase
       .from("purchase_records")
       .select(
-        "id, client_id, stripe_customer_id, stripe_subscription_id, is_recurring, next_billing_date, stripe_subscription_status, cancel_at_period_end",
+        "id, client_id, stripe_customer_id, stripe_subscription_id, is_recurring, next_billing_date, next_billing_at, stripe_subscription_status, cancel_at_period_end",
       )
       .not("stripe_subscription_id", "is", null)
       .eq("is_recurring", true);
@@ -104,27 +107,23 @@ export const backfillRecurringBilling = createServerFn({ method: "POST" })
       const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
       const isActive = status === "active" || status === "trialing";
       const isCancelled = status === "canceled" || status === "incomplete_expired";
-      const nextBillingDate: string | null = (() => {
-        if (isCancelled) return null;
-        if (cancelAtPeriodEnd) return null;
-        if (!isActive) return null;
-        if (!sub.current_period_end) return null;
-        return new Date(sub.current_period_end * 1000).toISOString().split("T")[0];
-      })();
+      const renewal = renewalColumns(isCancelled || cancelAtPeriodEnd || !isActive ? null : subscriptionPeriodEnd(sub));
 
       const before = {
         next_billing_date: row.next_billing_date ?? null,
+        next_billing_at: row.next_billing_at ?? null,
         stripe_subscription_status: row.stripe_subscription_status ?? null,
         cancel_at_period_end: row.cancel_at_period_end ?? null,
       };
       const after = {
-        next_billing_date: nextBillingDate,
+        ...renewal,
         stripe_subscription_status: status,
         cancel_at_period_end: cancelAtPeriodEnd,
       };
 
       const changed =
         before.next_billing_date !== after.next_billing_date ||
+        !sameInstant(before.next_billing_at, after.next_billing_at) ||
         before.stripe_subscription_status !== after.stripe_subscription_status ||
         before.cancel_at_period_end !== after.cancel_at_period_end;
 
@@ -144,7 +143,7 @@ export const backfillRecurringBilling = createServerFn({ method: "POST" })
       const { error: updErr } = await supabase
         .from("purchase_records")
         .update({
-          next_billing_date: nextBillingDate,
+          ...renewal,
           stripe_subscription_status: status,
           cancel_at_period_end: cancelAtPeriodEnd,
           last_payment_update_source: "recurring_backfill",

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/payment-display";
 import type { PaymentRow, SaleMoney } from "@/lib/sale-money";
+import { chargeTimeText, clockTime, renewalInstant } from "@/lib/stripe-renewal";
 import { cn } from "@/lib/utils";
 
 /** "Oct 30" this year, "Oct 30, 2025" otherwise. */
@@ -71,6 +72,9 @@ function nextSentence(m: SaleMoney, money: (c: number) => string, viaStripe: boo
     return `Next payment: ${m.next.cents != null ? money(m.next.cents) : ""}${when ? ` on ${when}` : ""}${which}${viaStripe ? ", charged automatically" : ""}.`;
   }
   if (m.state === "renews") {
+    // Stripe renews at the minute the subscription started and charges about an hour later.
+    const renewsAt = renewalInstant(m.next?.at);
+    if (when && renewsAt) return `Renews ${when} at ${clockTime(renewsAt)}. The card is charged automatically about an hour later, ${chargeTimeText(renewsAt)}.`;
     return when ? `Renews ${when}${viaStripe ? ", charged automatically" : ""}.` : "Renews, but Stripe hasn't sent the next date yet.";
   }
   if (m.state === "past_due") return when ? `Payment failed. Stripe tries again on ${when}.` : "Payment failed. Ask them to update their card.";

@@ -20178,6 +20178,7 @@ export type Database = {
           last_payment_update_at: string | null
           last_payment_update_source: string | null
           location: string | null
+          next_billing_at: string | null
           next_billing_date: string | null
           number_of_payments: number | null
           offer_id: string | null
@@ -20279,6 +20280,7 @@ export type Database = {
           last_payment_update_at?: string | null
           last_payment_update_source?: string | null
           location?: string | null
+          next_billing_at?: string | null
           next_billing_date?: string | null
           number_of_payments?: number | null
           offer_id?: string | null
@@ -20380,6 +20382,7 @@ export type Database = {
           last_payment_update_at?: string | null
           last_payment_update_source?: string | null
           location?: string | null
+          next_billing_at?: string | null
           next_billing_date?: string | null
           number_of_payments?: number | null
           offer_id?: string | null

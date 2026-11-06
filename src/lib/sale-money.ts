@@ -11,6 +11,7 @@
  */
 import { resolvePaymentDisplay, methodLabel, type PurchaseInput } from "@/lib/payment-display";
 import { saleOwedCents } from "@/lib/client-owed";
+import { renewalTimeFor } from "@/lib/stripe-renewal";
 
 export type MoneySale = PurchaseInput & {
   id: string;
@@ -18,6 +19,8 @@ export type MoneySale = PurchaseInput & {
   created_at?: string | null;
   sessions_purchased?: number | null;
   payment_structure?: string | null;
+  /** Stripe's exact renewal instant for `next_billing_date` (stripe-renewal.ts). */
+  next_billing_at?: string | null;
 };
 
 export type MoneyLedgerRow = {
@@ -72,8 +75,12 @@ export type SaleMoney = {
   leftCents: number;
   /** A plan's progress. */
   plan: { made: number; total: number } | null;
-  /** The next charge, when one is scheduled. */
-  next: { cents: number | null; date: string | null } | null;
+  /**
+   * The next charge, when one is scheduled. `at`: the exact renewal instant
+   * when Stripe gave one (a renewing subscription only); the card is charged
+   * about an hour after it (`renewalChargeAt`).
+   */
+  next: { cents: number | null; date: string | null; at: string | null } | null;
 };
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -163,8 +170,10 @@ export function saleMoney(
       : r.kind === "retry" || r.kind === "past_due" ? "past_due"
       : paidGross <= 0 && WAITING.has(status) ? "waiting"
       : "renews";
-    const next = state === "renews" || state === "past_due" ? { cents: priceCents, date: r.date }
-      : state === "cancelling" ? { cents: null, date: r.date }
+    // The time belongs to the day it was written with; any other day is shown without one.
+    const at = state === "renews" ? renewalTimeFor(r.date, sale.next_billing_at) : null;
+    const next = state === "renews" || state === "past_due" ? { cents: priceCents, date: r.date, at }
+      : state === "cancelling" ? { cents: null, date: r.date, at: null }
       : null;
     return { ...base, per, state, priceCents, priceNote, next, leftCents: state === "waiting" ? priceCents : 0 };
   }
@@ -192,7 +201,7 @@ export function saleMoney(
     : state === "waiting" ? priceCents
     : 0;
   const next = plan && (state === "left" || state === "past_due")
-    ? { cents: withTax(Math.round(plan.installmentAmount * 100), rate), date: sale.next_billing_date ?? null }
+    ? { cents: withTax(Math.round(plan.installmentAmount * 100), rate), date: sale.next_billing_date ?? null, at: null }
     : null;
 
   return {

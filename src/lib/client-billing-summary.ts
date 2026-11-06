@@ -115,7 +115,7 @@ export type BillingSummary = {
   /** Payment requests nothing has been paid on yet (not in owedCents). */
   waiting: WaitingLine[];
   /** The next scheduled charge across every sale. */
-  next: { cents: number | null; date: string; name: string } | null;
+  next: { cents: number | null; date: string; at: string | null; name: string } | null;
   /** True when every amount includes tax; false = before tax (rate unknown). */
   taxIncluded: boolean;
   /** Paid so far: what was charged (tax included), less refunds. */
@@ -162,7 +162,7 @@ export function buildBillingSummary(input: {
     const m = saleMoney(s, input.ledger.filter((l) => l.purchase_id === s.id), rate, { sessionsUsed: usedOn.get(s.id) });
     const name = s.offer_name ?? "Sale";
     if (m.next?.date && (m.state === "renews" || m.state === "left" || m.state === "past_due")) {
-      if (!next || m.next.date < next.date) next = { cents: m.next.cents, date: m.next.date, name };
+      if (!next || m.next.date < next.date) next = { cents: m.next.cents, date: m.next.date, at: m.next.at, name };
     }
     if (m.state === "waiting") {
       waiting.push({ kind: "waiting", id: s.id, name, cents: m.leftCents, since: (s.purchased_at ?? s.created_at ?? null)?.slice(0, 10) ?? null });
