@@ -32,6 +32,8 @@ import {
   type DailyLight,
   type DailyStyle,
   type DailyTheme,
+  type CoachPostDay,
+  pictureDaysLabel,
 } from "@/lib/daily-visuals";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +102,8 @@ type Overview = {
   maker: string | null;
   refs?: Partial<Record<DailyArt, string>>;
   tests?: Test[];
+  /** The coming 7 days and what else goes out on each (null = the picture's day). */
+  week?: CoachPostDay[];
   days: Day[];
 };
 type Version = {
@@ -198,7 +202,10 @@ export function DailyPicturesCard() {
     },
     onSuccess: (on) => {
       void qc.invalidateQueries({ queryKey: KEY });
-      toast.success(on ? "Daily pictures are on" : "Daily pictures are off", { description: on ? "Every morning at 7." : undefined });
+      const days = pictureDaysLabel(data?.week);
+      toast.success(on ? "Daily pictures are on" : "Daily pictures are off", {
+        description: on ? (days ? `${days} at 7, the days nothing else goes out.` : "At 7 on days nothing else goes out.") : undefined,
+      });
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't change that"),
   });
@@ -224,6 +231,7 @@ export function DailyPicturesCard() {
   const learned = parse<{ text?: string }>(data.learned)?.text ?? null;
   const maker = parse<{ blocked?: string; at?: string }>(data.maker);
   const open = data.days.find((d) => d.id === openId) ?? null;
+  const pictureDays = pictureDaysLabel(data.week);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card" data-daily-pictures>
@@ -231,7 +239,9 @@ export function DailyPicturesCard() {
         <ImageIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="text-[16px] font-semibold">Daily pictures</div>
-          <div className="truncate text-[12px] text-muted-foreground">Every morning at 7 · each one checked before it goes out</div>
+          <div className="truncate text-[12px] text-muted-foreground" data-daily-picture-days>
+            {pictureDays ? `${pictureDays} at 7` : "No picture days this week"} · one coach post a day
+          </div>
         </div>
         <Switch checked={data.on} disabled={setOn.isPending} onCheckedChange={(v) => setOn.mutate(v)} aria-label="Daily pictures on" />
       </header>
