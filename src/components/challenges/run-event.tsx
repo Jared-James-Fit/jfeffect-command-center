@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,12 +49,14 @@ import {
 import { RegisterForm, type RegisterDone } from "@/components/challenges/register-form";
 import { PhotoCapture } from "@/components/challenges/photo-capture";
 import {
+  clearOnPlatform,
   correctAttempt,
   errorText,
   invalidateChallenge,
   photoTicket,
   recordAttempt,
   resultUrl,
+  setOnPlatform,
   setStatus,
   updateEntry,
   useBoard,
@@ -463,6 +465,44 @@ function newKey() {
     : `${Date.now()}-${Math.random()}`;
 }
 
+/**
+ * Puts the athlete on the big screen while they lift and sends the judge's
+ * count as it changes (a quarter-second after the last tap). Closing the
+ * sheet or saving takes them off; only this athlete, never another judge's.
+ */
+function usePlatform(challengeId: string, entryId: string) {
+  const up = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quiet = () => undefined;
+  const start = useCallback(
+    (value: number | null) => {
+      up.current = true;
+      if (timer.current) clearTimeout(timer.current);
+      void setOnPlatform(challengeId, entryId, value).catch(quiet);
+    },
+    [challengeId, entryId],
+  );
+  const count = useCallback(
+    (value: number) => {
+      if (!up.current) return;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(
+        () => void setOnPlatform(challengeId, entryId, value).catch(quiet),
+        250,
+      );
+    },
+    [challengeId, entryId],
+  );
+  const clear = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (!up.current) return;
+    up.current = false;
+    void clearOnPlatform(challengeId, entryId).catch(quiet);
+  }, [challengeId, entryId]);
+  useEffect(() => () => clear(), [clear]);
+  return { start, count, clear };
+}
+
 function JudgeSheet({
   c,
   entry,
@@ -495,6 +535,9 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
   const [reps, setReps] = useState(0);
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
+  // ready → counting (or entering) → confirm → saved: a score is never one stray tap away
+  const [phase, setPhase] = useState<"ready" | "counting" | "confirm">("ready");
+  const [pending, setPending] = useState<{ value: number | null; valid: boolean } | null>(null);
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "saving" }
@@ -507,8 +550,21 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
   const [dq, setDq] = useState(false);
   const division = c.divisions.find((d) => d.id === e.division_id);
   const wantsWeighIn = c.tiebreak === "lighter" || c.relative;
+  const platform = usePlatform(c.id, e.id);
 
-  const save = async (valid: boolean) => {
+  const start = () => {
+    setReps(0);
+    setText("");
+    setPending(null);
+    setState({ kind: "idle" });
+    setPhase("counting");
+    platform.start(c.measure === "reps" ? 0 : null);
+  };
+  const bump = (n: number) => {
+    setReps(n);
+    platform.count(n);
+  };
+  const review = (valid: boolean) => {
     let value: number | null;
     if (c.measure === "reps") value = valid ? reps : null;
     else {
@@ -521,17 +577,27 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
         return;
       }
     }
+    setState({ kind: "idle" });
+    setPending({ value, valid });
+    setPhase("confirm");
+  };
+
+  const save = async () => {
+    if (!pending) return;
     setState({ kind: "saving" });
     try {
       const r = await recordAttempt({
         entryId: e.id,
-        value,
-        valid,
+        value: pending.value,
+        valid: pending.valid,
         clientKey: key.current,
         note: note.trim() || null,
       });
       key.current = newKey();
+      platform.clear();
       setState({ kind: "saved", r });
+      setPhase("ready");
+      setPending(null);
       setReps(0);
       setText("");
       setNote("");
@@ -567,7 +633,7 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
       </SheetHeader>
 
       {state.kind === "saved" ? (
-        <div className="mt-5 rounded-2xl bg-success/10 p-5 text-center">
+        <div className="mt-5 rounded-2xl bg-success/10 p-5 text-center" role="status">
           <CheckCircle2 className="mx-auto h-8 w-8 text-success" />
           <p className="mt-2 text-lg font-semibold">
             {state.r.valid ? formatScore(state.r.value, c) : "No valid score"} saved
@@ -584,18 +650,77 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
             <Button
               variant="ghost"
               className="mt-1 h-10 w-full"
-              onClick={() => setState({ kind: "idle" })}
+              onClick={() => {
+                setState({ kind: "idle" });
+                start();
+              }}
             >
-              Record attempt {verified.length + 1}
+              Start attempt {verified.length + 1}
             </Button>
           ) : null}
         </div>
+      ) : canScore && phase === "ready" ? (
+        <div className="mt-5">
+          <Button className="h-16 w-full text-lg" onClick={start}>
+            Start{" "}
+            {c.attempts_allowed > 1
+              ? `attempt ${verified.length + 1} of ${c.attempts_allowed}`
+              : "their set"}
+          </Button>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Puts {e.name} on the big screen while you count.
+          </p>
+        </div>
+      ) : canScore && phase === "confirm" && pending ? (
+        <div className="mt-5 rounded-2xl border border-border p-5 text-center">
+          <p className="text-sm text-muted-foreground">
+            {c.attempts_allowed > 1 ? `Attempt ${verified.length + 1}` : "Their set"} for {e.name} (#
+            {e.bib})
+          </p>
+          <p className="mt-2 font-display text-5xl tabular-nums leading-none">
+            {pending.valid ? formatScore(pending.value, c) : "No valid score"}
+          </p>
+          {state.kind === "error" ? (
+            <div
+              className="mt-4 rounded-xl bg-destructive/10 px-3 py-2 text-left text-sm text-destructive"
+              role="alert"
+            >
+              Not saved: {state.msg}
+              <span className="block text-xs">Tap Save again to retry. It can't be counted twice.</span>
+            </div>
+          ) : null}
+          <Button
+            className="mt-5 h-14 w-full text-lg"
+            disabled={state.kind === "saving"}
+            onClick={() => void save()}
+          >
+            {state.kind === "saving" ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Check className="mr-2 h-5 w-5" />
+            )}
+            Save score
+          </Button>
+          <Button
+            variant="outline"
+            className="mt-2 h-12 w-full"
+            disabled={state.kind === "saving"}
+            onClick={() => {
+              setState({ kind: "idle" });
+              setPhase("counting");
+            }}
+          >
+            Change it
+          </Button>
+        </div>
       ) : canScore ? (
         <div className="mt-5">
-          <p className="mb-2 text-sm font-medium">
+          <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+            <span className="jf-live-dot h-2 w-2 rounded-full bg-primary" />
             {c.attempts_allowed > 1
               ? `Attempt ${verified.length + 1} of ${c.attempts_allowed}`
               : "Their set"}
+            <span className="font-normal text-muted-foreground">· on the big screen</span>
           </p>
           {c.measure === "reps" ? (
             <div>
@@ -604,7 +729,7 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
                   type="button"
                   variant="outline"
                   className="h-20 w-20 rounded-2xl"
-                  onClick={() => setReps((r) => Math.max(0, r - 1))}
+                  onClick={() => bump(Math.max(0, reps - 1))}
                   aria-label="One less rep"
                 >
                   <Minus className="h-8 w-8" />
@@ -612,9 +737,7 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
                 <input
                   value={reps}
                   onChange={(ev) =>
-                    setReps(
-                      Math.max(0, Math.min(9999, Number(ev.target.value.replace(/\D/g, "")) || 0)),
-                    )
+                    bump(Math.max(0, Math.min(9999, Number(ev.target.value.replace(/\D/g, "")) || 0)))
                   }
                   inputMode="numeric"
                   // inline: the phone-wide 16px text-box rule would shrink a class size
@@ -625,7 +748,7 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
                 <Button
                   type="button"
                   className="h-20 w-20 rounded-2xl"
-                  onClick={() => setReps((r) => r + 1)}
+                  onClick={() => bump(reps + 1)}
                   aria-label="One more valid rep"
                 >
                   <Plus className="h-8 w-8" />
@@ -634,23 +757,13 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
               <p className="mt-1 text-center text-xs text-muted-foreground">
                 Tap + for every rep that counts.
               </p>
-              <Button
-                className="mt-4 h-14 w-full text-lg"
-                disabled={state.kind === "saving"}
-                onClick={() => void save(true)}
-              >
-                {state.kind === "saving" ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <Check className="mr-2 h-5 w-5" />
-                )}
-                Save {reps} {reps === 1 ? "rep" : "reps"}
+              <Button className="mt-4 h-14 w-full text-lg" onClick={() => review(true)}>
+                Done · {reps} {reps === 1 ? "rep" : "reps"}
               </Button>
               <Button
                 variant="ghost"
                 className="mt-1 h-11 w-full text-muted-foreground"
-                disabled={state.kind === "saving"}
-                onClick={() => void save(false)}
+                onClick={() => review(false)}
               >
                 No valid set (doesn't count)
               </Button>
@@ -673,26 +786,13 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
                   : `In ${c.unit}`}
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  className="h-14 text-base"
-                  disabled={state.kind === "saving"}
-                  onClick={() => void save(false)}
-                >
+                <Button variant="outline" className="h-14 text-base" onClick={() => review(false)}>
                   <Ban className="mr-2 h-4 w-4" />{" "}
                   {c.measure === "weight" ? "No lift" : "Doesn't count"}
                 </Button>
-                <Button
-                  className="h-14 text-base"
-                  disabled={state.kind === "saving"}
-                  onClick={() => void save(true)}
-                >
-                  {state.kind === "saving" ? (
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  ) : (
-                    <Check className="mr-2 h-5 w-5" />
-                  )}
-                  {c.measure === "weight" ? "Good lift" : "Save"}
+                <Button className="h-14 text-base" onClick={() => review(true)}>
+                  <Check className="mr-2 h-5 w-5" />
+                  {c.measure === "weight" ? "Good lift" : "Done"}
                 </Button>
               </div>
             </div>
@@ -705,16 +805,21 @@ function JudgePanel({ c, e, onClose }: { c: ChallengePublic; e: StaffEntry; onCl
             maxLength={300}
           />
           {state.kind === "error" ? (
-            <div
-              className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
-              Not saved: {state.msg}
-              <span className="block text-xs">
-                Tap save again to retry. It can't be counted twice.
-              </span>
-            </div>
+            <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+              {state.msg}
+            </p>
           ) : null}
+          <Button
+            variant="ghost"
+            className="mt-2 h-10 w-full text-muted-foreground"
+            onClick={() => {
+              platform.clear();
+              setPhase("ready");
+              setState({ kind: "idle" });
+            }}
+          >
+            Cancel this attempt
+          </Button>
         </div>
       ) : (
         <p className="mt-5 rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground">

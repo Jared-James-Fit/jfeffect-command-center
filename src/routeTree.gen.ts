@@ -169,7 +169,6 @@ import { Route as AuthenticatedAdminAgreementsSignedRouteImport } from './routes
 import { Route as AuthenticatedAdminBlocksBlockIdRouteImport } from './routes/_authenticated/admin/blocks.$blockId'
 import { Route as AuthenticatedAdminBroadcastsBroadcastIdRouteImport } from './routes/_authenticated/admin/broadcasts.$broadcastId'
 import { Route as AuthenticatedAdminChallengesIndexRouteImport } from './routes/_authenticated/admin/challenges.index'
-import { Route as AuthenticatedAdminChallengesIdRouteImport } from './routes/_authenticated/admin/challenges.$id'
 import { Route as AuthenticatedAdminChallengesNewRouteImport } from './routes/_authenticated/admin/challenges.new'
 import { Route as AuthenticatedAdminClientProgramsClientIdRouteImport } from './routes/_authenticated/admin/client-programs.$clientId_'
 import { Route as AuthenticatedAdminClientsIndexRouteImport } from './routes/_authenticated/admin/clients.index'
@@ -273,6 +272,8 @@ import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/em
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
+import { Route as AuthenticatedAdminChallengesIdIndexRouteImport } from './routes/_authenticated/admin/challenges.$id.index'
+import { Route as AuthenticatedAdminChallengesIdEditRouteImport } from './routes/_authenticated/admin/challenges.$id.edit'
 import { Route as AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.analytics'
 import { Route as AuthenticatedAdminClientProgramsClientIdHistoryRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.history'
 import { Route as AuthenticatedAdminClientProgramsClientIdIntelligenceRouteImport } from './routes/_authenticated/admin/client-programs.$clientId.intelligence'
@@ -1184,12 +1185,6 @@ const AuthenticatedAdminChallengesIndexRoute =
     path: '/challenges/',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
-const AuthenticatedAdminChallengesIdRoute =
-  AuthenticatedAdminChallengesIdRouteImport.update({
-    id: '/challenges/$id',
-    path: '/challenges/$id',
-    getParentRoute: () => AuthenticatedAdminRouteRoute,
-  } as any)
 const AuthenticatedAdminChallengesNewRoute =
   AuthenticatedAdminChallengesNewRouteImport.update({
     id: '/challenges/new',
@@ -1804,6 +1799,18 @@ const LovableEmailTransactionalSendRoute =
     path: '/lovable/email/transactional/send',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedAdminChallengesIdIndexRoute =
+  AuthenticatedAdminChallengesIdIndexRouteImport.update({
+    id: '/challenges/$id/',
+    path: '/challenges/$id/',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
+const AuthenticatedAdminChallengesIdEditRoute =
+  AuthenticatedAdminChallengesIdEditRouteImport.update({
+    id: '/challenges/$id/edit',
+    path: '/challenges/$id/edit',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminClientProgramsClientIdAnalyticsRoute =
   AuthenticatedAdminClientProgramsClientIdAnalyticsRouteImport.update({
     id: '/client-programs/$clientId/analytics',
@@ -2042,7 +2049,6 @@ export interface FileRoutesByFullPath {
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
-  '/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdRoute
   '/admin/challenges/new': typeof AuthenticatedAdminChallengesNewRoute
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRouteWithChildren
@@ -2149,6 +2155,7 @@ export interface FileRoutesByFullPath {
   '/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
+  '/admin/challenges/$id/edit': typeof AuthenticatedAdminChallengesIdEditRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
@@ -2161,6 +2168,7 @@ export interface FileRoutesByFullPath {
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
+  '/admin/challenges/$id/': typeof AuthenticatedAdminChallengesIdIndexRoute
   '/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -2316,7 +2324,6 @@ export interface FileRoutesByTo {
   '/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
-  '/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdRoute
   '/admin/challenges/new': typeof AuthenticatedAdminChallengesNewRoute
   '/admin/client-programs/$clientId': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/admin/clients/$id': typeof AuthenticatedAdminClientsIdRouteWithChildren
@@ -2423,6 +2430,7 @@ export interface FileRoutesByTo {
   '/portal/recipes': typeof AuthenticatedPortalRecipesIndexRoute
   '/portal/resources': typeof AuthenticatedPortalResourcesIndexRoute
   '/portal/workouts': typeof AuthenticatedPortalWorkoutsIndexRoute
+  '/admin/challenges/$id/edit': typeof AuthenticatedAdminChallengesIdEditRoute
   '/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
@@ -2435,6 +2443,7 @@ export interface FileRoutesByTo {
   '/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
+  '/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdIndexRoute
   '/admin/crm/contacts': typeof AuthenticatedAdminCrmContactsIndexRoute
 }
 export interface FileRoutesById {
@@ -2596,7 +2605,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/agreements/signed': typeof AuthenticatedAdminAgreementsSignedRoute
   '/_authenticated/admin/blocks/$blockId': typeof AuthenticatedAdminBlocksBlockIdRoute
   '/_authenticated/admin/broadcasts/$broadcastId': typeof AuthenticatedAdminBroadcastsBroadcastIdRoute
-  '/_authenticated/admin/challenges/$id': typeof AuthenticatedAdminChallengesIdRoute
   '/_authenticated/admin/challenges/new': typeof AuthenticatedAdminChallengesNewRoute
   '/_authenticated/admin/client-programs/$clientId_': typeof AuthenticatedAdminClientProgramsClientIdRoute
   '/_authenticated/admin/clients/$id': typeof AuthenticatedAdminClientsIdRouteWithChildren
@@ -2703,6 +2711,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/recipes/': typeof AuthenticatedPortalRecipesIndexRoute
   '/_authenticated/portal/resources/': typeof AuthenticatedPortalResourcesIndexRoute
   '/_authenticated/portal/workouts/': typeof AuthenticatedPortalWorkoutsIndexRoute
+  '/_authenticated/admin/challenges/$id/edit': typeof AuthenticatedAdminChallengesIdEditRoute
   '/_authenticated/admin/client-programs/$clientId/analytics': typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   '/_authenticated/admin/client-programs/$clientId/history': typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   '/_authenticated/admin/client-programs/$clientId/intelligence': typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
@@ -2715,6 +2724,7 @@ export interface FileRoutesById {
   '/_authenticated/m/forms/$assignmentId/complete': typeof AuthenticatedMFormsAssignmentIdCompleteRoute
   '/api/public/google/oauth/callback': typeof ApiPublicGoogleOauthCallbackRoute
   '/api/public/wearables/oura/callback': typeof ApiPublicWearablesOuraCallbackRoute
+  '/_authenticated/admin/challenges/$id/': typeof AuthenticatedAdminChallengesIdIndexRoute
   '/_authenticated/admin/crm/contacts/': typeof AuthenticatedAdminCrmContactsIndexRoute
 }
 export interface FileRouteTypes {
@@ -2876,7 +2886,6 @@ export interface FileRouteTypes {
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
-    | '/admin/challenges/$id'
     | '/admin/challenges/new'
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
@@ -2983,6 +2992,7 @@ export interface FileRouteTypes {
     | '/portal/recipes/'
     | '/portal/resources/'
     | '/portal/workouts/'
+    | '/admin/challenges/$id/edit'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/client-programs/$clientId/intelligence'
@@ -2995,6 +3005,7 @@ export interface FileRouteTypes {
     | '/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
+    | '/admin/challenges/$id/'
     | '/admin/crm/contacts/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -3150,7 +3161,6 @@ export interface FileRouteTypes {
     | '/admin/agreements/signed'
     | '/admin/blocks/$blockId'
     | '/admin/broadcasts/$broadcastId'
-    | '/admin/challenges/$id'
     | '/admin/challenges/new'
     | '/admin/client-programs/$clientId'
     | '/admin/clients/$id'
@@ -3257,6 +3267,7 @@ export interface FileRouteTypes {
     | '/portal/recipes'
     | '/portal/resources'
     | '/portal/workouts'
+    | '/admin/challenges/$id/edit'
     | '/admin/client-programs/$clientId/analytics'
     | '/admin/client-programs/$clientId/history'
     | '/admin/client-programs/$clientId/intelligence'
@@ -3269,6 +3280,7 @@ export interface FileRouteTypes {
     | '/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
+    | '/admin/challenges/$id'
     | '/admin/crm/contacts'
   id:
     | '__root__'
@@ -3429,7 +3441,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/agreements/signed'
     | '/_authenticated/admin/blocks/$blockId'
     | '/_authenticated/admin/broadcasts/$broadcastId'
-    | '/_authenticated/admin/challenges/$id'
     | '/_authenticated/admin/challenges/new'
     | '/_authenticated/admin/client-programs/$clientId_'
     | '/_authenticated/admin/clients/$id'
@@ -3536,6 +3547,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/recipes/'
     | '/_authenticated/portal/resources/'
     | '/_authenticated/portal/workouts/'
+    | '/_authenticated/admin/challenges/$id/edit'
     | '/_authenticated/admin/client-programs/$clientId/analytics'
     | '/_authenticated/admin/client-programs/$clientId/history'
     | '/_authenticated/admin/client-programs/$clientId/intelligence'
@@ -3548,6 +3560,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/forms/$assignmentId/complete'
     | '/api/public/google/oauth/callback'
     | '/api/public/wearables/oura/callback'
+    | '/_authenticated/admin/challenges/$id/'
     | '/_authenticated/admin/crm/contacts/'
   fileRoutesById: FileRoutesById
 }
@@ -4755,13 +4768,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminChallengesIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
-    '/_authenticated/admin/challenges/$id': {
-      id: '/_authenticated/admin/challenges/$id'
-      path: '/challenges/$id'
-      fullPath: '/admin/challenges/$id'
-      preLoaderRoute: typeof AuthenticatedAdminChallengesIdRouteImport
-      parentRoute: typeof AuthenticatedAdminRouteRoute
-    }
     '/_authenticated/admin/challenges/new': {
       id: '/_authenticated/admin/challenges/new'
       path: '/challenges/new'
@@ -5483,6 +5489,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/challenges/$id/': {
+      id: '/_authenticated/admin/challenges/$id/'
+      path: '/challenges/$id'
+      fullPath: '/admin/challenges/$id/'
+      preLoaderRoute: typeof AuthenticatedAdminChallengesIdIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/challenges/$id/edit': {
+      id: '/_authenticated/admin/challenges/$id/edit'
+      path: '/challenges/$id/edit'
+      fullPath: '/admin/challenges/$id/edit'
+      preLoaderRoute: typeof AuthenticatedAdminChallengesIdEditRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/client-programs/$clientId/analytics': {
       id: '/_authenticated/admin/client-programs/$clientId/analytics'
       path: '/client-programs/$clientId/analytics'
@@ -5814,7 +5834,6 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAgreementsNativeNewRoute: typeof AuthenticatedAdminAgreementsNativeNewRoute
   AuthenticatedAdminAgreementsSignedRoute: typeof AuthenticatedAdminAgreementsSignedRoute
   AuthenticatedAdminBlocksBlockIdRoute: typeof AuthenticatedAdminBlocksBlockIdRoute
-  AuthenticatedAdminChallengesIdRoute: typeof AuthenticatedAdminChallengesIdRoute
   AuthenticatedAdminChallengesNewRoute: typeof AuthenticatedAdminChallengesNewRoute
   AuthenticatedAdminClientProgramsClientIdRoute: typeof AuthenticatedAdminClientProgramsClientIdRoute
   AuthenticatedAdminClientsIdRoute: typeof AuthenticatedAdminClientsIdRouteWithChildren
@@ -5846,12 +5865,14 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminMembersIndexRoute: typeof AuthenticatedAdminMembersIndexRoute
   AuthenticatedAdminProductsHistoryIndexRoute: typeof AuthenticatedAdminProductsHistoryIndexRoute
   AuthenticatedAdminSalesIndexRoute: typeof AuthenticatedAdminSalesIndexRoute
+  AuthenticatedAdminChallengesIdEditRoute: typeof AuthenticatedAdminChallengesIdEditRoute
   AuthenticatedAdminClientProgramsClientIdAnalyticsRoute: typeof AuthenticatedAdminClientProgramsClientIdAnalyticsRoute
   AuthenticatedAdminClientProgramsClientIdHistoryRoute: typeof AuthenticatedAdminClientProgramsClientIdHistoryRoute
   AuthenticatedAdminClientProgramsClientIdIntelligenceRoute: typeof AuthenticatedAdminClientProgramsClientIdIntelligenceRoute
   AuthenticatedAdminClientProgramsClientIdNextProgramRoute: typeof AuthenticatedAdminClientProgramsClientIdNextProgramRoute
   AuthenticatedAdminCrmContactsIdRoute: typeof AuthenticatedAdminCrmContactsIdRoute
   AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute: typeof AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute
+  AuthenticatedAdminChallengesIdIndexRoute: typeof AuthenticatedAdminChallengesIdIndexRoute
   AuthenticatedAdminCrmContactsIndexRoute: typeof AuthenticatedAdminCrmContactsIndexRoute
 }
 
@@ -5959,7 +5980,6 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminAgreementsSignedRoute:
       AuthenticatedAdminAgreementsSignedRoute,
     AuthenticatedAdminBlocksBlockIdRoute: AuthenticatedAdminBlocksBlockIdRoute,
-    AuthenticatedAdminChallengesIdRoute: AuthenticatedAdminChallengesIdRoute,
     AuthenticatedAdminChallengesNewRoute: AuthenticatedAdminChallengesNewRoute,
     AuthenticatedAdminClientProgramsClientIdRoute:
       AuthenticatedAdminClientProgramsClientIdRoute,
@@ -6008,6 +6028,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminProductsHistoryIndexRoute:
       AuthenticatedAdminProductsHistoryIndexRoute,
     AuthenticatedAdminSalesIndexRoute: AuthenticatedAdminSalesIndexRoute,
+    AuthenticatedAdminChallengesIdEditRoute:
+      AuthenticatedAdminChallengesIdEditRoute,
     AuthenticatedAdminClientProgramsClientIdAnalyticsRoute:
       AuthenticatedAdminClientProgramsClientIdAnalyticsRoute,
     AuthenticatedAdminClientProgramsClientIdHistoryRoute:
@@ -6019,6 +6041,8 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
     AuthenticatedAdminCrmContactsIdRoute: AuthenticatedAdminCrmContactsIdRoute,
     AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute:
       AuthenticatedAdminSettingsNotificationsCoachingApplicationsRoute,
+    AuthenticatedAdminChallengesIdIndexRoute:
+      AuthenticatedAdminChallengesIdIndexRoute,
     AuthenticatedAdminCrmContactsIndexRoute:
       AuthenticatedAdminCrmContactsIndexRoute,
   }

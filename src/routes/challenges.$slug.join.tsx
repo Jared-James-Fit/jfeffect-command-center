@@ -114,7 +114,12 @@ function JoinPage() {
     );
   }
 
-  const open = selfSignupOpen(c);
+  // the database's answer includes the registration window; older data falls back to the rules here
+  const open = c.registration_open ?? selfSignupOpen(c);
+  const notYet =
+    !!c.registration_opens_at && mounted && new Date(c.registration_opens_at).getTime() > Date.now();
+  const closed =
+    !!c.registration_closes_at && mounted && new Date(c.registration_closes_at).getTime() <= Date.now();
   return (
     <ChallengeShell back={{ to: `/challenges/${slug}`, label: "Back" }}>
       <p className="text-sm font-medium text-muted-foreground">Enter</p>
@@ -128,7 +133,11 @@ function JoinPage() {
         <div className="mt-8 rounded-2xl border border-border p-6 text-center text-sm">
           {c.max_participants != null && c.registered >= c.max_participants
             ? "This challenge is full."
-            : "Sign-ups aren't open right now. Find event staff to register at the table."}
+            : notYet
+              ? `Registration opens ${eventWhen(c.registration_opens_at!, c.timezone) ?? "soon"}.`
+              : closed
+                ? "Registration has closed. Find event staff if you're at the venue."
+                : "Sign-ups aren't open right now. Find event staff to register at the table."}
           <Button asChild variant="outline" className="mt-4 h-11 w-full">
             <Link to="/challenges/$slug" params={{ slug }}>
               Back to the challenge
