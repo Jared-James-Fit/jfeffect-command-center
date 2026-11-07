@@ -12,7 +12,13 @@ import {
   CAPTION_FIX_PROMPT,
   NOT_HIS_VOICE,
   VOICE_EXAMPLE,
+  VOICE_EXAMPLES,
   VOICE_GUIDE,
+  DAILY_MIN_WORDS,
+  REVIEW_PROMPT,
+  contrastCount,
+  formatName,
+  topicName,
   namedPeople,
   motifRepeats,
   DAILY_STYLES,
@@ -69,9 +75,9 @@ const stat = (o: Partial<VisualStat>): VisualStat => ({
   theme: "courage",
   audience: "men",
   style: "medium_candid",
-  format: "observation",
-  topic: "confidence",
-  line: "start before youre ready",
+  format: "coach_note",
+  topic: "bar_path",
+  line: "Film your top set and look at the first inch.",
   viewers: 6,
   likers: 1,
   commenters: 0,
@@ -89,19 +95,29 @@ const review = (o: Partial<Review> = {}): Review => ({
   description: "",
   text_seen: "",
   defects: [],
-  scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4, uplift: 5 },
+  scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4, uplift: 5, on_topic: 5 },
   fix_image: "",
   fix_caption: "",
   ...o,
 });
 
+/** A coaching point the way the coach writes one: the point, why, what to do. */
+const good =
+  "Most missed squats aren't missed at the bottom. They're missed in the first few inches out of the hole, when the hips rise faster than the chest.\n\nWatch your last rep on video. If the bar drifts forward as your hips shoot up, the fix is usually a harder brace, not more weight.\n\nFilm your top set this week and look at that first inch.";
+const question =
+  "What's the one cue that fixed your bench? Not the one you read about, the one that actually changed how the bar moves for you.\n\nI'm asking because the best cues are usually simple and personal, and somebody here is probably stuck on the exact thing yours fixed.";
+
 describe("the week: a mood a day, women, men and everyone in turn", () => {
-  it("each weekday is a light mood (the database's keys), Monday a fresh start … Sunday rest & reset", () => {
+  it("each weekday is a training mood (the database's keys), Monday a new week … Sunday rest & reset", () => {
     expect([1, 2, 3, 4, 5, 6, 7].map(themeForDow)).toEqual(["courage", "patience", "your_circle", "self_reflection", "encouragement", "self_love", "emotional"]);
     expect(first).toContain("(ARRAY['courage', 'patience', 'your_circle', 'self_reflection', 'encouragement', 'self_love', 'emotional'])[extract(isodow FROM _day)::int]");
-    expect(DAILY_THEME_KEYS.map((k) => DAILY_THEMES[k].name)).toEqual(["Fresh start", "The long game", "Your people", "How far you've come", "Celebrate", "Enjoy it", "Rest & reset"]);
-    // a mood only nudges the pillar: it never decides it
-    for (const k of DAILY_THEME_KEYS) for (const v of Object.values(DAILY_THEMES[k].lean)) expect(v, k).toBeLessThanOrEqual(0.4);
+    expect(DAILY_THEME_KEYS.map((k) => DAILY_THEMES[k].name)).toEqual(["New week", "The long game", "Midweek", "Read your log", "Week in review", "Heavy day", "Rest & reset"]);
+    // a mood only nudges the category: it never decides it, and it's always a real one
+    for (const k of DAILY_THEME_KEYS)
+      for (const [p, v] of Object.entries(DAILY_THEMES[k].lean)) {
+        expect(v, k).toBeLessThanOrEqual(0.4);
+        expect(DAILY_PILLAR_KEYS, k).toContain(p);
+      }
   });
 
   it("speaks to women, men, then everyone, so each weekday changes every week (the same in SQL)", () => {
@@ -111,19 +127,26 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
     expect(sql).toContain("SELECT (ARRAY['women', 'men', 'everyone'])[((((_day - date '2026-01-05') % 3) + 3) % 3) + 1]");
   });
 
-  it("twelve shots and five natural caption forms, each as long as its idea needs and never longer", () => {
+  it("twelve shots and five coaching forms, about 40 to 100 words, never past the database's 600 characters", () => {
     // one look (a hand-drawn 2D film frame), the variety in the shot and the light
     expect(DAILY_STYLE_KEYS).toHaveLength(12);
     expect(Object.keys(DAILY_LIGHTS)).toHaveLength(9);
     for (const k of DAILY_STYLE_KEYS) expect(vivid, k).toContain(`'${k}'`);
-    // the scripted shapes are retired: no list posts, "me: / my legs:" bits or scenes narrated to "you"
-    expect(Object.keys(DAILY_FORMATS)).toEqual(["one_liner", "quick_take", "tip", "funny", "question"]);
-    expect(DAILY_FORMATS.one_liner.max).toBeLessThan(DAILY_FORMATS.quick_take.max);
+    expect(Object.keys(DAILY_FORMATS)).toEqual(["coach_note", "breakdown", "mistake", "take", "question"]);
     for (const p of DAILY_PILLAR_KEYS) for (const f of DAILY_PILLARS[p].formats) expect(Object.keys(DAILY_FORMATS), `${p} ${f}`).toContain(f);
-    // the database holds 600 characters for a caption
+    // the database holds 600 characters for a caption (and the coach's Edit words says so)
     for (const f of Object.values(DAILY_FORMATS)) expect(f.max).toBeLessThanOrEqual(600);
-    // no minimum: a one-line post is a post
-    expect(captionProblems("Your warm-up used to be your whole workout.", { format: "one_liner" })).toEqual([]);
+    expect(DAILY_MIN_WORDS).toBe(35);
+    // a one-liner is a slogan now, not a coaching point
+    expect(captionProblems("Your warm-up used to be your whole workout.", { format: "take" })[0]).toContain("too thin for a coaching point");
+    // the earlier forms still have names for the days made with them
+    expect(formatName("quick_take")).toBe("Thought");
+    expect(formatName("one_liner")).toBe("One-liner");
+  });
+
+  it("every shot is a training scene: no beach, brunch or park", () => {
+    for (const s of Object.values(DAILY_STYLES)) expect(s.look).not.toMatch(/\b(beach|brunch|picnic|park|rooftop|lake|kitchen table)\b/);
+    expect(DAILY_STYLES.in_action.look).toContain("squat, bench press or deadlift");
   });
 });
 
@@ -143,159 +166,160 @@ describe("the faith post's verse is the Bible's words, never a model's", () => {
   });
 
   it("sits under the caption with where it's from, the same in the app and the database", () => {
-    expect(dailyCaption("rest is part of it", FAITH_VERSES[0])).toBe("rest is part of it\n\n“Be still, and know that I am God” Psalm 46:10");
+    expect(dailyCaption("Rest is part of it.", FAITH_VERSES[0])).toBe("Rest is part of it.\n\n“Be still, and know that I am God” Psalm 46:10");
     expect(sql).toContain("THEN E'\\n\\n' || '“' || btrim(_verse_text) || '” ' || _verse_ref ELSE '' END");
     // the writer never writes one: a caption that names a verse is refused
-    expect(captionProblems("Psalm 46:10 says be still. So be still today and rest well.", { format: "quick_take" })).toContain("mentions a verse (the app adds it)");
+    expect(captionProblems(`Psalm 46:10 says be still. ${good}`, { format: "coach_note" })).toContain("mentions a verse (the app adds it)");
   });
 });
 
-describe("captions read like a real person posting, never a rerun", () => {
-  const good = "Your warm-up used to be your whole workout.\n\nNobody hands you a certificate for that, but you should probably notice it anyway.";
-
-  it("passes a thought said plainly, the way the coach wrote his own example", () => {
-    expect(captionProblems(good, { format: "quick_take" })).toEqual([]);
-    expect(captionProblems(VOICE_EXAMPLE.replace("that's progress too.", "that counts."), { format: "quick_take" })).toContain(
-      "copies the voice example (it's a reference, not a template)",
-    );
-    expect(
-      captionProblems("a lot of people think rest days are wasted days.\n\nthey're actually when the work you did all week gets a chance to show up.", { format: "tip" }),
-    ).toEqual([]);
-    expect(captionProblems("what's the one song that never fails you on a heavy set?", { format: "question" })).toEqual([]);
-    expect(captionProblems("the warm-up i used to dread is now the part i look forward to most. not sure when that happened.", { format: "one_liner" })).toEqual([]);
+describe("captions read like a powerlifting coach between sets, never a motivation page", () => {
+  it("passes a coaching point said plainly, and the coach's own two posts", () => {
+    expect(captionProblems(good, { format: "coach_note" })).toEqual([]);
+    expect(captionProblems(question, { format: "question" })).toEqual([]);
+    // his own posts pass every rule but the one that stops them coming back word for word
+    for (const x of VOICE_EXAMPLES) {
+      const p = captionProblems(x, { format: "coach_note" });
+      expect(p).toContain("copies a voice example (they're references, not templates)");
+      expect(p.filter((m) => !m.includes("voice example"))).toEqual([]);
+    }
   });
 
-  it("refuses the scripted shapes the audit found: list posts, meme scripts, scenes narrated to you, kickers", () => {
-    // the post he pointed to (Nov 5's)
-    expect(captionProblems(NOT_HIS_VOICE, { format: "quick_take" })).toEqual(
-      expect.arrayContaining(["a setup line ending in a colon (reads like a list post)", 'says "the old you" (scripted)', 'says "the new you" (scripted)', 'says "signs you\'re" (scripted)']),
-    );
-    expect(captionProblems("me: one more set\nmy legs: we've talked about this", { format: "funny" })).toContain('a "me: / my legs:" script');
+  it("refuses the lines he banned, and the motivation page behind them", () => {
+    for (const line of [
+      "every little bit counts",
+      "give yourself grace",
+      "listen to your body",
+      "you got this",
+      "movement is medicine",
+      "worse places to spend your time",
+    ])
+      expect(captionProblems(`${good} ${line[0].toUpperCase()}${line.slice(1)}.`, { format: "coach_note" }), line).toContain(`says "${line}" (a slogan)`);
+    const page = captionProblems(NOT_HIS_VOICE, { format: "coach_note" });
+    expect(page).toEqual(expect.arrayContaining(['says "give yourself grace" (a slogan)', 'says "every little bit counts" (a slogan)', 'says "the old you" (scripted)', "a setup line ending in a colon (reads like a list post)"]));
+    // and the AI transitions
+    expect(captionProblems(`At the end of the day, ${good}`, { format: "coach_note" })).toContain('says "at the end of the day" (reads like AI)');
+    expect(captionProblems(`${good}\n\nThe key takeaway is simple.`, { format: "coach_note" })).toContain('says "the key takeaway" (reads like AI)');
+  });
+
+  it("never cites research or a statistic: the lessons carry studies with their sources", () => {
+    for (const claim of ["Studies show most lifters squat better with a pause.", "Research says 80% of misses happen out of the hole.", "It's proven that pauses build strength."])
+      expect(captionProblems(`${good} ${claim}`, { format: "coach_note" }), claim).toContain(
+        "cites research or a statistic (daily posts are coaching; the lessons carry studies with their sources)",
+      );
+    // a coaching number is fine: weights, sets, RPE, weeks
+    expect(captionProblems(good.replace("this week", "this week at RPE 8"), { format: "coach_note" })).toEqual([]);
+  });
+
+  it("refuses the scripted shapes: list posts, meme scripts, scenes narrated to you, kickers, stories he didn't live", () => {
+    const pad = " Film your top set and check where the bar slows before you change anything else in the program.";
+    expect(captionProblems(`me: one more set\nmy legs: we've talked about this.${pad}`, { format: "take" })).toContain('a "me: / my legs:" script');
     expect(
-      captionProblems("you load the bar and think, same numbers. you log the set and see the old max next to it. you smile and add a plate.", { format: "quick_take" })[0],
-    ).toContain('narrates a scene to "you"');
-    expect(captionProblems("now it's just a warm-up. that's not boring. that's proof.", { format: "one_liner" })).toContain(
-      'ends on a "that\'s not X. that\'s Y." kicker',
-    );
-    expect(captionProblems("your logbook is secretly your gratitude list.", { format: "one_liner" })).toContain('says "secretly" (scripted)');
-    expect(captionProblems("let's go!! new week!!", { format: "one_liner" })).toContain("more than one exclamation mark");
-    // the example's own lines never come back, and a habit the new voice picked up can't repeat day to day
-    expect(captionProblems("funny how you stop needing a pep talk to train. that's progress too.", { format: "one_liner" })).toContain(
-      'borrows "that\'s progress too" from the voice example',
-    );
-    expect(motifRepeats("strength sneaks up on you", ["funny how training sneaks up on you"])).toEqual(["sneaks up"]);
-    // the first rewrite's misses (Nov 6 to 8): a story told as his own, a moral, the weekday trope
-    expect(captionProblems("called it a quick workout, left way later with new friends and one very unnecessary extra set.", { format: "one_liner" })).toContain(
-      "tells a story as his own (it never happened to him)",
-    );
-    expect(
-      captionProblems("rest days count.\n\nstrong isn't just how much you can grind. it's also how well you can switch off.", { format: "quick_take" }),
-    ).toContain('ends on a moral ("X isn\'t just Y. it\'s also Z")');
-    expect(captionProblems("the weights you used to circle are just tuesday now.", { format: "one_liner" })).toContain('the "it\'s just tuesday now" trope');
-    expect(motifRepeats("wild how fast a year goes", ["funny how that works", "wild how the bar moves"])).toEqual(["wild how"]);
-    // the redo of Nov 6 still told one, without the comma: any story told as his own is refused
+      captionProblems(`You walk in and load the bar. You check the log and see the old max. You grab the chalk and add a plate.${pad}`, { format: "coach_note" }),
+    ).toContain('narrates a scene to "you" (3 sentences walk "you" through it)');
+    // a coach explaining to "you" isn't a scene
+    expect(captionProblems(VOICE_EXAMPLES[1], { format: "coach_note" }).join()).not.toContain("narrates a scene");
+    expect(captionProblems(`${pad} Now it's just a warm-up. That's not boring. That's proof.`, { format: "take" })).toContain('ends on a "that\'s not X. that\'s Y." kicker');
+    expect(captionProblems(`${pad} Let's go!! New week!!`, { format: "take" })).toContain("more than one exclamation mark");
     for (const story of [
-      "planned a quick 45 minute lift. now i'm checking the clock like how did this turn into my whole evening",
-      "i went in for a quick upper day and stayed two hours.",
-      "a lot of my clients say the warm-up is their favourite part.",
-      "my legs after leg day: absolutely not.",
+      "I went in for a quick upper day and stayed two hours.",
+      "A lot of my clients say the warm-up is their favourite part.",
+      "Called it a quick workout, left way later.",
     ])
-      expect(captionProblems(story, { format: "one_liner" }), story).toContain("tells a story as his own (it never happened to him)");
-    // his opinions, what he notices and advice are fine
-    for (const ok of [
-      "i think a lot of people underrate how good a walk after dinner feels.",
-      "i've noticed the people who stick with it usually found one part they actually enjoy.",
-      "i'm convinced the best program is the one you look forward to.",
-      "hit the reps, leave one in the tank, go home.",
-    ])
-      expect(captionProblems(ok, { format: "quick_take" }), ok).not.toContain("tells a story as his own (it never happened to him)");
-    // and the ones that read right still pass
-    expect(captionProblems("this week, don't worry about being ready. just keep walking through that door.", { format: "one_liner" })).toEqual([]);
-    expect(
-      captionProblems("what's one thing your training partner does that makes you lift better? asking so we can all steal each other's good habits.", { format: "question" }),
-    ).toEqual([]);
-    expect(captionProblems('your "light" sets used to be your "heavy" ones.', { format: "one_liner" })).toContain("words in scare quotes");
-    // the editor flags them too, and picks the most natural, not the most dramatic
-    for (const k of ["natural:", "effortless:", "scripted:", "trying_too_hard:", "ai_phrasing:"]) expect(EDITOR_PROMPT, k).toContain(k);
-    expect(EDITOR_PROMPT).toContain("pick the most natural draft (not the most dramatic or clever)");
+      expect(captionProblems(`${story}${pad}`, { format: "coach_note" }), story).toContain("tells a story as his own (it never happened to him)");
+    // his opinions and what he notices are fine
+    for (const ok of ["I think most lifters rush the setup.", "I'm convinced the setup decides the rep.", "My rule of thumb: leave one in the tank."])
+      expect(captionProblems(`${ok}${pad}`, { format: "coach_note" }), ok).not.toContain("tells a story as his own (it never happened to him)");
+    expect(captionProblems(`${pad} Your "light" sets used to be your "heavy" ones.`, { format: "take" })).toContain("words in scare quotes");
+    // the coach's own lines never come back
+    expect(captionProblems(`${pad} More work isn't always better work.`, { format: "take" })).toContain('borrows "more work isn\'t always better work" from the voice example');
+    expect(motifRepeats("strength sneaks up on you", ["funny how training sneaks up on you"])).toEqual(["sneaks up"]);
   });
 
   it("names nobody: no crew member's first name lands in a daily post", () => {
     expect(namedPeople("marc would love this one", ["marc", "fionna"])).toEqual(["marc"]);
     expect(namedPeople("remarkable week for everyone", ["marc"])).toEqual([]);
-    expect(captionProblems("fionna, this one's for you.", { format: "one_liner", names: ["fionna"] })).toContain("names someone (fionna)");
+    expect(captionProblems(`Fionna, this one's for you. ${good}`, { format: "coach_note", names: ["fionna"] })).toContain("names someone (fionna)");
+    expect(captionProblems(`Jared says rest days count too. ${good}`, { format: "coach_note" })).toContain("drops in a name");
     expect(server).toContain("names: ctx.names");
   });
 
-  it("tidies a caption into his casual lowercase with real apostrophes", () => {
-    expect(tidyCaption("You close the app & swear its fine — dont worry, im fine")).toBe("you close the app and swear its fine, don't worry, i'm fine");
-    expect(tidyCaption("“You showed up.\n\n\n\nThat counts”")).toBe("you showed up.\n\nthat counts");
+  it("tidies a caption into normal sentence case with real apostrophes", () => {
+    expect(tidyCaption("you close the app & swear its fine — dont worry, im fine")).toBe("You close the app and swear its fine, don't worry, I'm fine");
+    expect(tidyCaption("“you showed up.\n\n\n\nthat counts”")).toBe("You showed up.\n\nThat counts");
     // "lets" is a word too: only fixed where it starts a sentence
-    expect(tidyCaption("it lets you rest. lets go")).toBe("it lets you rest. let's go");
+    expect(tidyCaption("it lets you rest. lets go")).toBe("It lets you rest. Let's go");
     // a model's non-breaking hyphens and curly quotes read like the rest of the caption
-    expect(tidyCaption("A quick after\u2011work lift, today\u2019s \u201clight\u201d sets")).toBe('a quick after-work lift, today\'s "light" sets');
-    // "I" and the days go lowercase, acronyms stay
-    expect(tidyCaption("I think Monday is the best day for a PR. I'm sure of it.")).toBe("i think monday is the best day for a PR. i'm sure of it.");
+    expect(tidyCaption("A quick after‑work lift, today’s “light” sets")).toBe('A quick after-work lift, today\'s "light" sets');
+    // "I", days, months and training acronyms in capitals; "march" and "may" are words too
+    expect(tidyCaption("i think monday is the day for a pr at rpe 9. your e1rm can march on in may.")).toBe("I think Monday is the day for a PR at RPE 9. Your e1RM can march on in may.");
+    // already right: unchanged
+    for (const x of VOICE_EXAMPLES) expect(tidyCaption(x)).toBe(x);
   });
 
-  it("refuses slogans, AI phrases, hashtags, tags, names, too many emojis and the wrong length for its form", () => {
-    const p = captionProblems("Trust the process. Here's the thing #grind 💪🔥 @marc", { format: "one_liner" });
-    expect(p).toEqual(expect.arrayContaining(['says "trust the process" (a slogan)', 'says "here\'s the thing" (reads like AI)', "has a hashtag", "tags someone", "more than one emoji"]));
-    expect(captionProblems("jared says rest days count too.", { format: "one_liner" })).toContain("drops in a name");
-    expect(captionProblems(good, { format: "one_liner" })).toEqual([]);
-    expect(captionProblems(`${good} ${good}`, { format: "one_liner" })[0]).toContain("a one-liner is 170 at most");
+  it("refuses hashtags, tags, too many emojis and the wrong length for its form", () => {
+    const p = captionProblems(`${good} #grind 💪🔥 @marc`, { format: "coach_note" });
+    expect(p).toEqual(expect.arrayContaining(["has a hashtag", "tags someone", "more than one emoji"]));
+    expect(good.length).toBeLessThan(480);
+    const long = `${good}\n\nFilm it from the side, at hip height, so you can see the bar and the hips together. Then compare the first rep with the last one and look for the moment the hips win.`;
+    expect(long.length).toBeGreaterThan(480);
+    expect(captionProblems(long, { format: "coach_note" })).toEqual([]);
+    expect(captionProblems(long, { format: "take" })[0]).toMatch(/characters \(a short take is 480 at most\)$/);
   });
 
   it("never a poem of one-line sentences, and the hook stays short enough for the feed's preview", () => {
-    expect(captionProblems("You lift.\nYou rest.\nYou grow.", { format: "quick_take" })).toContain("line breaks inside a paragraph (write sentences, not a poem of one-line lines)");
+    expect(captionProblems(`You lift.\nYou rest.\nYou grow.\n\n${good}`, { format: "coach_note" })).toContain("line breaks inside a paragraph (write sentences, not a poem of one-line lines)");
     expect(hookOf("First one. Then the rest.")).toBe("First one.");
-    const long = "When you finally walk into the gym after a long day at work and realize everyone else is tired too, it feels different.";
-    expect(captionProblems(long, { format: "quick_take" })[0]).toContain("the first sentence runs long");
+    const long = "When you finally get under a heavy bar after a long week of work and realize the warm-ups felt slow, it changes how you run the session.";
+    expect(captionProblems(`${long} ${good}`, { format: "coach_note" })[0]).toContain("the first sentence runs long");
   });
 
-  it("never puts a body down, lectures, or leans negative", () => {
-    expect(captionProblems("You tug the shirt down and your stomach says nah.", { format: "one_liner" })).toContain("puts a body down");
-    expect(captionProblems("Skipping dinner after a bad mirror day isn't the answer.", { format: "one_liner" })).toContain("puts a body down");
+  it("never puts a body down or talks down to anyone; direct about the training is fine", () => {
+    expect(captionProblems(`${good} Your stomach says nah.`, { format: "coach_note" })).toContain("puts a body down");
+    expect(captionProblems(`${good} Skipping dinner isn't the answer.`, { format: "coach_note" })).toContain("puts a body down");
     // food and training words aren't body words
-    expect(captionProblems("Low-fat yogurt, healthy fats and a fat-loss phase walk into a bar.", { format: "one_liner" })).not.toContain("puts a body down");
-    expect(captionProblems("You need to stop making excuses.", { format: "one_liner" })).toContain("lectures the reader");
-    // "not X, it's Y" twice is the AI template; once is how people talk
-    expect(captionProblems("Rest days aren't you falling off, they're when your body cashes in. That's not slacking, that's lifting smarter.", { format: "quick_take" })).toContain(`"it's not X, it's Y" 2 times (reads like AI)`);
-    expect(captionProblems("Rest days aren't you falling off. They're when your body catches up.", { format: "quick_take" })).toEqual([]);
-    expect(captionProblems("Tired, stressed, overwhelmed and dreading it again.", { format: "one_liner" })[0]).toContain("leans negative");
-    // a challenge can be a little heavier before it counts
-    expect(captionProblems("Tired, stressed, dreading it. Go anyway, then grab a coffee with a friend.", { format: "one_liner", pillar: "challenge" })).toEqual([]);
+    expect(captionProblems(`${good} Low-fat yogurt and a fat-loss phase.`, { format: "coach_note" })).not.toContain("puts a body down");
+    expect(captionProblems(`${good} Stop making excuses.`, { format: "coach_note" })).toContain("lectures the reader");
+    // a coach telling you what to stop doing in training isn't lecturing
+    expect(captionProblems(VOICE_EXAMPLES[0], { format: "coach_note" })).not.toContain("lectures the reader");
+    // "not X, it's Y" twice is the AI template; once is how people talk, and an if-clause isn't one
+    expect(captionProblems(`${good} Rest days aren't you falling off, they're when you adapt. That's not slacking, that's lifting smarter.`, { format: "coach_note" })).toContain(`"it's not X, it's Y" 3 times (reads like AI)`);
+    expect(contrastCount("If you're not logging every set, you're guessing.")).toBe(0);
+    expect(captionProblems(`${good} Stressed, overwhelmed, anxious, dreading it, exhausted.`, { format: "coach_note" }).join()).toContain("leans negative");
   });
 
   it("doesn't end on a question three days running, and doesn't just repeat the picture's words", () => {
     expect(endsWithQuestion("What gets you through leg day? 🎧")).toBe(true);
-    expect(captionProblems("What gets you through leg day?", { format: "question", asked: true })).toContain("ends on a question again (the last two did)");
-    expect(captionProblems("What gets you through leg day?", { format: "question" })).toEqual([]);
-    expect(captionProblems("You up? Rack's free at six. That text is a love language.", { format: "one_liner", picture: "you up? rack's free at six" })).toContain("repeats the words in the picture");
+    const ask = `${question} What's yours?`;
+    expect(captionProblems(ask, { format: "question", asked: true })).toContain("ends on a question again (the last two did)");
+    expect(captionProblems(ask, { format: "question" })).toEqual([]);
+    expect(captionProblems(`Bar speed tells you more than the number. ${good}`, { format: "coach_note", picture: "bar speed tells you more" })).toContain("repeats the words in the picture");
   });
 
   it("never comes back close to a recent post, or opens like the days around it", () => {
-    const recent = ["Your warm-up used to be your whole workout, and you didn't even notice when that changed."];
+    const recent = ["Most missed squats aren't missed at the bottom. They're missed in the first few inches out of the hole."];
     expect(captionSimilarity(good, recent[0])).toBeGreaterThan(0.3);
-    expect(captionProblems(good, { format: "quick_take", recent })[0]).toContain("too close to a recent post");
-    expect(captionProblems(good, { format: "quick_take", near: ["Your warm-up sets say a lot about you."] })).toContain('opens with "your warm" like a day near it');
+    expect(captionProblems(good, { format: "coach_note", recent })[0]).toContain("too close to a recent post");
+    expect(captionProblems(good, { format: "coach_note", near: ["Most lifters rush the setup."] })).toContain('opens with "most" like a day near it');
     // a common first word alone isn't a template: "you know" and "you showed" open differently
     expect(repeatsNearby("you know that moment", ["you showed up all week"])).toBeNull();
     expect(repeatsNearby("honestly the crew carried me", ["honestly just show up"])).toContain('opens with "honestly"');
-    expect(repeatsNearby("slow is still moving 🌱", ["honestly the crew 🤝"])).toBeNull();
+  });
+
+  it("lifters' words are fine; study-speak still isn't", () => {
+    expect(captionProblems(`${good} Hypertrophy work for the quads helps here too.`, { format: "coach_note" })).toEqual([]);
+    expect(captionProblems(`${good} Participants in a protocol.`, { format: "coach_note" }).join()).toContain('"participants"');
   });
 
   it("words in a picture stay few and plain enough for an image model to spell", () => {
     expect(typographyProblems("")).toEqual([]);
-    expect(typographyProblems("still here")).toEqual([]);
-    // a text message can carry a whole line, no more
-    expect(typographyProblems("leaving now, be there in 10, save me the bench")).toEqual([]);
+    expect(typographyProblems("RPE 8")).toEqual([]);
     expect(typographyProblems("one two three four five six seven eight nine ten eleven twelve thirteen")).toContain("more than 12 words in the picture");
     expect(typographyProblems("rest → reset")).toContain("characters in the picture an image model gets wrong");
   });
 });
 
-describe("what a day is about: a mix that makes people glad they opened the app", () => {
+describe("what a day is about: seven coaching categories in a set mix", () => {
   const l = learnDailyVisuals([]);
   const run = (n: number, learned = l) => {
     const days: { day: string; pillar: string }[] = [];
@@ -306,44 +330,53 @@ describe("what a day is about: a mix that makes people glad they opened the app"
     return days;
   };
 
-  it("starts at 30% realization, 25% humour, 20% community, 15% insight, 10% challenge", () => {
-    expect(DAILY_PILLAR_KEYS.map((k) => DAILY_PILLARS[k].share)).toEqual([0.3, 0.25, 0.2, 0.15, 0.1]);
-    const days = run(100);
+  it("starts at 20% Powerlifting IQ, 20% Coach's notes, 15% mistakes, 15% mindset, 10% each recovery, hypertrophy and comp prep", () => {
+    expect(DAILY_PILLAR_KEYS).toEqual(["powerlifting_iq", "coaches_notes", "mistakes", "mindset", "recovery", "hypertrophy", "comp_prep"]);
+    expect(DAILY_PILLAR_KEYS.map((k) => DAILY_PILLARS[k].name)).toEqual([
+      "Powerlifting IQ",
+      "Coach's notes",
+      "Training mistakes",
+      "Athlete mindset",
+      "Recovery and performance",
+      "Hypertrophy for strength",
+      "Competition prep",
+    ]);
+    expect(DAILY_PILLAR_KEYS.reduce((t, k) => t + DAILY_PILLARS[k].share, 0)).toBeCloseTo(1);
+    const days = run(140);
     for (const k of DAILY_PILLAR_KEYS) {
       const share = days.filter((d) => d.pillar === k).length / days.length;
-      expect(Math.abs(share - DAILY_PILLARS[k].share), k).toBeLessThanOrEqual(0.04);
+      expect(Math.abs(share - DAILY_PILLARS[k].share), k).toBeLessThanOrEqual(0.05);
     }
   });
 
-  it("never the same pillar two days running, a challenge at most once in 6 days and never on a Sunday", () => {
+  it("never the same category two days running", () => {
     const days = run(120);
     for (let i = 1; i < days.length; i++) expect(days[i].pillar, days[i].day).not.toBe(days[i - 1].pillar);
-    const challenges = days.filter((d) => d.pillar === "challenge");
-    for (let i = 1; i < challenges.length; i++) expect(Date.parse(challenges[i].day) - Date.parse(challenges[i - 1].day)).toBeGreaterThanOrEqual(6 * 86_400_000);
-    for (const c of challenges) expect(new Date(`${c.day}T12:00:00Z`).getUTCDay(), c.day).not.toBe(0);
   });
 
-  it("leans toward what the crew responds to, within limits, and a challenge never grows past its share", () => {
+  it("leans toward what the crew responds to, within limits", () => {
     const stats = [
-      ...[1, 2, 3, 4].map((i) => stat({ day: `2026-10-0${i}`, topic: "gym_floor_comedy", likers: 5, commenters: 3, savers: 2, sharers: 2 })),
-      ...[5, 6, 7, 8].map((i) => stat({ day: `2026-10-0${i}`, topic: "training_clicks", likers: 0, stopped: 0 })),
-      ...[1, 2, 3].map((i) => stat({ day: `2026-10-1${i}`, topic: "honest_and_kind", likers: 9, commenters: 5, savers: 4 })),
+      ...[1, 2, 3, 4].map((i) => stat({ day: `2026-10-0${i}`, topic: "bar_path", likers: 5, commenters: 3, savers: 2, sharers: 2 })),
+      ...[5, 6, 7, 8].map((i) => stat({ day: `2026-10-0${i}`, topic: "long_game", likers: 0, stopped: 0 })),
     ];
     const s = pillarShares(learnDailyVisuals(stats));
-    expect(s.humor).toBeGreaterThan(0.25);
-    expect(s.insight).toBeLessThan(0.15);
-    expect(s.insight).toBeGreaterThanOrEqual(0.15 * 0.75 * 0.8);
-    expect(s.challenge).toBeLessThanOrEqual(0.1 + 1e-9);
+    expect(s.powerlifting_iq).toBeGreaterThan(0.2);
+    expect(s.mindset).toBeLessThan(0.15);
+    expect(s.mindset).toBeGreaterThanOrEqual(0.15 * 0.75 * 0.8);
   });
 
-  it("every angle belongs to a pillar, every pillar has at least four, and old topics still read", () => {
-    for (const p of DAILY_PILLAR_KEYS) expect(DAILY_TOPIC_KEYS.filter((t) => DAILY_TOPICS[t].pillar === p).length, p).toBeGreaterThanOrEqual(4);
-    expect(pillarOf({ topic: "humor_shared" })).toBe("humor");
+  it("every angle belongs to a category, every category has at least five, and earlier days' topics still read", () => {
+    for (const p of DAILY_PILLAR_KEYS) expect(DAILY_TOPIC_KEYS.filter((t) => DAILY_TOPICS[t].pillar === p).length, p).toBeGreaterThanOrEqual(5);
+    expect(pillarOf({ topic: "attempt_selection" })).toBe("comp_prep");
+    expect(pillarOf({ pillar: "recovery", topic: "bar_path" })).toBe("recovery");
+    // the feel-good version's days keep their names but count toward nothing
+    expect(pillarOf({ pillar: "humor", topic: "gym_floor_comedy" })).toBeNull();
     expect(pillarOf({ topic: "burnout" })).toBeNull();
-    expect(pillarOf({ pillar: "community", topic: "humor_shared" })).toBe("community");
+    expect(topicName("gym_floor_comedy")).toBe("Gym floor comedy");
+    expect(topicName("bar_path")).toBe("Bar path and leverages");
   });
 
-  it("beginners, lifestyle members and serious lifters take turns, apart from women / men / everyone", () => {
+  it("newer lifters, strength for life and powerlifters take turns, apart from women / men / everyone", () => {
     const days = Array.from({ length: 12 }, (_, i) => new Date(Date.parse("2026-11-02T12:00:00Z") + i * 86_400_000).toISOString().slice(0, 10));
     expect(new Set(days.map((d) => `${audienceForDay(d)}·${crowdForDay(d)}`)).size).toBe(12);
   });
@@ -351,43 +384,43 @@ describe("what a day is about: a mix that makes people glad they opened the app"
 
 describe("the editor reads every caption before a picture is made", () => {
   const draft = (o: Partial<Record<string, number>> = {}, flags: Partial<Record<string, boolean>> = {}) => ({
-    scores: { natural: 5, effortless: 4, clarity: 5, match: 4, fresh: 4, positive: 5, worth_it: 4, ...o } as any,
-    flags: { scripted: false, trying_too_hard: false, ai_phrasing: false, lecturing: false, invented: false, shaming: false, negative: false, ...flags } as any,
+    scores: { natural: 5, substance: 4, accuracy: 5, clarity: 5, match: 4, fresh: 4, worth_it: 4, ...o } as any,
+    flags: { scripted: false, hype: false, ai_phrasing: false, preachy: false, invented: false, shaming: false, generic: false, ...flags } as any,
     note: "",
   });
 
-  it("asks one question first: would he naturally write this as his own post?", () => {
-    for (const k of ["natural:", "effortless:", "clarity:", "match:", "fresh:", "positive:", "worth_it:", "scripted:", "trying_too_hard:", "ai_phrasing:", "lecturing:", "invented:", "shaming:", "negative:"]) expect(EDITOR_PROMPT, k).toContain(k);
-    expect(EDITOR_PROMPT).toContain("would Jared naturally write this as his own social post?");
-    expect(EDITOR_PROMPT).toContain("Never add a closing line, a question, an emoji or a name, and never change the thought.");
+  it("asks one question first: would an elite powerlifting coach post this, and would a lifter be glad they read it?", () => {
+    for (const k of ["natural:", "substance:", "accuracy:", "clarity:", "match:", "fresh:", "worth_it:", "scripted:", "hype:", "ai_phrasing:", "preachy:", "invented:", "shaming:", "generic:"]) expect(EDITOR_PROMPT, k).toContain(k);
+    expect(EDITOR_PROMPT).toContain("would Jared, an elite powerlifting coach, post this as his own, and would a serious lifter be glad they read it?");
+    expect(EDITOR_PROMPT).toContain("Never add a closing line, a question, an emoji, a claim or a name, and never change the point.");
+    expect(EDITOR_PROMPT).toContain("Keep normal sentence case.");
     expect(EDITOR_PROMPT).toContain(VOICE_EXAMPLE);
     const p = editorPrompt({
-      concept: { pillar: "humor", topic: "lifter_habits", crowd: "lifters", mood: "funny", situation: "s", message: "m", visual: "v", typography: "", format: "funny" },
+      concept: { pillar: "mistakes", topic: "junk_volume", crowd: "lifters", mood: "direct", situation: "s", message: "m", visual: "v", typography: "", format: "mistake" },
       audience: "everyone",
       drafts: ["a", "b"],
       recent: ["older post"],
     });
-    expect(p).toContain("PILLAR: Humour.");
+    expect(p).toContain("CATEGORY: Training mistakes.");
     expect(p).toContain("THE DRAFTS:\n[0]\na\n\n[1]\nb");
     expect(p).toContain("RECENT POSTS:\n- older post");
   });
 
-  it("passes only at every bar with no flag (a challenge's positive bar is 3)", () => {
-    expect(editorVerdict({ drafts: [draft()], best: 0, polished: "", why: "" }, "humor")).toEqual({ pass: true, issues: [] });
-    expect(editorVerdict({ drafts: [draft({ natural: 3 })], best: 0, polished: "", why: "" }, "humor").issues).toContain("natural 3/5");
-    expect(editorVerdict({ drafts: [draft({}, { scripted: true })], best: 0, polished: "", why: "" }, "realization").issues).toContain("scripted");
-    expect(editorVerdict({ drafts: [draft({}, { trying_too_hard: true })], best: 0, polished: "", why: "" }, "realization").pass).toBe(false);
-    expect(editorVerdict({ drafts: [draft({ positive: 3 })], best: 0, polished: "", why: "" }, "challenge").pass).toBe(true);
-    expect(editorVerdict({ drafts: [draft({ positive: 3 })], best: 0, polished: "", why: "" }, "humor").pass).toBe(false);
+  it("passes only at every bar with no flag", () => {
+    expect(editorVerdict({ drafts: [draft()], best: 0, polished: "", why: "" }, "mistakes")).toEqual({ pass: true, issues: [] });
+    expect(editorVerdict({ drafts: [draft({ substance: 3 })], best: 0, polished: "", why: "" }).issues).toContain("substance 3/5");
+    expect(editorVerdict({ drafts: [draft({ accuracy: 3 })], best: 0, polished: "", why: "" }).pass).toBe(false);
+    for (const f of ["scripted", "hype", "generic", "invented", "preachy"]) expect(editorVerdict({ drafts: [draft({}, { [f]: true })], best: 0, polished: "", why: "" }).issues, f).toContain(f);
     expect(EDITOR_BARS.fresh).toBe(3);
+    expect(EDITOR_BARS.accuracy).toBe(4);
   });
 
   it("reads the editor's JSON, holding its pick to the drafts it saw", () => {
-    const e = parseEditor('{"drafts": [{"scores": {"natural": 9, "effortless": 4}, "flags": {"scripted": true}}, {"scores": {}}], "best": 7, "polished": "x", "why": "y"}', 2)!;
+    const e = parseEditor('{"drafts": [{"scores": {"natural": 9, "substance": 4}, "flags": {"hype": true}}, {"scores": {}}], "best": 7, "polished": "x", "why": "y"}', 2)!;
     expect(e.best).toBe(0);
     expect(e.drafts[0].scores.natural).toBe(5);
     expect(e.drafts[0].scores.worth_it).toBe(1);
-    expect(e.drafts[0].flags.scripted).toBe(true);
+    expect(e.drafts[0].flags.hype).toBe(true);
     expect(parseEditor("no json", 2)).toBeNull();
   });
 
@@ -397,32 +430,32 @@ describe("the editor reads every caption before a picture is made", () => {
     expect(server).toContain("const format = passing[ed.best].form;");
     expect(server).toContain('const e = await maker.json(EDITOR_PROMPT, editorPrompt({ concept: parsed, audience: r.audience, drafts: ok, forms: passing.map((d) => d.form), recent: recentCaptions }), { effort: "low" });');
     expect(server).toContain("editor: c.editor ?? null,");
-    // the feed reads like a social post: his never-say lists, not his texting style
+    // the feed reads like his posts: his never-say lists, not his texting style
     expect(server).not.toContain("casualize");
     expect(server).not.toContain("buildVoicePrompt");
   });
 });
 
-describe("the concept comes first: the moment, the picture, then three drafts", () => {
-  const choices = { pillar: "realization" as const, styles: ["backlit", "two_frames"] as any, lights: ["neon_night", "golden_teal"] as any, formats: ["quick_take", "one_liner"] as any, topics: ["progress_noticed", "small_milestones"] as any };
+describe("the concept comes first: the point, the picture, then three drafts", () => {
+  const choices = { pillar: "recovery" as const, styles: ["backlit", "two_frames"] as any, lights: ["neon_night", "golden_teal"] as any, formats: ["coach_note", "take"] as any, topics: ["sleep_performance", "lighter_weeks"] as any };
 
   it("reads the concept, holding its choices to the lists it was given", () => {
     const c = parseConcept(
-      '```json\n{"topic": "progress_noticed", "mood": "angry", "situation": "s", "idea": "m", "format": "essay", "style": "oil painting", "light": "golden_teal", "visual": "v", "typography": "\\"still here\\"", "captions": ["\\"one\\"", "two", "", "four"]}\n```',
+      '```json\n{"topic": "sleep_performance", "mood": "angry", "situation": "s", "idea": "m", "format": "essay", "style": "oil painting", "light": "golden_teal", "visual": "v", "typography": "\\"RPE 8\\"", "captions": ["\\"one\\"", "two", "", "four"]}\n```',
       { ...choices, crowd: "lifters" },
     );
-    // no art direction given: a realization leans to B, the cinematic anime
-    expect(c).toMatchObject({ pillar: "realization", topic: "progress_noticed", crowd: "lifters", mood: "uplifting", format: "quick_take", style: "backlit", light: "golden_teal", art: "anime", typography: "still here", message: "m", drafts: ["one", "two", "four"] });
+    // no art direction given: recovery leans to B, the cinematic anime
+    expect(c).toMatchObject({ pillar: "recovery", topic: "sleep_performance", crowd: "lifters", mood: "analytical", format: "coach_note", style: "backlit", light: "golden_teal", art: "anime", typography: "RPE 8", message: "m", drafts: ["one", "two", "four"] });
     expect(parseConcept("no json", choices)).toBeNull();
     // drafts labelled with their own forms: each keeps its own, the first one's is the post's until the editor picks
-    const labelled = parseConcept('{"topic": "small_milestones", "idea": "m", "visual": "v", "captions": [{"form": "one_liner", "text": "a"}, {"form": "nonsense", "text": "b"}]}', choices)!;
+    const labelled = parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "captions": [{"form": "take", "text": "a"}, {"form": "nonsense", "text": "b"}]}', choices)!;
     expect(labelled.drafts).toEqual(["a", "b"]);
-    expect(labelled.draftForms).toEqual(["one_liner", "quick_take"]);
-    expect(labelled.format).toBe("one_liner");
-    expect(editorPrompt({ concept: { ...labelled, crowd: "everyone" }, audience: "women", drafts: ["a", "b"], forms: ["one_liner", "quick_take"], recent: [] })).toContain("[0] (One-liner: one or two sentences");
+    expect(labelled.draftForms).toEqual(["take", "coach_note"]);
+    expect(labelled.format).toBe("take");
+    expect(editorPrompt({ concept: { ...labelled, crowd: "everyone" }, audience: "women", drafts: ["a", "b"], forms: ["take", "coach_note"], recent: [] })).toContain("[0] (Short take: one direct point");
   });
 
-  it("is told the day's pillar, who it's for, what's worked, what to avoid and what the coach threw out", () => {
+  it("is told the day's category, who it's for, what's worked, what to avoid and what the coach threw out", () => {
     const p = conceptPrompt({
       day: "2026-11-08",
       theme: "emotional",
@@ -430,44 +463,49 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
       crowd: "beginners",
       faith: true,
       choices,
-      learnings: "Pillars landing best: humour.",
+      learnings: "Categories landing best: Powerlifting IQ.",
       best: ["liked line"],
       worst: [],
       recent: [
-        { day: "2026-11-06", topic: "gym_floor_comedy", format: "question", style: "group", caption: "What's your song?" },
+        { day: "2026-11-06", pillar: "mistakes", topic: "junk_volume", format: "question", style: "group", caption: "What's your one accessory?" },
         { day: "2026-11-07", topic: "ask_the_crew", format: "question", style: "two_frames", light: "warm_lamp", caption: "Best gym memory?" },
       ],
       rejected: ["thrown out line"],
       neverSay: ["fr"],
-      editorNotes: ["hook 3/5"],
+      editorNotes: ["substance 3/5"],
     });
-    expect(p).toContain("TODAY: Sunday: rest, gratitude and a calm reset for the week.");
-    expect(p).toContain("PILLAR: Realization. The goal: something he's noticed about progress");
-    expect(p).toContain('ANGLES, as "topic" (pick one, best first): progress_noticed = ');
-    expect(p).toContain("Today especially people in their first months");
-    expect(p).toContain("SUNDAY: a Bible verse goes under the caption.");
+    expect(p).toContain("TODAY: Sunday: recovery, reviewing the week and setting up the next one.");
+    expect(p).toContain("CATEGORY: Recovery and performance. The goal: how sleep, food, fatigue and lighter weeks show up in bar speed and RPE");
+    expect(p).toContain('ANGLES, as "topic" (pick one, best first): sleep_performance = ');
+    expect(p).toContain("Today especially lifters in their first year or two");
+    expect(p).toContain("SUNDAY: a Bible verse goes under the caption. Keep the post about training");
     expect(p).toContain("The last two posts ended with a question: don't end with one.");
     expect(p).toContain("THE COACH NEVER SAYS: fr");
-    // what landed is said as kinds of posts, never captions to copy (the early ones were in a retired voice)
+    // what landed is said as kinds of posts, never captions to copy
     expect(p).not.toContain("liked line");
-    expect(p).toContain("RECENT POSTS (pick a different angle, moment and opening; don't copy how they're written):\n- 2026-11-06 · humor · gym_floor_comedy · question · group: What's your song?");
+    expect(p).toContain("RECENT POSTS (pick a different angle, moment and opening; don't copy how they're written):\n- 2026-11-06 · mistakes · junk_volume · question · group: What's your one accessory?");
     expect(p).toContain("THE COACH THREW THESE OUT (never write like them):\n- thrown out line");
-    expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: hook 3/5.");
+    expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: substance 3/5.");
     expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } })).toContain(
       "KEEP THIS CAPTION EXACTLY, word for word",
     );
   });
 
-  it("the writer writes as the coach: his own example, what isn't him, and how he writes", () => {
-    expect(CONCEPT_PROMPT).toContain(VOICE_EXAMPLE);
+  it("the writer writes as the coach: his two posts, what isn't him, the shape and the rules", () => {
+    for (const x of VOICE_EXAMPLES) expect(CONCEPT_PROMPT).toContain(x);
     expect(CONCEPT_PROMPT).toContain(NOT_HIS_VOICE);
-    expect(CONCEPT_PROMPT).toContain("lowercase, everyday words, contractions with apostrophes (don't, it's, you're, i'm)");
-    expect(CONCEPT_PROMPT).toContain("Don't try to make it profound.");
-    expect(CONCEPT_PROMPT).toContain("never an experience he didn't have");
-    expect(CONCEPT_PROMPT).toContain("no names at all: his name already shows on the post.");
-    expect(CONCEPT_PROMPT).toContain("Say what people tend to do, not what happened to him.");
-    expect(CONCEPT_PROMPT).toContain("Bodies: never about fixing how someone looks.");
-    expect(CONCEPT_PROMPT).toContain("Pick the most natural one first, not the most dramatic.");
+    expect(CONCEPT_PROMPT).toContain("an elite powerlifting coach explaining something to an athlete between sets");
+    expect(CONCEPT_PROMPT).toContain("Not another fitness motivation page.");
+    for (const part of ["- Hook:", "- Insight:", "- Application:", "- Takeaway:"]) expect(CONCEPT_PROMPT, part).toContain(part);
+    expect(CONCEPT_PROMPT).toContain("About 40 to 100 words.");
+    expect(CONCEPT_PROMPT).toContain("Normal sentence case and punctuation");
+    expect(CONCEPT_PROMPT).toContain("no studies, research, statistics or percentages");
+    expect(CONCEPT_PROMPT).toContain('"every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time"');
+    expect(CONCEPT_PROMPT).not.toContain("lowercase");
+    // the picture is strength training, drawn right, never a lifestyle scene
+    expect(CONCEPT_PROMPT).toContain("It shows strength training");
+    expect(CONCEPT_PROMPT).toContain("a straight barbell with the same plates on both sides");
+    expect(CONCEPT_PROMPT).toContain("Never a lifestyle scene with no training in it");
     expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them.");
     // the rewrite speaks the same voice
     expect(CAPTION_FIX_PROMPT).toContain(VOICE_GUIDE);
@@ -477,19 +515,20 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
     expect(server).toContain('words in the picture again (a post just before had some): leave them out today');
   });
 
-  it("the picture: always a hand-drawn 2D film frame, its shot and light, the words in it spelled exactly or none at all", () => {
-    const withWords = picturePrompt({ style: "two_frames", light: "neon_night", art: "anime", visual: "a speech bubble from her sister", typography: "you went?? proud of you", message: "m" });
+  it("the picture: always a hand-drawn 2D film frame, its shot and light, the gear drawn right, the words in it spelled exactly or none at all", () => {
+    const withWords = picturePrompt({ style: "two_frames", light: "neon_night", art: "anime", visual: "a training log open on a bench", typography: "RPE 8 felt like 9", message: "m" });
     expect(withWords.startsWith(FILM_LOOK)).toBe(true);
     expect(withWords).toContain(`The shot: ${DAILY_STYLES.two_frames.look}`);
     expect(withWords).toContain(`Colour and light: ${DAILY_LIGHTS.neon_night.look}.`);
     expect(withWords).toContain("Art direction B, beautiful cinematic 2D anime");
-    expect(withWords).toContain("spelled exactly and clearly readable: you went?? proud of you.");
+    expect(withWords).toContain("spelled exactly and clearly readable: RPE 8 felt like 9.");
+    expect(withWords).toContain("a straight barbell with matching plates on both sides and collars");
     expect(withWords).toContain(FILM_AVOID);
     expect(FILM_LOOK).toContain("colourful, hand-drawn 2D animated feature film");
     expect(FILM_LOOK).toContain("rich, vibrant, saturated colour with strong warm-versus-cool contrast");
     expect(FILM_AVOID).toContain("brown or grey colour grading, desaturated or muted colour, a dark, gloomy or murky scene");
     expect(FILM_AVOID).toContain("3D, CGI or Pixar-like rendering");
-    const none = picturePrompt({ style: "wide_moment", visual: "a car in a gym lot at dawn", typography: "", message: "m" }, { faith: true, fix: "the hands looked wrong" });
+    const none = picturePrompt({ style: "wide_moment", visual: "a platform at a meet", typography: "", message: "m" }, { faith: true, fix: "the hands looked wrong" });
     expect(none).toContain("No words, letters, numbers, signs, logos or watermarks anywhere in the frame");
     expect(none).toContain("never posing or looking at the camera");
     expect(none).toContain("any Bible stays closed");
@@ -500,7 +539,7 @@ describe("the concept comes first: the moment, the picture, then three drafts", 
 
 describe("the review: concrete checks before any score", () => {
   it("passes a clean picture whose words read exactly as asked", () => {
-    expect(reviewVerdict(review({ text_seen: "Still here." }), "still here")).toEqual({ pass: true, image: [], caption: [] });
+    expect(reviewVerdict(review({ text_seen: "RPE 8." }), "RPE 8")).toEqual({ pass: true, image: [], caption: [] });
     expect(reviewVerdict(review(), "").pass).toBe(true);
   });
 
@@ -510,14 +549,21 @@ describe("the review: concrete checks before any score", () => {
     // an apostrophe the picture added is the same word, and words the planned scene names aren't stray
     expect(reviewVerdict(review({ text_seen: "who are you\nwhen it's quiet?\n5:30 AM" }), "who are you when its quiet?", "a phone alarm set for 5:30 AM").pass).toBe(true);
     expect(reviewVerdict(review({ text_seen: "who are you when its quiet? SALE" }), "who are you when its quiet?", "a phone alarm").image[0]).toContain("extra words in the picture");
-    // a phone's clock isn't stray text
-    expect(reviewVerdict(review({ text_seen: "boss: quick thing for monday?\n11:23 PM" }), "boss: quick thing for monday?", "").pass).toBe(true);
-    expect(reviewVerdict(review({ defects: ["six fingers on the left hand"] }), "").image).toContain("six fingers on the left hand");
+    expect(reviewVerdict(review({ defects: ["the barbell has different plates on each side"] }), "").image).toContain("the barbell has different plates on each side");
     const low = reviewVerdict(review({ scores: { ...review().scores, writing: 2, aesthetic: 3 }, fix_caption: "say it plainer" }), "");
     expect(low.pass).toBe(false);
     expect(low.caption).toEqual(["writing 2/5", "fix: say it plainer"]);
     expect(low.image).toEqual(["aesthetic 3/5"]);
     expect(REVIEW_BARS.match).toBe(4);
+  });
+
+  it("a picture that isn't about strength training is remade, its caption kept", () => {
+    expect(reviewVerdict(review({ scores: { ...review().scores, on_topic: 2 } }), "").image).toEqual(["on_topic 2/5"]);
+    expect(REVIEW_BARS.on_topic).toBe(4);
+    expect(REVIEW_PROMPT).toContain("a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less");
+    expect(REVIEW_PROMPT).toContain("gym equipment drawn wrong (a bent or broken barbell, different plates on each side");
+    // a review from before the check reads as neutral
+    expect(parseReview('{"scores": {}}')?.scores.on_topic).toBe(4);
   });
 
   it("anything that doesn't read as a hand-drawn 2D film frame fails, whatever its scores", () => {
@@ -528,23 +574,24 @@ describe("the review: concrete checks before any score", () => {
     expect(parseReview('{"medium": "3D render", "scores": {}}')?.medium).toBe("3d_render");
   });
 
-  it("a defect is an objective error, never taste (taste is scored and goes in the fix)", async () => {
-    const { REVIEW_PROMPT } = await import("@/lib/daily-visuals");
+  it("a defect is an objective error, never taste (taste is scored and goes in the fix)", () => {
     expect(REVIEW_PROMPT).toContain("Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer)");
     expect(REVIEW_PROMPT).toContain("4 = good enough to publish");
     // the caption and the picture tell one story: a contradiction in the details fails match
     expect(REVIEW_PROMPT).toContain("any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less");
+    // the writing is judged as a coach's, not a motivation page's
+    expect(REVIEW_PROMPT).toContain("reads like an elite powerlifting coach explaining something to an athlete");
   });
 
   it("reads the reviewer's JSON and averages its scores", () => {
     const r = parseReview('{"text_seen": "", "defects": [], "scores": {"relatable": 5, "original": 4, "writing": 4, "audience_fit": 4, "aesthetic": 5, "storytelling": 4, "match": 5, "engaging": 9}}');
     expect(r?.scores.engaging).toBe(5);
-    // a review without the uplift score reads it as neutral (4)
+    // a review without the uplift or on_topic score reads them as neutral (4)
     expect(r?.scores.uplift).toBe(4);
     expect(reviewScore(r!)).toBe(4.4);
-    // uplift is the picture's: a gloomy frame is remade, the caption kept (a challenge's bar is 3)
-    expect(reviewVerdict(review({ scores: { ...review().scores, uplift: 3 } }), "").image).toEqual(["uplift 3/5"]);
-    expect(reviewVerdict(review({ scores: { ...review().scores, uplift: 3 } }), "", "", "challenge").pass).toBe(true);
+    // uplift is the picture's: a gloomy frame is remade, the caption kept
+    expect(reviewVerdict(review({ scores: { ...review().scores, uplift: 2 } }), "").image).toEqual(["uplift 2/5"]);
+    expect(reviewVerdict(review({ scores: { ...review().scores, uplift: 3 } }), "").pass).toBe(true);
     expect(parseCaption('{"caption": "\\"new words\\""}')).toBe("new words");
   });
 });
@@ -553,26 +600,23 @@ describe("it learns what the crew likes, and never repeats itself", () => {
   it("doesn't reuse a shot from the last 4 days, light from the last 3 or an angle from the last 2 weeks, and offers a form from the last 2 days last", () => {
     const l = learnDailyVisuals([]);
     const recent = [
-      { day: "2026-11-01", style: "backlit", light: "golden_teal", format: "quick_take", topic: "progress_noticed" },
-      { day: "2026-11-02", style: "two_frames", light: "neon_night", format: "one_liner", topic: "gym_floor_comedy" },
+      { day: "2026-11-01", style: "backlit", light: "golden_teal", format: "coach_note", topic: "sleep_performance" },
+      { day: "2026-11-02", style: "two_frames", light: "neon_night", format: "take", topic: "bar_path" },
     ];
-    const c = pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, pillar: "realization" });
-    expect(c.pillar).toBe("realization");
+    const c = pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, pillar: "recovery" });
+    expect(c.pillar).toBe("recovery");
     expect(c.styles).not.toContain("backlit");
     expect(c.styles).not.toContain("two_frames");
     expect(c.lights).not.toContain("golden_teal");
     expect(c.lights).toHaveLength(7);
-    // both forms were used in the last 2 days: still offered (a pillar has few), in their order
-    expect(c.formats).toEqual(["quick_take", "one_liner"]);
-    // one used: the other comes first
-    expect(pickChoices(l, { day: "2026-11-03", recent: recent.slice(1), rand: () => 0.9, pillar: "realization" }).formats).toEqual(["quick_take", "one_liner"]);
-    expect(pickChoices(l, { day: "2026-11-03", recent: [{ ...recent[1], format: "quick_take" }], rand: () => 0.9, pillar: "realization" }).formats).toEqual(["one_liner", "quick_take"]);
-    expect(c.formats.every((f) => DAILY_PILLARS.realization.formats.includes(f))).toBe(true);
-    expect(c.topics).not.toContain("progress_noticed");
-    expect(c.topics.every((t) => DAILY_TOPICS[t].pillar === "realization")).toBe(true);
-    // the coach's pick wins, and with no pillar asked it's picked for the day (never yesterday's)
+    // both used in the last 2 days go last, in their order
+    expect(c.formats).toEqual(["breakdown", "coach_note", "take"]);
+    expect(c.formats.every((f) => DAILY_PILLARS.recovery.formats.includes(f))).toBe(true);
+    expect(c.topics).not.toContain("sleep_performance");
+    expect(c.topics.every((t) => DAILY_TOPICS[t].pillar === "recovery")).toBe(true);
+    // the coach's pick wins, and with no category asked it's picked for the day (never yesterday's)
     expect(pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, style: "backlit" }).styles).toEqual(["backlit"]);
-    expect(pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9 }).pillar).not.toBe("humor");
+    expect(pickChoices(l, { day: "2026-11-03", recent: [{ ...recent[1], pillar: "powerlifting_iq" }], rand: () => 0.9 }).pillar).not.toBe("powerlifting_iq");
     expect(learningsText(l)).toContain("Not enough posted yet");
   });
 
@@ -580,9 +624,9 @@ describe("it learns what the crew likes, and never repeats itself", () => {
     const stats = [1, 2, 3].map((i) => stat({ day: `2026-10-0${i}`, style: "backlit", likers: 4, commenters: 1 }));
     stats.push(...[4, 5, 6].map((i) => stat({ day: `2026-10-0${i}`, style: "two_frames", likers: 0, stopped: 0 })));
     const l = learnDailyVisuals(stats);
-    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "humor" }).styles[0]).toBe("backlit");
-    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "humor" }).styles.at(-1)).toBe("two_frames");
-    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.01, pillar: "humor" }).styles[0]).not.toBe("backlit");
+    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles[0]).toBe("backlit");
+    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles.at(-1)).toBe("two_frames");
+    expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.01, pillar: "mistakes" }).styles[0]).not.toBe("backlit");
     expect(learningsText(l)).toContain("Best shots so far: backlit");
   });
 
@@ -700,8 +744,10 @@ describe("the vivid look: bright, colourful, crisp 2D film frames", () => {
   it("two art directions, each for its kind of story", async () => {
     const { ART_STYLES, artForPillar } = await import("@/lib/daily-visuals");
     expect(Object.keys(ART_STYLES)).toEqual(["graphic", "anime"]);
-    expect(artForPillar("humor")).toBe("graphic");
-    expect(artForPillar("community")).toBe("anime");
+    expect(artForPillar("powerlifting_iq")).toBe("graphic");
+    expect(artForPillar("comp_prep")).toBe("graphic");
+    expect(artForPillar("recovery")).toBe("anime");
+    expect(ART_STYLES.graphic.use).toContain("lifting, coaching, technique");
   });
 
   it("muted, dark or soft pictures fail whatever their scores", () => {
@@ -734,17 +780,17 @@ describe("the vivid look: bright, colourful, crisp 2D film frames", () => {
 });
 
 describe("captions don't fall back on the same stock moments", () => {
-  it("a stock moment a recent post used can't come back, and humour has to be funny", async () => {
+  it("a stock moment a recent post used can't come back, and a joke has to be funny", async () => {
     const { REVIEW_PROMPT, reviewPrompt } = await import("@/lib/daily-visuals");
     const recent = ["nobody cheered when you walked into the gym tonight", "the group chat is out and you hit seen"];
     expect(motifRepeats("you pack your bag and nobody cheered. thats fine", recent)).toEqual(["nobody cheered"]);
     expect(motifRepeats("your mom asks if you live at the gym now", recent)).toEqual([]);
-    expect(captionProblems("You check the group chat and laugh at your own form video from last week.", { format: "quick_take", recent })).toContain(
+    expect(captionProblems(`Post your form video in the group chat. ${good}`, { format: "coach_note", recent })).toContain(
       'uses "group chat" like a recent post (find a new moment)',
     );
-    expect(REVIEW_PROMPT).toContain("a caption meant as humour that isn't actually funny is 3 or less");
-    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", format: "funny", pillar: "humor", mood: "funny" }, audience: "everyone" })).toContain("THE CAPTION'S FORM: Funny");
-    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", pillar: "humor", mood: "funny" }, audience: "everyone" })).toContain("THE KIND OF POST: Humour (something genuinely funny");
+    expect(REVIEW_PROMPT).toContain("a joke that isn't actually funny is 3 or less");
+    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", format: "mistake", pillar: "mistakes", mood: "direct" }, audience: "everyone" })).toContain("THE CAPTION'S FORM: Mistake");
+    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group", pillar: "mistakes", mood: "direct" }, audience: "everyone" })).toContain("THE KIND OF POST: Training mistakes (a common mistake or belief");
   });
 });
 
@@ -776,7 +822,7 @@ describe("the coach's two references set the look", () => {
 
 describe("the writer's own clichés are banned outright", () => {
   it("nobody claps / the quiet rep fail even when no recent post used them", () => {
-    expect(captionProblems("You finish the containers and set them in the fridge.\n\nThat's the quiet rep that makes next week easier with no claps.", { format: "quick_take" })).toEqual(
+    expect(captionProblems(`${good}\n\nThat's the quiet rep that makes next week easier with no claps.`, { format: "coach_note" })).toEqual(
       expect.arrayContaining(['says "quiet rep" (a slogan)', 'says "no claps" (a slogan)']),
     );
   });
@@ -788,6 +834,6 @@ describe("a scene the image model's safety filter turns down gets a new scene, n
     expect(isSafetyRefusal(new Error("OpenAI: Your request was rejected by the safety system. If you believe this is an error"))).toBe(true);
     expect(isSafetyRefusal(new Error("OpenAI said no (500)"))).toBe(false);
     expect(server).toContain('issues: ["the image model\'s safety filter turned the scene down"]');
-    expect(CONCEPT_PROMPT).toContain("undressed, pinching or measuring their body, or on a scale");
+    expect(CONCEPT_PROMPT).toContain("undressed, measuring their body or on a scale");
   });
 });

@@ -1,39 +1,42 @@
 /**
- * Daily posts (series `daily_visual`): every morning one post that makes the
- * crew glad they opened the app. A picture and a caption made together, like
- * something a real person would post: a realization that makes someone see
- * their progress differently, a laugh they send to a friend, a moment of
- * belonging, one useful idea, now and then a respectful challenge. Never a
- * feed of AI motivation quotes, and never negativity as the default hook.
+ * Daily posts (series `daily_visual`): on the days no other coach post goes
+ * out, one post that's worth opening the app for. A picture and a caption made
+ * together, written as Jared, a powerlifting coach explaining something
+ * between sets: direct, confident, analytical, occasionally dry, always about
+ * getting stronger. Never a fitness motivation page.
  *
- * What a day is about (`pickPillars`): five content pillars with a target mix
- * (DAILY_PILLARS: realization 30%, humour 25%, community 20%, insight 15%,
- * challenge 10%), kept by how far each is behind its share over the last few
- * weeks, nudged by how the crew actually responds (`pillarShares`), never the
- * same pillar two days running and a challenge at most once in 6 days (never
- * on a Sunday). Each pillar has its angles (DAILY_TOPICS, stored as `topic`).
+ * What a day is about (`pickPillars`): seven content categories with a target
+ * mix (DAILY_PILLARS: Powerlifting IQ 20%, Coach's notes 20%, Training
+ * mistakes 15%, Athlete mindset 15%, Recovery and performance 10%,
+ * Hypertrophy for strength 10%, Competition prep 10%), kept by how far each
+ * is behind its share over the last few weeks, nudged by how the crew
+ * actually responds (`pillarShares`), never the same category two days
+ * running. Each category has its angles (DAILY_TOPICS, stored as `topic`).
  * Who it's for turns over too: women, men, everyone (`audienceForDay`) and,
- * independently, beginners, lifestyle, serious lifters, everyone
+ * independently, newer lifters, strength for life, powerlifters, everyone
  * (`crowdForDay`). The weekday only sets a mood (DAILY_THEMES), and Sunday's
  * carries a Bible verse (only ever one of FAITH_VERSES, word for word).
  *
  * How one is made (daily-visuals.server.ts):
- *   1. the writer plans the moment and the picture first, then drafts three
- *      captions for it (CONCEPT_PROMPT); `tidyCaption` and `captionProblems`
- *      throw out any that break the hard rules (length, a body put down,
- *      lecturing, slogans and AI phrases, a poem of one-line sentences, the
- *      picture's words repeated, a question ending again, too close to a
- *      recent post);
- *   2. an editor scores the drafts (EDITOR_PROMPT: human, hook, clarity,
- *      match, tight, mobile, relatable, fresh, shareable, feel-good, with
- *      flags for shaming, lecturing, invented claims, generic and negative),
- *      picks the best and polishes it; `editorVerdict` passes it only at every
- *      bar with no flag, else the writer tries again with the editor's notes;
+ *   1. the writer plans the point and the picture first, then drafts three
+ *      captions for it (CONCEPT_PROMPT: hook, insight, application, takeaway,
+ *      used flexibly, about 40 to 100 words); `tidyCaption` and
+ *      `captionProblems` throw out any that break the hard rules (length, a
+ *      slogan or one of his banned lines, AI phrases, research or statistics,
+ *      a story he didn't live, a body put down, the picture's words repeated,
+ *      too close to a recent post);
+ *   2. an editor scores the drafts (EDITOR_PROMPT: natural, substance,
+ *      accuracy, clarity, match, fresh, worth it, with flags for scripted,
+ *      hype, AI phrasing, preachy, invented, shaming and generic), picks the
+ *      best and polishes it; `editorVerdict` passes it only at every bar with
+ *      no flag, else the writer tries again with the editor's notes;
  *   3. the picture: a bright, colourful frame from a premium hand-drawn 2D
- *      animated film (FILM_LOOK), then a review that looks at the picture with
- *      the caption (REVIEW_PROMPT / `reviewVerdict`).
+ *      animated film (FILM_LOOK) of strength training (the lifts, coaching,
+ *      the log, the platform, recovery around training), then a review that
+ *      looks at the picture with the caption (REVIEW_PROMPT / `reviewVerdict`,
+ *      `on_topic` included).
  * It learns from every posted day (likes, comments (more for real ones),
- * saves, shares and reposts, and whether people stopped on it), by pillar,
+ * saves, shares and reposts, and whether people stopped on it), by category,
  * angle, form and shot.
  */
 import { JARGON, readingGrade, longestSentence, voiceProblems, words as wordsOf } from "@/lib/plain-words";
@@ -72,106 +75,174 @@ export type DailyArt = "graphic" | "anime";
 /*  What a day is about                                                */
 /* ------------------------------------------------------------------ */
 
-export type DailyPillar = "realization" | "humor" | "community" | "insight" | "challenge";
+export type DailyPillar = "powerlifting_iq" | "coaches_notes" | "mistakes" | "mindset" | "recovery" | "hypertrophy" | "comp_prep";
 export type DailyCrowd = "everyone" | "beginners" | "lifestyle" | "lifters";
-export type DailyMood = "uplifting" | "proud" | "funny" | "warm" | "curious" | "fired_up" | "thoughtful";
-export type DailyFormat = "one_liner" | "quick_take" | "tip" | "funny" | "question";
+export type DailyMood = "direct" | "analytical" | "dry_humour" | "matter_of_fact" | "focused" | "calm" | "curious";
+export type DailyFormat = "coach_note" | "breakdown" | "mistake" | "take" | "question";
 
-/** The five content pillars and the mix they start at (a guide the learning nudges, never quotas). */
+/**
+ * The seven content categories (stored as concept.pillar) and the mix they
+ * start at: a guide the learning nudges, never quotas. Every one is about
+ * getting stronger: the lifts, the log, the work around them and the head
+ * that does it.
+ */
 export const DAILY_PILLARS: Record<DailyPillar, { name: string; share: number; goal: string; guide: string; moods: DailyMood[]; formats: DailyFormat[] }> = {
-  realization: {
-    name: "Realization",
-    share: 0.3,
-    goal: "something he's noticed about progress or training life that makes people see themselves a little differently, and feel good about it",
-    guide: "A simple, true observation said plainly. It doesn't need a big conclusion.",
-    moods: ["uplifting", "proud", "thoughtful"],
-    formats: ["quick_take", "one_liner"],
-  },
-  humor: {
-    name: "Humour",
-    share: 0.25,
-    goal: "something genuinely funny about training life, the kind of thing people send to a friend",
-    guide: "Told the way you'd tell a friend: the joke is in the observation. Affectionate, never at anyone's body.",
-    moods: ["funny"],
-    formats: ["funny", "one_liner", "quick_take"],
-  },
-  community: {
-    name: "Community",
+  powerlifting_iq: {
+    name: "Powerlifting IQ",
     share: 0.2,
-    goal: "the people side of training: training partners, gym friends, cheering each other on, feeling part of the crew",
-    guide: "Warm and easy. Sometimes a question he'd actually like the crew to answer.",
-    moods: ["warm", "funny", "uplifting"],
-    formats: ["quick_take", "question", "one_liner"],
+    goal: "one idea that makes a lifter understand the squat, bench or deadlift, or their own training, better than they did",
+    guide: "Explain the mechanism plainly: what happens, why it happens, and how to check it in your own lifting. Principles strength coaches agree on, said precisely, never a study or a number presented as research.",
+    moods: ["analytical", "curious", "direct"],
+    formats: ["breakdown", "coach_note", "question"],
   },
-  insight: {
-    name: "Insight",
+  coaches_notes: {
+    name: "Coach's notes",
+    share: 0.2,
+    goal: "what an experienced coach pays attention to and why: how he reads a set, a log or a block, and what he'd change",
+    guide: "A note between sets: what to look at, what it tells you, the one adjustment. Coaching principles and his opinion, never a story or a client.",
+    moods: ["direct", "matter_of_fact", "dry_humour"],
+    formats: ["coach_note", "take", "question"],
+  },
+  mistakes: {
+    name: "Training mistakes",
     share: 0.15,
-    goal: "one useful thing about training, eating or recovery that makes it easier",
-    guide: "Explained the way he'd explain it to a client: plain, with why it helps. Only well-known, safe basics, no numbers or studies.",
-    moods: ["curious", "uplifting"],
-    formats: ["tip", "quick_take"],
+    goal: "a common mistake or belief that costs lifters progress, why it costs them, and what to do instead",
+    guide: "Direct, never mocking: name the mistake, explain the cost, give the fix. Slightly blunt is fine, a dry joke now and then.",
+    moods: ["direct", "dry_humour", "matter_of_fact"],
+    formats: ["mistake", "coach_note", "take"],
   },
-  challenge: {
-    name: "Challenge",
+  mindset: {
+    name: "Athlete mindset",
+    share: 0.15,
+    goal: "how a serious athlete thinks about training: execution, patience, accountability, confidence that comes from reps already done",
+    guide: "Grounded in training, never a motivational quote or hype: what to focus on, what to ignore, what to do after a bad day.",
+    moods: ["direct", "focused", "calm"],
+    formats: ["take", "coach_note", "question"],
+  },
+  recovery: {
+    name: "Recovery and performance",
     share: 0.1,
-    goal: "a friendly push or an honest thought from someone on their side, with something they can actually do",
-    guide: "Direct but kind. Never guilt or shame.",
-    moods: ["fired_up", "thoughtful"],
-    formats: ["quick_take", "one_liner", "tip"],
+    goal: "how sleep, food, fatigue and lighter weeks show up in bar speed and RPE, and what to adjust",
+    guide: "Recovery as part of the program, measured by performance, never self-care talk. Well-known basics, no studies or numbers.",
+    moods: ["analytical", "matter_of_fact", "calm"],
+    formats: ["coach_note", "breakdown", "take"],
+  },
+  hypertrophy: {
+    name: "Hypertrophy for strength",
+    share: 0.1,
+    goal: "building the muscle that moves the big lifts: which muscles, why, and how to train them without stealing from the main work",
+    guide: "Muscle as the engine for the squat, bench and deadlift, never about looks. Exercise choice, effort and fatigue, explained plainly.",
+    moods: ["analytical", "direct", "curious"],
+    formats: ["breakdown", "coach_note", "mistake"],
+  },
+  comp_prep: {
+    name: "Competition prep",
+    share: 0.1,
+    goal: "getting ready to compete or test a max: attempts, commands, peaking, weight class, meet day",
+    guide: "Practical and specific, for a first meet or a tenth: what to practise, what to plan, what not to change late.",
+    moods: ["focused", "analytical", "direct"],
+    formats: ["breakdown", "coach_note", "question"],
   },
 };
 export const DAILY_PILLAR_KEYS = Object.keys(DAILY_PILLARS) as DailyPillar[];
 
-/** Each pillar's angles (stored as `topic`). */
+/** Each category's angles (stored as `topic`). */
 export const DAILY_TOPICS = {
-  progress_noticed: { pillar: "realization", name: "Progress you stopped noticing", idea: "the moment you notice how far you've come: the weight that used to be your max is your warm-up now, the stairs, the hike, the jeans" },
-  confidence_grown: { pillar: "realization", name: "Confidence", idea: "realizing you carry yourself differently: you walk into the gym like you belong, you try the new thing, you take up space" },
-  more_than_looks: { pillar: "realization", name: "More than looks", idea: "fitness paying off where the mirror can't see it: sleep, mood, patience, energy for the people you love, every grocery bag in one trip" },
-  actually_enjoy_it: { pillar: "realization", name: "Actually enjoying it", idea: "the day you realize training is something you look forward to now, not something you force yourself through" },
-  new_identity: { pillar: "realization", name: "Who you're becoming", idea: "training stops being a big decision and just becomes part of your week" },
-  small_milestones: { pillar: "realization", name: "Small milestones", idea: "a small first worth being proud of: the first pull-up, the first full week, the first time the bar felt light" },
-  whats_possible: { pillar: "realization", name: "What's possible", idea: "getting excited about what's next now that you're stronger: the race, the meet, the trip, the hike you wouldn't have tried a year ago" },
-  kinder_to_yourself: { pillar: "realization", name: "Kinder to yourself", idea: "noticing you're easier on yourself than you used to be, and a missed day doesn't throw off the whole week anymore" },
-  gym_floor_comedy: { pillar: "humor", name: "Gym floor comedy", idea: "a funny, true observation from the gym floor that every lifter recognizes (fresh, never the tired old gym jokes)" },
-  expectation_reality: { pillar: "humor", name: "Plans vs what happens", idea: "how training plans tend to go in real life: the early alarm, the workout that was meant to be quick, meal prep day" },
-  food_life: { pillar: "humor", name: "Food life", idea: "affectionate jokes about eating well: protein in everything, the snack negotiation, the container collection, never anyone's body" },
-  lifter_habits: { pillar: "humor", name: "Lifter habits", idea: "the habits only people who train have: the playlist ritual, stairs after leg day, judging every bench and chair as gym equipment" },
-  strong_in_real_life: { pillar: "humor", name: "Strong in real life", idea: "the funny moments when training shows up in normal life: opening every jar, carrying the couch, racing the kids" },
-  training_partners: { pillar: "community", name: "Training partners", idea: "the friend who makes you show up, spots you, hypes you, texts 'you up?' at 5:45" },
-  cheering_others: { pillar: "community", name: "Cheering for others", idea: "the joy of watching someone else hit a PR or show up for the first time; their win feels like yours" },
-  first_days: { pillar: "community", name: "Day one", idea: "being new, first-day nerves, and how fast the gym starts to feel like yours; then welcoming the next new person" },
-  gym_friendships: { pillar: "community", name: "Gym friendships", idea: "friendships that started with a shared rack or a nod between sets and turned into the real thing" },
-  crew_rituals: { pillar: "community", name: "Crew rituals", idea: "the little shared rituals: the coffee after, the Saturday session, the playlist argument, the high five after the last set" },
-  ask_the_crew: { pillar: "community", name: "Ask the crew", idea: "a fun, easy question everyone wants to answer: the song that never fails, the best post-workout meal, the first lift you were proud of" },
-  training_clicks: { pillar: "insight", name: "Training, explained", idea: "a training idea explained so it finally clicks: getting stronger in tiny steps, why rest days build you, why easier weeks help" },
-  eating_made_simple: { pillar: "insight", name: "Eating, made simple", idea: "a simple, unrestrictive food idea: protein at each meal, eating enough to train well, water, planning one meal ahead" },
-  recovery_wins: { pillar: "insight", name: "Recovery", idea: "how sleep, walks and rest days make you stronger, framed as part of the fun, not a chore" },
-  one_good_cue: { pillar: "insight", name: "One good cue", idea: "one well-known technique cue that makes a common exercise feel better right away" },
-  myth_busted: { pillar: "insight", name: "Myth, busted", idea: "a common fitness myth set straight in a friendly way (soreness isn't the goal, lifting won't suddenly make you bulky, cardio doesn't erase your gains)" },
-  friendly_nudge: { pillar: "challenge", name: "A friendly nudge", idea: "a warm nudge about showing up this week, from someone who believes they can" },
-  try_something_new: { pillar: "challenge", name: "Try something new", idea: "an invitation to try one new thing this week: a class, a heavier set with good form, a new route, training with a friend" },
-  honest_and_kind: { pillar: "challenge", name: "Honest, and kind", idea: "a fair, respectful truth about progress that leaves them capable and motivated, never ashamed" },
-  mini_challenge: { pillar: "challenge", name: "Mini challenge", idea: "a small, doable challenge for the week: a walk after dinner, one extra glass of water, bed 30 minutes earlier" },
+  bar_path: { pillar: "powerlifting_iq", name: "Bar path and leverages", idea: "why the bar moves where it does in the squat, bench or deadlift, what pulls it off line and how to see it on video" },
+  rpe_honesty: { pillar: "powerlifting_iq", name: "RPE that means something", idea: "rating effort honestly: what a rep left in the tank looks like, why RPE drifts, how video and bar speed calibrate it" },
+  top_sets: { pillar: "powerlifting_iq", name: "Top sets and back-offs", idea: "what a top set and back-off sets are each for, and what they tell you when you read them in your log" },
+  sticking_points: { pillar: "powerlifting_iq", name: "Sticking points", idea: "where a lift slows down, the usual reasons, and how to find out which one it is before adding a variation" },
+  specificity: { pillar: "powerlifting_iq", name: "Specificity", idea: "why the competition lifts need their own practice, and when a variation actually helps" },
+  reading_the_log: { pillar: "powerlifting_iq", name: "Reading your log", idea: "trends over weeks instead of one session: load at the same RPE, bar speed, reps at a given weight" },
+  set_video: { pillar: "coaches_notes", name: "What I look for in a set video", idea: "what a coach watches in a set: the setup, the first inch, where the bar slows, what changes from the first rep to the last" },
+  one_variable: { pillar: "coaches_notes", name: "One change at a time", idea: "why a coach changes one variable when something stalls, so you know what fixed it" },
+  execution_first: { pillar: "coaches_notes", name: "Execution over program", idea: "most sensible programs work when the sets are done as written; how they're executed matters more than which one you pick" },
+  useful_notes: { pillar: "coaches_notes", name: "Notes that help your coach", idea: "what to write after a session so the next one can be adjusted: how it moved, what felt off, sleep, pain" },
+  small_jumps: { pillar: "coaches_notes", name: "Small jumps", idea: "why progressing in small steps adds up over a block, and why big jumps tend to stall early" },
+  sloppy_warmups: { pillar: "mistakes", name: "Sloppy warm-ups", idea: "warm-ups done differently from the top set: practising a different lift than the one you're testing" },
+  every_set_a_max: { pillar: "mistakes", name: "Every set a max", idea: "grinding every set: fatigue that costs the next sessions more than it builds" },
+  program_hopping: { pillar: "mistakes", name: "Changing everything", idea: "changing the program, the cues or the technique every week, so nothing gets enough time to work" },
+  not_logging: { pillar: "mistakes", name: "Not logging", idea: "skipping the log, so there's no evidence of progress or of a stall" },
+  junk_volume: { pillar: "mistakes", name: "Junk volume", idea: "extra sets that add fatigue without helping the main lifts" },
+  chasing_soreness: { pillar: "mistakes", name: "Chasing soreness", idea: "using soreness, sweat or exhaustion as the measure of a good session" },
+  bad_day_data: { pillar: "mindset", name: "A bad day is data", idea: "one bad session is one data point: what to do with it and what not to read into it" },
+  boring_consistency: { pillar: "mindset", name: "Boring consistency", idea: "the same work done well for months is what moves a total" },
+  earned_confidence: { pillar: "mindset", name: "Earned confidence", idea: "confidence under a heavy bar comes from reps you've already done, not from hype" },
+  execution_focus: { pillar: "mindset", name: "Focus on the rep", idea: "during a set, think about one cue for the rep, not the number on the bar or the people watching" },
+  long_game: { pillar: "mindset", name: "The long game", idea: "strength builds over blocks and years, so judge a week by whether it was done well" },
+  own_the_basics: { pillar: "mindset", name: "Owning the basics", idea: "accountability for the things only the athlete controls: sleep, food, showing up, doing the sets as written" },
+  sleep_performance: { pillar: "recovery", name: "Sleep and the bar", idea: "how a short night shows up in bar speed and RPE, and what to adjust on that day" },
+  eating_to_train: { pillar: "recovery", name: "Eating to train", idea: "eating enough to train well: protein through the day, food around training, not under-eating in a strength block" },
+  lighter_weeks: { pillar: "recovery", name: "Lighter weeks", idea: "what a deload or lighter week is for, and how to tell when one would help" },
+  fatigue_masks_fitness: { pillar: "recovery", name: "Fatigue hides fitness", idea: "why you can feel weak at the end of a hard block and strong once the fatigue clears" },
+  readiness: { pillar: "recovery", name: "Reading readiness", idea: "warm-up speed and the first working set's RPE as signals for how to run the day" },
+  rest_periods: { pillar: "recovery", name: "Rest between sets", idea: "why heavy sets need longer rest, and what short rest does to the quality of the next set" },
+  muscle_for_lifts: { pillar: "hypertrophy", name: "Muscle that moves the lifts", idea: "quads for the squat, pecs and triceps for the bench, back and hips for the deadlift: muscle as the engine" },
+  accessories_with_a_job: { pillar: "hypertrophy", name: "Accessories with a job", idea: "picking each accessory for the muscle that's limiting a lift, not to fill time" },
+  close_to_failure: { pillar: "hypertrophy", name: "Close enough to failure", idea: "taking growth sets close enough to failure to work, without wrecking the main lifts" },
+  size_then_strength: { pillar: "hypertrophy", name: "Build, then express", idea: "a block focused on muscle before a strength block, and why bigger muscles give strength room to grow" },
+  stable_exercises: { pillar: "hypertrophy", name: "Stable exercises for growth", idea: "machines, cables and supported variations for growth work, so the muscle is the limit, not balance" },
+  attempt_selection: { pillar: "comp_prep", name: "Attempt selection", idea: "an opener you'd make on a bad day, a second that builds the total, a third that's earned in training" },
+  commands: { pillar: "comp_prep", name: "Train with commands", idea: "practising squat, press and rack commands and the pause so meet day feels normal" },
+  peaking: { pillar: "comp_prep", name: "Peaking", idea: "less fatigue, more specificity, heavy singles; the strength is built before the last weeks, the peak lets it show" },
+  weight_class: { pillar: "comp_prep", name: "Weight class", idea: "choosing a class you can make without a big cut, since a hard cut usually costs more than it gives" },
+  meet_day: { pillar: "comp_prep", name: "Meet day", idea: "warm-up timing, food and staying calm between attempts" },
+  first_meet: { pillar: "comp_prep", name: "Your first meet", idea: "why a first meet is for making all your lifts and learning the day, not for a max" },
 } as const satisfies Record<string, { pillar: DailyPillar; name: string; idea: string }>;
 export type DailyTopic = keyof typeof DAILY_TOPICS;
 export const DAILY_TOPIC_KEYS = Object.keys(DAILY_TOPICS) as DailyTopic[];
 export const topicsOf = (p: DailyPillar): DailyTopic[] => DAILY_TOPIC_KEYS.filter((k) => DAILY_TOPICS[k].pillar === p);
 
-/** The first version's topics and forms, for the names (and the pillar, for the learning) of days made before. */
-export const LEGACY_TOPICS: Record<string, { name: string; pillar: DailyPillar | null }> = {
-  confidence: { name: "Confidence and self-worth", pillar: "realization" },
-  discipline: { name: "Discipline and consistency", pillar: "challenge" },
+/**
+ * Earlier versions' angles, for the names of days made before. Their posts
+ * were feel-good lifestyle posts, so none of them counts toward a category
+ * or the learning (`pillarOf` gives null).
+ */
+export const LEGACY_TOPICS: Record<string, { name: string; pillar: null }> = {
+  // the first version (Oct 2026)
+  confidence: { name: "Confidence and self-worth", pillar: null },
+  discipline: { name: "Discipline and consistency", pillar: null },
   body_image: { name: "Body image", pillar: null },
-  ambition: { name: "Ambition and growth", pillar: "realization" },
-  relationships: { name: "Relationships", pillar: "community" },
-  resilience: { name: "Resilience", pillar: "challenge" },
+  ambition: { name: "Ambition and growth", pillar: null },
+  relationships: { name: "Relationships", pillar: null },
+  resilience: { name: "Resilience", pillar: null },
   burnout: { name: "Stress and burnout", pillar: null },
   overwhelm: { name: "Feeling overwhelmed", pillar: null },
-  identity: { name: "Who you're becoming", pillar: "realization" },
-  small_wins: { name: "Small wins", pillar: "realization" },
-  hard_truths: { name: "Hard truths", pillar: "challenge" },
-  humor_shared: { name: "Shared humour", pillar: "humor" },
+  identity: { name: "Who you're becoming", pillar: null },
+  small_wins: { name: "Small wins", pillar: null },
+  hard_truths: { name: "Hard truths", pillar: null },
+  humor_shared: { name: "Shared humour", pillar: null },
+  // the feel-good version (Nov 5 to 7 2026)
+  progress_noticed: { name: "Progress you stopped noticing", pillar: null },
+  confidence_grown: { name: "Confidence", pillar: null },
+  more_than_looks: { name: "More than looks", pillar: null },
+  actually_enjoy_it: { name: "Actually enjoying it", pillar: null },
+  new_identity: { name: "Who you're becoming", pillar: null },
+  small_milestones: { name: "Small milestones", pillar: null },
+  whats_possible: { name: "What's possible", pillar: null },
+  kinder_to_yourself: { name: "Kinder to yourself", pillar: null },
+  gym_floor_comedy: { name: "Gym floor comedy", pillar: null },
+  expectation_reality: { name: "Plans vs what happens", pillar: null },
+  food_life: { name: "Food life", pillar: null },
+  lifter_habits: { name: "Lifter habits", pillar: null },
+  strong_in_real_life: { name: "Strong in real life", pillar: null },
+  training_partners: { name: "Training partners", pillar: null },
+  cheering_others: { name: "Cheering for others", pillar: null },
+  first_days: { name: "Day one", pillar: null },
+  gym_friendships: { name: "Gym friendships", pillar: null },
+  crew_rituals: { name: "Crew rituals", pillar: null },
+  ask_the_crew: { name: "Ask the crew", pillar: null },
+  training_clicks: { name: "Training, explained", pillar: null },
+  eating_made_simple: { name: "Eating, made simple", pillar: null },
+  recovery_wins: { name: "Recovery", pillar: null },
+  one_good_cue: { name: "One good cue", pillar: null },
+  myth_busted: { name: "Myth, busted", pillar: null },
+  friendly_nudge: { name: "A friendly nudge", pillar: null },
+  try_something_new: { name: "Try something new", pillar: null },
+  honest_and_kind: { name: "Honest, and kind", pillar: null },
+  mini_challenge: { name: "Mini challenge", pillar: null },
 };
+/** Earlier versions' caption forms, for the names of days made before. */
 export const LEGACY_FORMAT_NAMES: Record<string, string> = {
   observation: "Observation",
   humor: "Humour",
@@ -181,36 +252,48 @@ export const LEGACY_FORMAT_NAMES: Record<string, string> = {
   short_story: "Short story",
   dialogue: "Dialogue",
   list: "List",
+  // the feel-good version's (Nov 5 to 7 2026)
+  one_liner: "One-liner",
+  quick_take: "Thought",
+  tip: "Advice",
+  funny: "Funny",
 };
 
 export const topicName = (t: string | null | undefined): string | null =>
   !t ? null : t in DAILY_TOPICS ? DAILY_TOPICS[t as DailyTopic].name : (LEGACY_TOPICS[t]?.name ?? null);
 export const formatName = (f: string | null | undefined): string | null =>
   !f ? null : f in DAILY_FORMATS ? DAILY_FORMATS[f as DailyFormat].name : (LEGACY_FORMAT_NAMES[f] ?? null);
-/** A day's pillar: the concept's own, else its angle's (the first version's topics map where they can). */
+/** A day's category: the concept's own, else its angle's; an earlier version's day has none. */
 export function pillarOf(o: { pillar?: string | null; topic?: string | null } | null | undefined): DailyPillar | null {
   if (!o) return null;
   if (o.pillar && o.pillar in DAILY_PILLARS) return o.pillar as DailyPillar;
   if (o.topic && o.topic in DAILY_TOPICS) return DAILY_TOPICS[o.topic as DailyTopic].pillar;
-  return (o.topic && LEGACY_TOPICS[o.topic]?.pillar) || null;
+  return null;
 }
 
-/** How a caption is told, and how long it may run (characters). No minimum: a post is as long as the idea deserves. */
+/**
+ * How a caption is told, and how long it may run (characters). About 40 to
+ * 100 words (DAILY_MIN_WORDS is the floor); a breakdown and a coach's note
+ * get the database's whole 600 characters, about 100 words, for a technical
+ * idea that needs the room.
+ */
 export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; max: number }> = {
-  one_liner: { name: "One-liner", guide: "one or two sentences, and that's the whole post", max: 170 },
-  quick_take: { name: "Thought", guide: "a thought or observation in a few short paragraphs, said the way he'd say it out loud", max: 420 },
-  tip: { name: "Advice", guide: "one useful thing and why it helps, the way he'd explain it to a client, in a few plain sentences", max: 440 },
-  funny: { name: "Funny", guide: "something funny about training life told plainly in a sentence or a few, never a script or a setup and punchline", max: 300 },
-  question: { name: "Question", guide: "something he'd actually like the crew to answer, with a line on why he's asking", max: 240 },
+  coach_note: { name: "Coach's note", guide: "the point first, then why it happens and what to do about it, in a few short paragraphs, the way he'd say it between sets", max: 600 },
+  breakdown: { name: "Breakdown", guide: "one technical idea explained: what happens, why it matters, how to check it in your own lifting", max: 600 },
+  mistake: { name: "Mistake", guide: "a common mistake or belief, what it costs, and what to do instead", max: 560 },
+  take: { name: "Short take", guide: "one direct point and the reason behind it, in two or three short paragraphs", max: 480 },
+  question: { name: "Question", guide: "a real training question for the crew, with why he's asking and how he'd think about it, so the answers are worth reading", max: 480 },
 };
 export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
+/** Under this a post is a slogan, not a coaching point (the target is about 40 to 100 words). */
+export const DAILY_MIN_WORDS = 35;
 
-/** Who it's for, besides women / men / everyone: where they are with training. */
+/** Who it's for, besides women / men / everyone: where they are with training (the keys are the database's). */
 export const DAILY_CROWDS: Record<DailyCrowd, { name: string; guide: string }> = {
-  everyone: { name: "Everyone", guide: "anyone who trains, from week one to year ten" },
-  beginners: { name: "Beginners", guide: "people in their first months: a bit nervous, excited, learning the basics, surprised by their own progress" },
-  lifestyle: { name: "Lifestyle", guide: "people who train to feel good and live well, around work, family and a social life" },
-  lifters: { name: "Serious lifters", guide: "people who chase PRs, follow a program, know their numbers and love the details" },
+  everyone: { name: "Everyone", guide: "anyone who trains seriously, from their first program to their tenth meet" },
+  beginners: { name: "Newer lifters", guide: "lifters in their first year or two: learning the lifts, running their first programs, setting their first PRs" },
+  lifestyle: { name: "Strength for life", guide: "people who train for strength and health around work and family, not to compete, and still want to do it right" },
+  lifters: { name: "Powerlifters", guide: "competitive and serious lifters who run programs, use RPE, plan top sets and enter meets" },
 };
 const CROWD_ORDER: DailyCrowd[] = ["everyone", "beginners", "lifestyle", "lifters"];
 
@@ -244,13 +327,13 @@ type ThemeSpec = {
 
 /** A mood a day (Monday first; the keys are the database's, kept from the first version). Sunday's is the faith post. */
 export const DAILY_THEMES: Record<DailyTheme, ThemeSpec> = {
-  courage: { dow: 1, name: "Fresh start", idea: "Monday: a new week, a fresh start, something worth starting", lean: { realization: 0.3, challenge: 0.2 } },
-  patience: { dow: 2, name: "The long game", idea: "Tuesday: enjoying the process and the long game", lean: { insight: 0.3 } },
-  your_circle: { dow: 3, name: "Your people", idea: "Wednesday: the people you train with and around", lean: { community: 0.4 } },
-  self_reflection: { dow: 4, name: "How far you've come", idea: "Thursday: noticing how far you've come", lean: { realization: 0.3, insight: 0.1 } },
-  encouragement: { dow: 5, name: "Celebrate", idea: "Friday: celebrating the week and having fun with it", lean: { humor: 0.4, community: 0.1 } },
-  self_love: { dow: 6, name: "Enjoy it", idea: "Saturday: movement for fun, sunshine, friends, enjoying life", lean: { humor: 0.2, community: 0.2 } },
-  emotional: { dow: 7, name: "Rest & reset", idea: "Sunday: rest, gratitude and a calm reset for the week", lean: { realization: 0.3, community: 0.2 } },
+  courage: { dow: 1, name: "New week", idea: "Monday: a new training week, setting up the week's work", lean: { coaches_notes: 0.3, mistakes: 0.2 } },
+  patience: { dow: 2, name: "The long game", idea: "Tuesday: progress over blocks, not sessions", lean: { powerlifting_iq: 0.3, mindset: 0.1 } },
+  your_circle: { dow: 3, name: "Midweek", idea: "Wednesday: the middle of the training week, how the work is going", lean: { hypertrophy: 0.2, recovery: 0.2 } },
+  self_reflection: { dow: 4, name: "Read your log", idea: "Thursday: what the log says about the last few weeks", lean: { powerlifting_iq: 0.3, mistakes: 0.1 } },
+  encouragement: { dow: 5, name: "Week in review", idea: "Friday: how the training week went, and what to take into the next one", lean: { coaches_notes: 0.3, mistakes: 0.2 } },
+  self_love: { dow: 6, name: "Heavy day", idea: "Saturday: the long or heavy session of the week, doing the work well when it's hard", lean: { powerlifting_iq: 0.2, comp_prep: 0.2, hypertrophy: 0.1 } },
+  emotional: { dow: 7, name: "Rest & reset", idea: "Sunday: recovery, reviewing the week and setting up the next one", lean: { recovery: 0.4, mindset: 0.3 } },
 };
 
 export const DAILY_THEME_KEYS = Object.keys(DAILY_THEMES) as DailyTheme[];
@@ -260,9 +343,9 @@ export function themeForDow(dow: number): DailyTheme {
 }
 
 export const DAILY_AUDIENCE_GUIDE: Record<DailyAudience, string> = {
-  women: "Women in the crew: strong, busy, funny, ambitious, at every level. Confidence and strength, never how she should look.",
-  men: "Men in the crew: training, work, family, friends, at every level. Real and warm, never macho or preachy.",
-  everyone: "Everyone in the crew: a moment anyone sees themselves in.",
+  women: "Women who lift, at every level, serious about their training. Strength and performance, never how she should look.",
+  men: "Men who lift, at every level, around work and family. Straight talk, never macho or preachy.",
+  everyone: "Everyone in the crew: an idea any lifter can use.",
 };
 
 /* ------------------------------------------------------------------ */
@@ -287,12 +370,12 @@ export const ART_STYLES: Record<DailyArt, { name: string; look: string; use: str
   graphic: {
     name: "A · Vibrant graphic 2D",
     look: "Art direction A, vibrant graphic 2D illustration like a premium animated film's key art: crisp dark ink outlines and flat cel shading with clean, hard-edged shadow shapes and a light hatched texture; a warm coral-red, terracotta and golden-yellow palette set against teal and blue-grey shadows; dramatic hard-edged shafts of sunlight beaming through windows across the scene, dust glowing in them; a dense, lived-in environment where every object is drawn (plates, racks, shelves, tools, plants); bold, deep one-point compositions with a bright window or doorway behind the subject.",
-    use: "fitness, ambition, confidence, discipline, humour and exciting everyday moments",
+    use: "the gym and the platform: lifting, coaching, technique, loading the bar, a meet",
   },
   anime: {
     name: "B · Cinematic 2D anime",
     look: "Art direction B, beautiful cinematic 2D anime like a frame from a modern anime film: thin, clean, confident linework; two-tone cel shading with one soft shadow tone; a glowing golden-hour or sunset sky with soft painted clouds and silhouetted buildings and trees; warm sunlight flooding the frame and a bright rim light glowing along the hair and face; complementary colours in the clothes and scene (orange against teal, gold against blue); calm, expressive faces in profile or three-quarter view; intimate medium close-ups.",
-    use: "relationships, self-worth, lifestyle, personal growth, reflection and relatable everyday life",
+    use: "the moments around training: the warm-up room, writing in the log, the walk in, recovery, the night before a meet",
   },
 };
 export const DAILY_ART_KEYS = Object.keys(ART_STYLES) as DailyArt[];
@@ -302,18 +385,18 @@ export const FILM_AVOID =
   "Avoid: brown or grey colour grading, desaturated or muted colour, a dark, gloomy or murky scene, heavy film grain or dirty textures, low contrast, flat lifeless colour, blurry, smudged or painterly faces, watercolour or oil-painting looks, photorealism or a photograph, 3D, CGI or Pixar-like rendering, plastic skin, childish cartoon proportions, exaggerated anime expressions or giant eyes, a motivational poster, logos or watermarks.";
 
 export const DAILY_STYLES: Record<DailyStyle, { name: string; look: string }> = {
-  wide_moment: { name: "Wide scene", look: "a wide shot, the person in a beautifully illustrated place full of life and colour (a busy gym, a city street, a park, a beach path, a rooftop)." },
-  medium_candid: { name: "Candid moment", look: "a medium shot caught mid-moment, what they're doing and how they feel reading clearly from their posture, face and hands." },
-  two_people: { name: "Two people", look: "two people together (friends, a couple, training partners, a parent and grown child), the relationship in how they stand, laugh and look at each other." },
-  group: { name: "Group", look: "a few people together (a gym crew, friends at brunch, teammates), the energy and humour between them." },
-  in_action: { name: "In action", look: "mid-action with motion and energy: a heavy lift, a sprint, a laugh, a high five, a jump into the lake." },
-  close_detail: { name: "Close-up detail", look: "a close-up on hands and the things that tell the story (chalk on fingers, the knurl of a barbell, laced shoes, a shared meal), the person partly in frame." },
-  over_shoulder: { name: "Over the shoulder", look: "over the shoulder, seeing what they see: the bar waiting on the platform, a friend waving them over, the city from a rooftop." },
-  low_angle: { name: "Low angle", look: "a low angle looking up at them, a moment of confidence, bright sky or glowing lights behind them." },
-  framed_view: { name: "Framed view", look: "framed through a doorway, a window or the edge of a mirror, as if we're watching a moment we weren't meant to see." },
-  backlit: { name: "Backlit", look: "backlit by a big window or a low sun, a glowing rim of light around the person, long colourful shadows." },
-  overhead: { name: "From above", look: "a top-down view of the moment (a gym floor, a picnic blanket, a kitchen table with a meal and a notebook)." },
-  two_frames: { name: "Two frames", look: "two frames side by side like a storyboard, the same person in two moments (expectation and reality, before and after, Monday and Friday), the joke or the change living between them." },
+  wide_moment: { name: "Wide scene", look: "a wide shot of a training space full of life and colour: a busy gym floor, a powerlifting platform, a garage gym, a meet's warm-up room." },
+  medium_candid: { name: "Candid moment", look: "a medium shot caught mid-moment in training, what they're doing and thinking reading clearly from their posture, face and hands." },
+  two_people: { name: "Two people", look: "two people in training (a coach and a lifter, training partners), the relationship in how they stand, cue, spot and react." },
+  group: { name: "Group", look: "a few lifters together (a training group between sets, a meet crew, teammates loading a bar), the energy between them." },
+  in_action: { name: "In action", look: "mid-rep on a squat, bench press or deadlift with real effort and motion, the bar, the plates and the body drawn correctly." },
+  close_detail: { name: "Close-up detail", look: "a close-up on the details that tell the story (chalked hands on the knurl, a belt being tightened, a pencil on a training log, plates and collars), the person partly in frame." },
+  over_shoulder: { name: "Over the shoulder", look: "over the shoulder, seeing what they see: the bar waiting in the rack, the coach watching from the side, the judges and lights at a meet, a log open on a bench." },
+  low_angle: { name: "Low angle", look: "a low angle looking up at a lifter set up under the bar or locking out a lift, bright lights behind them." },
+  framed_view: { name: "Framed view", look: "framed through the rack's uprights, a doorway or the edge of a mirror, as if we're watching a set from the side of the gym." },
+  backlit: { name: "Backlit", look: "backlit by a big gym window or a bright platform light, a glowing rim of light around the lifter, long colourful shadows." },
+  overhead: { name: "From above", look: "a top-down view (a lifter's stance on the platform, a training log with a pencil, chalk and a coffee, a meal prepped next to a notebook)." },
+  two_frames: { name: "Two frames", look: "two frames side by side like a storyboard, the same lifter in two moments (the rep they felt and the rep on video, week one and week eight, the warm-up and the top set), the point living between them." },
 };
 export const DAILY_STYLE_KEYS = Object.keys(DAILY_STYLES) as DailyStyle[];
 
@@ -439,8 +522,8 @@ export type VisualStat = {
 export const LEARN_MIN_POSTS = 3;
 /** How often the next post is offered something that hasn't proven itself yet, so it keeps finding out. */
 export const EXPLORE_SHARE = 0.25;
-/** A caption past this is "long" for the learning (several short paragraphs). */
-export const LONG_CAPTION = 200;
+/** A caption past this is "long" for the learning (about 70 words and up). */
+export const LONG_CAPTION = 420;
 
 /**
  * How well one did: what people did with it per person who saw it (a real
@@ -502,13 +585,12 @@ function rank<K extends string>(keys: K[], a: Record<K, Arm>, rand: number): K[]
   return rand < EXPLORE_SHARE ? [...spun, ...strong, ...weak] : [...strong, ...spun, ...weak];
 }
 
-/** How far the learning may move a pillar from its starting share, either way. */
+/** How far the learning may move a category from its starting share, either way. */
 export const PILLAR_NUDGE = { min: 0.75, max: 1.3 } as const;
 
 /**
  * The mix to aim for: the starting shares, each nudged (within PILLAR_NUDGE)
  * by how its posts do against the others once it has LEARN_MIN_POSTS of them.
- * A challenge never goes above its starting share: it's the seasoning.
  */
 export function pillarShares(l: Pick<DailyLearnings, "pillar">): Record<DailyPillar, number> {
   const proven = DAILY_PILLAR_KEYS.filter((k) => l.pillar[k].n >= LEARN_MIN_POSTS);
@@ -517,26 +599,23 @@ export function pillarShares(l: Pick<DailyLearnings, "pillar">): Record<DailyPil
     DAILY_PILLAR_KEYS.map((k) => {
       const base = DAILY_PILLARS[k].share;
       const m = proven.includes(k) && avg > 0 ? Math.min(PILLAR_NUDGE.max, Math.max(PILLAR_NUDGE.min, l.pillar[k].mean / avg)) : 1;
-      return [k, k === "challenge" ? Math.min(base, base * m) : base * m];
+      return [k, base * m];
     }),
   ) as Record<DailyPillar, number>;
   const total = DAILY_PILLAR_KEYS.reduce((t, k) => t + raw[k], 0);
   return Object.fromEntries(DAILY_PILLAR_KEYS.map((k) => [k, raw[k] / total])) as Record<DailyPillar, number>;
 }
 
-/** The days a pillar's share is counted over. */
+/** The days a category's share is counted over. */
 export const PILLAR_WINDOW = 20;
-/** A challenge at most once in this many days. */
-export const CHALLENGE_GAP = 6;
 
 const dowOf = (day: string) => ((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
 const gap = (a: string, b: string) => Math.abs(Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86_400_000;
 
 /**
- * Today's pillar, best first: the one furthest behind its share over the
+ * Today's category, best first: the one furthest behind its share over the
  * days around it (PILLAR_WINDOW), plus the weekday's small lean. Never the
- * same as the day before or after, and a challenge only when there's been
- * none within CHALLENGE_GAP days, never on a Sunday.
+ * same as the day before or after.
  */
 export function pickPillars(l: Pick<DailyLearnings, "pillar">, day: string, around: { day: string; pillar?: DailyPillar | string | null }[], rand: () => number = Math.random): DailyPillar[] {
   const shares = pillarShares(l);
@@ -545,11 +624,9 @@ export function pickPillars(l: Pick<DailyLearnings, "pillar">, day: string, arou
   const n = window.length + 1;
   const count = (p: DailyPillar) => window.filter((a) => a.pillar === p).length;
   const neighbours = new Set(others.filter((a) => gap(a.day, day) === 1).map((a) => a.pillar));
-  const recentChallenge = others.some((a) => a.pillar === "challenge" && gap(a.day, day) < CHALLENGE_GAP);
-  const dow = dowOf(day);
-  const lean = DAILY_THEMES[themeForDow(dow)].lean;
-  const allowed = DAILY_PILLAR_KEYS.filter((p) => !neighbours.has(p) && !(p === "challenge" && (dow === 7 || recentChallenge)));
-  const pool = allowed.length ? allowed : DAILY_PILLAR_KEYS.filter((p) => p !== "challenge");
+  const lean = DAILY_THEMES[themeForDow(dowOf(day))].lean;
+  const allowed = DAILY_PILLAR_KEYS.filter((p) => !neighbours.has(p));
+  const pool = allowed.length ? allowed : DAILY_PILLAR_KEYS;
   const score = (p: DailyPillar) => shares[p] * n - count(p) + (lean[p] ?? 0) + rand() * 0.05;
   return pool.map((p) => ({ p, s: score(p) })).sort((a, b) => b.s - a.s).map((x) => x.p);
 }
@@ -598,7 +675,7 @@ export function pickChoices(
 
 /** What's worked, in plain words, for the writer and the coach's card. */
 export function learningsText(l: DailyLearnings): string {
-  if (l.posts < LEARN_MIN_POSTS) return "Not enough posted yet to tell what works. Trying the full mix of pillars, shots and forms.";
+  if (l.posts < LEARN_MIN_POSTS) return "Not enough posted yet to tell what works. Trying the full mix of categories, shots and forms.";
   const best = <K extends string>(a: Record<K, Arm>, name: (k: K) => string) =>
     (Object.keys(a) as K[])
       .filter((k) => a[k].n >= 2)
@@ -606,8 +683,8 @@ export function learningsText(l: DailyLearnings): string {
       .slice(0, 2)
       .map(name);
   const out: string[] = [];
-  const pillars = best(l.pillar, (k) => DAILY_PILLARS[k as DailyPillar].name.toLowerCase());
-  if (pillars.length) out.push(`Pillars landing best: ${pillars.join(", ")}.`);
+  const pillars = best(l.pillar, (k) => DAILY_PILLARS[k as DailyPillar].name);
+  if (pillars.length) out.push(`Categories landing best: ${pillars.join(", ")}.`);
   const topics = best(l.topic, (k) => DAILY_TOPICS[k as DailyTopic].name.toLowerCase());
   if (topics.length) out.push(`Angles landing: ${topics.join(", ")}.`);
   const formats = best(l.format, (k) => DAILY_FORMATS[k as DailyFormat].name.toLowerCase());
@@ -654,69 +731,102 @@ export type DailyConcept = {
 };
 
 /**
- * His voice, from the coach's own words (Nov 5 2026): the example he wrote to
- * show how he'd post. A reference for the writer and the editor, never a
- * template (it's checked against so it can't come back near word for word).
+ * His voice, from the coach's own words (Nov 7 2026): the two posts he wrote
+ * to show how a post should read. References for the writer and the editor,
+ * never templates (each is checked against so neither can come back near
+ * word for word).
  */
-export const VOICE_EXAMPLE = `one thing i think people overlook is when going to the gym starts feeling normal.
+export const VOICE_EXAMPLES = [
+  `Being in the gym for 3 hours doesn't automatically mean you trained harder.
 
-you don't have to hype yourself up or convince yourself to go anymore. it's just part of your day.
+I care about the quality of your working sets, not how long you occupied a bench.
 
-it's easy to forget how much effort it used to take just to get started.
+If your main lifts are progressing, your accessories have a purpose, and you're recovering between sessions, we're doing something right.
 
-that's progress too.`;
+More work isn't always better work. Stop confusing time spent training with productive training.`,
+  `Your rest day is part of your program. Not a day you failed to train.
 
-/** The example's own lines, which a caption never borrows. */
-export const EXAMPLE_LINES = ["that's progress too", "people overlook", "starts feeling normal", "hype yourself up"] as const;
+You don't get stronger just because you accumulated more fatigue. You get stronger when your body adapts to the training you've already done.
 
-/** What it must never sound like: the post he pointed to as scripted (Nov 5's). */
+If your performance keeps declining, adding another hard session probably isn't the answer.
+
+The goal isn't to see how much work you can survive. It's to find how much productive work you can recover from.`,
+] as const;
+/** Both examples as one block, for the prompts. */
+export const VOICE_EXAMPLE = VOICE_EXAMPLES.join("\n\n---\n\n");
+
+/** The examples' own lines, which a caption never borrows. */
+export const EXAMPLE_LINES = [
+  "rest day is part of your program",
+  "a day you failed to train",
+  "how much work you can survive",
+  "productive work you can recover from",
+  "how long you occupied a bench",
+  "time spent training with productive training",
+  "more work isn't always better work",
+  "we're doing something right",
+] as const;
+
+/** What it must never sound like: the post he pointed to as scripted (Nov 5's), and the motivation-page lines he banned (Nov 7). */
 export const NOT_HIS_VOICE = `Signs you're not "starting over" again, you're just a guy who trains now:
 
 Alarm goes off and you just stand up.
 You pack your bag before bed without thinking.
-The old you would be shocked. The new you just calls it Thursday.`;
+The old you would be shocked. The new you just calls it Thursday.
+
+---
+
+Rest days matter too! Remember to listen to your body and give yourself grace. Every little bit counts. You got this! 💪`;
 
 /** How he writes, said once for the writer, the editor and a rewrite. */
 export const VOICE_GUIDE = `HOW JARED WRITES
-This is him (a reference for the voice, not a template to copy):
+He's an elite powerlifting coach explaining something to an athlete between sets. These two posts are him (references for the voice, never templates to copy):
 
 ${VOICE_EXAMPLE}
 
-He sounds like someone casually sharing a thought with people he likes: something he's noticed, a realization, a useful bit of advice, something funny about training life, or a question he actually wants answered. Conversational, genuine, confident, easy to read, sometimes thought-provoking, often light. Some posts are a casual thought, some are funny, some are genuinely useful, some make you look at your own progress, some make you want to train, some just make you smile.
+Direct, confident, conversational and analytical. Athlete to athlete: he respects the reader's intelligence and talks about execution, accountability and measurable progress. Occasionally dry or a little sarcastic, never mean. Every post leaves a lifter with something they can understand, check or do in their own training.
 
-This is NOT him (scripted copywriting, trying to sound clever):
+This is NOT him (scripted copywriting, or a fitness motivation page):
 
 ${NOT_HIS_VOICE}
 
-- lowercase, everyday words, contractions with apostrophes (don't, it's, you're, i'm), normal clear punctuation. No forced slang, no deliberate typos or missing apostrophes.
-- Say the thought plainly, the way he'd say it out loud. Short paragraphs, as short as the idea allows: one line is often enough, five short paragraphs at most.
-- Don't try to make it profound. A simple, true observation beats a big message. Stop when the thought is done: no punchline, kicker or moral tacked on the end (unless it's a joke), like "strong isn't just X. it's also Y" or "the old max is just tuesday now".
-- Talk with people, not at them: no lecturing, hype or speeches.
-- Never these shapes: "signs you're…" or any list post, "me: / my legs:" scripts, a little movie narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y", a setup line ending in a colon, words in scare quotes, slogans ("trust the process", "no excuses", "level up", "your future self"), AI phrases ("here's the thing", "the truth is", "let that sink in", "journey", "game changer", "secretly", "plot twist").
-- His opinions and what he's noticed are fine ("i think", "a lot of people…"), but never an experience he didn't have, with or without the "i": no "yesterday a client told me", no "when i started lifting", no "called it a quick workout, left two hours later". Say what people tend to do, not what happened to him. No real people, and no names at all: his name already shows on the post.
-- Advice: only well-known, safe basics, said simply; no numbers or studies.
-- Bodies: never about fixing how someone looks. Strength, confidence, how life feels.
-- No hashtags, @tags or Bible verses (the app adds Sunday's). One emoji at most, usually none.`;
+THE SHAPE (use it flexibly; not every post needs every part):
+- Hook: the first sentence states the point or the tension, short enough to read in the preview.
+- Insight: why it happens, what's really going on.
+- Application: what to do, check or change in your own training.
+- Takeaway: one closing line only when it adds something; never a slogan or a moral.
 
-export const CONCEPT_PROMPT = `You write the daily post for the JF Effect community feed, as Jared, the strength coach who runs it. The crew is men and women from first-week beginners to serious lifters. A post is a picture and a caption made together, and it should leave people glad they opened the app: a little happier, more confident, entertained, or keen to train.
+THE RULES
+- About 40 to 100 words. Longer only when a technical point needs it. Short paragraphs, five at most.
+- Normal sentence case and punctuation: capitals at the start of sentences, "I", names of days, RPE and PR. Contractions with apostrophes. No hashtags, no @tags, no dashes or semicolons, at most one emoji (usually none), no exclamation-mark hype.
+- Plain, precise words. Training terms lifters use are fine (RPE, top set, back-off sets, bar speed, lockout, hypertrophy); explain anything past that.
+- Never invent. No personal stories (with or without the "I": no "yesterday a client", no "when I started lifting"), no clients, athletes or results, no studies, research, statistics or percentages (the lessons carry the research, with their sources). Say how sure he is: an established principle plainly, his opinion as his ("I think", "my rule of thumb"), and where it depends on the lifter, say so ("for most lifters", "depends on your leverages").
+- Never these lines or anything like them: "every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time", "trust the process", "no excuses", "your future self".
+- No AI transitions or tells ("here's the thing", "the truth is", "let that sink in", "at the end of the day", "the key takeaway", "ultimately", "dive into", "journey", "game changer").
+- Never these shapes: a list post or a setup line ending in a colon, a "me: / my legs:" script, a little scene narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y" more than once, words in scare quotes.
+- Bodies: strength and performance, never how someone looks. Talk with lifters, never down to them: blunt about the training, never about the person.
+- No names (his shows on the post) and no Bible verses (the app adds Sunday's).`;
+
+export const CONCEPT_PROMPT = `You write the daily post for the JF Effect community feed, as Jared, the powerlifting coach who runs it. The crew is men and women who lift, from newer lifters to competitive powerlifters. A post is a picture and a caption made together, and it should be worth opening the app for: one training idea a lifter can use, said the way an elite coach explains something between sets. Not another fitness motivation page.
 
 ${VOICE_GUIDE}
 
 WORK IT OUT IN THIS ORDER
-1. The kind of post is given. Pick one angle from its list.
-2. The thought: what he'd actually want to say about it, in one plain sentence.
-3. The moment the picture shows: one specific, everyday moment that goes with the thought (it sets the scene; the caption never describes it or repeats words in it).
-4. Three different captions, three takes on the thought, each labelled with its form. Make at least one of them short. Pick the most natural one first, not the most dramatic.
+1. The category is given. Pick one angle from its list.
+2. The point: what he wants a lifter to understand or do, in one plain sentence. It must be true for most lifters and defensible to another good coach.
+3. The picture: one specific training moment that goes with the point (it sets the scene; the caption never describes it or repeats words in it).
+4. Three different captions, three takes on the point, each labelled with its form. Pick the clearest and most useful first, not the most dramatic.
 
 THE PICTURE
-- A frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). It goes with the caption: the same kind of place, time and people.
-- Describe the frame: who's in it (adults, their age range, build, hair and clothes, people of different looks, fitting who it's for), what they're doing and feeling, where they are, what's around them.
-- Likeable people in moments full of life: training, laughing, a milestone, friends, a sunny walk, coffee after the gym, a busy, bright gym. Bright and inviting; night only when the moment needs it, then with vivid colour and one bright light.
-- Never someone miserable alone in a dark room, staring at a phone, undressed, pinching or measuring their body, or on a scale. Never a poster, a pose or someone looking at the camera.
-- Most pictures have no words in them. Put words in the scene (a text on a phone, a note, a sign) only when they ARE the point, and then write exactly those words in "typography" (at most 12). With no words in the scene, "typography" is "".
+- A frame from a premium, colourful, hand-drawn 2D animated film (the look is fixed; you choose the moment, the art direction, the shot and the colour and light). It shows strength training, the same place, time and people as the caption.
+- What it shows: a squat, bench press or deadlift (the setup, mid-rep, the lockout), a coach watching or cueing a lifter, a training log or notebook with a pencil, loading plates, chalking up, a belt and knee sleeves, a warm-up room, a meet platform with judges, or recovery that belongs to training (a meal prepped next to a training log, sleep before a heavy day, an easy walk the day after a meet, a light deload session). Real gyms: racks, platforms, barbells, plates, benches, chalk.
+- Equipment drawn right: a straight barbell with the same plates on both sides and collars, a real rack or bench, the grip and stance that lift actually uses.
+- Describe the frame: who's in it (adults, their age range, build, hair and training clothes, people of different looks, fitting who it's for), what they're doing and thinking, where they are, what's around them.
+- Never a lifestyle scene with no training in it (picnics, beaches, brunch, parks, parties), never someone miserable alone in a dark room, staring at a phone, undressed, measuring their body or on a scale, never a poster, a pose or someone looking at the camera. Bright and inviting; night only when the moment needs it, then with vivid colour and one bright light.
+- Most pictures have no words in them. Put words in the scene (a line in a training log, a note, a sign) only when they ARE the point, and then write exactly those words in "typography" (at most 12). With no words in the scene, "typography" is "".
 
 Answer with JSON only:
-{"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the thought, in one sentence", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
+{"topic": "the angle", "mood": "...", "situation": "the moment", "idea": "the point, in one sentence", "art": "graphic or anime", "style": "the shot", "light": "...", "visual": "...", "typography": "...", "captions": [{"form": "...", "text": "..."}, {"form": "...", "text": "..."}, {"form": "...", "text": "..."}]}`;
 
 /** Ends on a question mark (a closing emoji aside). */
 export const endsWithQuestion = (s: string) => /\?\s*(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*\s*)?$/u.test(s.trim());
@@ -752,11 +862,11 @@ export function conceptPrompt(o: {
   const asked = before.length === 2 && before.every((r) => r.caption && endsWithQuestion(r.caption));
   return [
     `TODAY: ${t.idea}.`,
-    `PILLAR: ${p.name}. The goal: ${p.goal}. ${p.guide}`,
+    `CATEGORY: ${p.name}. The goal: ${p.goal}. ${p.guide}`,
     `ANGLES, as "topic" (pick one, best first): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k].idea}`).join("; ")}`,
     `MOOD, as "mood" (pick one): ${p.moods.join(", ")}`,
     `WHO IT'S FOR: ${DAILY_AUDIENCE_GUIDE[o.audience]} Today especially ${DAILY_CROWDS[o.crowd].guide}.`,
-    o.faith ? "SUNDAY: a Bible verse goes under the caption. Make it sit well under a calm verse about rest, hope or strength, without preaching." : null,
+    o.faith ? "SUNDAY: a Bible verse goes under the caption. Keep the post about training (recovery, review, the week ahead) and leave the verse to speak for itself: no preaching." : null,
     `CAPTION FORMS, as each draft's "form" (best first; two drafts can share one): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
     `COLOUR AND LIGHT, as "light" (pick the one that fits the moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
@@ -787,9 +897,9 @@ export function conceptPrompt(o: {
 
 const isKey = <K extends string>(keys: readonly K[], v: unknown): v is K => typeof v === "string" && (keys as readonly string[]).includes(v);
 
-/** The art direction a pillar leans to when the writer doesn't pick one. */
+/** The art direction a category leans to when the writer doesn't pick one. */
 export function artForPillar(p: DailyPillar): DailyArt {
-  return p === "realization" || p === "community" ? "anime" : "graphic";
+  return p === "mindset" || p === "recovery" ? "anime" : "graphic";
 }
 
 /** The concept's JSON (fenced or not), with its choices held to the lists it was given. */
@@ -843,40 +953,40 @@ export function parseConcept(
 /*  The editor: scores the drafts, picks one, polishes it               */
 /* ------------------------------------------------------------------ */
 
-export const EDITOR_SCORES = ["natural", "effortless", "clarity", "match", "fresh", "positive", "worth_it"] as const;
+export const EDITOR_SCORES = ["natural", "substance", "accuracy", "clarity", "match", "fresh", "worth_it"] as const;
 export type EditorScore = (typeof EDITOR_SCORES)[number];
-export const EDITOR_FLAGS = ["scripted", "trying_too_hard", "ai_phrasing", "lecturing", "invented", "shaming", "negative"] as const;
+export const EDITOR_FLAGS = ["scripted", "hype", "ai_phrasing", "preachy", "invented", "shaming", "generic"] as const;
 export type EditorFlag = (typeof EDITOR_FLAGS)[number];
 
-/** Each score the chosen draft has to reach (a challenge can be a little less sunny: respected and keen is enough). */
-export const EDITOR_BARS: Record<EditorScore, number> = { natural: 4, effortless: 4, clarity: 4, match: 3, fresh: 3, positive: 4, worth_it: 4 };
+/** Each score the chosen draft has to reach. */
+export const EDITOR_BARS: Record<EditorScore, number> = { natural: 4, substance: 4, accuracy: 4, clarity: 4, match: 3, fresh: 3, worth_it: 4 };
 
-export const EDITOR_PROMPT = `You're the editor of the JF Effect community feed, a strength coach's app. Every caption has to pass one test: would Jared naturally write this as his own social post? You get today's post plan (one picture) and up to three caption drafts.
+export const EDITOR_PROMPT = `You're the editor of the JF Effect community feed, a powerlifting coach's app. Every caption has to pass one test: would Jared, an elite powerlifting coach, post this as his own, and would a serious lifter be glad they read it? You get today's post plan (one picture) and up to three caption drafts.
 
 ${VOICE_GUIDE}
 
 Score each draft 1 to 5 (5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor):
-- natural: reads exactly like Jared casually posting, not a copywriter, a brand, a motivational speaker or an AI
-- effortless: easy to read and not trying hard: no forced depth, no punchline or moral tacked on, no clever structure
-- clarity: you get it on one read
+- natural: reads exactly like Jared, a coach talking to an athlete, not a copywriter, a brand, a motivational speaker or an AI
+- substance: one real training idea a lifter can understand, check or use (why it happens, what to do), not a feeling or a slogan
+- accuracy: true for most lifters and defensible to another good coach; nothing overstated, opinion said as opinion, "it depends" said where it does
+- clarity: you get it on one read on a phone
 - match: it goes with the picture without describing it or repeating its words
 - fresh: different from the recent posts in angle, opening and shape
-- positive: people leave a little happier, more confident, entertained or keen to train (a challenge: respected and keen, never ashamed)
-- worth_it: someone would enjoy it, react or send it to a friend
+- worth_it: a lifter would save it, comment on it or send it to a training partner
 
 Flags (true or false):
-- scripted: a formula: a list post, a "me: / my legs:" bit, a scene narrated to "you", "the old you / the new you", "it's not X, it's Y", a kicker line at the end
-- trying_too_hard: reaching to be profound, clever or inspirational
-- ai_phrasing: phrases or rhythms that give away an AI
-- lecturing: talks down or tells people what they're doing wrong
-- invented: a fact, number, study, name or personal experience it can't stand behind (a story told as his own counts, even with the "i" left off: "called it a quick workout, left two hours later")
+- scripted: a formula: a list post, a "me: / my legs:" bit, a scene narrated to "you", "the old you / the new you", "it's not X, it's Y" twice, a kicker line or moral at the end
+- hype: motivation-page energy: hype words, exclamation marks, a pep talk, a poster line
+- ai_phrasing: phrases, transitions or rhythms that give away an AI
+- preachy: moralizing, guilt, or talking down to the reader (direct about the training is fine)
+- invented: a fact, number, study, statistic, name, result or personal story it can't stand behind (a story told as his own counts, even with the "I" left off)
 - shaming: makes anyone feel bad about their body or themselves
-- negative: dwells on the bad without landing anywhere good
+- generic: could sit on any fitness page; says nothing specific about training
 
-Then pick the most natural draft (not the most dramatic or clever) and polish it: only edits that make it plainer and easier (cut a word or a sentence, simpler wording, fix punctuation or a paragraph break). Keep it lowercase. Never add a closing line, a question, an emoji or a name, and never change the thought. If it's already right, return it unchanged.
+Then pick the clearest, most useful draft (not the most dramatic or clever) and polish it: only edits that make it plainer and tighter (cut a word or a sentence, simpler wording, fix punctuation, capitals or a paragraph break). Keep normal sentence case. Never add a closing line, a question, an emoji, a claim or a name, and never change the point. If it's already right, return it unchanged.
 
 Answer with JSON only:
-{"drafts": [{"scores": {"natural": 1-5, "effortless": 1-5, "clarity": 1-5, "match": 1-5, "fresh": 1-5, "positive": 1-5, "worth_it": 1-5}, "flags": {"scripted": false, "trying_too_hard": false, "ai_phrasing": false, "lecturing": false, "invented": false, "shaming": false, "negative": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
+{"drafts": [{"scores": {"natural": 1-5, "substance": 1-5, "accuracy": 1-5, "clarity": 1-5, "match": 1-5, "fresh": 1-5, "worth_it": 1-5}, "flags": {"scripted": false, "hype": false, "ai_phrasing": false, "preachy": false, "invented": false, "shaming": false, "generic": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
 
 export function editorPrompt(o: {
   concept: Pick<DailyConcept, "pillar" | "topic" | "crowd" | "mood" | "situation" | "message" | "visual" | "typography" | "format">;
@@ -889,7 +999,7 @@ export function editorPrompt(o: {
   const p = DAILY_PILLARS[o.concept.pillar];
   const label = (i: number) => (o.forms?.[i] && DAILY_FORMATS[o.forms[i]] ? ` (${DAILY_FORMATS[o.forms[i]].name}: ${DAILY_FORMATS[o.forms[i]].guide})` : "");
   return [
-    `PILLAR: ${p.name}. The goal: ${p.goal}`,
+    `CATEGORY: ${p.name}. The goal: ${p.goal}`,
     `ANGLE: ${DAILY_TOPICS[o.concept.topic]?.idea ?? o.concept.topic}`,
     `FOR: ${DAILY_AUDIENCE_GUIDE[o.audience]} Especially ${DAILY_CROWDS[o.concept.crowd]?.guide ?? "anyone who trains"}.`,
     `MOOD: ${o.concept.mood}`,
@@ -931,13 +1041,10 @@ export function parseEditor(text: string, count: number): EditorReview | null {
 export const editorScore = (d: Pick<EditorDraft, "scores">) => Math.round((EDITOR_SCORES.reduce((t, k) => t + d.scores[k], 0) / EDITOR_SCORES.length) * 10) / 10;
 
 /** Does the editor's chosen draft clear every bar with no flag? What's short, if not. */
-export function editorVerdict(e: EditorReview, pillar: DailyPillar): { pass: boolean; issues: string[] } {
+export function editorVerdict(e: EditorReview, _pillar?: DailyPillar | null): { pass: boolean; issues: string[] } {
   const d = e.drafts[e.best];
   const issues: string[] = [];
-  for (const k of EDITOR_SCORES) {
-    const bar = k === "positive" && pillar === "challenge" ? 3 : EDITOR_BARS[k];
-    if (d.scores[k] < bar) issues.push(`${k.replace("_", " ")} ${d.scores[k]}/5`);
-  }
+  for (const k of EDITOR_SCORES) if (d.scores[k] < EDITOR_BARS[k]) issues.push(`${k.replace("_", " ")} ${d.scores[k]}/5`);
   for (const f of EDITOR_FLAGS) if (d.flags[f]) issues.push(f);
   if (issues.length && d.note) issues.push(d.note);
   return { pass: !issues.length, issues };
@@ -956,12 +1063,16 @@ const CONTRACTIONS: Record<string, string> = {
 /** "lets" is also a word ("it lets you"), so it's only fixed where it starts a sentence. */
 const AMBIGUOUS = new Set(["lets", "ill", "wont", "cant"]);
 
+/** Training terms that are always written in capitals (e1RM keeps its small e). */
+const ACRONYMS: Record<string, string> = { rpe: "RPE", pr: "PR", prs: "PRs", rir: "RIR", "1rm": "1RM", e1rm: "e1RM", amrap: "AMRAP" };
+
 /**
- * A caption as it should read in the feed, in his casual lowercase: real
- * apostrophes ("dont" and "im" fixed, never dropped to look casual), "i"
- * and a sentence's first word lowercase (an all-caps word like PR stays),
- * days and months lowercase, no em dashes or "&", no stray spaces, at most
- * one blank line between paragraphs, and never wrapped in quotes.
+ * A caption as it should read in the feed, in normal sentence case (Nov 7
+ * 2026: the coach's posts read like a coach, not a casual lowercase text):
+ * real apostrophes ("dont" and "im" fixed), "I", a capital at the start of
+ * every line and sentence, days and months capitalised, RPE / PR / RIR in
+ * capitals, no em dashes or "&", no stray spaces, at most one blank line
+ * between paragraphs, and never wrapped in quotes.
  */
 export function tidyCaption(text: string): string {
   let t = String(text ?? "").replace(/\r\n/g, "\n").trim();
@@ -980,13 +1091,15 @@ export function tidyCaption(text: string): string {
     if (AMBIGUOUS.has(w.toLowerCase()) && !/(^|[.!?\n]\s*)$/.test(before)) return w;
     return fix;
   });
-  // his casual lowercase: "i" (and i'm, i've), the first word of a line or sentence, days and months
-  t = t.replace(/\bI\b/g, "i");
-  t = t.replace(/(^|\n|[.!?]\s+)([A-Z])(?![A-Z])/g, (_m, lead, ch) => `${lead}${ch.toLowerCase()}`);
+  // sentence case: "I" (and I'm, I've), training acronyms, days and months, the first word of a line or sentence
+  t = t.replace(/\bi\b/g, "I");
+  t = t.replace(/\b(rpe|prs?|rir|1rm|e1rm|amrap)\b/gi, (w) => ACRONYMS[w.toLowerCase()] ?? w);
+  // "march" and "may" are words too, so only the unambiguous ones
   t = t.replace(
-    /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|June|July|August|September|October|November|December)\b/g,
-    (w) => w.toLowerCase(),
+    /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|april|june|july|august|september|october|november|december)\b/g,
+    (w) => w[0].toUpperCase() + w.slice(1),
   );
+  t = t.replace(/(^|\n|[.!?]\s+)([a-z])/g, (_m, lead, ch) => `${lead}${ch.toUpperCase()}`);
   t = t.replace(/ +([,.!?])/g, "$1");
   t = t
     .split("\n")
@@ -1027,6 +1140,19 @@ export const GENERIC_PHRASES = [
   "motivation is",
   "crush it",
   "crushing it",
+  // the lines the coach banned (Nov 7 2026): a fitness motivation page, not a coach
+  "every little bit counts",
+  "every little bit helps",
+  "give yourself grace",
+  "listen to your body",
+  "you've got this",
+  "movement is medicine",
+  "worse places to spend your time",
+  "every rep counts",
+  "proud of you",
+  "be kind to yourself",
+  "self-care",
+  "self care",
   // the first weeks' own clichés: never, not just not twice
   "nobody claps",
   "no one claps",
@@ -1063,6 +1189,22 @@ export const AI_TELLS = [
   "drop a comment",
   "tag someone",
   "tag a friend",
+  // transitions an AI reaches for
+  "at the end of the day",
+  "the bottom line",
+  "the key takeaway",
+  "key takeaway",
+  "the takeaway",
+  "ultimately,",
+  "moreover",
+  "furthermore",
+  "additionally,",
+  "dive into",
+  "deep dive",
+  "it's important to",
+  "it's worth noting",
+  "in today's",
+  "in conclusion",
 ] as const;
 
 /**
@@ -1109,6 +1251,9 @@ const sentencesOf = (text: string) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
+/** A sentence that walks "you" through a scene, a step at a time. */
+const SCENE_TO_YOU = /^you\s+(?:walk|walked|load|loaded|open|opened|see|saw|look|looked|grab|grabbed|pack|packed|step|stepped|check|checked|unrack|sit|sat|stand|stood|wake|woke|get to|realize|realise|feel|notice|hear|pick|put|head|drive|leave|finally)\b/i;
+
 /**
  * The shapes that read as a script, not a person: a list post (a setup line
  * ending in a colon), a "me: / my legs:" bit, a little movie narrated to
@@ -1122,8 +1267,9 @@ export function scriptedProblems(text: string): string[] {
   if (lines.some((l, i) => /:\s*$/.test(l) && i < lines.length - 1)) out.push("a setup line ending in a colon (reads like a list post)");
   if (lines.filter((l) => /^(me|you|also me|my [a-z' ]{1,20}|the [a-z ]{1,20}|everyone|them|coach)\s*:\s*\S/i.test(l)).length >= 2)
     out.push('a "me: / my legs:" script');
-  const toYou = sentencesOf(t).filter((x) => /^you\s+\w/i.test(x)).length;
-  if (toYou >= 3) out.push(`narrates a scene to "you" (${toYou} sentences start with "you")`);
+  // a coach explains to "you" ("you get stronger when…"); a script narrates "you" through a scene ("you walk in. you load the bar.")
+  const toYou = sentencesOf(t).filter((x) => SCENE_TO_YOU.test(x)).length;
+  if (toYou >= 3) out.push(`narrates a scene to "you" (${toYou} sentences walk "you" through it)`);
   if (/\b(?:that|this|it)(?:'s| is) not [^.!?\n]{1,40}[.!?]\s+(?:that|this|it)(?:'s| is) [^.!?\n]{1,40}[.!?]?\s*$/i.test(t))
     out.push('ends on a "that\'s not X. that\'s Y." kicker');
   const last = sentencesOf(t).pop() ?? "";
@@ -1134,8 +1280,8 @@ export function scriptedProblems(text: string): string[] {
   if (firstPersonStory(t)) out.push("tells a story as his own (it never happened to him)");
   if ((t.match(/!/g) ?? []).length >= 2) out.push("more than one exclamation mark");
   if ((t.match(/"[^"\n]{1,40}"/g) ?? []).length >= 2) out.push("words in scare quotes");
-  if (captionSimilarity(t, VOICE_EXAMPLE) >= 0.25) out.push("copies the voice example (it's a reference, not a template)");
-  // its own lines don't come back either (the first test batch closed on "that's progress too." twice in ten)
+  if (VOICE_EXAMPLES.some((x) => captionSimilarity(t, x) >= 0.25)) out.push("copies a voice example (they're references, not templates)");
+  // their own lines don't come back either (the first test batch closed on its example's "that's progress too." twice in ten)
   const plain = ` ${t.toLowerCase().replace(/[^a-z']+/g, " ")} `;
   for (const line of EXAMPLE_LINES) if (plain.includes(` ${line} `)) out.push(`borrows "${line}" from the voice example`);
   return out;
@@ -1150,7 +1296,7 @@ export function scriptedProblems(text: string): string[] {
  * the reps").
  */
 const FIRST_PERSON_STORY = [
-  /\bi'm (?!(?:not |just |still )?(?:saying|talking|guessing|telling|thinking|convinced|sure|curious|a big|a fan|all for)\b)\w+ing\b/i,
+  /\bi'm (?!(?:not |just |still )?(?:saying|talking|guessing|telling|thinking|asking|wondering|convinced|sure|curious|a big|a fan|all for)\b)\w+ing\b/i,
   /\bi (?:was|went|did|had|got|planned|tried|spent|walked|left|showed|took|finished|started|ran|lifted|ate|sat|woke|remember)\b/i,
   /\bi've (?:been|got|had|done|hit|spent|tried)\b/i,
   /\bmy (?:legs|arms|back|workout|session|squat|bench|deadlift|lift|gym|program|clients?|wife|kids|son|daughter|husband|girlfriend|boyfriend|friends?|buddy|partner|coach|mom|dad|brother|sister)\b/i,
@@ -1169,12 +1315,15 @@ export function namedPeople(text: string, names: readonly string[]): string[] {
  * writer leans on. Once is natural; twice reads like a template.
  */
 const CONTRAST = /\b(?:not|isn't|aren't|wasn't|doesn't|don't|never)\b[^.!?\n]{0,70}?[,.!?]\s+(?:it's|that's|they're|you're|it is|that is|this is)\b/gi;
-export const contrastCount = (text: string) => (text.replace(/[’]/g, "'").match(CONTRAST) ?? []).length;
+export function contrastCount(text: string): number {
+  const t = text.replace(/[’]/g, "'");
+  // "if you're not logging, you're guessing" is a condition, not the contrast
+  return [...t.matchAll(CONTRAST)].filter((m) => !/(?:^|[.!?\n])\s*if\b[^.!?\n]*$/i.test(t.slice(0, m.index))).length;
+}
 
-/** Talking at the reader, not with them. */
+/** Talking down to the reader, not coaching them (a direct "stop doing X" about the training is a coach; these are about the person). */
 const LECTURING = [
-  /\byou (need|have|got) to\b/i,
-  /\bstop (making|being|saying|pretending|waiting)\b/i,
+  /\bstop (being|pretending|making excuses)\b/i,
   /\bthe lie\b/i,
   /\bbe honest with yourself\b/i,
   /\bno one cares\b/i,
@@ -1284,9 +1433,23 @@ export const SIMILAR_MAX = 0.3;
 /** The hook (the first sentence) shows alone in the feed's preview: past these it's cut mid-thought on a phone. */
 export const HOOK_MAX_WORDS = 18;
 export const HOOK_MAX_CHARS = 110;
-/** Plain enough to read in one pass on a phone (natural writing, not a 5th-grade drill). */
-export const DAILY_GRADE_MAX = 7;
+/** Plain enough to read in one pass on a phone (a coach explaining, not a 5th-grade drill: his own example reads at 7.3). */
+export const DAILY_GRADE_MAX = 8;
 export const DAILY_SENTENCE_MAX = 24;
+/**
+ * Words lifters know: fine in a coach's post (the plain-words list still
+ * catches study-speak like "participants" or "protocol").
+ */
+export const LIFTER_TERMS = ["hypertrophy", "eccentric", "concentric", "isometric", "velocity", "adaptation", "stimulus", "periodization", "rir", "1rm"] as const;
+const DAILY_JARGON = Object.keys(JARGON).filter((j) => !(LIFTER_TERMS as readonly string[]).includes(j));
+
+/**
+ * Research said as fact in a daily post: the lessons carry studies with their
+ * sources; a daily post is coaching, so it never cites research or a
+ * statistic it can't show.
+ */
+const RESEARCH = /\b(stud(?:y|ies)|research(?:ers)?|scientists?|science (?:says|shows)|evidence (?:says|shows)|data (?:says|shows)|journal|meta-?analys[ie]s|statistic\w*|proven)\b|\d\s?%|\bpercent\b/i;
+
 /** Names that must never be dropped into a caption (the coach's own, and placeholders). */
 export const NO_NAMES = /\b(jared|jf effect|coach jared)\b|\[name\]|\{name\}|<name>/i;
 
@@ -1309,10 +1472,12 @@ export function captionProblems(
   o: { format: DailyFormat; pillar?: DailyPillar; recent?: string[]; near?: string[]; asked?: boolean; picture?: string; names?: readonly string[] },
 ): string[] {
   const out: string[] = [];
-  const f = DAILY_FORMATS[o.format] ?? DAILY_FORMATS.quick_take;
+  const f = DAILY_FORMATS[o.format] ?? DAILY_FORMATS.coach_note;
   const text = caption.trim();
   if (!text) return ["empty"];
   if (text.length > f.max) out.push(`${text.length} characters (a ${f.name.toLowerCase()} is ${f.max} at most)`);
+  if (wordsOf(text).length < DAILY_MIN_WORDS) out.push(`${wordsOf(text).length} words: too thin for a coaching point (about 40 to 100: the point, why, what to do)`);
+  if (RESEARCH.test(text)) out.push("cites research or a statistic (daily posts are coaching; the lessons carry studies with their sources)");
   const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   if (paragraphs.length > 5) out.push(`${paragraphs.length} paragraphs (5 at most)`);
   if (paragraphs.some((p) => p.split("\n").length > 1)) out.push("line breaks inside a paragraph (write sentences, not a poem of one-line lines)");
@@ -1333,19 +1498,21 @@ export function captionProblems(
   if (contrastCount(text) >= 2) out.push(`"it's not X, it's Y" ${contrastCount(text)} times (reads like AI)`);
   if (BODY_PUTDOWN.some((re) => re.test(text))) out.push("puts a body down");
   const lean = negativeLean(text);
-  if (lean.negative >= (o.pillar === "challenge" ? 4 : 3) && lean.negative > lean.positive) out.push(`leans negative (${lean.negative} heavy words, ${lean.positive} light ones)`);
+  if (lean.negative >= 5 && lean.negative > lean.positive) out.push(`leans negative (${lean.negative} heavy words, ${lean.positive} light ones)`);
   if (o.asked && endsWithQuestion(text)) out.push("ends on a question again (the last two did)");
   const pic = letters(o.picture ?? "");
   if (pic.split(" ").length >= 4 && letters(text).includes(pic)) out.push("repeats the words in the picture");
   if (wordsOf(text).length >= 25 && readingGrade(text) > DAILY_GRADE_MAX) out.push(`hard to read (grade ${readingGrade(text)}, aim ${DAILY_GRADE_MAX} or under)`);
   if (longestSentence(text) > DAILY_SENTENCE_MAX) out.push(`a ${longestSentence(text)}-word sentence (${DAILY_SENTENCE_MAX} at most)`);
-  for (const j of Object.keys(JARGON)) if (new RegExp(`[^\\p{L}]${j}s?[^\\p{L}]`, "iu").test(lower)) out.push(`"${j}" (say "${JARGON[j]}")`);
+  for (const j of DAILY_JARGON) if (new RegExp(`[^\\p{L}]${j}s?[^\\p{L}]`, "iu").test(lower)) out.push(`"${j}" (say "${JARGON[j]}")`);
   const repeat = repeatsNearby(text, o.near ?? []);
   if (repeat) out.push(repeat);
   const close = (o.recent ?? []).find((r) => captionSimilarity(text, r) >= SIMILAR_MAX);
   if (close) out.push(`too close to a recent post ("${close.slice(0, 50)}…")`);
   for (const m of motifRepeats(text, o.recent ?? [])) out.push(`uses "${m}" like a recent post (find a new moment)`);
-  for (const p of voiceProblems(text)) if (!out.includes(p)) out.push(p);
+  // "leverages" is a lifting word (limb lengths); "leverage" the verb is on his never-say list
+  const liftingLeverages = /\bleverages\b/i.test(text) && !/\bleverag(?:e|ed|ing)\b/i.test(text);
+  for (const p of voiceProblems(text)) if (!out.includes(p) && !(liftingLeverages && p === 'says "leverage"')) out.push(p);
   return [...new Set(out)];
 }
 
@@ -1370,13 +1537,13 @@ export const STYLE_REFERENCE =
 
 /** How each mood should feel in the frame. */
 const MOOD_LOOK: Record<DailyMood, string> = {
-  uplifting: "uplifting and hopeful, a sense of possibility",
-  proud: "quietly proud and glowing, a small personal victory",
-  funny: "funny and lively, the comedy readable in the faces and the moment",
-  warm: "warm and friendly, real connection between people",
-  curious: "bright and engaging, a little 'aha' in the moment",
-  fired_up: "energetic and determined, full of momentum",
-  thoughtful: "calm and reflective, still bright and hopeful",
+  direct: "focused and determined, serious intent in the faces",
+  analytical: "concentrated, studying the detail that matters",
+  dry_humour: "lightly funny, a wry moment readable in the faces",
+  matter_of_fact: "an ordinary training moment, calm and competent",
+  focused: "locked-in concentration before or during a lift",
+  calm: "calm and restorative, still bright and colourful",
+  curious: "engaged, a little 'aha' over the detail",
 };
 
 /** The image model's prompt: the look and art direction, the shot, the colour and light, the moment and its mood, the words in it (exactly) or none, and what it must never look like. */
@@ -1397,7 +1564,8 @@ export function picturePrompt(
     light ? `Colour and light: ${light.look}.` : null,
     `What happens in the frame: ${c.visual}`,
     `The feeling: ${c.message}${mood ? ` (${mood})` : ""}`,
-    "People are expressive, likeable, naturally proportioned adults with clean, sharp faces and clear, natural expressions, caught mid-moment, never posing or looking at the camera. The scene feels alive and inviting.",
+    "People are expressive, likeable, naturally proportioned adults with athletic builds that fit lifters, clean, sharp faces and clear, natural expressions, caught mid-moment, never posing or looking at the camera. The scene feels alive and inviting.",
+    "Strength equipment is drawn correctly: a straight barbell with matching plates on both sides and collars, a real squat rack, bench or platform, the grip, stance and bar position that lift actually uses, chalk, belts and sleeves where they belong.",
     o.faith ? "Quiet and hopeful, still bright and colourful; any Bible stays closed with no readable writing on it." : null,
     words
       ? `The only words in the frame are exactly these, where the story puts them (a speech bubble, a note, a screen), spelled exactly and clearly readable: ${words}. No other letters, numbers or logos anywhere.`
@@ -1414,7 +1582,7 @@ export function picturePrompt(
 /*  The review                                                         */
 /* ------------------------------------------------------------------ */
 
-export const REVIEW_PROMPT = `You review one daily post for a strength coach's community feed before it goes out: a picture and its caption, made together for one idea. The feed should make members glad they opened the app. Be an honest editor at a good magazine. Look closely at the picture.
+export const REVIEW_PROMPT = `You review one daily post for a powerlifting coach's community feed before it goes out: a picture and its caption, made together for one training idea. The feed is for people serious about getting stronger, not a fitness motivation page. Be an honest editor at a good strength magazine. Look closely at the picture.
 
 Answer with JSON only:
 {
@@ -1424,14 +1592,14 @@ Answer with JSON only:
  "clarity": "crisp (clean linework, sharp, well-drawn faces) or soft (blurry, smudged, grainy or painterly faces and lines)",
  "text_seen": "every word you can clearly read in the image, exactly as written, or empty",
  "defects": ["only clear mistakes anyone would notice at a glance, each one named"],
- "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5, "uplift": 1-5},
+ "scores": {"relatable": 1-5, "original": 1-5, "writing": 1-5, "audience_fit": 1-5, "aesthetic": 1-5, "storytelling": 1-5, "match": 1-5, "engaging": 1-5, "uplift": 1-5, "on_topic": 1-5},
  "fix_image": "what would make the picture better, or empty",
  "fix_caption": "what would make the caption better, or empty"
 }
 
-DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
+DEFECTS are objective errors only: wrong or extra fingers or limbs, warped faces or bodies, melted or impossible objects, gym equipment drawn wrong (a bent or broken barbell, different plates on each side, a bar passing through a body or floating, an impossible grip or bar position for the lift), garbled, misspelled or extra text, a watermark or logo, obvious rendering artefacts, the subject or the words cut off at an edge. Taste is never a defect (a slightly stock look, the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = would someone think "that's me"; original = not a cliché or slogan; writing = reads like the coach casually posting his own thought (plain, easy, lowercase with clear punctuation; scripted, trying hard to be profound, lecturing or AI-sounding is 3 or less; a caption meant as humour that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other, the caption not just repeating the words in the picture (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a like, comment or send; uplift = the picture and caption together leave people feeling good (happier, more confident, entertained, connected or excited to train), never gloomy, shaming or heavy without a turn.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan; writing = reads like an elite powerlifting coach explaining something to an athlete (direct, precise, normal sentence case and punctuation, one real idea with why and what to do; motivational, scripted, preachy or AI-sounding is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = bright, colourful and beautiful like a frame from a great hand-drawn 2D animated film, as striking as any style reference you were shown (not 3D, not a photo, not cheap vector, not childish, not dark or muddy); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other, the caption not just repeating the words in the picture (any contradiction, like a text in the picture while the caption says they heard it, or another place, time or person, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training (a lift, a coach and lifter, a training log, the platform, recovery that belongs to training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less.`;
 
 export type Review = {
   /** What it actually is: only hand_drawn_2d passes. */
@@ -1443,7 +1611,7 @@ export type Review = {
   description: string;
   text_seen: string;
   defects: string[];
-  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging" | "uplift", number>;
+  scores: Record<"relatable" | "original" | "writing" | "audience_fit" | "aesthetic" | "storytelling" | "match" | "engaging" | "uplift" | "on_topic", number>;
   fix_image: string;
   fix_caption: string;
 };
@@ -1508,6 +1676,8 @@ export function parseReview(text: string): Review | null {
         engaging: n(s.engaging),
         // a review from before the uplift score counts as neutral, not a fail
         uplift: s.uplift == null ? 4 : n(s.uplift),
+        // and one from before the strength-training check
+        on_topic: s.on_topic == null ? 4 : n(s.on_topic),
       },
       fix_image: typeof j.fix_image === "string" ? j.fix_image.trim() : "",
       fix_caption: typeof j.fix_caption === "string" ? j.fix_caption.trim() : "",
@@ -1518,16 +1688,16 @@ export function parseReview(text: string): Review | null {
 }
 
 /** Each score a post has to reach (the caption already passed the editor, so its bars here only catch a picture that changed its meaning). */
-export const REVIEW_BARS: Review["scores"] = { relatable: 3, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3, uplift: 4 };
-const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match", "uplift"]);
+export const REVIEW_BARS: Review["scores"] = { relatable: 3, original: 3, writing: 4, audience_fit: 3, aesthetic: 4, storytelling: 3, match: 4, engaging: 3, uplift: 3, on_topic: 4 };
+const IMAGE_SCORES = new Set<keyof Review["scores"]>(["aesthetic", "storytelling", "match", "uplift", "on_topic"]);
 
 /**
  * Pass or fail, on concrete checks first: the words read off the picture are
  * exactly what was asked for (or none), no defects; then every score at its
- * bar (a challenge post's uplift bar is 3). Says which side failed, so only
- * that side is made again.
+ * bar (the picture has to be about strength training: `on_topic`). Says which
+ * side failed, so only that side is made again.
  */
-export function reviewVerdict(r: Review, typography: string, scene = "", pillar?: DailyPillar | string | null): { pass: boolean; image: string[]; caption: string[] } {
+export function reviewVerdict(r: Review, typography: string, scene = "", _pillar?: DailyPillar | string | null): { pass: boolean; image: string[]; caption: string[] } {
   const image: string[] = [];
   const caption: string[] = [];
   const want = letters(typography);
@@ -1548,8 +1718,7 @@ export function reviewVerdict(r: Review, typography: string, scene = "", pillar?
   if (r.clarity !== "crisp") image.push(`its faces and lines read as ${r.clarity || "unclear"}, not crisp`);
   for (const d of r.defects) image.push(d);
   for (const k of Object.keys(REVIEW_BARS) as (keyof Review["scores"])[]) {
-    const bar = k === "uplift" && pillar === "challenge" ? 3 : REVIEW_BARS[k];
-    if (r.scores[k] >= bar) continue;
+    if (r.scores[k] >= REVIEW_BARS[k]) continue;
     (IMAGE_SCORES.has(k) ? image : caption).push(`${k} ${r.scores[k]}/5`);
   }
   if (image.length && r.fix_image) image.push(`fix: ${r.fix_image}`);
@@ -1561,14 +1730,14 @@ export function reviewVerdict(r: Review, typography: string, scene = "", pillar?
 /*  A caption rewrite against the same picture                         */
 /* ------------------------------------------------------------------ */
 
-export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for the JF Effect community feed, as Jared. The picture is already made and stays. Keep the post's thought; fix only what the editor said, and make it plainer, never cleverer.
+export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for the JF Effect community feed, as Jared, the powerlifting coach. The picture is already made and stays. Keep the post's point; fix only what the editor said, and make it plainer and more useful, never cleverer.
 
 ${VOICE_GUIDE}
 
 Answer with JSON only: {"caption": "..."}`;
 
 export function captionFixPrompt(o: { concept: Pick<DailyConcept, "message" | "situation" | "visual" | "format">; caption: string; fix: string[] }): string {
-  const f = DAILY_FORMATS[o.concept.format] ?? DAILY_FORMATS.quick_take;
+  const f = DAILY_FORMATS[o.concept.format] ?? DAILY_FORMATS.coach_note;
   return [
     `THE IDEA: ${o.concept.message}`,
     `THE SITUATION: ${o.concept.situation}`,
