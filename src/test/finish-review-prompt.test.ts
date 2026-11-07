@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { isLoggedSetDone, shouldPromptReview, workoutSetProgress, type ProgressResult } from "@/lib/workout-set-progress";
+import {
+  REVIEW_AFTER_TYPING_MS, REVIEW_EFFORT_GRACE_MS, REVIEW_PROMPT_DELAY_MS,
+  isLoggedSetDone, lastLoggedSet, reviewPromptDelay, shouldPromptReview, timedSetAwaitingEffort, workoutSetProgress,
+  type ProgressResult,
+} from "@/lib/workout-set-progress";
 
 const day = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
 const at = "2026-10-20T07:30:00Z";
@@ -82,13 +86,58 @@ describe("the finish review pops the moment it's all logged", () => {
 
   it("the logger: marked shown only when it opens, re-armed when a set is cleared or added, never waits on the network", () => {
     expect(day).toContain("if (!autoFinishReady && reviewPromptedRef.current === promptKey) reviewPromptedRef.current = null;");
-    expect(day).toContain("const id = window.setTimeout(() => {\n      reviewPromptedRef.current = promptKey;");
-    expect(day).toContain("      setQuickFinishReviewOpen(true);\n      // nothing left to rest for: no countdown or beep over the review\n      dismissRestTimer();\n      // never waits on the network: the session's start is stamped behind it\n      void markInProgress();");
+    expect(day).toContain("        if (!live || editing()) return;\n        reviewPromptedRef.current = promptKey;\n        setQuickFinishReviewOpen(true);");
+    expect(day).toContain("        setQuickFinishReviewOpen(true);\n        // nothing left to rest for: no countdown or beep over the review\n        dismissRestTimer();\n        // never waits on the network: the session's start is stamped behind it\n        void markInProgress();");
     expect(day).not.toContain("await markInProgress();\n        setQuickFinishReviewOpen(true);");
     // a set saved from this screen (every save path calls the page's refresh)
     expect(day).toContain("  const refresh = () => {\n    setLoggedHereFor(promptKey);");
     // the bars and ring read the same progress
     expect(day).toContain("doneRowIds: loggedProgress.doneRowIds,");
     expect(day).not.toContain("loggedByRow");
+  });
+});
+
+// The cardio walk at the end of a workout counted as done the moment its
+// calories (or its timer) went in, and the review popped over it, blurring the
+// RPE box the athlete was heading to. The set still counts as done at once;
+// only the review waits for them to finish entering it.
+describe("the finish review waits while the last set is still being entered", () => {
+  const walk = (over: Partial<ProgressResult> & { actual_rpe_num?: unknown; actual_rpe?: unknown } = {}) =>
+    set("walk", 1, { actual_reps: null, actual_load: null, completed_duration_seconds: 600, completed_at: "2026-10-20T08:30:00Z", ...over });
+
+  it("never while a box is focused (calories then RPE, reps then RPE)", () => {
+    expect(reviewPromptDelay({ editing: true, leftABox: false, awaitingEffort: false })).toBeNull();
+    expect(reviewPromptDelay({ editing: true, leftABox: true, awaitingEffort: true })).toBeNull();
+  });
+
+  it("a beat after the last set, a longer one after leaving a box, and room for RPE on a timed set without it", () => {
+    expect(reviewPromptDelay({ editing: false, leftABox: false, awaitingEffort: false })).toBe(REVIEW_PROMPT_DELAY_MS);
+    expect(reviewPromptDelay({ editing: false, leftABox: true, awaitingEffort: false })).toBe(REVIEW_AFTER_TYPING_MS);
+    expect(reviewPromptDelay({ editing: false, leftABox: false, awaitingEffort: true })).toBe(REVIEW_EFFORT_GRACE_MS);
+    expect(REVIEW_AFTER_TYPING_MS).toBeGreaterThan(REVIEW_PROMPT_DELAY_MS);
+    expect(REVIEW_EFFORT_GRACE_MS).toBeGreaterThanOrEqual(5000);
+  });
+
+  it("knows the set that finished the workout and whether it's a timed set still missing RPE", () => {
+    const squat = set("squat", 3, { completed_at: "2026-10-20T08:00:00Z" });
+    expect(lastLoggedSet([walk(), squat])?.row_id).toBe("walk");
+    // a cleared set doesn't count as the last one logged
+    expect(lastLoggedSet([squat, walk({ completed_at: null })])?.row_id).toBe("squat");
+    expect(timedSetAwaitingEffort(walk())).toBe(true);
+    expect(timedSetAwaitingEffort(walk({ actual_rpe_num: 6 }))).toBe(false);
+    expect(timedSetAwaitingEffort(walk({ actual_rpe: "6" }))).toBe(false);
+    // a lift's last set: the plain beat, not the cardio grace
+    expect(timedSetAwaitingEffort(squat)).toBe(false);
+    expect(timedSetAwaitingEffort(null)).toBe(false);
+  });
+
+  it("the logger holds it while a box is focused and re-times it on every focus change", () => {
+    expect(day).toContain("const awaitingEffort = timedSetAwaitingEffort(lastLoggedSet(results as any[]));");
+    expect(day).toContain("const wait = reviewPromptDelay({ editing: editing(), leftABox, awaitingEffort });");
+    expect(day).toContain('document.addEventListener("focusin", onFocusIn);');
+    expect(day).toContain('document.addEventListener("focusout", onFocusOut);');
+    expect(day).toContain("}, [promptReview, promptKey, awaitingEffort]);");
+    // it no longer pulls the keyboard out from under a box being typed in
+    expect(day).not.toContain("if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) el.blur();");
   });
 });
