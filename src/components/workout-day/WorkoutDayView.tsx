@@ -164,7 +164,7 @@ import {
   type LoggedSetSpec,
   type RowMetricKind,
 } from "@/lib/workout-completeness";
-import { shouldPromptReview, workoutSetProgress } from "@/lib/workout-set-progress";
+import { lastLoggedSet, reviewPromptDelay, shouldPromptReview, timedSetAwaitingEffort, workoutSetProgress } from "@/lib/workout-set-progress";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { useWorkoutHeartbeat, readHeartbeatTimestamps, clearHeartbeatTimestamps } from "@/hooks/use-workout-heartbeat";
 import { computeActiveSeconds } from "@/lib/workout-duration";
@@ -408,8 +408,6 @@ export function WorkoutDayView({
 }
 
 const sb = supabase as any;
-/** How long after the last set is logged the finish review opens. */
-const REVIEW_PROMPT_DELAY_MS = 600;
 
 // Sets this device just wrote ("rowId:setIndex" -> when). Live sync skips its
 // own echo: the save already refetched the day's results.
@@ -2276,24 +2274,51 @@ function WorkoutDay({
     loggedHere,
     alreadyPrompted: reviewPromptedRef.current === promptKey,
   });
+  // A timed set that finished the workout with no RPE yet (its timer just
+  // stopped, or only calories went in) gets room for RPE before the review.
+  const awaitingEffort = timedSetAwaitingEffort(lastLoggedSet(results as any[]));
   useEffect(() => {
     if (!promptReview) return;
-    // A beat for the last set's tick and its bar filling green, then the review.
-    // Marked as shown only when it actually opens: a refetch landing inside
-    // this beat just runs it again instead of losing it.
-    const id = window.setTimeout(() => {
-      reviewPromptedRef.current = promptKey;
+    // Never while a box is focused: the last set counts as done as soon as it
+    // can (a walk's calories, a lift's reps), but the person may still be
+    // typing the rest of it (RPE). Held until they leave the box, then a beat
+    // (reviewPromptDelay, workout-set-progress.ts). Marked as shown only when
+    // it actually opens: a refetch landing inside the wait just runs it again.
+    const editing = () => {
       const el = document.activeElement as HTMLElement | null;
-      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) el.blur();
-      setQuickFinishReviewOpen(true);
-      // nothing left to rest for: no countdown or beep over the review
-      dismissRestTimer();
-      // never waits on the network: the session's start is stamped behind it
-      void markInProgress();
-    }, REVIEW_PROMPT_DELAY_MS);
-    return () => window.clearTimeout(id);
+      return !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+    };
+    let id = 0;
+    let live = true;
+    const schedule = (leftABox: boolean) => {
+      window.clearTimeout(id);
+      if (!live) return;
+      const wait = reviewPromptDelay({ editing: editing(), leftABox, awaitingEffort });
+      if (wait == null) return;
+      id = window.setTimeout(() => {
+        if (!live || editing()) return;
+        reviewPromptedRef.current = promptKey;
+        setQuickFinishReviewOpen(true);
+        // nothing left to rest for: no countdown or beep over the review
+        dismissRestTimer();
+        // never waits on the network: the session's start is stamped behind it
+        void markInProgress();
+      }, wait);
+    };
+    const onFocusIn = () => window.clearTimeout(id);
+    // focus moves out of one box and into the next in two events: look once it has landed
+    const onFocusOut = () => window.setTimeout(() => schedule(true), 0);
+    schedule(false);
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      live = false;
+      window.clearTimeout(id);
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promptReview, promptKey]);
+  }, [promptReview, promptKey, awaitingEffort]);
 
   // ── Story view ─────────────────────────────────────────────────────────
   const storyRowKey = (rows as any[]).map((r) => String(r.id)).join("|");
