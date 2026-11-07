@@ -81,3 +81,16 @@ describe("Athlete Insights: the coach's card", () => {
     expect(readFileSync("src/lib/post-scores.ts", "utf8")).toContain('daily_visual: "Athlete Insights",');
   });
 });
+
+describe("Athlete Insights in the anime house style", () => {
+  const anime = readFileSync("supabase/migrations/20270212090000_athlete_insights_anime.sql", "utf8");
+  it("only the two live posts the coach named and the ones still to come get the new look, captions kept", () => {
+    expect(anime).toContain("SET regen = 'picture', regen_reason = 'restyle'");
+    expect(anime).toContain("AND coalesce(v.concept->>'look', '') <> 'anime_v1'");
+    expect(anime).toContain("(v.status = 'posted' AND v.day IN ('2026-11-06', '2026-11-07')");
+    expect(anime).toContain("p.archived_at IS NULL");
+    expect(anime).toContain("OR (v.status = 'ready' AND v.post_id IS NULL AND v.day >= public.instant_to_local(now(), 'America/Winnipeg')::date)");
+    // no other table or column changes
+    expect(anime).not.toMatch(/ALTER TABLE|CREATE OR REPLACE FUNCTION|DELETE FROM/);
+  });
+});

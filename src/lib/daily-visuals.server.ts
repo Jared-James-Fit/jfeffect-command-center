@@ -14,11 +14,13 @@
  *      captions the coach threw out → the concept and caption, held to
  *      captionProblems (plain words, his voice, no slogans, nothing close to a
  *      recent post) with up to 3 tries; kept on the side in `candidate`.
- *   2. picture: the image model (picturePrompt: a real photo of the lesson,
- *      the shot and the light, the equipment and technique right, no
- *      readable words) and then the review that looks at the picture with the
- *      caption (reviewVerdict: a real photo, natural light, sharp, no
- *      defects, every score at its bar, `teaches` included). A caption the reviewer marks down gets one rewrite against
+ *   2. picture: the image model (picturePrompt: a frame from a serious
+ *      powerlifting anime in JF Effect's house style, of the lesson, the shot,
+ *      the light and the place, the equipment, anatomy and technique right,
+ *      no readable words) and then the review that looks at the picture with
+ *      the caption (reviewVerdict: an anime frame, mature, cinematic colour,
+ *      clean linework, no defects, every score at its bar, `teaches` and
+ *      `technique` included). A caption the reviewer marks down gets one rewrite against
  *      the same picture. A picture that fails is made again with the fix (2 a
  *      concept), then a new concept (3 at most).
  *   3. it passes → community_daily_visual_apply puts it live in one step
@@ -364,7 +366,7 @@ type Around = {
   format: string | null;
   topic: string | null;
   verse_ref: string | null;
-  concept: { light?: string; pillar?: string; mood?: string; typography?: string; visual?: string } | null;
+  concept: { light?: string; pillar?: string; mood?: string; typography?: string; visual?: string; setting?: string } | null;
 };
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
@@ -400,6 +402,7 @@ async function context(admin: Admin, r: DailyRow) {
     mood: d.concept?.mood ?? null,
     caption: lineOf(d),
     visual: d.concept?.visual ?? null,
+    setting: d.concept?.setting ?? null,
   }));
   // the two posts before this one both ended on a question: this one doesn't
   const lastTwo = days.filter((d) => d.day < r.day).sort((a, b) => a.day.localeCompare(b.day)).slice(-2);
@@ -638,6 +641,7 @@ async function applyMade(
       typography: concept.typography,
       light: concept.light,
       art: concept.art,
+      setting: concept.setting ?? null,
       look: FILM_LOOK_VERSION,
       round: c.round,
       pillar: concept.pillar,
@@ -681,7 +685,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     provider = r.picture_provider ?? "";
     image = await pictureUrl(admin, r.picture.path);
   } else {
-    // the words alone: the style references were 2D film frames, and an Athlete Insight is a photo
+    // the words alone: the house style is written out in full in every prompt (FILM_LOOK), and a reference frame would hand on its people and gym
     const made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));
     if (!made.ok) throw new Error(made.reason);
     const { width, height } = made.picture;
@@ -938,6 +942,7 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     style: concept.style,
     light: concept.light,
     art: concept.art,
+    setting: concept.setting ?? null,
     look: FILM_LOOK_VERSION,
     format: concept.format,
     topic: concept.topic,
