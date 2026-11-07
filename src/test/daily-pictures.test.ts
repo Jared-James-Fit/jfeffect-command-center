@@ -508,9 +508,11 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(p).toContain("RECENT POSTS (pick a different angle, moment, opening and picture; don't copy how they're written):\n- 2026-11-06 · mistakes · junk_volume · question · group: What's your one accessory?");
     expect(p).toContain("THE COACH THREW THESE OUT (never write like them):\n- thrown out line");
     expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: substance 3/5.");
-    expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } })).toContain(
-      "KEEP THIS CAPTION EXACTLY, word for word",
-    );
+    const kept = conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } });
+    expect(kept).toContain("KEEP THIS CAPTION EXACTLY, word for word");
+    // a kept caption's photo shows what the caption names, not whatever the angles suggest (Nov 8's log post came back as a lifter resting)
+    expect(kept).toContain("The photo shows exactly what this caption is about, not the angles above");
+    expect(REVIEW_PROMPT).toContain("when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less");
   });
 
   it("the writer writes as the coach: his two posts, what isn't him, the shape and the rules", () => {
