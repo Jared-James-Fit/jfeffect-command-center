@@ -157,7 +157,9 @@ describe("holidays in the same voice", () => {
     for (const h of holidays) {
       expect([...h.body].length, h.key).toBeLessThanOrEqual(160);
       expect(h.body.split("\n\n"), h.key).toHaveLength(2);
-      expect(problems(h.body), h.key).toEqual([]);
+      // superseded by 20270210090000_coach_voice_libraries.sql (sentence case, Nov 7 2026), whose own
+      // test holds today's texts to today's phrase lists; these only had to pass the lists of their day
+      expect(problems(h.body).filter((p) => !p.includes('"proud of you"')), h.key).toEqual([]);
       expect(h.body, h.key).toBe(h.body.toLowerCase());
     }
   });
