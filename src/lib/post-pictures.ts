@@ -58,7 +58,7 @@ export type PictureKind =
   | "lesson"
   | "holiday"
   | "birthday"
-  /** A daily picture (daily-visuals.ts): made again from its own day's scene. */
+  /** An Athlete Insight (daily-visuals.ts): made again from its own day's photo brief. */
   | "daily_visual";
 
 const KINDS: PictureKind[] = [
@@ -114,7 +114,7 @@ export const KIND_PICTURE: Record<Exclude<PictureKind, "saturday_spirit">, strin
   birthday:
     "A birthday cake with lit candles sitting on a bench in a bright strength gym, a few balloons, cheerful and warm.",
   // made again from the day's own scene (daily-visuals.server.ts repictureDailyPost); this is only the fallback
-  daily_visual: "A calm, clean everyday scene that shows the post's feeling without words.",
+  daily_visual: "A real photo from a serious strength gym that shows the post's lesson, no words in it.",
 };
 
 const clean = (s: string | null | undefined) => String(s ?? "").replace(/\s+/g, " ").trim();

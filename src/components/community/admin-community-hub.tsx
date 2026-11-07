@@ -60,7 +60,7 @@ function nextPost(p: CommunityPulse): { title: string; when: string | null } {
   if (!p.next) return { title: "Nothing scheduled", when: null };
   if (p.next.series === "lesson")
     return { title: `Next lesson: ${p.next.title ?? "from the library"}`, when: `${whenLabel(p.next.at)}${p.next.needs_ok ? " · needs your OK" : ""}` };
-  if (p.next.series === "daily_visual") return { title: "Next: Daily picture", when: whenLabel(p.next.at) };
+  if (p.next.series === "daily_visual") return { title: "Next: Athlete Insight", when: whenLabel(p.next.at) };
   return { title: `Next: ${SERIES_LABEL[p.next.series]?.name ?? "Coach post"}`, when: whenLabel(p.next.at) };
 }
 

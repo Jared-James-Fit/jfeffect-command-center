@@ -52,8 +52,8 @@ function offNote(series: SwitchedSeries): string {
   if (series === "sunday_recap") return "Off: Wednesday Wins carries the week's numbers. Post a recap by hand when a week's worth one.";
   if (LESSON_DAY.has(series)) return `Off: ${DAYS[series]} get the lesson only. Turn it on and this goes out too.`;
   return series === "tuesday_tips"
-    ? "Off: Tuesdays get the daily picture. Turn it on and the tip (or the crew's own numbers, when they hold) goes out instead."
-    : `Off: ${DAYS[series]} get the daily picture. Turn it on and this goes out instead.`;
+    ? "Off: Tuesdays get an Athlete Insight when Tuesday is one of its days. Turn it on and the tip (or the crew's own numbers, when they hold) goes out instead."
+    : `Off: ${DAYS[series]} get an Athlete Insight when it's one of its days. Turn it on and this goes out instead.`;
 }
 
 /** What the "Up next" label calls a library post. */
@@ -71,7 +71,7 @@ function holidayDay(day: string): string {
 
 /**
  * Every coach post that goes out on its own, besides the lessons: the daily
- * series, one per day, the daily pictures (DailyPicturesCard) and the
+ * series, one per day, Athlete Insights (DailyPicturesCard) and the
  * holidays coming up.
  *
  * Wednesday Wins is written from the crew's logs and always runs. The Sunday
@@ -81,7 +81,7 @@ function holidayDay(day: string): string {
  * The other five (Monday Motivation, Tuesday Tips, Try it Thursday,
  * Finish Strong Friday, Saturday Spirit) post from their libraries, each on
  * its own switch. One coach post a day: a series that's on takes its day from
- * the daily picture (community_coach_post_day), and Monday's and Thursday's
+ * an Athlete Insight (community_coach_post_day), and Monday's and Thursday's
  * share theirs with the lesson, so only Tuesday's is on by default (20270204090000_one_coach_post_a_day.sql). Each day shows what goes out
  * next (library posts can be edited first) or what it'd say right now, and can
  * be posted early. Pausing coach posts (the Lessons card) stops all of it.
