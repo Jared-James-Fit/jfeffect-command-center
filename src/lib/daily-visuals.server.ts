@@ -456,8 +456,14 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
   // a picture-only remake keeps the day's own pillar (its caption stays)
   const keptPillar = keepCaption ? pillarOf({ pillar: r.concept?.pillar as string | undefined, topic: r.topic }) : null;
   const pillar = force.pillar ?? (force.topic ? DAILY_TOPICS[force.topic].pillar : null) ?? keptPillar;
+  // a kept caption from before today's categories is read for its angle (and so its category), never given one by rotation
+  const classify = keepCaption && !pillar;
   const picked = pickChoices(learned, { day: r.day, recent: ctx.recent, style: keptStyle ?? r.regen_style, pillar });
-  const choices = { ...picked, topics: force.topic ? [force.topic] : picked.topics, formats: force.format ? [force.format] : picked.formats };
+  const choices = {
+    ...picked,
+    topics: force.topic ? [force.topic] : classify ? DAILY_TOPIC_KEYS : picked.topics,
+    formats: force.format ? [force.format] : classify ? DAILY_FORMAT_KEYS : picked.formats,
+  };
   const crowd: DailyCrowd = force.crowd ?? crowdForDay(r.day);
 
   // his never-say lists, not his texting style: the feed reads like a social post, not a text
@@ -496,10 +502,11 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
         keep,
         editorNotes: attempt ? notes : undefined,
         noWords: ctx.noWords && !keepPicture,
+        classify,
       }),
     );
     model = t.model;
-    const parsed = parseConcept(t.text, { ...choices, art: force.art ?? null, crowd });
+    const parsed = parseConcept(t.text, { ...choices, art: force.art ?? null, crowd, classify });
     if (!parsed) {
       notes = ["the answer wasn't the JSON asked for"];
       continue;
@@ -576,7 +583,7 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
     learned: {
       posts: learned.posts,
       text: learningsText(learned),
-      pillar: choices.pillar,
+      pillar: made.pillar,
       crowd,
       topics: choices.topics.slice(0, 3),
       formats: choices.formats.slice(0, 3),

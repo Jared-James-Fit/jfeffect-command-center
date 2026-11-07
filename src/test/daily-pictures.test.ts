@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   DAILY_FORMATS,
+  DAILY_FORMAT_KEYS,
   DAILY_PILLARS,
   DAILY_PILLAR_KEYS,
   DAILY_TOPICS,
@@ -513,6 +514,19 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     // a kept caption's photo shows what the caption names, not whatever the angles suggest (Nov 8's log post came back as a lifter resting)
     expect(kept).toContain("The photo shows exactly what this caption is about, not the angles above");
     expect(REVIEW_PROMPT).toContain("when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less");
+    // a kept caption from before the categories is read for its angle: every angle offered, and the category follows the one picked
+    const all = { ...choices, topics: DAILY_TOPIC_KEYS, formats: DAILY_FORMAT_KEYS };
+    const read = conceptPrompt({ day: "2026-11-07", theme: "self_love", audience: "everyone", crowd: "everyone", faith: false, choices: all, learnings: "", best: [], worst: [], recent: [], keep: { caption: "Your rest day is part of your program." }, classify: true });
+    expect(read).toContain("CATEGORY: the one the caption below is actually about.");
+    expect(read).toContain('ANGLES, as "topic" (pick the one this caption is about;');
+    expect(read).not.toContain(`CATEGORY: ${DAILY_PILLARS[choices.pillar].name}.`);
+    const json = `{"topic": "junk_volume", "mood": "${DAILY_PILLARS.mistakes.moods[0]}", "idea": "m", "visual": "v", "captions": ["More work isn't always better work."]}`;
+    const long = parseConcept(json, { ...all, classify: true })!;
+    expect(long.pillar).toBe("mistakes");
+    expect(long.topic).toBe("junk_volume");
+    expect(long.mood).toBe(DAILY_PILLARS.mistakes.moods[0]);
+    // without it the category is the one given, whatever the angle
+    expect(parseConcept(json, all)!.pillar).toBe("recovery");
   });
 
   it("the writer writes as the coach: his two posts, what isn't him, the shape and the rules", () => {
