@@ -70,6 +70,14 @@ export function validateTypedWeight(raw: string, unit: WUnit): WeightValidation 
   return { ok: true, value, aboveCap: value > WEIGHT_CAP[unit] };
 }
 
+/**
+ * A number over the kg cap that's a normal number of pounds (495 typed on a kg
+ * card): the weight cell offers it as lb first, then as kg.
+ */
+export function overCapAsPounds(value: number, unit: WUnit): boolean {
+  return unit === "kg" && Number.isFinite(value) && value > WEIGHT_CAP.kg && value <= WEIGHT_CAP.lb;
+}
+
 export type WeightInputMode = "picker" | "type";
 const MODE_KEY = "workout-weight-input-mode";
 

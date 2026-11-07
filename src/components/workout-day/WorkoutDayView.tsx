@@ -4675,6 +4675,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
               onRemoveSet={canRemoveSet ? removeSet : undefined}
+              onSwitchUnit={!readonly && onUnitChange && !hideWeight ? handleUnitToggle : undefined}
             />
           );
         })}
@@ -4982,6 +4983,9 @@ function NoteHistoryItem({ note }: { note: any }) {
   );
 }
 
+/** How long a weight typed in the other unit waits for the card's KG / LB switch to render. */
+const UNIT_PICK_WAIT_MS = 5000;
+
 function SetRow({
   rowId, workoutId, exerciseId, exerciseName, clientId, setIndex, existing, prevExisting,
   targetReps, targetRpe, targetRir, suggestedWeight, loadHint = null, autoFillSuggestedWeight = false, lastTimeWeight,
@@ -5003,8 +5007,11 @@ function SetRow({
   onTimerTargetChange,
   onTimerCascade,
   onRemoveSet,
+  onSwitchUnit,
 }: {
   loadHint?: LoadSuggestion | null;
+  /** The card's KG / LB switch: a weight typed in the other unit switches it, then saves. */
+  onSwitchUnit?: (u: "kg" | "lb") => void;
   rowId: string;
   workoutId?: string | null;
   exerciseId?: string | null;
@@ -5322,6 +5329,15 @@ function SetRow({
     if (lastUnitRef.current === unit) return;
     const previousUnit = lastUnitRef.current;
     lastUnitRef.current = unit;
+    // A weight typed in the other unit ("495 lb" on a kg card) switched the
+    // card: it's the person's own number in the new unit, saved like any pick
+    // (never converted, never adopted as already saved).
+    const pick = unitPickRef.current;
+    unitPickRef.current = null;
+    if (pick && pick.unit === unit && Date.now() - pick.at < UNIT_PICK_WAIT_MS) {
+      applyWeightPick(pick);
+      return;
+    }
     // The toggle changes only the display representation. Convert the visible
     // number so 90 kg becomes 198.4 lb (and vice versa), then retain the
     // existing entered pair as the autosave baseline. No unit toggle may
@@ -5738,6 +5754,35 @@ function SetRow({
     void save.flush().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commitFlushToken]);
+
+  /** The weight cell's pick, saved at once (see commitFlushToken). */
+  const applyWeightPick = ({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
+    // Guard against a window-focus refetch clobbering the pick.
+    recentlySavedRef.current = true;
+    if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
+    recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
+    // Canonical overwrite marker: hold this value on screen until the
+    // server reports it back (works for create, update, bodyweight,
+    // assisted and explicit clear alike).
+    committedLoadRef.current = { load: bodyweight ? "0" : nextLoad, loadType: nextType };
+    setLoadType(nextType);
+    setLoadPaired(bodyweight ? "0" : nextLoad);
+    setFocusedField(null);
+    setOptimisticComplete(false);
+    // Commit → persist + re-evaluate completion immediately, after the
+    // autosave hook has seen the new value (see commitFlushToken).
+    setCommitFlushToken((t) => t + 1);
+    // Manual change → cascade downward into eligible sets below.
+    void onCascadeFromSet?.(setIndex, {
+      load: bodyweight ? "0" : nextLoad,
+      loadType: nextType,
+      unit,
+      reps,
+      rpe,
+    });
+  };
+  /** A pick in the other unit, waiting for the card's switch to render. */
+  const unitPickRef = useRef<{ load: string; bodyweight: boolean; loadType: LoadType; unit: "kg" | "lb"; at: number } | null>(null);
 
   const flushSaveAfterEdit = () => {
     clearEditGuard();
@@ -6252,30 +6297,16 @@ function SetRow({
         // Today's suggestion lives behind "Show suggestions" (and the warm-up card).
         disabled={readonly}
         focusMode={focusMode}
-        onPick={({ load: nextLoad, bodyweight, loadType: nextType }: { load: string; bodyweight: boolean; loadType: LoadType }) => {
-          // Guard against a window-focus refetch clobbering the pick.
-          recentlySavedRef.current = true;
-          if (recentlySavedTimerRef.current) clearTimeout(recentlySavedTimerRef.current);
-          recentlySavedTimerRef.current = setTimeout(() => { recentlySavedRef.current = false; }, 8000);
-          // Canonical overwrite marker: hold this value on screen until the
-          // server reports it back (works for create, update, bodyweight,
-          // assisted and explicit clear alike).
-          committedLoadRef.current = { load: bodyweight ? "0" : nextLoad, loadType: nextType };
-          setLoadType(nextType);
-          setLoadPaired(bodyweight ? "0" : nextLoad);
-          setFocusedField(null);
-          setOptimisticComplete(false);
-          // Commit → persist + re-evaluate completion immediately, after the
-          // autosave hook has seen the new value (see commitFlushToken).
-          setCommitFlushToken((t) => t + 1);
-          // Manual change → cascade downward into eligible sets below.
-          void onCascadeFromSet?.(setIndex, {
-            load: bodyweight ? "0" : nextLoad,
-            loadType: nextType,
-            unit,
-            reps,
-            rpe,
-          });
+        canSwitchUnit={!!onSwitchUnit}
+        onPick={(next) => {
+          if (next.unit && next.unit !== unit && onSwitchUnit) {
+            // Switch the card first; the unit effect saves the number once the
+            // switch has rendered, so it's never converted as if it were kg.
+            unitPickRef.current = { ...next, unit: next.unit, at: Date.now() };
+            onSwitchUnit(next.unit);
+            return;
+          }
+          applyWeightPick(next);
         }}
       />
       )}
