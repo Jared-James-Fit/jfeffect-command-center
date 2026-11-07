@@ -899,17 +899,22 @@ export function conceptPrompt(o: {
   editorNotes?: string[];
   /** One of the two posts before had words in its picture: today's has none. */
   noWords?: boolean;
+  /** A kept caption from before the categories: its angle (and so its category) is read from its words. */
+  classify?: boolean;
 }): string {
   const t = DAILY_THEMES[o.theme];
   const p = DAILY_PILLARS[o.choices.pillar];
+  const moods = o.classify ? [...new Set(DAILY_PILLAR_KEYS.flatMap((k) => DAILY_PILLARS[k].moods))] : p.moods;
   const ordered = [...o.recent].sort((a, b) => a.day.localeCompare(b.day)).filter((r) => r.day !== o.day);
   const before = ordered.filter((r) => r.day < o.day).slice(-2);
   const asked = before.length === 2 && before.every((r) => r.caption && endsWithQuestion(r.caption));
   return [
     `TODAY: ${t.idea}.`,
-    `CATEGORY: ${p.name}. The goal: ${p.goal}. ${p.guide}`,
-    `ANGLES, as "topic" (pick one, best first; each with the picture that teaches it): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k].idea} (picture: ${DAILY_TOPICS[k].picture})`).join("; ")}`,
-    `MOOD, as "mood" (pick one): ${p.moods.join(", ")}`,
+    o.classify
+      ? "CATEGORY: the one the caption below is actually about. It follows from the angle you pick as \"topic\": pick the angle closest to what the caption says, never one it doesn't touch."
+      : `CATEGORY: ${p.name}. The goal: ${p.goal}. ${p.guide}`,
+    `ANGLES, as "topic" (${o.classify ? "pick the one this caption is about" : "pick one, best first"}; each with the picture that teaches it): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k].idea} (picture: ${DAILY_TOPICS[k].picture})`).join("; ")}`,
+    `MOOD, as "mood" (pick one): ${moods.join(", ")}`,
     `WHO IT'S FOR: ${DAILY_AUDIENCE_GUIDE.everyone} Today especially ${DAILY_CROWDS[o.crowd].guide}. Never aimed at men or women: it's about their training.`,
     o.faith ? "SUNDAY: a Bible verse goes under the caption. Keep the post about training (recovery, review, the week ahead) and leave the verse to speak for itself: no preaching." : null,
     `CAPTION FORMS, as each draft's "form" (best first; two drafts can share one): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
@@ -955,7 +960,7 @@ export function artForPillar(p: DailyPillar): DailyArt {
 /** The concept's JSON (fenced or not), with its choices held to the lists it was given. */
 export function parseConcept(
   text: string,
-  allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null; crowd?: DailyCrowd },
+  allowed: Omit<Choices, "lights"> & { lights?: DailyLight[]; art?: DailyArt | null; crowd?: DailyCrowd; classify?: boolean },
 ): DailyConcept | null {
   const m = /\{[\s\S]*\}/.exec(text ?? "");
   if (!m) return null;
@@ -974,10 +979,12 @@ export function parseConcept(
       .filter((d: { text: string }) => d.text)
       .slice(0, 3) as { text: string; form: DailyFormat }[];
     const drafts = raw.map((d) => d.text);
-    const pillar = allowed.pillar;
+    const topic: DailyTopic = isKey(allowed.topics, j.topic) ? j.topic : allowed.topics[0];
+    // a kept caption read for its angle takes that angle's category
+    const pillar = allowed.classify ? DAILY_TOPICS[topic].pillar : allowed.pillar;
     const c: DailyConcept = {
       pillar,
-      topic: isKey(allowed.topics, j.topic) ? j.topic : allowed.topics[0],
+      topic,
       crowd: allowed.crowd ?? "everyone",
       mood: isKey(DAILY_PILLARS[pillar].moods, j.mood) ? j.mood : DAILY_PILLARS[pillar].moods[0],
       situation: str(j.situation, 500),
@@ -985,7 +992,7 @@ export function parseConcept(
       message: str(j.idea ?? j.message, 300),
       format: raw[0]?.form ?? fallback,
       style: isKey(allowed.styles, j.style) ? j.style : allowed.styles[0],
-      light: isKey(DAILY_LIGHT_KEYS, j.light) ? j.light : (allowed.lights?.[0] ?? "golden_teal"),
+      light: isKey(DAILY_LIGHT_KEYS, j.light) ? j.light : (allowed.lights?.[0] ?? DAILY_LIGHT_KEYS[0]),
       art: allowed.art ?? (isKey(DAILY_ART_KEYS, j.art) ? j.art : artForPillar(pillar)),
       visual: str(j.visual, 1400),
       // a photo carries no readable words (an image model mangles them, and a real gym's are brands)
