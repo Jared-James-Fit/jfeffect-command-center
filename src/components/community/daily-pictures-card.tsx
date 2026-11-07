@@ -191,7 +191,7 @@ function daysName(days: number[]): string {
 function statusLine(d: Day, today: string, off: boolean): { text: string; tone?: "warn" | "good" } {
   if (d.regen) {
     const what = d.regen === "caption" ? "New caption" : d.regen === "picture" ? "New image" : d.status === "planned" ? "Being made" : "Being remade";
-    const step = d.step === "picture" ? " · photo and check" : d.step === "concept" ? " · words" : "";
+    const step = d.step === "picture" ? " · image and check" : d.step === "concept" ? " · words" : "";
     return { text: `${what}${step}…${d.error ? ` (${d.error})` : ""}` };
   }
   if (d.status === "skipped") return { text: d.error ?? "Skipped" };
@@ -207,8 +207,8 @@ function statusLine(d: Day, today: string, off: boolean): { text: string; tone?:
 
 /**
  * Crew → Posts: Athlete Insights (series `daily_visual`, daily-visuals.ts).
- * On the weekdays the coach picks (3 a week by default), a real photo and a
- * caption made together and checked before they go live
+ * On the weekdays the coach picks (3 a week by default), an anime frame in
+ * JF Effect's house style and a caption made together and checked before they go live
  * (daily-visuals.server.ts); a post that didn't fully pass waits for his OK.
  * Tap one to see it as the crew will, approve or reject it, make a new image
  * (caption kept) or a new caption (image kept), edit the words, publish it
@@ -764,7 +764,7 @@ function Tests({ tests }: { tests: Test[] }) {
 
 /**
  * The coach's yes to the new look for posts already published: their images
- * are remade as photos, captions, likes and comments kept, the old images in
+ * are remade in the current look, captions, likes and comments kept, the old images in
  * Versions (community_daily_visuals_restyle). Upcoming posts move to it on
  * their own; a published one only when he says so.
  */
@@ -788,10 +788,10 @@ function ApproveLook({ days }: { days: Day[] }) {
     <div className="border-t border-border px-4 py-3" data-daily-approve-look>
       <div className="text-[13px] font-semibold">Published posts in the old look</div>
       <p className="mb-2 text-[12px] text-muted-foreground">
-        {older} {older === 1 ? "post still has" : "posts still have"} an illustration. Nothing published changes unless you say so: open one to give it a new image, or replace them all here (captions, likes and comments stay, the old images in Versions).
+        {older} {older === 1 ? "post is" : "posts are"} still in an older look. Nothing published changes unless you say so: open one to give it a new image, or replace them all here (captions, likes and comments stay, the old images in Versions).
       </p>
       <Button className="w-full" variant="outline" disabled={run.isPending} onClick={() => run.mutate()}>
-        Give {older} {older === 1 ? "post" : "posts"} a new photo
+        Give {older} {older === 1 ? "post" : "posts"} the new look
       </Button>
     </div>
   );
