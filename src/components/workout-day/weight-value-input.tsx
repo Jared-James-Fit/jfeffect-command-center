@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, Eraser, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   WEIGHT_CAP,
   WEIGHT_STEP,
+  overCapAsPounds,
   validateTypedWeight,
   type WUnit,
 } from "@/lib/workout-weight-input";
@@ -27,8 +29,13 @@ import { formatLoadDisplay, type LoadType } from "@/lib/workout-load-type";
  * (Weight / Bodyweight / Assisted). Units stay on the card's KG/LB toggle and
  * input method is always typing — there is no +/− load "type".
  *
- * UNIT: read-only, from the workout card's KG/LB toggle. No local unit state,
- * no conversion here.
+ * UNIT: from the workout card's KG/LB toggle. No local unit state, no
+ * conversion here. The one exception is a number over the unit's cap: it's
+ * never dropped (the iPhone number pad has no Done key, so leaving the box is
+ * how most weights are entered), it asks, and on a kg card a number that fits
+ * as pounds offers "495 lb" first, which picks with `unit: "lb"` so the card
+ * switches to lb and saves exactly what was typed (Jared McIntyre's 495 lb
+ * deadlift on a kg card vanished every time he left the box, Nov 7 2026).
  */
 
 type SheetMode = "options" | "confirm";
@@ -44,14 +51,21 @@ export function WeightValueInput({
   ariaLabel,
   referenceWeight = null,
   suggested = null,
+  canSwitchUnit = false,
 }: {
   value: string;
   isBodyweight: boolean;
   /** external | bodyweight | assisted — assisted means the number is assistance. */
   loadType?: LoadType;
   unit: WUnit;
-  /** `{ load: "", bodyweight: false, loadType: "external" }` clears. */
-  onPick: (next: { load: string; bodyweight: boolean; loadType: LoadType }) => void;
+  /**
+   * `{ load: "", bodyweight: false, loadType: "external" }` clears. `unit` is
+   * set only when the number is in the other unit than the card's (the "495 lb"
+   * choice): the row switches the card first, then saves it.
+   */
+  onPick: (next: { load: string; bodyweight: boolean; loadType: LoadType; unit?: WUnit }) => void;
+  /** The card has a KG / LB switch, so an over-cap kg number can be saved as lb. */
+  canSwitchUnit?: boolean;
   disabled?: boolean;
   focusMode?: boolean;
   ariaLabel: string;
@@ -135,8 +149,20 @@ export function WeightValueInput({
     const draft = typed.trim();
     if (draft === "") { cancelEditing(); return; }
     const res = validateTypedWeight(draft, unit);
-    if (!res.ok || res.aboveCap) { cancelEditing(); return; }
+    if (!res.ok) { cancelEditing(); return; }
+    // Over the cap: ask, never drop it (this is how 495 typed on a kg card vanished).
+    if (res.aboveCap) { askAboveCap(res.value); return; }
     commitWeight({ load: String(res.value), bodyweight: false, loadType: numericType });
+  };
+
+  /** A number over the unit's cap: the box closes and the sheet asks what it is. */
+  const askAboveCap = (n: number) => {
+    committingRef.current = true;
+    inputRef.current?.blur();
+    setEditing(false);
+    setTyped("");
+    setConfirmValue(n);
+    setSheet("confirm");
   };
 
   const closeSheet = () => {
@@ -150,7 +176,7 @@ export function WeightValueInput({
    * Optimistic by construction: onPick updates local row state immediately and
    * the existing autosave/cascade/auto-complete run downstream of it.
    */
-  const commitWeight = (next: { load: string; bodyweight: boolean; loadType: LoadType }) => {
+  const commitWeight = (next: { load: string; bodyweight: boolean; loadType: LoadType; unit?: WUnit }) => {
     const n = next.load === "" ? null : Number(next.load);
     if (n != null && Number.isFinite(n)) {
       if (next.loadType === "assisted") memoAssist.current = n;
@@ -167,6 +193,9 @@ export function WeightValueInput({
   };
 
   const numericType: LoadType = draftType === "assisted" ? "assisted" : "external";
+  /** Over the kg cap but a normal number of pounds: offer it as lb first. */
+  const asPounds = (n: number | null) =>
+    n != null && canSwitchUnit && numericType === "external" && overCapAsPounds(n, unit);
 
   /** Keyboard Done / form submit. */
   const submitTyped = () => {
@@ -180,14 +209,7 @@ export function WeightValueInput({
     }
     const res = validateTypedWeight(typed, unit);
     if (!res.ok) { setError(res.error); return; }
-    if (res.aboveCap) {
-      committingRef.current = true;
-      inputRef.current?.blur();
-      setEditing(false);
-      setConfirmValue(res.value);
-      setSheet("confirm");
-      return;
-    }
+    if (res.aboveCap) { askAboveCap(res.value); return; }
     commitWeight({ load: String(res.value), bodyweight: false, loadType: numericType });
   };
 
@@ -260,30 +282,51 @@ export function WeightValueInput({
   const sheetBody = (
     <div className="space-y-2">
       <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {sheet === "confirm" ? "Confirm weight" : "Load type"}
+        {sheet === "confirm" ? "Check the weight" : "Load type"}
       </div>
 
       {sheet === "confirm" && confirmValue != null ? (
-        <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
-          <div className="text-[12px] font-medium text-foreground">
-            This is above the normal weight cap ({cap} {unit}). Save anyway?
+        <div className="space-y-2" data-weight-confirm>
+          <div className="px-1 text-[15px] font-medium text-foreground">
+            {asPounds(confirmValue)
+              ? <>{confirmValue} kg is over {cap} kg. Did you mean {confirmValue} lb?</>
+              : <>{confirmValue} {unit} is over the normal cap ({cap} {unit}). Save it anyway?</>}
           </div>
-          <div className="flex gap-1.5">
+          {asPounds(confirmValue) ? (
+            <>
+              <button
+                type="button"
+                data-weight-as-lb
+                onClick={() => commitWeight({ load: String(confirmValue), bodyweight: false, loadType: "external", unit: "lb" })}
+                className="flex h-12 w-full flex-col items-center justify-center rounded-lg bg-primary text-primary-foreground"
+              >
+                <span className="text-[15px] font-semibold">{confirmValue} lb</span>
+                <span className="text-[11px] opacity-80">Switches this exercise to lb</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => commitWeight({ load: String(confirmValue), bodyweight: false, loadType: numericType })}
+                className="h-11 w-full rounded-lg border border-border text-[15px] font-medium text-foreground"
+              >
+                {confirmValue} kg
+              </button>
+            </>
+          ) : (
             <button
               type="button"
               onClick={() => commitWeight({ load: String(confirmValue), bodyweight: false, loadType: numericType })}
-              className="h-9 flex-1 rounded-md bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90"
+              className="h-11 w-full rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground"
             >
-              Save anyway
+              Save {confirmValue} {unit}
             </button>
-            <button
-              type="button"
-              onClick={() => { setConfirmValue(null); setSheet(null); startEditing(numericType); }}
-              className="h-9 flex-1 rounded-md border border-border/60 text-xs font-bold text-muted-foreground hover:text-foreground"
-            >
-              Edit weight
-            </button>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={() => { setConfirmValue(null); setSheet(null); startEditing(numericType); }}
+            className="h-11 w-full rounded-lg text-[15px] font-medium text-muted-foreground"
+          >
+            Edit weight
+          </button>
         </div>
       ) : (
         <>
@@ -383,8 +426,11 @@ export function WeightValueInput({
         <div className="mt-0.5 text-[10px] font-medium text-destructive">{error}</div>
       )}
 
-      {sheet && (
-        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label={ariaLabel}>
+      {/* On <body>, never inside the card: in Focus the card sits under the ‹ / Next
+          bar (which covered the sheet's buttons), and data-state="open" holds
+          Focus's swipes while it's up. */}
+      {sheet && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label={ariaLabel} data-state="open">
           <button
             type="button"
             aria-label="Close load options"
@@ -393,13 +439,14 @@ export function WeightValueInput({
             onClick={closeSheet}
           />
           <div
-            className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-background p-2.5 shadow-2xl sm:inset-x-auto sm:left-1/2 sm:bottom-auto sm:top-1/2 sm:w-[15rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border"
+            className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-background p-2.5 shadow-2xl sm:inset-x-auto sm:left-1/2 sm:bottom-auto sm:top-1/2 sm:w-[18rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border"
             style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}
           >
             <div className="mx-auto mb-1.5 h-1 w-10 rounded-full bg-muted-foreground/30 sm:hidden" />
             {sheetBody}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
