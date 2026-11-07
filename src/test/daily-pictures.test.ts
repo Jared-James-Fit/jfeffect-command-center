@@ -15,6 +15,15 @@ import {
   VOICE_EXAMPLES,
   VOICE_GUIDE,
   DAILY_MIN_WORDS,
+  DAILY_AUDIENCE_GUIDE,
+  RELEVANCE,
+  relevanceOf,
+  qualityChecks,
+  visualRepeat,
+  TOPIC_GAP_DAYS,
+  ART_STYLES,
+  LEGACY_ART_NAMES,
+  FILM_LOOK_VERSION,
   REVIEW_PROMPT,
   contrastCount,
   formatName,
@@ -68,6 +77,7 @@ const first = readFileSync("supabase/migrations/20270124090000_daily_pictures.sq
 const sql = readFileSync("supabase/migrations/20270125090000_daily_pictures_rebuild.sql", "utf8");
 const film = readFileSync("supabase/migrations/20270126090000_daily_pictures_2d_film.sql", "utf8");
 const vivid = readFileSync("supabase/migrations/20270127090000_daily_pictures_vivid.sql", "utf8");
+const insights = readFileSync("supabase/migrations/20270211090000_athlete_insights.sql", "utf8");
 const server = readFileSync("src/lib/daily-visuals.server.ts", "utf8");
 
 const stat = (o: Partial<VisualStat>): VisualStat => ({
@@ -89,13 +99,13 @@ const stat = (o: Partial<VisualStat>): VisualStat => ({
 });
 
 const review = (o: Partial<Review> = {}): Review => ({
-  colour: "vibrant",
-  clarity: "crisp",
-  medium: "hand_drawn_2d",
+  colour: "natural",
+  clarity: "sharp",
+  medium: "photo",
   description: "",
   text_seen: "",
   defects: [],
-  scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4, uplift: 5, on_topic: 5 },
+  scores: { relatable: 5, original: 4, writing: 4, audience_fit: 4, aesthetic: 5, storytelling: 4, match: 5, engaging: 4, uplift: 5, on_topic: 5, teaches: 5 },
   fix_image: "",
   fix_caption: "",
   ...o,
@@ -120,19 +130,28 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
       }
   });
 
-  it("speaks to women, men, then everyone, so each weekday changes every week (the same in SQL)", () => {
-    expect(["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"].map(audienceForDay)).toEqual(["men", "everyone", "women", "men"]);
-    // next Monday is someone else
-    expect(audienceForDay("2026-11-09")).toBe("everyone");
-    expect(sql).toContain("SELECT (ARRAY['women', 'men', 'everyone'])[((((_day - date '2026-01-05') % 3) + 3) % 3) + 1]");
+  it("never aimed at men or women: every post is for every athlete, labelled by its training relevance", () => {
+    expect(["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"].map(audienceForDay)).toEqual(["everyone", "everyone", "everyone", "everyone"]);
+    expect(insights).toContain("SELECT 'everyone'::text");
+    expect(insights).toContain("UPDATE public.community_daily_visuals SET audience = 'everyone', updated_at = now()");
+    // the old values read the same, so an older day's remake isn't gendered either
+    expect(DAILY_AUDIENCE_GUIDE.women).toBe(DAILY_AUDIENCE_GUIDE.everyone);
+    expect(DAILY_AUDIENCE_GUIDE.men).toBe(DAILY_AUDIENCE_GUIDE.everyone);
+    expect([...new Set(Object.values(RELEVANCE))].sort()).toEqual(
+      ["All Athletes", "Athlete Mindset", "Competition", "Hypertrophy", "Powerlifting", "Recovery", "Strength Training"].sort(),
+    );
+    expect(relevanceOf({ topic: "attempt_selection" })).toBe("Competition");
+    expect(relevanceOf({ topic: "gym_floor_comedy" })).toBeNull();
+    const card = readFileSync("src/components/community/daily-pictures-card.tsx", "utf8");
+    for (const gendered of ["for him", "for her", "AUDIENCE["]) expect(card, gendered).not.toContain(gendered);
   });
 
-  it("twelve shots and five coaching forms, about 40 to 100 words, never past the database's 600 characters", () => {
+  it("twelve shots and six coaching forms, about 40 to 100 words, never past the database's 600 characters", () => {
     // one look (a hand-drawn 2D film frame), the variety in the shot and the light
     expect(DAILY_STYLE_KEYS).toHaveLength(12);
-    expect(Object.keys(DAILY_LIGHTS)).toHaveLength(9);
+    expect(Object.keys(DAILY_LIGHTS)).toHaveLength(8);
     for (const k of DAILY_STYLE_KEYS) expect(vivid, k).toContain(`'${k}'`);
-    expect(Object.keys(DAILY_FORMATS)).toEqual(["coach_note", "breakdown", "mistake", "take", "question"]);
+    expect(Object.keys(DAILY_FORMATS)).toEqual(["coach_note", "breakdown", "mistake", "take", "observation", "question"]);
     for (const p of DAILY_PILLAR_KEYS) for (const f of DAILY_PILLARS[p].formats) expect(Object.keys(DAILY_FORMATS), `${p} ${f}`).toContain(f);
     // the database holds 600 characters for a caption (and the coach's Edit words says so)
     for (const f of Object.values(DAILY_FORMATS)) expect(f.max).toBeLessThanOrEqual(600);
@@ -376,9 +395,9 @@ describe("what a day is about: seven coaching categories in a set mix", () => {
     expect(topicName("bar_path")).toBe("Bar path and leverages");
   });
 
-  it("newer lifters, strength for life and powerlifters take turns, apart from women / men / everyone", () => {
-    const days = Array.from({ length: 12 }, (_, i) => new Date(Date.parse("2026-11-02T12:00:00Z") + i * 86_400_000).toISOString().slice(0, 10));
-    expect(new Set(days.map((d) => `${audienceForDay(d)}·${crowdForDay(d)}`)).size).toBe(12);
+  it("newer lifters, strength for life and powerlifters take turns (experience, never gender)", () => {
+    const days = Array.from({ length: 4 }, (_, i) => new Date(Date.parse("2026-11-02T12:00:00Z") + i * 86_400_000).toISOString().slice(0, 10));
+    expect(new Set(days.map(crowdForDay)).size).toBe(4);
   });
 });
 
@@ -437,15 +456,15 @@ describe("the editor reads every caption before a picture is made", () => {
 });
 
 describe("the concept comes first: the point, the picture, then three drafts", () => {
-  const choices = { pillar: "recovery" as const, styles: ["backlit", "two_frames"] as any, lights: ["neon_night", "golden_teal"] as any, formats: ["coach_note", "take"] as any, topics: ["sleep_performance", "lighter_weeks"] as any };
+  const choices = { pillar: "recovery" as const, styles: ["backlit", "two_frames"] as any, lights: ["evening_gym", "window_daylight"] as any, formats: ["coach_note", "take"] as any, topics: ["sleep_performance", "lighter_weeks"] as any };
 
   it("reads the concept, holding its choices to the lists it was given", () => {
     const c = parseConcept(
-      '```json\n{"topic": "sleep_performance", "mood": "angry", "situation": "s", "idea": "m", "format": "essay", "style": "oil painting", "light": "golden_teal", "visual": "v", "typography": "\\"RPE 8\\"", "captions": ["\\"one\\"", "two", "", "four"]}\n```',
+      '```json\n{"topic": "sleep_performance", "mood": "angry", "situation": "s", "idea": "m", "format": "essay", "style": "oil painting", "light": "window_daylight", "visual": "v", "typography": "\\"RPE 8\\"", "captions": ["\\"one\\"", "two", "", "four"]}\n```',
       { ...choices, crowd: "lifters" },
     );
-    // no art direction given: recovery leans to B, the cinematic anime
-    expect(c).toMatchObject({ pillar: "recovery", topic: "sleep_performance", crowd: "lifters", mood: "analytical", format: "coach_note", style: "backlit", light: "golden_teal", art: "anime", typography: "RPE 8", message: "m", drafts: ["one", "two", "four"] });
+    // no direction given: recovery leans to the detail photo; a photo carries no words, whatever the writer sent
+    expect(c).toMatchObject({ pillar: "recovery", topic: "sleep_performance", crowd: "lifters", mood: "analytical", format: "coach_note", style: "backlit", light: "window_daylight", art: "detail", typography: "", message: "m", drafts: ["one", "two", "four"] });
     expect(parseConcept("no json", choices)).toBeNull();
     // drafts labelled with their own forms: each keeps its own, the first one's is the post's until the editor picks
     const labelled = parseConcept('{"topic": "lighter_weeks", "idea": "m", "visual": "v", "captions": [{"form": "take", "text": "a"}, {"form": "nonsense", "text": "b"}]}', choices)!;
@@ -476,14 +495,17 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     });
     expect(p).toContain("TODAY: Sunday: recovery, reviewing the week and setting up the next one.");
     expect(p).toContain("CATEGORY: Recovery and performance. The goal: how sleep, food, fatigue and lighter weeks show up in bar speed and RPE");
-    expect(p).toContain('ANGLES, as "topic" (pick one, best first): sleep_performance = ');
+    expect(p).toContain('ANGLES, as "topic" (pick one, best first; each with the picture that teaches it): sleep_performance = ');
+    expect(p).toContain(`(picture: ${DAILY_TOPICS.sleep_performance.picture})`);
     expect(p).toContain("Today especially lifters in their first year or two");
+    expect(p).toContain("Never aimed at men or women: it's about their training.");
+    expect(p).not.toMatch(/\bWomen who lift\b|\bMen who lift\b/);
     expect(p).toContain("SUNDAY: a Bible verse goes under the caption. Keep the post about training");
     expect(p).toContain("The last two posts ended with a question: don't end with one.");
     expect(p).toContain("THE COACH NEVER SAYS: fr");
     // what landed is said as kinds of posts, never captions to copy
     expect(p).not.toContain("liked line");
-    expect(p).toContain("RECENT POSTS (pick a different angle, moment and opening; don't copy how they're written):\n- 2026-11-06 · mistakes · junk_volume · question · group: What's your one accessory?");
+    expect(p).toContain("RECENT POSTS (pick a different angle, moment, opening and picture; don't copy how they're written):\n- 2026-11-06 · mistakes · junk_volume · question · group: What's your one accessory?");
     expect(p).toContain("THE COACH THREW THESE OUT (never write like them):\n- thrown out line");
     expect(p).toContain("THE EDITOR TURNED DOWN YOUR LAST DRAFTS: substance 3/5.");
     expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], keep: { caption: "keep me" } })).toContain(
@@ -502,45 +524,53 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain("no studies, research, statistics or percentages");
     expect(CONCEPT_PROMPT).toContain('"every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time"');
     expect(CONCEPT_PROMPT).not.toContain("lowercase");
-    // the picture is strength training, drawn right, never a lifestyle scene
-    expect(CONCEPT_PROMPT).toContain("It shows strength training");
-    expect(CONCEPT_PROMPT).toContain("a straight barbell with the same plates on both sides");
+    // the picture is a real photo of the lesson, the gear right, never a lifestyle scene
+    expect(CONCEPT_PROMPT).toContain("A real photograph, authentic sports photography in a serious strength gym or at a powerlifting meet");
+    expect(CONCEPT_PROMPT).toContain("It teaches the post's point");
+    expect(CONCEPT_PROMPT).toContain("fatigue management, an athlete resting between heavy squat sets");
+    expect(CONCEPT_PROMPT).toContain("one straight barbell, the same plates on both sides with collars");
     expect(CONCEPT_PROMPT).toContain("Never a lifestyle scene with no training in it");
-    expect(CONCEPT_PROMPT).toContain("Most pictures have no words in them.");
+    expect(CONCEPT_PROMPT).toContain('No readable words anywhere in the photo');
+    expect(CONCEPT_PROMPT).not.toMatch(/2D|anime|hand-drawn/);
+    // not every post is technical, and still never a story he didn't live
+    expect(VOICE_GUIDE).toContain("Not every post is technical: some are an observation about how lifters train, a challenging perspective, or a lesson competitive lifting teaches");
     // the rewrite speaks the same voice
     expect(CAPTION_FIX_PROMPT).toContain(VOICE_GUIDE);
     // and never two days in a row: a post just before had words, today's has none
-    expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], noWords: true })).toContain('NO WORDS IN THE PICTURE TODAY');
+    expect(conceptPrompt({ day: "2026-11-02", theme: "courage", audience: "men", crowd: "everyone", faith: false, choices, learnings: "", best: [], worst: [], recent: [], noWords: true })).toContain('NO WORDS IN THE PICTURE:');
     expect(server).toContain('noWords: lastTwo.some((d) => !!d.concept?.typography?.trim()),');
     expect(server).toContain('words in the picture again (a post just before had some): leave them out today');
   });
 
-  it("the picture: always a hand-drawn 2D film frame, its shot and light, the gear drawn right, the words in it spelled exactly or none at all", () => {
-    const withWords = picturePrompt({ style: "two_frames", light: "neon_night", art: "anime", visual: "a training log open on a bench", typography: "RPE 8 felt like 9", message: "m" });
-    expect(withWords.startsWith(FILM_LOOK)).toBe(true);
-    expect(withWords).toContain(`The shot: ${DAILY_STYLES.two_frames.look}`);
-    expect(withWords).toContain(`Colour and light: ${DAILY_LIGHTS.neon_night.look}.`);
-    expect(withWords).toContain("Art direction B, beautiful cinematic 2D anime");
-    expect(withWords).toContain("spelled exactly and clearly readable: RPE 8 felt like 9.");
-    expect(withWords).toContain("a straight barbell with matching plates on both sides and collars");
-    expect(withWords).toContain(FILM_AVOID);
-    expect(FILM_LOOK).toContain("colourful, hand-drawn 2D animated feature film");
-    expect(FILM_LOOK).toContain("rich, vibrant, saturated colour with strong warm-versus-cool contrast");
-    expect(FILM_AVOID).toContain("brown or grey colour grading, desaturated or muted colour, a dark, gloomy or murky scene");
-    expect(FILM_AVOID).toContain("3D, CGI or Pixar-like rendering");
+  it("the picture: a real photo of the lesson, its shot and light, the gear and technique right, no readable words", () => {
+    const p = picturePrompt({ style: "low_angle", light: "side_window", art: "documentary", visual: "a conventional deadlift setup, side-on", typography: "", message: "m" });
+    expect(p.startsWith(FILM_LOOK)).toBe(true);
+    expect(FILM_LOOK).toContain("A real photograph: authentic documentary sports photography");
+    expect(p).toContain(`The shot: ${DAILY_STYLES.low_angle.look}`);
+    expect(p).toContain(`Colour and light: ${DAILY_LIGHTS.side_window.look}.`);
+    expect(p).toContain(ART_STYLES.documentary.look);
+    expect(p).toContain("one straight barbell with the same plates loaded on both sides and collars on");
+    expect(p).toContain("never exaggerated, show-ready or steroid-looking");
+    expect(p).toContain("No readable text, brand names, logos or watermarks anywhere");
+    expect(p).toContain(FILM_AVOID);
+    for (const bad of ["illustration", "anime", "3D render", "cinematic colour grading", "lifestyle scenes with no training"]) expect(FILM_AVOID, bad).toContain(bad);
     const none = picturePrompt({ style: "wide_moment", visual: "a platform at a meet", typography: "", message: "m" }, { faith: true, fix: "the hands looked wrong" });
-    expect(none).toContain("No words, letters, numbers, signs, logos or watermarks anywhere in the frame");
     expect(none).toContain("never posing or looking at the camera");
     expect(none).toContain("any Bible stays closed");
     expect(none).toContain("Fix from the last try: the hands looked wrong");
     expect(none).toContain("middle 80% of the height");
+    // every angle carries the picture that teaches it
+    for (const k of DAILY_TOPIC_KEYS) expect(DAILY_TOPICS[k].picture.length, k).toBeGreaterThan(30);
+    expect(DAILY_TOPICS.fatigue_masks_fitness.picture).toContain("resting between heavy squat sets");
+    expect(DAILY_TOPICS.long_game.picture).toContain("training log");
   });
 });
 
 describe("the review: concrete checks before any score", () => {
-  it("passes a clean picture whose words read exactly as asked", () => {
-    expect(reviewVerdict(review({ text_seen: "RPE 8." }), "RPE 8")).toEqual({ pass: true, image: [], caption: [] });
-    expect(reviewVerdict(review(), "").pass).toBe(true);
+  it("passes a clean photo, its plate weights and a clock aside", () => {
+    expect(reviewVerdict(review(), "")).toEqual({ pass: true, image: [], caption: [] });
+    expect(reviewVerdict(review({ text_seen: "20 KG 45 LB" }), "").pass).toBe(true);
+    expect(reviewVerdict(review({ text_seen: "RPE 8." }), "RPE 8").pass).toBe(true);
   });
 
   it("fails misspelled, missing or extra words, any defect, and scores under the bar, on the right side", () => {
@@ -550,6 +580,8 @@ describe("the review: concrete checks before any score", () => {
     expect(reviewVerdict(review({ text_seen: "who are you\nwhen it's quiet?\n5:30 AM" }), "who are you when its quiet?", "a phone alarm set for 5:30 AM").pass).toBe(true);
     expect(reviewVerdict(review({ text_seen: "who are you when its quiet? SALE" }), "who are you when its quiet?", "a phone alarm").image[0]).toContain("extra words in the picture");
     expect(reviewVerdict(review({ defects: ["the barbell has different plates on each side"] }), "").image).toContain("the barbell has different plates on each side");
+    // a brand on a plate is stray text
+    expect(reviewVerdict(review({ text_seen: "ROGUE" }), "").image[0]).toContain("words that shouldn't be there");
     const low = reviewVerdict(review({ scores: { ...review().scores, writing: 2, aesthetic: 3 }, fix_caption: "say it plainer" }), "");
     expect(low.pass).toBe(false);
     expect(low.caption).toEqual(["writing 2/5", "fix: say it plainer"]);
@@ -561,17 +593,28 @@ describe("the review: concrete checks before any score", () => {
     expect(reviewVerdict(review({ scores: { ...review().scores, on_topic: 2 } }), "").image).toEqual(["on_topic 2/5"]);
     expect(REVIEW_BARS.on_topic).toBe(4);
     expect(REVIEW_PROMPT).toContain("a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less");
-    expect(REVIEW_PROMPT).toContain("gym equipment drawn wrong (a bent or broken barbell, different plates on each side");
+    expect(REVIEW_PROMPT).toContain("equipment or technique that's wrong (a bent or broken barbell, different plates on each side");
+    // and the photo has to show the lesson, not just look good
+    expect(reviewVerdict(review({ scores: { ...review().scores, teaches: 2 } }), "").image).toEqual(["teaches 2/5"]);
+    expect(REVIEW_BARS.teaches).toBe(4);
+    expect(REVIEW_PROMPT).toContain("an attractive gym photo that could go with any post is 2 or less");
     // a review from before the check reads as neutral
     expect(parseReview('{"scores": {}}')?.scores.on_topic).toBe(4);
   });
 
-  it("anything that doesn't read as a hand-drawn 2D film frame fails, whatever its scores", () => {
-    expect(reviewVerdict(review({ medium: "3d_render" }), "").image[0]).toBe("it reads as 3d render, not a hand-drawn 2D film frame");
-    expect(reviewVerdict(review({ medium: "photo" }), "").pass).toBe(false);
+  it("anything that doesn't read as a real photo fails, whatever its scores", () => {
+    expect(reviewVerdict(review({ medium: "illustration" }), "").image[0]).toBe("it reads as illustration, not a real photo");
+    expect(reviewVerdict(review({ medium: "hand_drawn_2d" }), "").pass).toBe(false);
+    expect(reviewVerdict(review({ medium: "3d_render" }), "").pass).toBe(false);
     expect(reviewVerdict(review({ medium: "" }), "").pass).toBe(false);
-    expect(parseReview('{"medium": "Hand-drawn 2D", "scores": {}}')?.medium).toBe("hand_drawn_2d");
+    expect(parseReview('{"medium": "Photorealistic", "scores": {}}')?.medium).toBe("photo");
+    expect(parseReview('{"medium": "photograph", "scores": {}}')?.medium).toBe("photo");
     expect(parseReview('{"medium": "3D render", "scores": {}}')?.medium).toBe("3d_render");
+    // movie grading, a murky frame or a soft subject fail too
+    expect(reviewVerdict(review({ colour: "stylized" }), "").image[0]).toBe("its colour reads as stylized, not natural");
+    expect(reviewVerdict(review({ colour: "dark" }), "").pass).toBe(false);
+    expect(reviewVerdict(review({ clarity: "soft" }), "").image[0]).toBe("its subject reads as soft, not sharp");
+    expect(parseReview('{"medium": "photo", "colour": "Natural", "clarity": "sharp, clean", "scores": {}}')).toMatchObject({ colour: "natural", clarity: "sharp" });
   });
 
   it("a defect is an objective error, never taste (taste is scored and goes in the fix)", () => {
@@ -597,22 +640,26 @@ describe("the review: concrete checks before any score", () => {
 });
 
 describe("it learns what the crew likes, and never repeats itself", () => {
-  it("doesn't reuse a shot from the last 4 days, light from the last 3 or an angle from the last 2 weeks, and offers a form from the last 2 days last", () => {
+  it("doesn't reuse a shot from the last 4 days, light from the last 3 or an angle from the last 4 weeks, and offers a form from the last 2 days last", () => {
     const l = learnDailyVisuals([]);
     const recent = [
-      { day: "2026-11-01", style: "backlit", light: "golden_teal", format: "coach_note", topic: "sleep_performance" },
-      { day: "2026-11-02", style: "two_frames", light: "neon_night", format: "take", topic: "bar_path" },
+      { day: "2026-11-01", style: "backlit", light: "window_daylight", format: "coach_note", topic: "sleep_performance" },
+      { day: "2026-11-02", style: "two_frames", light: "evening_gym", format: "take", topic: "bar_path" },
     ];
     const c = pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, pillar: "recovery" });
     expect(c.pillar).toBe("recovery");
     expect(c.styles).not.toContain("backlit");
     expect(c.styles).not.toContain("two_frames");
-    expect(c.lights).not.toContain("golden_teal");
-    expect(c.lights).toHaveLength(7);
+    expect(c.lights).not.toContain("window_daylight");
+    expect(c.lights).toHaveLength(6);
     // both used in the last 2 days go last, in their order
     expect(c.formats).toEqual(["breakdown", "coach_note", "take"]);
     expect(c.formats.every((f) => DAILY_PILLARS.recovery.formats.includes(f))).toBe(true);
     expect(c.topics).not.toContain("sleep_performance");
+    // an angle waits 4 weeks (about 12 posts at 3 a week)
+    expect(TOPIC_GAP_DAYS).toBe(28);
+    expect(pickChoices(l, { day: "2026-11-25", recent, rand: () => 0.9, pillar: "recovery" }).topics).not.toContain("sleep_performance");
+    expect(pickChoices(l, { day: "2026-12-05", recent, rand: () => 0.9, pillar: "recovery" }).topics).toContain("sleep_performance");
     expect(c.topics.every((t) => DAILY_TOPICS[t].pillar === "recovery")).toBe(true);
     // the coach's pick wins, and with no category asked it's picked for the day (never yesterday's)
     expect(pickChoices(l, { day: "2026-11-03", recent, rand: () => 0.9, style: "backlit" }).styles).toEqual(["backlit"]);
@@ -627,7 +674,7 @@ describe("it learns what the crew likes, and never repeats itself", () => {
     expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles[0]).toBe("backlit");
     expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.9, pillar: "mistakes" }).styles.at(-1)).toBe("two_frames");
     expect(pickChoices(l, { day: "2026-11-03", recent: [], rand: () => 0.01, pillar: "mistakes" }).styles[0]).not.toBe("backlit");
-    expect(learningsText(l)).toContain("Best shots so far: backlit");
+    expect(learningsText(l)).toContain("Best shots so far: window light");
   });
 
   it("a comment, a save or a share counts more than a like (a real comment more again), and stopping on it counts", () => {
@@ -716,10 +763,12 @@ describe("the 2D film look reaches every day, tested first", () => {
     expect(server).toContain('await admin.from("community_daily_visual_tests").insert({ data: test });');
     expect(film).toContain('CREATE POLICY "Staff read daily picture tests" ON public.community_daily_visual_tests');
     expect(film).toContain("REVOKE INSERT, UPDATE, DELETE ON public.community_daily_visual_tests FROM anon, authenticated;");
-    expect(readFileSync("src/routes/api/public/hooks/daily-visuals-tick.ts", "utf8")).toContain("runDailyVisualTest(supabaseAdmin as any, body.test)");
-    // a wrong theme or audience key answers with the allowed ones, never "reading 'idea'" of undefined
+    const hook = readFileSync("src/routes/api/public/hooks/daily-visuals-tick.ts", "utf8");
+    expect(hook).toContain("runDailyVisualTest(supabaseAdmin as any, body.test)");
+    // a theme is all a test needs: the audience is everyone
+    expect(hook).toContain("if (body?.test?.theme) return");
     expect(server).toContain("if (!(DAILY_THEME_KEYS as string[]).includes(spec.theme))");
-    expect(server).toContain('if (!(["women", "men", "everyone"] as string[]).includes(spec.audience))');
+    expect(server).toContain('const audience: DailyAudience = "everyone";');
   });
 
   it("every day there is gets its picture remade with its caption kept, the before kept as a version", () => {
@@ -730,52 +779,39 @@ describe("the 2D film look reaches every day, tested first", () => {
   });
 });
 
-describe("the vivid look: bright, colourful, crisp 2D film frames", () => {
-  it("never asks for the muddy, dark or soft look of the first tries", () => {
-    for (const bad of ["painterly shading", "soft painted", "sophisticated colour", "subtle linework", "dark room", "deep shadow", "muted and calm"]) {
+describe("the photo look: real strength gyms, no 2D frames, no style references", () => {
+  it("never asks for lifestyle, cinematic or illustrated looks", () => {
+    for (const bad of ["anime", "2D", "hand-drawn", "cel shading", "neon", "teal shadows", "sunset"]) {
       expect(FILM_LOOK, bad).not.toContain(bad);
       for (const l of Object.values(DAILY_LIGHTS)) expect(l.look, bad).not.toContain(bad);
+      for (const s of Object.values(DAILY_STYLES)) expect(s.look, bad).not.toContain(bad);
     }
-    // no shot built around someone staring at a phone
-    expect(Object.keys(DAILY_STYLES)).not.toContain("phone_story");
-    for (const s of Object.values(DAILY_STYLES)) expect(s.look).not.toMatch(/\bphone\b/);
+    for (const s of Object.values(DAILY_STYLES)) expect(s.look).not.toMatch(/\b(beach|brunch|picnic|park|rooftop|lake)\b/);
+    expect(FILM_LOOK_VERSION).toBe("photo_v1");
   });
 
-  it("two art directions, each for its kind of story", async () => {
+  it("two photographic directions, each for its kind of point", async () => {
     const { ART_STYLES, artForPillar } = await import("@/lib/daily-visuals");
-    expect(Object.keys(ART_STYLES)).toEqual(["graphic", "anime"]);
-    expect(artForPillar("powerlifting_iq")).toBe("graphic");
-    expect(artForPillar("comp_prep")).toBe("graphic");
-    expect(artForPillar("recovery")).toBe("anime");
-    expect(ART_STYLES.graphic.use).toContain("lifting, coaching, technique");
+    expect(Object.keys(ART_STYLES)).toEqual(["documentary", "detail"]);
+    expect(artForPillar("powerlifting_iq")).toBe("documentary");
+    expect(artForPillar("recovery")).toBe("detail");
+    expect(LEGACY_ART_NAMES.anime).toContain("old look");
   });
 
-  it("muted, dark or soft pictures fail whatever their scores", () => {
-    expect(reviewVerdict(review({ colour: "muted" }), "").image[0]).toBe("its colour reads as muted, not vibrant");
-    expect(reviewVerdict(review({ colour: "dark" }), "").pass).toBe(false);
-    expect(reviewVerdict(review({ clarity: "soft" }), "").image[0]).toBe("its faces and lines read as soft, not crisp");
-    expect(parseReview('{"medium": "hand_drawn_2d", "colour": "Vibrant", "clarity": "crisp, clean", "scores": {}}')).toMatchObject({ colour: "vibrant", clarity: "crisp" });
+  it("a photo is made from the words alone: the 2D style references aren't used", () => {
+    expect(server).toContain("const made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));");
+    expect(server).not.toContain("seedStyleRefs(");
+    expect(server).not.toContain("styleReference(");
+    expect(readFileSync("src/components/community/daily-pictures-card.tsx", "utf8")).not.toContain("community_daily_visuals_set_ref");
   });
 
-  it("the coach's style references go to the image model and to the review", async () => {
-    const { STYLE_REFERENCE, reviewPrompt } = await import("@/lib/daily-visuals");
-    expect(picturePrompt({ style: "in_action", light: "gym_glow", art: "graphic", visual: "v", typography: "", message: "m" }, { reference: true }).startsWith(STYLE_REFERENCE)).toBe(true);
-    expect(STYLE_REFERENCE).toContain("never copy the reference's people, place, objects or composition");
-    expect(reviewPrompt({ caption: "c", concept: { message: "m", situation: "s", visual: "v", typography: "", style: "group" }, audience: "everyone", references: 1 })).toContain(
-      "THE FIRST IMAGE IS THE STYLE REFERENCE THE COACH CHOSE.",
-    );
-    expect(readFileSync("src/lib/post-pictures.server.ts", "utf8")).toContain('fetch("https://api.openai.com/v1/images/edits"');
-    // a reference that fails never costs the picture: the words alone
-    expect(server).toContain("if (!made?.ok) made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));");
-    // a reference is only ever a picture the coach uploaded under his own folder
-    expect(vivid).toContain("IF v_path IS NOT NULL AND (v_path NOT LIKE ((SELECT auth.uid())::text || '/%') OR v_path LIKE '%..%') THEN");
-  });
-
-  it("existing days move to the new look only when the coach approves it, captions kept", () => {
+  it("published posts move to the new look only when the coach approves it; upcoming ones get a new photo, captions kept", () => {
     expect(vivid).toContain("CREATE OR REPLACE FUNCTION public.community_daily_visuals_restyle(_look text)");
-    expect(vivid).toContain("SET regen = 'picture', regen_reason = 'restyle'");
-    expect(vivid).not.toMatch(/^UPDATE public\.community_daily_visuals\b/m);
-    expect(readFileSync("src/components/community/daily-pictures-card.tsx", "utf8")).toContain('db.rpc("community_daily_visuals_restyle", { _look: FILM_LOOK_VERSION })');
+    const card = readFileSync("src/components/community/daily-pictures-card.tsx", "utf8");
+    expect(card).toContain('db.rpc("community_daily_visuals_restyle", { _look: FILM_LOOK_VERSION })');
+    expect(card).toContain("Nothing published changes unless you say so");
+    expect(insights).toContain("WHERE status = 'ready' AND post_id IS NULL AND picture IS NOT NULL AND regen IS NULL");
+    expect(insights).toContain("AND coalesce(concept->>'look', '') <> 'photo_v1';");
   });
 });
 
@@ -802,21 +838,41 @@ describe("a review never copies the picture into memory", () => {
   });
 });
 
-describe("the coach's two references set the look", () => {
-  it("each art direction is written from its reference, and the references are placed once, server only", async () => {
-    const { ART_STYLES } = await import("@/lib/daily-visuals");
-    expect(ART_STYLES.graphic.look).toContain("crisp dark ink outlines and flat cel shading");
-    expect(ART_STYLES.graphic.look).toContain("dramatic hard-edged shafts of sunlight");
-    expect(ART_STYLES.anime.look).toContain("a glowing golden-hour or sunset sky");
-    expect(ART_STYLES.anime.look).toContain("a bright rim light glowing along the hair and face");
-    const refs = readFileSync("src/lib/daily-style-refs.server.ts", "utf8");
-    expect(refs).toContain('import graphic from "@/assets/daily-style/graphic.jpg?inline";');
-    expect(refs).toContain('import anime from "@/assets/daily-style/anime.jpg?inline";');
-    // placed only where none is set, once, so the coach's own choice stays
-    expect(server).toContain("if (refs.seeded === STYLE_REFS_SEED || !data?.author_user_id) return [];");
-    expect(server).toContain("if (refs[art]) continue;");
-    // never a public file
-    expect(() => readFileSync("public/daily-style/graphic.jpg")).toThrow();
+describe("the coach's seven questions", () => {
+  it("each is answered from the editor's and the review's scores, and an older day reads as not checked", () => {
+    const pass = qualityChecks(
+      { scores: { natural: 5, substance: 4, accuracy: 5, clarity: 5, match: 4, fresh: 4, worth_it: 4 } },
+      { scores: review().scores },
+    );
+    expect(pass.map((c) => c.label)).toEqual([
+      "Relevant to athletes",
+      "The image shows the lesson",
+      "Real coaching value",
+      "Sounds like Jared",
+      "Technically accurate",
+      "Different from recent posts",
+      "Worth saving or discussing",
+    ]);
+    expect(pass.every((c) => c.pass === true)).toBe(true);
+    const weak = qualityChecks({ scores: { natural: 5, substance: 3, accuracy: 3, fresh: 2, worth_it: 3 } }, { scores: { ...review().scores, teaches: 2 } });
+    expect(weak.filter((c) => c.pass === false).map((c) => c.key)).toEqual(["image", "value", "accurate", "fresh", "worth"]);
+    expect(qualityChecks(null, null).every((c) => c.pass === null)).toBe(true);
+  });
+
+  it("the same picture twice is a rerun, whatever the words", () => {
+    const seen = "A lifter resting between heavy squat sets on a bench, belt loosened, the loaded bar waiting in the rack behind.";
+    expect(visualRepeat("A lifter resting between heavy squat sets on a bench, belt loosened, chalk on the hands.", [seen])).toContain("too close to a recent one");
+    expect(visualRepeat("A coach and lifter watching a set video on a phone beside the rack.", [seen])).toBeNull();
+    expect(server).toContain("const seenPicture = keepPicture ? null : visualRepeat(parsed.visual, ctx.recent.map((x) => x.visual));");
+  });
+
+  it("a post that didn't fully pass waits for the coach's OK, and Publish now is his OK", () => {
+    expect(insights).toContain("CREATE OR REPLACE FUNCTION public.community_daily_visual_held(r public.community_daily_visuals)");
+    expect(insights).toContain("IF public.community_daily_visual_held(r) THEN RETURN jsonb_build_object('status', 'needs_review'); END IF;");
+    expect(insights).toContain("-- publishing it now is the coach's OK, even for one held for review");
+    const card = readFileSync("src/components/community/daily-pictures-card.tsx", "utf8");
+    expect(card).toContain("Needs your OK");
+    expect(card).toContain("data-daily-quality");
   });
 });
 

@@ -1,5 +1,6 @@
 /**
- * The daily pictures' background maker (daily-visuals-tick hook, woken by
+ * Athlete Insights' background maker (series `daily_visual`, once "daily
+ * pictures"; the daily-visuals-tick hook, woken by
  * pg_cron or by the coach when a day is queued: `regen` = full / caption /
  * picture; see 20270125090000_daily_pictures_rebuild.sql).
  *
@@ -13,18 +14,20 @@
  *      captions the coach threw out → the concept and caption, held to
  *      captionProblems (plain words, his voice, no slogans, nothing close to a
  *      recent post) with up to 3 tries; kept on the side in `candidate`.
- *   2. picture: the image model (picturePrompt: the style, the JF Effect
- *      look, the scene, any words in it spelled exactly) and then the review
- *      that looks at the picture with the caption (reviewVerdict: the words
- *      read off it must be exactly what was asked, no defects, every score at
- *      its bar). A caption the reviewer marks down gets one rewrite against
+ *   2. picture: the image model (picturePrompt: a real photo of the lesson,
+ *      the shot and the light, the equipment and technique right, no
+ *      readable words) and then the review that looks at the picture with the
+ *      caption (reviewVerdict: a real photo, natural light, sharp, no
+ *      defects, every score at its bar, `teaches` included). A caption the reviewer marks down gets one rewrite against
  *      the same picture. A picture that fails is made again with the fix (2 a
  *      concept), then a new concept (3 at most).
  *   3. it passes → community_daily_visual_apply puts it live in one step
  *      (the version before kept; a posted day's post updated in place). It
  *      can't be made → the original stays and the reason goes on the day (a
  *      new day with nothing yet takes its best try when nothing's wrong with
- *      the picture itself).
+ *      the picture itself, and that one is held for the coach's OK:
+ *      community_daily_visual_post never posts a day that didn't fully pass
+ *      until he approves it).
  *
  * The models are OpenAI's (text, vision and images); Lovable AI is used only
  * when the coach turns it on (community_series_settings.daily_visuals_lovable).
@@ -65,9 +68,11 @@ import {
   pillarOf,
   reviewPrompt,
   reviewScore,
+  relevanceOf,
   reviewVerdict,
   tidyCaption,
   typographyProblems,
+  visualRepeat,
   type DailyAudience,
   type DailyConcept,
   type DailyArt,
@@ -359,7 +364,7 @@ type Around = {
   format: string | null;
   topic: string | null;
   verse_ref: string | null;
-  concept: { light?: string; pillar?: string; mood?: string; typography?: string } | null;
+  concept: { light?: string; pillar?: string; mood?: string; typography?: string; visual?: string } | null;
 };
 
 /** The days around it (3 weeks back, a week ahead), nearest last, and the captions the coach threw out. */
@@ -394,6 +399,7 @@ async function context(admin: Admin, r: DailyRow) {
     pillar: pillarOf({ pillar: d.concept?.pillar, topic: d.topic }),
     mood: d.concept?.mood ?? null,
     caption: lineOf(d),
+    visual: d.concept?.visual ?? null,
   }));
   // the two posts before this one both ended on a question: this one doesn't
   const lastTwo = days.filter((d) => d.day < r.day).sort((a, b) => a.day.localeCompare(b.day)).slice(-2);
@@ -499,7 +505,13 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
       continue;
     }
     const typography = keepPicture ? "" : parsed.typography;
-    const typo = [...typographyProblems(typography), ...(ctx.noWords && typography ? ["words in the picture again (a post just before had some): leave them out today"] : [])];
+    // the same visual concept as a recent post is a rerun, however the words differ
+    const seenPicture = keepPicture ? null : visualRepeat(parsed.visual, ctx.recent.map((x) => x.visual));
+    const typo = [
+      ...typographyProblems(typography),
+      ...(ctx.noWords && typography ? ["words in the picture again (a post just before had some): leave them out today"] : []),
+      ...(seenPicture ? [seenPicture] : []),
+    ];
     const style = keptStyle ?? parsed.style;
     if (keepCaption) {
       if (!typo.length) made = { ...parsed, style, typography, drafts: [lineOf(r)], caption: lineOf(r) };
@@ -606,7 +618,7 @@ async function applyMade(
     picture: c.keepPicture ? undefined : entry,
     picture_provider: c.keepPicture ? undefined : provider,
     ai_line: c.keepCaption ? undefined : caption,
-    audience: r.audience,
+    audience: "everyone",
     style: concept.style,
     format: concept.format,
     topic: concept.topic,
@@ -636,55 +648,6 @@ async function applyMade(
 }
 
 /**
- * The coach's two references (daily-style-refs.server.ts) placed as each art
- * direction's reference, once: under the posting account in the Crew bucket,
- * only where none is set, then marked seeded so a reference he later removes
- * or replaces stays his choice.
- */
-export async function seedStyleRefs(admin: Admin): Promise<string[]> {
-  const { DEFAULT_STYLE_REFS, STYLE_REFS_SEED } = await import("@/lib/daily-style-refs.server");
-  const { data } = await admin.from("community_series_settings").select("daily_visuals_refs, author_user_id").maybeSingle();
-  const refs = (data?.daily_visuals_refs ?? {}) as Record<string, string>;
-  if (refs.seeded === STYLE_REFS_SEED || !data?.author_user_id) return [];
-  const next: Record<string, string> = { ...refs, seeded: STYLE_REFS_SEED };
-  const placed: string[] = [];
-  for (const art of DAILY_ART_KEYS) {
-    if (refs[art]) continue;
-    const m = /^data:([^;]+);base64,(.+)$/.exec(DEFAULT_STYLE_REFS[art]);
-    if (!m) continue;
-    const bin = atob(m[2]);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const path = `${data.author_user_id}/daily-style/${art}-${Date.now()}.jpg`;
-    const { error } = await admin.storage.from(BUCKET).upload(path, bytes, { contentType: m[1], upsert: false });
-    if (error) throw new Error(`Couldn't place the ${art} reference: ${error.message}`);
-    next[art] = path;
-    placed.push(art);
-  }
-  const { error } = await admin.from("community_series_settings").update({ daily_visuals_refs: next }).eq("id", true);
-  if (error) throw new Error(error.message);
-  return placed;
-}
-
-/** The coach's style reference for an art direction (community_series_settings.daily_visuals_refs), once per run. */
-const refCache = new Map<string, RefImage | null>();
-async function styleReference(admin: Admin, art: DailyArt | undefined): Promise<(RefImage & { path: string }) | null> {
-  if (!art) return null;
-  const { data } = await admin.from("community_series_settings").select("daily_visuals_refs").maybeSingle();
-  const path = (data?.daily_visuals_refs as Record<string, string> | null)?.[art];
-  if (!path) return null;
-  if (!refCache.has(path)) {
-    try {
-      refCache.set(path, await bytesOf(admin, path));
-    } catch {
-      refCache.set(path, null);
-    }
-  }
-  const ref = refCache.get(path);
-  return ref ? { ...ref, path } : null;
-}
-
-/**
  * A stored picture as the vision model sees it: a 10-minute signed link, so
  * a review never builds a multi-megabyte base64 copy (two at once ran the
  * worker out of memory); the bytes as a data URL only if signing fails.
@@ -706,15 +669,13 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
   let provider: string;
   let image: string;
   let madeHere = false;
-  const ref = c.keepPicture ? null : await styleReference(admin, concept.art);
   if (c.keepPicture && r.picture?.path) {
     entry = r.picture;
     provider = r.picture_provider ?? "";
     image = await pictureUrl(admin, r.picture.path);
   } else {
-    // with the coach's style reference for this art direction when there is one, else (or if that fails) the words alone
-    let made = ref ? await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix, reference: true }), [ref]) : null;
-    if (!made?.ok) made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));
+    // the words alone: the style references were 2D film frames, and an Athlete Insight is a photo
+    const made = await maker.picture(picturePrompt(concept, { faith: r.faith, fix: c.fix }));
     if (!made.ok) throw new Error(made.reason);
     const { width, height } = made.picture;
     if (Math.min(width, height) < MIN_SIDE) throw new Error(`The picture came back too small (${width}×${height})`);
@@ -727,8 +688,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     madeHere = true;
   }
 
-  const refUrls = ref ? [await pictureUrl(admin, ref.path, ref)] : [];
-  let rev = await review(maker, r, concept, caption, image, refUrls);
+  let rev = await review(maker, r, concept, caption, image);
   let verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
   // a caption the reviewer marked down gets one rewrite against this same picture
   if (!verdict.image.length && verdict.caption.length && !c.keepCaption) {
@@ -737,7 +697,7 @@ async function drawAndReview(admin: Admin, r: DailyRow, maker: Maker, c: Candida
     const fixed = rewritten ? tidyCaption(rewritten) : null;
     if (fixed && !captionProblems(fixed, { format: concept.format, pillar: concept.pillar, picture: concept.typography, names: crewNames ?? [] }).length) {
       caption = fixed;
-      rev = await review(maker, r, concept, caption, image, refUrls);
+      rev = await review(maker, r, concept, caption, image);
       verdict = reviewVerdict(rev, concept.typography, concept.visual, concept.pillar);
     }
   }
@@ -829,8 +789,6 @@ export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promi
   const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
   const maker = makerFor(!!settings?.daily_visuals_lovable);
   const out: Record<string, unknown> = { today, openai: !!process.env.OPENAI_API_KEY, lovable: !!settings?.daily_visuals_lovable };
-  const seeded = await seedStyleRefs(admin).catch((e) => [`not placed: ${String(e?.message ?? e)}`]);
-  if (seeded.length) out.references = seeded;
 
   const { data: stats, error: statsError } = await admin.rpc("community_daily_visual_stats", { _days: 120 });
   if (statsError) throw new Error(`Couldn't read how the pictures did: ${statsError.message}`);
@@ -870,7 +828,8 @@ export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promi
 /* ------------------------------------------------------------------ */
 
 export type TestSpec = {
-  audience: DailyAudience;
+  /** Ignored: every post is for every athlete (Nov 7 2026). Older callers still send it. */
+  audience?: DailyAudience | null;
   theme: DailyTheme;
   /** The day it's for (its weekday mood, its crowd, the days around it), today if not given. */
   day?: string | null;
@@ -886,28 +845,26 @@ export type TestSpec = {
 const NO_DAY = "00000000-0000-0000-0000-000000000000";
 
 /**
- * A test post (the hook's `{ test: { audience, theme, style? } }`): a concept,
+ * A test post (the hook's `{ test: { theme, style? } }`): a concept,
  * a caption, a picture (a second with the review's fix if the first fails)
  * and its review, saved in community_daily_visual_tests for the coach's card.
  * Nothing goes on a day or in the feed.
  */
 export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<Record<string, unknown>> {
   // a wrong key answers with what's allowed, never a crash halfway through the writer
-  if (!(["women", "men", "everyone"] as string[]).includes(spec.audience))
-    return { error: `unknown audience "${spec.audience}": use women, men or everyone` };
+  const audience: DailyAudience = "everyone";
   if (!(DAILY_THEME_KEYS as string[]).includes(spec.theme))
     return { error: `unknown theme "${spec.theme}": use one of ${DAILY_THEME_KEYS.join(", ")}` };
   const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
   const maker = makerFor(!!settings?.daily_visuals_lovable);
   if ("blocked" in maker) return { blocked: maker.blocked };
-  await seedStyleRefs(admin);
   const { data: stats } = await admin.rpc("community_daily_visual_stats", { _days: 120 });
   const learned = learnDailyVisuals(Array.isArray(stats) ? (stats as VisualStat[]) : []);
   const r: DailyRow = {
     id: NO_DAY,
     day: spec.day && /^\d{4}-\d{2}-\d{2}$/.test(spec.day) ? spec.day : localDay(),
     theme: spec.theme,
-    audience: spec.audience,
+    audience,
     faith: false,
     style: null,
     format: null,
@@ -941,7 +898,7 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
     const k = c.concept!;
     return {
       day: r.day,
-      audience: spec.audience,
+      relevance: relevanceOf(k),
       pillar: k.pillar,
       topic: k.topic,
       crowd: k.crowd,
@@ -960,7 +917,7 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
   const tries: Record<string, unknown>[] = [];
   let d: Drawn | null = null;
   for (let i = 0; i < 2; i++) {
-    d = await drawAndReview(admin, r, maker, c, `daily-test-${spec.audience}`);
+    d = await drawAndReview(admin, r, maker, c, "daily-test");
     tries.push({ medium: d.rev.medium, description: d.rev.description, score: reviewScore(d.rev), issues: [...d.imageIssues, ...d.captionIssues] });
     if (!d.imageIssues.length || i === 1) break;
     await removeFile(admin, d.entry.path);
@@ -968,7 +925,8 @@ export async function runDailyVisualTest(admin: Admin, spec: TestSpec): Promise<
   }
   const concept = c.concept!;
   const test = {
-    audience: spec.audience,
+    audience,
+    relevance: relevanceOf(concept),
     theme: spec.theme,
     style: concept.style,
     light: concept.light,
