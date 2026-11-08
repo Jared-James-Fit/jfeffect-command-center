@@ -34,3 +34,16 @@ describe("every automated post goes out on its own (Nov 8 2026: no approval befo
     expect(sql).toContain("RAISE EXCEPTION 'posts on their own: community_admin_pulse no longer has the birthday count'");
   });
 });
+
+describe("Athlete Insights are made a week ahead, so there's time to edit", () => {
+  it("planned two weeks out and made once a day is within a week", async () => {
+    const server = await import("@/lib/daily-visuals.server");
+    expect(server.AHEAD_DAYS).toBe(7);
+    expect(server.PLAN_DAYS).toBe(14);
+    const src = read("src/lib/daily-visuals.server.ts");
+    expect(src).toContain('await admin.rpc("community_daily_visuals_plan", { _from: null, _days: PLAN_DAYS });');
+    const card = read("src/components/community/daily-pictures-card.tsx");
+    expect(card).toContain('"Ready · goes out on its own at 7 · edit any time"');
+    expect(card).toContain('"Made a week before"');
+  });
+});

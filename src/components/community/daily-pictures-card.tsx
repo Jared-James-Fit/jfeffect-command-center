@@ -201,8 +201,8 @@ function statusLine(d: Day, today: string, off: boolean): { text: string; tone?:
   if (d.status === "posted" && d.archived) return { text: "Archived · not in the feed" };
   if (d.status === "posted")
     return { text: `Posted · ${d.likes ?? 0} likes · ${d.comments ?? 0} comments · ${d.saves ?? 0} saves · ${d.views ?? 0} seen`, tone: "good" };
-  if (d.status === "ready") return { text: off ? "Ready · posting is off" : d.day === today ? "Ready · goes out at 7" : d.approved ? "Approved · goes out at 7" : "Ready · goes out at 7" };
-  return { text: "Made 3 days before" };
+  if (d.status === "ready") return { text: off ? "Ready · posting is off" : "Ready · goes out on its own at 7 · edit any time" };
+  return { text: "Made a week before" };
 }
 
 /**
