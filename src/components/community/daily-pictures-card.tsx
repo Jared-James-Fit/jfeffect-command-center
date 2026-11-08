@@ -413,7 +413,6 @@ function DayRow({ d, today, off, onOpen }: { d: Day; today: string; off: boolean
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[14px] font-semibold">{dayLabel(d.day, today)}</span>
             {relevance && <Chip>{relevance}</Chip>}
-            {d.faith && <Chip>verse</Chip>}
             {d.approved && (
               <span className="inline-flex items-center gap-0.5 text-[11px] text-success">
                 <Check className="h-3 w-3" /> approved
@@ -508,7 +507,7 @@ export function DaySheet({ d, today, off, onClose }: { d: Day | null; today: str
               {d.line && (
                 <p className="whitespace-pre-line px-4 pt-3 text-[15px] leading-snug">
                   <span className="font-semibold">JF Effect </span>
-                  {dailyCaption(d.line, d.faith && d.verse_text && d.verse_ref ? { ref: d.verse_ref, text: d.verse_text } : null)}
+                  {dailyCaption(d.line)}
                 </p>
               )}
               {posted && (

@@ -65,7 +65,6 @@ import {
   parseEditor,
   parseReview,
   pickChoices,
-  pickVerse,
   picturePrompt,
   pillarOf,
   reviewPrompt,
@@ -86,7 +85,6 @@ import {
   type DailyTheme,
   type DailyTopic,
   type EditorReview,
-  type FaithVerse,
   type Recent,
   type Review,
   type VisualStat,
@@ -107,7 +105,6 @@ export type Candidate = {
   keepCaption?: boolean;
   /** A words-only remake: the picture is the day's own. */
   keepPicture?: boolean;
-  verse?: FaithVerse | null;
   /** The last review's fix for the picture. */
   fix?: string | null;
   model?: string;
@@ -368,7 +365,6 @@ type Around = {
   style: string | null;
   format: string | null;
   topic: string | null;
-  verse_ref: string | null;
   concept: { light?: string; pillar?: string; mood?: string; typography?: string; visual?: string; setting?: string } | null;
 };
 
@@ -387,7 +383,7 @@ async function context(admin: Admin, r: DailyRow) {
   const [{ data: around }, { data: rejected }, { data: own }] = await Promise.all([
     admin
       .from("community_daily_visuals")
-      .select("day, ai_line, coach_line, style, format, topic, verse_ref, concept")
+      .select("day, ai_line, coach_line, style, format, topic, concept")
       .neq("id", r.id)
       .gte("day", addDays(r.day, -21))
       .lte("day", addDays(r.day, 7)),
@@ -422,10 +418,6 @@ async function context(admin: Admin, r: DailyRow) {
     near: days.filter((d) => daysApart(d.day, r.day) <= 3).map(lineOf).filter(Boolean),
     compareTo: [...days.map(lineOf).filter(Boolean), ...thrownOut, ...(r.regen === "picture" ? [] : mine)],
     rejected: thrownOut,
-    verses: ((around ?? []) as Around[])
-      .filter((d) => d.verse_ref && d.day < r.day)
-      .sort((a, b) => a.day.localeCompare(b.day))
-      .map((d) => d.verse_ref as string),
   };
 }
 
@@ -575,14 +567,12 @@ async function planConcept(admin: Admin, r: DailyRow, maker: Maker, learned: Dai
   }
   if (!made) throw new Error(`The captions didn't pass: ${notes.join("; ")}`);
 
-  const verse = r.faith ? (r.verse_ref && r.verse_text ? { ref: r.verse_ref, text: r.verse_text } : pickVerse(ctx.verses)) : null;
   return {
     ...c,
     concept: made,
     caption: made.caption,
     keepCaption,
     keepPicture,
-    verse,
     model,
     fix: null,
     editor,
@@ -655,7 +645,9 @@ async function applyMade(
     review: { ...rev, score: reviewScore(rev), passed: verdict.passed, why: verdict.why ?? null, at: new Date().toISOString() },
     model: c.model,
     learned: c.learned,
-    ...(r.faith && c.verse ? { verse_ref: c.verse.ref, verse_text: c.verse.text } : {}),
+    // no verse under Sunday's any more (Nov 8 2026): a remake clears one an older post had
+    verse_ref: null,
+    verse_text: null,
   };
   const { error } = await admin.rpc("community_daily_visual_apply", { _id: r.id, _patch: JSON.parse(JSON.stringify(patch)) });
   if (error) throw new Error(`Couldn't put it live: ${error.message}`);

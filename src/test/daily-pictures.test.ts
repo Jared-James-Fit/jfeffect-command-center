@@ -35,7 +35,6 @@ import {
   DAILY_STYLE_KEYS,
   DAILY_THEMES,
   DAILY_THEME_KEYS,
-  FAITH_VERSES,
   FILM_AVOID,
   FILM_LOOK,
   DAILY_LIGHTS,
@@ -69,7 +68,7 @@ import {
   parseConcept,
   parseReview,
   pickChoices,
-  pickVerse,
+  SUNDAY_PRINCIPLE,
   picturePrompt,
   repeatsNearby,
   reviewScore,
@@ -180,26 +179,29 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
   });
 });
 
-describe("the faith post's verse is the Bible's words, never a model's", () => {
-  it("a fixed list of King James verses, each once", () => {
-    expect(FAITH_VERSES.length).toBeGreaterThanOrEqual(12);
-    expect(new Set(FAITH_VERSES.map((v) => v.ref)).size).toBe(FAITH_VERSES.length);
-    expect(FAITH_VERSES.find((v) => v.ref === "Psalm 46:10")?.text).toBe("Be still, and know that I am God");
-    expect(FAITH_VERSES.find((v) => v.ref === "Matthew 11:28")?.text).toBe("Come unto me, all ye that labour and are heavy laden, and I will give you rest.");
+describe("no Bible verses in coach posts (Nov 8 2026)", () => {
+  const noVerses = readFileSync("supabase/migrations/20270217090000_no_bible_verses.sql", "utf8");
+  it("a post is its caption alone, Sunday's too, the same in the app and the database", () => {
+    expect(dailyCaption("  Rest is part of it.  ")).toBe("Rest is part of it.");
+    expect(noVerses).toContain("RETURNS text LANGUAGE sql IMMUTABLE AS $$\n  SELECT btrim(_line)\n$$;");
+    // no day keeps one, and the one post out with a verse loses it in place (same id, date and engagement)
+    expect(noVerses).toContain("SET verse_ref = NULL, verse_text = NULL");
+    expect(noVerses).toContain("series_data = coalesce(p.series_data, '{}'::jsonb) - 'verse'");
+    expect(noVerses).not.toMatch(/DELETE|created_at|updated_at/);
+    // a remake clears one an older post had; nothing picks one any more
+    expect(server).toContain("    verse_ref: null,\n    verse_text: null,");
+    expect(server).not.toContain("pickVerse");
   });
 
-  it("goes through every verse before one comes back", () => {
-    const used: string[] = [];
-    for (let i = 0; i < FAITH_VERSES.length; i++) used.push(pickVerse(used).ref);
-    expect(new Set(used).size).toBe(FAITH_VERSES.length);
-    expect(pickVerse(used).ref).toBe(used[0]);
-  });
-
-  it("sits under the caption with where it's from, the same in the app and the database", () => {
-    expect(dailyCaption("Rest is part of it.", FAITH_VERSES[0])).toBe("Rest is part of it.\n\n“Be still, and know that I am God” Psalm 46:10");
-    expect(sql).toContain("THEN E'\\n\\n' || '“' || btrim(_verse_text) || '” ' || _verse_ref ELSE '' END");
-    // the writer never writes one: a caption that names a verse is refused
-    expect(captionProblems(`Psalm 46:10 says be still. ${good}`, { format: "coach_note" })).toContain("mentions a verse (the app adds it)");
+  it("Sunday can lean on a principle in plain lifting terms, never a verse, a quote or a sermon", () => {
+    expect(SUNDAY_PRINCIPLE).toContain("rest, gratitude, patience, humility, consistency");
+    expect(SUNDAY_PRINCIPLE).toContain("Never a Bible verse, a scripture quote or a reference");
+    expect(captionProblems(`Psalm 46:10 says be still. ${good}`, { format: "coach_note" })).toContain("quotes or names a Bible verse (no verses: a principle in plain words)");
+    expect(captionProblems(`Come unto me and rest, the Lord says. ${good}`, { format: "coach_note" })).toContain("reads like scripture or a sermon (a principle in plain lifting terms only)");
+    // lifting words that only look close never trip it
+    for (const ok of ["reverse hypers after squats", "a good top set", "thyroid stuff aside"]) {
+      expect(captionProblems(`${ok}. ${good}`, { format: "coach_note" }).filter((x) => /scripture|verse/.test(x)), ok).toEqual([]);
+    }
   });
 });
 
@@ -538,7 +540,8 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(p).toContain("Today especially lifters in their first year or two");
     expect(p).toContain("Never aimed at men or women: it's about their training.");
     expect(p).not.toMatch(/\bWomen who lift\b|\bMen who lift\b/);
-    expect(p).toContain("SUNDAY: a Bible verse goes under the caption. Keep the post about training");
+    expect(p).toContain(SUNDAY_PRINCIPLE);
+    expect(p).not.toMatch(/a Bible verse goes under/);
     expect(p).toContain("The last two posts ended with a question: don't end with one.");
     expect(p).toContain("THE COACH NEVER SAYS: fr");
     // what landed is said as kinds of posts, never captions to copy
@@ -637,7 +640,7 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(none).toContain(ART_STYLES.key_frame.look);
     expect(none).not.toContain("The place:");
     expect(none).toContain("never posing for the viewer");
-    expect(none).toContain("any Bible stays closed");
+    expect(none).toContain("with no Bible, cross or other religious object or symbol in it");
     expect(none).toContain("Fix from the last try: the hands looked wrong");
     expect(none).toContain("middle 80% of the height");
     // every angle carries the picture that teaches it
