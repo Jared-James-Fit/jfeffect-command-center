@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CalendarClock, Check, ChevronDown, ImagePlus, Loader2, PartyPopper, PenLine, Send } from "lucide-react";
@@ -15,7 +15,6 @@ import { CompareBars } from "@/components/community/series-cards";
 import { PostArtImage } from "@/components/community/post-art";
 import { SpiritScene, isSpiritScene } from "@/components/community/spirit-scenes";
 import { NoteEditor } from "@/components/community/note-editor";
-import { DailyPicturesCard } from "@/components/community/daily-pictures-card";
 
 type DailySeries = Exclude<CommunitySeries, "lesson">;
 const ORDER: DailySeries[] = ["monday_motivation", "tuesday_tips", "wednesday_wins", "try_it_thursday", "finish_strong_friday", "saturday_spirit", "sunday_recap"];
@@ -70,9 +69,10 @@ function holidayDay(day: string): string {
 }
 
 /**
- * Every coach post that goes out on its own, besides the lessons: the daily
- * series, one per day, Athlete Insights (DailyPicturesCard) and the
- * holidays coming up.
+ * The daily series and the holidays coming up: Crew → Posts → Manage → Daily
+ * series & holidays (posts-schedule.tsx; the lessons, Athlete Insights and
+ * birthdays have pages of their own). `focus` (a series, or "holidays")
+ * opens that one and brings it on screen, for a tap on it in the schedule.
  *
  * Wednesday Wins is written from the crew's logs and always runs. The Sunday
  * Recap is too, but posts on its own only while it's switched on: it reported
@@ -84,19 +84,29 @@ function holidayDay(day: string): string {
  * an Athlete Insight (community_coach_post_day), and Monday's and Thursday's
  * share theirs with the lesson, so only Tuesday's is on by default (20270204090000_one_coach_post_a_day.sql). Each day shows what goes out
  * next (library posts can be edited first) or what it'd say right now, and can
- * be posted early. Pausing coach posts (the Lessons card) stops all of it.
+ * be posted early. Pausing coach posts (the schedule's switch) stops all of it.
  */
-export function CoachWeeklyPosts() {
+export function CoachWeeklyPosts({ focus = null }: { focus?: string | null } = {}) {
   const { data, isLoading, isError } = useSeriesOverview(true);
   const { user } = useAuth();
   const { data: unit = "lb" } = useViewerUnit(user?.id);
   const act = useSeriesAction();
   const [editing, setEditing] = useState<{ series: LibrarySeries; item: SeriesItem } | null>(null);
-  // every day starts closed (Crew → Posts has "Next: …" at the top); tap one to see or edit it
-  const [open, setOpen] = useState<DailySeries | null>(null);
+  // every day starts closed (the schedule above says what's next), unless the schedule opened one
+  const [open, setOpen] = useState<DailySeries | null>(() => (focus && ORDER.includes(focus as DailySeries) ? (focus as DailySeries) : null));
   const [showOff, setShowOff] = useState(false);
 
   const isOn = (s: DailySeries) => !isSwitched(s) || (data?.series_on ?? []).includes(s);
+  // a tap on one in the schedule: that series (or the holidays), opened and on screen
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focus || focused.current || !data) return;
+    focused.current = true;
+    if (open && !isOn(open)) setShowOff(true);
+    const target = focus === "holidays" ? "[data-coach-holidays]" : `[data-daily-series="${focus}"]`;
+    requestAnimationFrame(() => document.querySelector(target)?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, data]);
   const tuesday = useSeriesPreview("tuesday_tips", open === "tuesday_tips" && isOn("tuesday_tips"));
   const thursday = useSeriesPreview("try_it_thursday", open === "try_it_thursday");
   const sunday = useSeriesPreview("sunday_recap", open === "sunday_recap");
@@ -158,7 +168,7 @@ export function CoachWeeklyPosts() {
     const recapNow = series === "sunday_recap" ? sunday.data : null;
     const canPost = !act.isPending && !data.paused && (wins ? !!preview : library ? !!next : true);
     return (
-      <div key={series} data-daily-series={series}>
+      <div key={series} data-daily-series={series} className="scroll-mt-28">
         <div className="flex items-center justify-between gap-2 px-4 py-3">
           <button type="button" onClick={() => setOpen(expanded ? null : series)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={expanded}>
             <div className="min-w-0">
@@ -320,10 +330,8 @@ export function CoachWeeklyPosts() {
         )}
       </div>
 
-      <DailyPicturesCard />
-
       {holidays.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-coach-holidays>
+        <div className="scroll-mt-28 overflow-hidden rounded-2xl border border-border/70 bg-card" data-coach-holidays>
           <header className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
             <PartyPopper className="h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">

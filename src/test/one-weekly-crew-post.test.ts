@@ -30,7 +30,8 @@ describe("one weekly crew post", () => {
     expect(next).toContain("public.community_coach_post_day(v_day) IS NULL");
     expect(next).toContain("r.series_key = 'daily_visual:' || v_day::text");
     expect(next).toContain("(v_series = 'wednesday_wins' OR v_series = ANY (coalesce(v_settings.series_on, '{}'::text[])))");
-    expect(hub).toContain('if (p.next.series === "daily_visual") return { title: "Next: Athlete Insight"');
+    // the Posts tab's Next reads the same week from the schedule (posts-schedule.ts: Insights only on their planned days, switched-off series left out)
+    expect(read("src/components/community/posts-schedule.tsx")).toContain("const next = nextUp(days, now);");
   });
 
   it("this week's extra coach posts are archived only while nobody but staff engaged with them", () => {

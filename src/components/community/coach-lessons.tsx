@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useFullMediaUrl, useSeriesAction, useSeriesOverview } from "@/lib/community.queries";
+import { useFullMediaUrl, useSeriesOverview } from "@/lib/community.queries";
 import { lessonArtStatus, makeLessonArt } from "@/lib/lesson-art.functions";
 import {
   LESSON_LEVELS, LESSON_LIFTS, LESSON_TRACK, LESSON_TRACKS, LEVEL_LABEL, LIFT_LABEL, clockLabel, coachClock, coachInstant, coachTimeLabel, dayLabel,
@@ -37,7 +37,6 @@ import { openCommunityPost } from "@/components/community/shared-comment";
 export function CoachLessons() {
   const { data, isLoading, isError, refetch } = useLessonsOverview(true);
   const series = useSeriesOverview(true);
-  const seriesAct = useSeriesAction();
   const act = useLessonAct();
   const settings = useLessonsSettings();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -90,20 +89,6 @@ export function CoachLessons() {
             <div className="text-[14px] font-bold">Lessons</div>
             <div className="truncate text-[11px] text-muted-foreground">{data.author ? `Posts as ${data.author.name} · Winnipeg time` : "No posting account set"}</div>
           </div>
-          <label className="flex items-center gap-2 text-[12px] font-bold">
-            {paused ? "Paused" : "On"}
-            <Switch
-              checked={!paused}
-              disabled={seriesAct.isPending}
-              onCheckedChange={(on) =>
-                seriesAct.mutate(
-                  { kind: "pause", paused: !on },
-                  { onSuccess: () => toast.success(on ? "Coach posts are on" : "Coach posts paused", { description: on ? undefined : "Lessons, the daily series and holidays all wait until you turn them back on." }) },
-                )
-              }
-              aria-label="Coach posts on"
-            />
-          </label>
         </header>
 
         {/* review first, or let them go */}
@@ -139,7 +124,7 @@ export function CoachLessons() {
 
         {paused && (
           <div className="flex items-center gap-2 border-b border-border/60 bg-amber-500/10 px-4 py-2.5 text-[12px] font-bold text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4 shrink-0" /> Paused: nothing posts until it's back on.
+            <AlertTriangle className="h-4 w-4 shrink-0" /> Coach posts are paused: turn them back on at the top of Posts.
           </div>
         )}
 
@@ -457,7 +442,7 @@ function StatsPanel({ data }: { data: LessonsOverview }) {
 
 /* ---- one lesson ------------------------------------------------------ */
 
-function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data: LessonsOverview; onClose: () => void; onPlay?: () => void }) {
+export function LessonSheet({ row, data, onClose, onPlay }: { row: LessonPlanRow; data: LessonsOverview; onClose: () => void; onPlay?: () => void }) {
   const act = useLessonAct();
   const [tab, setTab] = useState<"post" | "story">("post");
   const [words, setWords] = useState(false);

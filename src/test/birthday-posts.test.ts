@@ -102,9 +102,10 @@ describe("birthday posts: reviewed by the coach, then out at 8am their time", ()
   });
   it("the hourly hook runs it, and Crew (where the coach lands) shows the review card", () => {
     expect(read("src/routes/api/public/hooks/birthday-notifications.ts")).toContain("runBirthdayPosts(supabaseAdmin, { notifyAppEvent, sendWebPushToUser })");
-    // a draft that needs review is in Crew's Needs you and first on its Posts tab; the dashboard doesn't repeat it
+    // a birthday is in the Posts schedule (its sheet a tap away) and has its own page under Manage; the dashboard doesn't repeat it
     expect(read("src/routes/_authenticated/admin/index.tsx")).not.toContain("BirthdayPostsCard");
-    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<BirthdayPostsCard />");
+    expect(read("src/components/community/posts-schedule.tsx")).toContain("<BirthdayPostsCard />");
+    expect(read("src/components/community/posts-schedule.tsx")).toContain("<BirthdayPostSheet post={birthday} onClose={() => setBirthdayId(null)} />");
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("birthday posts to review");
     const ui = read("src/components/community/birthday-posts.tsx");
     expect(ui).toContain("window.location.hash.match(/birthday=([0-9a-f-]{36})/i)");
