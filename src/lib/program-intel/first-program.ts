@@ -8,6 +8,7 @@
  * progression), fitted to the time they have. Every number is a starting
  * point the next program corrects from what they log. Deterministic.
  */
+import { levelFromYears, trainingYears } from "./athlete-development";
 import type { Brain } from "./types";
 
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
@@ -23,7 +24,8 @@ export function experienceLevel(raw: string | null | undefined): ExperienceLevel
   if (/beginner|novice|less than (1|one)|under (a|1|one) year|never|brand new|just start|few months|<\s*1|\b0\s*-\s*1\b/.test(t)) return "beginner";
   if (/more than 5|over 5|5\+|advanced|elite|\b(6|7|8|9|10)\+?\s*years?/.test(t)) return "advanced";
   if (/intermediate|1\s*-\s*3|3\s*-\s*5|\b[1-5]\+?\s*years?/.test(t)) return "intermediate";
-  return null;
+  // a number the patterns above don't cover ("14 years", "8 months")
+  return levelFromYears(trainingYears(raw));
 }
 
 /** What they said in Goals & Setup's last question ("anything else?"), unless it says nothing. */

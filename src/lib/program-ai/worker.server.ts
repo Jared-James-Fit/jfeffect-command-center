@@ -119,7 +119,7 @@ async function logCall(admin: Db, editId: string, x: { label: string; model: str
 }
 
 /** The athlete as Program Intelligence reads them (the generator's brief, minus its setup sections). */
-async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string; maxSessionMinutes: number | null; maxLifts: string[]; warnings: string[]; chars: number }> {
+async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string; maxSessionMinutes: number | null; maxLifts: string[]; warnings: string[]; chars: number; signals: NonNullable<EngineCtx["signals"]>; missing: Array<{ field: string; why: string; where: string }> }> {
   const rec = await loadIntelRecords(admin, clientId, { kind: "history" });
   const intel = buildGeneratorIntel(rec);
   const setup = intel.recommendation.setup;
@@ -134,7 +134,10 @@ async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string
   const flags = conflicts.length ? `\n\n## Things the data flags\n${conflicts.map((c: any) => `- [${c.severity}] ${c.title}. ${c.detail}`).join("\n")}` : "";
   const text = `${b.text}${flags}\n\n## What the data recommends for their training (a reference, not a requirement)\n${setupText(setup)}`;
   const maxLifts = intel.history.lifts.filter((l: any) => l.maxOnFileKg != null).map((l: any) => String(l.lift).toLowerCase());
-  return { text, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, warnings: b.warnings, chars: text.length };
+  // what the records say about each exercise: the editor warns when a change goes against it
+  const signals: NonNullable<EngineCtx["signals"]> = new Map();
+  for (const p of intel.development.progression) if (p.exerciseId) signals.set(p.exerciseId, { decision: p.decision, why: p.why });
+  return { text, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, warnings: b.warnings, chars: text.length, signals, missing: intel.development.missing };
 }
 
 function ctxFrom(catalog: CatalogExercise[], extra: Map<string, CatalogExercise> = new Map()): EngineCtx {
@@ -179,11 +182,16 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
     // 2. the athlete
     let brief: string | null = null;
     let briefInfo: { chars: number; warnings: string[] } | null = null;
+    let signals: EngineCtx["signals"] = undefined;
+    let missing: Array<{ field: string; why: string; where: string }> = [];
     if (athleteId) {
       await stage(admin, edit.id, "Reading their training history");
       const a = await athleteBrief(admin, athleteId);
       brief = a.text;
       briefInfo = { chars: a.chars, warnings: a.warnings };
+      // a template personalized for someone is still a template: no progression warnings against their program
+      if (edit.target_kind === "client") signals = a.signals;
+      missing = a.missing;
       if (snap.kind === "client") {
         snap.maxSessionMinutes = a.maxSessionMinutes;
         snap.maxLifts = a.maxLifts;
@@ -192,7 +200,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
 
     // 3. catalog, rules, the conversation
     const catalog = await loadCatalog(admin, snap, meta);
-    let ctx = ctxFrom(catalog);
+    let ctx: EngineCtx = { ...ctxFrom(catalog), signals };
     const rules = await loadRules(admin, athleteId, snap.today);
     const { data: earlier } = await admin
       .from("program_ai_edits")
@@ -260,7 +268,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
           notes.push(`"${m.name}" isn't in the exercise library.${m.candidates.length ? ` Closest library exercises: ${m.candidates.map((c) => `${c.code} ${c.name}`).join(", ")}.` : " Pick a catalog code."}`);
         }
       }
-      ctx = { catalog: ctx.catalog, byId: new Map([...ctx.catalog.values(), ...names.values()].map((e) => [e.id, e])), names };
+      ctx = { catalog: ctx.catalog, byId: new Map([...ctx.catalog.values(), ...names.values()].map((e) => [e.id, e])), names, signals };
       const merged = mergeProposal(programChanged ? [] : current, reply, edit.rejected ?? []);
       const problems = [...notes, ...fixable(snap, ctx, merged.changes.filter((c) => reply!.changes.some((x) => x.id === c.id) || merged.added.includes(c.id)))];
       if (!problems.length || call === MAX_CALLS || Date.now() - started > FIX_ROUND_BEFORE_MS) break;
@@ -315,7 +323,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       fingerprint,
       revision: snap.revision ?? null,
       program: { title: snap.title, kind: snap.kind, blocks: snap.blocks.map((b) => ({ ref: b.ref, id: b.id, name: b.name, weeks: b.weeks.length })), trainingDays: snap.trainingDays, maxSessionMinutes: snap.maxSessionMinutes ?? null },
-      context: { prompt_chars: user.length, brief_chars: briefInfo?.chars ?? 0, brief_warnings: briefInfo?.warnings ?? [], catalog: catalog.length, rules: rules.length, program_changed: programChanged },
+      context: { prompt_chars: user.length, brief_chars: briefInfo?.chars ?? 0, brief_warnings: briefInfo?.warnings ?? [], catalog: catalog.length, rules: rules.length, program_changed: programChanged, missing },
     };
     await admin
       .from("program_ai_edits")

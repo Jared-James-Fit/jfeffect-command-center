@@ -32,6 +32,8 @@ export type EngineCtx = {
   byId: Map<string, CatalogExercise>;
   /** Library names the server resolved for this reply (lowercased name → exercise). */
   names?: Map<string, CatalogExercise>;
+  /** What the athlete's records say about each exercise (Program Intelligence's progress / hold / back off), by exercise id. */
+  signals?: Map<string, { decision: "progress" | "maintain" | "regress" | "not_enough_data"; why: string }>;
 };
 
 export const LOAD_CAP = { kg: 450, lb: 1000 } as const;
@@ -617,6 +619,46 @@ function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: 
     const ex = ctx.byId.get(id);
     if (ex?.standard) issues.push({ level: "warning", text: `${ex.name} is below the exercise standard: ${ex.standard}.` });
   }
+  // asking more of an exercise the athlete's records say to back off
+  if (ctx.signals?.size) {
+    const flagged = new Set<string>();
+    for (const b of work.blocks)
+      for (const w of b.weeks)
+        for (const d of w.days)
+          for (const r of d.rows) {
+            const o = original.get(r.id);
+            if (!o || !r.exerciseId || o.exerciseId !== r.exerciseId || flagged.has(r.exerciseId)) continue;
+            const sig = ctx.signals.get(r.exerciseId);
+            if (sig?.decision !== "regress" || !asksMore(o, r)) continue;
+            flagged.add(r.exerciseId);
+            issues.push({ level: "warning", text: `${r.name}: their records say back off (${sig.why}), and this asks for more.` });
+          }
+  }
+}
+
+const top = (v: string | null) => {
+  const n = v ? effortValues(v) : null;
+  return n ? Math.max(...n) : null;
+};
+const low = (v: string | null) => {
+  const n = v ? effortValues(v) : null;
+  return n ? Math.min(...n) : null;
+};
+
+/** More sets, more load, a higher %, a harder RPE or fewer reps in reserve than before. */
+export function asksMore(before: RowSnap, after: RowSnap): boolean {
+  if ((after.sets ?? 0) > (before.sets ?? 0)) return true;
+  const load = (r: RowSnap) => (r.loadKg != null ? r.loadKg : r.loadLb != null ? r.loadLb / 2.2046226218 : null);
+  const lb = load(before);
+  const la = load(after);
+  if (lb != null && la != null && la > lb) return true;
+  if (before.percentage != null && after.percentage != null && after.percentage > before.percentage) return true;
+  const rb = top(before.rpe);
+  const ra = top(after.rpe);
+  if (rb != null && ra != null && ra > rb) return true;
+  const ib = low(before.rir);
+  const ia = low(after.rir);
+  return ib != null && ia != null && ia < ib;
 }
 
 function weeksOf(diffs: DayDiff[]): string[] {

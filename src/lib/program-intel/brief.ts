@@ -6,6 +6,7 @@
  * budget, in which case they're summarized per exercise AND the brief, the
  * job's context and the inspector all say so (never silently cut).
  */
+import { developmentText } from "./athlete-development";
 import { cardioBriefLines } from "./cardio";
 import { fmtLoad, fmtSet } from "./core";
 import type { AthleteContext } from "./context";
@@ -183,6 +184,8 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
   const add = (key: string, title: string, text: string, detail: "full" | "summary" = "full", note?: string) => sections.push({ key, title, text, chars: text.length, detail, note });
 
   add("athlete", "Athlete", athleteSection(ctx));
+  // how they're developing: the deterministic read every decision below should follow (see DEVELOPMENT_RULES)
+  if (intel.development) add("development", "Athlete development (computed from their records)", developmentText(intel.development, ctx.unit));
   const rec = intel.recommendation.setup;
   const editedLines = x.edited.map((k) => `- ${FIELD_LABEL[k] ?? k}: the coach changed it${JSON.stringify(rec[k]) !== JSON.stringify(x.setup[k]) ? ` (recommended: ${String(JSON.stringify(rec[k])).slice(0, 200)})` : ""}`);
   add(

@@ -5,6 +5,7 @@
  * one), the rows written to the program, and the dates a draft gets when the
  * coach assigns it. The interpret run's prompt lives here too.
  */
+import { DEVELOPMENT_RULES } from "./athlete-development";
 import { z } from "zod";
 import { isTimedCardio } from "@/lib/timed-cardio";
 import { rxToRow } from "@/lib/cleo-program";
@@ -84,6 +85,8 @@ Rules:
 - Each one must cite evidence that appears in the report (week labels, exercises, numbers copied exactly). Do not compute or invent numbers.
 - Prefer specific, actionable observations (what to keep, change or test) over general advice. At most 10.
 - Add questions for the coach about information the records are missing.
+- Read the "Athlete development" section as the measured read of who they are and how they develop (training age and rate, strength against bodyweight and bodyweight phase, weight class, plateaus, adherence, fatigue, and progress / hold / back off per exercise); interpret it, don't repeat it.
+${DEVELOPMENT_RULES}
 Reply with ONE JSON object and nothing else:
 { "observations": [ { "statement": string, "category": "squat"|"bench"|"deadlift"|"volume"|"intensity"|"frequency"|"exercise"|"recovery"|"adherence"|"muscle"|"other", "evidence": [string] } ], "questions": [string] }`;
 }
