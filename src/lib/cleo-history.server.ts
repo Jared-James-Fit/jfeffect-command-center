@@ -194,6 +194,7 @@ export async function describeRestore(db: Db, versionId: string): Promise<string
     remove_workout: "Put the deleted workout back on their calendar",
     build_program: "Hide the new block from the client (it stays in their training to delete if you want)",
     assign_program_template: "Hide the assigned block from the client (it stays in their training to delete if you want)",
+    ai_edit: "Put the program back the way it was before this Edit with AI change (workouts trained since stay as trained)",
   };
   return `${how[v.kind] ?? "Undo"}.\nUndoing: ${what} (${when}).`;
 }
@@ -339,6 +340,13 @@ export async function restoreVersion(actor: { supabase: Db; userId: string }, ve
         if (error) throw new Error(error.message);
         text = "Hidden from the client. The block is still in their training if you want to delete it.";
         break;
+      }
+      case "ai_edit": {
+        // Edit with AI's own restore (one transaction, dates put back too); it claims the version itself
+        await admin.from("pl_program_versions").update({ restored_at: null, restored_by: null }).eq("id", versionId);
+        const { undoVersion } = await import("@/lib/program-ai/apply.server");
+        const r = await undoVersion(actor, versionId);
+        return [r.note, r.scheduleNote].filter(Boolean).join(" ");
       }
       default:
         throw new Error("That change can't be undone here.");

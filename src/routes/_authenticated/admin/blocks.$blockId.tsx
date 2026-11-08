@@ -38,6 +38,7 @@ import { useScrollRestoration } from "@/lib/scroll-restore";
 import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
 import { BlockSwitcher } from "@/components/block-switcher";
 import { Badge } from "@/components/ui/badge";
+import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
   component: BlockEditor,
@@ -869,6 +870,28 @@ function BlockEditor() {
               Saved to {clientName}'s Program
             </span>
           ) : null}
+          {clientId && (
+            <EditWithAiButton
+              target={{ kind: "client", clientId, focusBlockId: blockId }}
+              title={`${clientName} · ${name || tree.block.name || "Block"}`}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              label="Edit with AI"
+              // the AI reads what's saved: save what's on screen first
+              beforeOpen={async () => {
+                if (dirty) await save();
+              }}
+              onApplied={async () => {
+                // rehydrate the builder from the program as it is now
+                hydratedBlockIdRef.current = null;
+                await refetchTree();
+                qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
+                qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
+                qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
+                invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
+              }}
+            />
+          )}
           <ActionButton
             onAction={save}
             loadingLabel="Saving…"

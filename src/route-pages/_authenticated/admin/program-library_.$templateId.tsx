@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -538,6 +539,8 @@ export function TemplateEditor() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const hydratedRef = useRef(false);
+  // bumped to re-read the template from the server (after an Edit with AI change)
+  const [reloadTick, setReloadTick] = useState(0);
   // JSON of the payload as first hydrated — the undo stack compares its
   // persisted content fingerprint against this to detect stale history.
   const initialPayloadJsonRef = useRef<string | null>(null);
@@ -570,7 +573,7 @@ export function TemplateEditor() {
       setPayload(freshPayload);
       hydratedRef.current = true;
     }
-  }, [tpl]);
+  }, [tpl, reloadTick]);
 
   const setM = (patch: any) => { setMeta({ ...meta, ...patch }); setDirty(true); };
   const setP = (next: any, opts?: { skipHistory?: boolean }) => {
@@ -703,6 +706,26 @@ export function TemplateEditor() {
       meta={meta} summary={summary} typeLabel={type.replace("_", " ")}
       autosave={autosave} save={save} dirty={dirty}
       statusTemplate={{ ...tpl, payload }}
+      aiTool={["block", "full_prep", "program"].includes(type) ? (
+        <EditWithAiButton
+          target={{ kind: "template", templateId }}
+          title={meta.name || tpl.name}
+          size="sm"
+          className="h-7 px-2 text-xs"
+          // the AI reads what's saved: save what's on screen first
+          beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
+          onApplied={async () => {
+            // re-read the template as it is now (the hydration effect runs again)
+            hydratedRef.current = false;
+            setMeta(null);
+            setPayload(null);
+            setDirty(false);
+            await qc.invalidateQueries({ queryKey: ["pl-template", templateId] });
+            qc.invalidateQueries({ queryKey: ["pl-templates"] });
+            setReloadTick((t) => t + 1);
+          }}
+        />
+      ) : null}
     >
       {conflictWatch.conflict && (
           <Card className="flex flex-wrap items-start gap-3 border-amber-500/60 bg-amber-500/5 p-3 text-sm">
@@ -796,10 +819,12 @@ export function TemplateEditor() {
   );
 }
 
-function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, children }: {
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, aiTool, children }: {
   meta: any; summary: any; typeLabel: string;
   autosave: any; save: () => Promise<void>; dirty: boolean;
   statusTemplate?: any;
+  /** Edit with AI (block and program templates). */
+  aiTool?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -817,6 +842,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
         </div>
         <div className="ml-auto flex items-center gap-2">
           {statusTemplate && <ProgramStatusBadge template={statusTemplate} />}
+          {aiTool}
           <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
           <ActionButton
             onAction={save}

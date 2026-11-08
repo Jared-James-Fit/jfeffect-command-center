@@ -257,6 +257,7 @@ import { Route as ApiPublicHooksNutritionPlansTickRouteImport } from './routes/a
 import { Route as ApiPublicHooksNutritionTickRouteImport } from './routes/api/public/hooks/nutrition-tick'
 import { Route as ApiPublicHooksPaymentReminderSmsRouteImport } from './routes/api/public/hooks/payment-reminder-sms'
 import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api/public/hooks/post-pictures-tick'
+import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
 import { Route as ApiPublicHooksProgramIntelTickRouteImport } from './routes/api/public/hooks/program-intel-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
@@ -1712,6 +1713,12 @@ const ApiPublicHooksPostPicturesTickRoute =
     path: '/api/public/hooks/post-pictures-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProgramAiTickRoute =
+  ApiPublicHooksProgramAiTickRouteImport.update({
+    id: '/api/public/hooks/program-ai-tick',
+    path: '/api/public/hooks/program-ai-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProgramIntelTickRoute =
   ApiPublicHooksProgramIntelTickRouteImport.update({
     id: '/api/public/hooks/program-intel-tick',
@@ -2121,6 +2128,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
+  '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
@@ -2396,6 +2404,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
+  '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
@@ -2677,6 +2686,7 @@ export interface FileRoutesById {
   '/api/public/hooks/nutrition-tick': typeof ApiPublicHooksNutritionTickRoute
   '/api/public/hooks/payment-reminder-sms': typeof ApiPublicHooksPaymentReminderSmsRoute
   '/api/public/hooks/post-pictures-tick': typeof ApiPublicHooksPostPicturesTickRoute
+  '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
@@ -2958,6 +2968,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
+    | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
@@ -3233,6 +3244,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
+    | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
@@ -3513,6 +3525,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/nutrition-tick'
     | '/api/public/hooks/payment-reminder-sms'
     | '/api/public/hooks/post-pictures-tick'
+    | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
     | '/api/public/hooks/scheduled-messages-worker'
@@ -3627,6 +3640,7 @@ export interface RootRouteChildren {
   ApiPublicHooksNutritionTickRoute: typeof ApiPublicHooksNutritionTickRoute
   ApiPublicHooksPaymentReminderSmsRoute: typeof ApiPublicHooksPaymentReminderSmsRoute
   ApiPublicHooksPostPicturesTickRoute: typeof ApiPublicHooksPostPicturesTickRoute
+  ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
   ApiPublicHooksProgramIntelTickRoute: typeof ApiPublicHooksProgramIntelTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
@@ -5384,6 +5398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPostPicturesTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/program-ai-tick': {
+      id: '/api/public/hooks/program-ai-tick'
+      path: '/api/public/hooks/program-ai-tick'
+      fullPath: '/api/public/hooks/program-ai-tick'
+      preLoaderRoute: typeof ApiPublicHooksProgramAiTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/program-intel-tick': {
       id: '/api/public/hooks/program-intel-tick'
       path: '/api/public/hooks/program-intel-tick'
@@ -6306,6 +6327,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksNutritionTickRoute: ApiPublicHooksNutritionTickRoute,
   ApiPublicHooksPaymentReminderSmsRoute: ApiPublicHooksPaymentReminderSmsRoute,
   ApiPublicHooksPostPicturesTickRoute: ApiPublicHooksPostPicturesTickRoute,
+  ApiPublicHooksProgramAiTickRoute: ApiPublicHooksProgramAiTickRoute,
   ApiPublicHooksProgramIntelTickRoute: ApiPublicHooksProgramIntelTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,
