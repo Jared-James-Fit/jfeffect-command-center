@@ -32,8 +32,9 @@ function athleteSection(ctx: AthleteContext): string {
   const e = ctx.equipment;
   const lines: string[] = [];
   lines.push(`Name: ${ctx.name} · today ${ctx.today} · loads in ${u}`);
-  lines.push(`Profile: ${[p.age != null ? `${p.age} y` : "age not on file", p.sex ?? "sex not on file", p.heightCm ? `${p.heightCm} cm` : "height not on file", p.bodyweightKg != null ? `bodyweight ${kg(p.bodyweightKg, u)} (${p.bodyweightDate})${p.bodyweightChange4wKg != null ? `, ${p.bodyweightChange4wKg > 0 ? "+" : ""}${u === "lb" ? Math.round(p.bodyweightChange4wKg * 2.2046) : p.bodyweightChange4wKg}${u} over ~4 weeks` : ""}` : "no bodyweight on file", p.weightClass ? `weight class ${p.weightClass}` : null, p.experience ? `experience: ${p.experience}` : "experience not on file", p.trainingSince ? `training with the coach since ${p.trainingSince}` : null, p.isPowerlifter ? "marked as a powerlifter" : null].filter(Boolean).join(" · ")}`);
+  lines.push(`Profile: ${[p.age != null ? `${p.age} y` : "age not on file", p.sex ?? "sex not on file", p.heightCm ? `${p.heightCm} cm` : "height not on file", p.bodyweightKg != null ? `bodyweight ${kg(p.bodyweightKg, u)} (${p.bodyweightDate})${p.bodyweightChange4wKg != null ? `, ${p.bodyweightChange4wKg > 0 ? "+" : ""}${u === "lb" ? Math.round(p.bodyweightChange4wKg * 2.2046) : p.bodyweightChange4wKg}${u} over ~4 weeks` : ""}` : "no bodyweight on file", p.weightClass ? `weight class ${p.weightClass}` : null, p.experience ? `experience: ${p.experience}${p.level ? ` (${p.level})` : ""}` : "experience not on file", p.trainingSince ? `training with the coach since ${p.trainingSince}` : null, p.isPowerlifter ? "marked as a powerlifter" : null].filter(Boolean).join(" · ")}`);
   lines.push(`Goals (${ctx.goals.onFile ? `Goals & Setup${ctx.goals.updatedAt ? `, updated ${ctx.goals.updatedAt.slice(0, 10)}` : ""}` : "no Goals & Setup on file"}): ${[ctx.goals.main, ctx.goals.other, ctx.goals.target && `target: ${ctx.goals.target}`, ctx.goals.styles.length && `styles: ${ctx.goals.styles.join(", ")}`, ctx.goals.clientGoals && `client file: ${ctx.goals.clientGoals}`, ctx.goals.bodyweightGoal && `bodyweight goal: ${ctx.goals.bodyweightGoal}`].filter(Boolean).join(" · ") || "none"}`);
+  if (ctx.goals.notes) lines.push(`Anything else they told you at setup: "${ctx.goals.notes}"`);
   const m = ctx.competition.next;
   lines.push(`Competition: ${m ? `${m.name} on ${m.date} (${m.weeksOut} weeks out)${m.federation ? `, ${m.federation}` : ""}${m.weightClass ? `, ${m.weightClass} class` : ""}` : "no upcoming meet on file"}${ctx.competition.history.length ? ` · results: ${ctx.competition.history.map((h) => `${h.date ?? "?"} ${h.name ?? ""} ${h.squat ?? "?"}/${h.bench ?? "?"}/${h.deadlift ?? "?"}=${h.total ?? "?"}kg @${h.bodyweight ?? "?"}kg`).join("; ")}` : ""}`);
   lines.push(`Schedule: committed ${ctx.schedule.committedDays.join(", ") || "—"}${ctx.schedule.committedFrequency ? ` (${ctx.schedule.committedFrequency}/week)` : ""}${ctx.schedule.updatedAt ? `, set ${ctx.schedule.updatedAt.slice(0, 10)}` : ""} · Goals & Setup ${ctx.schedule.goalsDaysPerWeek ?? "—"} days/week · available ${ctx.schedule.availableWeekdays.join(", ") || "—"} · actually trained on ${ctx.schedule.observedWeekdays.join(", ") || "—"}${ctx.schedule.preferredTime ? ` · prefers ${ctx.schedule.preferredTime}` : ""}${ctx.schedule.notes ? ` · notes: ${ctx.schedule.notes}` : ""}`);
@@ -73,7 +74,7 @@ const FIELD_LABEL: Partial<Record<SetupField, string>> = {
   excluded: "Excluded exercises",
   recovery: "Recovery constraints",
   preferences: "Exercise preferences",
-  coachNotes: "Coach notes",
+  coachNotes: "Coach's notes & ideas for this program",
   newCircumstances: "New circumstances",
 };
 
@@ -154,6 +155,27 @@ export function programLayout(r: IntelReport | null): string {
 /** The sections the construction stages skip: the set-by-set logs (the strategy already read them; load references and measured exercises stay). */
 export const CONSTRUCT_EXCLUDE = ["log", "earlier"];
 
+/** A first program: what's known from their setup, and what nothing logged yet means. */
+export function firstProgramText(intel: GeneratorIntel): string {
+  const { ctx } = intel;
+  const known = [
+    ctx.goals.main ? `goal "${ctx.goals.main}"${ctx.goals.target ? ` (${ctx.goals.target})` : ""}` : null,
+    ctx.profile.experience ? `experience "${ctx.profile.experience}"${ctx.profile.level ? ` = ${ctx.profile.level}` : ""}` : null,
+    ctx.schedule.committedDays.length ? `training days ${ctx.schedule.committedDays.join(", ")}` : ctx.schedule.goalsDaysPerWeek ? `${ctx.schedule.goalsDaysPerWeek} days a week` : null,
+    ctx.session.ptMinutes ? `${ctx.session.ptMinutes}-min PT sessions` : ctx.session.goalsMinutes ? `${ctx.session.goalsMinutes}-min sessions` : null,
+    ctx.equipment.items.length ? `equipment (${ctx.equipment.confidence})` : null,
+    ctx.injuries.stated.length ? "injuries" : "no injuries stated",
+    ctx.goals.notes ? "what else they said at setup" : null,
+  ].filter(Boolean) as string[];
+  const maxes = intel.history.lifts.filter((l) => l.maxOnFileKg != null).map((l) => `${l.lift} ${fmtLoad(l.maxOnFileKg as number, ctx.unit)}`);
+  return [
+    "FIRST PROGRAM: no training logged yet, so there's no previous program, no load history and no measured response.",
+    `Built from their setup answers: ${known.join(", ") || "nothing (no Goals & Setup on file: defaults)"}${ctx.goals.onFile ? "" : ". No Goals & Setup on file"}.`,
+    `Maxes on file: ${maxes.join(", ") || "none (no percentages; never write a starting weight)"}.`,
+    "Not known yet: their working weights, how they recover, which exercises suit them, how consistent they'll be. The setup's frequency, weekly sets, rep ranges, effort and progression are evidence-based starting points for their level, fitted to their time; the next program corrects them from what they log.",
+  ].join("\n");
+}
+
 export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[]; exclude?: string[] }): Brief {
   const budget = x.budgetChars ?? BRIEF_BUDGET_CHARS;
   const { ctx, prev, history } = intel;
@@ -165,7 +187,7 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
   const editedLines = x.edited.map((k) => `- ${FIELD_LABEL[k] ?? k}: the coach changed it${JSON.stringify(rec[k]) !== JSON.stringify(x.setup[k]) ? ` (recommended: ${String(JSON.stringify(rec[k])).slice(0, 200)})` : ""}`);
   add(
     "setup",
-    "Next program setup (approved by the coach)",
+    intel.firstProgram ? "First program setup (approved by the coach)" : "Next program setup (approved by the coach)",
     [setupText(x.setup), editedLines.length ? `\nChanged by the coach (these are requirements; honor them and adapt everything else around them):\n${editedLines.join("\n")}` : "\nThe coach accepted the recommended setup.", x.redistribution ? `\nWorkload redistribution (days changed):\n${list(x.redistribution.lines)}` : ""].join("\n"),
   );
   add("cardio", "Cardio (the client's cardio plan, never workout rows)", cardioBriefLines(x.setup.cardio).join("\n") || "Not set: write no cardio into the workouts.");
@@ -178,7 +200,7 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
       `Restrictions: ${x.setup.restrictions.join(" · ") || "none"}`,
       `Recovery constraints: ${x.setup.recovery || "none"}`,
       `Exercise preferences: ${x.setup.preferences || "none"}`,
-      `Coach notes for this program: ${x.setup.coachNotes || "none"}`,
+      `Coach's notes & ideas for this program (the head coach's direction: follow each one and say how in coach_requirements): ${x.setup.coachNotes || "none"}`,
       `New circumstances not yet in the records: ${x.setup.newCircumstances || "none"}`,
       `Conflicts found before generating:\n${list(x.conflicts.map((c) => `[${c.severity}] ${c.title}. ${c.detail}`), "none")}`,
     ].join("\n"),
@@ -195,7 +217,7 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
           `Consistency issues:\n${list(q.issues.map((i) => `[${i.severity}] ${i.title}. ${i.detail}${i.evidence.length ? ` (${i.evidence.slice(0, 4).join("; ")})` : ""}`), "none")}`,
           `Missing:\n${list(q.missing, "nothing major")}`,
         ].join("\n")
-      : "No training logged yet: program from goals, schedule, equipment and conservative defaults; say what's assumed.",
+      : firstProgramText(intel),
   );
   if (intel.review && ctx.previous) {
     const p = ctx.previous;

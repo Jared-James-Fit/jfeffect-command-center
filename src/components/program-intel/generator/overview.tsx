@@ -32,7 +32,41 @@ function Stat({ label, value, sub, warn }: { label: string; value: React.ReactNo
   );
 }
 
+/** A first program: the setup answers it's built from, nothing that needs training history. */
+function FirstProgramOverview({ intel }: { intel: GeneratorIntel }) {
+  const { ctx } = intel;
+  const u = ctx.unit;
+  const maxes = intel.history.lifts.filter((l) => l.maxOnFileKg != null).map((l) => `${l.lift[0].toUpperCase()}${l.lift.slice(1)} ${fmtLoad(l.maxOnFileKg as number, u)}`);
+  const days = ctx.schedule.committedDays.length ? ctx.schedule.committedDays.map((d) => d.slice(0, 3)).join(" ") : null;
+  return (
+    <Card className="space-y-2.5 p-3.5" data-testid="gen-athlete-overview">
+      <SectionTitle hint={ctx.goals.onFile ? `Goals & Setup${ctx.goals.updatedAt ? ` · ${ctx.goals.updatedAt.slice(0, 10)}` : ""}` : "no Goals & Setup"}>Starting from their setup</SectionTitle>
+      <p className="text-[12px] text-muted-foreground">No training logged yet. These answers are what the first program is built from; the next one is built from what they log.</p>
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+        <Stat label="Program type" value={BRAIN_LABEL[intel.brain]} sub={intel.brainSource === "auto" ? "from their goal" : `auto: ${BRAIN_LABEL[intel.classification.auto]}`} />
+        <Stat label="Goal" value={ctx.goals.main ?? "not on file"} sub={ctx.goals.target ?? undefined} warn={!ctx.goals.main} />
+        <Stat label="Experience" value={ctx.profile.experience ?? "not on file"} sub={ctx.profile.level ? `starts as ${ctx.profile.level}` : "starts as a beginner"} warn={!ctx.profile.experience} />
+        <Stat label="Training days" value={ctx.schedule.committedFrequency ? `${ctx.schedule.committedFrequency} days / week` : ctx.schedule.goalsDaysPerWeek ? `${ctx.schedule.goalsDaysPerWeek} days / week` : "not on file"} sub={days ?? undefined} warn={!ctx.schedule.committedFrequency && !ctx.schedule.goalsDaysPerWeek} />
+        <Stat label="Session length" value={ctx.session.ptMinutes ? `${ctx.session.ptMinutes} min PT` : ctx.session.goalsMinutes ? `${ctx.session.goalsMinutes} min` : "not on file"} sub={ctx.session.ptMinutes && ctx.session.goalsMinutes ? `setup says ${ctx.session.goalsMinutes}` : undefined} />
+        <Stat label="Environment" value={ctx.equipment.location ?? ctx.goals.location ?? "not on file"} sub={`${ctx.equipment.items.length} items · ${ctx.equipment.confidence}`} warn={ctx.equipment.confidence === "unknown" || ctx.equipment.conflicts.length > 0} />
+        <Stat label="Injuries" value={ctx.injuries.stated.length ? `${ctx.injuries.stated.length} stated` : "none stated"} sub={ctx.injuries.stated[0]?.slice(0, 60)} />
+        <Stat label="Athlete" value={[ctx.profile.age != null ? `${ctx.profile.age} y` : null, ctx.profile.sex].filter(Boolean).join(" · ") || "—"} sub={ctx.profile.heightCm ? `${ctx.profile.heightCm} cm` : undefined} />
+        <Stat label="Bodyweight" value={ctx.profile.bodyweightKg != null ? fmtLoad(ctx.profile.bodyweightKg, u) : "—"} sub={ctx.profile.bodyweightDate ?? "not logged"} />
+        <Stat label="Maxes on file" value={maxes.length ? maxes.join(" · ") : "none"} sub={maxes.length ? "load anchors" : "loads found in week 1"} />
+        <Stat label="Competition" value={ctx.competition.next ? `${ctx.competition.next.weeksOut} weeks out` : "none on file"} sub={ctx.competition.next ? `${ctx.competition.next.name} · ${ctx.competition.next.date}` : undefined} />
+      </div>
+      {ctx.equipment.conflicts.length > 0 && (
+        <div className="flex gap-1.5 rounded-xl bg-amber-500/10 p-2 text-[11px] text-amber-800 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{ctx.equipment.conflicts[0]}</span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function AthleteOverview({ intel }: { intel: GeneratorIntel }) {
+  if (intel.firstProgram) return <FirstProgramOverview intel={intel} />;
   const { ctx, prev } = intel;
   const p = ctx.previous;
   const c = prev?.coverage;

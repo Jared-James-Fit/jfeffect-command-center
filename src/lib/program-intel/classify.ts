@@ -9,6 +9,7 @@
  * ranges and the accessories are hypertrophy work, it's powerbuilding.
  */
 import { repRange } from "./core";
+import { experienceLevel, goalBrain } from "./first-program";
 import type { Brain, Classification, IntelRecords } from "./types";
 
 const PL_WORDS = /powerlift|\bmeet\b|\btotal\b|compet|federation|\bipf\b|\bcpu\b|usapl|\bsbd\b|strength sport|\bpeak/i;
@@ -116,6 +117,18 @@ export function classifyProgram(rec: IntelRecords): Classification {
   else if (st >= 0.4) auto = "general_strength";
   else if (bb >= 0.3 && bb > gf) auto = "bodybuilding";
   else auto = "general_fitness";
+  // No training on file yet: the goal they picked at setup is the only real signal, so it decides
+  // ("Build muscle" alone scores too little to beat the general-fitness default).
+  if (total === 0 && !meet && !rec.meets.length) {
+    const fromGoal = goalBrain(
+      { main: rec.goals?.main_goal ?? null, other: rec.goals?.main_goal_other ?? null, target: rec.goals?.goal_target ?? null, styles: rec.goals?.training_styles ?? [] },
+      experienceLevel(rec.goals?.training_experience ?? rec.client.intake_training_experience),
+    );
+    if (fromGoal) {
+      auto = fromGoal.brain;
+      reasons.unshift(`No training on file yet: ${fromGoal.why}`);
+    }
+  }
   if (!reasons.length) reasons.push("No goals, meet or structure signals on file: read as general fitness");
   return { auto, scores: { powerlifting: pl, bodybuilding: bb, strength: st, general: gf, hybrid: hy }, reasons };
 }

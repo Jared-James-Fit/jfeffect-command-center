@@ -32,7 +32,7 @@ import { DraftView, PipelineProgress } from "./draft-view";
 import { ContextInspector } from "./inspector";
 import { OutcomesCard } from "./outcomes-card";
 import { AthleteOverview, DataQualityCard, PatternsCard, ProgramReviewCard } from "./overview";
-import { AdvancedControls, ConflictsCard, EquipmentSheet, SetupCard } from "./setup";
+import { AdvancedControls, ConflictsCard, EquipmentSheet, ProgramNotesCard, SetupCard } from "./setup";
 import { StrategyReview } from "./strategy-view";
 
 const HISTORY = { kind: "history" } as const;
@@ -172,7 +172,7 @@ export function NextProgramWorkstation({ clientId }: { clientId: string }) {
   const running = (j: IntelJob | null) => !!j && (j.status === "pending" || j.status === "running");
   return (
     <>
-      <PageHeader title="Next program" subtitle={name || undefined} backTo={`/admin/client-programs/${clientId}/intelligence`} backLabel="Program Intelligence" />
+      <PageHeader title={intel?.firstProgram ? "First program" : "Next program"} subtitle={name || undefined} backTo={`/admin/client-programs/${clientId}/intelligence`} backLabel="Program Intelligence" />
       <div className="mx-auto w-full max-w-3xl space-y-3 p-3 pb-28 sm:p-6" data-testid="next-program-workstation">
         {records.isLoading || !intel || !setup ? (
           records.isError ? (
@@ -226,6 +226,7 @@ export function NextProgramWorkstation({ clientId }: { clientId: string }) {
             <DataQualityCard intel={intel} />
             <PatternsCard intel={intel} />
             <SetupCard intel={intel} setup={setup} edited={edited} onChange={change} onBrain={setBrain} onReset={resetSetup} redistribution={red} onEditEquipment={() => setEquipmentOpen(true)} />
+            <ProgramNotesCard intel={intel} value={setup.coachNotes} edited={edited.has("coachNotes")} onChange={(v) => change("coachNotes", v)} />
             <AdvancedControls intel={intel} setup={setup} edited={edited} onChange={change} />
             <ConflictsCard conflicts={conflicts} />
 
@@ -243,7 +244,9 @@ export function NextProgramWorkstation({ clientId }: { clientId: string }) {
                 <span>Privacy-safe: the AI gets the training data without the athlete's name, their own notes or check-ins.</span>
               </label>
               <p className="text-[11px] text-muted-foreground">
-                The AI reads everything above ({intel.history.coverage.loggedSets} set records, the previous program set by set) plus your setup, writes the strategy, builds each block from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}), and the result is audited before you see it. It never assigns anything.
+                {intel.firstProgram
+                  ? <>No training logged yet: the AI writes their first program from their Goals & Setup (goal, experience, days, session length, equipment, injuries), the starting point above and your notes & ideas, builds each block from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}, demo videos first), keeps week 1 easier to find their working weights, and never makes up a starting weight. It's audited before you see it and never assigned for you.</>
+                  : <>The AI reads everything above ({intel.history.coverage.loggedSets} set records, the previous program set by set) plus your setup and notes, writes the strategy, builds each block from your library ({intel.ctx.equipment.confidence === "unknown" ? "any equipment" : "only exercises their equipment allows"}), and the result is audited before you see it. It never assigns anything.</>}
               </p>
             </Card>
 
