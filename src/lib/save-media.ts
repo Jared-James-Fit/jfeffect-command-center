@@ -11,7 +11,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { peekChatVideo } from "@/lib/chat-video-store";
-import { canShareFiles, downloadFiles, isTouchDevice } from "@/lib/file-share";
 
 const BUCKET = "message-attachments";
 const SIGN_SECONDS = 10 * 60;
@@ -206,27 +205,8 @@ export function warmSave(items: SaveItem[], opts: { cheap?: boolean } = {}) {
   prepareSave(list).catch(() => { /* the tap reports it */ });
 }
 
-export type SaveOutcome = "shared" | "cancelled" | "again" | "saved" | "failed";
-
-/**
- * Hand the files over: the share sheet on a phone (its first await is the
- * share itself, so this must be called straight from the tap), a download
- * on a computer. "again": the phone wouldn't open the sheet from this tap.
- */
-export async function saveFiles(files: File[]): Promise<SaveOutcome> {
-  if (isTouchDevice() && canShareFiles(files)) {
-    try {
-      await navigator.share({ files });
-      return "shared";
-    } catch (e: unknown) {
-      const name = (e as { name?: string })?.name;
-      if (name === "AbortError") return "cancelled";
-      if (name === "NotAllowedError") return "again";
-      return downloadFiles(files) ? "saved" : "failed";
-    }
-  }
-  return downloadFiles(files) ? "saved" : "failed";
-}
+// Handing the files over (the share sheet on a phone, a download on a computer) lives in file-share.
+export { saveFiles, type SaveOutcome } from "@/lib/file-share";
 
 /** Test hook: forget held files. */
 export function _resetSaveMedia() {

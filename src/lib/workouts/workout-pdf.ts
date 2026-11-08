@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { loggedSetHasInput } from "@/lib/workouts/training-report-data";
 
 type Row = {
   id?: string;
@@ -40,6 +41,7 @@ export type LoggedSet = {
   actual_rpe_num?: string | number | null;
   actual_rir?: string | number | null;
   completed_duration_seconds?: number | null;
+  actual_calories?: number | null;
   notes?: string | null;
 };
 
@@ -97,6 +99,8 @@ export type FullTrainingReportBlock = {
 export type FullTrainingReportData = {
   client_name?: string | null;
   generated_at?: Date;
+  /** A coach's copy carries their private day notes; a client's never does (the data leaves them out). */
+  audience?: "coach" | "client";
   blocks: FullTrainingReportBlock[];
 };
 
@@ -130,6 +134,11 @@ function fmtDate(iso?: string | null) {
 function sanitizeText(s: string | null | undefined): string {
   if (!s) return "";
   return s
+    // Typed punctuation the font can't draw, as its plain version (or "Block 2 — Volume" loses its dash).
+    .replace(/[\u2012-\u2015\u2212]/g, "-")
+    .replace(/[\u2018\u2019\u201B\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201F\u2033]/g, '"')
+    .replace(/\u2026/g, "...")
     // eslint-disable-next-line no-control-regex
     .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "")
     .replace(/[ \t]{2,}/g, " ")
@@ -186,9 +195,19 @@ function formatLoad(r: Row): string {
   return "—";
 }
 
+/** 45 → "45s", 600 → "10:00", 3725 → "1:02:05". */
+function formatSeconds(total: number): string {
+  const t = Math.round(total);
+  if (t < 60) return `${t}s`;
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
 function formatReps(r: Row): string {
   if (r.measurement_type === "time" && r.duration_seconds != null) {
-    return `${r.duration_seconds}s`;
+    return formatSeconds(r.duration_seconds);
   }
   return (r.reps_text ?? "").trim() || "—";
 }
@@ -223,10 +242,14 @@ function formatLoggedLoad(s: LoggedSet): string {
 }
 
 function formatLoggedRepsOrTime(s: LoggedSet): string {
-  if (s.completed_duration_seconds != null && s.actual_reps == null) {
-    return `${s.completed_duration_seconds}s`;
-  }
-  return s.actual_reps != null ? String(s.actual_reps) : "—";
+  const cal = s.actual_calories != null && Number(s.actual_calories) > 0 ? `${s.actual_calories} cal` : null;
+  const main =
+    s.completed_duration_seconds != null && s.actual_reps == null
+      ? formatSeconds(s.completed_duration_seconds)
+      : s.actual_reps != null
+        ? String(s.actual_reps)
+        : null;
+  return [main, cal].filter(Boolean).join(" · ") || "—";
 }
 
 function formatLoggedEffort(s: LoggedSet): string {
@@ -242,24 +265,6 @@ function isWorkoutCompleted(day: Day): boolean {
 
 function isWorkoutInProgress(day: Day): boolean {
   return !isWorkoutCompleted(day) && (!!day.started_at || !!day.in_progress_at || countLoggedSets(day) > 0);
-}
-
-function loggedSetHasInput(s: LoggedSet): boolean {
-  const reps = s.actual_reps != null && Number.isFinite(Number(s.actual_reps)) && Number(s.actual_reps) > 0;
-  const duration = s.completed_duration_seconds != null && Number.isFinite(Number(s.completed_duration_seconds)) && Number(s.completed_duration_seconds) > 0;
-  const load =
-    s.entered_value != null ||
-    s.actual_load != null ||
-    s.actual_load_lb != null ||
-    s.actual_load_kg != null ||
-    s.normalized_lb != null ||
-    s.normalized_kg != null;
-  const effort =
-    (s.actual_rpe_num != null && s.actual_rpe_num !== "") ||
-    (s.actual_rpe != null && s.actual_rpe !== "") ||
-    (s.actual_rir != null && s.actual_rir !== "");
-  const note = !!s.notes?.trim();
-  return reps || duration || load || effort || note;
 }
 
 function countLoggedSets(day: Day): number {
@@ -664,8 +669,9 @@ export function downloadWorkoutPdf(data: WorkoutPdfData) {
 /* prescribed sets AND the sets the athlete actually logged.              */
 /* ---------------------------------------------------------------------- */
 
-export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsPDF {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
+export function generateFullTrainingReportPdf(data: FullTrainingReportData, opts: { compress?: boolean } = {}): jsPDF {
+  // Compressed: a year of training is ~6 MB raw and a fraction of that packed.
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: opts.compress ?? true });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const marginX = 36;
@@ -680,7 +686,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
   doc.text("JF EFFECT", marginX, 40);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.text("Complete Training Report", marginX, 60);
+  doc.text("Training Report", marginX, 60);
   doc.setFontSize(9);
   const generated = data.generated_at ?? new Date();
   doc.text(
@@ -732,7 +738,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
         );
         return [
           sanitizeText(b.block_name) || "Training Block",
-          [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" – ") || "—",
+          [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" - ") || "—",
           sanitizeText(b.block_status) || "—",
           `${blockDone}/${blockTotal}`,
         ];
@@ -778,7 +784,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(80, 80, 80);
-    const range = [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" – ");
+    const range = [fmtDate(b.block_start), fmtDate(b.block_end)].filter(Boolean).join(" - ");
     const bLines: string[] = [];
     if (range) bLines.push(range);
     if (b.block_status) bLines.push(`Status: ${b.block_status}`);
@@ -913,8 +919,8 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           doc.setTextColor(90, 90, 90);
           const prescribed = [
             r.sets != null ? `${r.sets} sets` : null,
-            `× ${formatReps(r)}`,
-            `@ ${formatLoad(r)}`,
+            formatReps(r) !== "—" ? `× ${formatReps(r)}` : null,
+            formatLoad(r) !== "—" ? `@ ${formatLoad(r)}` : null,
             formatRpe(r) !== "—" ? formatRpe(r) : null,
             formatRest(r) !== "—" ? `rest ${formatRest(r)}` : null,
             r.tempo?.trim() ? `tempo ${r.tempo.trim()}` : null,
@@ -961,17 +967,13 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
             });
             y = (doc as any).lastAutoTable?.finalY ?? y;
             y += 6;
-          } else if (completed) {
+          } else if (completed || inProgress) {
+            // A workout that wasn't trained says so once, on its pill; only a
+            // trained one says which exercises have nothing logged.
             doc.setFont("helvetica", "italic");
             doc.setFontSize(8);
             doc.setTextColor(140, 140, 140);
-            doc.text("Completed workout — no sets logged for this exercise.", marginX, y);
-            y += 12;
-          } else {
-            doc.setFont("helvetica", "italic");
-            doc.setFontSize(8);
-            doc.setTextColor(140, 140, 140);
-            doc.text("Not completed yet.", marginX, y);
+            doc.text("No sets logged for this exercise.", marginX, y);
             y += 12;
           }
 
@@ -1026,12 +1028,14 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
           y += 4;
         }
 
-        if (day.notes?.trim() && day.notes_client_visible !== false) {
+        // The data decides who sees a day note (a client only the ones marked for them).
+        if (day.notes?.trim()) {
           doc.setFont("helvetica", "italic");
           doc.setFontSize(9);
           doc.setTextColor(90, 90, 90);
+          const label = data.audience === "coach" && day.notes_client_visible !== true ? "Coach day note (private)" : "Coach day note";
           const lines = doc.splitTextToSize(
-            sanitizeText(`Coach day note: ${day.notes.trim()}`),
+            sanitizeText(`${label}: ${day.notes.trim()}`),
             pageWidth - marginX * 2,
           );
           ensureSpace(lines.length * 11 + 4);
@@ -1053,7 +1057,7 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(140, 140, 140);
-    doc.text("Generated from JF Effect Client Portal", marginX, pageHeight - 24);
+    doc.text("JF Effect training report", marginX, pageHeight - 24);
     doc.text(`${i} / ${pageCount}`, pageWidth - marginX, pageHeight - 24, {
       align: "right",
     });
@@ -1062,13 +1066,8 @@ export function generateFullTrainingReportPdf(data: FullTrainingReportData): jsP
   return doc;
 }
 
-export function downloadFullTrainingReportPdf(data: FullTrainingReportData) {
-  const doc = generateFullTrainingReportPdf(data);
-  const safeName = [data.client_name, "training-report"]
-    .filter(Boolean)
-    .join("-")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  doc.save(`${safeName || "training-report"}.pdf`);
+/** The report as a PDF file, for the share sheet or a download (see training-report-sheet). */
+export function trainingReportPdfFile(data: FullTrainingReportData, fileName: string): File {
+  const blob = generateFullTrainingReportPdf(data).output("blob");
+  return new File([blob], fileName, { type: "application/pdf" });
 }
