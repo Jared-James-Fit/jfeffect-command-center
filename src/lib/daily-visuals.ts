@@ -1423,6 +1423,9 @@ export function scriptedProblems(text: string): string[] {
   const t = text.replace(/[’]/g, "'");
   const lines = t.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.some((l, i) => /:\s*$/.test(l) && i < lines.length - 1)) out.push("a setup line ending in a colon (reads like a list post)");
+  // a list in disguise ("Opener: … Second: … Third: …"): labels read edited, not typed (Nov 8 2026)
+  const labels = (t.match(/(?:^|[.!?\n]\s*)[A-Za-z][A-Za-z' ]{0,18}:\s/g) ?? []).length;
+  if (labels >= 2) out.push(`${labels} labelled parts ("Opener: … Second: …"): say it the way he'd talk, not as a labelled list`);
   if (lines.filter((l) => /^(me|you|also me|my [a-z' ]{1,20}|the [a-z ]{1,20}|everyone|them|coach)\s*:\s*\S/i.test(l)).length >= 2)
     out.push('a "me: / my legs:" script');
   // a coach explains to "you" ("you get stronger when…"); a script narrates "you" through a scene ("you walk in. you load the bar.")

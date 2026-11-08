@@ -59,6 +59,7 @@ import {
   pillarShares,
   tidyCaption,
   habitProblems,
+  scriptedProblems,
   HABIT_WORDS,
   openingOf,
   dailyCaption,
@@ -297,6 +298,12 @@ describe("captions read like a powerlifting coach between sets, never a motivati
     expect(habitProblems("i think most people rush their warm ups", ["I think bar speed tells you more than RPE"])).toContain('opens like a post around it ("i think")');
     expect(habitProblems("most people rush their warm ups", ["I think bar speed tells you more than RPE"])).toEqual([]);
     expect(openingOf("I think, honestly")).toBe("i think");
+    // a list in disguise reads edited: Nov 8's first new caption was "Opener: … Second: … Third: …"
+    expect(scriptedProblems("Good attempt selection starts in the log. Opener: a weight you'd make on a bad day. Second: close to your best recent single. Third: only if you've earned it.")).toContain(
+      '3 labelled parts ("Opener: … Second: …"): say it the way he\'d talk, not as a labelled list',
+    );
+    // one "my take:" or a clock isn't a list
+    expect(scriptedProblems("my take: most people rush it. the bar should be moving by 6:30 at the latest")).toEqual([]);
     // and captionProblems reads the posts around it
     expect(captionProblems(`i think ${good}`, { format: "coach_note", near: ["i think top sets matter"] })).toContain('opens like a post around it ("i think")');
   });
