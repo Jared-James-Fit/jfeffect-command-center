@@ -21,16 +21,16 @@
  *
  * How one is made (daily-visuals.server.ts):
  *   1. the writer plans the point and the picture first, then drafts three
- *      captions for it (CONCEPT_PROMPT: hook, insight, application, takeaway,
- *      used flexibly, about 40 to 100 words); `tidyCaption` and
+ *      captions for it (CONCEPT_PROMPT: the way he'd type it himself, casual
+ *      and a bit imperfect, no fixed shape, about 25 to 100 words); `tidyCaption` and
  *      `captionProblems` throw out any that break the hard rules (length, a
  *      slogan or one of his banned lines, AI phrases, research or statistics,
  *      a story he didn't live, a body put down, the picture's words repeated,
  *      too close to a recent post);
  *   2. an editor scores the drafts (EDITOR_PROMPT: natural, substance,
  *      accuracy, clarity, match, fresh, worth it, with flags for scripted,
- *      hype, AI phrasing, preachy, invented, shaming and generic), picks the
- *      best and polishes it; `editorVerdict` passes it only at every bar with
+ *      hype, AI phrasing, preachy, invented, shaming, generic and polished), picks the
+ *      best and only fixes what's actually wrong (never into sentence case); `editorVerdict` passes it only at every bar with
  *      no flag, else the writer tries again with the editor's notes;
  *   3. the picture: a still frame from a premium, serious powerlifting anime
  *      (FILM_LOOK, the house style every post shares) of the lesson itself
@@ -287,22 +287,23 @@ export function pillarOf(o: { pillar?: string | null; topic?: string | null } | 
 }
 
 /**
- * How a caption is told, and how long it may run (characters). About 40 to
- * 100 words (DAILY_MIN_WORDS is the floor); a breakdown and a coach's note
- * get the database's whole 600 characters, about 100 words, for a technical
- * idea that needs the room.
+ * How a caption is told, and how long it may run (characters). About 25 to
+ * 100 words (DAILY_MIN_WORDS is the floor), in no fixed shape: a quick
+ * thought in one paragraph or a few short ones; a breakdown and a coach's
+ * note get the database's whole 600 characters for a technical idea that
+ * needs the room.
  */
 export const DAILY_FORMATS: Record<DailyFormat, { name: string; guide: string; max: number }> = {
-  coach_note: { name: "Coach's note", guide: "the point first, then why it happens and what to do about it, in a few short paragraphs, the way he'd say it between sets", max: 600 },
-  breakdown: { name: "Breakdown", guide: "one technical idea explained: what happens, why it matters, how to check it in your own lifting", max: 600 },
-  mistake: { name: "Mistake", guide: "a common mistake or belief, what it costs, and what to do instead", max: 560 },
-  take: { name: "Short take", guide: "one direct point or a challenging perspective and the reason behind it, in two or three short paragraphs", max: 480 },
-  observation: { name: "Observation", guide: "something he notices in lifters, training logs or at meets, said as a pattern he sees (never a single story, person or result), and what it means for your training", max: 560 },
-  question: { name: "Question", guide: "a real training question for the crew, with why he's asking and how he'd think about it, so the answers are worth reading", max: 480 },
+  coach_note: { name: "Coach's note", guide: "what he'd tell an athlete about it and why, the way he'd type it, one paragraph or a few short ones", max: 600 },
+  breakdown: { name: "Breakdown", guide: "one technical idea explained in his own words: what's going on and how to check it in your own lifting", max: 600 },
+  mistake: { name: "Mistake", guide: "a common mistake or belief he sees and what he'd do instead, said plainly", max: 560 },
+  take: { name: "Short take", guide: "a quick opinion or a challenging perspective and his reason, often just one paragraph", max: 480 },
+  observation: { name: "Observation", guide: "something he notices in lifters, training logs or at meets, said as a pattern he sees (never a single story, person or result), sometimes just a couple of sentences", max: 560 },
+  question: { name: "Question", guide: "a real training question for the crew and how he'd think about it, so the answers are worth reading", max: 480 },
 };
 export const DAILY_FORMAT_KEYS = Object.keys(DAILY_FORMATS) as DailyFormat[];
-/** Under this a post is a slogan, not a coaching point (the target is about 40 to 100 words). */
-export const DAILY_MIN_WORDS = 35;
+/** Under this a post is a slogan, not a coaching point (the target is about 25 to 100 words: a quick observation is short). */
+export const DAILY_MIN_WORDS = 25;
 
 /** Who it's for, besides women / men / everyone: where they are with training (the keys are the database's). */
 export const DAILY_CROWDS: Record<DailyCrowd, { name: string; guide: string }> = {
@@ -834,12 +835,14 @@ export type DailyConcept = {
 };
 
 /**
- * His voice, from the coach's own words (Nov 7 2026): the two posts he wrote
- * to show how a post should read. References for the writer and the editor,
- * never templates (each is checked against so neither can come back near
- * word for word).
+ * His voice, from the coach's own words: how he'd actually type a post (Nov 8
+ * 2026, casual, a quick thought in one paragraph) and the two he wrote on Nov
+ * 7. References for the writer and the editor, never templates (each is
+ * checked against so none can come back near word for word, and the casual
+ * one's lowercase and "lol" are his habits sometimes, not a format).
  */
 export const VOICE_EXAMPLES = [
+  `i think sometimes people get too caught up in how much time they're spending at the gym. if you're getting your main work done, progressing and recovering properly then that's what matters. some sessions are gonna take longer especially when you're lifting heavier but that doesn't mean you need to be there for 3 hours every time lol`,
   `Being in the gym for 3 hours doesn't automatically mean you trained harder.
 
 I care about the quality of your working sets, not how long you occupied a bench.
@@ -855,7 +858,7 @@ If your performance keeps declining, adding another hard session probably isn't 
 
 The goal isn't to see how much work you can survive. It's to find how much productive work you can recover from.`,
 ] as const;
-/** Both examples as one block, for the prompts. */
+/** The examples as one block, for the prompts. */
 export const VOICE_EXAMPLE = VOICE_EXAMPLES.join("\n\n---\n\n");
 
 /** The examples' own lines, which a caption never borrows. */
@@ -868,6 +871,9 @@ export const EXAMPLE_LINES = [
   "time spent training with productive training",
   "more work isn't always better work",
   "we're doing something right",
+  "too caught up in how much time",
+  "getting your main work done",
+  "there for 3 hours every time",
 ] as const;
 
 /** What it must never sound like: the post he pointed to as scripted (Nov 5's), and the motivation-page lines he banned (Nov 7). */
@@ -883,34 +889,31 @@ Rest days matter too! Remember to listen to your body and give yourself grace. E
 
 /** How he writes, said once for the writer, the editor and a rewrite. */
 export const VOICE_GUIDE = `HOW JARED WRITES
-He's an elite powerlifting coach explaining something to an athlete between sets. These two posts are him (references for the voice, never templates to copy):
+He's a powerlifting coach who knows his stuff, typing a post to his crew himself. It should read like he wrote it on his phone, not like it was professionally edited. These are him (references for the voice, never templates: don't copy their lines, openings, topics or habits):
 
 ${VOICE_EXAMPLE}
 
-Direct, confident, conversational and analytical. Athlete to athlete: he respects the reader's intelligence and talks about execution, accountability and measurable progress. Occasionally dry or a little sarcastic, never mean. Every post leaves a lifter with something they can understand, check or do in their own training. Not every post is technical: some are an observation about how lifters train, a challenging perspective, or a lesson competitive lifting teaches, said as a principle or a pattern, never as a story or result he didn't live. No generic motivation and no positivity for its own sake.
+Conversational, direct and confident, and he knows the training: execution, recovery, effort, measurable progress. Athlete to athlete, he respects the reader. Sometimes dry or a little sarcastic, never mean. Every post leaves a lifter with something real about their training. Not every post is technical: sometimes it's a quick observation about how lifters train, an opinion, or something competitive lifting teaches, said as a pattern he sees, never as a story or result he didn't live. No generic motivation and no positivity for its own sake.
 
 This is NOT him (scripted copywriting, or a fitness motivation page):
 
 ${NOT_HIS_VOICE}
 
-THE SHAPE (use it flexibly; not every post needs every part):
-- Hook: the first sentence states the point or the tension, short enough to read in the preview.
-- Insight: why it happens, what's really going on.
-- Application: what to do, check or change in your own training.
-- Takeaway: one closing line only when it adds something; never a slogan or a moral.
-
-THE RULES
-- About 40 to 100 words. Longer only when a technical point needs it. Short paragraphs, five at most.
-- Normal sentence case and punctuation: capitals at the start of sentences, "I", names of days, RPE and PR. Contractions with apostrophes. No hashtags, no @tags, no dashes or semicolons, at most one emoji (usually none), no exclamation-mark hype.
-- Plain, precise words. Training terms lifters use are fine (RPE, top set, back-off sets, bar speed, lockout, hypertrophy); explain anything past that.
-- Never invent. No personal stories (with or without the "I": no "yesterday a client", no "when I started lifting"), no clients, athletes or results, no studies, research, statistics or percentages (the lessons carry the research, with their sources). Say how sure he is: an established principle plainly, his opinion as his ("I think", "my rule of thumb"), and where it depends on the lifter, say so ("for most lifters", "depends on your leverages").
+HOW IT READS
+- Natural and a bit imperfect, the way people actually write posts. Casual grammar is fine: contractions, a sentence fragment, a run-on joined with "and" or "but", a sentence that starts lowercase. Some posts are lowercase all the way through, some use normal capitals, most are somewhere in between. Vary it from post to post.
+- No fixed shape. Don't force a hook, an explanation and a conclusion into every post. Sometimes it's one paragraph, sometimes two to four short thoughts, sometimes he explains something in detail, sometimes it's a quick observation. Not every sentence needs to sound crafted, and the post doesn't need a closing line.
+- Words he uses ("i think", "honestly", "gonna", "lol") are his habits, not a format: at most one or two in a post, and most posts have none of them. Never start a post the same way as a recent one.
+- Never misspell a word or break grammar on purpose to sound human. Apostrophes stay in (don't, you're, that's).
+- About 25 to 100 words. No hashtags, no @tags, no em dashes or semicolons, at most one emoji (usually none), no exclamation-mark hype, no formal transitions ("however", "additionally", "moreover", "furthermore", "in conclusion", "ultimately", "that said").
+- Plain words. Training terms lifters use are fine (RPE, top set, back-off sets, bar speed, lockout, hypertrophy); explain anything past that.
+- The coaching is accurate even when the writing is casual. Never invent. No personal stories (with or without the "I": no "yesterday a client", no "when I started lifting"), no clients, athletes or results, no studies, research, statistics or percentages (the lessons carry the research, with their sources). An established principle said plainly, his opinion as his ("i think", "my rule of thumb"), and where it depends on the lifter, say so.
 - Never these lines or anything like them: "every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time", "trust the process", "no excuses", "your future self".
-- No AI transitions or tells ("here's the thing", "the truth is", "let that sink in", "at the end of the day", "the key takeaway", "ultimately", "dive into", "journey", "game changer").
-- Never these shapes: a list post or a setup line ending in a colon, a "me: / my legs:" script, a little scene narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y" more than once, words in scare quotes.
-- Bodies: strength and performance, never how someone looks. Talk with lifters, never down to them: blunt about the training, never about the person.
+- No AI tells ("here's the thing", "the truth is", "let that sink in", "at the end of the day", "the key takeaway", "dive into", "journey", "game changer").
+- Never these shapes: a list post or a setup line ending in a colon, a "me: / my legs:" script, a little scene narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y" more than once, words in scare quotes, a moral or slogan to end on.
+- Bodies: strength and performance, never how someone looks. Blunt about the training, never about the person.
 - No names (his shows on the post) and no Bible verses (the app adds Sunday's).`;
 
-export const CONCEPT_PROMPT = `You write one Athlete Insight for the JF Effect community feed, as Jared McIntyre, the powerlifting coach who runs it. The crew is men and women who lift, from newer lifters to competitive powerlifters. A post is a picture and a caption made together, and it should be worth opening the app for: one training idea a lifter can use, said the way an elite coach explains something between sets. Not another fitness motivation page.
+export const CONCEPT_PROMPT = `You write one Athlete Insight for the JF Effect community feed, as Jared McIntyre, the powerlifting coach who runs it. The crew is men and women who lift, from newer lifters to competitive powerlifters. A post is a picture and a caption made together, and it should be worth opening the app for: one real training idea a lifter can use, from a coach who knows his stuff, written the way he'd type it himself. Not another fitness motivation page.
 
 ${VOICE_GUIDE}
 
@@ -918,7 +921,7 @@ WORK IT OUT IN THIS ORDER
 1. The category is given. Pick one angle from its list.
 2. The point: what he wants a lifter to understand or do, in one plain sentence. It must be true for most lifters and defensible to another good coach.
 3. The picture: one specific training moment that goes with the point (it sets the scene; the caption never describes it or repeats words in it).
-4. Three different captions, three takes on the point, each labelled with its form. Pick the clearest and most useful first, not the most dramatic.
+4. Three different captions, three takes on the point, each labelled with its form, and different in how they're written too (one a quick one-paragraph thought, another a few short lines; their length and capitals vary). Pick the one that sounds most like him and is most useful first, not the most dramatic or the most polished.
 
 THE PICTURE
 - A still frame from a premium, serious Japanese sports anime about powerlifting, in JF Effect's house style (the look is fixed; you choose the moment, the anime direction, the shot, the light and the place). It teaches the post's point: an athlete who only saw the picture should be able to guess what the post is about.
@@ -1084,12 +1087,12 @@ export function parseConcept(
 }
 
 /* ------------------------------------------------------------------ */
-/*  The editor: scores the drafts, picks one, polishes it               */
+/*  The editor: scores the drafts, picks one, fixes only what's wrong   */
 /* ------------------------------------------------------------------ */
 
 export const EDITOR_SCORES = ["natural", "substance", "accuracy", "clarity", "match", "fresh", "worth_it"] as const;
 export type EditorScore = (typeof EDITOR_SCORES)[number];
-export const EDITOR_FLAGS = ["scripted", "hype", "ai_phrasing", "preachy", "invented", "shaming", "generic"] as const;
+export const EDITOR_FLAGS = ["scripted", "hype", "ai_phrasing", "preachy", "invented", "shaming", "generic", "polished"] as const;
 export type EditorFlag = (typeof EDITOR_FLAGS)[number];
 
 /** Each score the chosen draft has to reach. */
@@ -1100,12 +1103,12 @@ export const EDITOR_PROMPT = `You're the editor of the JF Effect community feed,
 ${VOICE_GUIDE}
 
 Score each draft 1 to 5 (5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor):
-- natural: reads exactly like Jared, a coach talking to an athlete, not a copywriter, a brand, a motivational speaker or an AI
+- natural: reads like Jared typed it himself: casual, conversational, a bit imperfect, not a copywriter, a brand, a motivational speaker, an AI or a professional editor (casual grammar, lowercase starts and fragments are his, never a fault)
 - substance: one real training idea a lifter can understand, check or use (why it happens, what to do), not a feeling or a slogan
 - accuracy: true for most lifters and defensible to another good coach; nothing overstated, opinion said as opinion, "it depends" said where it does
 - clarity: you get it on one read on a phone
 - match: it goes with the picture without describing it or repeating its words
-- fresh: different from the recent posts in angle, opening and shape
+- fresh: different from the recent posts in angle, opening, length and shape
 - worth_it: a lifter would save it, comment on it or send it to a training partner
 
 Flags (true or false):
@@ -1116,11 +1119,12 @@ Flags (true or false):
 - invented: a fact, number, study, statistic, name, result or personal story it can't stand behind (a story told as his own counts, even with the "I" left off)
 - shaming: makes anyone feel bad about their body or themselves
 - generic: could sit on any fitness page; says nothing specific about training
+- polished: reads professionally edited, not typed by him: a neat hook, explanation and conclusion, formal transitions, every sentence carefully built, textbook grammar all the way through
 
-Then pick the clearest, most useful draft (not the most dramatic or clever) and polish it: only edits that make it plainer and tighter (cut a word or a sentence, simpler wording, fix punctuation, capitals or a paragraph break). Keep normal sentence case. Never add a closing line, a question, an emoji, a claim or a name, and never change the point. If it's already right, return it unchanged.
+Then pick the draft that sounds most like him and is most useful (not the most dramatic, clever or polished). Don't polish it: keep his casual grammar, lowercase starts, fragments and run-ons as they are. Only fix what's actually wrong: a fact, a word that's unclear, an em dash or semicolon, a slogan, a misspelling. Never add a closing line, a question, an emoji, a claim or a name, and never change the point. If it's already right, return it unchanged.
 
 Answer with JSON only:
-{"drafts": [{"scores": {"natural": 1-5, "substance": 1-5, "accuracy": 1-5, "clarity": 1-5, "match": 1-5, "fresh": 1-5, "worth_it": 1-5}, "flags": {"scripted": false, "hype": false, "ai_phrasing": false, "preachy": false, "invented": false, "shaming": false, "generic": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
+{"drafts": [{"scores": {"natural": 1-5, "substance": 1-5, "accuracy": 1-5, "clarity": 1-5, "match": 1-5, "fresh": 1-5, "worth_it": 1-5}, "flags": {"scripted": false, "hype": false, "ai_phrasing": false, "preachy": false, "invented": false, "shaming": false, "generic": false, "polished": false}, "note": "one line"}], "best": 0, "polished": "...", "why": "one line"}`;
 
 export function editorPrompt(o: {
   concept: Pick<DailyConcept, "pillar" | "topic" | "crowd" | "mood" | "situation" | "message" | "visual" | "typography" | "format">;
@@ -1201,12 +1205,12 @@ const AMBIGUOUS = new Set(["lets", "ill", "wont", "cant"]);
 const ACRONYMS: Record<string, string> = { rpe: "RPE", pr: "PR", prs: "PRs", rir: "RIR", "1rm": "1RM", e1rm: "e1RM", amrap: "AMRAP" };
 
 /**
- * A caption as it should read in the feed, in normal sentence case (Nov 7
- * 2026: the coach's posts read like a coach, not a casual lowercase text):
- * real apostrophes ("dont" and "im" fixed), "I", a capital at the start of
- * every line and sentence, days and months capitalised, RPE / PR / RIR in
- * capitals, no em dashes or "&", no stray spaces, at most one blank line
- * between paragraphs, and never wrapped in quotes.
+ * A caption as it should read in the feed: the way he typed it (Nov 8 2026:
+ * casual and a bit imperfect, never professionally edited), so capitals are
+ * left as written, lowercase starts and a lowercase "i" included. Only what's
+ * actually wrong is fixed: real apostrophes ("dont" and "im" fixed), RPE / PR
+ * / RIR in capitals, no em dashes or "&", no stray spaces, at most one blank
+ * line between paragraphs, and never wrapped in quotes.
  */
 export function tidyCaption(text: string): string {
   let t = String(text ?? "").replace(/\r\n/g, "\n").trim();
@@ -1223,17 +1227,11 @@ export function tidyCaption(text: string): string {
     if (!fix) return w;
     const before = t.slice(0, i);
     if (AMBIGUOUS.has(w.toLowerCase()) && !/(^|[.!?\n]\s*)$/.test(before)) return w;
-    return fix;
+    // his capital (or not) stays: "Dont" → "Don't", "im" → "i'm"
+    return /^[A-Z]/.test(w) ? fix[0].toUpperCase() + fix.slice(1) : fix;
   });
-  // sentence case: "I" (and I'm, I've), training acronyms, days and months, the first word of a line or sentence
-  t = t.replace(/\bi\b/g, "I");
+  // his capitals stay as he typed them; only the training acronyms are always written the same way
   t = t.replace(/\b(rpe|prs?|rir|1rm|e1rm|amrap)\b/gi, (w) => ACRONYMS[w.toLowerCase()] ?? w);
-  // "march" and "may" are words too, so only the unambiguous ones
-  t = t.replace(
-    /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|april|june|july|august|september|october|november|december)\b/g,
-    (w) => w[0].toUpperCase() + w.slice(1),
-  );
-  t = t.replace(/(^|\n|[.!?]\s+)([a-z])/g, (_m, lead, ch) => `${lead}${ch.toUpperCase()}`);
   t = t.replace(/ +([,.!?])/g, "$1");
   t = t
     .split("\n")
@@ -1394,6 +1392,32 @@ const SCENE_TO_YOU = /^you\s+(?:walk|walked|load|loaded|open|opened|see|saw|look
  * "you", a "that's not X. that's Y." kicker, hype, scare quotes, or the
  * coach's own example coming back near word for word.
  */
+/**
+ * His habits ("lol", "gonna", "honestly", "i think") are his sometimes, never
+ * a format (Nov 8 2026: "don't turn this example into another rigid
+ * template"): each at most once a post and never all four together, "lol" never
+ * in a post right after one that had it, and no post opening the way one
+ * around it did. `near` is the captions of the posts within a few days.
+ */
+export const HABIT_WORDS = ["lol", "gonna", "honestly", "i think"] as const;
+const habitText = (t: string) => ` ${t.toLowerCase().replace(/[’]/g, "'").replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ")} `;
+const habitCount = (t: string, w: string) => habitText(t).split(` ${w} `).length - 1;
+/** The first two words, lowercased: how a post opens. */
+export const openingOf = (t: string) => habitText(t).trim().split(" ").slice(0, 2).join(" ");
+export function habitProblems(text: string, near: readonly string[] = []): string[] {
+  const out: string[] = [];
+  for (const w of HABIT_WORDS) {
+    const n = habitCount(text, w);
+    if (n > 1) out.push(`says "${w}" ${n} times (once at most)`);
+  }
+  const used = HABIT_WORDS.filter((w) => habitCount(text, w) > 0);
+  if (used.length > 3) out.push(`leans on every one of his habits at once (${used.join(", ")})`);
+  if (habitCount(text, "lol") && near.some((x) => habitCount(x, "lol"))) out.push('"lol" again (a post around it already has one)');
+  const open = openingOf(text);
+  if (open.split(" ").length === 2 && near.some((x) => openingOf(x) === open)) out.push(`opens like a post around it ("${open}")`);
+  return out;
+}
+
 export function scriptedProblems(text: string): string[] {
   const out: string[] = [];
   const t = text.replace(/[’]/g, "'");
@@ -1565,11 +1589,11 @@ export function motifRepeats(caption: string, recent: string[]): string[] {
 /** Past this share of three-word runs, a caption is a rerun. */
 export const SIMILAR_MAX = 0.3;
 /** The hook (the first sentence) shows alone in the feed's preview: past these it's cut mid-thought on a phone. */
-export const HOOK_MAX_WORDS = 18;
-export const HOOK_MAX_CHARS = 110;
+export const HOOK_MAX_WORDS = 22;
+export const HOOK_MAX_CHARS = 140;
 /** Plain enough to read in one pass on a phone (a coach explaining, not a 5th-grade drill: his own example reads at 7.3). */
-export const DAILY_GRADE_MAX = 8;
-export const DAILY_SENTENCE_MAX = 24;
+export const DAILY_GRADE_MAX = 9;
+export const DAILY_SENTENCE_MAX = 30;
 /**
  * Words lifters know: fine in a coach's post (the plain-words list still
  * catches study-speak like "participants" or "protocol").
@@ -1610,7 +1634,7 @@ export function captionProblems(
   const text = caption.trim();
   if (!text) return ["empty"];
   if (text.length > f.max) out.push(`${text.length} characters (a ${f.name.toLowerCase()} is ${f.max} at most)`);
-  if (wordsOf(text).length < DAILY_MIN_WORDS) out.push(`${wordsOf(text).length} words: too thin for a coaching point (about 40 to 100: the point, why, what to do)`);
+  if (wordsOf(text).length < DAILY_MIN_WORDS) out.push(`${wordsOf(text).length} words: too thin for a coaching point (about 25 to 100)`);
   if (RESEARCH.test(text)) out.push("cites research or a statistic (daily posts are coaching; the lessons carry studies with their sources)");
   const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   if (paragraphs.length > 5) out.push(`${paragraphs.length} paragraphs (5 at most)`);
@@ -1628,6 +1652,7 @@ export function captionProblems(
   for (const g of AI_TELLS) if (lower.includes(g)) out.push(`says "${g}" (reads like AI)`);
   for (const g of SCRIPTED_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (scripted)`);
   for (const x of scriptedProblems(text)) out.push(x);
+  for (const x of habitProblems(text, o.near ?? [])) out.push(x);
   if (LECTURING.some((re) => re.test(text))) out.push("lectures the reader");
   if (contrastCount(text) >= 2) out.push(`"it's not X, it's Y" ${contrastCount(text)} times (reads like AI)`);
   if (BODY_PUTDOWN.some((re) => re.test(text))) out.push("puts a body down");
@@ -1741,7 +1766,7 @@ Answer with JSON only:
 
 DEFECTS are objective errors only: wrong or extra fingers or limbs, broken anatomy or impossible joints, warped faces or bodies, melted or impossible objects, equipment or technique that's wrong (a bent or broken barbell, different plates on each side, a bar passing through a body or floating, a bar with no collars on a heavy lift, an impossible grip, stance or bar position for the lift, a lifter in a position that would injure them), an exaggerated, steroid-looking physique, readable brand names, speech bubbles, garbled or misspelled text, a watermark or logo, obvious rendering artefacts, the subject cut off at an edge. Taste is never a defect (the framing, the lighting, empty space, what could be clearer): score it and put it in fix_image or fix_caption.
 
-SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan, and not a generic composition (a character standing centred and posing is 3 or less); writing = reads like an elite powerlifting coach explaining something to an athlete (direct, precise, normal sentence case and punctuation, one real idea with why and what to do; motivational, scripted, preachy or AI-sounding is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = looks like a still from a beautifully animated, serious sports anime: clean line art, cel shading, a detailed painted gym background, cinematic lighting and a dynamic, intentional composition (a photo, a 3D render, a generic AI illustration, a childish cartoon, an empty or plain background is 2 or less); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like another place, time or person than the caption says, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training (a lift, a coach and athlete, a training log, the platform, recovery that belongs to training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less; teaches = the picture shows the specific thing the post is about (the lift, the position, the moment or the tool the caption names), so it reinforces the lesson: when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less, and a good-looking gym scene that could go with any post is 2 or less; technique = the lift, the equipment and the bodies are drawn right (bar position, grip, stance, depth, a straight bar, matching plates, believable anatomy under load), so a coach would be happy to show it to an athlete: anything a coach would correct is 3 or less.`;
+SCORES: 5 = excellent, 4 = good enough to publish, 3 = needs work, 2 or 1 = poor. relatable = a lifter sees their own training in it; original = not a cliché or slogan, and not a generic composition (a character standing centred and posing is 3 or less); writing = reads like Jared, a powerlifting coach who knows his stuff, typed it himself (conversational and accurate; casual grammar, lowercase starts and fragments are fine and never lower the score; motivational, scripted, preachy, AI-sounding or professionally polished is 3 or less; a joke that isn't actually funny is 3 or less); audience_fit = right for who it's for; aesthetic = looks like a still from a beautifully animated, serious sports anime: clean line art, cel shading, a detailed painted gym background, cinematic lighting and a dynamic, intentional composition (a photo, a 3D render, a generic AI illustration, a childish cartoon, an empty or plain background is 2 or less); storytelling = the picture tells a story; match = the picture and caption tell the same story with the same details and add to each other (any contradiction, like another place, time or person than the caption says, is 3 or less); engaging = worth a save, a comment or a send to a training partner; uplift = the picture leaves people keen to train or clearer about their training, never gloomy, shaming or heavy; on_topic = the picture is about strength training (a lift, a coach and athlete, a training log, the platform, recovery that belongs to training): a lifestyle scene with no training in it (a picnic, a beach, brunch, a party, a park) is 2 or less; teaches = the picture shows the specific thing the post is about (the lift, the position, the moment or the tool the caption names), so it reinforces the lesson: when the caption names something (a training log, a deadlift setup, small plates, a meet platform) and it isn't clearly visible, teaches is 2 or less, and a good-looking gym scene that could go with any post is 2 or less; technique = the lift, the equipment and the bodies are drawn right (bar position, grip, stance, depth, a straight bar, matching plates, believable anatomy under load), so a coach would be happy to show it to an athlete: anything a coach would correct is 3 or less.`;
 
 export type Review = {
   /** What it actually is: only anime passes. */
@@ -1890,7 +1915,7 @@ export function reviewVerdict(r: Review, typography: string, scene = "", _pillar
 /*  A caption rewrite against the same picture                         */
 /* ------------------------------------------------------------------ */
 
-export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for the JF Effect community feed, as Jared, the powerlifting coach. The picture is already made and stays. Keep the post's point; fix only what the editor said, and make it plainer and more useful, never cleverer.
+export const CAPTION_FIX_PROMPT = `You rewrite the caption of one daily post for the JF Effect community feed, as Jared, the powerlifting coach. The picture is already made and stays. Keep the post's point; fix only what the editor said, and make it plainer and more useful, never cleverer or more polished: keep it sounding like he typed it himself.
 
 ${VOICE_GUIDE}
 

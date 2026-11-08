@@ -58,6 +58,9 @@ import {
   pillarOf,
   pillarShares,
   tidyCaption,
+  habitProblems,
+  HABIT_WORDS,
+  openingOf,
   dailyCaption,
   learnDailyVisuals,
   learningsText,
@@ -152,7 +155,7 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
     for (const gendered of ["for him", "for her", "AUDIENCE["]) expect(card, gendered).not.toContain(gendered);
   });
 
-  it("twelve shots and six coaching forms, about 40 to 100 words, never past the database's 600 characters", () => {
+  it("twelve shots and six coaching forms, about 25 to 100 words, never past the database's 600 characters", () => {
     // one look (a hand-drawn 2D film frame), the variety in the shot and the light
     expect(DAILY_STYLE_KEYS).toHaveLength(12);
     expect(Object.keys(DAILY_LIGHTS)).toHaveLength(8);
@@ -161,7 +164,8 @@ describe("the week: a mood a day, women, men and everyone in turn", () => {
     for (const p of DAILY_PILLAR_KEYS) for (const f of DAILY_PILLARS[p].formats) expect(Object.keys(DAILY_FORMATS), `${p} ${f}`).toContain(f);
     // the database holds 600 characters for a caption (and the coach's Edit words says so)
     for (const f of Object.values(DAILY_FORMATS)) expect(f.max).toBeLessThanOrEqual(600);
-    expect(DAILY_MIN_WORDS).toBe(35);
+    // a quick observation can be short (Nov 8 2026), a one-liner still can't
+    expect(DAILY_MIN_WORDS).toBe(25);
     // a one-liner is a slogan now, not a coaching point
     expect(captionProblems("Your warm-up used to be your whole workout.", { format: "take" })[0]).toContain("too thin for a coaching point");
     // the earlier forms still have names for the days made with them
@@ -199,7 +203,7 @@ describe("the faith post's verse is the Bible's words, never a model's", () => {
 });
 
 describe("captions read like a powerlifting coach between sets, never a motivation page", () => {
-  it("passes a coaching point said plainly, and the coach's own two posts", () => {
+  it("passes a coaching point said plainly, and the coach's own posts, the casual one included", () => {
     expect(captionProblems(good, { format: "coach_note" })).toEqual([]);
     expect(captionProblems(question, { format: "question" })).toEqual([]);
     // his own posts pass every rule but the one that stops them coming back word for word
@@ -269,17 +273,32 @@ describe("captions read like a powerlifting coach between sets, never a motivati
     expect(server).toContain("names: ctx.names");
   });
 
-  it("tidies a caption into normal sentence case with real apostrophes", () => {
-    expect(tidyCaption("you close the app & swear its fine — dont worry, im fine")).toBe("You close the app and swear its fine, don't worry, I'm fine");
-    expect(tidyCaption("“you showed up.\n\n\n\nthat counts”")).toBe("You showed up.\n\nThat counts");
+  it("tidies only what's actually wrong: his capitals stay as he typed them, apostrophes and acronyms fixed", () => {
+    // lowercase starts and a lowercase "i" are his (Nov 8 2026): never pushed into sentence case
+    expect(tidyCaption("you close the app & swear its fine — dont worry, im fine")).toBe("you close the app and swear its fine, don't worry, i'm fine");
+    expect(tidyCaption("“you showed up.\n\n\n\nthat counts”")).toBe("you showed up.\n\nthat counts");
+    // a capital he typed stays a capital
+    expect(tidyCaption("Dont rush it. Im serious")).toBe("Don't rush it. I'm serious");
     // "lets" is a word too: only fixed where it starts a sentence
-    expect(tidyCaption("it lets you rest. lets go")).toBe("It lets you rest. Let's go");
+    expect(tidyCaption("it lets you rest. lets go")).toBe("it lets you rest. let's go");
     // a model's non-breaking hyphens and curly quotes read like the rest of the caption
     expect(tidyCaption("A quick after‑work lift, today’s “light” sets")).toBe('A quick after-work lift, today\'s "light" sets');
-    // "I", days, months and training acronyms in capitals; "march" and "may" are words too
-    expect(tidyCaption("i think monday is the day for a pr at rpe 9. your e1rm can march on in may.")).toBe("I think Monday is the day for a PR at RPE 9. Your e1RM can march on in may.");
+    // training acronyms are always written the same way; days, months and "i" stay as typed
+    expect(tidyCaption("i think monday is the day for a pr at rpe 9. your e1rm can march on in may.")).toBe("i think monday is the day for a PR at RPE 9. your e1RM can march on in may.");
     // already right: unchanged
     for (const x of VOICE_EXAMPLES) expect(tidyCaption(x)).toBe(x);
+  });
+
+  it("his habits are sometimes, never a format: once a post, never all at once, no lol two posts running, no opening twice", () => {
+    expect(HABIT_WORDS).toEqual(["lol", "gonna", "honestly", "i think"]);
+    expect(habitProblems("lol this is a set lol")).toContain('says "lol" 2 times (once at most)');
+    expect(habitProblems("honestly i think we're gonna be fine lol")).toEqual(["leans on every one of his habits at once (lol, gonna, honestly, i think)"]);
+    expect(habitProblems("i think most people rush their warm ups lol", ["Top sets matter more than people think lol"])).toContain('"lol" again (a post around it already has one)');
+    expect(habitProblems("i think most people rush their warm ups", ["I think bar speed tells you more than RPE"])).toContain('opens like a post around it ("i think")');
+    expect(habitProblems("most people rush their warm ups", ["I think bar speed tells you more than RPE"])).toEqual([]);
+    expect(openingOf("I think, honestly")).toBe("i think");
+    // and captionProblems reads the posts around it
+    expect(captionProblems(`i think ${good}`, { format: "coach_note", near: ["i think top sets matter"] })).toContain('opens like a post around it ("i think")');
   });
 
   it("refuses hashtags, tags, too many emojis and the wrong length for its form", () => {
@@ -415,10 +434,14 @@ describe("the editor reads every caption before a picture is made", () => {
   });
 
   it("asks one question first: would an elite powerlifting coach post this, and would a lifter be glad they read it?", () => {
-    for (const k of ["natural:", "substance:", "accuracy:", "clarity:", "match:", "fresh:", "worth_it:", "scripted:", "hype:", "ai_phrasing:", "preachy:", "invented:", "shaming:", "generic:"]) expect(EDITOR_PROMPT, k).toContain(k);
+    for (const k of ["natural:", "substance:", "accuracy:", "clarity:", "match:", "fresh:", "worth_it:", "scripted:", "hype:", "ai_phrasing:", "preachy:", "invented:", "shaming:", "generic:", "polished:"]) expect(EDITOR_PROMPT, k).toContain(k);
     expect(EDITOR_PROMPT).toContain("would Jared, an elite powerlifting coach, post this as his own, and would a serious lifter be glad they read it?");
     expect(EDITOR_PROMPT).toContain("Never add a closing line, a question, an emoji, a claim or a name, and never change the point.");
-    expect(EDITOR_PROMPT).toContain("Keep normal sentence case.");
+    // the editor never polishes him into sentence case (Nov 8 2026)
+    expect(EDITOR_PROMPT).toContain("Don't polish it: keep his casual grammar, lowercase starts, fragments and run-ons as they are.");
+    expect(EDITOR_PROMPT).toContain("casual grammar, lowercase starts and fragments are his, never a fault");
+    expect(EDITOR_PROMPT).toContain("polished: reads professionally edited, not typed by him");
+    expect(EDITOR_PROMPT).not.toContain("sentence case.");
     expect(EDITOR_PROMPT).toContain(VOICE_EXAMPLE);
     const p = editorPrompt({
       concept: { pillar: "mistakes", topic: "junk_volume", crowd: "lifters", mood: "direct", situation: "s", message: "m", visual: "v", typography: "", format: "mistake" },
@@ -435,7 +458,7 @@ describe("the editor reads every caption before a picture is made", () => {
     expect(editorVerdict({ drafts: [draft()], best: 0, polished: "", why: "" }, "mistakes")).toEqual({ pass: true, issues: [] });
     expect(editorVerdict({ drafts: [draft({ substance: 3 })], best: 0, polished: "", why: "" }).issues).toContain("substance 3/5");
     expect(editorVerdict({ drafts: [draft({ accuracy: 3 })], best: 0, polished: "", why: "" }).pass).toBe(false);
-    for (const f of ["scripted", "hype", "generic", "invented", "preachy"]) expect(editorVerdict({ drafts: [draft({}, { [f]: true })], best: 0, polished: "", why: "" }).issues, f).toContain(f);
+    for (const f of ["scripted", "hype", "generic", "invented", "preachy", "polished"]) expect(editorVerdict({ drafts: [draft({}, { [f]: true })], best: 0, polished: "", why: "" }).issues, f).toContain(f);
     expect(EDITOR_BARS.fresh).toBe(3);
     expect(EDITOR_BARS.accuracy).toBe(4);
   });
@@ -479,7 +502,7 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(labelled.drafts).toEqual(["a", "b"]);
     expect(labelled.draftForms).toEqual(["take", "coach_note"]);
     expect(labelled.format).toBe("take");
-    expect(editorPrompt({ concept: { ...labelled, crowd: "everyone" }, audience: "women", drafts: ["a", "b"], forms: ["take", "coach_note"], recent: [] })).toContain("[0] (Short take: one direct point");
+    expect(editorPrompt({ concept: { ...labelled, crowd: "everyone" }, audience: "women", drafts: ["a", "b"], forms: ["take", "coach_note"], recent: [] })).toContain("[0] (Short take: a quick opinion or a challenging perspective");
   });
 
   it("is told the day's category, who it's for, what's worked, what to avoid and what the coach threw out", () => {
@@ -539,17 +562,26 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(parseConcept(json, all)!.pillar).toBe("recovery");
   });
 
-  it("the writer writes as the coach: his two posts, what isn't him, the shape and the rules", () => {
+  it("the writer writes as the coach types: his posts, what isn't him, no fixed shape, casual and accurate", () => {
     for (const x of VOICE_EXAMPLES) expect(CONCEPT_PROMPT).toContain(x);
+    expect(VOICE_EXAMPLES[0]).toContain("i think sometimes people get too caught up in how much time they're spending at the gym.");
     expect(CONCEPT_PROMPT).toContain(NOT_HIS_VOICE);
-    expect(CONCEPT_PROMPT).toContain("an elite powerlifting coach explaining something to an athlete between sets");
+    expect(CONCEPT_PROMPT).toContain("It should read like he wrote it on his phone, not like it was professionally edited.");
     expect(CONCEPT_PROMPT).toContain("Not another fitness motivation page.");
-    for (const part of ["- Hook:", "- Insight:", "- Application:", "- Takeaway:"]) expect(CONCEPT_PROMPT, part).toContain(part);
-    expect(CONCEPT_PROMPT).toContain("About 40 to 100 words.");
-    expect(CONCEPT_PROMPT).toContain("Normal sentence case and punctuation");
+    // no forced hook / explanation / conclusion
+    for (const part of ["- Hook:", "- Insight:", "- Application:", "- Takeaway:"]) expect(CONCEPT_PROMPT, part).not.toContain(part);
+    expect(CONCEPT_PROMPT).toContain("No fixed shape. Don't force a hook, an explanation and a conclusion into every post.");
+    expect(CONCEPT_PROMPT).toContain("Casual grammar is fine: contractions, a sentence fragment, a run-on");
+    expect(CONCEPT_PROMPT).toContain("Vary it from post to post.");
+    expect(CONCEPT_PROMPT).toContain('are his habits, not a format: at most one or two in a post, and most posts have none of them.');
+    expect(CONCEPT_PROMPT).toContain("Never misspell a word or break grammar on purpose to sound human.");
+    expect(CONCEPT_PROMPT).toContain("About 25 to 100 words.");
+    expect(CONCEPT_PROMPT).toContain("no em dashes or semicolons");
+    expect(CONCEPT_PROMPT).toContain('no formal transitions ("however", "additionally", "moreover", "furthermore", "in conclusion", "ultimately", "that said")');
+    expect(CONCEPT_PROMPT).toContain("The coaching is accurate even when the writing is casual.");
     expect(CONCEPT_PROMPT).toContain("no studies, research, statistics or percentages");
     expect(CONCEPT_PROMPT).toContain('"every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time"');
-    expect(CONCEPT_PROMPT).not.toContain("lowercase");
+    expect(CONCEPT_PROMPT).not.toContain("Normal sentence case");
     // the picture is a frame from a serious powerlifting anime, of the lesson, the gear right, never a lifestyle scene
     expect(CONCEPT_PROMPT).toContain("A still frame from a premium, serious Japanese sports anime about powerlifting, in JF Effect's house style");
     expect(CONCEPT_PROMPT).toContain("It teaches the post's point");
@@ -564,7 +596,7 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain("never a flat, centred, posed shot");
     expect(CONCEPT_PROMPT).not.toMatch(/photograph|photo\b/);
     // not every post is technical, and still never a story he didn't live
-    expect(VOICE_GUIDE).toContain("Not every post is technical: some are an observation about how lifters train, a challenging perspective, or a lesson competitive lifting teaches");
+    expect(VOICE_GUIDE).toContain("Not every post is technical: sometimes it's a quick observation about how lifters train, an opinion, or something competitive lifting teaches");
     // the rewrite speaks the same voice
     expect(CAPTION_FIX_PROMPT).toContain(VOICE_GUIDE);
     // and never two days in a row: a post just before had words, today's has none
@@ -674,7 +706,8 @@ describe("the review: concrete checks before any score", () => {
     // the caption and the picture tell one story: a contradiction in the details fails match
     expect(REVIEW_PROMPT).toContain("any contradiction, like another place, time or person than the caption says, is 3 or less");
     // the writing is judged as a coach's, not a motivation page's
-    expect(REVIEW_PROMPT).toContain("reads like an elite powerlifting coach explaining something to an athlete");
+    expect(REVIEW_PROMPT).toContain("reads like Jared, a powerlifting coach who knows his stuff, typed it himself");
+    expect(REVIEW_PROMPT).toContain("casual grammar, lowercase starts and fragments are fine and never lower the score");
   });
 
   it("reads the reviewer's JSON and averages its scores", () => {
