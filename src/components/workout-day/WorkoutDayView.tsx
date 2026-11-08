@@ -4244,6 +4244,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 exerciseName={name}
                 displayUnit={activeUnit}
                 currentDayIndex={dayIndex}
+                editable={!readonly}
                 className="w-auto h-8 rounded-full px-2.5 text-xs"
               />
             ) : null}
@@ -4258,6 +4259,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           exerciseName={name}
           displayUnit={activeUnit}
           currentDayIndex={dayIndex}
+          // Fix a past day's sets right here, without leaving the workout.
+          editable={!readonly}
           onClose={() => setHistoryOpen(false)}
         />
       )}

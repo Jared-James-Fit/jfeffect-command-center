@@ -66,6 +66,8 @@ export function DeferredExerciseHistorySheet(props: {
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   currentDayIndex?: number | null;
+  /** The viewer may fix a past day's sets in the sheet. */
+  editable?: boolean;
   onClose: () => void;
 }) {
   return (
@@ -82,6 +84,7 @@ export function DeferredExerciseHistoryButton({
   displayUnit,
   currentDayIndex,
   className,
+  editable,
 }: {
   clientId: string | null | undefined;
   exerciseId: string | null | undefined;
@@ -89,6 +92,7 @@ export function DeferredExerciseHistoryButton({
   displayUnit?: "kg" | "lb";
   currentDayIndex?: number | null;
   className?: string;
+  editable?: boolean;
 }) {
   const [requested, setRequested] = useState(false);
   useIdleActionPreload();
@@ -116,6 +120,7 @@ export function DeferredExerciseHistoryButton({
         exerciseName={exerciseName}
         displayUnit={displayUnit}
         currentDayIndex={currentDayIndex}
+        editable={editable}
         onClose={() => setRequested(false)}
       />
     </Suspense>

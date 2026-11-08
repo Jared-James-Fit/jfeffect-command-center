@@ -7,11 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { History, CheckCircle2, Circle, StickyNote } from "lucide-react";
+import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
 import { listenChannel } from "@/lib/realtime-channel";
+import { toast } from "sonner";
+import {
+  HISTORY_EDIT_QUERY_KEYS,
+  setDraftIssue,
+  setEditDraft,
+  setEditPatch,
+  type SetDraft,
+} from "@/lib/history-set-edit";
 
 const sb = supabase as any;
 
@@ -44,6 +52,11 @@ export function historySetOrder(x: HistorySet, y: HistorySet): number {
  *
  * Used by both the client logger ("History" button on each exercise card)
  * and the coach client-profile history page.
+ *
+ * `editable`: a day's sets can be fixed right here (Edit on the day: weight,
+ * its kg / lb, reps, RPE; Save writes only what changed), so the athlete or
+ * the coach never leaves the workout they're in, and "Last time", records and
+ * suggestions refresh at once (HISTORY_EDIT_QUERY_KEYS).
  */
 export function ExerciseHistorySheet({
   open,
@@ -54,6 +67,7 @@ export function ExerciseHistorySheet({
   displayUnit = "kg",
   excludePartial = false,
   currentDayIndex,
+  editable = false,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -65,8 +79,15 @@ export function ExerciseHistorySheet({
   excludePartial?: boolean;
   /** Program day index of the workout the history was opened from. When present, matching days are highlighted. */
   currentDayIndex?: number | null;
+  /** The viewer may fix a past day's sets here (their own, or a client they coach). */
+  editable?: boolean;
 }) {
   const [showPartial, setShowPartial] = useState(!excludePartial);
+  // One day in edit mode at a time; drafts keyed by set id.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, SetDraft>>({});
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
@@ -128,7 +149,7 @@ export function ExerciseHistorySheet({
           id, set_index, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rpe_num, mean_concentric_velocity_mps,
           entered_value, entered_unit, normalized_kg, normalized_lb,
-          actual_load, actual_load_unit,
+          actual_load, actual_load_unit, load_type, is_bodyweight,
           pl_exercise_rows!inner(
             id, exercise_id, exercise_name_override, sort_order,
             pl_days!inner(id, day_index, title, scheduled_date, pl_weeks!inner(id, week_index, pl_blocks!inner(id, name)))
@@ -263,6 +284,57 @@ export function ExerciseHistorySheet({
     return `${rounded} ${unit}`;
   };
 
+  const startEdit = (key: string, sets: any[]) => {
+    const next: Record<string, SetDraft> = {};
+    for (const set of sets) next[set.id] = setEditDraft(set, displayUnit);
+    setDrafts(next);
+    setEditError(null);
+    setEditingKey(key);
+  };
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setDrafts({});
+    setEditError(null);
+  };
+  const patchDraft = (id: string, change: Partial<SetDraft>) => {
+    setEditError(null);
+    setDrafts((d) => (d[id] ? { ...d, [id]: { ...d[id], ...change } } : d));
+  };
+  const saveEdit = async (sets: any[]) => {
+    for (const set of sets) {
+      const issue = drafts[set.id] ? setDraftIssue(drafts[set.id]) : null;
+      if (issue) {
+        setEditError(`Set ${sets.indexOf(set) + 1}: ${issue}`);
+        return;
+      }
+    }
+    const writes = sets
+      .map((set) => ({ id: set.id as string, patch: drafts[set.id] ? setEditPatch(set, drafts[set.id], displayUnit) : null }))
+      .filter((w) => w.patch);
+    if (!writes.length) {
+      cancelEdit();
+      return;
+    }
+    setSaving(true);
+    try {
+      for (const w of writes) {
+        // .select() so a row RLS didn't let through reads as a failure, never as saved.
+        const { data, error } = await sb.from("pl_row_results").update(w.patch).eq("id", w.id).select("id");
+        if (error) throw error;
+        if (!data?.length) throw new Error("You can't change this set");
+      }
+      // Everything this history feeds refreshes now: "Last time", records,
+      // suggestions and, when it's today's, the open workout's own sets.
+      await Promise.all(HISTORY_EDIT_QUERY_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey: [...queryKey] })));
+      toast.success(writes.length === 1 ? "Set updated" : `${writes.length} sets updated`);
+      cancelEdit();
+    } catch (e: any) {
+      setEditError(e?.message ? `Couldn't save: ${e.message}` : "Couldn't save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -326,9 +398,10 @@ export function ExerciseHistorySheet({
             </Card>
           )}
           {grouped.map((g) => {
+            const dayKey = `${g.block?.id}-${g.week?.id}-${g.day?.id}`;
             const isSameTrainingDay = currentDayIndex != null && g.day?.day_index != null && g.day.day_index === currentDayIndex;
             return (
-            <Card key={`${g.block?.id}-${g.week?.id}-${g.day?.id}`} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
+            <Card key={dayKey} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <div className={cn("truncate font-bold", isSameTrainingDay && "min-w-0 flex-1")}>
                   {g.block?.name ?? "Block"} · Wk {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
@@ -360,8 +433,93 @@ export function ExerciseHistorySheet({
                   {isSameTrainingDay && (
                     <Badge variant="outline" className="text-[10px] font-medium">Same training day</Badge>
                   )}
+                  {editable && editingKey !== dayKey && (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(dayKey, g.sets)}
+                      disabled={saving}
+                      data-history-edit
+                      aria-label={`Edit this day's ${exerciseName} sets`}
+                      className="-my-2 inline-flex h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold normal-case tracking-normal text-foreground active:bg-secondary disabled:opacity-40"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                  )}
                 </div>
               </div>
+              {editingKey === dayKey ? (
+                <div data-history-editor>
+                  <div className="overflow-hidden rounded-md border border-border">
+                    <div className="grid grid-cols-[24px_minmax(0,1fr)_56px_56px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <span>Set</span>
+                      <span>Weight</span>
+                      <span>Reps</span>
+                      <span>RPE</span>
+                    </div>
+                    {g.sets.map((s: any, i: number) => {
+                      const d = drafts[s.id];
+                      if (!d) return null;
+                      return (
+                        <div key={s.id} className="grid grid-cols-[24px_minmax(0,1fr)_56px_56px] items-center gap-2 border-t border-border/60 px-2 py-1.5">
+                          <span className="font-mono text-xs text-muted-foreground">{i + 1}</span>
+                          {d.loadEditable ? (
+                            <div className="flex min-w-0 items-center gap-1">
+                              <Input
+                                value={d.load}
+                                onChange={(e) => patchDraft(s.id, { load: e.target.value.replace(/[^0-9.]/g, "") })}
+                                inputMode="decimal"
+                                enterKeyHint="done"
+                                placeholder="—"
+                                aria-label={`Set ${i + 1} weight`}
+                                className="h-10 min-w-0 flex-1 px-2 text-center text-base tabular-nums"
+                              />
+                              {/* The unit is a label on the number: flipping it never converts. */}
+                              <button
+                                type="button"
+                                onClick={() => patchDraft(s.id, { unit: d.unit === "kg" ? "lb" : "kg" })}
+                                aria-label={`Set ${i + 1} unit: ${d.unit}. Tap to change to ${d.unit === "kg" ? "lb" : "kg"}`}
+                                data-history-unit
+                                className="h-10 w-10 shrink-0 rounded-lg border border-border text-[13px] font-semibold text-foreground active:bg-secondary"
+                              >
+                                {d.unit}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">{fmtLoad(s)}</span>
+                          )}
+                          <Input
+                            value={d.reps}
+                            onChange={(e) => patchDraft(s.id, { reps: e.target.value.replace(/[^0-9]/g, "") })}
+                            inputMode="numeric"
+                            enterKeyHint="done"
+                            placeholder="—"
+                            aria-label={`Set ${i + 1} reps`}
+                            className="h-10 px-1 text-center text-base tabular-nums"
+                          />
+                          <Input
+                            value={d.rpe}
+                            onChange={(e) => patchDraft(s.id, { rpe: e.target.value.replace(/[^0-9.]/g, "") })}
+                            inputMode="decimal"
+                            enterKeyHint="done"
+                            placeholder="—"
+                            aria-label={`Set ${i + 1} RPE`}
+                            className="h-10 px-1 text-center text-base tabular-nums"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {editError && <p className="mt-2 text-xs font-medium text-destructive" role="alert">{editError}</p>}
+                  <div className="mt-2 flex gap-2">
+                    <Button type="button" variant="outline" className="h-10 flex-1" onClick={cancelEdit} disabled={saving}>
+                      Cancel
+                    </Button>
+                    <Button type="button" className="h-10 flex-1" onClick={() => void saveEdit(g.sets)} disabled={saving}>
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
               <div className="overflow-hidden rounded-md border border-border">
                 <div className="grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                   <span>Set</span>
@@ -416,6 +574,7 @@ export function ExerciseHistorySheet({
                   </div>
                 ))}
               </div>
+              )}
             </Card>
           );
         })}
@@ -433,6 +592,7 @@ export function ExerciseHistoryButton({
   displayUnit,
   className,
   currentDayIndex,
+  editable,
 }: {
   clientId: string | null | undefined;
   exerciseId: string | null | undefined;
@@ -440,6 +600,7 @@ export function ExerciseHistoryButton({
   displayUnit?: "kg" | "lb";
   className?: string;
   currentDayIndex?: number | null;
+  editable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!clientId || (!exerciseId && !exerciseName)) return null;
@@ -456,6 +617,7 @@ export function ExerciseHistoryButton({
         exerciseName={exerciseName}
         displayUnit={displayUnit}
         currentDayIndex={currentDayIndex}
+        editable={editable}
       />
     </>
   );
