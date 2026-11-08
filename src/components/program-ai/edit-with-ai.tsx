@@ -32,6 +32,7 @@ import {
   undoProgramAiFn,
   type ProgramAiTarget,
 } from "@/lib/program-ai/program-ai.functions";
+import { dayNames } from "@/lib/program-ai/engine";
 import type { DayDiff, ResolvedChange } from "@/lib/program-ai/types";
 
 type Tab = "chat" | "rules" | "history";
@@ -480,7 +481,7 @@ function AppliedLine({ turn, result, onUndo, undoing }: { turn: any; result?: an
       {result?.verified && !result.verified.ok && <p className="text-xs text-warning">{result.verified.problems.join(" ")}</p>}
       {s && !s.error && (s.trainingDays || s.moved > 0) && (
         <p className="text-xs text-muted-foreground">
-          {s.trainingDays ? `Training days are now ${s.trainingDays.join(", ")}. ` : ""}
+          {s.trainingDays ? `Training days are now ${dayNames(s.trainingDays)}. ` : ""}
           {s.moved > 0 ? `${s.moved} workout${s.moved === 1 ? "" : "s"} re-dated.` : ""}
           {s.keptPinned > 0 ? ` ${s.keptPinned} placed by hand kept their dates.` : ""}
           {s.unplaced > 0 ? ` ${s.unplaced} couldn't be placed on a training day.` : ""}
@@ -576,7 +577,7 @@ export function ChangeCard({ change, checked, disabled, onChange, faded, default
               <p className="font-medium">Schedule</p>
               {change.schedule.after && (
                 <p className="text-muted-foreground">
-                  Training days: <span className="line-through">{change.schedule.before.join(", ") || "not set"}</span> → {change.schedule.after.join(", ")}
+                  Training days: <span className="line-through">{dayNames(change.schedule.before) || "not set"}</span> → {dayNames(change.schedule.after)}
                 </p>
               )}
               {change.schedule.redate && <p className="text-muted-foreground">Every upcoming workout goes back on their training days, in order (ones placed by hand keep their dates).</p>}

@@ -645,6 +645,14 @@ export function TemplateEditor() {
       await persist(m, p);
     },
   });
+  // after Edit with AI changed the template, what was just re-read is the saved version
+  const cleanTick = useRef(0);
+  useEffect(() => {
+    if (reloadTick > cleanTick.current && meta && payload) {
+      cleanTick.current = reloadTick;
+      autosave.markClean();
+    }
+  }, [reloadTick, meta, payload, autosave]);
 
   // Save-state truth: only clear the dirty flag once the autosave state
   // machine confirms a successful write with nothing still pending — a

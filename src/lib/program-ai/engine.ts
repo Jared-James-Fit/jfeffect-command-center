@@ -84,6 +84,12 @@ function shortDate(iso: string): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
 }
 
+const DAY_NAME: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+/** "mon,wed,fri" → "Mon, Wed, Fri" */
+export function dayNames(days: readonly string[] | null | undefined): string {
+  return (days ?? []).map((d) => DAY_NAME[d] ?? d).join(", ");
+}
+
 export function lockReason(lock: DaySnap["lock"]): string {
   return lock === "trained" ? "already trained" : lock === "started" ? "already started" : lock === "past" ? "in the past" : "";
 }
@@ -485,7 +491,9 @@ export function applyOp(work: Work, op: EditOp, ctx: EngineCtx, snap: ProgramSna
     case "schedule": {
       if (snap.kind !== "client") return err("Training days belong to a client, not a template.");
       const days = op.training_days ? WEEKDAYS.filter((d) => op.training_days!.includes(d)) : null;
-      work.schedule = { trainingDays: days, redate: op.redate };
+      // the days they already train on aren't a change (only re-dating is)
+      const same = !!days && days.join() === WEEKDAYS.filter((d) => snap.trainingDays.includes(d)).join();
+      work.schedule = { trainingDays: same ? null : days, redate: op.redate };
       return;
     }
   }

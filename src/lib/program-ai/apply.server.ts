@@ -233,7 +233,9 @@ export async function undoVersion(actor: Actor, versionId: string): Promise<{ no
       scheduleNote = `The program is back, but the dates didn't move back: ${String(e?.message ?? e).slice(0, 160)}`;
     }
   }
-  return { note: out.note ?? v?.restore_note ?? "Undone.", redoVersionId: out.redo_version_id ?? null, scheduleNote };
+  // a change that only moved dates put back no workouts: say what it did put back
+  const note = out.note ?? (out.restored === 0 && out.removed === 0 && scheduleNote ? scheduleNote : v?.restore_note) ?? "Undone.";
+  return { note, redoVersionId: out.redo_version_id ?? null, scheduleNote: note === scheduleNote ? null : scheduleNote };
 }
 
 /** Put every workout a re-dating moved back on its old date (never one trained since). */
