@@ -343,6 +343,10 @@ export type ProgressionSignal = {
   method: string;
   confidence: Confidence;
   sessions: number;
+  /** The top set's load (kg) in their latest session of it: what a change is measured against. */
+  lastKg: number | null;
+  /** Held because of a related pain report (backing it off is then a fair call). */
+  pain: boolean;
 };
 
 type Exposure = { date: string; row: RowCompare; completion: number | null; repsHit: number | null; rpeDelta: number | null; e1rm: number | null };
@@ -408,7 +412,8 @@ export function progressionSignals(h: IntelReport, ctx: AthleteContext, level: T
       const top = r.topSet;
       return `${e.date}: ${r.setsDone}/${r.prescribed.sets ?? "?"} sets${r.repsHitPct != null ? `, ${Math.round(r.repsHitPct)}% of reps` : ""}${top?.kg ? `, top ${fmt(top.kg)} kg × ${top.reps ?? "?"}` : ""}${top?.rpe != null ? ` @${top.rpe}` : ""}${r.prescribed.rpe ? ` (target ${r.prescribed.rpe})` : ""}`;
     });
-    const base = { exerciseId: info.exerciseId, exercise: info.exercise, lift: info.lift, competition: info.competition, sessions: list.length };
+    const pain = info.lift ? recentPain.filter((p) => PAIN_REGION[info.lift!].test(p.area ?? "")) : [];
+    const base = { exerciseId: info.exerciseId, exercise: info.exercise, lift: info.lift, competition: info.competition, sessions: list.length, lastKg: list.length ? list[list.length - 1].row.topSet?.kg ?? null : null, pain: pain.length > 0 };
     if (list.length < 2) {
       out.push({ ...base, decision: "not_enough_data", why: list.length ? "only one logged session in the last 8 weeks" : "not logged in the last 8 weeks", evidence, method: "keep it as written", confidence: "low" });
       continue;
@@ -428,7 +433,6 @@ export function progressionSignals(h: IntelReport, ctx: AthleteContext, level: T
     const hardE1 = list.filter((e) => (e.row.topSet?.rpe ?? 0) >= INFORMATIVE_RPE).map((e) => e.e1rm).filter((n): n is number => n != null && n > 0);
     const e1 = hardE1.length >= 2 ? hardE1 : list.map((e) => e.e1rm).filter((n): n is number => n != null && n > 0);
     const e1Change = e1.length >= 2 ? pct(robust(e1.slice(0, Math.ceil(e1.length / 2)))!, robust(e1.slice(Math.floor(e1.length / 2)))!) : null;
-    const pain = info.lift ? recentPain.filter((p) => PAIN_REGION[info.lift!].test(p.area ?? "")) : [];
     let decision: Decision = "maintain";
     let why: string;
     if (pain.length) {

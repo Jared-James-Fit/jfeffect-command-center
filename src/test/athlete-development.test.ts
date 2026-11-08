@@ -342,5 +342,16 @@ describe("it reaches every AI feature, and it changes what the editor accepts", 
     const [m, l] = resolveChanges(snap, [more, less], ctx);
     expect(m.issues.map((i) => i.text)).toContain("Competition Squat: their records say back off (fell short in 3 of the last 3 sessions), and this asks for more.");
     expect(l.issues.some((i) => /back off/.test(i.text))).toBe(false);
+
+    // the mirror: a lift the records say to hold, backed off after one hard session, is flagged; a pain-held one isn't
+    const held = (pain: boolean): EngineCtx => ({ ...ctx, signals: new Map([["sq", { decision: "maintain" as const, why: "one session fell short; the others were on target", lastKg: 140, pain }]]) });
+    const lighter = changeSchema.parse({ id: "c3", title: "Lighter squat", basis: "data", ops: [{ op: "update", rows: ["B1W1D1E1"], set: { load: 130, load_unit: "kg" } }] });
+    const same = changeSchema.parse({ id: "c4", title: "Same squat", basis: "data", ops: [{ op: "update", rows: ["B1W1D1E1"], set: { load: 140, load_unit: "kg" } }] });
+    const fewer = changeSchema.parse({ id: "c5", title: "Fewer sets", basis: "data", ops: [{ op: "update", rows: ["B1W1D1E1"], set: { sets: 2 } }] });
+    const [a, b, c] = resolveChanges(snap, [lighter, same, fewer], held(false));
+    expect(a.issues.map((i) => i.text)).toContain("Competition Squat: their records say hold it (one session fell short; the others were on target), and this backs it off.");
+    expect(b.issues.some((i) => /backs it off/.test(i.text))).toBe(false);
+    expect(c.issues.some((i) => /backs it off/.test(i.text))).toBe(true);
+    expect(resolveChanges(snap, [lighter], held(true))[0].issues.some((i) => /backs it off/.test(i.text))).toBe(false);
   });
 });
