@@ -209,7 +209,7 @@ function statusLine(d: Day, today: string, off: boolean): { text: string; tone?:
  * Crew → Posts: Athlete Insights (series `daily_visual`, daily-visuals.ts).
  * On the weekdays the coach picks (3 a week by default), an anime frame in
  * JF Effect's house style and a caption made together and checked before they go live
- * (daily-visuals.server.ts); a post that didn't fully pass waits for his OK.
+ * (daily-visuals.server.ts); every post goes out on its own at its time (no approval first).
  * Tap one to see it as the crew will, approve or reject it, make a new image
  * (caption kept) or a new caption (image kept), edit the words, publish it
  * now, move it to another day, or go back to any earlier version, a

@@ -96,11 +96,11 @@ export function BirthdayPostsCard({ actionableOnly = false }: { actionableOnly?:
           <Cake className="h-4 w-4" />
         </span>
         <h2 className="text-[13px] font-bold tracking-tight">Birthday posts</h2>
-        {waiting > 0 && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">{waiting} to review</span>}
+        {waiting > 0 && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-bold text-primary-foreground">{waiting} coming up</span>}
       </div>
       {!actionableOnly && (
         <p className="mb-2 text-[12px] text-muted-foreground">
-          Written in your voice from their numbers. Each draft lands at 5pm the day before, with a notification. Nothing goes out until you approve it.
+          Written in your voice from their numbers. Each draft lands at 5pm the day before, with a notification, and goes out on its own at 8am on their birthday. Edit or skip it any time before.
         </p>
       )}
       <div className="divide-y divide-border/70">
@@ -242,7 +242,7 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
                     ? `Approved. Goes out ${dayWord(post.birthday).toLowerCase()} at ${postTimeLine(post)}, with your message to ${name}.`
                     : due
                       ? `It's their birthday. Post it now and ${name} gets your message too.`
-                      : `${dayWord(post.birthday)}. Approve it and it goes out at ${postTimeLine(post)} on their birthday.`}
+                      : `${dayWord(post.birthday)}. It goes out on its own at ${postTimeLine(post)} on their birthday. Edit it or skip it any time before.`}
               </SheetDescription>
             </SheetHeader>
 
@@ -305,8 +305,8 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
                     <button type="button" disabled={busy} onClick={() => void run("post_now", `Posted. ${name} got your message`)} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
                       Post now instead
                     </button>
-                    <button type="button" disabled={busy} onClick={() => void run("unschedule")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
-                      Unschedule
+                    <button type="button" disabled={busy} onClick={() => void run("skip", "Skipped. It won't go out")} className="h-11 flex-1 rounded-2xl bg-muted text-[14px] font-bold disabled:opacity-60">
+                      Skip it
                     </button>
                   </div>
                 </>
@@ -318,7 +318,7 @@ export function BirthdayPostSheet({ post, onClose: closeSheet }: { post: Birthda
                     onClick={() => void run(due ? "post_now" : "approve", due ? `Posted. ${name} got your message` : `Scheduled for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`)}
                     className="h-12 w-full rounded-2xl bg-primary text-[15px] font-bold text-primary-foreground shadow-lg shadow-primary/20 disabled:opacity-60"
                   >
-                    {draft.tray.uploading > 0 ? "Uploading…" : act.isPending ? "Saving…" : due ? `Post & message ${name}` : `Approve for ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`}
+                    {draft.tray.uploading > 0 ? "Uploading…" : act.isPending ? "Saving…" : due ? `Post & message ${name}` : `Looks good · ${dayWord(post.birthday).toLowerCase()} ${postTime(post)}`}
                   </button>
                   <div className="flex gap-2">
                     {edited && (

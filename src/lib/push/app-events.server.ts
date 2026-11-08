@@ -54,7 +54,7 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
   birthday_post_ready: {
     to: "staff", category: "wins",
     title: (n) => `🎂 ${n}'s birthday post is ready`,
-    body: () => "Tap to review it. Approve and it goes out at 8am on their birthday.",
+    body: () => "It goes out on its own at 8am on their birthday. Tap to read or edit it.",
     url: (id) => `/admin#birthday=${id}`, rateMinutes: 60,
   },
   birthday_post_reminder: {
