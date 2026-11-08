@@ -26,8 +26,9 @@ const MAX_ATTEMPTS = 3;
 const CALL_TIMEOUT_MS = 170_000;
 /** The athlete's brief: the full history unless it's larger (then summarized and said so). */
 const BRIEF_CHARS = 170_000;
-/** At most this many model calls per turn (the first, then fix rounds). */
-const MAX_CALLS = 3;
+/** At most this many model calls per turn (the first, then a fix round), and no fix round once a turn has run this long. */
+const MAX_CALLS = 2;
+const FIX_ROUND_BEFORE_MS = 120_000;
 
 async function claim(admin: Db, editId: string | null): Promise<any | null> {
   const since = new Date(Date.now() - 86_400_000).toISOString();
@@ -52,25 +53,42 @@ async function stage(admin: Db, id: string, text: string) {
   await admin.from("program_ai_edits").update({ stage: text }).eq("id", id);
 }
 
+/**
+ * The model that edits programs: the strongest one the gateway takes (Cleo's, which does her
+ * program edits too; PROGRAM_AI_MODEL overrides it), then the app's fast default if it fails or
+ * runs out of time. A live test on Nov 8 2026 had the fast model put "rear delt work" on a
+ * lateral raise and overwrite an athlete's cue; programming judgment is worth the wait.
+ */
+export const EDIT_PRIMARY_MODEL = "openai/gpt-5.5";
+const PRIMARY_TIMEOUT_MS = 150_000;
+const FALLBACK_TIMEOUT_MS = 90_000;
+
 async function callModel(admin: Db, edit: any, label: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
   const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-  const { PROGRAM_DESIGN_MODEL, modelsFor } = await import("@/lib/program-intel/pipeline.server");
   const { generateText } = await import("ai");
   const { data: cfg } = await admin.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-  const models = modelsFor(system.length + prompt.length, { primary: PROGRAM_DESIGN_MODEL, fallback: (cfg?.default_model as string | undefined) || DEFAULT_AI_MODEL });
+  const primary = process.env.PROGRAM_AI_MODEL || EDIT_PRIMARY_MODEL;
+  const models = [...new Set([primary, (cfg?.default_model as string | undefined) || DEFAULT_AI_MODEL])];
   let last: any = null;
-  for (const model of models) {
+  for (const [i, model] of models.entries()) {
     const t0 = Date.now();
     try {
-      const r = await generateText({ model: createLovableAiGateway()(model), system, prompt, temperature: 0.2, abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS) });
+      // OpenAI's reasoning models take only their default temperature
+      const r = await generateText({
+        model: createLovableAiGateway()(model),
+        system,
+        prompt,
+        ...(model.startsWith("openai/") ? {} : { temperature: 0.2 }),
+        abortSignal: AbortSignal.timeout(i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS),
+      });
       await logCall(admin, edit.id, { label, model, system, prompt, response: r.text, ok: true, ms: Date.now() - t0, usage: (r as any).usage });
       return { text: r.text, model };
     } catch (e: any) {
       const status = e?.statusCode ?? e?.status;
       await logCall(admin, edit.id, { label, model, system, prompt, response: null, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 500) });
       last = e;
-      if (status === 429) throw new Error("The AI service is busy (too many requests). Try again in a minute.");
       if (status === 402) throw new Error("AI credits are used up.");
+      // busy: the next model may not be
     }
   }
   throw new Error(`The AI service didn't answer: ${String(last?.message ?? last).slice(0, 200)}`);
@@ -216,6 +234,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
 
     // 4. ask, check, fix
     await stage(admin, edit.id, "Thinking it through");
+    const started = Date.now();
     let reply: EditReply | null = null;
     let model = "";
     let prompt = user;
@@ -224,7 +243,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       model = r.model;
       const parsed = parseReply(r.text);
       if (!parsed.ok) {
-        if (call === MAX_CALLS) throw new Error(`The AI's reply wasn't usable: ${parsed.error}`);
+        if (call === MAX_CALLS || Date.now() - started > FIX_ROUND_BEFORE_MS) throw new Error(`The AI's reply wasn't usable: ${parsed.error}`);
         prompt = `${user}\n\nYour previous reply couldn't be used: ${parsed.error}\nReply again with ONE valid JSON object in exactly the required shape.`;
         continue;
       }
@@ -244,7 +263,7 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       ctx = { catalog: ctx.catalog, byId: new Map([...ctx.catalog.values(), ...names.values()].map((e) => [e.id, e])), names };
       const merged = mergeProposal(programChanged ? [] : current, reply, edit.rejected ?? []);
       const problems = [...notes, ...fixable(snap, ctx, merged.changes.filter((c) => reply!.changes.some((x) => x.id === c.id) || merged.added.includes(c.id)))];
-      if (!problems.length || call === MAX_CALLS) break;
+      if (!problems.length || call === MAX_CALLS || Date.now() - started > FIX_ROUND_BEFORE_MS) break;
       await stage(admin, edit.id, "Fixing a few details");
       prompt = `${user}\n\nYour previous reply:\n${r.text.slice(0, 20_000)}\n\nIt has problems the app won't accept:\n${problems.map((p) => `- ${p}`).join("\n")}\nReply again with the whole JSON object, fixed (same ids). Only codes from the catalog or the ones listed above.`;
     }

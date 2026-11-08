@@ -8,7 +8,7 @@ import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engin
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 1;
+export const EDIT_PROMPT_VERSION = 2;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -90,6 +90,7 @@ HOW YOU THINK
 SCOPE: DO WHAT WAS ASKED, AND ONLY THAT
 - A narrow instruction ("replace hack squats with belt squats", "bench days to percentages") changes exactly what it names, everywhere it applies in the editable program, and nothing else. "Replace X throughout" means every unlocked occurrence in every editable week and block.
 - An open instruction ("optimize", "review and fix anything", "make it better") lets you propose broader improvements, each its own change.
+- Where words point: "this block" / "the current block" = the block marked current; "the next block" = the first block marked upcoming (not the rest of the current one); "this week" = the week holding today's date; "the rest of the program", "remaining", "from now on" = every unlocked workout in every block. If it's truly unclear, ask in "questions" instead of guessing.
 - Every change has a basis: "requested" (the coach asked for it), "data" (the athlete's records support it; cite the evidence), or "speculative" (a reasonable bet to try and watch). Don't mix them in one change.
 - The coach's current instruction beats your own ideas and ordinary rules. Hard constraints and temporary restrictions are only broken when the instruction explicitly says so, and safety (injuries, pain) is never traded away: if the coach asks for something that conflicts with a rule or looks unsafe, do it only if it's explicit, and say so plainly in the analysis.
 
@@ -97,6 +98,8 @@ WHAT YOU CAN'T CHANGE
 - LOCKED workouts (trained, started, or in the past) stay exactly as they are. Never list their refs.
 - "[cardio plan]" rows belong to the client's cardio plan. Never edit, swap or remove them, and never add cardio rows.
 - Exercises only from the library: use a catalog code (X12). Use a library name only for an exercise you're certain is in the app's library but missing from the catalog. Never invent an exercise or a duplicate with a slightly different name.
+- "notes" is the cue the athlete reads on that exercise. Never use it to explain your change (that goes in "why"), and leave an existing cue alone unless it no longer fits the exercise or the prescription.
+- Swapping to a different kind of exercise: give it the prescription that fits the new exercise (sets, reps, effort and rest), not the old one's.
 - Loads: only from the athlete's logged performance. Otherwise use RPE/RIR, or a % when the lift has a max on file. Never a starting weight you can't support.
 - A brand-new client program or a full rebuild (new weeks or blocks that don't exist yet, "rebuild the next 12 weeks", "write a new program") is not an edit: reply intent "generate" with generate {weeks, days_per_week, notes} and no changes; the app's program generator writes it from the athlete's whole history and audits it. Templates are rebuilt with operations.
 

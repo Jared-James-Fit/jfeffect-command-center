@@ -373,10 +373,20 @@ export function applyOp(work: Work, op: EditOp, ctx: EngineCtx, snap: ProgramSna
       if (!ex) return;
       for (const loc of rowsOf(op.rows)) {
         if (loc.row.exerciseId === ex.id && !op.set) continue;
+        // A different kind of exercise doesn't inherit the old one's rest, label or cue
+        // (a lat pulldown never keeps a deadlift's 4:00 rest or "SECONDARY DEADLIFT" note).
+        const was = loc.row.exerciseId ? ctx.byId.get(loc.row.exerciseId) : null;
+        const different = loc.row.timeProfile !== ex.timeProfile || (!!was?.family && !!ex.family && was.family !== ex.family);
         loc.row.exerciseId = ex.id;
         loc.row.name = ex.name;
         loc.row.nameOverride = null;
         loc.row.timeProfile = ex.timeProfile;
+        if (different) {
+          loc.row.restSeconds = ex.defaultRest;
+          loc.row.restOverride = null;
+          loc.row.purposeLabel = null;
+          loc.row.notes = null;
+        }
         applyRx(loc.row, op.set, snap.unit, out.issues, label(loc, loc.row));
         out.touchedRows.add(loc.row.id);
       }
@@ -551,14 +561,20 @@ const COMP_FAMILY: Record<string, string> = { squat: "squat", bench: "bench", de
 
 function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: DayDiff[], issues: Issue[]) {
   const affected = new Set(diffs.map((d) => d.label));
+  const before = new Map(snap.blocks.flatMap((b) => b.weeks).flatMap((w) => w.days).map((d) => [d.id, d]));
+  const count = (rows: RowSnap[]) => {
+    const m = new Map<string, number>();
+    for (const r of rows) if (r.exerciseId) m.set(r.exerciseId, (m.get(r.exerciseId) ?? 0) + 1);
+    return m;
+  };
   for (const block of work.blocks)
     for (const week of block.weeks)
       for (const day of week.days) {
         const lbl = dayLabel(snap, block, week, day);
         if (!affected.has(lbl)) continue;
-        const seen = new Map<string, number>();
-        for (const r of day.rows) if (r.exerciseId) seen.set(r.exerciseId, (seen.get(r.exerciseId) ?? 0) + 1);
-        for (const [id, n] of seen) if (n > 1) issues.push({ level: "warning", text: `${lbl}: ${ctx.byId.get(id)?.name ?? "an exercise"} is in it ${n} times (fine for a top set and back-offs).` });
+        // only a duplicate this change makes (a top set + back-offs already there is the coach's)
+        const had = count(before.get(day.id)?.rows ?? []);
+        for (const [id, n] of count(day.rows)) if (n > 1 && n > (had.get(id) ?? 0)) issues.push({ level: "warning", text: `${lbl}: ${ctx.byId.get(id)?.name ?? "an exercise"} would be in it ${n} times (fine for a top set and back-offs).` });
         if (!day.rows.length) issues.push({ level: "warning", text: `${lbl} would have no exercises: remove the workout instead.` });
       }
   const max = snap.maxSessionMinutes ?? null;
