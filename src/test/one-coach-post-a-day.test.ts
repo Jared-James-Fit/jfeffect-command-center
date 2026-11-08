@@ -12,7 +12,7 @@ const week = (posts: (string | null)[]) =>
   posts.map((post, i) => ({ day: `2026-11-${String(6 + i).padStart(2, "0")}`, post }));
 
 describe("one coach post a day", () => {
-  it("the picture takes only the days nothing else does, Sunday always (the verse)", () => {
+  it("the picture takes only the days nothing else does, Sunday always", () => {
     const fn = sql.slice(sql.indexOf("FUNCTION public.community_coach_post_day"), sql.indexOf("REVOKE ALL ON FUNCTION public.community_coach_post_day"));
     // Sunday first, before any lesson, series or holiday can take it
     expect(fn.indexOf("WHEN d.n = 7 THEN NULL")).toBeLessThan(fn.indexOf("'lesson'"));

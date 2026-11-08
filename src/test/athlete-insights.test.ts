@@ -48,7 +48,7 @@ describe("Athlete Insights: move a post, publish it now", () => {
     expect(move).toContain("IF _day IS NULL OR _day < v_today THEN RAISE EXCEPTION 'Pick today or a day ahead'; END IF;");
     expect(move).toContain("RAISE EXCEPTION 'Another Athlete Insight is on that day';");
     expect(move).toContain("RAISE EXCEPTION 'Something else goes out that day (%): one coach post a day'");
-    // the verse stays with Sunday's post
+    // the move still carries the old verse column (no day has one since 20270217090000_no_bible_verses.sql)
     expect(move).toContain("verse_ref = CASE WHEN extract(isodow FROM _day) = 7 THEN v.verse_ref END,");
     expect(move).toContain("'Moved to ' || to_char(_day, 'Dy Mon FMDD')");
     expect(card).toContain('db.rpc("community_daily_visual_move", { _id: d!.id, _day: day })');

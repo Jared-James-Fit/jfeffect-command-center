@@ -17,7 +17,9 @@
  * running. Each category has its angles (DAILY_TOPICS, stored as `topic`).
  * Who it's for turns over by experience only: newer lifters, strength for
  * life, powerlifters, everyone (`crowdForDay`). The weekday only sets a mood (DAILY_THEMES), and Sunday's
- * carries a Bible verse (only ever one of FAITH_VERSES, word for word).
+ * (rest & reset) may lean on a principle the Bible teaches that good training
+ * shares (rest, gratitude, patience), said in plain lifting terms: never a
+ * verse, a scripture quote or reference, or preaching (Nov 8 2026).
  *
  * How one is made (daily-visuals.server.ts):
  *   1. the writer plans the point and the picture first, then drafts three
@@ -347,7 +349,7 @@ type ThemeSpec = {
   lean: Partial<Record<DailyPillar, number>>;
 };
 
-/** A mood a day (Monday first; the keys are the database's, kept from the first version). Sunday's is the faith post. */
+/** A mood a day (Monday first; the keys are the database's, kept from the first version). Sunday's is rest & reset (SUNDAY_PRINCIPLE). */
 export const DAILY_THEMES: Record<DailyTheme, ThemeSpec> = {
   courage: { dow: 1, name: "New week", idea: "Monday: a new training week, setting up the week's work", lean: { coaches_notes: 0.3, mistakes: 0.2 } },
   patience: { dow: 2, name: "The long game", idea: "Tuesday: progress over blocks, not sessions", lean: { powerlifting_iq: 0.3, mindset: 0.1 } },
@@ -534,44 +536,23 @@ export const LEGACY_STYLE_NAMES: Record<string, string> = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  The faith post                                                     */
+/*  Sunday                                                             */
 /* ------------------------------------------------------------------ */
 
-/** A Bible verse for the weekly faith post: the King James words exactly (public domain), never a model's. */
-export type FaithVerse = { ref: string; text: string };
+/**
+ * Sunday's post (the day's `faith` flag) can lean on a principle the Bible
+ * teaches that good training shares, in his own plain words. No verse goes
+ * under it any more (Nov 8 2026: "I don't want full on bible verses in post
+ * remove the verses. It can use some biblical principals but not that
+ * extreme"), and a caption that quotes or names one is refused
+ * (`captionProblems`).
+ */
+export const SUNDAY_PRINCIPLE =
+  "SUNDAY: rest and reset. Today the post can lean on a principle the Bible teaches that good training shares too (rest, gratitude, patience, humility, consistency, looking after the body you've got), said in plain lifting terms the way he'd say it about training. Never a Bible verse, a scripture quote or a reference, never God or Jesus by name, never preaching: someone who doesn't share his faith reads it as good training advice.";
 
-export const FAITH_VERSES: FaithVerse[] = [
-  { ref: "Psalm 46:10", text: "Be still, and know that I am God" },
-  { ref: "Matthew 11:28", text: "Come unto me, all ye that labour and are heavy laden, and I will give you rest." },
-  { ref: "Psalm 30:5", text: "weeping may endure for a night, but joy cometh in the morning." },
-  { ref: "Psalm 34:18", text: "The LORD is nigh unto them that are of a broken heart" },
-  { ref: "1 Peter 5:7", text: "Casting all your care upon him; for he careth for you." },
-  { ref: "Lamentations 3:22-23", text: "his compassions fail not. They are new every morning" },
-  { ref: "Isaiah 40:31", text: "they that wait upon the LORD shall renew their strength" },
-  { ref: "Joshua 1:9", text: "Be strong and of a good courage; be not afraid" },
-  { ref: "Psalm 139:14", text: "I am fearfully and wonderfully made" },
-  { ref: "Galatians 6:9", text: "let us not be weary in well doing: for in due season we shall reap, if we faint not." },
-  { ref: "Proverbs 27:17", text: "Iron sharpeneth iron; so a man sharpeneth the countenance of his friend." },
-  { ref: "Psalm 118:24", text: "This is the day which the LORD hath made; we will rejoice and be glad in it." },
-  { ref: "Matthew 6:34", text: "Take therefore no thought for the morrow: for the morrow shall take thought for the things of itself." },
-  { ref: "Psalm 23:1", text: "The LORD is my shepherd; I shall not want." },
-  { ref: "Proverbs 24:16", text: "For a just man falleth seven times, and riseth up again" },
-  { ref: "2 Timothy 1:7", text: "For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind." },
-];
-
-/** The verse used least recently (`used` oldest first), so every verse goes once before one comes back. */
-export function pickVerse(used: string[]): FaithVerse {
-  const last = new Map<string, number>();
-  used.forEach((ref, i) => last.set(ref, i));
-  const never = FAITH_VERSES.filter((v) => !last.has(v.ref));
-  if (never.length) return never[0];
-  return [...FAITH_VERSES].sort((a, b) => (last.get(a.ref) ?? -1) - (last.get(b.ref) ?? -1))[0];
-}
-
-/** The post's words: the caption, and on Sunday the verse under it with where it's from (the same as the SQL caption). */
-export function dailyCaption(line: string, verse?: FaithVerse | null): string {
-  const words = line.trim();
-  return verse ? `${words}\n\n“${verse.text.trim()}” ${verse.ref}` : words;
+/** The post's words: the caption alone, Sunday's too (the same as the SQL `community_daily_visual_caption`). */
+export function dailyCaption(line: string): string {
+  return line.trim();
 }
 
 
@@ -911,7 +892,7 @@ HOW IT READS
 - No AI tells ("here's the thing", "the truth is", "let that sink in", "at the end of the day", "the key takeaway", "dive into", "journey", "game changer").
 - Never these shapes: a list post or a setup line ending in a colon, a "me: / my legs:" script, a little scene narrated to "you" ("you walk in… you load the bar… you realize…"), "the old you / the new you", "it's not X, it's Y" more than once, words in scare quotes, a moral or slogan to end on.
 - Bodies: strength and performance, never how someone looks. Blunt about the training, never about the person.
-- No names (his shows on the post) and no Bible verses (the app adds Sunday's).`;
+- No names (his shows on the post). No Bible verses, scripture quotes or references and no preaching.`;
 
 export const CONCEPT_PROMPT = `You write one Athlete Insight for the JF Effect community feed, as Jared McIntyre, the powerlifting coach who runs it. The crew is men and women who lift, from newer lifters to competitive powerlifters. A post is a picture and a caption made together, and it should be worth opening the app for: one real training idea a lifter can use, from a coach who knows his stuff, written the way he'd type it himself. Not another fitness motivation page.
 
@@ -992,7 +973,7 @@ export function conceptPrompt(o: {
     `ANGLES, as "topic" (${o.classify ? "pick the one this caption is about" : "pick one, best first"}; each with the picture that teaches it): ${o.choices.topics.map((k) => `${k} = ${DAILY_TOPICS[k].idea} (picture: ${DAILY_TOPICS[k].picture})`).join("; ")}`,
     `MOOD, as "mood" (pick one): ${moods.join(", ")}`,
     `WHO IT'S FOR: ${DAILY_AUDIENCE_GUIDE.everyone} Today especially ${DAILY_CROWDS[o.crowd].guide}. Never aimed at men or women: it's about their training.`,
-    o.faith ? "SUNDAY: a Bible verse goes under the caption. Keep the post about training (recovery, review, the week ahead) and leave the verse to speak for itself: no preaching." : null,
+    o.faith ? SUNDAY_PRINCIPLE : null,
     `CAPTION FORMS, as each draft's "form" (best first; two drafts can share one): ${o.choices.formats.map((k) => `${k} = ${DAILY_FORMATS[k].guide} (up to ${DAILY_FORMATS[k].max} characters)`).join("; ")}`,
     `SHOTS, as "style" (pick the one that tells this story best, best performers first): ${o.choices.styles.map((k) => `${k} = ${DAILY_STYLES[k].look}`).join("; ")}`,
     `LIGHT, as "light" (pick the one that fits the place and moment): ${o.choices.lights.map((k) => `${k} = ${DAILY_LIGHTS[k].look}`).join("; ")}`,
@@ -1545,6 +1526,8 @@ export function captionSimilarity(a: string, b: string): number {
   return both / Math.min(x.size, y.size);
 }
 /** "Psalm 46:10", "1 peter 5:7": a verse named in a caption (a time like "5:30" isn't one). */
+/** Scripture's own words or a sermon's: King James English, God by name, "the Bible says". */
+const SCRIPTURE_WORDS = /\b(?:thee|thou|thy|thine|hath|unto|saith|cometh|shalt|ye|god|jesus|lord|bible|scripture|verse|amen)\b/i;
 const BIBLE_REF =
   /\b(?:[1-3]\s?)?(?:genesis|exodus|deuteronomy|joshua|psalms?|proverbs|ecclesiastes|isaiah|jeremiah|lamentations|micah|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|hebrews|james|peter|revelation)\s+\d{1,3}:\d{1,3}\b/i;
 
@@ -1649,7 +1632,8 @@ export function captionProblems(
   if (/@\w/.test(text)) out.push("tags someone");
   if (NO_NAMES.test(text)) out.push("drops in a name");
   for (const n of namedPeople(text, o.names ?? [])) out.push(`names someone (${n})`);
-  if (BIBLE_REF.test(text) || /\b(verse|scripture)\b/i.test(text)) out.push("mentions a verse (the app adds it)");
+  if (BIBLE_REF.test(text)) out.push("quotes or names a Bible verse (no verses: a principle in plain words)");
+  else if (SCRIPTURE_WORDS.test(text)) out.push("reads like scripture or a sermon (a principle in plain lifting terms only)");
   const lower = ` ${text.toLowerCase().replace(/[’]/g, "'")} `;
   for (const g of GENERIC_PHRASES) if (lower.includes(g)) out.push(`says "${g}" (a slogan)`);
   for (const g of AI_TELLS) if (lower.includes(g)) out.push(`says "${g}" (reads like AI)`);
@@ -1735,7 +1719,7 @@ export function picturePrompt(
     `The feeling: ${c.message}${mood ? ` (${mood})` : ""}`,
     "The people are adults drawn with realistic adult anatomy in the anime style: strong, athletic strength-athlete builds (never exaggerated, show-ready or steroid-looking), correct joints and proportions, five fingers on each hand, mature faces with focused, natural expressions, caught mid-moment, never posing for the viewer.",
     "Equipment and technique are correct: one straight barbell with the same plates loaded on both sides and collars on, calibrated plates in their real colours and sizes (red 25, blue 20, yellow 15, green 10), a real power rack, monolift, competition bench or deadlift platform; the grip width, stance and bar position that lift actually uses (the bar on the upper back for a squat, feet planted and shoulder blades set on the bench, the bar over the midfoot on a deadlift); chalk, belts and knee sleeves where they belong.",
-    o.faith ? "Calm and focused, still a real gym or meet; any Bible stays closed with no readable writing on it." : null,
+    o.faith ? "Calm and focused, still a real gym or meet, with no Bible, cross or other religious object or symbol in it." : null,
     words
       ? `The only readable words are exactly these: ${words}. No other text, brand names or logos anywhere.`
       : "No readable text, speech bubbles, subtitles, brand names, logos or watermarks anywhere: a logbook's writing and any phone screen are scribbles or turned away, plate markings small and unreadable.",
@@ -1998,7 +1982,7 @@ const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
 /**
  * The days the picture goes out this week, Monday first ("Fri, Sat and Sun"):
  * one coach post a day, so the picture takes only the days nothing else does
- * (`community_coach_post_day`; Sunday's always runs, it carries the verse).
+ * (`community_coach_post_day`; Sunday's always runs).
  */
 export function pictureDaysLabel(week: CoachPostDay[] | null | undefined): string | null {
   const days = [...new Set((week ?? []).filter((d) => d.post == null).map((d) => new Date(`${d.day}T12:00:00Z`).getUTCDay()))]
