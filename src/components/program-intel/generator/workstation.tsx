@@ -31,7 +31,7 @@ import { useBrainOverride, useGeneratorIntel, useIntelJobs, useIntelRecords, use
 import { DraftView, PipelineProgress } from "./draft-view";
 import { ContextInspector } from "./inspector";
 import { OutcomesCard } from "./outcomes-card";
-import { AthleteOverview, DataQualityCard, PatternsCard, ProgramReviewCard } from "./overview";
+import { AthleteOverview, DataQualityCard, DevelopmentCard, PatternsCard, ProgramReviewCard } from "./overview";
 import { AdvancedControls, ConflictsCard, EquipmentSheet, ProgramNotesCard, SetupCard } from "./setup";
 import { StrategyReview } from "./strategy-view";
 
@@ -231,6 +231,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
             )}
 
             <AthleteOverview intel={intel} />
+            {!intel.firstProgram && <DevelopmentCard intel={intel} clientId={clientId} />}
             <OutcomesCard clientId={clientId} outcomes={outcomes} recordedKeys={recordedKeys} />
             <ProgramReviewCard intel={intel} />
             <DataQualityCard intel={intel} />

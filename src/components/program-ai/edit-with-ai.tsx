@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import {
   applyProgramAiFn,
   askProgramAiFn,
+  athleteGapsFn,
   deleteProgramRuleFn,
   discardProgramAiFn,
   latestProgramAiThreadFn,
@@ -126,6 +127,35 @@ export function EditWithAiSheet({ open, onOpenChange, target, title, onApplied }
         {tab === "history" && <HistoryPanel target={target} onChanged={onApplied} />}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// What's not on file about the athlete (never guessed), with where to fix it
+
+const GAP_TAB: Record<string, string> = { info: "info", "goals-setup": "goals-setup", metrics: "metrics", program: "training" };
+
+function AthleteGaps({ clientId }: { clientId: string }) {
+  const gaps = useServerFn(athleteGapsFn);
+  const q = useQuery({ queryKey: ["athlete-gaps", clientId], queryFn: () => gaps({ data: { clientId } }), staleTime: 60_000 });
+  const missing = (q.data?.missing ?? []) as Array<{ field: string; why: string; where: string }>;
+  if (!missing.length) return null;
+  return (
+    <div className="mb-4 rounded-lg border border-border p-3 text-sm" data-athlete-gaps>
+      <p className="font-medium">Not on file, so the AI won't assume it:</p>
+      <ul className="mt-1.5 space-y-1">
+        {missing.map((m) => (
+          <li key={m.field} className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0">
+              {m.field} <span className="text-xs text-muted-foreground">· {m.why}</span>
+            </span>
+            <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: GAP_TAB[m.where] ?? "info" } as any} className="shrink-0 text-xs font-medium underline">
+              Add
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -259,6 +289,7 @@ function ChatPanel({ target, onApplied }: { target: ProgramAiTarget; onApplied?:
   return (
     <>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4" data-chat-scroll>
+        {target.kind === "client" && <AthleteGaps clientId={target.clientId} />}
         {!turns.length && resumed && !send.isPending && (
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">

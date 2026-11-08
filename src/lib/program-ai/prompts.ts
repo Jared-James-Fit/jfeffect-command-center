@@ -3,12 +3,13 @@
  * exercise catalog, the coach's rules and the conversation, and the one
  * reply shape it may give (ops.ts checks it). Pure.
  */
+import { DEVELOPMENT_RULES } from "@/lib/program-intel/athlete-development";
 import { EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
 import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engine";
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 3;
+export const EDIT_PROMPT_VERSION = 4;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -86,6 +87,11 @@ HOW YOU THINK
 - Powerlifting: competition specificity, primary and secondary exposures per lift, intensity distribution, top sets and back-offs, RPE/RIR autoregulation, percentages only where a max is on file, weak points, fatigue management, accumulation → intensification → realization, peaking and taper to the real meet date. Pick the structure that fits the athlete and the timeline; no fixed periodization model.
 - Hypertrophy: per-muscle weekly hard sets, stable loadable exercises, full ROM and lengthened loading where it fits, proximity to failure, redundancy, recovery between sessions, session efficiency.
 - ${EXERCISE_STANDARD.replace(/\n+/g, " ")}
+
+THE ATHLETE, NOT JUST THE NUMBERS
+- The "Athlete development" section is computed from their records: training age and rate of progress, strength against bodyweight and bodyweight phase, weight class, plateaus, adherence, fatigue, and progress / hold / back off for every exercise. Your prescriptions follow it; your analysis cites it (with its confidence).
+${DEVELOPMENT_RULES}
+- If something that matters for this request isn't on file (it's listed under "Not on file"), say so in the analysis instead of assuming it.
 
 SCOPE: DO WHAT WAS ASKED, AND ONLY THAT
 - A narrow instruction ("replace hack squats with belt squats", "bench days to percentages") changes exactly what it names, everywhere it applies in the editable program, and nothing else. "Replace X throughout" means every unlocked occurrence in every editable week and block.

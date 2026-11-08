@@ -7,6 +7,7 @@
  * and again in the background worker, so the AI receives exactly what the
  * coach saw (the data hash ties them together).
  */
+import { buildAthleteDevelopment, type AthleteDevelopment } from "./athlete-development";
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { buildAthleteContext, type AthleteContext } from "./context";
 import { resolveEquipment, type EquipmentResolution } from "./equipment";
@@ -37,6 +38,8 @@ export type GeneratorIntel = {
   dataHash: string;
   /** Nothing logged yet: a first program, built from their Goals & Setup and your notes. */
   firstProgram: boolean;
+  /** How they're developing: bodyweight-adjusted strength, training age, phase, progress / hold / back off per exercise, trends. */
+  development: AthleteDevelopment;
 };
 
 /** Blocks that are a coach's draft nobody has seen yet (hidden and undated) never count as a program the athlete did (the loader leaves them out too). */
@@ -89,6 +92,7 @@ export function buildGeneratorIntel(rec: IntelRecords, opts: { brainOverride?: B
     ? `Set by you (auto-classification read ${BRAIN_LABEL[classification.auto]}).`
     : `${classification.reasons.slice(0, 4).join("; ")}.`;
   const recommendation = recommendSetup({ ctx, brain, brainWhy, prev, history, review, patterns, exercises });
+  const development = buildAthleteDevelopment(rec, ctx, history);
   return {
     history,
     prev,
@@ -106,5 +110,6 @@ export function buildGeneratorIntel(rec: IntelRecords, opts: { brainOverride?: B
     exercises,
     dataHash: history.dataHash,
     firstProgram: history.coverage.loggedSets === 0,
+    development,
   };
 }

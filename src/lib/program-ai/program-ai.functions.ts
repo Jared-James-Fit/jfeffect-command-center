@@ -221,3 +221,36 @@ export const deleteProgramRuleFn = createServerFn({ method: "POST" })
     if (!gone?.length) throw new Error("That rule couldn't be removed.");
     return { ok: true };
   });
+
+/** What's not on file about this athlete that the AI's reads need (shown in Edit with AI with a way to fix it). */
+export const athleteGapsFn = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ clientId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = context.supabase as any;
+    const { data: c } = await sb.from("clients").select("date_of_birth, sex, height_cm, intake_training_experience, user_id, is_powerlifter, timezone").eq("id", data.clientId).maybeSingle();
+    if (!c) return { missing: [] as Array<{ field: string; why: string; where: string }> };
+    const { todayInTimeZone } = await import("@/lib/committed-schedule-realign");
+    const { missingInfo, sexOf } = await import("@/lib/program-intel/athlete-development");
+    const today = todayInTimeZone(c.timezone ?? "America/Winnipeg");
+    const [goals, bw, prep] = await Promise.all([
+      sb.from("client_goals_setup").select("training_experience").eq("client_id", data.clientId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+      c.user_id ? sb.from("progress_bodyweight").select("logged_date").eq("user_id", c.user_id).order("logged_date", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+      sb.from("pl_preps").select("weight_class, event_date, status").eq("client_id", data.clientId).gte("event_date", today).order("event_date").limit(1).maybeSingle(),
+    ]);
+    const dob = c.date_of_birth ? String(c.date_of_birth).slice(0, 10) : null;
+    const age = dob ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dob}T00:00:00Z`)) / (365.25 * 86_400_000)) : null;
+    const meet = prep.data && !/archiv/i.test(prep.data.status ?? "") ? prep.data : null;
+    return {
+      missing: missingInfo({
+        age: age != null && age > 5 && age < 100 ? age : null,
+        sex: sexOf(c.sex),
+        heightCm: c.height_cm != null ? Number(c.height_cm) : null,
+        lastBodyweight: bw.data?.logged_date ?? null,
+        experience: goals.data?.training_experience ?? c.intake_training_experience ?? null,
+        isPowerlifter: !!c.is_powerlifter,
+        meetWithoutClass: !!meet && !meet.weight_class,
+        today,
+      }),
+    };
+  });

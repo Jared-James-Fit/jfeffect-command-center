@@ -3,6 +3,7 @@
  * program tells us, read from their records (no AI). Compact by default;
  * every number opens to its definition or evidence.
  */
+import { Link } from "@tanstack/react-router";
 import { AlertTriangle, CheckCircle2, CircleDashed, Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -257,4 +258,90 @@ export function StatusIcon({ status }: { status: string }) {
 
 export function equipmentText(items: string[]): string {
   return items.map((i) => EQUIPMENT_LABEL[i as keyof typeof EQUIPMENT_LABEL] ?? i).join(", ");
+}
+
+const DECISION: Record<string, { label: string; tone: string }> = {
+  progress: { label: "Progress", tone: "bg-success/15 text-success" },
+  maintain: { label: "Hold", tone: "bg-secondary text-foreground" },
+  regress: { label: "Back off", tone: "bg-warning/15 text-warning" },
+  not_enough_data: { label: "Too little data", tone: "bg-muted text-muted-foreground" },
+};
+const GAP_TAB: Record<string, string> = { info: "info", "goals-setup": "goals-setup", metrics: "metrics", program: "training" };
+
+/** How they're developing: the read every AI program decision follows (Program Intelligence's athlete development). */
+export function DevelopmentCard({ intel, clientId }: { intel: GeneratorIntel; clientId: string }) {
+  const d = intel.development;
+  if (!d) return null;
+  const u = intel.ctx.unit;
+  const counts = { progress: 0, maintain: 0, regress: 0, not_enough_data: 0 } as Record<string, number>;
+  for (const p of d.progression) counts[p.decision]++;
+  const head = [
+    d.level ? `${d.level}${d.trainingYears != null ? ` (~${d.trainingYears} y training)` : ""}` : "training age unknown",
+    d.phase ? `${d.phase.phase} ${d.phase.pctPerWeek > 0 ? "+" : ""}${d.phase.pctPerWeek}%/wk` : null,
+    d.weightClass?.current ? `${d.weightClass.current.label} class` : null,
+    d.ageCategory,
+  ].filter(Boolean);
+  return (
+    <Card className="p-3.5" data-testid="gen-development">
+      <details>
+        <summary className="cursor-pointer select-none">
+          <SectionTitle hint={`${counts.progress} progress · ${counts.maintain} hold · ${counts.regress} back off`}>How they're developing</SectionTitle>
+          <div className="mt-1 text-[12px] text-muted-foreground">{head.join(" · ")}</div>
+        </summary>
+        <div className="mt-2 space-y-2.5 text-[12px]">
+          {d.lifts.length > 0 && (
+            <ul className="space-y-1">
+              {d.lifts.map((l) => (
+                <li key={l.lift}>
+                  <span className="font-semibold capitalize">{l.lift}</span>{" "}
+                  {l.firstKg != null && l.lastKg != null ? `${fmtLoad(l.firstKg, u)} → ${fmtLoad(l.lastKg, u)}` : ""}
+                  {l.changePct != null ? ` (${l.changePct > 0 ? "+" : ""}${l.changePct}%${l.monthlyPct != null ? `, ${l.monthlyPct > 0 ? "+" : ""}${l.monthlyPct}%/mo` : ""})` : ""}
+                  {l.relFirst != null && l.relLast != null ? ` · ${l.relFirst}× → ${l.relLast}× BW` : ""}
+                  {l.plateauWeeks ? ` · no new best in ${l.plateauWeeks} wk` : ""}
+                  <span className="text-muted-foreground"> · {l.confidence}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(d.gymTotal || d.meets.length > 0) && (
+            <p className="text-muted-foreground">
+              {d.gymTotal ? `Gym total ${fmtLoad(d.gymTotal.kg, u)}${d.gymTotal.gl != null ? ` ≈ ${d.gymTotal.gl} GL` : ""} (estimate)` : ""}
+              {d.gymTotal && d.meets.length ? " · " : ""}
+              {d.meets.length ? `Best meet ${Math.max(...d.meets.map((m) => m.gl ?? 0)) || "—"} GL` : ""}
+            </p>
+          )}
+          {d.progression.length > 0 && (
+            <ul className="space-y-1.5">
+              {d.progression.filter((p) => p.decision !== "not_enough_data").slice(0, 12).map((p) => (
+                <li key={`${p.exercise}-${p.decision}`} className="flex items-start gap-1.5">
+                  <span className={cn("shrink-0 rounded-full px-2 py-px text-[10px] font-bold uppercase tracking-wider", DECISION[p.decision].tone)}>{DECISION[p.decision].label}</span>
+                  <span>
+                    <span className="font-semibold">{p.exercise}</span> <span className="text-muted-foreground">— {p.why}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(d.adherence.trend === "declining" || d.adherence.missed.length > 0 || d.fatigue.possible) && (
+            <p className="text-warning">
+              {[d.adherence.trend === "declining" ? `Adherence down to ${d.adherence.recentPct}% (from ${d.adherence.earlierPct}%)` : null, d.adherence.missed.length ? `often missed: ${d.adherence.missed.map((m) => m.workout).join(", ")}` : null, d.fatigue.possible ? `possible fatigue: ${d.fatigue.signs.join("; ")}` : null].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          {d.missing.length > 0 && (
+            <p className="text-muted-foreground">
+              Not on file:{" "}
+              {d.missing.map((m, i) => (
+                <span key={m.field}>
+                  {i ? ", " : ""}
+                  <Link to="/admin/clients/$id" params={{ id: clientId }} search={{ tab: GAP_TAB[m.where] ?? "info" } as any} className="underline">
+                    {m.field}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
+      </details>
+    </Card>
+  );
 }

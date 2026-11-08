@@ -6,6 +6,7 @@
  * builds one block at a time from the approved strategy; repairs fix only
  * what the audit found.
  */
+import { DEVELOPMENT_RULES } from "./athlete-development";
 import { EXERCISE_STANDARD } from "./exercise-standard";
 import { BLOCK_GUIDE, PROGRAMMING_METHOD } from "./methods";
 import { BRAIN_LABEL, type Brain } from "./types";
@@ -13,7 +14,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 5;
+export const PIPELINE_PROMPT_VERSION = 6;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -26,6 +27,9 @@ const PROGRAMMING_RULES = `Programming rules:
 - The coach's notes & ideas for this program are the head coach's direction: follow each one (they outrank the defaults and your own preferences, never safety, their equipment or the exercise standard) and say in coach_requirements how each was used, or why it couldn't be.
 - Respect the athlete's real circumstances: their equipment (only what's listed), the equipment rules, their session time, injuries and pain reports, and what they actually adhere to.
 - Cardio is the client's cardio plan (see "Cardio" in the brief), not part of the program you write: the app adds the plan's training-day session as the last exercise of every workout and asks for its rest-day sessions on days off. Never write walking, treadmill, bike, elliptical, stair, rowing-machine or other steady cardio into a workout; leave the time for it and let it shape the lifting (fatigue, leg volume, session length).
+- The brief's "Athlete development" section is the measured read of how this athlete develops: their training age and rate of progress, strength against bodyweight and bodyweight phase, weight class, plateaus, adherence, fatigue, and progress / hold / back off for each exercise. The cycle's progression model, starting prescriptions and volume follow it.
+
+${DEVELOPMENT_RULES}
 
 ${EXERCISE_STANDARD}`;
 
