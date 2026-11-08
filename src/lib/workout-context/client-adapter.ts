@@ -337,7 +337,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
     async getActiveSubject() {
       const { data, error } = await sb
         .from("clients")
-        .select("id, full_name, preferred_weight_unit")
+        .select("id, full_name, preferred_weight_unit, weight_unit_confirmed_at")
         .eq("user_id", ref.userId)
         .maybeSingle();
       if (error) throw new Error(error.message);
@@ -347,6 +347,7 @@ export function createClientAdapter(ref: WorkoutContextRef): WorkoutContextAdapt
         id: (data as any).id as string,
         full_name: (data as any).full_name ?? null,
         preferred_weight_unit: unit === "kg" ? "kg" : unit === "lb" ? "lb" : null,
+        weight_unit_confirmed_at: (data as any).weight_unit_confirmed_at ?? null,
       };
     },
 
