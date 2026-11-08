@@ -13,6 +13,7 @@ import type { Pattern } from "./patterns";
 import { exerciseResponse, type ProgramReview } from "./review";
 import { calibrationFactor, estimateDay, type TimedExercise } from "./session-time";
 import { cardioGoal, liftingMinutesWith, proposeCardio, type CardioPlan } from "./cardio";
+import { LEVEL_LABEL, PRIORITY_GROUPS, startingDose } from "./first-program";
 import { BRAIN_LABEL, LIFTS, STRENGTH_BRAINS, type Brain, type EquipmentItem, type IntelReport, type Lift, type RawExercise } from "./types";
 
 export type ExerciseRef = { id: string | null; name: string };
@@ -174,6 +175,9 @@ export function recommendSetup(x: {
   const why: Partial<Record<SetupField, Why>> = {};
   const p = ctx.previous;
   const baseline = programBaseline(prev, x.exercises, { adjustableDumbbells: ctx.equipment.items.includes("adjustable_dumbbells") });
+  // A first program: nothing logged yet, so it's built from what they told you at setup.
+  const fresh = x.history.coverage.loggedSets === 0;
+  const level = ctx.profile.level ?? null;
 
   // Goals.
   const goalBits = [ctx.goals.main, ctx.goals.other].filter(Boolean) as string[];
@@ -190,7 +194,9 @@ export function recommendSetup(x: {
     .filter((s) => !EMPTY_ANSWER.test(s.trim()))
     .slice(0, 5);
   if (goalBits[0] && progFocus && !new RegExp(goalBits[0].split(" ")[0], "i").test(progFocus)) secondary.push(`Keep the last program's focus: ${progFocus.split(" · ")[0]}`);
-  why.secondaryGoals = { source: "Goals & Setup + last program", reason: "Training styles, target and the last program's focus.", confidence: "medium" };
+  why.secondaryGoals = fresh
+    ? { source: "Goals & Setup", reason: "Their training styles and target.", confidence: "medium" }
+    : { source: "Goals & Setup + last program", reason: "Training styles, target and the last program's focus.", confidence: "medium" };
 
   // Days per week: their training schedule (clients.committed_training_days, which Goals & Setup
   // follows) is where every workout lands, so a program with another number of days can't be placed.
@@ -238,6 +244,9 @@ export function recommendSetup(x: {
   } else if (p && p.weeks >= 3) {
     weeks = Math.min(12, Math.max(4, p.weeks));
     why.weeks = { source: "Last program", reason: `Same length as the last program (${p.weeks} weeks), then reassess from its results.`, confidence: "medium" };
+  } else if (fresh) {
+    weeks = 4;
+    why.weeks = { source: "First program", reason: "4 weeks to learn how they move, recover and respond; the next program is built from what they log.", confidence: "medium" };
   } else {
     weeks = brain === "powerlifting" || brain === "powerbuilding" ? 8 : 6;
     why.weeks = { source: "Default", reason: `A typical ${BRAIN_LABEL[brain].toLowerCase()} cycle.`, confidence: "low" };
@@ -308,11 +317,19 @@ export function recommendSetup(x: {
   }
   if (prev) for (const m of prev.muscles.filter((m) => m.target && m.status === "below")) { priorities.push(m.muscle); prioWhy.push(`${m.muscle} below its volume target`); }
   const goalText = [ctx.goals.target, ctx.goals.other, ctx.goals.clientGoals].filter(Boolean).join(" ").toLowerCase();
-  for (const word of ["glutes", "arms", "chest", "back", "shoulders", "legs", "bench", "squat", "deadlift", "total"]) if (goalText.includes(word) && !priorities.some((p) => p.toLowerCase() === word)) { priorities.push(word[0].toUpperCase() + word.slice(1)); prioWhy.push(`${word} named in their goals`); }
+  // a body part they named, as the muscle groups the program counts ("arms" = biceps and triceps)
+  for (const word of ["glutes", "arms", "chest", "back", "shoulders", "legs", "bench", "squat", "deadlift", "total"]) {
+    if (!new RegExp(`\\b${word}\\b`).test(goalText)) continue;
+    const groups = PRIORITY_GROUPS[word] ?? [word[0].toUpperCase() + word.slice(1)];
+    const added = groups.filter((g) => !priorities.some((q) => q.toLowerCase() === g.toLowerCase()));
+    if (!added.length) continue;
+    priorities.push(...added);
+    prioWhy.push(`${word} named in their goals`);
+  }
   why.priorities = priorities.length ? { source: "Records + goals", reason: prioWhy.join("; "), confidence: "medium" } : { source: "Nothing stands out", reason: "No lift or muscle lagged in the records and none is named in their goals. Add one if you want an emphasis.", confidence: "low" };
 
   const restrictions = [...ctx.injuries.stated, ...ctx.injuries.areas.map((a) => `Pain reported: ${a} (${ctx.injuries.painReports.filter((p) => (p.area ?? "").toLowerCase().trim() === a).length}×)`)];
-  why.restrictions = restrictions.length ? { source: "Injuries + check-outs", reason: "Stated injuries and pain reported after workouts.", confidence: "medium" } : { source: "Nothing on file", reason: ctx.recovery.checkouts ? "No injuries or pain reports on file." : "No injuries on file and no check-outs to report pain: confirm with them.", confidence: ctx.recovery.checkouts ? "medium" : "low" };
+  why.restrictions = restrictions.length && fresh ? { source: "Goals & Setup", reason: "Injuries they told you about at setup.", confidence: "medium" } : restrictions.length ? { source: "Injuries + check-outs", reason: "Stated injuries and pain reported after workouts.", confidence: "medium" } : { source: "Nothing on file", reason: ctx.recovery.checkouts ? "No injuries or pain reports on file." : "No injuries on file and no check-outs to report pain: confirm with them.", confidence: ctx.recovery.checkouts ? "medium" : "low" };
 
   // Exercises to keep and to reconsider.
   const retain: ExerciseRef[] = [];
@@ -327,8 +344,12 @@ export function recommendSetup(x: {
     }
   }
   for (const pt of x.patterns.filter((q) => q.id.startsWith("pain:") || q.id.endsWith(":stalls"))) if (!replace.some((r) => r.name === pt.subject)) replace.push({ id: null, name: pt.subject });
-  why.retain = { source: "Last program", reason: retain.length ? "Progressed with their sets done (and the competition lifts for a strength program)." : "No exercise clearly progressed with full adherence.", confidence: retain.length ? "high" : "low" };
-  why.replace = { source: "Last program + patterns", reason: replace.length ? "Stalled over 4+ exposures, often skipped, or linked to pain reports. Candidates only: the strategy decides." : "Nothing clearly failed.", confidence: "medium" };
+  why.retain = fresh
+    ? { source: "First program", reason: "No training logged yet: exercises are chosen from their goal, level, equipment and injuries.", confidence: "medium" }
+    : { source: "Last program", reason: retain.length ? "Progressed with their sets done (and the competition lifts for a strength program)." : "No exercise clearly progressed with full adherence.", confidence: retain.length ? "high" : "low" };
+  why.replace = fresh
+    ? { source: "First program", reason: "Nothing to reconsider yet.", confidence: "medium" }
+    : { source: "Last program + patterns", reason: replace.length ? "Stalled over 4+ exposures, often skipped, or linked to pain reports. Candidates only: the strategy decides." : "Nothing clearly failed.", confidence: "medium" };
 
   // Advanced: the previous dose per lift / muscle, so the next program starts from what they did.
   const frequency: GenerationSetup["frequency"] = [];
@@ -354,9 +375,25 @@ export function recommendSetup(x: {
   }
   why.frequency = { source: "Last program + at least 2×/week", reason: `How often each was trained in the last program, raised to at least twice a week for the squat, bench and major muscles (deadlift once) where ${days} day${days === 1 ? "" : "s"} allow it.`, confidence: prev ? "high" : "low" };
   why.volume = { source: "Last program", reason: "Weekly working sets (lifts) and hard sets (muscles, secondary muscles counted half) in the last program.", confidence: prev ? "high" : "low" };
-  const style = prescriptionStyle(prev);
+  let style = prescriptionStyle(prev);
   why.intensity = { source: "Last program", reason: "Its rep ranges and RPE targets.", confidence: prev ? "medium" : "low" };
   why.progression = { source: "Last program", reason: "How its prescriptions were written.", confidence: prev ? "medium" : "low" };
+  // A first program starts from evidence-based doses for their framework and level, fitted to their time.
+  if (fresh) {
+    const dose = startingDose({ brain, level, days, liftingMinutes: sessionMinutes, priorities, maxesOnFile: x.history.lifts.some((l) => l.maxOnFileKg != null) });
+    frequency.splice(0, frequency.length, ...dose.frequency);
+    volume.splice(0, volume.length, ...dose.volume);
+    style = { intensity: dose.intensity, effort: dose.effort, progression: dose.progression };
+    const lvl = level ? `a ${LEVEL_LABEL[level]} (Goals & Setup: "${ctx.profile.experience}")` : "a beginner (no experience on file, so the safe start; set it in Goals & Setup if they've trained before)";
+    const fitText = dose.fit.scaled
+      ? ` Scaled to ${Math.round(dose.fit.scaled * 100)}% to fit ${days} × ${sessionMinutes}-min sessions (about ${dose.fit.fits} working sets a week).`
+      : sessionMinutes ? ` Fits ${days} × ${sessionMinutes}-min sessions (about ${dose.fit.needed} of ${dose.fit.fits} working sets a week).` : "";
+    why.frequency = { source: "First program", reason: `No training logged yet: each major muscle twice a week${STRENGTH_BRAINS.includes(brain) ? ", the squat and bench twice and the deadlift once" : ""} where ${days} day${days === 1 ? "" : "s"} allow it.`, confidence: "medium" };
+    why.volume = { source: "First program", reason: `A starting dose for ${lvl}: weekly hard sets per muscle (secondary muscles count half)${STRENGTH_BRAINS.includes(brain) ? " and working sets per lift" : ""}, a little more for their priorities.${fitText} The next program adjusts it from what they log.`, confidence: "medium" };
+    why.intensity = { source: "First program", reason: `Rep ranges for ${lvl} in a ${BRAIN_LABEL[brain].toLowerCase()} program.`, confidence: "medium" };
+    why.effort = { source: "First program", reason: "Week 1 a little easier to find their working weights; effort rises from there.", confidence: "medium" };
+    why.progression = { source: "First program", reason: `How ${level ? LEVEL_LABEL[level] : "beginner"}s progress best on this kind of program.`, confidence: "medium" };
+  }
 
   const setup: GenerationSetup = {
     brain,
@@ -405,7 +442,7 @@ export function recommendSetup(x: {
   setup.equipment.notes = setup.equipment.notes ? clip(setup.equipment.notes, 600) : null;
   setup.blocks = setup.blocks.map((b) => ({ ...b, name: clip(b.name, 80), objective: clip(b.objective, 400) }));
   why.brain = { source: "Classification", reason: x.brainWhy, confidence: "medium" };
-  why.equipment = { source: ctx.equipment.source === "coach" ? "Confirmed by you" : ctx.equipment.source === "program" ? "Last program" : ctx.equipment.source === "goals" ? "Goals & Setup" : "Not on file", reason: ctx.equipment.conflicts[0] ?? ctx.equipment.evidence.slice(0, 3).join("; "), confidence: ctx.equipment.confidence === "confirmed" ? "high" : ctx.equipment.confidence === "unknown" ? "low" : "medium" };
+  why.equipment = { source: ctx.equipment.source === "coach" ? "Confirmed by you" : ctx.equipment.source === "program" ? "Last program" : ctx.equipment.source === "goals" ? "Goals & Setup" : "Not on file", reason: ctx.equipment.conflicts[0] ?? (ctx.equipment.evidence.slice(0, 3).join("; ") || (ctx.equipment.source === "goals" ? "What they listed at setup." : ctx.equipment.source === "unknown" ? "Nothing on file: nothing is ruled out." : "")), confidence: ctx.equipment.confidence === "confirmed" ? "high" : ctx.equipment.confidence === "unknown" ? "low" : "medium" };
   return { setup, why, baseline };
 }
 
@@ -476,6 +513,15 @@ export function findConflicts(setup: GenerationSetup, ctx: AthleteContext, basel
   const blockWeeks = setup.blocks.reduce((n, b) => n + b.weeks, 0);
   if (setup.blocks.length && blockWeeks !== setup.weeks) out.push({ id: "blocks-weeks", severity: "blocker", title: `The blocks add up to ${blockWeeks} weeks, not ${setup.weeks}`, detail: setup.blocks.map((b) => `${b.name} ${b.weeks}`).join(" + "), options: ["Adjust the blocks", "Reset the blocks to the recommendation"] });
   for (const f of setup.frequency) if (f.perWeek > setup.daysPerWeek) out.push({ id: `freq:${f.target}`, severity: "warning", title: `${f.target} ${f.perWeek}×/week is more than ${setup.daysPerWeek} training days`, detail: "It will be capped at one exposure per day.", options: [`${f.target} ${setup.daysPerWeek}×/week`] });
+  // A first program comes from what they told you at setup: say what's missing from it.
+  if (ctx.firstProgram) {
+    if (!ctx.goals.onFile)
+      out.push({ id: "first-no-setup", severity: "warning", title: "No training logged and no Goals & Setup on file", detail: `This program would come from defaults: ${setup.daysPerWeek} days, ${setup.sessionMinutes ?? "no"}-minute sessions, ${setup.equipment.items.length ? "the equipment set here" : "any equipment"}. Ask them to fill in Goals & Setup, or set the days, session length and equipment here and tell it what you know in Notes & ideas.`, options: ["Send them Goals & Setup", "Set it here and add notes"] });
+    else if (!ctx.profile.level)
+      out.push({ id: "first-no-experience", severity: "warning", title: "How long they've trained isn't on file", detail: "It starts them as a beginner (easier first weeks, simpler exercises, less volume). If they've trained before, set their experience in Goals & Setup or say so in Notes & ideas.", options: ["Keep the beginner start", "Add their experience"] });
+    if (setup.equipment.confidence === "unknown")
+      out.push({ id: "first-no-equipment", severity: "warning", title: "Their equipment isn't on file", detail: "Nothing rules an exercise out, so it may pick something they don't have. Set their equipment (Edit) or describe the gym in Notes & ideas.", options: ["Set their equipment"] });
+  }
   const ptMin = ctx.session.ptMinutes ?? null;
   const walk = setup.cardio?.trainingDay?.minutes ?? 0;
   if (ptMin && walk > ptMin / 4) {

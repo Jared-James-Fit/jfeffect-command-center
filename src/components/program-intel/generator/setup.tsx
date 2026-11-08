@@ -5,7 +5,7 @@
  * does to the workload; conflicts are listed, never silently resolved.
  */
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, Minus, Pencil, Plus, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Lightbulb, Minus, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -243,12 +243,73 @@ export function SetupCard({
       <Row label="Restrictions" value={setup.restrictions.join(" · ") || "None on file"} why={why.restrictions} edited={edited.has("restrictions")}>
         <Chips values={setup.restrictions} onChange={(v) => onChange("restrictions", v)} placeholder="e.g. No barbell back squat (knee)" />
       </Row>
-      <Row label="Keep" value={setup.retain.map((r) => r.name).join(", ") || "—"} why={why.retain} edited={edited.has("retain")}>
-        <ExerciseChips values={setup.retain} onChange={(v) => onChange("retain", v)} options={exerciseOptions(intel)} placeholder="Exercise name" />
-      </Row>
-      <Row label="Reconsider" value={setup.replace.map((r) => r.name).join(", ") || "—"} why={why.replace} edited={edited.has("replace")}>
-        <ExerciseChips values={setup.replace} onChange={(v) => onChange("replace", v)} options={exerciseOptions(intel)} placeholder="Exercise name" />
-      </Row>
+      {intel.firstProgram ? (
+        <Row label="Starting point" value={setup.intensity.split(" · ")[0] || "—"} why={why.volume} edited={edited.has("volume") || edited.has("intensity") || edited.has("effort") || edited.has("progression")} testId="gen-row-starting-point">
+          <div className="space-y-1.5 text-[12px]">
+            {setup.volume.length > 0 && <p><span className="font-semibold">Weekly sets:</span> {setup.volume.map((v) => `${v.target} ${v.setsPerWeek}`).join(" · ")}</p>}
+            <p><span className="font-semibold">Effort:</span> {setup.effort || "—"}</p>
+            <p><span className="font-semibold">Progression:</span> {setup.progression || "—"}</p>
+            <p className="text-[11px] text-muted-foreground">Change any of it in Advanced programming controls below.</p>
+          </div>
+        </Row>
+      ) : (
+        <>
+          <Row label="Keep" value={setup.retain.map((r) => r.name).join(", ") || "—"} why={why.retain} edited={edited.has("retain")}>
+            <ExerciseChips values={setup.retain} onChange={(v) => onChange("retain", v)} options={exerciseOptions(intel)} placeholder="Exercise name" />
+          </Row>
+          <Row label="Reconsider" value={setup.replace.map((r) => r.name).join(", ") || "—"} why={why.replace} edited={edited.has("replace")}>
+            <ExerciseChips values={setup.replace} onChange={(v) => onChange("replace", v)} options={exerciseOptions(intel)} placeholder="Exercise name" />
+          </Row>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** Example notes, one tap to add: the kind of direction that changes a program. */
+export const NOTE_IDEAS = [
+  "Upper / lower split",
+  "Keep sessions to 5 exercises",
+  "A glute day each week",
+  "Teach the deadlift slowly",
+  "Pull-ups every week",
+  "No barbell back squat yet",
+  "Machines over free weights for now",
+  "Add a weekly core finisher",
+];
+
+/**
+ * The coach's notes & ideas for this program, always in view: what they want
+ * in it, what they know about the athlete that isn't on file. The AI follows
+ * each one and says how it used it (the strategy's coach requirements).
+ */
+export function ProgramNotesCard({ intel, value, edited, onChange }: { intel: GeneratorIntel; value: string; edited: boolean; onChange: (v: string) => void }) {
+  const add = (idea: string) => {
+    const t = value.trim();
+    if (t.toLowerCase().includes(idea.toLowerCase())) return;
+    onChange(t ? `${t}\n${idea}` : idea);
+  };
+  const setupSaid = intel.ctx.goals.notes;
+  return (
+    <Card className="space-y-2 p-3.5" data-testid="gen-notes">
+      <div className="flex items-center gap-1.5">
+        <Lightbulb className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1"><SectionTitle hint={edited ? "yours" : undefined}>Notes & ideas for this program</SectionTitle></div>
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        {intel.firstProgram
+          ? "No training logged yet, so it's written from their Goals & Setup. Add anything you want in it or know about them: a split, exercises, a focus, how they move."
+          : "Anything you want in it or know that isn't in their records: a split, exercises, a focus, what they told you."}{" "}
+        It follows each note and says how it used it.
+      </p>
+      {setupSaid && <p className="rounded-lg bg-muted px-2.5 py-1.5 text-[12px]"><span className="font-semibold">They said at setup:</span> "{setupSaid}"</p>}
+      <Textarea value={value} onChange={(e) => onChange(e.target.value)} rows={4} maxLength={2000} className="text-[13px]" placeholder="e.g. Upper / lower with a glute day. She's nervous about barbells: start on machines and teach the squat with a goblet squat." aria-label="Notes & ideas for this program" />
+      <div className="flex flex-wrap gap-1.5">
+        {NOTE_IDEAS.filter((idea) => !value.toLowerCase().includes(idea.toLowerCase())).map((idea) => (
+          <button key={idea} type="button" onClick={() => add(idea)} className="min-h-8 rounded-full bg-secondary px-2.5 text-[11px] font-semibold text-foreground">+ {idea}</button>
+        ))}
+      </div>
+      <div className="text-right text-[10px] text-muted-foreground">{value.length} / 2000</div>
     </Card>
   );
 }
@@ -380,10 +441,6 @@ export function AdvancedControls({ intel, setup, edited, onChange }: { intel: Ge
             <div>
               <Label className="text-[11px]">Exercise preferences{mark("preferences")}</Label>
               <Textarea value={setup.preferences} onChange={(e) => onChange("preferences", e.target.value)} rows={2} className="text-[12px]" placeholder="e.g. Prefers safety-bar squats; dislikes lunges" />
-            </div>
-            <div>
-              <Label className="text-[11px]">Coach notes for this program{mark("coachNotes")}</Label>
-              <Textarea value={setup.coachNotes} onChange={(e) => onChange("coachNotes", e.target.value)} rows={3} maxLength={2000} className="text-[12px]" placeholder="Anything the program must do" />
             </div>
             <div>
               <Label className="text-[11px]">New circumstances not in the records yet{mark("newCircumstances")}</Label>

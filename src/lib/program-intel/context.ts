@@ -8,6 +8,7 @@
 import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
 import { daysBetween, localDate, mean, round } from "./core";
 import type { EquipmentResolution } from "./equipment";
+import { experienceLevel, setupNotes, type ExperienceLevel } from "./first-program";
 import type { IntelRecords, IntelReport, RawPtSession, Unit } from "./types";
 
 export type ProgramSummary = {
@@ -40,8 +41,10 @@ export type AthleteContext = {
     experience: string | null;
     trainingSince: string | null;
     isPowerlifter: boolean;
+    /** Their experience read as a level (Goals & Setup), or null when not on file. */
+    level?: ExperienceLevel | null;
   };
-  goals: { main: string | null; other: string | null; target: string | null; styles: string[]; clientGoals: string | null; bodyweightGoal: string | null; updatedAt: string | null; onFile: boolean };
+  goals: { main: string | null; other: string | null; target: string | null; styles: string[]; clientGoals: string | null; bodyweightGoal: string | null; updatedAt: string | null; onFile: boolean; /** Goals & Setup's last answer (anything else they told you), when it says something. */ notes?: string | null; location?: string | null };
   competition: {
     next: { name: string; date: string; weeksOut: number; federation: string | null; weightClass: string | null; division: string | null } | null;
     history: Array<{ date: string | null; name: string | null; squat: number | null; bench: number | null; deadlift: number | null; total: number | null; bodyweight: number | null }>;
@@ -74,6 +77,8 @@ export type AthleteContext = {
   memory: { established: Array<{ statement: string; category: string | null; date: string; kind: string; confidence: string }>; proposed: number; rejected: number };
   previous: ProgramSummary | null;
   history: { blocks: number; firstDate: string | null; programs: ProgramSummary[] };
+  /** Nothing logged yet: the program is built from what they told you at setup. */
+  firstProgram?: boolean;
 };
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -209,6 +214,7 @@ export function buildAthleteContext(x: {
       experience: g?.training_experience ?? rec.client.intake_training_experience ?? null,
       trainingSince: firstDate,
       isPowerlifter: !!rec.client.is_powerlifter,
+      level: experienceLevel(g?.training_experience ?? rec.client.intake_training_experience ?? null),
     },
     goals: {
       main: g?.main_goal ?? null,
@@ -219,6 +225,8 @@ export function buildAthleteContext(x: {
       bodyweightGoal: rec.client.bodyweight_goal_type ? `${rec.client.bodyweight_goal_type}${rec.client.bodyweight_goal_value ? ` ${rec.client.bodyweight_goal_value}${rec.client.bodyweight_goal_unit ?? ""}` : ""}` : null,
       updatedAt: g?.updated_at ?? g?.completed_at ?? null,
       onFile: !!g,
+      notes: setupNotes(g?.final_notes),
+      location: g?.training_location ?? null,
     },
     competition: {
       next: nextMeet?.event_date
@@ -260,5 +268,6 @@ export function buildAthleteContext(x: {
     },
     previous: x.prev && x.prevRec ? summarizeProgram(x.prev, x.prevRec, x.prevLabel) : null,
     history: { blocks: x.history.blocks.length, firstDate, programs: x.programs.map((p) => summarizeProgram(p.report, p.rec, p.label)) },
+    firstProgram: x.history.coverage.loggedSets === 0,
   };
 }

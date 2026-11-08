@@ -35,6 +35,8 @@ export type GeneratorIntel = {
   recommendation: SetupRecommendation;
   exercises: Map<string, RawExercise>;
   dataHash: string;
+  /** Nothing logged yet: a first program, built from their Goals & Setup and your notes. */
+  firstProgram: boolean;
 };
 
 /** Blocks that are a coach's draft nobody has seen yet (hidden and undated) never count as a program the athlete did (the loader leaves them out too). */
@@ -103,5 +105,6 @@ export function buildGeneratorIntel(rec: IntelRecords, opts: { brainOverride?: B
     recommendation,
     exercises,
     dataHash: history.dataHash,
+    firstProgram: history.coverage.loggedSets === 0,
   };
 }

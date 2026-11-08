@@ -181,9 +181,10 @@ async function libraryCatalog(admin: Db): Promise<Array<CatalogExercise & { arch
   const ids = [...used];
   const out: CatalogExercise[] = [];
   for (let i = 0; i < ids.length; i += 150) {
-    const { data, error } = await admin.from("exercises").select("id, name, movement_family, primary_muscle_group, equipment, archived").in("id", ids.slice(i, i + 150));
+    const { data, error } = await admin.from("exercises").select("id, name, movement_family, primary_muscle_group, equipment, archived, video_url").in("id", ids.slice(i, i + 150));
     if (error) throw new Error(error.message);
-    for (const e of data ?? []) if (!e.archived) out.push({ id: e.id, name: e.name, family: e.movement_family, muscle: e.primary_muscle_group, equipment: e.equipment });
+    // "demo video": the athlete can watch how it's done (what a first program leans on)
+    for (const e of data ?? []) if (!e.archived) out.push({ id: e.id, name: e.name, family: e.movement_family, muscle: e.primary_muscle_group, equipment: e.equipment, history: e.video_url ? "demo video" : null });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -282,7 +283,9 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       model: { primary: cfg.primary, fallback: cfg.fallback, temperature: 0.3, timeout_ms: CALL_TIMEOUT_MS, design_model_max_prompt_chars: DESIGN_MODEL_MAX_PROMPT_CHARS },
       previous_adherence_pct: intel.ctx.previous?.sessionAdherencePct ?? null,
       // what the later stages build and audit from (the same data the brief came from)
-      load_refs: loadReferences(intel.prev),
+      // a first program has no previous one: maxes entered at setup are its only load references
+      load_refs: loadReferences(intel.prev ?? (intel.history.lifts.some((l) => l.maxOnFileKg != null) ? intel.history : null)),
+      first_program: intel.firstProgram,
       athlete_catalog: intel.prev ? athleteCatalog(intel.prev, intel.exercises) : [],
       audit_inputs: {
         baseline: intel.recommendation.baseline,
@@ -313,7 +316,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   const brain: Brain = setup.brain;
 
   if (stage === "strategy") {
-    const { value, model } = await askChecked<Strategy>(admin, job, "strategy", strategySystemPrompt(brain), strategyUserPrompt(brief, setup), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup)]);
+    const { value, model } = await askChecked<Strategy>(admin, job, "strategy", strategySystemPrompt(brain, { first: !!ctxRow.first_program }), strategyUserPrompt(brief, setup, { first: !!ctxRow.first_program }), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup)]);
     const issues = strategyIssues(value, setup);
     if (issues.length) throw new Error(`The strategy didn't match your setup: ${issues.join(" ")}`);
     // anything still below the exercise standard after the retry comes out here, never fails the run
@@ -351,7 +354,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       admin,
       job,
       stage,
-      constructSystemPrompt(brain),
+      constructSystemPrompt(brain, { first: !!ctxRow.first_program }),
       constructUserPrompt({ brief: ctxRow.construct_brief_text ?? brief, setup, strategy, blockIndex: i, previousBlocks: built.slice(0, i), loadRefs: ctxRow.load_refs ?? "", athleteCatalog: athlete, libraryCatalog: library, catalogText }),
       builtBlockSchema,
       (v) => blockIssues(v, { weeks: sb.weeks, days: setup.daysPerWeek }),
@@ -377,7 +380,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       const bi = queue[0];
       if (bi != null) {
         const issues: string[] = result.audit?.repairs?.[bi] ?? [];
-        const { value } = await askChecked<BuiltBlock>(admin, job, `repair:block ${bi + 1}`, constructSystemPrompt(brain), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
+        const { value } = await askChecked<BuiltBlock>(admin, job, `repair:block ${bi + 1}`, constructSystemPrompt(brain, { first: !!ctxRow.first_program }), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
         const lean = withoutCardioRows(withStandardSubstitutions(value));
         if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
         result.blocks[bi] = lean.block;

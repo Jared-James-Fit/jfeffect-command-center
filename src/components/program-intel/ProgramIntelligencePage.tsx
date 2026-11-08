@@ -275,7 +275,7 @@ export function ProgramIntelligencePage({ clientId, search: initial }: { clientI
               </DropdownMenu>
               <Button className="h-auto min-h-12 flex-col gap-0.5 py-2" onClick={() => void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } })} data-testid="intel-generate">
                 <Wand2 className="h-4 w-4" />
-                <span className="text-xs font-bold">Generate next program</span>
+                <span className="text-xs font-bold">{c.loggedSets === 0 ? "Generate first program" : "Generate next program"}</span>
               </Button>
               <Button
                 variant="outline"

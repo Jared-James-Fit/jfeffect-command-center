@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   AlertTriangle, Archive, BarChart3, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
-  Download, Dumbbell, Flame, FlagOff, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles,
+  Download, Dumbbell, Flame, FlagOff, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -280,7 +280,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
         {empty ? (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Give {clientName?.split(" ")[0] ?? "them"} a program from your library, or build one from scratch.
+              Give {clientName?.split(" ")[0] ?? "them"} a program from your library, have one written from their Goals & Setup and your notes, or build one from scratch.
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button className="min-h-[48px]" onClick={() => setAssignOpen(true)}>
@@ -288,6 +288,11 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
               </Button>
               <Button variant="outline" className="min-h-[48px]" onClick={() => setNewOpen(true)}>
                 <Sparkles className="mr-2 h-4 w-4" /> Build a new block
+              </Button>
+              <Button asChild variant="outline" className="min-h-[48px] sm:col-span-2" data-testid="training-write-with-ai">
+                <Link to="/admin/client-programs/$clientId/next-program" params={{ clientId }}>
+                  <Wand2 className="mr-2 h-4 w-4" /> Write it with AI
+                </Link>
               </Button>
             </div>
           </div>
@@ -352,6 +357,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
         onLibrary={() => { setAddOpen(false); setAssignOpen(true); }}
         onNew={() => { setAddOpen(false); setNewOpen(true); }}
         onSchedule={() => { setAddOpen(false); setScheduleBlock({ id: null }); }}
+        clientId={clientId}
       />
       <AssignProgramDialog open={assignOpen} onOpenChange={(v) => { setAssignOpen(v); if (!v) refresh(); }} clientId={clientId} clientName={clientName} />
       <NewBlockDialog
@@ -486,9 +492,9 @@ function RoadmapRow({
   );
 }
 
-/** One Add: a library program, a new block, or a built block onto the calendar. */
+/** One Add: a library program, one written with AI (Generate Next Program), a new block, or a built block onto the calendar. */
 function AddTrainingSheet({
-  open, onOpenChange, hasDrafts, onLibrary, onNew, onSchedule,
+  open, onOpenChange, hasDrafts, onLibrary, onNew, onSchedule, clientId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -496,7 +502,9 @@ function AddTrainingSheet({
   onLibrary: () => void;
   onNew: () => void;
   onSchedule: () => void;
+  clientId: string;
 }) {
+  const navigate = useNavigate();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
@@ -506,6 +514,7 @@ function AddTrainingSheet({
         </SheetHeader>
         <div className="space-y-2">
           <ChoiceRow icon={<BookOpen className="h-5 w-5" />} title="From your library" text="A ready-made program, placed on their training days." onClick={onLibrary} />
+          <ChoiceRow icon={<Wand2 className="h-5 w-5" />} title="Write it with AI" text="From their training so far, or their Goals & Setup when it's their first, plus your notes. You review it before they see it." onClick={() => { onOpenChange(false); void navigate({ to: "/admin/client-programs/$clientId/next-program", params: { clientId } }); }} />
           <ChoiceRow icon={<Sparkles className="h-5 w-5" />} title="Build a new block" text="Start blank and write it in the program builder." onClick={onNew} />
           {hasDrafts && (
             <ChoiceRow icon={<CalendarPlus className="h-5 w-5" />} title="Schedule a built block" text="Put a block you've already built onto the calendar." onClick={onSchedule} />
