@@ -14,6 +14,35 @@ export function sentSinceAsked(
   return Date.parse(last.submitted_at ?? last.created_at) >= Date.parse(askedAt);
 }
 
+/** Two clocks stamp a request and its answer (the database, the phone): this much slack. */
+export const REQUEST_CLOCK_SLACK_MS = 60_000;
+
+/**
+ * What a form request's chat card shows (`FormRequestChatCard`): the newest
+ * submission SENT at or after the request, the same rule as the Forms
+ * tracker and the inbox (`matchFormRequests`, `pickUnfilledFormRequests`),
+ * else a draft still being filled in (opening the form continues it), else
+ * nothing. Never by when the draft was started: Jared opened his Nutrition
+ * Update on Oct 4, the monthly request came Oct 26, he sent it Nov 8, and a
+ * card that only counted drafts started after Oct 26 kept saying "Start" to
+ * him and "Waiting for client" to the coach, with no answers or plan shown.
+ */
+export function requestCardSubmission<S extends { status: string; submitted_at?: string | null; created_at: string }>(
+  subs: S[],
+  sentAt: string | null | undefined,
+): S | null {
+  const from = sentAt ? Date.parse(sentAt) - REQUEST_CLOCK_SLACK_MS : -Infinity;
+  let sent: S | null = null;
+  let sentT = -Infinity;
+  for (const s of subs) {
+    if (s.status === "in_progress") continue;
+    const t = Date.parse(s.submitted_at ?? s.created_at);
+    if (Number.isFinite(t) && t >= from && t > sentT) { sent = s; sentT = t; }
+  }
+  if (sent) return sent;
+  return subs.find((s) => s.status === "in_progress") ?? null;
+}
+
 /**
  * The request the coach's panel is about: the newest one, except that a blank
  * form opened after they'd already answered the latest request isn't a new one.
