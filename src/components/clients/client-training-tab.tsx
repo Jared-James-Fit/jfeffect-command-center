@@ -43,6 +43,7 @@ import { useClientTrainingSchedule, clientTrainingScheduleKey } from "@/lib/use-
 import { trainingRoadmap, trainingAlerts, type TrainingAlert } from "@/lib/training-tab";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
 import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
+import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
 import { WorkoutArchiveDialog } from "@/components/clients/workout-archive-dialog";
 import {
@@ -292,6 +293,12 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
             <Button variant="outline" className="min-h-[48px] px-4" onClick={() => setAddOpen(true)}>
               <Plus className="mr-1 h-4 w-4" /> Add
             </Button>
+            <EditWithAiButton
+              target={{ kind: "client", clientId, focusBlockId: focus.id }}
+              title={clientName ?? "Their program"}
+              onApplied={refresh}
+              className="col-span-2 min-h-[48px]"
+            />
           </div>
         ) : null}
       </div>

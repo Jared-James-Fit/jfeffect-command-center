@@ -37,7 +37,8 @@ import { StrategyReview } from "./strategy-view";
 
 const HISTORY = { kind: "history" } as const;
 
-export function NextProgramWorkstation({ clientId }: { clientId: string }) {
+/** prefill: what Edit with AI handed over ("rebuild the next 12 weeks…"): the coach's words as notes, and the weeks / days it read from them. */
+export function NextProgramWorkstation({ clientId, prefill }: { clientId: string; prefill?: { notes?: string; weeks?: number; days?: number } }) {
   const { viewOnly } = useAuth();
   const qc = useQueryClient();
   const records = useIntelRecords(clientId, HISTORY);
@@ -95,6 +96,15 @@ export function NextProgramWorkstation({ clientId }: { clientId: string }) {
       return n;
     });
   };
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (prefilled.current || !setup || !intel || !prefill) return;
+    prefilled.current = true;
+    if (prefill.notes?.trim()) change("coachNotes", prefill.notes.trim().slice(0, 2000));
+    if (prefill.weeks && prefill.weeks >= 1 && prefill.weeks <= 52) change("weeks", prefill.weeks);
+    if (prefill.days && prefill.days >= 1 && prefill.days <= 7) change("daysPerWeek", prefill.days);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setup, intel, prefill]);
   const setBrain = (b: Brain) => {
     brain.set.mutate(b === intel?.classification.auto ? null : b, { onError: (e: any) => toast.error(e?.message ?? "Couldn't save") });
     setEdited((e) => {
