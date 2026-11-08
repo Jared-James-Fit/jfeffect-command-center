@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
+import { ATHLETE_HABIT_MIN_LOGS, athleteHabitUnit, resolveWorkoutRowUnits } from "@/lib/workout-unit-resolution";
 
 const pausedBench = { id: "ex-pb", is_competition_lift: false, competition_lift_type: null, default_load_unit: null };
 
@@ -137,5 +137,64 @@ describe("a set is saved in the unit its number was typed in", () => {
     const bare = body.match(/(?<![\w.])setLoad\(/g) ?? [];
     // only the one inside setLoadPaired itself
     expect(bare.length).toBe(1);
+  });
+});
+
+describe("a lift nobody has logged opens in the athlete's own unit, not the kg default", () => {
+  // Nicolas, Oct 10 2026: every log in lb, no deadlift-family history (RDLs
+  // are a hinge), so his first Competition Deadlift opened in kg and 135 /
+  // 185 / 205 lb saved as kg; the next deadlift day suggested 440 lb.
+  const compDeadlift = { id: "ex-cdl", competition_lift_type: "deadlift", is_competition_lift: true, movement_family: "deadlift" };
+  const rows = [{ id: "dl", exercise_id: "ex-cdl", exercises: compDeadlift, load_unit: null }];
+  const log = (unit: string, family = "hinge", load = 100) =>
+    ({ actual_load_unit: unit, actual_load: load, pl_exercise_rows: { exercises: { movement_family: family } } });
+  const lbHabit = Array.from({ length: 12 }, () => log("lb"));
+
+  it("an athlete who logs in lb gets lb on their first deadlift", () => {
+    const units = resolveWorkoutRowUnits({ rows, prefRows: [], historyRows: [], familyHistoryRows: lbHabit, overrides: {} });
+    expect(units["row:dl"]).toBe("lb");
+  });
+
+  it("a confirmed choice decides even with no logs yet, either way", () => {
+    expect(resolveWorkoutRowUnits({ rows, prefRows: [], historyRows: [], athleteChosenUnit: "lb", overrides: {} })["row:dl"]).toBe("lb");
+    const accessory = { id: "ex-row", competition_lift_type: null, default_load_unit: "lb" };
+    expect(resolveWorkoutRowUnits({
+      rows: [{ id: "r", exercise_id: "ex-row", exercises: accessory, load_unit: null }],
+      prefRows: [], historyRows: [], athleteChosenUnit: "kg", overrides: {},
+    })["row:r"]).toBe("kg");
+  });
+
+  it("the lift's own preference, history and family still come first", () => {
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [{ exercise_id: "ex-cdl", unit: "kg" }], historyRows: [], familyHistoryRows: lbHabit, athleteChosenUnit: "lb", overrides: {},
+    })["row:dl"]).toBe("kg");
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [], historyRows: [], familyHistoryRows: [...lbHabit, log("kg", "deadlift")], overrides: {},
+    })["row:dl"]).toBe("kg");
+  });
+
+  it("the athlete's unit beats the coach's row unit", () => {
+    expect(resolveWorkoutRowUnits({
+      rows: [{ ...rows[0], load_unit: "kg" }], prefRows: [], historyRows: [], familyHistoryRows: lbHabit, overrides: {},
+    })["row:dl"]).toBe("lb");
+  });
+
+  it("no clear habit (too few logs, or mixed) keeps the old default", () => {
+    expect(athleteHabitUnit(Array.from({ length: ATHLETE_HABIT_MIN_LOGS - 1 }, () => log("lb")))).toBeNull();
+    expect(athleteHabitUnit([...Array.from({ length: 6 }, () => log("lb")), ...Array.from({ length: 4 }, () => log("kg"))])).toBeNull();
+    expect(athleteHabitUnit([...Array.from({ length: 9 }, () => log("lb")), log("kg")])).toBe("lb");
+    expect(athleteHabitUnit([...Array.from({ length: 9 }, () => log("lb", "hinge", 0))])).toBeNull();
+    expect(resolveWorkoutRowUnits({
+      rows, prefRows: [], historyRows: [], familyHistoryRows: [log("lb"), log("lb")], overrides: {},
+    })["row:dl"]).toBe("kg");
+  });
+
+  it("the workout passes the athlete's confirmed unit only", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const view = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(view).toContain("athleteChosenUnit: (client as any)?.weight_unit_confirmed_at ? (client as any)?.preferred_weight_unit ?? null : null,");
+    expect(view).toContain('.select("id, full_name, preferred_weight_unit, weight_unit_confirmed_at")');
+    expect(readFileSync("src/lib/workout-context/client-adapter.ts", "utf8")).toContain("weight_unit_confirmed_at: (data as any).weight_unit_confirmed_at ?? null,");
   });
 });

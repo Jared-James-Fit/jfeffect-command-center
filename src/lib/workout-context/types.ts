@@ -338,6 +338,8 @@ export interface ActiveSubjectDTO {
   id: string;
   full_name: string | null;
   preferred_weight_unit: "lb" | "kg" | null;
+  /** When they actually chose it (null: lb is only the column's default). */
+  weight_unit_confirmed_at?: string | null;
 }
 
 export interface WorkoutContextAdapter {

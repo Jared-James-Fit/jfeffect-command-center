@@ -8,14 +8,22 @@
  *   2. The most common unit in their recent logs of it
  *   3. For a squat / bench / deadlift variation, the most common unit in their
  *      recent logs of any lift in that family
- *   4. The coach's unit on the program row (pl_exercise_rows.load_unit)
- *   5. The exercise library default (exercises.default_load_unit)
- *   6. The workout default (kg for competition lifts, lb otherwise)
+ *   4. The athlete's own unit: the one they chose (clients.preferred_weight_unit
+ *      once weight_unit_confirmed_at is set), else the unit nearly all their
+ *      recent loaded logs are in (`athleteHabitUnit`)
+ *   5. The coach's unit on the program row (pl_exercise_rows.load_unit)
+ *   6. The exercise library default (exercises.default_load_unit)
+ *   7. The workout default (kg for competition lifts, lb otherwise)
  *
  * Step 3 exists because athletes who squat in lb opened their first
  * Competition Squat in kg (the competition-lift default) and typed their lb
  * numbers into it: 305 lb saved as 305 kg (672 lb) and landed in the Hall of
  * Strength review (Jarrett, Marc, Nicolas, Colten, Shaina — Oct 2026).
+ *
+ * Step 4 exists because a lift with no family history still fell to the kg
+ * default: Nicolas logs everything in lb, yet his first Competition Deadlift
+ * (Oct 10 2026, his deadlift family empty: RDLs are a hinge) opened in kg and
+ * 135 / 185 / 205 lb saved as kg, so the next deadlift day suggested 440 lb.
  *
  * One unit per exercise per workout: the first card of an exercise decides and
  * every later card of that exercise follows. Resolving cards independently let
@@ -30,6 +38,7 @@ export function resolveExerciseUnit(args: {
   prefUnit?: WUnit | null;
   historyUnit?: WUnit | null;
   familyUnit?: WUnit | null;
+  athleteUnit?: WUnit | null;
   rowLoadUnit?: WUnit | null;
   exerciseDefault?: WUnit | null;
   workoutUnit: WUnit;
@@ -38,6 +47,7 @@ export function resolveExerciseUnit(args: {
     args.prefUnit ||
     args.historyUnit ||
     args.familyUnit ||
+    args.athleteUnit ||
     args.rowLoadUnit ||
     args.exerciseDefault ||
     args.workoutUnit
@@ -58,6 +68,30 @@ export function modeUnit(units: (string | null | undefined)[]): WUnit | null {
 
 const isUnit = (u: unknown): u is WUnit => u === "kg" || u === "lb";
 
+/** A habit needs this many recent loaded logs… */
+export const ATHLETE_HABIT_MIN_LOGS = 5;
+/** …and this share of them in one unit (a kg machine or two in an lb gym is still lb). */
+export const ATHLETE_HABIT_SHARE = 0.75;
+
+/**
+ * The unit an athlete logs in, from their recent loaded logs of anything
+ * (`{ actual_load_unit, actual_load }`), or null when there's no clear habit.
+ */
+export function athleteHabitUnit(logs: any[] | null | undefined): WUnit | null {
+  let kg = 0;
+  let lb = 0;
+  for (const h of logs ?? []) {
+    if (!(Number(h?.actual_load) > 0)) continue;
+    if (h?.actual_load_unit === "kg") kg++;
+    else if (h?.actual_load_unit === "lb") lb++;
+  }
+  const total = kg + lb;
+  if (total < ATHLETE_HABIT_MIN_LOGS) return null;
+  if (lb / total >= ATHLETE_HABIT_SHARE) return "lb";
+  if (kg / total >= ATHLETE_HABIT_SHARE) return "kg";
+  return null;
+}
+
 /** Families where plates make the unit habitual (exercises.movement_family). */
 const MAIN_LIFT_FAMILIES = new Set(["squat", "bench", "deadlift"]);
 export const isMainLiftFamily = (family: unknown): family is string =>
@@ -70,8 +104,12 @@ export function resolveWorkoutRowUnits(input: {
   historyRows: any[];
   /** Recent logs of any exercise: { actual_load_unit, actual_load, pl_exercise_rows: { exercises: { movement_family } } } */
   familyHistoryRows?: any[];
+  /** The unit the athlete chose (clients.preferred_weight_unit), only once they confirmed it. */
+  athleteChosenUnit?: WUnit | null;
   overrides: Record<string, WUnit>;
 }): Record<string, WUnit> {
+  const athleteUnit = (isUnit(input.athleteChosenUnit) ? input.athleteChosenUnit : null)
+    ?? athleteHabitUnit(input.familyHistoryRows);
   const prefByEx: Record<string, WUnit> = {};
   for (const p of input.prefRows) {
     if (p?.exercise_id && isUnit(p.unit)) prefByEx[p.exercise_id] = p.unit;
@@ -116,6 +154,7 @@ export function resolveWorkoutRowUnits(input: {
       prefUnit: exId ? prefByEx[exId] ?? null : null,
       historyUnit: exId ? modeUnit(historyByEx[exId] ?? []) : null,
       familyUnit: isMainLiftFamily(family) ? modeUnit(historyByFamily[family] ?? []) : null,
+      athleteUnit,
       rowLoadUnit: isUnit(r.load_unit) ? r.load_unit : null,
       exerciseDefault: libraryDefault,
       workoutUnit: isCompLift ? "kg" : "lb",

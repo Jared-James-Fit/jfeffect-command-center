@@ -548,7 +548,7 @@ function WorkoutDay({
       return (
         await supabase
           .from("clients")
-          .select("id, full_name, preferred_weight_unit")
+          .select("id, full_name, preferred_weight_unit, weight_unit_confirmed_at")
           .eq("user_id", portalUserId!)
           .maybeSingle()
       ).data;
@@ -1596,9 +1596,11 @@ function WorkoutDay({
       prefRows: prefRows as any[],
       historyRows: historyRows as any[],
       familyHistoryRows: familyHistoryRows as any[],
+      // The athlete's own unit beats the competition-lift kg default (see resolveWorkoutRowUnits).
+      athleteChosenUnit: (client as any)?.weight_unit_confirmed_at ? (client as any)?.preferred_weight_unit ?? null : null,
       overrides: unitOverrides,
     }),
-    [rows, prefRows, historyRows, familyHistoryRows, unitOverrides],
+    [rows, prefRows, historyRows, familyHistoryRows, unitOverrides, (client as any)?.preferred_weight_unit, (client as any)?.weight_unit_confirmed_at],
   );
 
   const setExerciseUnit = async (exerciseId: string | null, rowId: string, next: WUnit) => {
