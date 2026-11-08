@@ -33,7 +33,7 @@ export type EngineCtx = {
   /** Library names the server resolved for this reply (lowercased name → exercise). */
   names?: Map<string, CatalogExercise>;
   /** What the athlete's records say about each exercise (Program Intelligence's progress / hold / back off), by exercise id. */
-  signals?: Map<string, { decision: "progress" | "maintain" | "regress" | "not_enough_data"; why: string }>;
+  signals?: Map<string, { decision: "progress" | "maintain" | "regress" | "not_enough_data"; why: string; lastKg?: number | null; pain?: boolean }>;
 };
 
 export const LOAD_CAP = { kg: 450, lb: 1000 } as const;
@@ -619,7 +619,7 @@ function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: 
     const ex = ctx.byId.get(id);
     if (ex?.standard) issues.push({ level: "warning", text: `${ex.name} is below the exercise standard: ${ex.standard}.` });
   }
-  // asking more of an exercise the athlete's records say to back off
+  // asking more of an exercise the athlete's records say to back off, or backing off one they say to hold or progress
   if (ctx.signals?.size) {
     const flagged = new Set<string>();
     for (const b of work.blocks)
@@ -629,9 +629,13 @@ function changeChecks(snap: ProgramSnapshot, work: Work, ctx: EngineCtx, diffs: 
             const o = original.get(r.id);
             if (!o || !r.exerciseId || o.exerciseId !== r.exerciseId || flagged.has(r.exerciseId)) continue;
             const sig = ctx.signals.get(r.exerciseId);
-            if (sig?.decision !== "regress" || !asksMore(o, r)) continue;
-            flagged.add(r.exerciseId);
-            issues.push({ level: "warning", text: `${r.name}: their records say back off (${sig.why}), and this asks for more.` });
+            if (sig?.decision === "regress" && asksMore(o, r)) {
+              flagged.add(r.exerciseId);
+              issues.push({ level: "warning", text: `${r.name}: their records say back off (${sig.why}), and this asks for more.` });
+            } else if ((sig?.decision === "maintain" || sig?.decision === "progress") && !sig.pain && asksLess(o, r, sig.lastKg ?? null)) {
+              flagged.add(r.exerciseId);
+              issues.push({ level: "warning", text: `${r.name}: their records say ${sig.decision === "progress" ? "it's ready to progress" : "hold it"} (${sig.why}), and this backs it off.` });
+            }
           }
   }
 }
@@ -644,6 +648,22 @@ const low = (v: string | null) => {
   const n = v ? effortValues(v) : null;
   return n ? Math.min(...n) : null;
 };
+
+const rowKg = (r: RowSnap) => (r.loadKg != null ? r.loadKg : r.loadLb != null ? r.loadLb / 2.2046226218 : null);
+
+/**
+ * Backs it off: fewer sets, or a load under both what was written and their last session's top set
+ * (by more than a rounding step), with nothing else asking more.
+ */
+export function asksLess(before: RowSnap, after: RowSnap, lastKg: number | null): boolean {
+  if (asksMore(before, after)) return false;
+  if (after.sets != null && before.sets != null && after.sets < before.sets) return true;
+  const la = rowKg(after);
+  if (la == null) return false;
+  const lb = rowKg(before);
+  const floor = Math.min(lb ?? Infinity, lastKg != null ? lastKg * 0.97 : Infinity);
+  return Number.isFinite(floor) && la < floor - 0.01;
+}
 
 /** More sets, more load, a higher %, a harder RPE or fewer reps in reserve than before. */
 export function asksMore(before: RowSnap, after: RowSnap): boolean {

@@ -136,7 +136,7 @@ async function athleteBrief(admin: Db, clientId: string): Promise<{ text: string
   const maxLifts = intel.history.lifts.filter((l: any) => l.maxOnFileKg != null).map((l: any) => String(l.lift).toLowerCase());
   // what the records say about each exercise: the editor warns when a change goes against it
   const signals: NonNullable<EngineCtx["signals"]> = new Map();
-  for (const p of intel.development.progression) if (p.exerciseId) signals.set(p.exerciseId, { decision: p.decision, why: p.why });
+  for (const p of intel.development.progression) if (p.exerciseId) signals.set(p.exerciseId, { decision: p.decision, why: p.why, lastKg: p.lastKg, pain: p.pain });
   return { text, maxSessionMinutes: setup.maxSessionMinutes ?? null, maxLifts, warnings: b.warnings, chars: text.length, signals, missing: intel.development.missing };
 }
 
