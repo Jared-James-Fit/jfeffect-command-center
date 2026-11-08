@@ -213,7 +213,8 @@ export type LiftDevelopment = {
   relLast: number | null;
   relChangePct: number | null;
   /** strength through each bodyweight phase (only where 2+ sessions fall inside it) */
-  byPhase: Array<{ phase: Phase; from: string; to: string; changePct: number; bwChangeKg: number }>;
+  /** Each bodyweight phase's best e1RM, at that phase's bodyweight: phases compared with each other, not first-to-last inside one (a block's rep ranges move a short phase's e1RMs more than its bodyweight does). */
+  byPhase: Array<{ phase: Phase; from: string; to: string; bestKg: number; bwKg: number | null; rel: number | null; sessions: number }>;
   rate: "above" | "within" | "below" | null;
   /** weeks since the best e1RM, when the recent sessions haven't beaten it */
   plateauWeeks: number | null;
@@ -288,8 +289,11 @@ function liftDevelopment(h: IntelReport, lift: Lift, bw: BW[], phases: PhaseSpan
   const byPhase: LiftDevelopment["byPhase"] = [];
   for (const s of phases) {
     const inside = pts.filter((p) => p.date >= s.from && p.date <= s.to);
-    const e = inside.length >= 3 && daysBetween(inside[0].date, inside[inside.length - 1].date) >= 14 ? ends(inside) : null;
-    if (e) byPhase.push({ phase: s.phase, from: s.from, to: s.to, changePct: pct(e.first, e.last), bwChangeKg: s.changeKg });
+    if (inside.length < 2) continue;
+    const bestKg = Math.max(...inside.map((p) => p.value));
+    const inBw = bw.filter((b) => b.date >= s.from && b.date <= s.to).map((b) => b.kg);
+    const bwKg = inBw.length ? round(inBw.reduce((a, b) => a + b, 0) / inBw.length, 1) : null;
+    byPhase.push({ phase: s.phase, from: s.from, to: s.to, bestKg: round(bestKg, 1), bwKg, rel: bwKg ? round(bestKg / bwKg, 2) : null, sessions: inside.length });
   }
   const band = level ? EXPECTED_MONTHLY_PCT[level] : null;
   const rate = band && monthlyPct != null && weeks >= 6 ? (monthlyPct > band[1] ? "above" : monthlyPct < band[0] ? "below" : "within") : null;
@@ -643,7 +647,7 @@ export function developmentText(d: AthleteDevelopment, unit: Unit): string {
   if (!d.lifts.length) L.push("- not enough logged competition-lift sessions to read a trend");
   for (const l of d.lifts) {
     L.push(`- ${l.lift}: ${l.reading} [${l.points} sessions, ${l.confidence} confidence]`);
-    if (l.byPhase.length) L.push(`  by bodyweight phase: ${l.byPhase.map((p) => `${p.phase} ${p.from}→${p.to}: ${p.changePct > 0 ? "+" : ""}${p.changePct}%`).join("; ")}`);
+    if (l.byPhase.length >= 2) L.push(`  best e1RM in each bodyweight phase (compare phases, not one block's rep ranges): ${l.byPhase.map((p) => `${p.phase} ${p.from}→${p.to}: ${u(p.bestKg)}${p.bwKg != null ? ` at ${u(p.bwKg)} (${p.rel}×)` : ""}`).join("; ")}`);
     if (l.variations.length > 1) L.push(`  their own variation history: ${l.variations.map((v) => `${v.exercise} ${v.changePct != null ? `${v.changePct > 0 ? "+" : ""}${v.changePct}%` : "?"} (${v.exposures})`).join(", ")}`);
   }
   if (d.gymTotal) L.push(`Gym total (e1RM estimate, NOT a meet result): ${u(d.gymTotal.kg)}${d.gymTotal.gl != null ? ` ≈ ${d.gymTotal.gl} IPF GL points at ${u(d.gymTotal.bodyweightKg)}` : ""} (as of ${d.gymTotal.asOf})`);

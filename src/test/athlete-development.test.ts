@@ -280,6 +280,21 @@ describe("trends", () => {
     expect(d.gymTotal!.kg).toBeGreaterThan(100 + 140 + 170);
   });
 
+  it("bodyweight phases are compared by each phase's best e1RM at that phase's bodyweight", () => {
+    const rec = athlete({ sq: [150, 2], weeks: 12 });
+    const start = add(TODAY, -12 * 7);
+    // six weeks cutting 80 → 77 kg, then six gaining back to 80
+    rec.bodyweight = Array.from({ length: 22 }, (_, i) => ({ date: add(start, i * 4), kg: Math.round((i < 11 ? 80 - (3 * i) / 10 : 77 + (3 * (i - 11)) / 10) * 10) / 10 }));
+    const d = buildGeneratorIntel(rec).development;
+    const phases = lift(d, "squat").byPhase;
+    expect(phases.map((p) => p.phase)).toEqual(expect.arrayContaining(["cutting", "gaining"]));
+    for (const p of phases) {
+      expect(p.bestKg).toBeGreaterThan(150);
+      expect(p.rel).toBeCloseTo(p.bestKg / (p.bwKg as number), 1);
+    }
+    expect(developmentText(d, "kg")).toMatch(/best e1RM in each bodyweight phase \(compare phases, not one block's rep ranges\): .*cutting .* at 7\d(\.\d)? kg \(\d\.\d+×\)/);
+  });
+
   it("an athlete who never logs RPE gets floors, said so", () => {
     const b = lift(dev({ rpe: () => null }), "squat");
     expect(b.reading).toMatch(/floors, not maxes/);
