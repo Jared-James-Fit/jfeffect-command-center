@@ -14,7 +14,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 6;
+export const PIPELINE_PROMPT_VERSION = 7;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
