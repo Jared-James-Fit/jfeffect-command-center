@@ -263,6 +263,28 @@ describe("trends", () => {
     expect(lift(dev({ weeks: 3 }), "squat").confidence).toBe("low");
   });
 
+  it("light days and unrated sets aren't read as strength lost (Jared's bench: technique singles @5 after heavy work)", () => {
+    const rec = athlete({ bench: [100, 1.25], weeks: 10 });
+    // the last three bench days: 60 kg singles, RPE 5 on the first set and nothing logged on the rest
+    for (const w of [8, 9, 10])
+      for (const r of rec.results.filter((x) => x.row_id === `hist-w${w}-d1-r1`)) {
+        r.actual_load = r.normalized_kg = r.actual_load_kg = 60;
+        r.actual_reps = 1;
+        r.actual_rpe = r.set_index === 1 ? "5" : null;
+        r.actual_rpe_num = r.set_index === 1 ? 5 : null;
+      }
+    const d = buildGeneratorIntel(rec).development;
+    const b = lift(d, "bench");
+    expect(b.changePct).toBeGreaterThan(0);
+    expect(b.reading).toMatch(/3 easy or unrated sessions left out/);
+    expect(d.gymTotal!.kg).toBeGreaterThan(100 + 140 + 170);
+  });
+
+  it("an athlete who never logs RPE gets floors, said so", () => {
+    const b = lift(dev({ rpe: () => null }), "squat");
+    expect(b.reading).toMatch(/floors, not maxes/);
+  });
+
   it("possible fatigue accumulation needs more than one sign", () => {
     const d = dev({ rpe: (w) => (w >= 6 ? 9.5 : 8), weeks: 8 });
     expect(d.fatigue.signs.join(" ")).toMatch(/feel harder than prescribed lately/);

@@ -235,13 +235,44 @@ function confidenceOf(points: number, weeks: number): Confidence {
 
 const pct = (a: number, b: number) => round(((b - a) / a) * 100, 1);
 
+/**
+ * A session's e1RM says something about a max only when its top set was hard: an easy
+ * day (a technique single @5) or a set with no effort logged extrapolates to far less
+ * than they can lift, so a trend over every session reads deloads and light days as
+ * strength lost. With 3+ such sessions only they count; else every session does, as floors.
+ */
+export const INFORMATIVE_RPE = 7;
+const hardEnough = (e: { topSet: { rpe: number | null } | null }) => (e.topSet?.rpe ?? 0) >= INFORMATIVE_RPE;
+
+export type StrengthPoints = { points: Array<{ date: string; value: number }>; sessions: number; easyLeftOut: number; floorsOnly: boolean };
+
+/** One point per day (that day's best competition-lift e1RM), from the sessions that can show a max. */
+export function strengthPoints(rep: IntelReport["lifts"][number] | undefined): StrengthPoints {
+  const comp = (rep?.exposures ?? []).filter((e) => e.competition && e.date && (e.e1rm ?? 0) > 0);
+  const hard = comp.filter(hardEnough);
+  const floorsOnly = hard.length < 3;
+  const src = floorsOnly ? comp : hard;
+  const byDate = new Map<string, number>();
+  for (const e of src) byDate.set(e.date!, Math.max(byDate.get(e.date!) ?? 0, e.e1rm!));
+  const points = [...byDate].map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date));
+  const days = new Set(comp.map((e) => e.date));
+  return { points, sessions: days.size, easyLeftOut: floorsOnly ? 0 : days.size - byDate.size, floorsOnly };
+}
+
+/** Start and end of a run of points: the best of the first and last few (strength shows in the best sessions, not the average one). */
+function ends(pts: Array<{ value: number }>): { first: number; last: number } | null {
+  if (pts.length < 2) return null;
+  const k = Math.min(3, Math.max(1, Math.floor(pts.length / 3)));
+  return { first: Math.max(...pts.slice(0, k).map((p) => p.value)), last: Math.max(...pts.slice(-k).map((p) => p.value)) };
+}
+
 function liftDevelopment(h: IntelReport, lift: Lift, bw: BW[], phases: PhaseSpan[], level: TrainingLevel | null, today: string, unit: Unit): LiftDevelopment | null {
   const rep = h.lifts.find((l) => l.lift === lift);
-  const pts = (rep?.compTrend.points ?? []).filter((p) => p.value > 0);
+  const sp = strengthPoints(rep);
+  const pts = sp.points;
   if (!rep || pts.length < 2) return null;
   const k = Math.min(3, Math.max(1, Math.floor(pts.length / 3)));
-  const firstKg = robust(pts.slice(0, k).map((p) => p.value));
-  const lastKg = robust(pts.slice(-k).map((p) => p.value));
+  const { first: firstKg, last: lastKg } = ends(pts)!;
   const from = pts[0].date;
   const to = pts[pts.length - 1].date;
   const weeks = round(daysBetween(from, to) / 7, 1);
@@ -257,7 +288,8 @@ function liftDevelopment(h: IntelReport, lift: Lift, bw: BW[], phases: PhaseSpan
   const byPhase: LiftDevelopment["byPhase"] = [];
   for (const s of phases) {
     const inside = pts.filter((p) => p.date >= s.from && p.date <= s.to);
-    if (inside.length >= 2) byPhase.push({ phase: s.phase, from: s.from, to: s.to, changePct: pct(inside[0].value, inside[inside.length - 1].value), bwChangeKg: s.changeKg });
+    const e = inside.length >= 3 && daysBetween(inside[0].date, inside[inside.length - 1].date) >= 14 ? ends(inside) : null;
+    if (e) byPhase.push({ phase: s.phase, from: s.from, to: s.to, changePct: pct(e.first, e.last), bwChangeKg: s.changeKg });
   }
   const band = level ? EXPECTED_MONTHLY_PCT[level] : null;
   const rate = band && monthlyPct != null && weeks >= 6 ? (monthlyPct > band[1] ? "above" : monthlyPct < band[0] ? "below" : "within") : null;
@@ -273,7 +305,7 @@ function liftDevelopment(h: IntelReport, lift: Lift, bw: BW[], phases: PhaseSpan
   const confidence = confidenceOf(pts.length, weeks);
   const u = (kg: number) => (unit === "lb" ? `${Math.round(kg * LB)} lb` : `${round(kg, 1)} kg`);
   const parts: string[] = [`e1RM ${u(firstKg!)} → ${u(lastKg!)} (${changePct! > 0 ? "+" : ""}${changePct}%) over ${weeks} weeks`];
-  if (monthlyPct != null) parts.push(`${monthlyPct > 0 ? "+" : ""}${monthlyPct}%/month${rate && level ? ` (${rate} the usual ${EXPECTED_MONTHLY_PCT[level][0]}–${EXPECTED_MONTHLY_PCT[level][1]}%/month for a ${level})` : ""}`);
+  if (monthlyPct != null) parts.push(`${monthlyPct > 0 ? "+" : ""}${monthlyPct}%/month${rate && level ? ` (${rate} the usual ${EXPECTED_MONTHLY_PCT[level][0]}–${EXPECTED_MONTHLY_PCT[level][1]}%/month for ${level === "beginner" ? "a" : "an"} ${level})` : ""}`);
   if (relFirst && relLast) {
     parts.push(`relative ${relFirst}× → ${relLast}× bodyweight (${relChangePct! > 0 ? "+" : ""}${relChangePct}%)`);
     const bwChange = bwFirstKg && bwLastKg ? pct(bwFirstKg, bwLastKg) : 0;
@@ -285,6 +317,9 @@ function liftDevelopment(h: IntelReport, lift: Lift, bw: BW[], phases: PhaseSpan
     }
   } else parts.push("no bodyweight on those dates, so no relative read");
   if (plateauWeeks) parts.push(`no new best in ${plateauWeeks} weeks`);
+  if (daysBetween(to, today) > 28) parts.push(`the competition ${lift} itself last trained ${to} (only variations since)`);
+  if (sp.floorsOnly) parts.push(`few of these sessions had a top set at RPE ${INFORMATIVE_RPE}+ logged, so these e1RMs are floors, not maxes`);
+  else if (sp.easyLeftOut) parts.push(`${sp.easyLeftOut} easy or unrated session${sp.easyLeftOut === 1 ? "" : "s"} left out (a light day isn't strength lost)`);
   return { lift, points: pts.length, from, to, weeks, firstKg, lastKg, changePct, monthlyPct, bwFirstKg, bwLastKg, relFirst, relLast, relChangePct, byPhase, rate, plateauWeeks, variations, confidence, reading: parts.join("; ") };
 }
 
@@ -385,7 +420,9 @@ export function progressionSignals(h: IntelReport, ctx: AthleteContext, level: T
       (e.completion == null || e.completion >= 1) && (e.repsHit == null || e.repsHit >= 100) && ((e.rpeDelta != null && e.rpeDelta <= -0.75) || (topOfRange(e) && (e.rpeDelta == null || e.rpeDelta <= 0)));
     const nUnder = last3.filter(under).length;
     const nOver = last3.filter(over).length;
-    const e1 = list.map((e) => e.e1rm).filter((n): n is number => n != null && n > 0);
+    // strength from the sessions that can show it (top set at RPE 7+) when there are two; else every session's
+    const hardE1 = list.filter((e) => (e.row.topSet?.rpe ?? 0) >= INFORMATIVE_RPE).map((e) => e.e1rm).filter((n): n is number => n != null && n > 0);
+    const e1 = hardE1.length >= 2 ? hardE1 : list.map((e) => e.e1rm).filter((n): n is number => n != null && n > 0);
     const e1Change = e1.length >= 2 ? pct(robust(e1.slice(0, Math.ceil(e1.length / 2)))!, robust(e1.slice(Math.floor(e1.length / 2)))!) : null;
     const pain = info.lift ? recentPain.filter((p) => PAIN_REGION[info.lift!].test(p.area ?? "")) : [];
     let decision: Decision = "maintain";
@@ -521,10 +558,14 @@ export function buildAthleteDevelopment(rec: IntelRecords, ctx: AthleteContext, 
   const phases = bodyweightPhases(bw);
   const lifts = LIFTS.map((l) => liftDevelopment(h, l, bw, phases, level, today, ctx.unit)).filter((x): x is LiftDevelopment => !!x);
   // gym total: each competition lift's latest e1RM, only when all three were trained in the last 10 weeks
+  // (each lift's best hard session in its last 8 weeks of training, so a light last session doesn't sink it)
   const recentLast = LIFTS.map((l) => {
-    const pts = h.lifts.find((x) => x.lift === l)?.compTrend.points ?? [];
-    const last = pts.slice(-2);
-    return last.length && daysBetween(last[last.length - 1].date, today) <= 70 ? { kg: robust(last.map((p) => p.value)) as number, date: last[last.length - 1].date } : null;
+    const pts = strengthPoints(h.lifts.find((x) => x.lift === l)).points;
+    if (!pts.length) return null;
+    const lastDate = pts[pts.length - 1].date;
+    if (daysBetween(lastDate, today) > 70) return null;
+    const recent = pts.filter((p) => daysBetween(p.date, lastDate) <= 56);
+    return { kg: Math.max(...recent.map((p) => p.value)), date: lastDate };
   });
   const gymTotal = recentLast.every(Boolean)
     ? (() => {
