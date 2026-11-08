@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mergeProposal, snapshotFingerprint, conversationText } from "@/lib/program-ai/conversation";
-import { buildPlan, resolveChanges, templatePayloadFrom, effortValues, type EngineCtx } from "@/lib/program-ai/engine";
+import { buildPlan, dayNames, resolveChanges, templatePayloadFrom, effortValues, type EngineCtx } from "@/lib/program-ai/engine";
 import { changeSchema, parseReply, type EditChange } from "@/lib/program-ai/ops";
 import { programText } from "@/lib/program-ai/prompts";
 import type { CatalogExercise, DaySnap, ProgramSnapshot, RowSnap } from "@/lib/program-ai/types";
@@ -272,6 +272,12 @@ describe("Edit with AI engine: the 17 scenarios that are pure logic", () => {
     d.rows.push({ ...d.rows[0], id: "row-backoff", ref: "B1W2D3E3", sortOrder: 2, sets: 3, reps: "5", rpe: "7" });
     const [c] = resolveChanges(s, [change("c1", [{ op: "update", rows: ["B1W2D3E3"], set: { sets: 2 } }])], ctx);
     expect(c.issues.filter((i) => /times/.test(i.text))).toEqual([]);
+  });
+
+  it("re-dating with the days they already train on isn't a training-days change", () => {
+    const [c] = resolveChanges(client(), [change("c1", [{ op: "schedule", training_days: ["mon", "wed", "fri"], redate: true }])], ctx);
+    expect(c.schedule).toEqual({ before: ["mon", "wed", "fri"], after: null, redate: true });
+    expect(dayNames(["mon", "thu", "sat"])).toBe("Mon, Thu, Sat");
   });
 
   it("reads efforts the way coaches write them", () => {
