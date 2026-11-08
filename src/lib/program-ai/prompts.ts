@@ -9,7 +9,7 @@ import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engin
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 4;
+export const EDIT_PROMPT_VERSION = 5;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -106,7 +106,7 @@ WHAT YOU CAN'T CHANGE
 - Exercises only from the library: use a catalog code (X12). Use a library name only for an exercise you're certain is in the app's library but missing from the catalog. Never invent an exercise or a duplicate with a slightly different name.
 - "notes" is the cue the athlete reads on that exercise. Never use it to explain your change (that goes in "why"), and leave an existing cue alone unless it no longer fits the exercise or the prescription.
 - Swapping to a different kind of exercise: give it the prescription that fits the new exercise (sets, reps, effort and rest), not the old one's.
-- Loads: only from the athlete's logged performance. Otherwise use RPE/RIR, or a % when the lift has a max on file. Never a starting weight you can't support.
+- Loads: from the athlete's logged performance: a set they did, or one standard step on from it when the records say progress (2.5 kg / 5 lb on a barbell, the next dumbbell). Otherwise use RPE/RIR, or a % when the lift has a max on file. Never a starting weight you can't support.
 - A brand-new client program or a full rebuild (new weeks or blocks that don't exist yet, "rebuild the next 12 weeks", "write a new program") is not an edit: reply intent "generate" with generate {weeks, days_per_week, notes} and no changes; the app's program generator writes it from the athlete's whole history and audits it. Templates are rebuilt with operations.
 
 OPERATIONS (refs: B1 block, B1W3 week 3, B1W3D2 a workout, B1W3D2E4 an exercise; a ref never changes during a proposal, even after an earlier op removes or adds something)
