@@ -39,3 +39,26 @@ export function downloadFiles(files: File[]): boolean {
     return false;
   }
 }
+
+export type SaveOutcome = "shared" | "cancelled" | "again" | "saved" | "failed";
+
+/**
+ * Hand the files over: the share sheet on a phone (its first await is the
+ * share itself, so this must be called straight from the tap), a download
+ * on a computer. "again": the phone wouldn't open the sheet from this tap.
+ * Chat photos and videos (save-media) and the training report PDF use it.
+ */
+export async function saveFiles(files: File[]): Promise<SaveOutcome> {
+  if (isTouchDevice() && canShareFiles(files)) {
+    try {
+      await navigator.share({ files });
+      return "shared";
+    } catch (e: unknown) {
+      const name = (e as { name?: string })?.name;
+      if (name === "AbortError") return "cancelled";
+      if (name === "NotAllowedError") return "again";
+      return downloadFiles(files) ? "saved" : "failed";
+    }
+  }
+  return downloadFiles(files) ? "saved" : "failed";
+}

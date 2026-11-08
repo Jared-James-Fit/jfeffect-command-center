@@ -24,33 +24,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { markClientReviewsReviewed, refreshReviewQueries } from "@/lib/checkin-review";
 import { getClientMealPlanForCoach } from "@/lib/nutrition-targets/admin-meal-plan.functions";
 import { useServerFn } from "@tanstack/react-start";
-import { downloadFullTrainingReportForClient } from "@/lib/workouts/download-full-training-report";
+import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 
 function useClientPdfDownloads(r: DirectoryRow) {
-  const [workoutPending, setWorkoutPending] = useState(false);
   const [mealPending, setMealPending] = useState(false);
   const fetchMealPlan = useServerFn(getClientMealPlanForCoach);
-
-  const downloadWorkout = async () => {
-    setWorkoutPending(true);
-    const toastId = toast.loading("Generating training report…");
-    try {
-      const res = await downloadFullTrainingReportForClient({
-        clientId: r.id,
-        clientDisplayName: r.full_name ?? null,
-      });
-      if (!res.ok) {
-        toast.error(res.reason, { id: toastId });
-        return;
-      }
-      toast.success("Training report downloaded", { id: toastId });
-    } catch (err) {
-      console.error("Training report download failed", err);
-      toast.error("Could not generate training report.", { id: toastId });
-    } finally {
-      setWorkoutPending(false);
-    }
-  };
 
   const downloadMealPlan = async () => {
     setMealPending(true);
@@ -89,7 +67,7 @@ function useClientPdfDownloads(r: DirectoryRow) {
     }
   };
 
-  return { workoutPending, mealPending, downloadWorkout, downloadMealPlan };
+  return { mealPending, downloadMealPlan };
 }
 
 /**
@@ -143,6 +121,7 @@ export function ClientMoreMenu({
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const pdfs = useClientPdfDownloads(r);
   const assignProgram = () => (onAssignProgram ? onAssignProgram() : setAssignOpen(true));
   // A block that's ended or ending with nothing queued after it.
@@ -221,16 +200,8 @@ export function ClientMoreMenu({
         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setArchiveOpen(true); }}>
           <Archive className="h-4 w-4" /> Workout Archive
         </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={pdfs.workoutPending}
-          onSelect={(e) => { e.preventDefault(); pdfs.downloadWorkout(); }}
-        >
-          {pdfs.workoutPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-          Download Training Report
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setReportOpen(true); }}>
+          <Download className="h-4 w-4" /> Download Training Report
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -356,6 +327,13 @@ export function ClientMoreMenu({
       onOpenChange={setScheduleOpen}
       clientId={r.id}
       clientName={r.full_name}
+    />
+    <TrainingReportSheet
+      open={reportOpen}
+      onOpenChange={setReportOpen}
+      clientId={r.id}
+      clientName={r.full_name}
+      audience="coach"
     />
     </>
   );

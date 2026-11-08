@@ -26,7 +26,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getBlockTree } from "@/lib/pl-programs";
 import { clientWorkoutsQuery, PAGE_CACHE_MS } from "@/lib/client-workouts-query";
 import { useArrivalClass } from "@/hooks/use-arrival";
 import { ProgramCardSkeleton, ScheduleSkeleton, WorkoutCardSkeleton } from "@/components/workouts/workouts-skeleton";
@@ -37,6 +36,7 @@ import { localStartOfToday, toLocalISO } from "@/lib/today";
 import { pickCurrentBlock } from "@/lib/block-dates";
 import { MoveWorkoutSheet } from "@/components/schedule/MoveWorkoutSheet";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
+import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 import { ClientBlockView } from "@/components/client-block-view";
 import { WorkoutStatusSheet } from "@/components/workout-status-sheet";
 import { WorkoutHistorySheet } from "@/components/workout-history-sheet";
@@ -233,7 +233,7 @@ export function WorkoutsExperience({
         onDropDate: dropWorkoutOnDate,
       }
     : null;
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const navigate = useNavigate();
 
   // Arriving with ?open=<date> (a coach tapping "Open … workout" on a session):
@@ -257,162 +257,11 @@ export function WorkoutsExperience({
     });
   }, [openDate, isLoading, clientFetched, byDate, navigate]);
 
-  const handleDownloadPdf = async () => {
-    setDownloadingPdf(true);
-    try {
-      // Pull every client-visible block, then their weeks/days/exercises,
-      // completions, and every logged set — so the report includes both
-      // the prescribed program and everything the athlete actually did.
-      const { data: blocks } = await supabase
-        .from("pl_blocks")
-        .select("*")
-        .eq("client_id", clientId)
-        .eq("client_visible", true)
-        .neq("status", "Archived")
-        .order("start_date", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: true });
-
-      const blockRows = (blocks ?? []) as any[];
-      if (!blockRows.length) {
-        toast.error("No blocks to download yet.");
-        return;
-      }
-
-      const trees = await Promise.all(
-        blockRows.map(async (b) => ({ block: b, tree: await getBlockTree(b.id) })),
-      );
-
-      const allDayIds: string[] = [];
-      const allRowIds: string[] = [];
-      for (const { tree } of trees) {
-        for (const d of tree?.days ?? []) allDayIds.push(d.id);
-        for (const r of tree?.rows ?? []) allRowIds.push(r.id);
-      }
-
-      const [completionsRes, resultsRes] = await Promise.all([
-        allDayIds.length
-          ? supabase
-              .from("pl_day_completions")
-              .select("day_id, started_at, in_progress_at, completed_at, client_notes, actual_duration_min, logging_percentage, logged_sets_count")
-              .in("day_id", allDayIds)
-              .eq("client_id", clientId)
-          : Promise.resolve({ data: [] as any[] }),
-        allRowIds.length
-          ? supabase
-              .from("pl_row_results")
-              .select(
-                "row_id, set_index, actual_reps, actual_load, actual_load_lb, actual_load_kg, actual_load_unit, entered_value, entered_unit, normalized_lb, normalized_kg, actual_rpe, actual_rpe_num, actual_rir, completed_duration_seconds, notes",
-              )
-              .in("row_id", allRowIds)
-              .eq("client_id", clientId)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-      if ((completionsRes as any).error) throw (completionsRes as any).error;
-      if ((resultsRes as any).error) throw (resultsRes as any).error;
-      // Client-authored exercise notes for every day in the report.
-      const notesRes: any = allDayIds.length
-        ? await supabase
-            .from("pl_exercise_notes")
-            .select("day_id, row_id, exercise_name, content, status, created_at, updated_at")
-            .in("day_id", allDayIds)
-            .eq("client_id", clientId)
-            .order("updated_at", { ascending: true })
-        : { data: [] as any[] };
-      if (notesRes?.error) throw notesRes.error;
-      const notesByDay = new Map<string, any[]>();
-      for (const n of (notesRes.data ?? []) as any[]) {
-        const list = notesByDay.get(n.day_id) ?? [];
-        list.push(n);
-        notesByDay.set(n.day_id, list);
-      }
-      const completionByDay = new Map<string, any>();
-      for (const c of (completionsRes.data ?? []) as any[]) {
-        // If there are somehow multiple, prefer the completed one.
-        const prev = completionByDay.get(c.day_id);
-        if (!prev || (c.completed_at && !prev.completed_at)) {
-          completionByDay.set(c.day_id, c);
-        }
-      }
-      const resultsByRow = new Map<string, any[]>();
-      for (const r of (resultsRes.data ?? []) as any[]) {
-        const list = resultsByRow.get(r.row_id) ?? [];
-        list.push(r);
-        resultsByRow.set(r.row_id, list);
-      }
-
-      const { downloadFullTrainingReportPdf } = await import(
-        "@/lib/workouts/workout-pdf"
-      );
-      const clientDisplayName =
-        clientName ||
-        [(client as any)?.first_name, (client as any)?.last_name]
-          .filter(Boolean)
-          .join(" ") ||
-        (client as any)?.full_name ||
-        null;
-
-      downloadFullTrainingReportPdf({
-        client_name: clientDisplayName,
-        generated_at: new Date(),
-        blocks: trees.map(({ block, tree }) => {
-          const weeksSorted = (tree?.weeks ?? [])
-            .slice()
-            .sort((a: any, b: any) => (a.week_index ?? 0) - (b.week_index ?? 0));
-          const daysByWeek = new Map<string, any[]>();
-          for (const d of tree?.days ?? []) {
-            const list = daysByWeek.get(d.week_id) ?? [];
-            list.push(d);
-            daysByWeek.set(d.week_id, list);
-          }
-          const rowsByDay = new Map<string, any[]>();
-          for (const r of tree?.rows ?? []) {
-            const list = rowsByDay.get(r.day_id) ?? [];
-            list.push(r);
-            rowsByDay.set(r.day_id, list);
-          }
-          return {
-            block_name: block?.name ?? null,
-            block_status: block?.status ?? null,
-            block_start: block?.start_date ?? null,
-            block_end: block?.end_date ?? null,
-            weeks: weeksSorted.map((w: any) => ({
-              id: w.id,
-              week_index: w.week_index,
-              notes: w.notes ?? null,
-              days: (daysByWeek.get(w.id) ?? [])
-                .slice()
-                .sort((a: any, b: any) => (a.day_index ?? 0) - (b.day_index ?? 0))
-                .map((d: any) => {
-                  const c = completionByDay.get(d.id);
-                  return {
-                    id: d.id,
-                    day_index: d.day_index,
-                    title: cleanDayTitle(d.title) ?? d.title ?? null,
-                    notes: d.notes ?? null,
-                    notes_client_visible: d.notes_client_visible ?? null,
-                    scheduled_date: d.scheduled_date ?? null,
-                    started_at: c?.started_at ?? null,
-                    in_progress_at: c?.in_progress_at ?? null,
-                    completed_at: c?.completed_at ?? null,
-                    completion_note: c?.client_notes ?? null,
-                    rows: (rowsByDay.get(d.id) ?? []).map((r: any) => ({
-                      ...r,
-                      logged_sets: resultsByRow.get(r.id) ?? [],
-                    })),
-                    client_exercise_notes: notesByDay.get(d.id) ?? [],
-                  };
-                }),
-            })),
-          };
-        }),
-      });
-    } catch (err) {
-      console.error("Workout PDF download failed", err);
-      toast.error("Could not generate workout PDF. Please try again.");
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
+  const reportName =
+    clientName ||
+    [(client as any)?.first_name, (client as any)?.last_name].filter(Boolean).join(" ") ||
+    (client as any)?.full_name ||
+    null;
 
   return (
     <>
@@ -471,8 +320,8 @@ export function WorkoutsExperience({
                   <History className="mr-2 h-4 w-4" /> Schedule history
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => void handleDownloadPdf()} disabled={downloadingPdf}>
-                  {downloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                <DropdownMenuItem onSelect={() => setReportOpen(true)}>
+                  <Download className="mr-2 h-4 w-4" />
                   Training report (PDF)
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -614,6 +463,13 @@ export function WorkoutsExperience({
         clientId={clientId}
         open={historyOpen}
         onOpenChange={setHistoryOpen}
+      />
+      <TrainingReportSheet
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        clientId={clientId}
+        clientName={reportName}
+        audience={mode === "coach" ? "coach" : "client"}
       />
       {mode === "self" && client && (
         <TrainingDaysSheet client={client as any} open={daysOpen} onOpenChange={setDaysOpen} />

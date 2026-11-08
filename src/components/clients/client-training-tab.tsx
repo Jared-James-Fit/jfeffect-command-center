@@ -42,7 +42,7 @@ import { todayISO, formatRange, type ScheduleBlock } from "@/lib/block-schedule-
 import { useClientTrainingSchedule, clientTrainingScheduleKey } from "@/lib/use-client-training-schedule";
 import { trainingRoadmap, trainingAlerts, type TrainingAlert } from "@/lib/training-tab";
 import { WEEK_DAYS, SHORT_DAY, type WeekDay } from "@/lib/training-schedule";
-import { downloadFullTrainingReportForClient } from "@/lib/workouts/download-full-training-report";
+import { TrainingReportSheet } from "@/components/workouts/training-report-sheet";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
 import { WorkoutArchiveDialog } from "@/components/clients/workout-archive-dialog";
 import {
@@ -111,7 +111,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
   const [endEarlyFor, setEndEarlyFor] = useState<ScheduleBlock | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pastOpen, setPastOpen] = useState(false);
-  const [reportBusy, setReportBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const blocks = useMemo(() => data?.blocks ?? [], [data?.blocks]);
   const assignmentId = data?.currentAssignmentId ?? null;
@@ -138,20 +138,6 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
     qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
     qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
     qc.invalidateQueries({ queryKey: ["my-workouts"] });
-  };
-
-  const downloadReport = async () => {
-    setReportBusy(true);
-    const id = toast.loading("Making the training report…");
-    try {
-      const res = await downloadFullTrainingReportForClient({ clientId, clientDisplayName: clientName });
-      if (!res.ok) toast.error(res.reason, { id });
-      else toast.success("Training report downloaded", { id });
-    } catch {
-      toast.error("Could not make the training report.", { id });
-    } finally {
-      setReportBusy(false);
-    }
   };
 
   const goToSchedule = () => {
@@ -214,8 +200,8 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
                 <Link to="/admin/client-programs/$clientId/history" params={{ clientId }}><History className="mr-2 h-4 w-4" /> Program history</Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setArchiveOpen(true)}><Archive className="mr-2 h-4 w-4" /> Workout archive</DropdownMenuItem>
-              <DropdownMenuItem disabled={reportBusy} onClick={downloadReport}>
-                {reportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Download training report
+              <DropdownMenuItem onClick={() => setReportOpen(true)}>
+                <Download className="mr-2 h-4 w-4" /> Download training report
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -398,6 +384,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
         />
       )}
       <WorkoutArchiveDialog open={archiveOpen} onOpenChange={setArchiveOpen} clientId={clientId} clientName={clientName} />
+      <TrainingReportSheet open={reportOpen} onOpenChange={setReportOpen} clientId={clientId} clientName={clientName} audience="coach" />
     </Card>
   );
 }

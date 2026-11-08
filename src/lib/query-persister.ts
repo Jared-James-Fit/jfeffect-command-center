@@ -79,6 +79,10 @@ const DO_NOT_PERSIST_PREFIXES = [
   // device/tab until the pool refetches. They're cheap to refetch.
   "exercise-search-pool",
   "quick-swap-suggestions",
+  // The training report's data is every block, set and note a client has
+  // (megabytes for a long-term client): read when the sheet opens, never
+  // written to the phone's storage, where it would crowd out the pages' copies.
+  "training-report-",
 ];
 
 export function shouldPersistQueryKey(queryKey: readonly unknown[]): boolean {
