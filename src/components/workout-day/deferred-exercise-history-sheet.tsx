@@ -7,6 +7,7 @@ export default function DeferredExerciseHistorySheet({
   exerciseName,
   displayUnit,
   currentDayIndex,
+  editable,
   onClose,
 }: {
   clientId: string;
@@ -14,6 +15,7 @@ export default function DeferredExerciseHistorySheet({
   exerciseName: string;
   displayUnit?: "kg" | "lb";
   currentDayIndex?: number | null;
+  editable?: boolean;
   onClose: () => void;
 }) {
   const [open, setOpen] = useState(true);
@@ -30,6 +32,7 @@ export default function DeferredExerciseHistorySheet({
       exerciseName={exerciseName}
       displayUnit={displayUnit}
       currentDayIndex={currentDayIndex}
+      editable={editable}
     />
   );
 }
