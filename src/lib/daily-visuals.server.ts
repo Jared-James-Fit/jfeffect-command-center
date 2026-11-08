@@ -157,8 +157,11 @@ const MAX_ROUNDS = 3;
 const PICTURES_PER_CONCEPT = 2;
 /** Below this the picture is too soft for a phone's 4:5 feed. */
 const MIN_SIDE = 900;
-const AHEAD_DAYS = 3;
+/** Posts are made a week ahead, so the coach can read and edit each one any time before it goes out (Nov 8 2026). */
+export const AHEAD_DAYS = 7;
 const BACK_DAYS = 45;
+/** Days planned ahead: two weeks of placeholders on the coach's card, each made once it's within AHEAD_DAYS. */
+export const PLAN_DAYS = 14;
 /** A run starts another step only this young (the hook allows 5 minutes). */
 const SECOND_STEP_BEFORE_MS = 60_000;
 const LEARNED_KEY = "daily_visuals_learned";
@@ -795,7 +798,7 @@ async function queued(admin: Admin, today: string, now: number): Promise<DailyRo
 /** One run: plan, learn, then one step (two while the run is young), then wake the next run if there's more. */
 export async function runDailyVisualsTick(admin: Admin, now = Date.now()): Promise<Record<string, unknown>> {
   const started = Date.now();
-  await admin.rpc("community_daily_visuals_plan", { _from: null, _days: 7 });
+  await admin.rpc("community_daily_visuals_plan", { _from: null, _days: PLAN_DAYS });
   const today = localDay(new Date(now));
   const { data: settings } = await admin.from("community_series_settings").select("daily_visuals_lovable").maybeSingle();
   const maker = makerFor(!!settings?.daily_visuals_lovable);
