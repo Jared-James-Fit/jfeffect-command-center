@@ -5,18 +5,18 @@
  * The database writes the drafts and posts; this sends the pushes:
  *
  *   - "🎂 <name>'s birthday post is ready" to the coach when a draft lands
- *     (the evening before, 5pm Winnipeg)
- *   - a reminder at 9am their time on the day if it still hasn't been reviewed
- *   - once an approved post goes out (8am their time), the usual
+ *     (the evening before, 5pm Winnipeg), so he can read or edit it
+ *   - once the post goes out (8am their time, on its own: Nov 8 2026, no
+ *     approval needed; community_birthdays_publish_due), the usual
  *     "Coach Jared · Sent you a post" for the message that links to it
  *
- * Nothing here posts on its own: only approved drafts go out. Every push is
- * deduped on its event key, and each row is stamped once it's been pushed.
+ * Every push is deduped on its event key, and each row is stamped once it's
+ * been pushed.
  */
 import { buildNotificationPayload, coachLabel } from "@/lib/push/notification-payload";
 
 type Deps = {
-  notifyAppEvent: (admin: any, event: "birthday_post_ready" | "birthday_post_reminder", input: { clientId: string; sourceId: string }) => Promise<{ sent: number }>;
+  notifyAppEvent: (admin: any, event: "birthday_post_ready", input: { clientId: string; sourceId: string }) => Promise<{ sent: number }>;
   sendWebPushToUser: (
     admin: any,
     userId: string,
@@ -25,12 +25,9 @@ type Deps = {
   ) => Promise<{ sent: number; removed: number; skipped: string | null }>;
 };
 
-/** How long after the post time (8am theirs) an unreviewed draft gets a nudge. */
-const REMIND_AFTER_MS = 60 * 60 * 1000;
-
 export async function runBirthdayPosts(admin: any, deps: Deps, nowMs: number = Date.now()) {
   const now = new Date(nowMs).toISOString();
-  const out = { drafted: 0, ready: 0, reminded: 0, published: 0, dms: 0 };
+  const out = { drafted: 0, ready: 0, published: 0, dms: 0 };
 
   const prep = await admin.rpc("community_birthdays_prepare", { _now: now });
   out.drafted = Number(prep.data ?? 0);
@@ -43,23 +40,7 @@ export async function runBirthdayPosts(admin: any, deps: Deps, nowMs: number = D
     out.ready++;
   }
 
-  // It's their birthday and it's still waiting: one nudge.
-  const remindBefore = new Date(nowMs - REMIND_AFTER_MS).toISOString();
-  const { data: late } = await admin
-    .from("community_birthday_posts")
-    .select("id, client_id")
-    .eq("status", "ready")
-    .is("reminder_pushed_at", null)
-    .lte("post_at", remindBefore)
-    .gte("post_at", new Date(nowMs - 20 * 60 * 60 * 1000).toISOString())
-    .limit(50);
-  for (const d of (late ?? []) as any[]) {
-    await deps.notifyAppEvent(admin, "birthday_post_reminder", { clientId: d.client_id, sourceId: d.id });
-    await admin.from("community_birthday_posts").update({ reminder_pushed_at: now }).eq("id", d.id);
-    out.reminded++;
-  }
-
-  // Approved ones whose time has come.
+  // Drafts whose time has come go out on their own (approved or not).
   const pub = await admin.rpc("community_birthdays_publish_due", { _now: now });
   out.published = Number(pub.data ?? 0);
 

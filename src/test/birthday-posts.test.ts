@@ -108,7 +108,7 @@ describe("birthday posts: reviewed by the coach, then out at 8am their time", ()
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("birthday posts to review");
     const ui = read("src/components/community/birthday-posts.tsx");
     expect(ui).toContain("window.location.hash.match(/birthday=([0-9a-f-]{36})/i)");
-    expect(ui).toContain("Nothing goes out until you approve it.");
+    expect(ui).toContain("goes out on its own at 8am on their birthday. Edit or skip it any time before.");
   });
   it("Messenger shows the post as a card that opens it in the app", () => {
     const thread = read("src/components/message-thread.tsx");
