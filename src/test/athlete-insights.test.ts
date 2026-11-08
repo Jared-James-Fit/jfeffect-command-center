@@ -77,7 +77,8 @@ describe("Athlete Insights: the coach's card", () => {
   });
 
   it("the rest of the app calls it Athlete Insights too", () => {
-    expect(readFileSync("src/components/community/admin-community-hub.tsx", "utf8")).toContain('title: "Next: Athlete Insight"');
+    expect(readFileSync("src/lib/posts-schedule.ts", "utf8")).toContain('insight: "Athlete Insight",');
+    expect(readFileSync("src/components/community/posts-schedule.tsx", "utf8")).toContain('title="Athlete Insights"');
     expect(readFileSync("src/lib/post-scores.ts", "utf8")).toContain('daily_visual: "Athlete Insights",');
   });
 });

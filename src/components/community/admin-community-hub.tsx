@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
-import { SERIES_LABEL } from "@/lib/community";
 import { useCommunityFeed, useCommunityPulse, useSeriesAction, useViewerUnit, type CommunityPulse } from "@/lib/community.queries";
 import { CommunityScreen } from "@/components/community/community-screen";
 import { MyTabPhoto } from "@/components/community/profile-view";
@@ -14,15 +13,12 @@ import { BarButton } from "@/components/community/crew-header";
 import { openCommunityPerson } from "@/lib/community-notifications";
 import { openCrewActivity } from "@/lib/crew-activity";
 import { ActivityHeart } from "@/components/community/activity-heart";
-import { CoachWeeklyPosts } from "@/components/community/coach-weekly-posts";
-import { CoachLessons } from "@/components/community/coach-lessons";
+import { CoachPostsTab } from "@/components/community/posts-schedule";
 import { PostScoreBoard } from "@/components/community/post-score-board";
-import { BirthdayPostsCard } from "@/components/community/birthday-posts";
 import { CoachPostRow } from "@/components/community/community-entry";
 import { NoteEditor } from "@/components/community/note-editor";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
-import { UpcomingBirthdaysWidget } from "@/components/upcoming-birthdays-widget";
 
 /** "Today 7:00 pm" · "Tomorrow 9:00 am" · "Mon 8:00 am", in the coach's own clock. */
 export function whenLabel(iso: string, now: Date = new Date()): string {
@@ -53,15 +49,6 @@ export function groupReplies(rows: CommunityPulse["to_reply"]) {
     ...g,
     who: g.names.length <= 2 ? g.names.join(" & ") : `${g.names[0]}, ${g.names[1]} +${g.names.length - 2}`,
   }));
-}
-
-function nextPost(p: CommunityPulse): { title: string; when: string | null } {
-  if (p.paused) return { title: "Coach posts are paused", when: "Nothing goes out until you turn them back on" };
-  if (!p.next) return { title: "Nothing scheduled", when: null };
-  if (p.next.series === "lesson")
-    return { title: `Next lesson: ${p.next.title ?? "from the library"}`, when: `${whenLabel(p.next.at)}${p.next.needs_ok ? " · needs your OK" : ""}` };
-  if (p.next.series === "daily_visual") return { title: "Next: Athlete Insight", when: whenLabel(p.next.at) };
-  return { title: `Next: ${SERIES_LABEL[p.next.series]?.name ?? "Coach post"}`, when: whenLabel(p.next.at) };
 }
 
 type HubTab = "feed" | "posts" | "insights";
@@ -99,8 +86,9 @@ export function hubTabCounts(p: CommunityPulse | undefined): Record<HubTab, numb
  * photo), like the clients' Crew bar:
  * - Feed: only what's waiting on you (comments to answer, workouts waiting
  *   on props, posts to approve), then the feed.
- * - Posts: everything that goes out on its own (lessons, the daily series,
- *   birthdays), a birthday draft to review first.
+ * - Posts: one schedule of everything that goes out on its own, what's out
+ *   lately, and Manage (each kind's settings on a page of its own,
+ *   posts-schedule.tsx).
  * - Insights: the week in numbers and how each post did.
  * The League is its own page (`/admin/league`, the trophy on the bar).
  */
@@ -197,7 +185,7 @@ export function AdminCommunityHub() {
             </div>
           </>
         ) : tab === "posts" ? (
-          <PostsTab birthdayFirst={(pulse?.birthday_review ?? 0) > 0} />
+          <CoachPostsTab />
         ) : (
           <>
             <WeekCard />
@@ -221,37 +209,6 @@ export function AdminCommunityHub() {
           return r?.id;
         }}
       />
-    </div>
-  );
-}
-
-/** What goes out next (lessons and the daily series together), or that posts are paused. */
-function UpNext() {
-  const { data: p } = useCommunityPulse();
-  if (!p) return null;
-  const next = nextPost(p);
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-crew-up-next>
-      <Row icon={<CalendarClock className="h-4 w-4" />} title={next.title} sub={next.when ?? undefined} hot={p.paused} />
-    </div>
-  );
-}
-
-/** Everything that goes out on its own: what's next, lessons, the daily series, birthdays (a draft to review first). */
-function PostsTab({ birthdayFirst }: { birthdayFirst: boolean }) {
-  const birthdays = (
-    <div className="space-y-3">
-      <BirthdayPostsCard />
-      <UpcomingBirthdaysWidget windowDays={30} hideWhenEmpty />
-    </div>
-  );
-  return (
-    <div className="space-y-3">
-      <UpNext />
-      {birthdayFirst && birthdays}
-      <CoachLessons />
-      <CoachWeeklyPosts />
-      {!birthdayFirst && birthdays}
     </div>
   );
 }

@@ -856,7 +856,7 @@ describe("nothing is lost, and a post that's out changes in place", () => {
     expect(sql).toContain("IF v_status->>'blocked' IS NOT NULL AND (v_status->>'at')::timestamptz > now() - interval '1 hour' THEN RETURN false; END IF;");
     expect(sql).toContain("$cmd$select public.community_publish_daily_visual(); select public.community_daily_visuals_kick(false);$cmd$");
     expect(readFileSync("src/routeTree.gen.ts", "utf8")).toContain("'/api/public/hooks/daily-visuals-tick'");
-    expect(readFileSync("src/components/community/coach-weekly-posts.tsx", "utf8")).toContain("<DailyPicturesCard />");
+    expect(readFileSync("src/components/community/posts-schedule.tsx", "utf8")).toContain('{which === "insights" && <DailyPicturesCard />}');
   });
 });
 

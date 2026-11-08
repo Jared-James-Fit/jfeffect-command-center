@@ -41,6 +41,7 @@ const db = supabase as any;
 
 type Scores = { scores?: Record<string, number> } | null;
 type ReviewSummary = { score?: number; passed?: boolean; why?: string | null; text_seen?: string; scores?: Record<string, number> } | null;
+export type InsightDay = Day;
 type Day = {
   id: string;
   day: string;
@@ -99,6 +100,7 @@ type Test = {
   score: number;
   medium: string;
 };
+export type InsightsOverview = Overview;
 type Overview = {
   on: boolean;
   paused: boolean;
@@ -215,10 +217,10 @@ function statusLine(d: Day, today: string, off: boolean): { text: string; tone?:
  * now, move it to another day, or go back to any earlier version, a
  * published post included (it changes in place).
  */
-export function DailyPicturesCard() {
-  const qc = useQueryClient();
-  const { data, isLoading, isError } = useQuery({
+export function useInsightsOverview(enabled = true) {
+  return useQuery({
     queryKey: KEY,
+    enabled,
     staleTime: 30_000,
     // while something's being made, check back
     refetchInterval: (q) => (((q.state.data as Overview | undefined)?.days ?? []).some((d) => !!d.regen) ? 20_000 : false),
@@ -228,6 +230,11 @@ export function DailyPicturesCard() {
       return data as Overview;
     },
   });
+}
+
+export function DailyPicturesCard() {
+  const qc = useQueryClient();
+  const { data, isLoading, isError } = useInsightsOverview();
   const [openId, setOpenId] = useState<string | null>(null);
 
   const setOn = useMutation({
@@ -383,7 +390,7 @@ function SectionLabel({ children }: { children: string }) {
   return <div className="px-4 pb-1 pt-3 text-[12px] font-semibold text-muted-foreground">{children}</div>;
 }
 
-function Thumb({ path, busy, className }: { path: string | null; busy?: boolean; className?: string }) {
+export function Thumb({ path, busy, className }: { path: string | null; busy?: boolean; className?: string }) {
   const url = useFullMediaUrl(path, !!path).data ?? null;
   return url ? (
     <img src={url} alt="" className={cn("aspect-[4/5] shrink-0 rounded-lg object-cover", className)} />
@@ -430,7 +437,7 @@ function Chip({ children }: { children: React.ReactNode }) {
 }
 
 /** One post: as the crew sees it, what it's about, how it did on the checks, and everything the coach can do with it. */
-function DaySheet({ d, today, off, onClose }: { d: Day | null; today: string; off: boolean; onClose: () => void }) {
+export function DaySheet({ d, today, off, onClose }: { d: Day | null; today: string; off: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const [style, setStyle] = useState<string>("auto");
   const [editing, setEditing] = useState(false);

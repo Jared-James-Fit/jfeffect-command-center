@@ -21,9 +21,8 @@ describe("the coach's community, in one place", () => {
     expect(hub).toContain("{!viewOnly && <NeedsYou onGo={setTab} />}");
     expect(hub).toContain("<CommunityScreen hideTabs />");
     expect(hub).toContain("if (!any) return null;");
-    // Posts: what's next, lessons, the daily series, birthdays (a draft to review first)
-    expect(hub).toContain("<PostsTab birthdayFirst={(pulse?.birthday_review ?? 0) > 0} />");
-    expect(hub).toContain("<UpcomingBirthdaysWidget windowDays={30} hideWhenEmpty />");
+    // Posts: one schedule of everything going out, then Recently out and Manage (posts-schedule.test.ts)
+    expect(hub).toContain("<CoachPostsTab />");
     // Insights: the week in numbers, then each post's score
     expect(hub).toContain("<WeekCard />\n            <PostScoreBoard />");
     // the tab is kept in the hash so Back returns to it; Crew's own button (no hash) is the Feed
@@ -37,7 +36,7 @@ describe("the coach's community, in one place", () => {
     // the composer lives on the page now, not at the bottom of the schedule
     expect(read("src/components/community/coach-weekly-posts.tsx")).not.toContain("Write a post for the crew");
     // every daily series starts closed (a full Recap preview opening on its own tripled the page)
-    expect(read("src/components/community/coach-weekly-posts.tsx")).toContain("const [open, setOpen] = useState<DailySeries | null>(null);");
+    expect(read("src/components/community/coach-weekly-posts.tsx")).toContain("const [open, setOpen] = useState<DailySeries | null>(() => (focus && ORDER.includes(focus as DailySeries) ? (focus as DailySeries) : null));");
   });
   it("reads a link's tab: old Daily / Birthdays links open Posts, old League links the League page", () => {
     expect(hubTabFromHash("")).toBe("feed");
