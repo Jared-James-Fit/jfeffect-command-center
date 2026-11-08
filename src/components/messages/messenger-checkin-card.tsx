@@ -35,7 +35,7 @@ import {
   type MessengerCheckinTaskType,
 } from "@/lib/messenger-checkins.functions";
 import { generateNutritionPlanFn } from "@/lib/nutrition-ai-plans.functions";
-import { planMissing } from "@/lib/form-request-state";
+import { planMissing, requestCardSubmission } from "@/lib/form-request-state";
 import { answeredQuestions, type FormAnswerRow, type FormQuestionRow } from "@/lib/form-answer-text";
 
 type Role = "admin" | "client";
@@ -1078,17 +1078,19 @@ export function FormRequestChatCard({
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { supabase } = await import("@/integrations/supabase/client");
-      let q = (supabase as any)
+      const { data } = await (supabase as any)
         .from("nf_submissions")
         .select("id, status, submitted_at, created_at")
         .eq("form_id", formId)
         .eq("client_id", clientId)
         .order("created_at", { ascending: false })
-        .limit(1);
-      // Only count a submission made for THIS request (after it was sent).
-      if (sentAt) q = q.gte("created_at", new Date(new Date(sentAt).getTime() - 60_000).toISOString());
-      const { data } = await q;
-      return (data?.[0] ?? null) as { id: string; status: string; submitted_at: string | null } | null;
+        .limit(12);
+      // The answer to THIS request is one sent after it, whenever its draft
+      // was started (requestCardSubmission); else a draft being filled in.
+      return requestCardSubmission(
+        (data ?? []) as Array<{ id: string; status: string; submitted_at: string | null; created_at: string }>,
+        sentAt,
+      );
     },
   });
   const done = !!sub && sub.status !== "in_progress";
