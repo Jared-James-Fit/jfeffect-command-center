@@ -8,7 +8,7 @@ import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engin
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 2;
+export const EDIT_PROMPT_VERSION = 3;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -130,7 +130,7 @@ REPLY: ONE JSON object, nothing else:
 }
 Refining: when there's a CURRENT PROPOSAL, return only new changes, or a changed one under the same id, plus ids to drop. Unchanged changes carry forward on their own; don't repeat them and don't rebuild the proposal for a small adjustment.
 A question gets intent "question" and no changes, unless the coach asked you to make them; offer the edits in the answer instead ("Say the word and I'll…").
-Keep titles under 10 words. No markdown in the JSON strings.`;
+Keep titles under 10 words. No markdown in the JSON strings. Refs (B1W2D3E2) are only for ops: in answer, analysis, why and evidence name workouts the way a coach would ("Thursday's hinge day, weeks 2–4").`;
 
 export function editUserPrompt(x: {
   target: string;
