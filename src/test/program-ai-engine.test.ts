@@ -239,10 +239,32 @@ describe("Edit with AI engine: the 17 scenarios that are pure logic", () => {
     const [c] = resolveChanges(s, [change("c1", [{ op: "add", days: ["B1W2D1"], exercise: "X1", set: { sets: 3, reps: "5", rpe: "6", notes: "Back-off" } }, { op: "add", days: ["B1W2D1"], exercise: "X8", set: { sets: 6, reps: "15", rpe: "9" } }, { op: "add", days: ["B1W2D1"], exercise: "X6", set: { sets: 8, reps: "15", rpe: "9" } }])], ctx);
     expect(c.ok).toBe(true);
     const texts = c.issues.map((i) => i.text).join("\n");
-    expect(texts).toMatch(/Competition Squat is in it 2 times/);
+    expect(texts).toMatch(/Competition Squat would be in it 2 times/);
     expect(texts).toMatch(/Landmine Lateral Raise is below the exercise standard/);
     expect(texts).toMatch(/over their 60-min limit/);
     expect(c.days[0].minutesAfter).toBeGreaterThan(c.days[0].minutesBefore!);
+  });
+
+  it("a swap to a different kind of exercise doesn't inherit the old rest, label or cue; a like-for-like swap keeps them", () => {
+    const s = client();
+    s.blocks[0].weeks[1].days[2].rows[0] = { ...s.blocks[0].weeks[1].days[2].rows[0], restOverride: 240, purposeLabel: "Secondary Deadlift", notes: "Technique only. Comp stance." };
+    const [far] = resolveChanges(s, [change("c1", [{ op: "swap", rows: ["B1W2D3E1"], exercise: "X5", set: { sets: 3, reps: "10-12", rpe: "8" } }])], ctx);
+    expect(far.days[0].rows[0].after).toBe("Lat Pulldown · 3 × 10-12 @RPE 8 · rest 2:00");
+    const p = buildPlan(s, [change("c1", [{ op: "swap", rows: ["B1W2D3E1"], exercise: "X5", set: { sets: 3, reps: "10-12", rpe: "8" } }])], ctx);
+    expect(p.plan.row_updates[0].patch).toMatchObject({ exercise_id: "ex-X5", rest_seconds_override: null, purpose_label: null, notes: null });
+    // hack squat → belt squat: same kind of exercise, the coach's cue stays
+    const t = client();
+    t.blocks[0].weeks[1].days[0].rows[1].notes = "Control the descent.";
+    const [near] = resolveChanges(t, [change("c1", [{ op: "swap", rows: ["B1W2D1E2"], exercise: "X3" }])], ctx);
+    expect(near.days[0].rows[0].after).toBe('Belt Squat · 3 × 10 @RPE 8 · rest 2:00 · "Control the descent."');
+  });
+
+  it("a top set + back-offs already in a workout isn't flagged as a duplicate", () => {
+    const s = client();
+    const d = s.blocks[0].weeks[1].days[2];
+    d.rows.push({ ...d.rows[0], id: "row-backoff", ref: "B1W2D3E3", sortOrder: 2, sets: 3, reps: "5", rpe: "7" });
+    const [c] = resolveChanges(s, [change("c1", [{ op: "update", rows: ["B1W2D3E3"], set: { sets: 2 } }])], ctx);
+    expect(c.issues.filter((i) => /times/.test(i.text))).toEqual([]);
   });
 
   it("reads efforts the way coaches write them", () => {
