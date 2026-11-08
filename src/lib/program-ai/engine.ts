@@ -373,17 +373,21 @@ export function applyOp(work: Work, op: EditOp, ctx: EngineCtx, snap: ProgramSna
       if (!ex) return;
       for (const loc of rowsOf(op.rows)) {
         if (loc.row.exerciseId === ex.id && !op.set) continue;
-        // A different kind of exercise doesn't inherit the old one's rest, label or cue
-        // (a lat pulldown never keeps a deadlift's 4:00 rest or "SECONDARY DEADLIFT" note).
+        // Another class of exercise doesn't inherit the old one's rest (a lat pulldown never keeps a
+        // deadlift's 4:00); another movement doesn't inherit its label or cue ("SECONDARY DEADLIFT…").
+        // Like for like (belt squat → hack squat) keeps the coach's rest: it may be a superset's.
         const was = loc.row.exerciseId ? ctx.byId.get(loc.row.exerciseId) : null;
-        const different = loc.row.timeProfile !== ex.timeProfile || (!!was?.family && !!ex.family && was.family !== ex.family);
+        const otherClass = loc.row.timeProfile !== ex.timeProfile;
+        const otherMovement = otherClass || (!!was?.family && !!ex.family && was.family !== ex.family);
         loc.row.exerciseId = ex.id;
         loc.row.name = ex.name;
         loc.row.nameOverride = null;
         loc.row.timeProfile = ex.timeProfile;
-        if (different) {
+        if (otherClass) {
           loc.row.restSeconds = ex.defaultRest;
           loc.row.restOverride = null;
+        }
+        if (otherMovement) {
           loc.row.purposeLabel = null;
           loc.row.notes = null;
         }

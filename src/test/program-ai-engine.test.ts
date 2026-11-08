@@ -257,6 +257,13 @@ describe("Edit with AI engine: the 17 scenarios that are pure logic", () => {
     t.blocks[0].weeks[1].days[0].rows[1].notes = "Control the descent.";
     const [near] = resolveChanges(t, [change("c1", [{ op: "swap", rows: ["B1W2D1E2"], exercise: "X3" }])], ctx);
     expect(near.days[0].rows[0].after).toBe('Belt Squat · 3 × 10 @RPE 8 · rest 2:00 · "Control the descent."');
+    // live, Nov 8: belt squat → hack squat (same class, other movement family) lost a superset's 45 s rest
+    const u = client();
+    u.blocks[0].weeks[1].days[0].rows[1] = { ...u.blocks[0].weeks[1].days[0].rows[1], restSeconds: 45, restOverride: 45, notes: "Superset with calf raises: hack squat, rest 45s" };
+    const fam = (e: CatalogExercise) => (e.code === "X2" ? { ...e, family: "machine_squat" } : e.code === "X3" ? { ...e, family: "belt_squat" } : e);
+    const famCtx = { catalog: new Map([...ctx.catalog].map(([k, e]) => [k, fam(e)])), byId: new Map([...ctx.byId].map(([k, e]) => [k, fam(e)])) };
+    const p2 = buildPlan(u, [change("c1", [{ op: "swap", rows: ["B1W2D1E2"], exercise: "X3" }])], famCtx);
+    expect(p2.plan.row_updates[0].patch).toEqual({ exercise_id: "ex-X3", notes: null });
   });
 
   it("a top set + back-offs already in a workout isn't flagged as a duplicate", () => {
