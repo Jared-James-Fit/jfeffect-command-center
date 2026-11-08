@@ -586,6 +586,9 @@ describe("the concept comes first: the point, the picture, then three drafts", (
     expect(CONCEPT_PROMPT).toContain("no em dashes or semicolons");
     expect(CONCEPT_PROMPT).toContain('no formal transitions ("however", "additionally", "moreover", "furthermore", "in conclusion", "ultimately", "that said")');
     expect(CONCEPT_PROMPT).toContain("The coaching is accurate even when the writing is casual.");
+    // one of the three drafts is typed his casual way, and no stock opinion phrase gets seeded
+    expect(CONCEPT_PROMPT).toContain("at least one is typed the casual way of his first example: lowercase starts, a run-on, nothing tidied");
+    expect(CONCEPT_PROMPT).toContain('not the same stock phrase like "my rule of thumb" post after post');
     expect(CONCEPT_PROMPT).toContain("no studies, research, statistics or percentages");
     expect(CONCEPT_PROMPT).toContain('"every little bit counts", "give yourself grace", "remember to listen to your body", "you got this", "movement is medicine", "there are worse places to spend your time"');
     expect(CONCEPT_PROMPT).not.toContain("Normal sentence case");
