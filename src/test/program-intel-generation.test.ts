@@ -279,3 +279,12 @@ describe("the brief speaks the athlete's units and plans (blind grading, Nov 9 2
     expect(lines.join("\n")).toContain("2× a week (2 of Tuesday, Saturday, Sunday)");
   });
 });
+
+describe("a strategy's week-by-week detail is kept (blind grading, Nov 9 2026)", () => {
+  it("a phase that carries the week's main-lift prescription isn't cut to a label", () => {
+    const phase = "W3 build: Squat 3×4 @RPE 7.5 (top set +2.5 kg if W2 hit), Bench 4×4 @7.5, Deadlift 2×3 @7; accessories hold reps";
+    const s = strategySchema.parse({ athlete_read: "x", previous_program: {}, progression: {}, structure: { weeks: 4, days_per_week: 2, blocks: [{ name: "A", weeks: 4, phases: [{ week: 3, phase }] }] }, weekly_layout: [{ day: 1, title: "A", notes: "n".repeat(2000) }], exercise_plan: {}, decisions: [{ observation: "o", change: "c" }] });
+    expect(s.structure.blocks[0].phases[0].phase).toBe(phase);
+    expect(s.weekly_layout[0].notes).toHaveLength(2000);
+  });
+});
