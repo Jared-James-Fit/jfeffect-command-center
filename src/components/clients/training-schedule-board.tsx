@@ -44,6 +44,7 @@ import {
 import {
   currentBlock as pickCurrent, upcomingBlocks, draftBlocks, historyBlocks,
   findOverlaps, gapDays, suggestedNextStart, bestNextStart, defaultStartFor, todayISO, addDaysISO,
+  blockGap, blockCoverEnd, blockCoverStart,
   formatRange, durationLabel, STATUS_LABEL, type ScheduleBlock,
 } from "@/lib/block-schedule-model";
 import {
@@ -115,7 +116,7 @@ export function TrainingScheduleBoard({
 
   const currentProgram = current?.prep_id ? prepById.get(current.prep_id) : null;
   const nextBlock = upcoming[0] ?? null;
-  const gap = gapDays(current?.effective_end ?? null, nextBlock?.effective_start ?? null);
+  const gap = blockGap(blockCoverEnd(current), blockCoverStart(nextBlock)).days;
 
   const blockWorkouts = useMemo(
     () => workouts.filter((w) => w.blockId === current?.id),
@@ -284,7 +285,7 @@ export function TrainingScheduleBoard({
                   </div>
                   {gap > 0 && (
                     <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                      {gap}-day training gap after the current block
+                      {gap} day{gap === 1 ? "" : "s"} with nothing planned after the current block
                     </div>
                   )}
                 </div>
@@ -755,15 +756,17 @@ export function EndBlockEarlyDialog({
 }
 
 export function ChangeBlockDatesDialog({
-  block, open, onOpenChange, onDone,
+  block, open, onOpenChange, onDone, initialStart,
 }: {
   block: ScheduleBlock;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onDone: () => void;
+  /** Fix dates on a gap: open on the day after the block before it ends */
+  initialStart?: string | null;
 }) {
   const setSchedule = useServerFn(setBlockScheduleFn);
-  const [start, setStart] = useState(block.start_date ?? todayISO());
+  const [start, setStart] = useState(initialStart ?? block.start_date ?? todayISO());
   const [end, setEnd] = useState(block.effective_end ?? "");
   const [endTouched, setEndTouched] = useState(false);
   const [shift, setShift] = useState(true);
@@ -849,7 +852,7 @@ export function ChangeBlockDatesDialog({
 }
 
 export function AddNextBlockDialog({
-  open, onOpenChange, clientId, blocks, current, onDone, onAssignLibrary, initialBlockId,
+  open, onOpenChange, clientId, blocks, current, onDone, onAssignLibrary, initialBlockId, trainingDays,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -861,6 +864,8 @@ export function AddNextBlockDialog({
   onAssignLibrary: () => void;
   /** Pre-picks this block (the Training tab's Schedule on a draft). */
   initialBlockId?: string | null;
+  /** the client's training days: a gap is only a day they'd train on */
+  trainingDays?: readonly string[] | null;
 }) {
   const setSchedule = useServerFn(setBlockScheduleFn);
   const assignDraft = useServerFn(assignIntelDraftFn);
@@ -908,7 +913,7 @@ export function AddNextBlockDialog({
   const totalWeeks = draft ? draftBlocks.reduce((n, b) => n + (Number(b.weeks) || 0), 0) : Number(chosen?.weeks ?? 0);
   const expectedEnd = totalWeeks ? addDaysISO(start, totalWeeks * dur - 1) : null;
   const before = best.after;
-  const gap = gapDays(before?.effective_end ?? null, start);
+  const gap = blockGap(blockCoverEnd(before), start, trainingDays).days;
   const overlaps = !!before?.effective_end && start <= before.effective_end;
 
   const run = async () => {
@@ -983,7 +988,7 @@ export function AddNextBlockDialog({
             <div className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
               <div>Start: <span className="font-semibold">{pretty(start)}</span></div>
               <div>Expected end: <span className="font-semibold">{pretty(expectedEnd)}</span></div>
-              {gap > 0 && <div className="mt-1 text-amber-600 dark:text-amber-400">{gap}-day gap after {before?.name ?? "the last block"} (allowed)</div>}
+              {gap > 0 && <div className="mt-1 text-amber-600 dark:text-amber-400">{gap} training day{gap === 1 ? "" : "s"} with nothing planned after {before?.name ?? "the last block"} (allowed)</div>}
               {overlaps && (
                 <div className="mt-1 inline-flex items-start gap-1 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />

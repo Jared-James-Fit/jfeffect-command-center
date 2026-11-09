@@ -78,7 +78,31 @@ describe("trainingAlerts", () => {
       today,
     });
     expect(alerts.map((a) => a.kind)).toEqual(["unscheduled", "gap"]);
-    expect(alerts[1]).toEqual({ kind: "gap", days: 6 });
+    expect(alerts[1]).toEqual({ kind: "gap", days: 6, suggestedStart: "2026-10-29" });
+  });
+  it("a rest day between two blocks whose weeks follow on is never a gap (Jared, Nov 9 2026)", () => {
+    // Volume 4s/6s: Sun Nov 1 – Sat Dec 5, workouts Nov 2 – Dec 5; Strength Check-In from Sun Dec 6, first workout Mon Dec 7
+    const blocks = [
+      block("v", "Active", "2026-11-01", "2026-12-05", { effective_start: "2026-11-02", effective_end: "2026-12-05", weeks: 5 }),
+      block("s", "Upcoming", "2026-12-06", "2027-01-02", { effective_start: "2026-12-07", effective_end: "2027-01-02" }),
+    ];
+    const days = ["Monday", "Tuesday", "Thursday", "Saturday"];
+    expect(trainingAlerts({ blocks, roadmap: trainingRoadmap(blocks, "p1"), unscheduled: [], today, trainingDays: days })).toEqual([]);
+    expect(trainingAlerts({ blocks, roadmap: trainingRoadmap(blocks, "p1"), unscheduled: [], today })).toEqual([]);
+  });
+  it("counts only days they train on, and Fix dates starts the next block the day after", () => {
+    // ends Sat Dec 5, next starts Wed Dec 9: Sun, Mon, Tue between, of which Mon and Tue are training days
+    const blocks = [
+      block("a", "Active", "2026-11-01", "2026-12-05", { weeks: 5 }),
+      block("b", "Upcoming", "2026-12-09", "2027-01-05"),
+    ];
+    const days = ["Monday", "Tuesday", "Thursday", "Saturday"];
+    expect(trainingAlerts({ blocks, roadmap: trainingRoadmap(blocks, "p1"), unscheduled: [], today, trainingDays: days })).toEqual([
+      { kind: "gap", days: 2, suggestedStart: "2026-12-06" },
+    ]);
+    // a lone Sunday off between Sat and Mon is not a gap for someone who never trains Sundays
+    const restOnly = [block("a", "Active", "2026-11-01", "2026-12-05", { weeks: 5 }), block("b", "Upcoming", "2026-12-07", "2027-01-03")];
+    expect(trainingAlerts({ blocks: restOnly, roadmap: trainingRoadmap(restOnly, "p1"), unscheduled: [], today, trainingDays: days })).toEqual([]);
   });
   it("a dated program the client can't see comes first, with its workouts left to Start (never also 'need a date')", () => {
     const blocks = [
