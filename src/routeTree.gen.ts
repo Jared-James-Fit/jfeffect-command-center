@@ -242,6 +242,7 @@ import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_
 import { Route as AuthenticatedPortalWorkoutsAnalyticsRouteImport } from './routes/_authenticated/portal/workouts.analytics'
 import { Route as AuthenticatedPortalWorkoutsPrsRouteImport } from './routes/_authenticated/portal/workouts.prs'
 import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api/public/hooks/action-centre-tick'
+import { Route as ApiPublicHooksAiModelsCheckRouteImport } from './routes/api/public/hooks/ai-models-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
 import { Route as ApiPublicHooksCleanupPendingSignupsRouteImport } from './routes/api/public/hooks/cleanup-pending-signups'
@@ -1624,6 +1625,12 @@ const ApiPublicHooksActionCentreTickRoute =
     path: '/api/public/hooks/action-centre-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksAiModelsCheckRoute =
+  ApiPublicHooksAiModelsCheckRouteImport.update({
+    id: '/api/public/hooks/ai-models-check',
+    path: '/api/public/hooks/ai-models-check',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksAppointmentRemindersRoute =
   ApiPublicHooksAppointmentRemindersRouteImport.update({
     id: '/api/public/hooks/appointment-reminders',
@@ -2113,6 +2120,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
+  '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2389,6 +2397,7 @@ export interface FileRoutesByTo {
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
+  '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2671,6 +2680,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/_authenticated/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
+  '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
   '/api/public/hooks/cleanup-pending-signups': typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -2953,6 +2963,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
     | '/api/public/hooks/action-centre-tick'
+    | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -3229,6 +3240,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
     | '/api/public/hooks/action-centre-tick'
+    | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -3510,6 +3522,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/analytics'
     | '/_authenticated/portal/workouts/prs'
     | '/api/public/hooks/action-centre-tick'
+    | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
     | '/api/public/hooks/cleanup-pending-signups'
@@ -3625,6 +3638,7 @@ export interface RootRouteChildren {
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   ChallengesSlugIndexRoute: typeof ChallengesSlugIndexRoute
   ApiPublicHooksActionCentreTickRoute: typeof ApiPublicHooksActionCentreTickRoute
+  ApiPublicHooksAiModelsCheckRoute: typeof ApiPublicHooksAiModelsCheckRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
   ApiPublicHooksCleanupPendingSignupsRoute: typeof ApiPublicHooksCleanupPendingSignupsRoute
@@ -5293,6 +5307,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksActionCentreTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/ai-models-check': {
+      id: '/api/public/hooks/ai-models-check'
+      path: '/api/public/hooks/ai-models-check'
+      fullPath: '/api/public/hooks/ai-models-check'
+      preLoaderRoute: typeof ApiPublicHooksAiModelsCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/appointment-reminders': {
       id: '/api/public/hooks/appointment-reminders'
       path: '/api/public/hooks/appointment-reminders'
@@ -6307,6 +6328,7 @@ const rootRouteChildren: RootRouteChildren = {
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   ChallengesSlugIndexRoute: ChallengesSlugIndexRoute,
   ApiPublicHooksActionCentreTickRoute: ApiPublicHooksActionCentreTickRoute,
+  ApiPublicHooksAiModelsCheckRoute: ApiPublicHooksAiModelsCheckRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,
   ApiPublicHooksBirthdayNotificationsRoute:
