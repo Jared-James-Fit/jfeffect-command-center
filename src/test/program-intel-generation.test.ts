@@ -102,7 +102,10 @@ describe("Generate Next Program: every stage's answer is checked before it's use
       expect(DEFAULT_ROUTES[t].strongOnly).toBe(true);
       expect(DEFAULT_ROUTES[t].models.every((m) => STRONG_MODELS.includes(m))).toBe(true);
     }
-    expect(DEFAULT_ROUTES.construct.models.at(-1)).toBe("gateway:google/gemini-3-flash-preview");
+    // building: Flash first (same audit results as GPT-5.5 in the benchmark, 2-5x faster), GPT-5.5 behind it
+    expect(DEFAULT_ROUTES.construct.models).toEqual(["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"]);
+    // no route leans on a model that can't finish inside one request through the gateway
+    expect(Object.values(DEFAULT_ROUTES).flatMap((r) => r.models).some((m) => m.startsWith("gateway:anthropic/"))).toBe(false);
     // an admin override can't put a weaker model on a coaching decision; a benchmark can, on purpose
     expect(resolveRoute("strategy", { strategy: ["gateway:google/gemini-3-flash-preview"] }).models).toEqual(DEFAULT_ROUTES.strategy.models);
     expect(resolveRoute("strategy", { strategy: ["gateway:google/gemini-3-flash-preview"] }, { anyModel: true }).models).toEqual(["gateway:google/gemini-3-flash-preview"]);

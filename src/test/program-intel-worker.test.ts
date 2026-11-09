@@ -218,7 +218,8 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(j.stage).toBe("done");
     expect(j.progress.stages.map((s: any) => [s.key, s.status])).toEqual([["context", "done"], ["strategy", "done"], ["construct:0", "done"], ["audit", "done"], ["review", "done"], ["save", "done"]]);
     // the coaching brain writes the strategy from the whole history; building reads the compact brief
-    expect(calls.map((c) => c.model)).toEqual(["openai:gpt-6-astra", "openai:gpt-6-astra", "openai:gpt-6-astra"]);
+    // the strategy and the review on the top tier, the block built by the efficient model
+    expect(calls.map((c) => c.model)).toEqual(["openai:gpt-6-astra", "gateway:google/gemini-3-flash-preview", "openai:gpt-6-astra"]);
     // the coaching review read the built program with the measured facts, after the automatic checks
     expect(calls[2].system).toContain("reviewing a");
     expect(calls[2].prompt).toContain("## The program to review (4 weeks, 4 days");
@@ -239,7 +240,7 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(j.context.records_changed).toBe(false);
     expect(j.context.brief.sections.map((s: any) => s.key)).toContain("log");
     expect(j.context.sources.previous_program).toBe("Home Gym 4-Day Strength + Hypertrophy");
-    expect(j.context.model.routes.strategy).toMatchObject({ models: ["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"], effort: "high", strongOnly: true });
+    expect(j.context.model.routes.strategy).toMatchObject({ models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "high", strongOnly: true });
     expect(j.context.brief.sections.map((s: any) => s.key)).toContain("timeline");
     expect(j.result.calls).toEqual({});
     // the draft: hidden, undated, every week written from its own prescription
@@ -378,8 +379,8 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     const r = await runToEnd(db);
     expect(r.error ?? null).toBeNull();
     expect(r.status).toBe("ready");
-    expect(calls.map((c) => c.model)).toEqual(["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"]);
-    expect(db.tables.program_intel_job_calls.map((c: any) => [c.model, c.ok])).toEqual([["openai:gpt-6-astra", false], ["gateway:anthropic/claude-opus-5-5", true]]);
+    expect(calls.map((c) => c.model)).toEqual(["openai:gpt-6-astra", "gateway:openai/gpt-5.5"]);
+    expect(db.tables.program_intel_job_calls.map((c: any) => [c.model, c.ok])).toEqual([["openai:gpt-6-astra", false], ["gateway:openai/gpt-5.5", true]]);
   });
 
   it("a coaching decision is never handed to a weaker model: when the top tier is down it stops and says so", async () => {

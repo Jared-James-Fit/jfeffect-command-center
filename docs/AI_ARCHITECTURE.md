@@ -78,8 +78,50 @@ Sonnet 5 $2 / $10 (Anthropic's model table). Gateway calls bill in Lovable credi
   its calls are logged like any run, so the comparison is per call: time, tokens, the audit and
   the review on the same athlete.
 
-## Benchmark
+## Benchmark (Nov 9 2026, real athletes)
 
-Pending: the runs on real athletes (advanced powerlifter gaining with stalled lifts, beginners
-in a home gym and cutting with low-back pain, an intermediate with limited recovery in 60-min
-sessions, a first program, two lifters 4 weeks out from a meet) decide the defaults above.
+**Strategy** (the coaching decisions). Each model wrote the strategy for the same athlete from
+the same brief; an independent grader scored them blind (letters shuffled per athlete, the
+grader never saw which model wrote which) on six criteria, 60 points: faithful to the data,
+goal and timeline fit, individualization, programming soundness, exercise selection,
+actionable. Scores are after the parser fix below.
+
+| Athlete (scenario) | GPT-6 Astra (direct) | GPT-5.5 (gateway) | Gemini 3 Flash (gateway) |
+|---|---|---|---|
+| Jared (advanced, stalled lifts, leaning out) | **47** | 44 | 22 |
+| Alyssa (meet in 4 weeks, patchy attendance) | **51** | 44 | 27 |
+| Nicolas (60-min PT sessions, limited recovery) | **51** | 41 | 26 |
+| Marc (beginner, fat loss, low-back pain, home gym) | **44** | 41 | 20 |
+| Colten (beginner, home gym) | **41** | failed (524) | 25 |
+| Devin (first program, cutting, 6 days) | **49** | 46 | 26 |
+| Average | **47.2** | 43.2 | 24.3 |
+
+- Astra beat GPT-5.5 on all five athletes where both finished, and was the most faithful to
+  the records every time. Time per strategy 154–867 s (about $1.20–2.50 at $10 / $50 per
+  million tokens). It never failed to answer; one run crashed with the worker and resumed.
+- GPT-5.5 took 155–210 s and failed once: the gateway answers 524 when a reasoning model
+  thinks for more than ~125 s before streaming its answer.
+- Flash took 12–22 s and was the weakest every time, with unsafe or invented choices (a
+  standing press "for the low back", invented stressors, peaks with no meet).
+- Claude (Opus 5.5, Fable 5.1) through the gateway never finished a strategy inside one
+  request (240 s), at high or medium effort: the gateway has no background mode. Not routed.
+- Strategies for Shaina (adherence), Reece (hypertrophy) and Vicky (gaining) were written by
+  Astra only.
+
+**Building** from an approved strategy (Jared, Nicolas, Devin; the coaching review fixed):
+Flash and GPT-5.5 had the same audit result on every paired build (Devin and Nicolas pass with
+review notes; Jared's fails the same frequency checks with either, a strategy-to-build hand-off
+issue, not the model), Flash in 31–185 s, GPT-5.5 in 80–480 s. Astra as the builder wasn't
+measured: the OpenAI credits ran out mid-run. Flash builds; GPT-5.5 is its fallback.
+
+**Found and fixed along the way** (each made every model look worse than it was):
+- The schemas wiped text over a cap and lists with one bad item, so Astra's detailed
+  strategies arrived with their progression model empty on 9 of 9 runs (#876, #878).
+- The brief named an abandoned program as Alyssa's previous one; "didn't progress in any
+  block" next to +13 %; volume targets counted ½ for secondary muscles while the prompt said
+  direct sets; per-exercise loads printed in kg for lb lifters (#874, #877).
+- A built block was refused for one 0-set week or a long superset label (#879).
+
+**Costs and limits seen**: the benchmark used about $22 of OpenAI credit (25 Astra calls)
+and Lovable AI credit for the gateway runs, and both accounts ran out during it; a run whose
+models are all out of credit stops with a message naming which account to top up.

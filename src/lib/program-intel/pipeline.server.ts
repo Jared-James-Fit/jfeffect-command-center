@@ -123,8 +123,10 @@ async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, 
     await save(admin, job.id, { result });
     return { text, model };
   };
+  const lastErrors: string[] = [];
   const failed = async (model: string, ms: number, error: string) => {
     tried.push(model);
+    lastErrors.push(error);
     result.pending[key] = { failed: tried };
     await logCall(admin, job, { stage: key, model, system, prompt, response: null, ok: false, ms, error: error.slice(0, 500) });
     // kept at once: if this request is cut off trying the next model, the next one skips this
@@ -152,15 +154,16 @@ async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, 
       return done(r.text, model, r.usage, r.ms);
     } catch (e: any) {
       if (e instanceof WaitingForModel) throw e;
-      if (e instanceof ModelHttpError && e.status === 402) throw new Error("AI credits are used up.");
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("Lovable AI credits are used up. Add credits in Lovable (workspace settings, usage), then tap Try again: finished steps aren't redone.");
       await failed(model, Date.now() - t0, String(e?.message ?? e));
     }
   }
   await save(admin, job.id, { result });
+  const noOpenAiCredits = /no credits remaining|insufficient_quota/i.test(JSON.stringify(result.pending?.[key] ?? "")) || lastErrors.some((m) => /no credits remaining|insufficient_quota/i.test(m));
   throw new Error(
-    route.strongOnly
+    (route.strongOnly
       ? `The coaching model didn't answer (tried ${tried.join(", ")}). Coaching decisions aren't handed to a weaker model; try again in a few minutes.`
-      : `No model answered (tried ${tried.join(", ")}). Try again in a few minutes.`,
+      : `No model answered (tried ${tried.join(", ")}). Try again in a few minutes.`) + (noOpenAiCredits ? " The OpenAI account has no credits left: add credits at platform.openai.com (billing)." : ""),
   );
 }
 
