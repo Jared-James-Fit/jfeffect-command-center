@@ -81,6 +81,58 @@ describe("model client", () => {
     expect(seen[1].url).toMatch(/\/responses\/resp_1$/);
   });
 
+  it("streams gateway replies (no 524 on a long think): Claude's text deltas and usage", async () => {
+    const sse = [
+      { type: "message_start", message: { usage: { input_tokens: 90_000 } } },
+      { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
+      { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "hmm" } },
+      { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: '{"a":' } },
+      { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "1}" } },
+      { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 1234 } },
+      { type: "message_stop" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: any) => {
+        seen.push({ url, body: JSON.parse(init.body), headers: init.headers });
+        const text = sse.map((e) => `event: ${e.type}\r\ndata: ${JSON.stringify(e)}\r\n\r\n`).join("");
+        return new Response(text, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+      }),
+    );
+    const c = await callModel("gateway:anthropic/claude-opus-5-5", { system: "s", prompt: "p", effort: "high" });
+    expect(seen[0].body.stream).toBe(true);
+    expect(c.text).toBe('{"a":1}');
+    expect(c.usage).toEqual({ input: 90_000, output: 1234, reasoning: null });
+  });
+
+  it("streams chat completions: deltas joined, usage from the last chunk, [DONE] ignored", async () => {
+    const chunks = ['{"choices":[{"delta":{"content":"he"}}]}', '{"choices":[{"delta":{"content":"llo"}}]}', '{"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2}}', "[DONE]"];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: any) => {
+        seen.push({ url, body: JSON.parse(init.body), headers: init.headers });
+        return new Response(chunks.map((c) => `data: ${c}\n\n`).join(""), { status: 200, headers: { "Content-Type": "text/event-stream; charset=utf-8" } });
+      }),
+    );
+    const r = await callModel("gateway:openai/gpt-5.5", { system: "s", prompt: "p", effort: "medium" });
+    expect(seen[0].body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+    expect(r.text).toBe("hello");
+    expect(r.usage).toEqual({ input: 5, output: 2, reasoning: null });
+  });
+
+  it("a streamed refusal or error event is a failed call", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(`data: ${JSON.stringify({ type: "message_delta", delta: { stop_reason: "refusal" }, usage: { output_tokens: 0 } })}\n\n`, { status: 200, headers: { "Content-Type": "text/event-stream" } })),
+    );
+    await expect(callModel("gateway:anthropic/claude-opus-5-5", { system: "s", prompt: "p" })).rejects.toThrow(/declined/);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(`data: ${JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } })}\n\n`, { status: 200, headers: { "Content-Type": "text/event-stream" } })),
+    );
+    await expect(callModel("gateway:anthropic/claude-opus-5-5", { system: "s", prompt: "p" })).rejects.toThrow(/Overloaded/);
+  });
+
   it("estimates cost only from published prices", () => {
     expect(estimateCost("openai:gpt-6-astra", 100_000, 10_000)).toBe(1.5);
     expect(estimateCost("gateway:anthropic/claude-opus-5-5", 100_000, 10_000)).toBe(0.6);

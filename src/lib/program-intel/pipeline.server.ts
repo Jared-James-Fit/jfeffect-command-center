@@ -47,7 +47,7 @@ const MAX_REPAIR_ROUNDS = 2;
 /** How long one request polls a background call before handing over to the next request, and how often. */
 export const pollConfig = { ms: 200_000, every: 4000 };
 /** A gateway (synchronous) call's limit. */
-const SYNC_TIMEOUT_MS = 170_000;
+const SYNC_TIMEOUT_MS = 240_000;
 /** A background call that hasn't finished by now is given up on (and the next model tried). */
 const BACKGROUND_LIMIT_MS = 25 * 60_000;
 
@@ -119,6 +119,8 @@ async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, 
     tried.push(model);
     result.pending[key] = { failed: tried };
     await logCall(admin, job, { stage: key, model, system, prompt, response: null, ok: false, ms, error: error.slice(0, 500) });
+    // kept at once: if this request is cut off trying the next model, the next one skips this
+    await save(admin, job.id, { result });
   };
   if (pending?.id && pending.model) {
     const st = await pollFor(pending.id, pollConfig.ms);

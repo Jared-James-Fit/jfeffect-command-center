@@ -42,6 +42,12 @@ id (never a second submission), up to `BACKGROUND_LIMIT_MS`. A finished answer i
 `result.calls[key]`, so a resumed stage never re-asks. A failed stage clears both, so Try again
 asks fresh.
 
+Gateway calls (Claude, and OpenAI / Google through the gateway) are **streamed**: the gateway
+answers 524 to a request that sends nothing back for ~125s, which a strong model thinking over a
+long brief always hits. Streamed, a call can run up to `SYNC_TIMEOUT_MS` (240s, inside the 300s
+the database gives the worker request). A model that fails is saved on the job at once, so a
+request cut off while trying the next model never retries the one that failed.
+
 ## Claude via the gateway
 
 Claude Opus 5.5 / Sonnet 5 refuse a thinking budget (`budget_tokens`) and any `temperature`

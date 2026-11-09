@@ -53,6 +53,48 @@ async function post(url: string, headers: Record<string, string>, body: unknown,
   return text ? JSON.parse(text) : {};
 }
 
+/**
+ * A streamed POST (server-sent events). The gateway answers 524 to a request that sends nothing
+ * back for ~125s, which a strong model thinking over a long brief always hits; streamed, bytes
+ * flow from the first token, so a call runs as long as `timeoutMs` allows. Each `data:` payload
+ * goes to `onEvent`; a plain JSON answer (a gateway that didn't stream) is handed back whole.
+ */
+async function postStream(url: string, headers: Record<string, string>, body: Record<string, unknown>, timeoutMs: number, onEvent: (data: any) => void): Promise<any | null> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...headers }, body: JSON.stringify({ ...body, stream: true }), signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ModelHttpError(res.status, `${res.status} ${text.slice(0, 400)}`);
+  }
+  if (!String(res.headers.get("content-type") ?? "").includes("text/event-stream") || !res.body) {
+    const text = await res.text();
+    return text ? JSON.parse(text) : {};
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const flush = (chunk: string) => {
+    const data = chunk
+      .split("\n")
+      .filter((l) => l.startsWith("data:"))
+      .map((l) => l.slice(5).trimStart())
+      .join("\n");
+    if (!data || data === "[DONE]") return;
+    onEvent(JSON.parse(data));
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    let i: number;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      flush(buf.slice(0, i));
+      buf = buf.slice(i + 2);
+    }
+  }
+  if (buf.trim()) flush(buf);
+  return null;
+}
+
 function gatewayHeaders(): Record<string, string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY is not configured.");
@@ -65,15 +107,26 @@ function openaiHeaders(): Record<string, string> {
 }
 
 /** Thinking budget for Claude by effort (tokens it may think before answering). */
+/** OpenAI and Google models through the gateway's chat completions, streamed (see postStream). */
 async function gatewayChat(id: string, r: ModelRequest): Promise<Omit<ModelReply, "model" | "ms">> {
-  const body: Record<string, unknown> = { model: id, messages: [{ role: "system", content: r.system }, { role: "user", content: r.prompt }] };
+  const body: Record<string, unknown> = { model: id, messages: [{ role: "system", content: r.system }, { role: "user", content: r.prompt }], stream_options: { include_usage: true } };
   if (isReasoning(id)) {
     if (r.effort) body.reasoning_effort = r.effort;
   } else if (r.temperature != null) body.temperature = r.temperature;
   if (r.maxOutputTokens) body[isReasoning(id) ? "max_completion_tokens" : "max_tokens"] = r.maxOutputTokens;
-  const j = await post(`${GATEWAY}/chat/completions`, gatewayHeaders(), body, r.timeoutMs ?? 170_000);
-  const text = String(j?.choices?.[0]?.message?.content ?? "");
-  return { text, usage: { input: j?.usage?.prompt_tokens ?? null, output: j?.usage?.completion_tokens ?? null, reasoning: j?.usage?.completion_tokens_details?.reasoning_tokens ?? null } };
+  let text = "";
+  let usage: any = null;
+  const whole = await postStream(`${GATEWAY}/chat/completions`, gatewayHeaders(), body, r.timeoutMs ?? 170_000, (e) => {
+    if (e?.error) throw new Error(`${id}: ${String(e.error?.message ?? JSON.stringify(e.error)).slice(0, 300)}`);
+    const d = e?.choices?.[0]?.delta?.content;
+    if (typeof d === "string") text += d;
+    if (e?.usage) usage = e.usage;
+  });
+  if (whole) {
+    text = String(whole?.choices?.[0]?.message?.content ?? "");
+    usage = whole?.usage ?? null;
+  }
+  return { text, usage: { input: usage?.prompt_tokens ?? null, output: usage?.completion_tokens ?? null, reasoning: usage?.completion_tokens_details?.reasoning_tokens ?? null } };
 }
 
 /**
@@ -84,11 +137,31 @@ async function gatewayChat(id: string, r: ModelRequest): Promise<Omit<ModelReply
 async function gatewayMessages(id: string, r: ModelRequest): Promise<Omit<ModelReply, "model" | "ms">> {
   const body: Record<string, unknown> = { model: id, max_tokens: r.maxOutputTokens ?? 32_000, system: r.system, messages: [{ role: "user", content: r.prompt }], thinking: { type: "adaptive" } };
   if (r.effort) body.output_config = { effort: r.effort };
-  const j = await post(`${GATEWAY}/messages`, { ...gatewayHeaders(), "anthropic-version": "2023-06-01" }, body, r.timeoutMs ?? 170_000);
-  if (j?.stop_reason === "refusal") throw new Error(`${id} declined the request${j?.stop_details?.category ? ` (${j.stop_details.category})` : ""}`);
-  const text = (Array.isArray(j?.content) ? j.content : []).filter((c: any) => c?.type === "text").map((c: any) => c.text ?? "").join("");
-  if (j?.stop_reason === "max_tokens" && !text.trim()) throw new Error(`${id} ran out of room before answering`);
-  return { text, usage: { input: j?.usage?.input_tokens ?? null, output: j?.usage?.output_tokens ?? null, reasoning: null } };
+  let text = "";
+  let input: number | null = null;
+  let output: number | null = null;
+  let stop: string | null = null;
+  let category: string | null = null;
+  const whole = await postStream(`${GATEWAY}/messages`, { ...gatewayHeaders(), "anthropic-version": "2023-06-01" }, body, r.timeoutMs ?? 170_000, (e) => {
+    if (e?.type === "error") throw new Error(`${id}: ${String(e.error?.message ?? e.error?.type ?? "stream error").slice(0, 300)}`);
+    if (e?.type === "message_start") input = e.message?.usage?.input_tokens ?? input;
+    if (e?.type === "content_block_delta" && e.delta?.type === "text_delta") text += e.delta.text ?? "";
+    if (e?.type === "message_delta") {
+      output = e.usage?.output_tokens ?? output;
+      stop = e.delta?.stop_reason ?? stop;
+      category = e.delta?.stop_details?.category ?? category;
+    }
+  });
+  if (whole) {
+    text = (Array.isArray(whole?.content) ? whole.content : []).filter((c: any) => c?.type === "text").map((c: any) => c.text ?? "").join("");
+    input = whole?.usage?.input_tokens ?? null;
+    output = whole?.usage?.output_tokens ?? null;
+    stop = whole?.stop_reason ?? null;
+    category = whole?.stop_details?.category ?? null;
+  }
+  if (stop === "refusal") throw new Error(`${id} declined the request${category ? ` (${category})` : ""}`);
+  if (stop === "max_tokens" && !text.trim()) throw new Error(`${id} ran out of room before answering`);
+  return { text, usage: { input, output, reasoning: null } };
 }
 
 function responseText(j: any): string {
