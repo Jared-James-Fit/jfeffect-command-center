@@ -20,7 +20,9 @@
  * Every model call is logged with its exact prompt, reply, model and size in
  * program_intel_job_calls (coach-readable) for the context inspector.
  */
-import { auditProgram, HEAVY_SPACING_BRAINS, heavyOf, spreadHeavyDays, type AuditResult } from "./audit";
+import { resolveRoute, type AiTask } from "@/lib/ai/routing";
+import { auditProgram, type AuditResult } from "./audit";
+import { reviewRepairs, reviewReplySchema, reviewSystemPrompt, reviewUserPrompt, withReview, type CoachingReview, type ReviewReply } from "./coaching-review";
 import { buildBrief, CONSTRUCT_EXCLUDE, loadReferences } from "./brief";
 import { builtBlockSchema, setupSchema, strategySchema, type BuiltBlock, type BuiltProgram, type Strategy } from "./generator-schemas";
 import { constructSystemPrompt, constructUserPrompt, PIPELINE_PROMPT_VERSION, repairUserPrompt, strategySystemPrompt, strategyUserPrompt } from "./generator-prompts";
@@ -30,28 +32,30 @@ import { isLowValueExercise, meetsStandard, withStandardStrategy, withStandardSu
 import { loadIntelRecords } from "./load";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
-import { findConflicts, redistribution, type GenerationSetup, type SetupField } from "./recommend";
+import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "./recommend";
 import { BRAIN_LABEL, type Brain, type IntelRecords, type RawExercise } from "./types";
 
 type Db = any;
-/** The model that designs programs; the app's default model answers if it can't. */
-export const PROGRAM_DESIGN_MODEL = "google/gemini-3.1-pro-preview";
 /**
- * The design model answers a prompt up to about this size in time. In
- * production it answered a 38k-character repair in 67s but timed out at
- * 170s on 63k (a block to build), 105k and 135k, while the app's default
- * model read 130k in 12s and built a block from 63k in 26s. So the design
- * model only takes the small prompts (repairs); everything else goes to the
- * default model.
+ * Which model answers each stage comes from the routing table (src/lib/ai/routing.ts): the
+ * coaching brain writes the strategy and reviews the program; building and repairs may fall
+ * back further. OpenAI models run in background mode: the call is submitted, its id kept on
+ * the job, and polled across requests, so a long think never hits a request's time limit.
  */
-export const DESIGN_MODEL_MAX_PROMPT_CHARS = 40_000;
-const CALL_TIMEOUT_MS = 170_000;
-
-/** Which models a call tries, in order, for its size. */
-export function modelsFor(promptChars: number, cfg: { primary: string; fallback: string }): string[] {
-  return promptChars <= DESIGN_MODEL_MAX_PROMPT_CHARS ? [...new Set([cfg.primary, cfg.fallback])] : [cfg.fallback];
-}
 const MAX_REPAIR_ROUNDS = 2;
+/** How long one request polls a background call before handing over to the next request, and how often. */
+export const pollConfig = { ms: 200_000, every: 4000 };
+/** A gateway (synchronous) call's limit. */
+const SYNC_TIMEOUT_MS = 170_000;
+/** A background call that hasn't finished by now is given up on (and the next model tried). */
+const BACKGROUND_LIMIT_MS = 25 * 60_000;
+
+/** The model hasn't answered yet; the job is re-queued and the next request keeps polling. */
+export class WaitingForModel extends Error {
+  constructor() {
+    super("Waiting for the model");
+  }
+}
 
 export type StageState = { key: string; label: string; status: "pending" | "running" | "done" | "skipped" | "error"; detail?: string };
 
@@ -63,39 +67,96 @@ function stagesFor(kind: "strategy" | "generate", blocks: number | null, approve
   if (kind === "generate") {
     const n = blocks ?? 1;
     for (let i = 0; i < n; i++) s.push({ key: `construct:${i}`, label: n > 1 ? `Building block ${i + 1} of ${n}` : "Building the program", status: "pending" });
-    s.push({ key: "audit", label: "Quality audit", status: "pending" }, { key: "save", label: "Saving the hidden draft", status: "pending" });
+    s.push({ key: "audit", label: "Quality audit", status: "pending" }, { key: "review", label: "Coaching review", status: "pending" }, { key: "save", label: "Saving the hidden draft", status: "pending" });
   }
   return s;
 }
 
-async function modelConfig(admin: Db): Promise<{ primary: string; fallback: string }> {
-  const { DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-  const { data: cfg } = await admin.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-  return { primary: PROGRAM_DESIGN_MODEL, fallback: (cfg?.default_model as string | undefined) || DEFAULT_AI_MODEL };
+/** Model routing for this job: a benchmark run's own models, else the admin's override, else the defaults. */
+async function routeOverride(admin: Db, job: any): Promise<Partial<Record<AiTask, string[]>> | null> {
+  if (job.options?.models) return job.options.models;
+  const { data } = await admin.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
+  try {
+    return data?.value ? JSON.parse(data.value) : null;
+  } catch {
+    return null;
+  }
 }
 
-/** One logged model call: the design model (for prompts it answers in time), then the app's default if it fails (not for rate limits or credits). */
-async function callModel(admin: Db, job: any, stage: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
-  const { createLovableAiGateway } = await import("@/lib/ai-gateway.server");
-  const { generateText } = await import("ai");
-  const cfg = await modelConfig(admin);
-  const models = modelsFor(system.length + prompt.length, cfg);
-  let lastErr: any = null;
-  for (const model of models) {
+async function pollFor(id: string, ms: number) {
+  const { pollBackground } = await import("@/lib/ai/model-client.server");
+  const t0 = Date.now();
+  for (;;) {
+    const st = await pollBackground(id);
+    if (st.status !== "running" || Date.now() - t0 >= ms) return st;
+    await new Promise((r) => setTimeout(r, pollConfig.every));
+  }
+}
+
+/**
+ * One model call for a stage, routed (`task`) and logged. `key` names the call within the job: a
+ * finished answer is kept on the job (so a stage resumed by the next request never asks twice) and
+ * a background call in flight is resumed, not restarted.
+ */
+async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
+  result.calls = result.calls ?? {};
+  result.pending = result.pending ?? {};
+  if (result.calls[key]) return result.calls[key];
+  const { submitBackground, callModel, parseModelRef, ModelHttpError } = await import("@/lib/ai/model-client.server");
+  const route = resolveRoute(task, await routeOverride(admin, job), { anyModel: !!job.options?.bench });
+  const req = { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.3 };
+  const pending = result.pending[key] as { id?: string; model?: string; at?: number; failed?: string[] } | undefined;
+  const tried: string[] = [...(pending?.failed ?? [])];
+  const done = async (text: string, model: string, usage: any, ms: number) => {
+    result.calls[key] = { text, model };
+    delete result.pending[key];
+    await logCall(admin, job, { stage: key, model, system, prompt, response: text, ok: true, ms, usage });
+    await save(admin, job.id, { result });
+    return { text, model };
+  };
+  const failed = async (model: string, ms: number, error: string) => {
+    tried.push(model);
+    result.pending[key] = { failed: tried };
+    await logCall(admin, job, { stage: key, model, system, prompt, response: null, ok: false, ms, error: error.slice(0, 500) });
+  };
+  if (pending?.id && pending.model) {
+    const st = await pollFor(pending.id, pollConfig.ms);
+    if (st.status === "running" && Date.now() - (pending.at ?? 0) < BACKGROUND_LIMIT_MS) throw new WaitingForModel();
+    if (st.status === "done") return done(st.reply.text, pending.model, st.reply.usage, Date.now() - (pending.at ?? Date.now()));
+    await failed(pending.model, Date.now() - (pending.at ?? Date.now()), st.status === "failed" ? st.error : "no answer in time");
+  }
+  for (const model of route.models.filter((m) => !tried.includes(m))) {
     const t0 = Date.now();
     try {
-      const r = await generateText({ model: createLovableAiGateway()(model), system, prompt, temperature: 0.3, abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS) });
-      await logCall(admin, job, { stage, model, system, prompt, response: r.text, ok: true, ms: Date.now() - t0, usage: (r as any).usage ?? null });
-      return { text: r.text, model };
+      if (parseModelRef(model).via === "openai") {
+        const { id } = await submitBackground(model, req);
+        result.pending[key] = { id, model, at: t0, failed: tried };
+        await save(admin, job.id, { result });
+        const st = await pollFor(id, pollConfig.ms);
+        if (st.status === "running") throw new WaitingForModel();
+        if (st.status === "done") return done(st.reply.text, model, st.reply.usage, Date.now() - t0);
+        throw new Error(st.error);
+      }
+      const r = await callModel(model, { ...req, timeoutMs: SYNC_TIMEOUT_MS });
+      return done(r.text, model, r.usage, r.ms);
     } catch (e: any) {
-      const status = e?.statusCode ?? e?.status;
-      await logCall(admin, job, { stage, model, system, prompt, response: null, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 500) });
-      lastErr = e;
-      if (status === 429) throw new Error("The AI service is busy (too many requests). Try again in a minute.");
-      if (status === 402) throw new Error("AI credits are used up.");
+      if (e instanceof WaitingForModel) throw e;
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("AI credits are used up.");
+      await failed(model, Date.now() - t0, String(e?.message ?? e));
     }
   }
-  throw new Error(`The AI service didn't answer: ${String(lastErr?.message ?? lastErr).slice(0, 200)}`);
+  await save(admin, job.id, { result });
+  throw new Error(
+    route.strongOnly
+      ? `The coaching model didn't answer (tried ${tried.join(", ")}). Coaching decisions aren't handed to a weaker model; try again in a few minutes.`
+      : `No model answered (tried ${tried.join(", ")}). Try again in a few minutes.`,
+  );
+}
+
+/** A stage finished: the answers kept for it aren't needed any more. */
+function clearCalls(result: any) {
+  result.calls = {};
+  result.pending = {};
 }
 
 async function logCall(admin: Db, job: any, x: { stage: string; model: string; system: string; prompt: string; response: string | null; ok: boolean; ms: number; error?: string; usage?: any }) {
@@ -112,8 +173,8 @@ async function logCall(admin: Db, job: any, x: { stage: string; model: string; s
       prompt_chars: x.system.length + x.prompt.length,
       response_chars: x.response?.length ?? 0,
       est_input_tokens: Math.round((x.system.length + x.prompt.length) / 4),
-      input_tokens: x.usage?.inputTokens ?? x.usage?.promptTokens ?? null,
-      output_tokens: x.usage?.outputTokens ?? x.usage?.completionTokens ?? null,
+      input_tokens: x.usage?.input ?? x.usage?.inputTokens ?? x.usage?.promptTokens ?? null,
+      output_tokens: x.usage?.output ?? x.usage?.outputTokens ?? x.usage?.completionTokens ?? null,
       duration_ms: x.ms,
       ok: x.ok,
       error: x.error ?? null,
@@ -125,12 +186,12 @@ async function logCall(admin: Db, job: any, x: { stage: string; model: string; s
 }
 
 /** Ask, check the JSON (and the caller's own checks), and ask once more with the problems named. */
-async function askChecked<T>(admin: Db, job: any, stage: string, system: string, prompt: string, schema: any, check: (v: T) => string[]): Promise<{ value: T; model: string; issues: string[] }> {
-  const first = await callModel(admin, job, stage, system, prompt);
+async function askChecked<T>(admin: Db, job: any, result: any, task: AiTask, key: string, system: string, prompt: string, schema: any, check: (v: T) => string[]): Promise<{ value: T; model: string; issues: string[] }> {
+  const first = await ask(admin, job, result, task, key, system, prompt);
   const p1 = parseJsonReply<T>(first.text, schema);
   const issues1 = p1.ok ? check(p1.value) : [p1.error];
   if (p1.ok && !issues1.length) return { value: p1.value, model: first.model, issues: [] };
-  const second = await callModel(admin, job, `${stage} (retry)`, system, `${prompt}\n\nYour previous reply couldn't be used:\n${issues1.map((i) => `- ${i}`).join("\n")}\nReply again with ONE valid JSON object in exactly the required shape that fixes these, nothing else.`);
+  const second = await ask(admin, job, result, task, `${key} (retry)`, system, `${prompt}\n\nYour previous reply couldn't be used:\n${issues1.map((i) => `- ${i}`).join("\n")}\nReply again with ONE valid JSON object in exactly the required shape that fixes these, nothing else.`);
   const p2 = parseJsonReply<T>(second.text, schema);
   if (!p2.ok) throw new Error(`The AI reply wasn't in the required shape: ${p2.error}`);
   return { value: p2.value, model: second.model, issues: check(p2.value) };
@@ -157,10 +218,29 @@ export function strategyIssues(s: Strategy, setup: GenerationSetup): string[] {
   const sum = s.structure.blocks.reduce((n, b) => n + b.weeks, 0);
   if (sum !== s.structure.weeks) out.push(`The blocks' weeks add up to ${sum}, not ${s.structure.weeks}.`);
   if (s.weekly_layout.length !== setup.daysPerWeek) out.push(`weekly_layout has ${s.weekly_layout.length} days; it needs exactly ${setup.daysPerWeek}.`);
+  // blocks the coach set are kept as set; otherwise the strategy chooses them (each at most 12 weeks)
+  const set = setup.blocks ?? [];
+  if (set.length && (s.structure.blocks.length !== set.length || s.structure.blocks.some((b, i) => b.weeks !== set[i].weeks)))
+    out.push(`The coach set the blocks: ${set.map((b) => `${b.name} ${b.weeks} wk`).join(", ")}; structure.blocks must match them.`);
   const names = JSON.stringify(s.exercise_plan).toLowerCase();
   for (const e of setup.excluded) if ([...s.exercise_plan.retain, ...s.exercise_plan.add].some((x) => x.name.toLowerCase() === e.name.toLowerCase())) out.push(`${e.name} is excluded by the coach but the plan keeps or adds it.`);
   for (const r of setup.required) if (!names.includes(r.name.toLowerCase())) out.push(`Required exercise ${r.name} isn't in exercise_plan (retain or add).`);
   return out;
+}
+
+/** The roadmap the last assigned program was written with, in words (continuity for the next one). */
+export function roadmapText(job: any): string | null {
+  const r = job?.result?.strategy?.roadmap;
+  const st = job?.result?.setup;
+  if (!r && !st) return null;
+  const lines = [
+    `Assigned ${String(job.created_at ?? "").slice(0, 10)}: ${st?.weeks ?? "?"} weeks${st?.startDate ? ` from ${st.startDate}` : ""}${st?.durationMode === "goal" ? " (goal timeline)" : ""}.`,
+    r?.timeline ? `Timeline then: ${r.timeline}` : "",
+    r?.this_program ? `What it was for: ${r.this_program}` : "",
+    r?.phases?.length ? `What was to follow: ${r.phases.map((p: any) => `weeks ${p.weeks} ${p.focus}${p.milestone ? ` (${p.milestone})` : ""}`).join("; ")}` : "",
+    r?.track ? `Track then: ${r.track}${r.track_why ? `, ${r.track_why}` : ""}` : "",
+  ].filter(Boolean);
+  return lines.join("\n");
 }
 
 export function blockIssues(b: BuiltBlock, want: { weeks: number; days: number }): string[] {
@@ -219,7 +299,12 @@ async function intelFor(admin: Db, job: any): Promise<{ intel: GeneratorIntel; r
   const intel = buildGeneratorIntel(rec, { brainOverride: job.brain as Brain });
   const parsed = job.options?.setup ? setupSchema.safeParse(job.options.setup) : null;
   if (parsed && !parsed.success) throw new Error(`The setup sent with this run isn't valid: ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
-  const setup = (parsed?.data as GenerationSetup | undefined) ?? intel.recommendation.setup;
+  let setup = (parsed?.data as GenerationSetup | undefined) ?? intel.recommendation.setup;
+  // a benchmark run: the recommended setup with its own changes (a start date, a length), weeks from the goal timeline when asked
+  if (job.options?.bench && job.options?.setupPatch) {
+    setup = { ...setup, ...job.options.setupPatch };
+    if (setup.durationMode === "goal") setup = { ...setup, weeks: horizonFor(intel.ctx, "goal", null, setup.startDate).weeks };
+  }
   return { intel, rec, setup, edited: (job.options?.edited ?? []) as SetupField[] };
 }
 
@@ -248,9 +333,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const red = redistribution(setup, intel.recommendation.baseline);
     const { data: assigned } = await admin.from("program_intel_jobs").select("id, created_at, result, brain").eq("client_id", job.client_id).eq("kind", "generate").eq("status", "assigned").order("created_at");
     const outcomes = generatedProgramOutcomes(rec, (assigned ?? []) as any);
-    const brief = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes) });
-    const compact = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), exclude: CONSTRUCT_EXCLUDE });
-    const cfg = await modelConfig(admin);
+    const previousRoadmap = roadmapText((assigned ?? []).slice(-1)[0]);
+    const brief = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), previousRoadmap });
+    const compact = buildBrief(intel, { setup, edited, conflicts, redistribution: red, outcomes: outcomeLines(outcomes), exclude: CONSTRUCT_EXCLUDE, previousRoadmap });
+    const override = await routeOverride(admin, job);
     const context = {
       version: 2,
       prompt_version: PIPELINE_PROMPT_VERSION,
@@ -280,7 +366,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
         unreadable: intel.history.coverage.unreadable,
       },
       quality_summary: intel.quality?.summary ?? null,
-      model: { primary: cfg.primary, fallback: cfg.fallback, temperature: 0.3, timeout_ms: CALL_TIMEOUT_MS, design_model_max_prompt_chars: DESIGN_MODEL_MAX_PROMPT_CHARS },
+      model: { routes: Object.fromEntries((["strategy", "construct", "repair", "review"] as AiTask[]).map((t) => [t, resolveRoute(t, override, { anyModel: !!job.options?.bench })])), background_poll_ms: pollConfig.ms, sync_timeout_ms: SYNC_TIMEOUT_MS },
       previous_adherence_pct: intel.ctx.previous?.sessionAdherencePct ?? null,
       // what the later stages build and audit from (the same data the brief came from)
       // a first program has no previous one: maxes entered at setup are its only load references
@@ -316,7 +402,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   const brain: Brain = setup.brain;
 
   if (stage === "strategy") {
-    const { value, model } = await askChecked<Strategy>(admin, job, "strategy", strategySystemPrompt(brain, { first: !!ctxRow.first_program }), strategyUserPrompt(brief, setup, { first: !!ctxRow.first_program }), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup)]);
+    const { value, model } = await askChecked<Strategy>(admin, job, result, "strategy", "strategy", strategySystemPrompt(brain, { first: !!ctxRow.first_program }), strategyUserPrompt(brief, setup, { first: !!ctxRow.first_program }), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup)]);
     const issues = strategyIssues(value, setup);
     if (issues.length) throw new Error(`The strategy didn't match your setup: ${issues.join(" ")}`);
     // anything still below the exercise standard after the retry comes out here, never fails the run
@@ -324,6 +410,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     if (clean.removed.length) result.standardRemoved = clean.removed;
     result.strategy = clean.strategy;
     result.strategySource = "auto";
+    clearCalls(result);
     stages = setStage(stages, "strategy", "done", `${value.decisions.length} decisions · ${model}`);
     if (kind === "strategy") {
       await save(admin, job.id, { result, model, prompt_version: PIPELINE_PROMPT_VERSION, stage: "done", status: "ready", finished_at: new Date().toISOString(), progress: { stages, current: "done" } });
@@ -353,6 +440,8 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     const { value, model, issues } = await askChecked<BuiltBlock>(
       admin,
       job,
+      result,
+      "construct",
       stage,
       constructSystemPrompt(brain, { first: !!ctxRow.first_program }),
       constructUserPrompt({ brief: ctxRow.construct_brief_text ?? brief, setup, strategy, blockIndex: i, previousBlocks: built.slice(0, i), loadRefs: ctxRow.load_refs ?? "", athleteCatalog: athlete, libraryCatalog: library, catalogText }),
@@ -365,6 +454,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
     built[i] = { ...lean.block, name: lean.block.name || sb.name };
     result.blocks = built;
+    clearCalls(result);
     stages = setStage(stages, stage, "done", `${value.days.length} days · ${value.days.reduce((n, d) => n + d.exercises.length, 0)} exercises · ${model}`);
     const next = i + 1 < strategy.structure.blocks.length ? `construct:${i + 1}` : "audit";
     await save(admin, job.id, { result, model, stage: next, progress: { stages, current: next } });
@@ -380,11 +470,12 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       const bi = queue[0];
       if (bi != null) {
         const issues: string[] = result.audit?.repairs?.[bi] ?? [];
-        const { value } = await askChecked<BuiltBlock>(admin, job, `repair:block ${bi + 1}`, constructSystemPrompt(brain, { first: !!ctxRow.first_program }), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
+        const { value } = await askChecked<BuiltBlock>(admin, job, result, "repair", `repair:block ${bi + 1}:${result.repairRound ?? 1}`, constructSystemPrompt(brain, { first: !!ctxRow.first_program }), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
         const lean = withoutCardioRows(withStandardSubstitutions(value));
         if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
         result.blocks[bi] = lean.block;
         result.repairs = [...(result.repairs ?? []), { round: result.repairRound ?? 1, block: bi, issues }];
+        clearCalls(result);
       }
       result.repairQueue = queue.slice(1);
       const next = result.repairQueue.length ? "repair" : "audit";
@@ -406,16 +497,6 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     });
     const ids = resolved.program.blocks.flatMap((b) => b.days.flatMap((d) => d.exercises.map((e) => e.exercise_id))).filter(Boolean) as string[];
     const meta = await exerciseMeta(admin, ids);
-    // a heavy squat day and a heavy deadlift day never land back to back when turning the week fixes it (the split's order kept)
-    const dayOrder: string[] = [];
-    if (HEAVY_SPACING_BRAINS.includes(brain) && setup.trainingDays.length === setup.daysPerWeek) {
-      resolved.program.blocks = resolved.program.blocks.map((b, bi) => {
-        const turned = spreadHeavyDays(b.days, setup.trainingDays, (d) => heavyOf(d, meta));
-        if (!turned) return b;
-        dayOrder.push(`Days turned so heavy squat and deadlift aren't back to back${resolved.program.blocks.length > 1 ? ` (block ${bi + 1})` : ""}: ${turned.days.map((d, k) => `${setup.trainingDays[k].slice(0, 3)} ${d.title}`).join(" · ")}.`);
-        return { ...b, days: turned.days };
-      });
-    }
     const audit: AuditResult = auditProgram({
       program: resolved.program,
       setup,
@@ -428,13 +509,14 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       unmatched: resolved.unmatched,
       athleteExerciseIds: new Set((ai.athlete_exercise_ids ?? []) as string[]),
       brief,
-      dayOrder,
     });
     result.blocks = resolved.program.blocks;
     result.program = resolved.program;
     result.unmatched = resolved.unmatched;
     result.matched = [...resolved.resolved.values()];
-    result.audit = { scorecard: audit.scorecard, overall: audit.overall, findings: audit.findings, sessions: audit.sessions, weekly: audit.weekly, repairs: audit.repairs };
+    // the coaching review's verdict (once it has run) sits on the scorecard with the automatic checks
+    const scored = withReview(audit, (result.review as CoachingReview | undefined) ?? null);
+    result.audit = { scorecard: scored.scorecard, overall: scored.overall, findings: scored.findings, sessions: audit.sessions, weekly: audit.weekly, repairs: audit.repairs, facts: audit.facts ?? [] };
     const round = result.repairRound ?? 0;
     const flagged = Object.keys(audit.repairs).map(Number).sort((a, b) => a - b);
     if (flagged.length && round < MAX_REPAIR_ROUNDS) {
@@ -443,14 +525,58 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       await save(admin, job.id, { result, stage: "repair", progress: { stages: setStage(stages, "audit", "running", `Repair round ${round + 1}: ${flagged.length} block${flagged.length === 1 ? "" : "s"}`), current: "repair" } });
       return "next";
     }
-    const label = audit.overall === "passed" ? "Passed" : audit.overall === "review" ? "Needs review" : "Failed validation";
-    stages = setStage(stages, "audit", audit.overall === "failed" ? "error" : "done", `${label}${round ? ` after ${round} repair round${round === 1 ? "" : "s"}` : ""}`);
+    const label = scored.overall === "passed" ? "Passed" : scored.overall === "review" ? "Needs review" : "Failed validation";
+    stages = setStage(stages, "audit", scored.overall === "failed" ? "error" : "done", `${label}${round ? ` after ${round} repair round${round === 1 ? "" : "s"}` : ""}`);
+    // the automatic checks are done: the coaching brain reads the program once before it's saved
+    const next = !result.review && !job.options?.skipReview ? "review" : "save";
+    await save(admin, job.id, { result, stage: next, progress: { stages, current: next } });
+    return "next";
+  }
+
+  if (stage === "review") {
+    const program: BuiltProgram = result.program;
+    const { value, model } = await askChecked<ReviewReply>(
+      admin,
+      job,
+      result,
+      "review",
+      "review",
+      reviewSystemPrompt(brain),
+      reviewUserPrompt({ brief: ctxRow.construct_brief_text ?? brief, setup, strategy, program, audit: result.audit }),
+      reviewReplySchema,
+      () => [],
+    );
+    const fixes = reviewRepairs(value, program.blocks.length);
+    const blocks = Object.keys(fixes).map(Number).sort((a, b) => a - b);
+    const round = result.repairRound ?? 0;
+    const repairing = blocks.length > 0 && round < MAX_REPAIR_ROUNDS;
+    result.review = { ...value, model, at: new Date().toISOString(), repaired: repairing ? blocks : [] } satisfies CoachingReview;
+    clearCalls(result);
+    const mustFix = value.issues.filter((i) => i.severity === "must_fix").length;
+    stages = setStage(stages, "review", "done", `${value.verdict === "sound" ? "Sound" : `${mustFix} to fix`}${value.issues.length - mustFix ? ` · ${value.issues.length - mustFix} to consider` : ""} · ${model}`);
+    if (repairing) {
+      // genuine problems go to a targeted repair of their block; the automatic checks re-run after
+      result.repairRound = round + 1;
+      result.repairQueue = blocks;
+      result.audit = { ...result.audit, repairs: fixes };
+      await save(admin, job.id, { result, stage: "repair", progress: { stages, current: "repair" } });
+      return "next";
+    }
+    // nothing to repair: put the review on the scorecard and save
+    const scored = withReview({ ...result.audit, repairs: result.audit.repairs ?? {} } as AuditResult, result.review);
+    result.audit = { ...result.audit, scorecard: scored.scorecard, overall: scored.overall, findings: scored.findings };
     await save(admin, job.id, { result, stage: "save", progress: { stages, current: "save" } });
     return "next";
   }
 
   if (stage === "save") {
     const program: BuiltProgram = result.program;
+    // a benchmark run keeps its result for comparison and writes nothing to the client's training
+    if (job.options?.bench) {
+      stages = setStage(stages, "save", "skipped", "Benchmark: no draft written");
+      await save(admin, job.id, { result, stage: "done", status: "ready", finished_at: new Date().toISOString(), prompt_version: PIPELINE_PROMPT_VERSION, progress: { stages, current: "done" } });
+      return "done";
+    }
     const blockIds = await insertDraftProgram(admin, { clientId: job.client_id, createdBy: job.created_by, program, jobId: job.id });
     const decisions = strategy.decisions.map((d) => ({
       client_id: job.client_id,

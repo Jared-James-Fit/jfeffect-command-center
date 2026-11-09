@@ -44,7 +44,7 @@ export type AthleteContext = {
     /** Their experience read as a level (Goals & Setup), or null when not on file. */
     level?: ExperienceLevel | null;
   };
-  goals: { main: string | null; other: string | null; target: string | null; styles: string[]; clientGoals: string | null; bodyweightGoal: string | null; updatedAt: string | null; onFile: boolean; /** Goals & Setup's last answer (anything else they told you), when it says something. */ notes?: string | null; location?: string | null };
+  goals: { main: string | null; other: string | null; target: string | null; styles: string[]; clientGoals: string | null; bodyweightGoal: string | null; updatedAt: string | null; onFile: boolean; /** Goals & Setup's last answer (anything else they told you), when it says something. */ notes?: string | null; location?: string | null; /** A dated long-term goal the coach set once (e.g. "600 kg total" by a date), on the intel profile. */ longTerm?: { text: string; date: string | null; savedAt?: string | null } | null };
   competition: {
     next: { name: string; date: string; weeksOut: number; federation: string | null; weightClass: string | null; division: string | null } | null;
     history: Array<{ date: string | null; name: string | null; squat: number | null; bench: number | null; deadlift: number | null; total: number | null; bodyweight: number | null }>;
@@ -58,6 +58,8 @@ export type AthleteContext = {
     notes: string | null;
     updatedAt: string | null;
     observedWeekdays: string[];
+    /** The last day of the program they're on now (a visible, dated block still running), so the next one starts after it. */
+    currentEnd?: string | null;
   };
   session: {
     goalsMinutes: number | null;
@@ -227,6 +229,7 @@ export function buildAthleteContext(x: {
       onFile: !!g,
       notes: setupNotes(g?.final_notes),
       location: g?.training_location ?? null,
+      longTerm: rec.profile?.long_term_goal ?? null,
     },
     competition: {
       next: nextMeet?.event_date
@@ -243,6 +246,12 @@ export function buildAthleteContext(x: {
       notes: rec.client.schedule_notes ?? null,
       updatedAt: rec.client.schedule_updated_at ?? null,
       observedWeekdays,
+      currentEnd:
+        rec.blocks
+          .filter((b) => b.client_visible !== false && !b.archived && b.end_date && b.end_date >= today && !/^(draft|archived)$/i.test(String(b.status ?? "")))
+          .map((b) => b.end_date as string)
+          .sort()
+          .slice(-1)[0] ?? null,
     },
     session: {
       goalsMinutes: g?.workout_length_minutes ?? null,

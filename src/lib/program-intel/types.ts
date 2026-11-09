@@ -307,7 +307,7 @@ export type EquipmentProfile = {
   notes: string | null;
   confirmedAt?: string | null;
 };
-export type RawIntelProfile = { brain_override: string | null; equipment_profile: EquipmentProfile | null; updated_at?: string | null };
+export type RawIntelProfile = { brain_override: string | null; equipment_profile: EquipmentProfile | null; updated_at?: string | null; /** A dated long-term goal the coach set once (horizon.ts). */ long_term_goal?: { text: string; date: string | null; savedAt?: string | null } | null };
 
 /** Stored athlete observations (memory across programs): what the coach approved, corrected or rejected. */
 export type ObservationStatus = "proposed" | "approved" | "corrected" | "rejected";

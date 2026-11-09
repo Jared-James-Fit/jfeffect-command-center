@@ -4,7 +4,8 @@ import { builtBlockSchema, strategySchema, type BuiltProgram } from "@/lib/progr
 import { constructSystemPrompt, strategySystemPrompt } from "@/lib/program-intel/generator-prompts";
 import { draftBlockDates, exerciseRow, interpretReplySchema, parseJsonReply, resolveProgramExercises } from "@/lib/program-intel/next-program";
 import { rxForWeek } from "@/lib/program-intel/program-view";
-import { blockIssues, modelsFor, strategyIssues } from "@/lib/program-intel/pipeline.server";
+import { blockIssues, strategyIssues } from "@/lib/program-intel/pipeline.server";
+import { DEFAULT_ROUTES, resolveRoute, STRONG_MODELS } from "@/lib/ai/routing";
 import { BRAINS } from "@/lib/program-intel/types";
 import { currentProgramBlocks, fetchAll, fetchByIds } from "@/lib/program-intel/load";
 
@@ -53,6 +54,12 @@ describe("Generate Next Program: every stage's answer is checked before it's use
     expect(issues.join(" ")).toMatch(/Leg Press is excluded/);
     expect(issues.join(" ")).toMatch(/Nordic Curl isn't in exercise_plan/);
     expect(blockIssues(builtBlockSchema.parse(block()), { weeks: 4, days: 2 })).toHaveLength(2);
+    // blocks the coach set are kept; otherwise the strategy picks them
+    const ok = strategySchema.parse({ athlete_read: "x", previous_program: {}, progression: {}, structure: { weeks: 12, days_per_week: 1, blocks: [{ name: "A", weeks: 7 }, { name: "B", weeks: 5 }] }, weekly_layout: [{ day: 1, title: "A" }], exercise_plan: {}, decisions: [{ observation: "o", change: "c" }] });
+    expect(strategyIssues(ok, { weeks: 12, daysPerWeek: 1, blocks: [], excluded: [], required: [] } as any)).toEqual([]);
+    expect(strategyIssues(ok, { weeks: 12, daysPerWeek: 1, blocks: [{ name: "A", weeks: 4, objective: "" }, { name: "B", weeks: 4, objective: "" }, { name: "C", weeks: 4, objective: "" }], excluded: [], required: [] } as any).join(" ")).toMatch(/The coach set the blocks: A 4 wk, B 4 wk, C 4 wk/);
+    // no block runs longer than 12 weeks (a longer program is several, each built in its own request)
+    expect(() => strategySchema.parse({ ...ok, structure: { weeks: 16, days_per_week: 1, blocks: [{ name: "A", weeks: 16 }] } })).toThrow();
   });
   it("interpretations are capped and carry evidence", () => {
     const p = parseJsonReply(JSON.stringify({ observations: [{ statement: "Squat responds to frequency", category: "squat", evidence: ["B1·W2"] }], questions: ["Sleep?"] }), interpretReplySchema);
@@ -90,11 +97,16 @@ describe("Generate Next Program: every stage's answer is checked before it's use
     const named = exerciseRow({ ...b.days[0].exercises[2], exercise_id: null }, 1, 2);
     expect(named).toMatchObject({ exercise_name_override: "Zercher Moonwalk" });
   });
-  it("the design model gets the prompts it answers in time; bigger ones go to the app's default model", () => {
-    const cfg = { primary: "pro", fallback: "flash" };
-    expect(modelsFor(38_000, cfg)).toEqual(["pro", "flash"]);
-    expect(modelsFor(63_000, cfg)).toEqual(["flash"]);
-    expect(modelsFor(105_000, cfg)).toEqual(["flash"]);
+  it("coaching decisions go to the top tier only; building may fall back further", () => {
+    for (const t of ["strategy", "review", "interpret"] as const) {
+      expect(DEFAULT_ROUTES[t].strongOnly).toBe(true);
+      expect(DEFAULT_ROUTES[t].models.every((m) => STRONG_MODELS.includes(m))).toBe(true);
+    }
+    expect(DEFAULT_ROUTES.construct.models.at(-1)).toBe("gateway:google/gemini-3-flash-preview");
+    // an admin override can't put a weaker model on a coaching decision; a benchmark can, on purpose
+    expect(resolveRoute("strategy", { strategy: ["gateway:google/gemini-3-flash-preview"] }).models).toEqual(DEFAULT_ROUTES.strategy.models);
+    expect(resolveRoute("strategy", { strategy: ["gateway:google/gemini-3-flash-preview"] }, { anyModel: true }).models).toEqual(["gateway:google/gemini-3-flash-preview"]);
+    expect(resolveRoute("construct", { construct: ["gateway:anthropic/claude-sonnet-5"] }).models).toEqual(["gateway:anthropic/claude-sonnet-5"]);
     expect(strategySystemPrompt("powerbuilding")).toContain("An observation that links a cause");
   });
   it("assigning: blocks back to back from the start date, each week seven days", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditProgram, heavyClashes, heavyOf, maxRepsAt, spreadHeavyDays, unsupportedTokens } from "@/lib/program-intel/audit";
+import { auditProgram, heavyClashes, maxRepsAt, unsupportedTokens } from "@/lib/program-intel/audit";
 import { buildBrief } from "@/lib/program-intel/brief";
 import { missingEquipment, requirementsOf } from "@/lib/program-intel/equipment";
 import { setupSchema, type BuiltBlock, type BuiltProgram, type Strategy } from "@/lib/program-intel/generator-schemas";
@@ -47,7 +47,11 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
     expect(why.daysPerWeek?.reason).toMatch(/Monday, Tuesday, Wednesday, Friday/);
     expect(why.daysPerWeek?.reason).toMatch(/last program: 4 days/);
     expect(s.trainingDays).toEqual(["Monday", "Tuesday", "Wednesday", "Friday"]);
-    expect(s.weeks).toBe(4);
+    // 12 weeks written at a time (no deadline on file), whatever the last program's length
+    expect(s.weeks).toBe(12);
+    expect(s.durationMode).toBe("default");
+    expect(s.startDate).toBe("2026-11-09");
+    expect(s.blocks).toEqual([]);
   });
   it("session length from their logged sessions, within the stated limit", () => {
     expect(intel.ctx.session.observedMedian).toBeGreaterThanOrEqual(50);
@@ -100,7 +104,7 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
   it("the brief carries the whole previous program set by set, the setup, the coach's changes and data quality", () => {
     const three = setupWith(intel, { daysPerWeek: 3, trainingDays: [] });
     const b = buildBrief(intel, { setup: three, edited: ["daysPerWeek"], conflicts: [], redistribution: redistribution(three, intel.recommendation.baseline) });
-    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "setup", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes", "log", "earlier"]);
+    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "setup", "timeline", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes", "log", "earlier"]);
     expect(b.text).toContain("Changed by the coach");
     expect(b.text).toContain("Days per week: the coach changed it");
     expect(b.text).toContain("4 → 3 days");
@@ -111,7 +115,7 @@ describe("Home-gym athlete (4-day strength + hypertrophy, the real test case)", 
   });
   it("building reads a compact brief: no set-by-set logs, but the measured exercises, load references and the last program's layout", () => {
     const b = buildBrief(intel, { setup: s, edited: [], conflicts: [], redistribution: null, exclude: ["log", "earlier"] });
-    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "setup", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes"]);
+    expect(b.sections.map((x) => x.key)).toEqual(["athlete", "development", "setup", "timeline", "cardio", "requirements", "quality", "previous", "patterns", "memory", "notes"]);
     expect(b.text).not.toContain("## Previous program: full log");
     expect(b.text).toContain("Load references (latest sets of each exercise)");
     expect(b.text).toContain("Station 2 — High cable");
@@ -134,10 +138,13 @@ describe("Powerlifter (3 blocks, top sets + back-offs, meet on file, partial RPE
   const s = intel.recommendation.setup;
   it("is powerlifting, built back from the meet", () => {
     expect(intel.classification.auto).toBe("powerlifting");
+    // the meet falls in week 10 from the start: the goal timeline runs the program to it
     expect(s.weeks).toBe(10);
-    expect(intel.recommendation.why.weeks?.source).toBe("Meet prep");
-    expect(s.blocks.map((b) => b.name)).toEqual(["Accumulation", "Intensification", "Realization and taper"]);
-    expect(s.blocks.reduce((n, b) => n + b.weeks, 0)).toBe(10);
+    expect(s.durationMode).toBe("goal");
+    expect(intel.recommendation.why.weeks?.source).toBe("Goal timeline");
+    expect(intel.recommendation.why.weeks?.reason).toMatch(/Nationals \(2027-01-11\) falls in week 10: the program runs to it/);
+    // the strategy picks the phases and their lengths around the meet
+    expect(s.blocks).toEqual([]);
     expect(s.meetDate).toBe(intel.ctx.competition.next!.date);
   });
   it("previous program = the whole meet prep (3 blocks); each lift read on its own", () => {
@@ -165,8 +172,14 @@ describe("Powerlifter (3 blocks, top sets + back-offs, meet on file, partial RPE
   it("blocks don't add up → a blocker; a meet after the program → warned", () => {
     const bad = setupWith(intel, { blocks: [{ name: "A", weeks: 3, objective: "" }] });
     expect(findConflicts(bad, intel.ctx, intel.recommendation.baseline, lookup(intel)).find((c) => c.id === "blocks-weeks")?.severity).toBe("blocker");
-    const short = setupWith(intel, { weeks: 6, blocks: blockStructure("powerlifting", 6, null) });
-    expect(findConflicts(short, intel.ctx, intel.recommendation.baseline, lookup(intel)).find((c) => c.id === "meet-after-end")).toBeTruthy();
+    // 8 weeks of the coach's own would leave 2 before the meet: said, with the alternatives
+    const short = setupWith(intel, { weeks: 8, durationMode: "custom" });
+    const c = findConflicts(short, intel.ctx, intel.recommendation.baseline, lookup(intel)).find((x) => x.id === "short-final-prep")!;
+    expect(c.options).toEqual(["Make it 10 weeks (through Nationals)", "Make it 6 weeks (a 4-week final prep next)", "Keep 8"]);
+    // the 12-week default runs past it
+    const long = setupWith(intel, { weeks: 12, durationMode: "default" });
+    expect(findConflicts(long, intel.ctx, intel.recommendation.baseline, lookup(intel)).find((x) => x.id === "runs-past-deadline")).toBeTruthy();
+    expect(blockStructure("powerlifting", 6, null)).toHaveLength(1);
   });
 });
 
@@ -232,7 +245,7 @@ const strategyFor = (setup: GenerationSetup, over: Partial<Strategy> = {}): Stra
   prioritize: [],
   reduce: [],
   progression: { model: "Double progression", expected: "", fatigue: "Lighter week 4", success_criteria: [] },
-  structure: { weeks: setup.weeks, days_per_week: setup.daysPerWeek, session_minutes: setup.sessionMinutes, blocks: setup.blocks.map((b) => ({ name: b.name, weeks: b.weeks, objective: b.objective, phases: [] })) },
+  structure: { weeks: setup.weeks, days_per_week: setup.daysPerWeek, session_minutes: setup.sessionMinutes, blocks: (setup.blocks.length ? setup.blocks : [{ name: "Strength + hypertrophy", weeks: setup.weeks, objective: "" }]).map((b) => ({ name: b.name, weeks: b.weeks, objective: b.objective, phases: [] })) },
   weekly_layout: Array.from({ length: setup.daysPerWeek }, (_, i) => ({ day: i + 1, title: `Day ${i + 1}`, focus: "", primary: [], notes: "" })),
   frequency_targets: [],
   volume_targets: [],
@@ -253,7 +266,8 @@ const exr = (id: string, name: string, extra: any = {}) => ({ exercise_id: id, e
 
 describe("Program quality audit and scorecard", () => {
   const intel = buildGeneratorIntel(homeGym());
-  const setup = intel.recommendation.setup;
+  // a 4-week program of the coach's own length (the fixture's blocks are 4 weeks)
+  const setup: GenerationSetup = { ...intel.recommendation.setup, weeks: 4, durationMode: "custom" };
   const input = (program: BuiltProgram, extra: any = {}) => ({
     program,
     setup,
@@ -451,16 +465,12 @@ describe("A first program that follows its plan isn't flagged for what compounds
     expect(row(a, "instructions").status).toBe("passed");
   });
 
-  it("heavy deadlift Tuesday into heavy squat Wednesday is flagged, and turning the week fixes it with the split's order kept", () => {
+  it("heavy deadlift Tuesday into heavy squat Wednesday isn't a mistake by rule: it's a fact for the coaching review", () => {
     const a = audit(days());
-    expect(row(a, "fatigue").reasons).toEqual(["Heavy squat and heavy deadlift on back-to-back days (Tuesday / Wednesday)."]);
-    const turned = spreadHeavyDays(days(), trainingDays, (d) => heavyOf(d, meta))!;
-    expect(turned.days.map((d) => d.title)).toEqual(["Legs 2", "Push 1", "Pull 1", "Legs 1", "Push 2", "Pull 2"]);
-    const b = audit(turned.days, { dayOrder: ["Days turned so heavy squat and deadlift aren't back to back: …"] });
-    expect(row(b, "fatigue").status).toBe("passed");
-    expect(row(b, "fatigue").reasons[0]).toMatch(/Days turned/);
-    // nothing to turn when nothing clashes
-    expect(spreadHeavyDays(turned.days, trainingDays, (d) => heavyOf(d, meta))).toBeNull();
+    expect(row(a, "fatigue").status).toBe("passed");
+    expect(a.facts).toEqual(["Block 1: Pull 1 (Tuesday) and Legs 1 (Wednesday) lead with a heavy squat and a heavy deadlift on back-to-back days."]);
+    // the days stay as the strategy laid them out
+    expect(a.sessions.filter((x) => x.week === 1).map((x) => x.title)).toEqual(["Push 1", "Pull 1", "Legs 1", "Push 2", "Pull 2", "Legs 2"]);
   });
 
   it("Sunday into Monday counts as back to back", () => {

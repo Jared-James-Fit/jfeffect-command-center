@@ -77,12 +77,16 @@ export async function checkModels(opts: { probe?: boolean; extra?: string[] } = 
     if (lovable)
       for (const model of gwModels)
         tasks.push(
-          timed(() => getJson(`${GATEWAY}/chat/completions`, gw, { model, messages: [{ role: "user", content: PROMPT }] }, 90_000)).then((r) => ({
+          // Claude answers only on the native Messages route (as model-client.server.ts calls it)
+          (/^anthropic\//.test(model)
+            ? timed(() => getJson(`${GATEWAY}/messages`, { ...gw, "anthropic-version": "2023-06-01" }, { model, max_tokens: 2000, thinking: { type: "adaptive" }, output_config: { effort: "low" }, messages: [{ role: "user", content: PROMPT }] }, 90_000))
+            : timed(() => getJson(`${GATEWAY}/chat/completions`, gw, { model, messages: [{ role: "user", content: PROMPT }] }, 90_000))
+          ).then((r) => ({
             provider: "gateway",
             model,
             ok: !r.e,
             ms: r.ms,
-            reply: r.v?.choices?.[0]?.message?.content?.slice(0, 40),
+            reply: (r.v?.choices?.[0]?.message?.content ?? (Array.isArray(r.v?.content) ? r.v.content.find((c: any) => c?.type === "text")?.text : undefined))?.slice(0, 40),
             error: r.e,
           })),
         );

@@ -21,20 +21,29 @@ const STALE_RUN_MS = 10 * 60_000;
 const MAX_ATTEMPTS = 3;
 const INTERPRET_PROMPT_VERSION = 1;
 
+/** Reading an athlete's training is a coaching task: the coaching brain answers (routing.ts "interpret"), never a weaker model. */
 async function askModel(admin: Db, system: string, prompt: string, timeoutMs: number): Promise<{ text: string; model: string }> {
-  const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-  const { generateText } = await import("ai");
-  const { data: cfg } = await admin.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-  const model = (cfg?.default_model as string | undefined) || DEFAULT_AI_MODEL;
+  const { callModel, ModelHttpError } = await import("@/lib/ai/model-client.server");
+  const { resolveRoute } = await import("@/lib/ai/routing");
+  const { data } = await admin.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
+  let override: any = null;
   try {
-    const r = await generateText({ model: createLovableAiGateway()(model), system, prompt, temperature: 0.3, abortSignal: AbortSignal.timeout(timeoutMs) });
-    return { text: r.text, model };
-  } catch (e: any) {
-    const status = e?.statusCode ?? e?.status;
-    if (status === 429) throw new Error("The AI service is busy (too many requests). Try again in a minute.");
-    if (status === 402) throw new Error("AI credits are used up.");
-    throw new Error(`The AI service didn't answer: ${String(e?.message ?? e).slice(0, 200)}`);
+    override = data?.value ? JSON.parse(data.value) : null;
+  } catch {
+    override = null;
   }
+  const route = resolveRoute("interpret", override);
+  const errors: string[] = [];
+  for (const model of route.models) {
+    try {
+      const r = await callModel(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, timeoutMs, temperature: 0.3 });
+      return { text: r.text, model };
+    } catch (e: any) {
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("AI credits are used up.");
+      errors.push(`${model}: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  }
+  throw new Error(`The coaching model didn't answer (${errors.join("; ")}). Try again in a few minutes.`);
 }
 
 /** Ask, check the JSON, and ask once more with the problem named if it didn't hold up. */
@@ -72,16 +81,23 @@ export async function runIntelJob(admin: Db, jobId: string | null): Promise<{ st
   if (!job) return { status: "idle" };
   if (job.kind === "strategy" || job.kind === "generate") {
     // Generate Next Program runs as stages, one per request (see pipeline.server.ts).
-    const { runPipelineStage } = await import("./pipeline.server");
+    const { runPipelineStage, WaitingForModel } = await import("./pipeline.server");
     try {
       const r = await runPipelineStage(admin, job);
       if (r === "next") await admin.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id);
       return { status: r === "next" ? "pending" : "ready", jobId: job.id };
     } catch (e: any) {
+      // the model is still thinking (background mode): the next request keeps polling where this one stopped
+      if (e instanceof WaitingForModel) {
+        await admin.from("program_intel_jobs").update({ status: "pending", attempts: 0 }).eq("id", job.id);
+        return { status: "pending", jobId: job.id };
+      }
       const message = String(e?.message ?? e).slice(0, 500);
-      const { data: cur } = await admin.from("program_intel_jobs").select("progress, stage").eq("id", job.id).maybeSingle();
+      const { data: cur } = await admin.from("program_intel_jobs").select("progress, stage, result").eq("id", job.id).maybeSingle();
       const stages = ((cur?.progress as any)?.stages ?? []).map((s: any) => (s.status === "running" ? { ...s, status: "error", detail: message.slice(0, 200) } : s));
-      await finish(admin, job.id, { status: "error", error: message, progress: { stages, current: cur?.stage ?? null } });
+      // the answers kept for the failed stage go too, so Try again asks again instead of replaying them
+      const result = cur?.result ? { ...(cur.result as any), calls: {}, pending: {} } : cur?.result;
+      await finish(admin, job.id, { status: "error", error: message, progress: { stages, current: cur?.stage ?? null }, ...(result ? { result } : {}) });
       return { status: "error", jobId: job.id, error: message, stage: cur?.stage ?? undefined };
     }
   }
@@ -98,7 +114,7 @@ export async function runIntelJob(admin: Db, jobId: string | null): Promise<{ st
     const { developmentText } = await import("./athlete-development");
     const dev = buildGeneratorIntel(rec, { brainOverride: job.brain as Brain }).development;
     const markdown = `${reportToMarkdown(report, rec, { privacySafe: !!job.privacy_safe, reportId: job.id })}\n\n## Athlete development (computed from their records)\n${developmentText(dev, report.client.unit)}`;
-    const { value, model } = await askJson<any>(admin, interpretSystemPrompt(job.brain), markdown, interpretReplySchema, 120_000);
+    const { value, model } = await askJson<any>(admin, interpretSystemPrompt(job.brain), markdown, interpretReplySchema, 140_000);
     const rows = value.observations.map((o: any) => ({
       client_id: job.client_id,
       kind: "observation",

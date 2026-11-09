@@ -115,8 +115,9 @@ export const replySchema = z
     changes: z.array(changeSchema).max(40).default([]),
     generate: z
       .object({
-        weeks: z.coerce.number().int().min(1).max(52).optional(),
+        weeks: z.coerce.number().int().min(1).max(24).optional(),
         days_per_week: z.coerce.number().int().min(1).max(7).optional(),
+        timeline: z.enum(["goal"]).nullish(),
         notes: text(2000).default(""),
       })
       .strict()

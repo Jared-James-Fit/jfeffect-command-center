@@ -256,7 +256,7 @@ export async function loadIntelRecords(
   const profile = await optional<RawIntelProfile | null>(
     "Program Intelligence settings",
     async () => {
-      const { data, error } = await sb.from("program_intel_profiles").select("brain_override, equipment_profile, updated_at").eq("client_id", clientId).maybeSingle();
+      const { data, error } = await sb.from("program_intel_profiles").select("brain_override, equipment_profile, long_term_goal, updated_at").eq("client_id", clientId).maybeSingle();
       if (error) throw error;
       return (data as RawIntelProfile | null) ?? null;
     },

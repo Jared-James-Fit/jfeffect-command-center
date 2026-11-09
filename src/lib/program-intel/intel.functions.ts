@@ -106,7 +106,7 @@ export const retryIntelJobFn = createServerFn({ method: "POST" })
 
 export const assignIntelDraftFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid(), startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), acknowledgeAudit: z.boolean().default(false) }).parse(d))
+  .inputValidator((d: unknown) => z.object({ jobId: z.string().uuid(), startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), acknowledgeAudit: z.boolean().default(false), allowOverlap: z.boolean().default(false) }).parse(d))
   .handler(async ({ data, context }) => {
     const sb = context.supabase as any;
     const { data: job } = await sb.from("program_intel_jobs").select("id, client_id, kind, status, result").eq("id", data.jobId).maybeSingle();
@@ -123,6 +123,23 @@ export const assignIntelDraftFn = createServerFn({ method: "POST" })
     const weekRows = await Promise.all(ordered.map((b) => sb.from("pl_weeks").select("id, week_index").eq("block_id", b.id).eq("archived", false).is("deleted_at", null).order("week_index")));
     const counts = weekRows.map((r: any) => (r.data ?? []).length || 1);
     const dates = draftBlockDates(data.startDate, counts);
+    // never two programs on the same days by accident: a start inside a program that's still running needs the coach's say-so
+    if (!data.allowOverlap) {
+      const end = dates[dates.length - 1].end;
+      const { data: running } = await sb
+        .from("pl_blocks")
+        .select("id, name, start_date, end_date, status")
+        .eq("client_id", job.client_id)
+        .eq("client_visible", true)
+        .eq("archived", false)
+        .gte("end_date", data.startDate)
+        .lte("start_date", end);
+      const clash = (running ?? []).filter((b: any) => !blockIds.includes(b.id) && !/^(draft|archived|completed)$/i.test(String(b.status ?? "")));
+      if (clash.length) {
+        const last = clash.map((b: any) => b.end_date as string).sort().slice(-1)[0];
+        throw new Error(`It starts ${data.startDate}, but "${clash[0].name}" runs until ${last}: both programs would have workouts on the same days. Start after it, or confirm the overlap.`);
+      }
+    }
     for (const [i, b] of ordered.entries()) {
       const { error } = await sb.from("pl_blocks").update({ start_date: dates[i].start, end_date: dates[i].end, weeks: counts[i], client_visible: true, status: "Active" }).eq("id", b.id);
       if (error) throw new Error(error.message);

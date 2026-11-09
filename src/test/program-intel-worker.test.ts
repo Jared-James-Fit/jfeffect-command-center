@@ -4,18 +4,48 @@ import type { GenerationSetup } from "@/lib/program-intel/recommend";
 import type { IntelRecords } from "@/lib/program-intel/types";
 import { homeGym, sparse } from "./program-intel-scenarios";
 
-// The AI gateway, answered from the test (never a real call). Each call's model and prompt are kept.
+// The models, answered from the test (never a real call). Each call's model and prompt are kept.
+// OpenAI models run in background mode: submitted, then polled; `stillThinking` makes the next polls say "running".
 const replies: Array<string | Error> = [];
 const calls: Array<{ model: string; system: string; prompt: string }> = [];
-vi.mock("@/lib/ai-gateway.server", () => ({ createLovableAiGateway: () => (model: string) => ({ model }), DEFAULT_AI_MODEL: "test-model" }));
-vi.mock("ai", () => ({
-  generateText: vi.fn(async (x: any) => {
-    calls.push({ model: x.model.model, system: x.system, prompt: x.prompt });
+const background = new Map<string, string | Error>();
+const bg = { stillThinking: 0, submitted: 0 };
+vi.mock("@/lib/ai/model-client.server", () => {
+  class ModelHttpError extends Error {
+    constructor(public status: number, message: string) {
+      super(message);
+    }
+  }
+  const answer = () => {
     const r = replies.shift() ?? "{}";
-    if (r instanceof Error) throw r;
-    return { text: r, usage: { inputTokens: 1000, outputTokens: 200 } };
-  }),
-}));
+    return r;
+  };
+  return {
+    ModelHttpError,
+    parseModelRef: (ref: string) => ({ via: ref.startsWith("openai:") ? "openai" : "gateway", family: "openai", id: ref }),
+    callModel: vi.fn(async (model: string, r: any) => {
+      calls.push({ model, system: r.system, prompt: r.prompt });
+      const x = answer();
+      if (x instanceof Error) throw x;
+      return { text: x, model, usage: { input: 1000, output: 200, reasoning: null }, ms: 5 };
+    }),
+    submitBackground: vi.fn(async (model: string, r: any) => {
+      calls.push({ model, system: r.system, prompt: r.prompt });
+      const id = `resp-${++bg.submitted}`;
+      background.set(id, answer());
+      return { id };
+    }),
+    pollBackground: vi.fn(async (id: string) => {
+      if (bg.stillThinking > 0) {
+        bg.stillThinking--;
+        return { status: "running" };
+      }
+      const x = background.get(id);
+      if (x instanceof Error) return { status: "failed", error: x.message };
+      return { status: "done", reply: { text: x ?? "{}", usage: { input: 1000, output: 200, reasoning: null } } };
+    }),
+  };
+});
 vi.mock("@/lib/pl-programs", () => ({ inferTimeProfileFromExercise: () => "strength" }));
 vi.mock("@/lib/exercise-metadata", () => ({ defaultRestSeconds: () => 120 }));
 
@@ -115,7 +145,8 @@ function seed(rec: IntelRecords, job: any) {
 
 const rec = homeGym();
 const intel = buildGeneratorIntel(rec);
-const recommended = intel.recommendation.setup;
+// a 4-week program of the coach's own length (the default is 12; this fixture's blocks are 4 weeks)
+const recommended: GenerationSetup = { ...intel.recommendation.setup, weeks: 4, durationMode: "custom" };
 const job = (over: any = {}) => ({ id: "job-1", client_id: "client-1", kind: "generate", status: "pending", stage: null, scope: { kind: "history" }, brain: recommended.brain, instructions: null, options: { setup: recommended, edited: [], dataHash: intel.dataHash }, privacy_safe: false, attempts: 0, created_by: "coach-1", created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...over });
 
 const strategyJson = (setup: GenerationSetup, over: any = {}) =>
@@ -127,7 +158,7 @@ const strategyJson = (setup: GenerationSetup, over: any = {}) =>
     prioritize: [],
     reduce: [],
     progression: { model: "Double progression at RPE 7–8", expected: "Load up on the main lifts", fatigue: "Week 4 lighter", success_criteria: ["Squat top set +5 kg"] },
-    structure: { weeks: setup.weeks, days_per_week: setup.daysPerWeek, session_minutes: setup.sessionMinutes, blocks: setup.blocks.map((b) => ({ name: b.name, weeks: b.weeks, objective: b.objective, phases: [{ week: b.weeks, phase: "Deload" }] })) },
+    structure: { weeks: setup.weeks, days_per_week: setup.daysPerWeek, session_minutes: setup.sessionMinutes, blocks: (setup.blocks.length ? setup.blocks : [{ name: "Strength + hypertrophy", weeks: setup.weeks, objective: "Progress the main lifts" }]).map((b) => ({ name: b.name, weeks: b.weeks, objective: b.objective, phases: [{ week: b.weeks, phase: "Deload" }] })) },
     weekly_layout: Array.from({ length: setup.daysPerWeek }, (_, i) => ({ day: i + 1, title: ["Lower A", "Upper A", "Lower B", "Upper B"][i] ?? `Day ${i + 1}`, focus: "", primary: [], notes: "" })),
     frequency_targets: [],
     volume_targets: [],
@@ -172,6 +203,9 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
   beforeEach(() => {
     replies.length = 0;
     calls.length = 0;
+    background.clear();
+    bg.submitted = 0;
+    bg.stillThinking = 0;
   });
 
   it("fast path: context → strategy → block → audit → hidden draft, with a snapshot and every model call logged", async () => {
@@ -182,13 +216,13 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     const j = db.tables.program_intel_jobs[0];
     expect(j.status).toBe("ready");
     expect(j.stage).toBe("done");
-    expect(j.progress.stages.map((s: any) => [s.key, s.status])).toEqual([["context", "done"], ["strategy", "done"], ["construct:0", "done"], ["audit", "done"], ["save", "done"]]);
-    // the strategy reads the whole history (too big for the design model in time: the app's default reads it);
-    // building reads the compact brief and goes to the design model first
-    const { modelsFor } = await import("@/lib/program-intel/pipeline.server");
-    const cfg = { primary: "google/gemini-3.1-pro-preview", fallback: "test-model" };
-    expect(calls.map((c) => c.model)).toEqual(calls.map((c) => modelsFor(c.system.length + c.prompt.length, cfg)[0]));
-    expect(calls[0].model).toBe("test-model");
+    expect(j.progress.stages.map((s: any) => [s.key, s.status])).toEqual([["context", "done"], ["strategy", "done"], ["construct:0", "done"], ["audit", "done"], ["review", "done"], ["save", "done"]]);
+    // the coaching brain writes the strategy from the whole history; building reads the compact brief
+    expect(calls.map((c) => c.model)).toEqual(["openai:gpt-6-astra", "openai:gpt-6-astra", "openai:gpt-6-astra"]);
+    // the coaching review read the built program with the measured facts, after the automatic checks
+    expect(calls[2].system).toContain("reviewing a");
+    expect(calls[2].prompt).toContain("## The program to review (4 weeks, 4 days");
+    expect(j.result.review).toMatchObject({ verdict: "sound", issues: [] });
     expect(calls[0].prompt.length).toBeGreaterThan(70_000);
     expect(calls[1].prompt).not.toContain("## Previous program: full log, set by set");
     expect(calls[1].prompt).toContain("How it was laid out (its first full week, as written)");
@@ -198,14 +232,16 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(calls[1].prompt).toContain("Station 2 — High cable");
     // the library catalog the builder saw only holds what their equipment allows
     expect(calls[1].prompt).not.toMatch(/\| Leg Press \|/);
-    expect(db.tables.program_intel_job_calls.map((c: any) => [c.stage, c.ok])).toEqual([["strategy", true], ["construct:0", true]]);
+    expect(db.tables.program_intel_job_calls.map((c: any) => [c.stage, c.ok])).toEqual([["strategy", true], ["construct:0", true], ["review", true]]);
     expect(db.tables.program_intel_job_calls[0].input_tokens).toBe(1000);
     // the snapshot: what the run used
     expect(j.context.data_hash).toBe(intel.dataHash);
     expect(j.context.records_changed).toBe(false);
     expect(j.context.brief.sections.map((s: any) => s.key)).toContain("log");
     expect(j.context.sources.previous_program).toBe("Home Gym 4-Day Strength + Hypertrophy");
-    expect(j.context.model).toMatchObject({ primary: "google/gemini-3.1-pro-preview", fallback: "test-model" });
+    expect(j.context.model.routes.strategy).toMatchObject({ models: ["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"], effort: "high", strongOnly: true });
+    expect(j.context.brief.sections.map((s: any) => s.key)).toContain("timeline");
+    expect(j.result.calls).toEqual({});
     // the draft: hidden, undated, every week written from its own prescription
     const draft = db.tables.pl_blocks.find((b: any) => b.id === j.block_id);
     expect(draft).toMatchObject({ client_visible: false, status: "Draft", start_date: null, end_date: null, created_by: "coach-1" });
@@ -242,7 +278,7 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     const db = memoryDb(seed(rec, job({ options: { setup: recommended, edited: [], strategy: approved, strategyJobId: "s-1" } })));
     const r = await runToEnd(db);
     expect(r.status).toBe("ready");
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(calls[0].prompt).toContain("Coach's own wording");
     const j = db.tables.program_intel_jobs[0];
     expect(j.result.strategySource).toBe("coach");
@@ -259,7 +295,7 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(j.result.repairs).toHaveLength(1);
     expect(j.result.repairs[0].issues.join(" ")).toMatch(/Leg Press needs/);
     expect(calls[2].prompt).toContain("Fix ONLY these problems");
-    expect(db.tables.program_intel_job_calls.map((c: any) => c.stage)).toEqual(["strategy", "construct:0", "repair:block 1"]);
+    expect(db.tables.program_intel_job_calls.map((c: any) => c.stage)).toEqual(["strategy", "construct:0", "repair:block 1:1", "review"]);
     expect(j.result.audit.scorecard.find((x: any) => x.criterion === "equipment").status).toBe("passed");
     expect(JSON.stringify(j.result.program)).not.toContain("Leg Press\"");
   });
@@ -280,7 +316,7 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     replies.push(blockJson());
     const r2 = await runToEnd(db);
     expect(r2.status).toBe("ready");
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(calls[0].prompt).toContain("## Build block 1 of 1");
   });
 
@@ -309,7 +345,32 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     expect(calls).toHaveLength(0);
   });
 
-  it("falls back to the app's default model when the design model fails, and logs both", async () => {
+  it("the coaching review's genuine problem goes to a targeted repair of that block; a 'consider' stays on the scorecard for you", async () => {
+    const review = JSON.stringify({
+      verdict: "needs_fixes",
+      summary: "Solid layout; Lower A stacks too much knee-dominant work after a heavy squat for someone with knee pain.",
+      issues: [
+        { block: 1, area: "individual", severity: "must_fix", problem: "Bulgarian split squats right after the heavy squat on Lower A aggravate the knee they reported.", fix: "Swap them for a hamstring-dominant hinge on Lower A." },
+        { block: 1, area: "progression", severity: "consider", problem: "Accessories could progress a rep a week instead of by range.", fix: "Optional." },
+      ],
+    });
+    replies.push(strategyJson(recommended), blockJson(), review, blockJson());
+    const db = memoryDb(seed(rec, job()));
+    const r = await runToEnd(db);
+    expect(r.status).toBe("ready");
+    const j = db.tables.program_intel_jobs[0];
+    expect(db.tables.program_intel_job_calls.map((c: any) => c.stage)).toEqual(["strategy", "construct:0", "review", "repair:block 1:1"]);
+    expect(calls[3].prompt).toContain("Fix ONLY these problems");
+    expect(calls[3].prompt).toContain("Coaching review (individual): Bulgarian split squats right after the heavy squat");
+    expect(j.result.review.repaired).toEqual([0]);
+    const reasons = j.result.audit.scorecard.flatMap((x: any) => x.reasons);
+    expect(reasons).toContain("Fixed after the coaching review: Bulgarian split squats right after the heavy squat on Lower A aggravate the knee they reported.");
+    expect(j.result.audit.scorecard.find((x: any) => x.criterion === "progression").status).toBe("review");
+    // reviewed once: no second review after the repair
+    expect(db.tables.program_intel_job_calls.filter((c: any) => c.stage === "review")).toHaveLength(1);
+  });
+
+  it("the strategy falls back only to another top-tier model, and both tries are logged", async () => {
     const small = sparse();
     const smallSetup = buildGeneratorIntel(small).recommendation.setup;
     replies.push(new Error("model not available"), strategyJson(smallSetup));
@@ -317,8 +378,47 @@ describe("Generate Next Program pipeline (background, service role, one stage pe
     const r = await runToEnd(db);
     expect(r.error ?? null).toBeNull();
     expect(r.status).toBe("ready");
-    expect(calls.map((c) => c.model)).toEqual(["google/gemini-3.1-pro-preview", "test-model"]);
-    expect(db.tables.program_intel_job_calls.map((c: any) => [c.model, c.ok])).toEqual([["google/gemini-3.1-pro-preview", false], ["test-model", true]]);
+    expect(calls.map((c) => c.model)).toEqual(["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"]);
+    expect(db.tables.program_intel_job_calls.map((c: any) => [c.model, c.ok])).toEqual([["openai:gpt-6-astra", false], ["gateway:anthropic/claude-opus-5-5", true]]);
+  });
+
+  it("a coaching decision is never handed to a weaker model: when the top tier is down it stops and says so", async () => {
+    const small = sparse();
+    const smallSetup = buildGeneratorIntel(small).recommendation.setup;
+    replies.push(new Error("down"), new Error("down too"));
+    const db = memoryDb(seed(small, job({ kind: "strategy", brain: smallSetup.brain, options: { setup: smallSetup, edited: [] } })));
+    const r = await runToEnd(db);
+    expect(r.status).toBe("error");
+    expect(db.tables.program_intel_jobs[0].error).toMatch(/Coaching decisions aren't handed to a weaker model/);
+    expect(calls.map((c) => c.model)).not.toContain("gateway:google/gemini-3-flash-preview");
+  });
+
+  it("a long think: the job waits and the next request resumes the same background call (never submitted twice)", async () => {
+    const { pollConfig } = await import("@/lib/program-intel/pipeline.server");
+    const before = { ...pollConfig };
+    Object.assign(pollConfig, { every: 0, ms: 0 });
+    try {
+      replies.push(strategyJson(recommended));
+      bg.stillThinking = 2;
+      const db = memoryDb(seed(rec, job({ kind: "strategy" })));
+      const { runIntelJob } = await import("@/lib/program-intel/jobs.server");
+      const statuses: string[] = [];
+      for (let i = 0; i < 8; i++) {
+        const x = await runIntelJob(db, "job-1");
+        statuses.push(x.status);
+        if (x.status !== "pending") break;
+      }
+      expect(statuses.at(-1)).toBe("ready");
+      expect(statuses.filter((x) => x === "pending").length).toBeGreaterThanOrEqual(2);
+      expect(bg.submitted).toBe(1);
+      const j = db.tables.program_intel_jobs[0];
+      expect(j.status).toBe("ready");
+      expect(j.attempts).toBeLessThan(3);
+      expect(j.result.strategy.decisions).toHaveLength(1);
+    } finally {
+      Object.assign(pollConfig, before);
+      bg.stillThinking = 0;
+    }
   });
 
   it("a block that misses the strategy's own frequency target goes back for repair", async () => {

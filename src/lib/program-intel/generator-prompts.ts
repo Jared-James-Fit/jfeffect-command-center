@@ -14,7 +14,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 8;
+export const PIPELINE_PROMPT_VERSION = 9;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -28,6 +28,10 @@ const PROGRAMMING_RULES = `Programming rules:
 - Respect the athlete's real circumstances: their equipment (only what's listed), the equipment rules, their session time, injuries and pain reports, and what they actually adhere to.
 - Cardio is the client's cardio plan (see "Cardio" in the brief), not part of the program you write: the app adds the plan's training-day session as the last exercise of every workout and asks for its rest-day sessions on days off. Never write walking, treadmill, bike, elliptical, stair, rowing-machine or other steady cardio into a workout; leave the time for it and let it shape the lifting (fatigue, leg volume, session length).
 - The brief's "Athlete development" section is the measured read of how this athlete develops: their training age and rate of progress, strength against bodyweight and bodyweight phase, weight class, plateaus, adherence, fatigue, and progress / hold / back off for each exercise. The cycle's progression model, starting prescriptions and volume follow it.
+
+- Length and timeline (the brief's "Program length and timeline"): write exactly the setup's weeks, every week fully prescribed. These weeks are the current horizon, not the whole goal: the long-term timeline (a meet or test months away, a long-term goal) decides what these weeks must build and leave the athlete ready for, but never squeeze a long-term goal into them. Peak and taper only when this program ends at the deadline, timed so the deadline falls in its last week; otherwise build what the next phase needs.
+- Block structure is yours to decide for this athlete unless the coach set blocks in the setup: how many blocks (up to 12 weeks each), how long, and what each emphasizes (accumulation, intensification, hypertrophy, strength, rising specificity, peaking). Base it on their training age, recovery, adherence, volume tolerance, how they responded to past block lengths, and the timeline; never equal 4-week blocks by habit. Plan a lighter week only where fatigue, their history or the timeline calls for one, or write a deload rule that triggers on fatigue (e.g. top-set RPE up 1+ at the same load two sessions running); never a deload every 4th week by default.
+- Continuity: this program follows the one before it. Keep the exercises and structures that progressed, start loads from where the last program finished (the load references), carry the previous roadmap forward (or say why it changed), and don't reset progressions; change only what the records say isn't working.
 
 ${DEVELOPMENT_RULES}
 
@@ -68,7 +72,8 @@ Reply with ONE JSON object and nothing else:
   "prioritize": [ { "item": string, "why": string, "evidence": [string] } ],
   "reduce": [ { "item": string, "why": string, "evidence": [string] } ],
   "progression": { "model": string, "expected": string, "fatigue": string, "success_criteria": [string] },
-  "structure": { "weeks": int, "days_per_week": int, "session_minutes": int|null, "blocks": [ { "name": string, "weeks": int, "objective": string, "phases": [ { "week": int, "phase": string } ] } ] },
+  "structure": { "weeks": int, "days_per_week": int, "session_minutes": int|null, "blocks": [ { "name": string, "weeks": int (at most 12), "objective": string, "phases": [ { "week": int, "phase": string } ] } ] },
+  "roadmap": { "timeline": string (the long-term goal and its deadline as you read them, or "none dated"), "this_program": string (what these weeks must achieve and leave them ready for), "phases": [ { "weeks": string (e.g. "13–24"), "focus": string, "milestone": string } ] (what comes after this program, laid out not written; [] when nothing is dated), "track": "ahead"|"on_track"|"behind"|"unknown", "track_why": string (from their measured rate of progress against what the goal needs; "unknown" when it can't be measured) },
   "weekly_layout": [ { "day": int, "title": string, "focus": string, "primary": [string], "notes": string } ],
   "frequency_targets": [ { "target": string (a lift or muscle), "per_week": number } ],
   "volume_targets": [ { "target": string, "sets_per_week": number, "vs_previous": string } ],
@@ -80,7 +85,7 @@ Reply with ONE JSON object and nothing else:
   "data_limits": [string],
   "monitor": [string]
 }
-"structure" must match the coach's setup (weeks, days per week; the blocks' weeks add up to the total). "weekly_layout" has exactly one entry per training day, in the order of their training days, and keeps the heavy squat day and the heavy deadlift day off back-to-back calendar days (their last training day into the first of the next week counts) whenever the days allow it.
+"structure" must match the coach's setup (weeks, days per week; the blocks' weeks add up to the total). "weekly_layout" has exactly one entry per training day, in the order of their training days, and places the demanding sessions so recovery fits this athlete: a heavy squat day and a heavy deadlift day on back-to-back calendar days (their last training day into the first of the next week counts) can be fine or a problem depending on the loads, the volume, the phase and the athlete, so decide it on purpose and say why in that day's focus.
 "volume_targets" for a muscle are sets aimed at that muscle (exercises whose target it is); what a compound gives its other muscles (a bench set's triceps, a row's biceps) comes on top and isn't counted.`;
 }
 
@@ -105,7 +110,7 @@ Building rules:
 - Top sets and back-offs are separate exercises: e.g. role "Primary Squat" (the top set) and "Primary Squat Backoff" (the back-off sets) on the same exercise_id. Other roles: "Secondary <Lift>", "Accessory", "Primary" / "Secondary" for non-competition work.
 - Prescribe every exercise: sets, reps ("5", "8-10", "AMRAP"), an effort target (rpe like "7" or "7-8", or rir), rest_seconds, tempo / pauses when it matters, "progression" (a conditional rule, e.g. "When all sets reach 10 reps at RPE ≤8, add 2.5 kg"), up to 3 "substitutions" from the catalog the athlete can swap to, and short notes the athlete reads (cues, station, setup).
 - Use "percentage" (of estimated 1RM) only for lifts with a reliable reference in the load references; otherwise use RPE. Never prescribe reps a percentage can't allow.
-- Weekly prescriptions: give the base prescription and a "weeks" entry for every week that differs (sets, reps, rpe, rir, percentage, notes). Progress conditionally and sensibly for the training model; no fake progression (the same percentage added every week regardless of the model). Plan any deload or lighter week the strategy calls for.
+- Weekly prescriptions: every week of the block is a complete, executable week. Give the base prescription and a "weeks" entry for every week that differs (sets, reps, rpe, rir, percentage, notes); a week with no entry repeats the base, so the base must stand on its own and the exercise's "progression" rule says how load moves within it. Progress conditionally and sensibly for the training model (autoregulate by RPE / RIR rather than pretending future loads are known); no fake progression (the same percentage added every week regardless of the model). Plan any deload or lighter week the strategy calls for, and nothing it doesn't.
 - Loads: use the load references to set the starting point in the notes when helpful (e.g. "start ~5 kg under last block's top set"), never as invented past results.
 
 Reply with ONE JSON object for this block and nothing else:
