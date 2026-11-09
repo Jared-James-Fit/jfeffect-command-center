@@ -4,7 +4,8 @@
  * and its tests read it the same way.
  */
 import {
-  currentBlock, upcomingBlocks, draftBlocks, historyBlocks, findOverlaps, gapDays, daysBetween,
+  currentBlock, upcomingBlocks, draftBlocks, historyBlocks, findOverlaps, daysBetween,
+  blockGap, blockCoverEnd, blockCoverStart,
   type ScheduleBlock,
 } from "@/lib/block-schedule-model";
 import type { UnscheduledWorkout } from "@/lib/use-client-training-schedule";
@@ -42,7 +43,8 @@ export type TrainingAlert =
   | { kind: "hidden"; blocks: ScheduleBlock[] }
   | { kind: "unscheduled"; count: number }
   | { kind: "ends_soon"; end: string; daysLeft: number }
-  | { kind: "gap"; days: number }
+  /** training days with nothing planned between the current block and the next; Fix dates starts the next one on `suggestedStart` */
+  | { kind: "gap"; days: number; suggestedStart: string | null }
   | { kind: "overlap"; a: string; b: string };
 
 /** Dated blocks still hidden from the client (a program they can't see, however it's dated). */
@@ -72,6 +74,8 @@ export function trainingAlerts(input: {
   roadmap: TrainingRoadmap;
   unscheduled: UnscheduledWorkout[];
   today: string;
+  /** the client's training days: a gap is only a day they'd train on */
+  trainingDays?: readonly string[] | null;
 }): TrainingAlert[] {
   const { roadmap, today } = input;
   const out: TrainingAlert[] = [];
@@ -88,8 +92,9 @@ export function trainingAlerts(input: {
     if (daysLeft >= 0 && daysLeft <= ENDS_SOON_DAYS) out.push({ kind: "ends_soon", end, daysLeft });
   }
   if (current && next) {
-    const gap = gapDays(end, next.effective_start ?? null);
-    if (gap > 0) out.push({ kind: "gap", days: gap });
+    // what each block covers (its weeks or its workouts), counting only days they train on
+    const gap = blockGap(blockCoverEnd(current), blockCoverStart(next), input.trainingDays);
+    if (gap.days > 0) out.push({ kind: "gap", days: gap.days, suggestedStart: gap.suggestedStart });
   }
   const overlap = findOverlaps(input.blocks)[0];
   if (overlap) out.push({ kind: "overlap", a: overlap.a.name ?? "A block", b: overlap.b.name ?? "another block" });

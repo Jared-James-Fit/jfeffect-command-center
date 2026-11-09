@@ -415,6 +415,53 @@ export function gapDays(prevEnd: string | null, nextStart: string | null): numbe
   return d > 0 ? d : 0;
 }
 
+type CoverBlock = Pick<ScheduleBlockInput, "start_date" | "end_date" | "weeks" | "week_duration_days"> & {
+  effective_start?: string | null;
+  effective_end?: string | null;
+};
+
+/** The last day a block covers: its own weeks or its last workout, whichever is later. */
+export function blockCoverEnd(b: CoverBlock | null | undefined): string | null {
+  if (!b) return null;
+  const ends = [b.effective_end ?? null, effectiveEnd(b as ScheduleBlockInput)].filter((d): d is string => !!d).sort();
+  return ends[ends.length - 1] ?? null;
+}
+
+/** The first day a block covers: its own start or its first workout, whichever is earlier. */
+export function blockCoverStart(b: CoverBlock | null | undefined): string | null {
+  if (!b) return null;
+  const starts = [b.effective_start ?? null, b.start_date ?? null].filter((d): d is string => !!d).sort();
+  return starts[0] ?? null;
+}
+
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * A real gap between two blocks: the days between the end of what one covers and the start of
+ * the next that the client trains on (every day when no training days are on file). A rest day
+ * between the last workout of one block and the first of the next is never a gap, nor are two
+ * blocks whose weeks follow on: Jared's Volume 4s/6s ran to Sat Dec 5 and Strength Check-In
+ * from Sun Dec 6, yet "1-day gap" showed for the Sunday he never trains on, and Fix dates could
+ * never clear it. `suggestedStart` is the day after the first block ends. Pure.
+ */
+export function blockGap(
+  prevEnd: string | null,
+  nextStart: string | null,
+  trainingDays?: readonly string[] | null,
+): { days: number; calendarDays: number; suggestedStart: string | null } {
+  const calendarDays = gapDays(prevEnd, nextStart);
+  const suggestedStart = prevEnd ? addDaysISO(prevEnd, 1) : null;
+  if (!prevEnd || !calendarDays) return { days: 0, calendarDays: 0, suggestedStart };
+  const known = new Set((trainingDays ?? []).filter((d) => WEEKDAY_NAMES.includes(d)));
+  if (!known.size || calendarDays > 366) return { days: calendarDays, calendarDays, suggestedStart };
+  let days = 0;
+  for (let i = 1; i <= calendarDays; i++) {
+    const d = parseLocalDate(addDaysISO(prevEnd, i));
+    if (d && known.has(WEEKDAY_NAMES[d.getDay()])) days++;
+  }
+  return { days, calendarDays, suggestedStart };
+}
+
 /** Suggested start for the next block: the day after the current one ends. */
 /**
  * The best start for the next block: the Monday after the client's most recent program ends, or

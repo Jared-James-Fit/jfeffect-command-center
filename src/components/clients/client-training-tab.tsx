@@ -117,6 +117,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
   const [newOpen, setNewOpen] = useState(false);
   const [scheduleBlock, setScheduleBlock] = useState<{ id: string | null } | null>(null);
   const [datesFor, setDatesFor] = useState<ScheduleBlock | null>(null);
+  const [datesStart, setDatesStart] = useState<string | null>(null);
   const [endEarlyFor, setEndEarlyFor] = useState<ScheduleBlock | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pastOpen, setPastOpen] = useState(false);
@@ -128,8 +129,8 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
   const roadmap = useMemo(() => trainingRoadmap(blocks, assignmentId), [blocks, assignmentId]);
   const today = todayISO();
   const alerts = useMemo(
-    () => trainingAlerts({ blocks, roadmap, unscheduled: data?.unscheduled ?? [], today }),
-    [blocks, roadmap, data?.unscheduled, today],
+    () => trainingAlerts({ blocks, roadmap, unscheduled: data?.unscheduled ?? [], today, trainingDays }),
+    [blocks, roadmap, data?.unscheduled, today, trainingDays],
   );
   const current = roadmap.current;
   // What "Edit program" opens: the running block, else the next one, else a built one.
@@ -187,7 +188,8 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
     if (a.kind === "unscheduled") return { label: placing ? "Placing…" : "Place them", run: placeOnTrainingDays };
     if (a.kind === "ends_soon") return { label: "Plan next", run: () => setAddOpen(true) };
     const target = a.kind === "gap" ? roadmap.live[1] : roadmap.live[1] ?? current;
-    return target ? { label: "Fix dates", run: () => setDatesFor(target) } : null;
+    // a gap: the next block opens on the day after this one ends
+    return target ? { label: "Fix dates", run: () => { setDatesStart(a.kind === "gap" ? a.suggestedStart : null); setDatesFor(target); } } : null;
   };
 
   const parts = blockNameParts(focus?.name);
@@ -224,7 +226,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
             <DropdownMenuContent align="end" className="w-56">
               {current && (
                 <>
-                  <DropdownMenuItem onClick={() => setDatesFor(current)}><Pencil className="mr-2 h-4 w-4" /> Change block dates</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setDatesStart(null); setDatesFor(current); }}><Pencil className="mr-2 h-4 w-4" /> Change block dates</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setEndEarlyFor(current)}><FlagOff className="mr-2 h-4 w-4" /> End block early</DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
@@ -358,7 +360,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
                 key={b.id}
                 block={b}
                 label={b.status_derived === "Active" ? "Now" : i === (current ? 1 : 0) ? "Next" : "Planned"}
-                onDates={() => setDatesFor(b)}
+                onDates={() => { setDatesStart(null); setDatesFor(b); }}
                 onStart={b.client_visible === false ? () => setScheduleBlock({ id: b.id }) : undefined}
                 onEndEarly={b.status_derived === "Active" && b.client_visible !== false ? () => setEndEarlyFor(b) : undefined}
                 onDelete={() => setDeleteFor(b)}
@@ -417,6 +419,7 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
           blocks={blocks}
           current={current}
           initialBlockId={scheduleBlock.id}
+          trainingDays={trainingDays}
           onDone={() => { setScheduleBlock(null); refresh(); }}
           onAssignLibrary={() => { setScheduleBlock(null); setAssignOpen(true); }}
         />
@@ -424,9 +427,10 @@ function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string;
       {datesFor && (
         <ChangeBlockDatesDialog
           block={datesFor}
+          initialStart={datesStart}
           open
-          onOpenChange={(v) => !v && setDatesFor(null)}
-          onDone={() => { setDatesFor(null); refresh(); }}
+          onOpenChange={(v) => { if (!v) { setDatesFor(null); setDatesStart(null); } }}
+          onDone={() => { setDatesFor(null); setDatesStart(null); refresh(); }}
         />
       )}
       {endEarlyFor && (
@@ -467,7 +471,7 @@ function alertText(a: TrainingAlert, first: string | null): string {
         ? "Block ends today, nothing planned after"
         : `Block ends ${pretty(a.end, "MMM d")}, nothing planned after`;
     case "gap":
-      return `${a.days}-day gap before the next block`;
+      return `${a.days} training day${a.days === 1 ? "" : "s"} with nothing planned before the next block`;
     case "overlap":
       return `${a.a} overlaps ${a.b}`;
   }
