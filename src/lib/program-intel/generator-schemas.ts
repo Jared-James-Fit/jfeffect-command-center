@@ -129,7 +129,8 @@ export const strategySchema = z.object({
           name: clipReq(80),
           weeks: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS),
           objective: clip(1000),
-          phases: list(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), phase: clip(80) }), MAX_PROGRAM_WEEKS),
+          // a phase often carries that week's main-lift prescription: never cut it to a label
+          phases: list(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), phase: clip(600) }), MAX_PROGRAM_WEEKS),
         }),
       )
       .min(1)
@@ -147,7 +148,7 @@ export const strategySchema = z.object({
     .nullish()
     .catch(null),
   weekly_layout: z
-    .array(z.object({ day: z.coerce.number().int().min(1).max(7), title: clipReq(100), focus: clip(600), primary: list(clip(160), 8), notes: clip(800) }))
+    .array(z.object({ day: z.coerce.number().int().min(1).max(7), title: clipReq(100), focus: clip(800), primary: list(clip(200), 10), notes: clip(2500) }))
     .min(1)
     .max(7),
   frequency_targets: list(z.object({ target: clipReq(120), per_week: z.coerce.number().min(0).max(7) }), 30),
