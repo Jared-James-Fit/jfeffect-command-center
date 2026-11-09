@@ -19,7 +19,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
-  AlertTriangle, Archive, BarChart3, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
+  AlertTriangle, Archive, BarChart3, Trash2, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
   Download, Dumbbell, Flame, FlagOff, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +46,7 @@ import { TrainingReportSheet } from "@/components/workouts/training-report-sheet
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 import { AssignProgramDialog } from "@/components/clients/assign-program-dialog";
 import { WorkoutArchiveDialog } from "@/components/clients/workout-archive-dialog";
+import { DeleteProgramDialog } from "@/components/clients/delete-program-dialog";
 import {
   AddNextBlockDialog, ChangeBlockDatesDialog, EndBlockEarlyDialog,
 } from "@/components/clients/training-schedule-board";
@@ -113,6 +114,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pastOpen, setPastOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [deleteFor, setDeleteFor] = useState<ScheduleBlock | null>(null);
 
   const blocks = useMemo(() => data?.blocks ?? [], [data?.blocks]);
   const assignmentId = data?.currentAssignmentId ?? null;
@@ -139,6 +141,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
     qc.invalidateQueries({ queryKey: ["assigned-blocks", clientId] });
     qc.invalidateQueries({ queryKey: ["pl-blocks", clientId] });
     qc.invalidateQueries({ queryKey: ["my-workouts"] });
+    qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] });
   };
 
   const goToSchedule = () => {
@@ -208,6 +211,14 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
               <DropdownMenuItem asChild>
                 <Link to="/admin/client-programs/$clientId" params={{ clientId }}><Layers className="mr-2 h-4 w-4" /> All programs &amp; blocks</Link>
               </DropdownMenuItem>
+              {focus && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteFor(focus)} data-delete-program-menu>
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete this program
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -314,10 +325,11 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
                 label={b.status_derived === "Active" ? "Now" : i === (current ? 1 : 0) ? "Next" : "Planned"}
                 onDates={() => setDatesFor(b)}
                 onEndEarly={b.status_derived === "Active" ? () => setEndEarlyFor(b) : undefined}
+                onDelete={() => setDeleteFor(b)}
               />
             ))}
             {roadmap.drafts.map((b) => (
-              <RoadmapRow key={b.id} block={b} label="Not scheduled" onSchedule={() => setScheduleBlock({ id: b.id })} />
+              <RoadmapRow key={b.id} block={b} label="Not scheduled" onSchedule={() => setScheduleBlock({ id: b.id })} onDelete={() => setDeleteFor(b)} />
             ))}
           </ul>
           {roadmap.past.length > 0 && (
@@ -334,7 +346,7 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
               {pastOpen && (
                 <ul className="divide-y divide-border/60 pb-1">
                   {roadmap.past.map((b) => (
-                    <RoadmapRow key={b.id} block={b} label={b.status_derived === "EndedEarly" ? "Ended early" : b.status_derived === "Archived" ? "Archived" : "Done"} />
+                    <RoadmapRow key={b.id} block={b} label={b.status_derived === "EndedEarly" ? "Ended early" : b.status_derived === "Archived" ? "Archived" : "Done"} onDelete={() => setDeleteFor(b)} />
                   ))}
                 </ul>
               )}
@@ -391,6 +403,15 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
         />
       )}
       <WorkoutArchiveDialog open={archiveOpen} onOpenChange={setArchiveOpen} clientId={clientId} clientName={clientName} />
+      {deleteFor && (
+        <DeleteProgramDialog
+          block={deleteFor}
+          firstName={clientName?.split(" ")[0] ?? null}
+          open
+          onOpenChange={(v) => !v && setDeleteFor(null)}
+          onDone={() => { setDeleteFor(null); refresh(); }}
+        />
+      )}
       <TrainingReportSheet open={reportOpen} onOpenChange={setReportOpen} clientId={clientId} clientName={clientName} audience="coach" />
     </Card>
   );
@@ -416,13 +437,14 @@ function pretty(iso: string, fmt: string): string {
 }
 
 function RoadmapRow({
-  block, label, onDates, onEndEarly, onSchedule,
+  block, label, onDates, onEndEarly, onSchedule, onDelete,
 }: {
   block: ScheduleBlock;
   label: string;
   onDates?: () => void;
   onEndEarly?: () => void;
   onSchedule?: () => void;
+  onDelete?: () => void;
 }) {
   const parts = blockNameParts(block.name);
   const active = block.status_derived === "Active";
@@ -466,7 +488,7 @@ function RoadmapRow({
           {label}
         </span>
       )}
-      {(onDates || onEndEarly) && (
+      {(onDates || onEndEarly || onDelete) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" aria-label={`${block.name ?? "Block"} options`}>
@@ -479,6 +501,14 @@ function RoadmapRow({
             </DropdownMenuItem>
             {onDates && <DropdownMenuItem onClick={onDates}><CalendarDays className="mr-2 h-4 w-4" /> Change dates</DropdownMenuItem>}
             {onEndEarly && <DropdownMenuItem onClick={onEndEarly}><FlagOff className="mr-2 h-4 w-4" /> End early</DropdownMenuItem>}
+            {onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete program
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

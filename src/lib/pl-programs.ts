@@ -321,6 +321,45 @@ export async function deleteBlock(blockId: string): Promise<"deleted" | "archive
   return "deleted";
 }
 
+/**
+ * Delete a program from the client's Training tab: `deleteBlock` (a program with logged
+ * workouts is archived, never deleted). A Generate Next Program draft whose programs are all
+ * gone is closed like its own Discard, so the generator never offers to assign a deleted draft.
+ */
+export async function deleteProgram(blockId: string): Promise<"deleted" | "archived"> {
+  const { data: runs } = await sb
+    .from("program_intel_jobs")
+    .select("id, result")
+    .eq("kind", "generate")
+    .eq("status", "ready")
+    .contains("result", { blockIds: [blockId] });
+  const outcome = await deleteBlock(blockId);
+  if (outcome === "deleted") {
+    for (const run of (runs ?? []) as Array<{ id: string; result: { blockIds?: string[] } | null }>) {
+      const others = (run.result?.blockIds ?? []).filter((id) => id && id !== blockId);
+      const { data: left } = others.length ? await sb.from("pl_blocks").select("id").in("id", others) : { data: [] as unknown[] };
+      if (!(left ?? []).length) await sb.from("program_intel_jobs").update({ status: "discarded" }).eq("id", run.id);
+    }
+  }
+  return outcome;
+}
+
+/** What the delete sheet needs to say: how many workouts it holds and whether any is logged. */
+export async function programDeleteFacts(blockId: string): Promise<{ workouts: number | null; logged: boolean }> {
+  const [logged, days] = await Promise.all([
+    loggedIds("block", [blockId]),
+    sb
+      .from("pl_days")
+      .select("id, pl_weeks!inner(block_id, archived, deleted_at)", { count: "exact", head: true })
+      .eq("pl_weeks.block_id", blockId)
+      .eq("pl_weeks.archived", false)
+      .is("pl_weeks.deleted_at", null)
+      .eq("archived", false)
+      .is("deleted_at", null),
+  ]);
+  return { workouts: days.error ? null : days.count ?? null, logged: logged.has(blockId) };
+}
+
 export async function deleteDay(dayId: string) {
   const { error } = await sb.from("pl_days").delete().eq("id", dayId);
   if (error) throw error;
