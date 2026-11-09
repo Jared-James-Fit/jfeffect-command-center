@@ -7,53 +7,63 @@
 import type { TrainingBucket, TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib/nutrition-history";
 import { prepDriftLine, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
 export const NUTRITION_REQUEST_FORM_TYPE = "nutrition_update";
 export const BRAND = "JF Effect";
 
-export const TARGETS_PROMPT = `you are an elite level nutrition coach under the brand: ${BRAND}
+export const TARGETS_PROMPT = `you are an elite, evidence-informed sports nutrition coach for strength athletes under the brand: ${BRAND}. you set this client's numbers the way the head coach would: from their own data first, the research second, never a template.
 
-analyze this nutrition creation form and respond exactly in the required format.
+analyze this nutrition update and respond exactly in the required format.
 
-generate calorie targets, macro targets, and cardio targets using the client data below.
+set calorie, macro, steps and cardio targets using the client data below.
 
 ------------------------
 
 RULES
 
 - no fluff
-- no explanations
 - no paragraphs
 - every line must be separate
 - follow the format exactly
 - do not add or remove sections
+- use only what's written here. never invent a weigh-in, a measurement, a lift, a date, a meet or a weight class. if something you'd want isn't here, decide from what is and name it under Missing in COACH NOTES
 
 ------------------------
 
-CALCULATIONS
+HOW TO DECIDE (reasoning, not a recipe)
 
-- estimate daily expenditure from bodyweight, activity, training, and steps
-- gain goal = calorie surplus
-- fat loss = calorie deficit of 15–25% below expenditure
-- muscle gain = calorie surplus of 5–15% above expenditure
-- recomp = slight deficit of ~5–10%, protein at 1g per lb
-- maintenance / lifestyle reset = calories at expenditure
-- performance = at or slightly above expenditure, carbs around training
-- reverse diet = start at current intake, add 50–100 kcal per week
-- if a COACH-SELECTED PHASE is given, it overrides the client's goal
-- if a TRAINING PROGRAM is given, use it to judge training demand: higher volume or intensity blocks and weeks get more carbs on training days, a deload never lowers protein, and within 2 weeks of a meet keep foods familiar with no new big deficit unless the coach-selected phase says so. it never overrides the goal or the coach-selected phase
-
-- protein = 0.8–1g per lb bodyweight
+- read the data in this order: the COACH-SELECTED PHASE and their goal, the ATHLETE section and the RESULTS ON THE PREVIOUS PLAN (what actually happened), the TRAINING PROGRAM (what's coming), then their answers. their own results beat any formula
+- phase: a COACH-SELECTED PHASE overrides the client's goal. otherwise pick the phase their goal, timeline, meet date and results support (fat loss, muscle gain, recomp, maintenance, performance, reverse diet, lifestyle reset)
+- energy: when the maintenance their results imply is given, start from it: it's their real expenditure. otherwise estimate daily expenditure from bodyweight, height, sex, age, training and steps, and call it an estimate
+- rate of change, as % of bodyweight per week (a starting point to individualize, not a rule):
+  - fat loss: aim for 0.5–1% per week. nearer 0.5% for leaner athletes, within ~8 weeks of a meet, or when strength is slipping; nearer 1% only with more fat to lose, strength holding and good adherence
+  - muscle gain: aim for 0.25–0.5% per week for most lifters; true beginners can gain faster, advanced lifters at the low end. more than that is mostly fat
+  - recomp: weight about flat, protein high; it suits newer or returning lifters and people with more fat to lose
+  - maintenance / performance: weight about flat, carbs where training needs them
+  - reverse diet: from current intake, small steps up while weight stays about flat
+- sizing a calorie change: about 7,700 kcal per kg (3,500 per lb) of the gap between the rate they're getting and the rate they need, spread over the week. close all of the gap only when the trend is clear over 4+ weeks; about half when the data is thinner. a change over ~300 kcal a day is rarely needed and needs its reason in COACH NOTES
+- protein = about 1.6–2.2 g per kg of bodyweight (0.7–1 g per lb), the higher end in a deficit, for leaner athletes and in harder training. for someone carrying a lot of extra fat, base it on a goal bodyweight instead of total bodyweight
+- fats = enough for health and adherence: usually 20–35% of calories, never under about 0.5 g per kg of bodyweight
+- carbs = remaining calories. they fuel training: a heavier or higher-volume block keeps them up, and a cut takes from fats (to their floor) and lighter days first
 - protein is the SAME on every day type, and so are fats (within about 5 g); the calorie difference between training, non training and high days comes only from carbs, in whole meal-prep steps: Non Training Day = Training Day minus one step (two at most), High Day = Training Day plus one or two steps, one step being a round 40–80 g of carbs, the same size both ways (e.g. 60 g: 290 / 230 / 350). the meal plan then adds or takes out whole carb portions (one meal's rice or potatoes) instead of re-weighing every meal
-- fats = 20–30% of calories
-- carbs = remaining calories
-
 - training day = higher carbs
 - non training day = lower carbs
 - high day = highest carbs and calories
 - training time (morning / evening / fasted / varies) never changes the daily totals; it only changes which meals carry the carbs (pre- and post-workout meals)
 - a free meal on the high day fits inside the high day calories; never add calories for it
+
+------------------------
+
+TRAINING (read the TRAINING PROGRAM and ATHLETE sections; never change the program)
+
+- the block sets the fuel: a hypertrophy or volume block with a gain goal suits a surplus; a heavy strength or peaking block needs carbs, so don't start a big deficit going into one; a deload doesn't need fewer calories just because it's a deload
+- within 2 weeks of a meet: familiar foods, no new deficit, carbs kept up for the last heavy sessions, unless the coach-selected phase says otherwise
+- weight class: when the ATHLETE section says they're over their class, plan the rate that makes it by the meet. over ~1% a week costs strength, so put the options (a slower cut, a heavier class) under Flags for the coach to decide instead of a crash cut
+- strength in a cut: holding the competition lifts' e1RM is success. a lift clearly dropping across sessions, with fatigue signs or a fast loss, means the cut is too fast: slow it or plan a maintenance week, and say so
+- strength in a gain: rising lifts back the surplus up; bodyweight climbing fast with no strength change means trim it
+- low workout adherence or fatigue signs: name them. food isn't always the cause, so never fix a sleep, stress or schedule problem with calories alone
 
 ------------------------
 
@@ -75,17 +85,26 @@ STEPS + CARDIO
 PREVIOUS PLAN (only when one is given)
 
 - start from the previous plan's numbers and adjust them using RESULTS ON THE PREVIOUS PLAN. do not rebuild from scratch
-- judge bodyweight by the % of bodyweight per week, never one weigh-in
+- judge bodyweight by the trend line and its scatter, never one weigh-in: "within normal fluctuation" means treat it as flat. only a clear trend (or, with no weigh-ins logged, a change in their answered bodyweight well past a normal 1–2% fluctuation) is a reason to change calories
 - the first 2–3 weeks after calories or carbs go up include about 1–3 lb of water and glycogen, and the first 1–2 weeks of a cut drop extra water. if the plan is 3 weeks old or less, don't correct for a fast early change; only act on it once it holds past that
-- fat loss: aim for 0.5–1% per week. under 0.25% per week with adherence 4/5 or better = drop 5–10% of calories (about 100–200 kcal), from carbs and fats, protein stays. over 1.25% per week, or hunger / low energy flagged most weeks = add 100–150 kcal, mostly carbs
-- muscle gain: aim for 0.25–0.5% per week. under that with good adherence = add 100–150 kcal, mostly carbs. over 0.75% per week = take off about 100 kcal
-- recomp / maintenance / performance: within about ±0.25% per week = keep calories. drifting past that = nudge about 100 kcal the other way
-- adherence under 4/5 = keep calories the same. the numbers aren't the problem, consistency is
+- fat loss: aim for 0.5–1% per week; muscle gain: aim for 0.25–0.5% per week, each adjusted for this athlete as above. size any change from the gap, as above
+- adherence under 4/5 = keep calories the same. the numbers aren't the problem, consistency is: say what would help under Watch
+- a food log that covers most days is the best record of what they ate. a partly logged one undercounts: never read it as eating less than planned
+- hunger, low energy, poor sleep or digestion flagged most weeks: weigh them against the rate. a cut that's on rate with constant hunger may need more filling food or a slower rate, not always more calories
 - under 2 weeks on the plan, or not enough weigh-ins = keep calories unless the goal changed
 - a new goal or a COACH-SELECTED PHASE different from the previous plan's phase overrides all of this: set targets for the new phase
 - protein stays at or above the previous plan's unless bodyweight changed a lot
 - keep the same day types as the previous plan
-- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", Cardio: what changed in steps / cardio (or "no change"), and Why: one short line from the results (e.g. "down 0.2% a week for 4 weeks at 4.5/5 adherence, so -150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
+- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", Cardio: what changed in steps / cardio (or "no change"), and Why: one short line from the results (e.g. "trend −0.15% a week for 5 weeks at 4.5/5 adherence, so −150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
+
+------------------------
+
+SAFETY
+
+- never under 1,200 kcal a day (women) or 1,500 (men), fat under about 0.5 g per kg or protein under 1.6 g per kg of bodyweight without the reason under Flags
+- if their answers or the SAFETY NOTES mention an eating disorder (history or signs), pregnancy or breastfeeding, diabetes or blood sugar medication, a GLP-1 medication, or a kidney, heart, thyroid or digestive condition: keep it conservative (no aggressive deficit, no big swings between days) and put "plan this with their doctor or a registered dietitian" under Flags
+- never plan dehydration, water loading, diuretics, sauna sessions or skipped meals to make weight. a weigh-in cut is the coach's call, with qualified supervision
+- never diagnose anything
 
 === OUTPUT ===
 
@@ -132,7 +151,13 @@ Training Day:
 Non Training Day:
 High Day:
 Cardio:
-Why:`;
+Why:
+
+COACH NOTES
+Why: 1–3 short lines: what in their data set these numbers
+Watch: what to watch before the next update, and what you'd change if it happens
+Missing: what wasn't on file that would change this, or "nothing"
+Flags: anything safety-related or for the coach to decide, or "none"`;
 
 export const MEAL_PLAN_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
 
@@ -241,14 +266,22 @@ export function targetsUserPrompt(
   previous?: string | null,
   /** currentCardioText(): the cardio they're doing now. */
   cardio?: string | null,
+  extra: {
+    /** nutritionAthleteText(): their records as the training AI reads them. */
+    athlete?: string | null;
+    /** safetyNotes(): health things in their answers. */
+    safety?: string[] | null;
+  } = {},
 ): string {
   return [
     `CLIENT DATA`,
     ...clientBasicsLines(client, qas),
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
+    extra.athlete ? extra.athlete : "",
     program ? `TRAINING PROGRAM\n${program}` : "",
     previous ? previous : "",
     cardio ? cardio : "",
+    extra.safety?.length ? `SAFETY NOTES: their answers mention ${extra.safety.join(", ")}` : "",
     "",
     formatAnswers(qas),
   ]
@@ -262,9 +295,9 @@ export function manualTargetsPrompt(
   qas: QA[],
   phase?: string | null,
   previous?: string | null,
-  extra?: { program?: string | null; cardio?: string | null },
+  extra?: { program?: string | null; cardio?: string | null; athlete?: string | null },
 ): string {
-  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null)}`;
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null, { athlete: extra?.athlete ?? null, safety: safetyNotes(qas) })}`;
 }
 
 /**
@@ -500,19 +533,35 @@ export function quickPastePrompt(opts: {
 }
 
 /**
- * The one fix a written plan gets when it re-weighs a prepped food between
- * meals or day types (`prepDrift`): the same client details, the draft, and
- * exactly which foods drift and where. Runs under MEAL_PLAN_PROMPT, so the
- * format and rule 2c come with it.
+ * The one fix a written plan gets when code finds a problem in it: a prepped
+ * food re-weighed between meals or day types (`prepDrift`), or totals that
+ * don't hold (`planTotalsIssues`: a Daily Total off its targets, meals that
+ * don't add up to it). The same client details, the draft, and exactly what's
+ * wrong and where. Runs under MEAL_PLAN_PROMPT, so the format and rule 2c come
+ * with it.
  */
-export function mealPrepFixPrompt(userPrompt: string, draft: string, drift: PrepDrift[]): string {
+export function mealPrepFixPrompt(userPrompt: string, draft: string, drift: PrepDrift[], totals: string[] = []): string {
+  const fix: string[] = [];
+  if (drift.length) {
+    fix.push(
+      "FIX THE MEAL PREP: these weighed foods change amount between meals or day types, so the client would have to weigh them out differently on prep day:",
+      ...drift.map((d) => `- ${prepDriftLine(d)} (prepped amount ${d.base} ${d.unit}; off at ${d.odd.slice(0, 4).join(", ")})`),
+      "Make each of them one prepped amount on every menu, or exactly 2× it where a whole portion was added (rule 2c): move whole carb portions between day types and close what's left with counted units.",
+    );
+  }
+  if (totals.length) {
+    fix.push(
+      "FIX THE TOTALS: these don't add up, and the client reads every number:",
+      ...totals.map((t) => `- ${t}`),
+      "Make each meal's Approximate macros match its foods, each Daily Total the sum of its meals, and each Daily Total match its TARGETS, moving whole portions or counted units first (rule 2c).",
+    );
+  }
   return [
     userPrompt.trim(),
     `YOUR DRAFT:\n${draft.trim()}`,
     [
-      "FIX THE MEAL PREP: these weighed foods change amount between meals or day types, so the client would have to weigh them out differently on prep day:",
-      ...drift.map((d) => `- ${prepDriftLine(d)} (prepped amount ${d.base} ${d.unit}; off at ${d.odd.slice(0, 4).join(", ")})`),
-      "Rewrite the plan so each of them is one prepped amount on every menu, or exactly 2× it where a whole portion was added (rule 2c): move whole carb portions between day types and close what's left with counted units. Keep everything else as it is: the menus, meals, foods, order and workout-meal tags. Each menu's Daily Total still matches its TARGETS within ±3%; update every Approximate macros and Daily Total you change.",
+      ...fix,
+      "Keep everything else as it is: the menus, meals, foods, order and workout-meal tags. Each menu's Daily Total still matches its TARGETS within ±3%; update every Approximate macros and Daily Total you change.",
       "Output the full meal plan again in the same format: the PHASE line, every menu, then FOOD-WEIGHING RULES. Nothing before or after it.",
     ].join("\n"),
   ].join("\n\n");

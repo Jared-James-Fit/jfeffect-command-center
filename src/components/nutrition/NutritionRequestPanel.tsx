@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
-import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
+import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, answerFor, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
 import { WorkoutMealsSelect, workoutMealsLabel } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
@@ -39,6 +39,7 @@ import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/Me
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
 import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
 import { LEAN_GROCERY_LIST, planFoodStats, prepDrift, prepDriftLine, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 type Req = {
   id: string;
@@ -200,7 +201,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       days,
       structure: structureFor(days.map((d) => d.day_label)),
       food_weighing_rules: parseFoodWeighingRules(plan.meal_plan_text),
-      admin_notes: plan.targets_text ?? null,
+      // COACH NOTES (reasoning, health flags) never reaches the client-readable plan.
+      admin_notes: withoutCoachNotes(plan.targets_text ?? null),
       phase: plan.phase ?? phaseFromPlanText(plan.meal_plan_text) ?? phaseFromText(plan.targets_text?.match(/^Goal:\s*(.+)$/m)?.[1]),
       // Daily steps + cardio sessions ride along into the editor.
       targetsText: plan.targets_text ?? null,
@@ -225,6 +227,20 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       };
     });
   }, [prefill, plan?.targets_text]);
+
+  // What to look at before publishing: the targets' own math, floors, health mentions, the AI's flags.
+  const checks = useMemo(() => {
+    if (!plan?.targets_text) return [];
+    const answers = latest?.answers ?? [];
+    const out = coachChecks({
+      days: parseAiTargets(plan.targets_text),
+      bodyweightKg: bodyweightAnswerKg(answerFor(answers, "bodyweight")),
+      female: /female/i.test(String(data?.client?.sex ?? "")),
+      safety: safetyNotes(answers),
+    });
+    const flags = coachNotesFlags(plan.targets_text);
+    return flags ? [...out, `AI: ${flags}`] : out;
+  }, [plan?.targets_text, latest?.answers, data?.client?.sex]);
 
   /** Everything for this plan as one block (to paste into a doc, a chat or another AI). */
   const everything = () => {
@@ -460,7 +476,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       {submitted && plan && (plan.status === "ready" || revising) && (
         <div className="space-y-3">
           <LastPlanSummary previous={plan.previous_plan ?? null} />
-          {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} drift={prefill ? prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes }))) : null} />}
+          {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} drift={prefill ? prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes }))) : null} checks={checks} />}
           {plan.targets_text && <CopyBlock title="AI targets" text={plan.targets_text} icon={<ClipboardList className="h-4 w-4 text-primary" />} />}
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
@@ -741,11 +757,21 @@ function LastPlanSummary({ previous }: { previous: PreviousPlan | null }) {
 }
 
 /** Each day type's numbers, steps and cardio from the AI plan, before opening the editor. */
-function PlanPreview({ rows, foods, drift }: { rows: Array<{ label: string; kcal: number | null; p: number | null; c: number | null; f: number | null; steps: number | null; cardio: string }>; foods: PlanFoodStats | null; drift: PrepDrift[] | null }) {
+function PlanPreview({ rows, foods, drift, checks = [] }: { rows: Array<{ label: string; kcal: number | null; p: number | null; c: number | null; f: number | null; steps: number | null; cardio: string }>; foods: PlanFoodStats | null; drift: PrepDrift[] | null; checks?: string[] }) {
   const heavy = !!foods && foods.total > LEAN_GROCERY_LIST;
   const drifting = !!drift?.length;
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
+      {checks.length > 0 && (
+        <div data-coach-checks className="border-b border-border bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
+          <div className="font-semibold">Check before publishing</div>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+            {checks.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {foods && foods.total > 0 && (
         <div
           className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", heavy ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "text-muted-foreground")}

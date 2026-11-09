@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -44,6 +44,16 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
   construct: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
   repair: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
   edit: { models: ["gateway:openai/gpt-5.5", "gateway:google/gemini-3-flash-preview"], effort: "medium", strongOnly: false },
+  /**
+   * A Nutrition Update's targets: calories, macros, steps and cardio from the athlete's records
+   * and how the last plan went. A coaching decision, so the strong tier only, like the strategy.
+   */
+  nutrition: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
+  /**
+   * Writing a meal plan to those targets, its meal-prep fix and coach updates: structured writing
+   * checked in code (prepDrift, planTotalsIssues), like construct.
+   */
+  nutrition_write: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 24_000, strongOnly: false },
 };
 
 /**

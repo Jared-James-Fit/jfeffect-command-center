@@ -23,6 +23,8 @@ import {
 } from "@/lib/nutrition-ai-prompts";
 import { phaseFromText } from "@/lib/nutrition-cardio";
 import { planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { configuredHighWeekday } from "@/lib/client-nutrition-day";
+import { bodyweightAnswerKg, parseAiTargets, planTotalsIssues, safetyNotes, weeklyAverageKcal, withoutCoachNotes, type DayTargets } from "@/lib/nutrition-targets/nutrition-intel";
 import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
 import { sexLabel } from "@/lib/athlete-sex";
 import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
@@ -110,15 +112,6 @@ export async function loadTrainingPattern(sb: any, clientId: string): Promise<Tr
 
 const LB = 2.2046226;
 
-/** A bodyweight answer ("182", "182 lbs", "82 kg") in kg. The form asks in lbs. */
-function answerKg(text: string): number | null {
-  const m = String(text ?? "").match(/(\d+(?:\.\d+)?)\s*(kg|lb|lbs)?/i);
-  if (!m) return null;
-  const n = Number(m[1]);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return /kg/i.test(m[2] ?? "") ? n : n / LB;
-}
-
 /**
  * The plan the client was on when they sent this update (the latest one made
  * before it), and how it went: bodyweight trend, weekly check-in adherence
@@ -142,7 +135,7 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
   const start = String(t.start_date ?? t.created_at).slice(0, 10);
   const end = before.slice(0, 10);
   const [{ data: client }, { data: prevSubs }] = await Promise.all([
-    sb.from("clients").select("user_id, preferred_weight_unit").eq("id", sub.client_id).maybeSingle(),
+    sb.from("clients").select("user_id, preferred_weight_unit, timezone, committed_training_days, preferred_high_days").eq("id", sub.client_id).maybeSingle(),
     sb
       .from("nf_submissions")
       .select("id, submitted_at")
@@ -154,7 +147,11 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
       .limit(1),
   ]);
   const unit: "lb" | "kg" = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
-  const [{ data: weights }, { data: checkins }] = await Promise.all([
+  // Log Food keeps a client's entries on their member row (made the first time they log).
+  const { data: member } = client?.user_id
+    ? await sb.from("app_members").select("id").eq("user_id", client.user_id).maybeSingle()
+    : { data: null };
+  const [{ data: weights }, { data: checkins }, { data: food }] = await Promise.all([
     client?.user_id
       ? sb
           .from("progress_bodyweight")
@@ -171,15 +168,24 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
       .eq("status", "completed")
       .gte("submitted_at", `${start}T00:00:00Z`)
       .lt("submitted_at", before),
+    member?.id
+      ? sb
+          .from("member_meal_logs")
+          .select("logged_at, calories, protein_g, carbs_g, fat_g")
+          .eq("member_id", member.id)
+          .gte("logged_at", `${start}T00:00:00Z`)
+          .lt("logged_at", before)
+          .limit(5000)
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Fallback trend: the last Nutrition Update's bodyweight answer vs this one.
   let formFallback: { fromKg: number; toKg: number; days: number } | null = null;
   const prev = (prevSubs ?? [])[0];
-  const nowKg = answerKg(answerFor(qas, "bodyweight"));
+  const nowKg = bodyweightAnswerKg(answerFor(qas, "bodyweight"));
   if (prev?.submitted_at && nowKg) {
     const { qas: prevQas } = await loadQAs(sb, prev.id).catch(() => ({ qas: [] as QA[] }));
-    const fromKg = answerKg(answerFor(prevQas, "bodyweight"));
+    const fromKg = bodyweightAnswerKg(answerFor(prevQas, "bodyweight"));
     const days = (Date.parse(before) - Date.parse(prev.submitted_at)) / 86_400_000;
     if (fromKg) formFallback = { fromKg, toKg: nowKg, days };
   }
@@ -214,6 +220,13 @@ export async function loadPreviousPlan(sb: any, sub: { id: string; client_id: st
       })),
       checkins: ((checkins ?? []) as any[]).map((c) => ({ answers: c.answers ?? null })),
       formFallback,
+      food: ((food ?? []) as any[]).map((f) => ({ at: String(f.logged_at), kcal: f.calories, protein: f.protein_g, carbs: f.carbs_g, fat: f.fat_g })),
+      tz: client?.timezone || "America/Winnipeg",
+      planKcal: weeklyAverageKcal(
+        days,
+        ((client?.committed_training_days ?? []) as string[]).filter(Boolean),
+        configuredHighWeekday(client?.preferred_high_days ?? null).weekday,
+      ),
     }),
   };
 }
@@ -254,7 +267,8 @@ export async function runPlan(
   // The row goes in first, so the coach's panel shows it building, and
   // anything that goes wrong after this (a lookup, the AI) is on the row as
   // the error instead of leaving no trace.
-  const startedAt = new Date().toISOString();
+  const startedMs = Date.now();
+  const startedAt = new Date(startedMs).toISOString();
   const { data: subRow } = await sb.from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
   if (!subRow) throw new Error("Submission not found");
   const { error: rowError } = await sb.from("nutrition_ai_plans").upsert(
@@ -273,7 +287,7 @@ export async function runPlan(
       previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
       if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
     }
-    const [coach, basics, history, program, cardioRows, trainingDays] = await Promise.all([
+    const [coach, basics, history, program, cardioRows, trainingDays, athlete] = await Promise.all([
       coachSettings(sb, sub.client_id),
       loadClientBasics(sb, sub.client_id),
       // Never let a history lookup block the plan.
@@ -283,6 +297,8 @@ export async function runPlan(
       // Their cardio now: the AI adjusts it with the calories.
       loadCardioRows(sb, sub.client_id),
       loadTrainingDays(sb, sub.client_id).catch(() => [] as string[]),
+      // Their records as Program Intelligence reads them (never blocks the plan).
+      loadNutritionAthlete(sb, sub.client_id),
     ]);
     const selected = phaseOverride ?? coach.phase;
     const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -290,24 +306,30 @@ export async function runPlan(
     const phase = selected ?? phaseFromText(goalAnswer);
     await sb.from("nutrition_ai_plans").update({ phase, workout_meals: workoutMeals }).eq("submission_id", submissionId);
 
-    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText } = await import("ai");
-    const gateway = createLovableAiGateway();
-    const { data: g } = await sb.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-    const modelId = g?.default_model || DEFAULT_AI_MODEL;
-
-    const t = await generateText({
-      model: gateway(modelId),
-      system: TARGETS_PROMPT,
-      prompt: targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays })),
-    });
+    // The targets are the coaching decision (the strong tier); the meal plan is writing to them.
+    const deadline = startedMs + RUN_BUDGET_MS;
+    const t = await askNutrition(
+      sb,
+      "nutrition",
+      TARGETS_PROMPT,
+      targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays }), {
+        athlete: athlete?.text ?? null,
+        safety: safetyNotes(qas),
+      }),
+      deadline - WRITE_RESERVE_MS,
+    );
     const targetsText = cleanAiText(t.text);
 
-    const mealPrompt = mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history, previousMealsText(previous));
-    const m = await generateText({ model: gateway(modelId), system: MEAL_PLAN_PROMPT, prompt: mealPrompt });
-    const mealPlanText = await withPrepFix(cleanAiText(m.text), mealPrompt, (prompt) =>
-      generateText({ model: gateway(modelId), system: MEAL_PLAN_PROMPT, prompt }).then((r) => r.text),
+    // The meal plan is the client's: the targets' COACH NOTES (reasoning, health flags) stay out of it.
+    const mealPrompt = mealPlanUserPrompt(qas, withoutCoachNotes(targetsText) ?? "", phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history, previousMealsText(previous));
+    const m = await askNutrition(sb, "nutrition_write", MEAL_PLAN_PROMPT, mealPrompt, deadline);
+    const mealPlanText = await withPrepFix(
+      cleanAiText(m.text),
+      mealPrompt,
+      (prompt) => (deadline - Date.now() > FIX_MIN_MS ? askNutrition(sb, "nutrition_write", MEAL_PLAN_PROMPT, prompt, deadline).then((r) => r.text) : Promise.resolve("")),
+      parseAiTargets(targetsText),
     );
+    const modelId = `targets ${t.model} · meals ${m.model}`;
 
     await sb.from("nutrition_ai_plans").update({
       status: "ready",
@@ -333,19 +355,94 @@ export async function runPlan(
 }
 
 /**
- * Meal prep is checked in code, not trusted to the model: a plan that writes
- * a weighed food at different amounts between meals or day types (prepDrift)
- * gets one targeted fix, and the fix is kept only when it still reads as the
- * same plan (same menus, a Daily Total) with fewer foods drifting. A failed
- * fix never costs the plan already written. Exported for tests.
+ * A written plan is checked in code, not trusted to the model: a weighed food
+ * at different amounts between meals or day types (prepDrift), a menu whose
+ * Daily Total is off its targets or whose meals don't add up to it
+ * (planTotalsIssues). One that fails gets one targeted fix, kept only when it
+ * still reads as the same plan (same menus, a Daily Total) with fewer
+ * problems. A failed fix never costs the plan already written. Exported for tests.
  */
-export async function withPrepFix(draft: string, userPrompt: string, ask: (prompt: string) => Promise<string>): Promise<string> {
-  const drift = prepDrift(planMenus(draft));
-  if (!drift.length) return draft;
-  const fixed = cleanAiText(await ask(mealPrepFixPrompt(userPrompt, draft, drift)).catch(() => ""));
+export async function withPrepFix(draft: string, userPrompt: string, ask: (prompt: string) => Promise<string>, targets: DayTargets[] = []): Promise<string> {
+  const issues = (text: string) => ({ drift: prepDrift(planMenus(text)), totals: targets.length ? planTotalsIssues(text, targets) : [] });
+  const before = issues(draft);
+  const count = (x: ReturnType<typeof issues>) => x.drift.length + x.totals.length;
+  if (!count(before)) return draft;
+  const fixed = cleanAiText(await ask(mealPrepFixPrompt(userPrompt, draft, before.drift, before.totals)).catch(() => ""));
   if (!fixed || !revisionLooksRight("meals", draft, fixed)) return draft;
   if (planMenus(fixed).length !== planMenus(draft).length) return draft;
-  return prepDrift(planMenus(fixed)).length < drift.length ? fixed : draft;
+  return count(issues(fixed)) < count(before) ? fixed : draft;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Which model answers                                                       */
+
+/** A whole plan (targets, meals, one fix) finishes inside one background request. */
+export const RUN_BUDGET_MS = 270_000;
+/** Kept back from the targets for writing the meal plan. */
+const WRITE_RESERVE_MS = 90_000;
+/** The fix only runs with this much of the budget left. */
+const FIX_MIN_MS = 45_000;
+/** Each model's own limit: the first gets longer (a strong model thinks), the fallback less. */
+const FIRST_MODEL_MS = 150_000;
+const NEXT_MODEL_MS = 110_000;
+
+/**
+ * One nutrition call, routed like the training AI (src/lib/ai/routing.ts: "nutrition" for the
+ * targets, the strong tier only; "nutrition_write" for meal plans, fast first; an admin
+ * override in app_settings.ai_routes wins), trying the next model when one fails or runs out of
+ * time, never past `deadline`.
+ */
+export async function askNutrition(sb: any, task: "nutrition" | "nutrition_write", system: string, prompt: string, deadline: number): Promise<{ text: string; model: string }> {
+  const { callModel, ModelHttpError } = await import("@/lib/ai/model-client.server");
+  const { resolveRoute } = await import("@/lib/ai/routing");
+  const { data } = await sb.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
+  let override: any = null;
+  try {
+    override = data?.value ? JSON.parse(data.value) : null;
+  } catch {
+    override = null;
+  }
+  const route = resolveRoute(task, override);
+  const errors: string[] = [];
+  for (const [i, model] of route.models.entries()) {
+    const timeoutMs = Math.min(i === 0 ? FIRST_MODEL_MS : NEXT_MODEL_MS, deadline - Date.now());
+    if (timeoutMs < 20_000) {
+      errors.push(`${model}: out of time`);
+      break;
+    }
+    try {
+      const r = await callModel(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, timeoutMs, temperature: 0.3 });
+      if (!r.text.trim()) throw new Error("an empty answer");
+      return { text: r.text, model };
+    } catch (e: any) {
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("Lovable AI credits are used up. Add credits in Lovable, then Regenerate.");
+      errors.push(`${model}: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  }
+  throw new Error(
+    route.strongOnly
+      ? `The coaching model didn't answer (${errors.join("; ")}). Nutrition targets aren't handed to a weaker model; Regenerate in a few minutes.`
+      : `No model answered (${errors.join("; ")}). Try again in a few minutes.`,
+  );
+}
+
+/**
+ * The athlete as Program Intelligence reads them (nutrition-athlete.ts): their whole history,
+ * read once. Null when it can't be read in time; a plan is never held up by it.
+ */
+export async function loadNutritionAthlete(sb: any, clientId: string): Promise<{ text: string } | null> {
+  const read = (async () => {
+    const [{ loadIntelRecords }, { buildGeneratorIntel }, { nutritionAthleteText }] = await Promise.all([
+      import("@/lib/program-intel/load"),
+      import("@/lib/program-intel/intelligence"),
+      import("@/lib/nutrition-targets/nutrition-athlete"),
+    ]);
+    const rec = await loadIntelRecords(sb, clientId, { kind: "history" } as any);
+    const intel = buildGeneratorIntel(rec);
+    return { text: nutritionAthleteText(intel.ctx, intel.development) };
+  })();
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30_000));
+  return Promise.race([read, timeout]).catch(() => null);
 }
 
 /** A plan for this submission is already being written (started under 3 minutes ago). */
@@ -482,37 +579,35 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
   try {
     const { qas } = await loadQAs(sb, submissionId);
     const history = await loadTrainingPattern(sb, row.client_id).catch(() => null);
-    const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-    const { generateText } = await import("ai");
-    const gateway = createLovableAiGateway();
-    const { data: g } = await sb.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-    const modelId = g?.default_model || DEFAULT_AI_MODEL;
+    const deadline = Date.now() + RUN_BUDGET_MS;
+    const models: string[] = [];
 
     const oldTargets = String(row.targets_text ?? "");
     let targetsText = oldTargets;
     if (oldTargets.trim()) {
-      const t = await generateText({
-        model: gateway(modelId),
-        system: REVISE_TARGETS_PROMPT,
-        prompt: reviseTargetsUserPrompt(oldTargets, instructions),
-      });
+      const t = await askNutrition(sb, "nutrition_write", REVISE_TARGETS_PROMPT, reviseTargetsUserPrompt(oldTargets, instructions), deadline - WRITE_RESERVE_MS);
+      models.push(`targets ${t.model}`);
       const next = cleanAiText(t.text);
       if (revisionLooksRight("targets", oldTargets, next)) targetsText = next;
     }
     const phase = row.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]);
-    const m = await generateText({
-      model: gateway(modelId),
-      system: MEAL_PLAN_PROMPT,
-      prompt: reviseMealPlanUserPrompt({
+    const m = await askNutrition(
+      sb,
+      "nutrition_write",
+      MEAL_PLAN_PROMPT,
+      reviseMealPlanUserPrompt({
         qas,
-        targetsText,
+        targetsText: withoutCoachNotes(targetsText) ?? "",
         mealPlanText: row.meal_plan_text,
         instructions,
         phase,
         workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
         history,
       }),
-    });
+      deadline,
+    );
+    models.push(`meals ${m.model}`);
+    const modelId = `update · ${models.join(" · ")}`;
     const mealPlanText = cleanAiText(m.text);
     if (!revisionLooksRight("meals", row.meal_plan_text, mealPlanText)) {
       throw new Error("The AI's answer didn't come back as a meal plan. Try wording the change differently");

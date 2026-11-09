@@ -9,6 +9,7 @@ import { PHASE_GOAL } from "@/lib/nutrition-cardio";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, parseAiCardio, planCardioSync, type CardioDraft } from "@/lib/nutrition-cardio-sync";
 import { plainOrNull } from "@/lib/nutrition-targets/plain-paste";
+import { withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
 import { todayLocalISO } from "@/lib/today";
 import {
   aiPlanDays,
@@ -151,7 +152,8 @@ export async function publishAiPlan(input: {
     ending_soon_days: current?.ending_soon_days ?? 7,
     client_notes: current?.client_notes ?? null,
     food_weighing_rules: plainOrNull(input.foodWeighingRules),
-    admin_notes: input.targetsText,
+    // COACH NOTES (the AI's reasoning and health flags) stays on the coach-only AI plan: clients can read this row.
+    admin_notes: withoutCoachNotes(input.targetsText),
     visible_to_client: true,
     pdf_url: null,
     pdf_name: null,

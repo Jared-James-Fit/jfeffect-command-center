@@ -18,6 +18,8 @@ const TASK_LABEL: Record<string, string> = {
   construct: "Writing the workouts from the strategy",
   repair: "Targeted fixes",
   edit: "Edit with AI",
+  nutrition: "Nutrition targets (coaching decisions)",
+  nutrition_write: "Writing meal plans and plan updates",
 };
 
 /** Admin only: which models run the coaching AI, whether they're reachable, and how the calls have gone. Nothing here changes a program. */
