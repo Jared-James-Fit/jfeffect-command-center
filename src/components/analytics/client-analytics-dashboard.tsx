@@ -73,6 +73,8 @@ export interface ClientAnalyticsDashboardProps {
   headerLeadingNode?: ReactNode;
   /** Whether GraphDotDetail can open the underlying set log. */
   canOpenLog?: boolean;
+  /** Leave out the bodyweight trend card (the coach's Progress tab has its own bodyweight panel above). */
+  hideBodyweight?: boolean;
   /** Optional class on outer container. */
   className?: string;
 }
@@ -92,6 +94,7 @@ export function ClientAnalyticsDashboard({
   viewAllPRsNode,
   headerLeadingNode,
   canOpenLog = false,
+  hideBodyweight = false,
   className,
 }: ClientAnalyticsDashboardProps) {
   const {
@@ -726,6 +729,7 @@ export function ClientAnalyticsDashboard({
             />
             </SectionErrorBoundary>
 
+            {!hideBodyweight && (
             <SectionErrorBoundary label="Bodyweight trend">
             <BodyweightTrendCard
               clientId={clientId}
@@ -735,6 +739,7 @@ export function ClientAnalyticsDashboard({
               rangeLabel={filter.label}
             />
             </SectionErrorBoundary>
+            )}
 
             <SectionErrorBoundary label="Cardio">
             <CardioAnalyticsSection

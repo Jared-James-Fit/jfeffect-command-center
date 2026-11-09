@@ -792,6 +792,7 @@ export function ClientProfileWorkspace({
                 clientId={id}
                 preferredUnit={(form?.preferred_weight_unit as "lb" | "kg") ?? "lb"}
                 canOpenLog
+                hideBodyweight
               />
             </div>
           </Suspense>
