@@ -28,12 +28,21 @@ export type Route = {
 /** The top tier: models allowed to make a coaching decision. */
 export const STRONG_MODELS = ["openai:gpt-6-astra", "gateway:openai/gpt-6-astra", "gateway:anthropic/claude-opus-5-5", "openai:gpt-5.5", "gateway:openai/gpt-5.5"];
 
+/**
+ * Chosen from the Nov 9 2026 benchmark on real athletes (docs/AI_ARCHITECTURE.md): the strategy,
+ * blind-graded, was best from GPT-6 Astra (47/60 average, all 5 head-to-heads against GPT-5.5's
+ * 43; Flash 24), which runs in OpenAI's background mode with no time ceiling; GPT-5.5 through
+ * the gateway is the fallback (it can 524 on a think over ~125s). Claude through the gateway
+ * couldn't finish a strategy inside one request (no background mode there), so it isn't routed.
+ * Building from an approved strategy: Flash and GPT-5.5 had the same audit results on every
+ * paired build, Flash 2-5x faster, so Flash builds and GPT-5.5 is its fallback.
+ */
 export const DEFAULT_ROUTES: Record<AiTask, Route> = {
-  strategy: { models: ["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"], effort: "high", maxOutputTokens: 40_000, strongOnly: true },
-  review: { models: ["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
-  interpret: { models: ["openai:gpt-6-astra", "gateway:anthropic/claude-opus-5-5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
-  construct: { models: ["openai:gpt-6-astra", "gateway:anthropic/claude-sonnet-5", "gateway:google/gemini-3-flash-preview"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
-  repair: { models: ["openai:gpt-6-astra", "gateway:anthropic/claude-sonnet-5", "gateway:google/gemini-3-flash-preview"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
+  strategy: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "high", maxOutputTokens: 40_000, strongOnly: true },
+  review: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
+  interpret: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
+  construct: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
+  repair: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
   edit: { models: ["gateway:openai/gpt-5.5", "gateway:google/gemini-3-flash-preview"], effort: "medium", strongOnly: false },
 };
 
