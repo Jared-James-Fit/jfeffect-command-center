@@ -334,8 +334,10 @@
   }
 }
 
-/* Hide mobile bottom nav when the on-screen keyboard is open */
-html[data-keyboard-open="true"] [data-mobile-bottom-nav] {
+/* Hide mobile bottom nav when the on-screen keyboard is open, and anything
+   pinned above it (a page's own action bar, data-hide-on-keyboard) */
+html[data-keyboard-open="true"] [data-mobile-bottom-nav],
+html[data-keyboard-open="true"] [data-hide-on-keyboard] {
   display: none !important;
 }
 

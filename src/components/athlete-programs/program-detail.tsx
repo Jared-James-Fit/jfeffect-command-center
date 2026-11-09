@@ -49,8 +49,8 @@ import {
   useProgram,
   useProgramActions,
   type ProgramDetail,
-  type ProgramExercise,
 } from "@/lib/athlete-programs";
+import { prescription } from "@/lib/athlete-program-draft";
 
 /** One program: what's in it, who made it, and what you can do with it. */
 export function ProgramDetailPage({
@@ -406,16 +406,5 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
   );
 }
 
-/** "3 × 8-10 · RPE 8 · 2:00" */
-export function prescription(
-  e: Pick<ProgramExercise, "sets" | "reps" | "rpe" | "rest_seconds">,
-): string {
-  const parts = [`${e.sets} × ${e.reps}`];
-  if (e.rpe) parts.push(`RPE ${e.rpe}`);
-  if (e.rest_seconds) {
-    const m = Math.floor(e.rest_seconds / 60);
-    const s = e.rest_seconds % 60;
-    parts.push(m ? `${m}:${String(s).padStart(2, "0")} rest` : `${s}s rest`);
-  }
-  return parts.join(" · ");
-}
+/** Kept here too for older imports; it lives with the builder's helpers. */
+export { prescription };

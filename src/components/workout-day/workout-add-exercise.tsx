@@ -22,6 +22,37 @@ export type ExerciseLite = {
   category: string | null;
 };
 
+const LIBRARY_PAGE = 1000;
+
+/**
+ * The unarchived library, light (one shared cache for every picker that adds
+ * an exercise), read whole page by page: one request capped at 2,000 rows
+ * could silently drop the end of the alphabet as the library grows past it.
+ */
+export function useExerciseLibraryLite(enabled: boolean) {
+  return useQuery({
+    queryKey: ["workout-add-exercise-library"],
+    enabled,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const all: ExerciseLite[] = [];
+      for (let from = 0; from < 20 * LIBRARY_PAGE; from += LIBRARY_PAGE) {
+        const { data, error } = await supabase
+          .from("exercises")
+          .select("id,name,muscle_group,equipment,category")
+          .eq("archived", false)
+          .order("name")
+          .order("id")
+          .range(from, from + LIBRARY_PAGE - 1);
+        if (error) throw error;
+        all.push(...((data ?? []) as ExerciseLite[]));
+        if (!data || data.length < LIBRARY_PAGE) break;
+      }
+      return all;
+    },
+  });
+}
+
 export function WorkoutAddExercise({
   onAdd,
   disabled = false,
@@ -40,21 +71,7 @@ export function WorkoutAddExercise({
   const [search, setSearch] = useState("");
   const [addingId, setAddingId] = useState<string | null>(null);
 
-  const { data: library = [], isLoading } = useQuery({
-    queryKey: ["workout-add-exercise-library"],
-    enabled: open,
-    staleTime: 10 * 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("exercises")
-        .select("id,name,muscle_group,equipment,category")
-        .eq("archived", false)
-        .order("name")
-        .limit(2000);
-      if (error) throw error;
-      return (data ?? []) as ExerciseLite[];
-    },
-  });
+  const { data: library = [], isLoading } = useExerciseLibraryLite(open);
 
   const results = useMemo<ExerciseLite[]>(() => {
     const q = search.trim();

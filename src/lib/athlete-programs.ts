@@ -165,25 +165,37 @@ export function draftDaysPayload(days: ProgramDay[]) {
   }));
 }
 
-/** First thing to fix before saving (the database checks the same things), or null. */
-export function draftProblem(d: ProgramDraft): string | null {
-  if (d.title.trim().length < 2) return "Give your program a name.";
-  if (!d.days.length) return "Add a training day.";
-  if (d.days.length > 7) return "A week has at most 7 training days.";
+/**
+ * First thing to fix before saving (the database checks the same things), and
+ * where it is: the name, the week as a whole, or a day (its index), so the
+ * builder can take the person straight to it. Null when it can be saved.
+ */
+export function draftIssue(
+  d: ProgramDraft,
+): { message: string; at: "title" | "days" | number } | null {
+  if (d.title.trim().length < 2) return { message: "Give your program a name.", at: "title" };
+  if (!d.days.length) return { message: "Add a training day.", at: "days" };
+  if (d.days.length > 7) return { message: "A week has at most 7 training days.", at: "days" };
   for (const [i, day] of d.days.entries()) {
     const name = day.title.trim() || `Day ${i + 1}`;
-    if (!day.exercises.length) return `Add an exercise to ${name}.`;
-    if (day.exercises.length > 20) return `${name} has more than 20 exercises.`;
+    const at = (message: string) => ({ message, at: i });
+    if (!day.exercises.length) return at(`Add an exercise to ${name}.`);
+    if (day.exercises.length > 20) return at(`${name} has more than 20 exercises.`);
     for (const e of day.exercises) {
       const sets = Number(e.sets);
       if (!Number.isInteger(sets) || sets < 1 || sets > 20)
-        return `Sets must be 1 to 20 (${name}).`;
-      if (!String(e.reps ?? "").trim()) return `Every exercise needs reps (${name}).`;
+        return at(`Sets must be 1 to 20 (${name}).`);
+      if (!String(e.reps ?? "").trim()) return at(`Every exercise needs reps (${name}).`);
       if (e.rpe && !/^(10|[1-9](\.5)?)(-(10|[1-9](\.5)?))?$/.test(String(e.rpe).trim()))
-        return `RPE is 1 to 10, like 8 or 7-8 (${name}).`;
+        return at(`RPE is 1 to 10, like 8 or 7-8 (${name}).`);
     }
   }
   return null;
+}
+
+/** First thing to fix before saving, or null. */
+export function draftProblem(d: ProgramDraft): string | null {
+  return draftIssue(d)?.message ?? null;
 }
 
 /** Postgres raises plain sentences for the person; anything else gets a generic line. */
