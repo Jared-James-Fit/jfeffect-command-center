@@ -15,6 +15,31 @@ export const Route = createFileRoute("/api/public/hooks/ai-benchmark")({
         if (!(await authorizeHookRequest(request))) return new Response("unauthorized", { status: 401 });
         const body = (await request.json().catch(() => null)) as any;
         const uuid = /^[0-9a-f-]{36}$/i;
+        // re-read benchmark runs' first strategy reply with the current parser (no model call):
+        // kept as result.strategyReparsed beside what the run used
+        if (Array.isArray(body?.reparse)) {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          const { parseJsonReply } = await import("@/lib/program-intel/next-program");
+          const { strategySchema } = await import("@/lib/program-intel/generator-schemas");
+          const db = supabaseAdmin as any;
+          const out: Array<{ id: string; ok: boolean; error?: string }> = [];
+          for (const id of body.reparse.filter((x: unknown) => typeof x === "string" && uuid.test(x)).slice(0, 60)) {
+            const { data: job } = await db.from("program_intel_jobs").select("id, result, options").eq("id", id).maybeSingle();
+            if (!job?.options?.bench) {
+              out.push({ id, ok: false, error: "not a benchmark run" });
+              continue;
+            }
+            const { data: call } = await db.from("program_intel_job_calls").select("response").eq("job_id", id).eq("stage", "strategy").eq("ok", true).order("created_at").limit(1).maybeSingle();
+            const parsed = call?.response ? parseJsonReply(call.response, strategySchema) : null;
+            if (!parsed?.ok) {
+              out.push({ id, ok: false, error: parsed ? parsed.error : "no strategy reply" });
+              continue;
+            }
+            const { error } = await db.from("program_intel_jobs").update({ result: { ...(job.result ?? {}), strategyReparsed: parsed.value } }).eq("id", id);
+            out.push({ id, ok: !error, error: error?.message });
+          }
+          return Response.json({ reparsed: out });
+        }
         if (!body || !uuid.test(String(body.clientId ?? "")) || !uuid.test(String(body.createdBy ?? ""))) return Response.json({ error: "clientId and createdBy are required" }, { status: 400 });
         const kind = body.kind === "generate" ? "generate" : "strategy";
         const models = typeof body.models === "object" && body.models ? body.models : null;

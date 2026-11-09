@@ -15,7 +15,26 @@ export { MAX_PROGRAM_WEEKS };
 export const MAX_BLOCK_WEEKS = 12;
 
 const ref = z.object({ id: z.string().trim().max(64).nullable(), name: z.string().trim().min(1).max(120) });
-const shortText = (n: number) => z.string().trim().max(n).catch("");
+
+/**
+ * Model answers are read tolerantly, never thrown away for being thorough: text over its cap is
+ * cut to the cap (an object or number where text belongs is kept as its text), and a list keeps
+ * every item that reads, up to its cap. Before Nov 9 2026 a long `intensity` or one 66-character
+ * frequency label wiped the whole field to "" / [], so the most detailed strategies arrived with
+ * their intensity, progression and day plans empty.
+ */
+const asText = (v: unknown): string => (v == null ? "" : typeof v === "string" ? v : typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v));
+export const clip = (n: number) => z.preprocess(asText, z.string()).transform((s) => s.trim().slice(0, n));
+export const clipReq = (n: number) => z.preprocess(asText, z.string().trim().min(1)).transform((s) => s.slice(0, n));
+export function list<T extends z.ZodTypeAny>(schema: T, k: number) {
+  return z
+    .preprocess((v) => (Array.isArray(v) ? v : v == null ? [] : [v]), z.array(z.unknown()))
+    .transform((arr) => arr.flatMap((x) => {
+      const r = schema.safeParse(x);
+      return r.success ? [r.data as z.output<T>] : [];
+    }).slice(0, k));
+}
+const shortText = (n: number) => clip(n);
 
 const cardioSessionSchema = z.object({
   type: z.string().trim().min(1).max(60),
@@ -78,28 +97,28 @@ export const setupSchema = z.object({
 
 // ── Stage 4: the programming strategy ────────────────────────────────────────
 
-const item = z.object({ item: z.string().trim().min(1).max(300), why: shortText(700), evidence: z.array(z.string().trim().max(300)).max(6).catch([]) });
+const item = z.object({ item: clipReq(400), why: clip(1200), evidence: list(clip(400), 8) });
 
 export const decisionSchema = z.object({
-  area: shortText(40),
-  observation: z.string().trim().min(1).max(700),
-  evidence: z.array(z.string().trim().max(300)).max(8).catch([]),
-  change: z.string().trim().min(1).max(700),
-  benefit: shortText(500),
-  monitor: shortText(500),
+  area: clip(60),
+  observation: clipReq(1200),
+  evidence: list(clip(400), 10),
+  change: clipReq(1200),
+  benefit: clip(800),
+  monitor: clip(800),
   basis: z.enum(["fact", "hypothesis"]).catch("hypothesis"),
   confidence: z.enum(["high", "medium", "low"]).catch("medium"),
 });
 export type StrategyDecision = z.infer<typeof decisionSchema>;
 
 export const strategySchema = z.object({
-  athlete_read: z.string().trim().min(1).max(2000),
-  previous_program: z.object({ intent: shortText(1000), outcome: shortText(1500) }),
-  keep: z.array(item).max(14).catch([]),
-  change: z.array(item).max(14).catch([]),
-  prioritize: z.array(item).max(10).catch([]),
-  reduce: z.array(item).max(12).catch([]),
-  progression: z.object({ model: shortText(900), expected: shortText(900), fatigue: shortText(900), success_criteria: z.array(z.string().trim().max(300)).max(10).catch([]) }),
+  athlete_read: clipReq(4000),
+  previous_program: z.object({ intent: clip(1500), outcome: clip(2500) }),
+  keep: list(item, 20),
+  change: list(item, 20),
+  prioritize: list(item, 14),
+  reduce: list(item, 16),
+  progression: z.object({ model: clip(4000), expected: clip(2000), fatigue: clip(2500), success_criteria: list(clip(400), 12) }),
   structure: z.object({
     weeks: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS),
     days_per_week: z.coerce.number().int().min(1).max(7),
@@ -107,10 +126,10 @@ export const strategySchema = z.object({
     blocks: z
       .array(
         z.object({
-          name: z.string().trim().min(1).max(80),
+          name: clipReq(80),
           weeks: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS),
-          objective: shortText(600),
-          phases: z.array(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), phase: z.string().trim().max(60) })).max(MAX_PROGRAM_WEEKS).catch([]),
+          objective: clip(1000),
+          phases: list(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), phase: clip(80) }), MAX_PROGRAM_WEEKS),
         }),
       )
       .min(1)
@@ -119,31 +138,31 @@ export const strategySchema = z.object({
   /** How these weeks fit the longer timeline (a deadline months away, a long-term goal): what's written now vs later. */
   roadmap: z
     .object({
-      timeline: shortText(700),
-      this_program: shortText(700),
-      phases: z.array(z.object({ weeks: z.string().trim().max(24), focus: shortText(300), milestone: shortText(300) })).max(10).catch([]),
+      timeline: clip(1200),
+      this_program: clip(1200),
+      phases: list(z.object({ weeks: clip(40), focus: clip(500), milestone: clip(500) }), 12),
       track: z.enum(["ahead", "on_track", "behind", "unknown"]).catch("unknown"),
-      track_why: shortText(600),
+      track_why: clip(1000),
     })
     .nullish()
     .catch(null),
   weekly_layout: z
-    .array(z.object({ day: z.coerce.number().int().min(1).max(7), title: z.string().trim().min(1).max(80), focus: shortText(300), primary: z.array(z.string().trim().max(100)).max(5).catch([]), notes: shortText(400) }))
+    .array(z.object({ day: z.coerce.number().int().min(1).max(7), title: clipReq(100), focus: clip(600), primary: list(clip(160), 8), notes: clip(800) }))
     .min(1)
     .max(7),
-  frequency_targets: z.array(z.object({ target: z.string().trim().max(60), per_week: z.coerce.number().min(0).max(7) })).max(24).catch([]),
-  volume_targets: z.array(z.object({ target: z.string().trim().max(60), sets_per_week: z.coerce.number().min(0).max(60), vs_previous: shortText(160) })).max(30).catch([]),
-  intensity: shortText(900),
+  frequency_targets: list(z.object({ target: clipReq(120), per_week: z.coerce.number().min(0).max(7) }), 30),
+  volume_targets: list(z.object({ target: clipReq(120), sets_per_week: z.coerce.number().min(0).max(60), vs_previous: clip(300) }), 36),
+  intensity: clip(4000),
   exercise_plan: z.object({
-    retain: z.array(z.object({ exercise_id: z.string().trim().max(64).nullish(), name: z.string().trim().max(120), why: shortText(300) })).max(40).catch([]),
-    replace: z.array(z.object({ exercise_id: z.string().trim().max(64).nullish(), name: z.string().trim().max(120), with: z.string().trim().max(120).nullish(), why: shortText(300) })).max(25).catch([]),
-    add: z.array(z.object({ name: z.string().trim().max(120), why: shortText(300) })).max(25).catch([]),
+    retain: list(z.object({ exercise_id: z.string().trim().max(64).nullish().catch(null), name: clipReq(160), why: clip(600) }), 50),
+    replace: list(z.object({ exercise_id: z.string().trim().max(64).nullish().catch(null), name: clipReq(160), with: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 160) || null)), why: clip(600) }), 30),
+    add: list(z.object({ name: clipReq(160), why: clip(600) }), 30),
   }),
-  decisions: z.array(decisionSchema).min(1).max(16),
-  coach_requirements: z.array(z.object({ requirement: z.string().trim().max(400), status: z.enum(["met", "conflict", "not_applicable"]).catch("met"), how: shortText(500) })).max(24).catch([]),
-  conflicts: z.array(z.object({ description: z.string().trim().max(500), resolution: shortText(500) })).max(12).catch([]),
-  data_limits: z.array(z.string().trim().max(500)).max(12).catch([]),
-  monitor: z.array(z.string().trim().max(300)).max(12).catch([]),
+  decisions: list(decisionSchema, 16).refine((a) => a.length > 0, { message: "decisions needs at least one readable decision" }),
+  coach_requirements: list(z.object({ requirement: clipReq(600), status: z.enum(["met", "conflict", "not_applicable"]).catch("met"), how: clip(800) }), 30),
+  conflicts: list(z.object({ description: clipReq(800), resolution: clip(800) }), 16),
+  data_limits: list(clip(800), 16),
+  monitor: list(clip(500), 16),
 });
 export type Strategy = z.infer<typeof strategySchema>;
 
@@ -155,41 +174,41 @@ const rxFields = {
   rpe: z.coerce.string().trim().max(10).nullish(),
   rir: z.coerce.string().trim().max(10).nullish(),
   percentage: z.coerce.number().min(30).max(110).nullish(),
-  notes: z.string().trim().max(300).nullish(),
+  notes: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 500) || null)).optional(),
 };
 
 export const builtExerciseSchema = z.object({
   exercise_id: z.string().trim().max(64).nullish(),
-  exercise_name: z.string().trim().min(1).max(120),
-  role: z.string().trim().max(60).nullish(),
-  station: z.string().trim().max(40).nullish(),
+  exercise_name: clipReq(160),
+  role: z.string().trim().max(60).nullish().catch(null),
+  station: z.string().trim().max(40).nullish().catch(null),
   superset: z.string().trim().max(4).nullish(),
   ...rxFields,
   sets: z.coerce.number().int().min(1).max(15),
   reps: z.coerce.string().trim().min(1).max(30),
   rest_seconds: z.coerce.number().int().min(0).max(900).nullish(),
-  tempo: z.string().trim().max(20).nullish(),
-  progression: z.string().trim().max(400).nullish(),
-  substitutions: z.array(z.object({ exercise_id: z.string().trim().max(64).nullish(), exercise_name: z.string().trim().min(1).max(120) })).max(3).catch([]),
+  tempo: z.string().trim().max(20).nullish().catch(null),
+  progression: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 800) || null)).optional(),
+  substitutions: list(z.object({ exercise_id: z.string().trim().max(64).nullish().catch(null), exercise_name: clipReq(160) }), 3),
   weeks: z.array(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), ...rxFields })).max(MAX_PROGRAM_WEEKS).nullish(),
 });
 export type BuiltExercise = z.infer<typeof builtExerciseSchema>;
 
 export const builtDaySchema = z.object({
   day: z.coerce.number().int().min(1).max(7).optional(),
-  title: z.string().trim().min(1).max(80),
-  focus: z.string().trim().max(200).nullish(),
+  title: clipReq(100),
+  focus: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 400) || null)).optional(),
   exercises: z.array(builtExerciseSchema).min(1).max(12),
 });
 export type BuiltDay = z.infer<typeof builtDaySchema>;
 
 export const builtBlockSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  objective: z.string().trim().max(600).nullish(),
+  name: clipReq(80),
+  objective: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 1200) || null)).optional(),
   weeks: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS),
-  week_phases: z.array(z.object({ week: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS), phase: z.string().trim().max(60) })).max(MAX_BLOCK_WEEKS).catch([]),
-  deload_rule: z.string().trim().max(400).nullish(),
-  progression_rules: z.array(z.string().trim().max(400)).max(10).catch([]),
+  week_phases: list(z.object({ week: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS), phase: clip(80) }), MAX_BLOCK_WEEKS),
+  deload_rule: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 800) || null)).optional(),
+  progression_rules: list(clip(600), 12),
   days: z.array(builtDaySchema).min(1).max(7),
 });
 export type BuiltBlock = z.infer<typeof builtBlockSchema>;
