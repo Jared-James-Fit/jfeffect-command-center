@@ -85,7 +85,7 @@ export function goalBrain(g: { main: string | null; other?: string | null; targe
 const MAJOR = ["Chest", "Quads", "Hamstrings", "Glutes"] as const;
 const PULL = ["Back", "Lats"] as const;
 const MINOR = ["Shoulders", "Biceps", "Triceps", "Calves"] as const;
-/** Weekly hard sets per muscle to start from (secondary muscles count half), by level. */
+/** Weekly hard sets per muscle to start from, by level: sets aimed at the muscle (what a compound gives its other muscles comes on top, as the audit reads it). */
 export const MUSCLE_DOSE: Record<ExperienceLevel, { major: number; pull: number; minor: number }> = {
   beginner: { major: 8, pull: 6, minor: 6 },
   intermediate: { major: 12, pull: 9, minor: 8 },

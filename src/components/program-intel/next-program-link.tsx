@@ -7,11 +7,13 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { IntelJob } from "./use-program-intel";
 
-const OVERALL: Record<string, string> = { passed: "passed its audit", review: "needs review", failed: "failed validation" };
+const OVERALL: Record<string, string> = { passed: "passed its audit", partly: "partly checked", review: "needs review", failed: "failed validation" };
 
 export function NextProgramLink({ job, clientId }: { job: IntelJob; clientId: string }) {
   const working = job.status === "pending" || job.status === "running";
-  const audit = job.result?.audit?.overall as string | undefined;
+  const rows = (job.result?.audit?.scorecard ?? []) as Array<{ status: string }>;
+  const partly = job.result?.audit?.overall === "review" && !rows.some((r) => r.status === "review" || r.status === "failed");
+  const audit = partly ? "partly" : (job.result?.audit?.overall as string | undefined);
   const text = working
     ? job.kind === "strategy" ? "Writing the strategy…" : "Building the next program…"
     : job.status === "error"

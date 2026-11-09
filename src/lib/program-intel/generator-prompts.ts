@@ -14,7 +14,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 7;
+export const PIPELINE_PROMPT_VERSION = 8;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -80,7 +80,8 @@ Reply with ONE JSON object and nothing else:
   "data_limits": [string],
   "monitor": [string]
 }
-"structure" must match the coach's setup (weeks, days per week; the blocks' weeks add up to the total). "weekly_layout" has exactly one entry per training day.`;
+"structure" must match the coach's setup (weeks, days per week; the blocks' weeks add up to the total). "weekly_layout" has exactly one entry per training day, in the order of their training days, and keeps the heavy squat day and the heavy deadlift day off back-to-back calendar days (their last training day into the first of the next week counts) whenever the days allow it.
+"volume_targets" for a muscle are sets aimed at that muscle (exercises whose target it is); what a compound gives its other muscles (a bench set's triceps, a row's biceps) comes on top and isn't counted.`;
 }
 
 export function strategyUserPrompt(brief: string, setup: GenerationSetup, opts: { first?: boolean } = {}): string {
@@ -97,7 +98,7 @@ ${PROGRAMMING_METHOD[brain]}
 ${PROGRAMMING_RULES}
 ${opts.first ? `\n${FIRST_PROGRAM_RULES}\n` : ""}
 Building rules:
-- Follow the approved strategy: its weekly layout, frequency and volume targets, exercises to keep / replace / add, intensity and progression model. Anything you can't follow, say why in the block's "objective".
+- Follow the approved strategy: its weekly layout (in order: day 1 is their first training day), frequency and volume targets (a muscle's target is sets aimed at it; a compound's other muscles come on top), exercises to keep / replace / add, intensity and progression model. Anything you can't follow, say why in the block's "objective".
 - Exercises: use exercise_id values from the catalog (the athlete's own exercises first: they have demo videos; then library exercises marked "demo video"). Copy the id and name exactly. Only when nothing in the catalog fits, set exercise_id to null and give the exercise's standard name. Never invent ids.
 - Only use exercises the athlete's equipment allows, and follow every equipment rule (stations, one cable column, adjustable dumbbells, shared attachments). Order each session as a sensible flow: main lift first, then by station, finishing one station before the next. Keep each session within the time limit.
 - Supersets save time without cutting work: when a session is tight, pair accessories as "A1" / "A2" (same letter, next to each other; a push with a pull, an upper with a lower, or a small muscle beside a big one) on stations that don't clash: never two cable exercises on one column, two exercises needing the bench at different angles, one barbell loaded two ways, or two different weights on adjustable dumbbells. Never pair the day's main lift; its sets keep their full rest. The rest_seconds of the first exercise in a pair is the short rest before its partner; the last one's is the rest before the next round. The athlete reads who an exercise is paired with.

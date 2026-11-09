@@ -62,7 +62,9 @@ export function Scorecard({ audit }: { audit: any }) {
   if (!audit?.scorecard) return null;
   const rows = audit.scorecard as Array<{ criterion: string; label: string; status: string; reasons: string[] }>;
   const counts = (s: string) => rows.filter((r) => r.status === s).length;
-  const [label, cls] = OVERALL[audit.overall] ?? OVERALL.review;
+  // nothing to review, only checks that couldn't run (a first program's history, unknown equipment): said as such, not as a warning
+  const partly = audit.overall === "review" && !counts("review") && !counts("failed");
+  const [label, cls] = partly ? ["Partly checked", "bg-secondary text-foreground"] : OVERALL[audit.overall] ?? OVERALL.review;
   return (
     <div className="space-y-1.5" data-testid="gen-scorecard">
       <div className="flex flex-wrap items-center gap-2">
@@ -83,7 +85,7 @@ export function Scorecard({ audit }: { audit: any }) {
           </li>
         ))}
       </ul>
-      {audit.overall !== "passed" && <p className="text-[11px] text-muted-foreground">Not called fully validated: {audit.overall === "failed" ? "a check failed even after automatic repair" : "some checks need your eye or couldn't run automatically"}. Each reason says where.</p>}
+      {audit.overall !== "passed" && <p className="text-[11px] text-muted-foreground">Not called fully validated: {audit.overall === "failed" ? "a check failed even after automatic repair" : partly ? "some checks couldn't run automatically" : "some checks need your eye or couldn't run automatically"}. Each reason says where.</p>}
     </div>
   );
 }

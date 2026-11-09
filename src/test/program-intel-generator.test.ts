@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditProgram, maxRepsAt, unsupportedTokens } from "@/lib/program-intel/audit";
+import { auditProgram, heavyClashes, heavyOf, maxRepsAt, spreadHeavyDays, unsupportedTokens } from "@/lib/program-intel/audit";
 import { buildBrief } from "@/lib/program-intel/brief";
 import { missingEquipment, requirementsOf } from "@/lib/program-intel/equipment";
 import { setupSchema, type BuiltBlock, type BuiltProgram, type Strategy } from "@/lib/program-intel/generator-schemas";
@@ -367,6 +367,115 @@ describe("Program quality audit and scorecard", () => {
     expect(a.scorecard.find((r) => r.criterion === "instructions")!.status).toBe("skipped");
     expect(a.scorecard.find((r) => r.criterion === "selection")!.reasons.join(" ")).toMatch(/can't be checked automatically/);
     expect(a.overall).toBe("review");
+  });
+});
+
+// Devin Buth's first program (Nov 8 2026): a 6-day push / pull / legs powerbuilding split on Mon–Wed + Fri–Sun,
+// written to its strategy's targets, with the library's real muscle data (a bench lists triceps among its muscles).
+describe("A first program that follows its plan isn't flagged for what compounds give other muscles", () => {
+  const intel = buildGeneratorIntel(homeGym());
+  const mx = (id: string, name: string, pm: string, mg: string[], sm: string[] = [], family = "accessory") => [id, { id, name, primary_muscle_group: pm, muscle_groups: mg, secondary_muscle_groups: sm, movement_family: family, is_competition_lift: false, competition_lift_type: null, exercise_category: "compound", variation_type: null, counts_toward_volume: true, volume_multiplier: 1, equipment: null }] as const;
+  const meta = new Map<string, any>([
+    mx("bench", "Barbell Bench Press", "Chest", ["chest", "triceps"], ["front_delts"], "bench"),
+    mx("pbench", "Paused Bench Press", "Chest", ["chest", "triceps"], ["front_delts"], "bench"),
+    mx("dbpress", "Seated Shoulder Press - Dumbbell", "Front Delts", ["front_delts"], ["side_delts", "triceps"]),
+    mx("pushdown", "Cable Triceps Pushdown", "Triceps", ["triceps"]),
+    mx("dl", "Conventional Deadlift", "Glutes", ["glutes", "hamstrings", "lower_back"], ["upper_back", "traps", "forearms", "quads", "adductors"], "deadlift"),
+    mx("pulldown", "Lat Pull Down Normal Grip", "Lats", ["lats"], ["upper_back", "biceps"]),
+    mx("curl", "Dumbbell Alternate Biceps Curl", "Biceps", ["biceps"], ["forearms"]),
+    mx("hbsq", "High Bar Squat", "Quads", ["quads", "glutes"], ["upper_back", "adductors", "core"], "squat"),
+    mx("legpress", "Leg Press Machine", "Quads", ["quads", "glutes"], ["adductors"]),
+    mx("calf", "Standing Calf Raise - Machine", "Calves", ["calves"]),
+    mx("lateral", "Lateral Raises Dumbbell", "Side Delts", ["side_delts"], ["traps"]),
+    mx("row", "Cable Seated Row", "Upper Back", ["upper_back", "lats"], ["rear_delts", "biceps"]),
+    mx("wpulldown", "Wide-Grip Lat Pulldown", "Lats", ["lats"], ["upper_back", "biceps"]),
+    mx("hammer", "Dumbbell Hammer Curl", "Biceps", ["biceps", "forearms"]),
+    mx("bsq", "Barbell Full Squat(Back)", "Quads", ["quads", "glutes", "adductors"], ["core", "lower_back"], "squat"),
+    mx("rdl", "Barbell Romanian Deadlift", "Hamstrings", ["hamstrings", "glutes"], ["forearms", "lower_back"], "hinge"),
+    mx("legcurl", "Seated Leg Curl Machine", "Hamstrings", ["hamstrings"], ["calves"]),
+    mx("scalf", "Seated Calf Raise", "Calves", ["calves"]),
+  ]);
+  const e = (id: string, sets: number, role: string | null = null) => exr(id, meta.get(id).name, { sets, role, rpe: "7" });
+  const days = (): BuiltBlock["days"] => [
+    { title: "Push 1", exercises: [e("bench", 4, "Primary Bench"), e("dbpress", 3), e("pushdown", 3)] },
+    { title: "Pull 1", exercises: [e("dl", 4, "Primary Deadlift"), e("pulldown", 4), e("curl", 3)] },
+    { title: "Legs 1", exercises: [e("hbsq", 4, "Primary Squat"), e("legpress", 3), e("calf", 3)] },
+    { title: "Push 2", exercises: [e("pbench", 4, "Primary Bench"), e("lateral", 4), e("pushdown", 4)] },
+    { title: "Pull 2", exercises: [e("row", 4), e("wpulldown", 4), e("hammer", 4)] },
+    { title: "Legs 2", exercises: [e("bsq", 3, "Primary Squat"), e("rdl", 3), e("legcurl", 3), e("scalf", 4)] },
+  ];
+  const trainingDays = ["Monday", "Tuesday", "Wednesday", "Friday", "Saturday", "Sunday"];
+  const setup = setupWith(intel, { brain: "powerbuilding", daysPerWeek: 6, trainingDays, weeks: 4, blocks: [{ name: "Powerbuilding", weeks: 4, objective: "" }], coachNotes: "", preferences: "", newCircumstances: "", recovery: "", restrictions: [], excluded: [], required: [], priorities: [] });
+  const targets: Array<[string, number, number]> = [["Chest", 10, 2], ["Quads", 10, 2], ["Hamstrings", 10, 2], ["Glutes", 10, 2], ["Back", 8, 2], ["Lats", 8, 2], ["Shoulders", 7, 2], ["Biceps", 7, 2], ["Triceps", 7, 2], ["Calves", 7, 2], ["Squat", 7, 2], ["Bench", 8, 2], ["Deadlift", 4, 1]];
+  const strategy = strategyFor(setup, {
+    volume_targets: targets.map(([target, sets_per_week]) => ({ target, sets_per_week, vs_previous: "baseline" })),
+    frequency_targets: targets.map(([target, , per_week]) => ({ target, per_week })),
+    exercise_plan: { retain: [], replace: [], add: [] },
+    conflicts: [{ description: "The specific equipment available at the commercial gym is unknown.", resolution: "Assumed standard commercial gym equipment." }],
+  });
+  const program = (d: BuiltBlock["days"]): BuiltProgram => ({ program_name: "x", summary: "", progression: "", recovery: "", changes: [], watch: [], blocks: [homeBlock(d)] });
+  const audit = (d: BuiltBlock["days"], extra: any = {}) =>
+    auditProgram({
+      program: program(d),
+      setup,
+      strategy,
+      baseline: { ...intel.recommendation.baseline, weeklySets: null },
+      equipment: { items: [], confidence: "unknown", home: false, cableStations: null },
+      ctx: intel.ctx,
+      quality: null,
+      meta,
+      unmatched: [],
+      athleteExerciseIds: new Set<string>(),
+      brief: "",
+      ...extra,
+    });
+  const row = (a: ReturnType<typeof auditProgram>, c: string) => a.scorecard.find((r) => r.criterion === c)!;
+
+  it("volume and frequency read like with like: sets aimed at a muscle for 'too much', everything reaching it for 'too little'", () => {
+    const a = audit(days());
+    // what reaches each muscle is still measured (a bench set does work the triceps)…
+    expect(a.weekly[0].muscles.Triceps.sets).toBe(16.5);
+    expect(a.weekly[0].muscles.Back.days).toBeGreaterThanOrEqual(4);
+    // …but the plan's 7 triceps sets are the 7 sets aimed at them, and back work lands on one day
+    expect(a.weekly[0].direct!.Triceps.sets).toBe(7);
+    expect(a.weekly[0].direct!.Biceps.sets).toBe(7);
+    expect(a.weekly[0].direct!.Shoulders.sets).toBe(7);
+    expect(row(a, "volume").status).toBe("passed");
+    expect(row(a, "frequency").status).toBe("passed");
+  });
+
+  it("a first program's missing history and unknown equipment are 'not checked', never a review item", () => {
+    const a = audit(days());
+    expect(row(a, "data").status).toBe("skipped");
+    expect(row(a, "equipment").status).toBe("skipped");
+    expect(row(a, "instructions").status).toBe("passed");
+  });
+
+  it("heavy deadlift Tuesday into heavy squat Wednesday is flagged, and turning the week fixes it with the split's order kept", () => {
+    const a = audit(days());
+    expect(row(a, "fatigue").reasons).toEqual(["Heavy squat and heavy deadlift on back-to-back days (Tuesday / Wednesday)."]);
+    const turned = spreadHeavyDays(days(), trainingDays, (d) => heavyOf(d, meta))!;
+    expect(turned.days.map((d) => d.title)).toEqual(["Legs 2", "Push 1", "Pull 1", "Legs 1", "Push 2", "Pull 2"]);
+    const b = audit(turned.days, { dayOrder: ["Days turned so heavy squat and deadlift aren't back to back: …"] });
+    expect(row(b, "fatigue").status).toBe("passed");
+    expect(row(b, "fatigue").reasons[0]).toMatch(/Days turned/);
+    // nothing to turn when nothing clashes
+    expect(spreadHeavyDays(turned.days, trainingDays, (d) => heavyOf(d, meta))).toBeNull();
+  });
+
+  it("Sunday into Monday counts as back to back", () => {
+    const flags = [{ squat: false, deadlift: true }, { squat: false, deadlift: false }, { squat: true, deadlift: false }];
+    expect(heavyClashes(flags, ["Monday", "Wednesday", "Sunday"])).toEqual([[2, 0]]);
+    expect(heavyClashes(flags, ["Monday", "Wednesday", "Friday"])).toEqual([]);
+  });
+
+  it("a real overshoot or shortfall is still flagged", () => {
+    const more = days();
+    more[0].exercises.push(e("pushdown", 8, "extra"));
+    expect(row(audit(more), "volume").reasons.join(" ")).toMatch(/Triceps: 15 sets aimed at it in week 1 vs the strategy's 7/);
+    const less = days();
+    less[3].exercises.shift(); // no paused bench on Push 2
+    expect(row(audit(less), "volume").reasons.join(" ")).toMatch(/Chest: 4 sets reach it in week 1 \(compounds included\) vs the strategy's 10/);
   });
 });
 

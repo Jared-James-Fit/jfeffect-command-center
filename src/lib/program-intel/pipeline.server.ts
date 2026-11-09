@@ -20,7 +20,7 @@
  * Every model call is logged with its exact prompt, reply, model and size in
  * program_intel_job_calls (coach-readable) for the context inspector.
  */
-import { auditProgram, type AuditResult } from "./audit";
+import { auditProgram, HEAVY_SPACING_BRAINS, heavyOf, spreadHeavyDays, type AuditResult } from "./audit";
 import { buildBrief, CONSTRUCT_EXCLUDE, loadReferences } from "./brief";
 import { builtBlockSchema, setupSchema, strategySchema, type BuiltBlock, type BuiltProgram, type Strategy } from "./generator-schemas";
 import { constructSystemPrompt, constructUserPrompt, PIPELINE_PROMPT_VERSION, repairUserPrompt, strategySystemPrompt, strategyUserPrompt } from "./generator-prompts";
@@ -406,6 +406,16 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     });
     const ids = resolved.program.blocks.flatMap((b) => b.days.flatMap((d) => d.exercises.map((e) => e.exercise_id))).filter(Boolean) as string[];
     const meta = await exerciseMeta(admin, ids);
+    // a heavy squat day and a heavy deadlift day never land back to back when turning the week fixes it (the split's order kept)
+    const dayOrder: string[] = [];
+    if (HEAVY_SPACING_BRAINS.includes(brain) && setup.trainingDays.length === setup.daysPerWeek) {
+      resolved.program.blocks = resolved.program.blocks.map((b, bi) => {
+        const turned = spreadHeavyDays(b.days, setup.trainingDays, (d) => heavyOf(d, meta));
+        if (!turned) return b;
+        dayOrder.push(`Days turned so heavy squat and deadlift aren't back to back${resolved.program.blocks.length > 1 ? ` (block ${bi + 1})` : ""}: ${turned.days.map((d, k) => `${setup.trainingDays[k].slice(0, 3)} ${d.title}`).join(" · ")}.`);
+        return { ...b, days: turned.days };
+      });
+    }
     const audit: AuditResult = auditProgram({
       program: resolved.program,
       setup,
@@ -418,6 +428,7 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       unmatched: resolved.unmatched,
       athleteExerciseIds: new Set((ai.athlete_exercise_ids ?? []) as string[]),
       brief,
+      dayOrder,
     });
     result.blocks = resolved.program.blocks;
     result.program = resolved.program;

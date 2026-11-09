@@ -14,6 +14,7 @@ import { rxForWeek } from "./program-view";
 import type { Baseline, GenerationSetup } from "./recommend";
 import { estimateDay, type TimedExercise } from "./session-time";
 import { musclesOf } from "./core";
+import { normalizeMuscle } from "@/lib/analytics/muscle-map";
 import type { AthleteContext } from "./context";
 import type { DataQuality } from "./quality";
 import { LIFTS, STRENGTH_BRAINS, HYPERTROPHY_BRAINS, type Lift, type RawExercise } from "./types";
@@ -53,7 +54,8 @@ export const CRITERIA: Array<[Criterion, string]> = [
   ["instructions", "Coach instruction compliance"],
 ];
 
-export type AuditFinding = { criterion: Criterion; status: Exclude<CheckStatus, "passed">; text: string; block?: number; repairable?: boolean };
+/** A finding is a problem (review / failed), a check that couldn't run (skipped), or a note on what was done for a check (passed). */
+export type AuditFinding = { criterion: Criterion; status: CheckStatus; text: string; block?: number; repairable?: boolean };
 export type ScoreRow = { criterion: Criterion; label: string; status: CheckStatus; reasons: string[] };
 export type AuditResult = {
   scorecard: ScoreRow[];
@@ -61,7 +63,12 @@ export type AuditResult = {
   findings: AuditFinding[];
   repairs: Record<number, string[]>;
   sessions: Array<{ block: number; week: number; day: number; title: string; minutes: number; stationChanges: number }>;
-  weekly: Array<{ block: number; week: number; sets: number; lifts: Record<Lift, { sets: number; days: number }>; muscles: Record<string, { sets: number; days: number }> }>;
+  /**
+   * `muscles` is everything that reaches a muscle (a compound's other muscles too, its secondaries at half: what a
+   * low dose is read from); `direct` is only sets aimed at it (the exercise's own target muscle: what "too much" is
+   * read from), so a bench set is chest work, never a full triceps set.
+   */
+  weekly: Array<{ block: number; week: number; sets: number; lifts: Record<Lift, { sets: number; days: number }>; muscles: Record<string, { sets: number; days: number }>; direct?: Record<string, { sets: number; days: number }> }>;
 };
 
 export type AuditInput = {
@@ -77,6 +84,8 @@ export type AuditInput = {
   /** the athlete's own exercise ids (from their history) */
   athleteExerciseIds: Set<string>;
   brief: string;
+  /** Blocks whose days were rotated before the audit so heavy squat and deadlift days aren't back to back (`spreadHeavyDays`). */
+  dayOrder?: string[];
 };
 
 const LIFT_RE: Record<Lift, RegExp> = { squat: /squat/i, bench: /bench/i, deadlift: /deadlift/i };
@@ -93,6 +102,55 @@ function liftOfBuilt(e: BuiltExercise, m: RawExercise | undefined): Lift | null 
   return null;
 }
 const isPrimary = (e: BuiltExercise, i: number) => i === 0 || /primary/i.test(e.role ?? "");
+
+/** The muscle an exercise is aimed at (its own target), for "sets aimed at it". */
+export function directGroupOf(m: RawExercise | undefined): string | null {
+  if (!m || m.counts_toward_volume === false) return null;
+  return normalizeMuscle(m.primary_muscle_group) ?? normalizeMuscle(m.muscle_groups?.[0]);
+}
+
+/** Programs where a heavy squat day and a heavy deadlift day are kept off back-to-back days. */
+export const HEAVY_SPACING_BRAINS = ["powerlifting", "powerbuilding", "general_strength"];
+export type HeavyDay = { squat: boolean; deadlift: boolean };
+
+/** A day's heavy work: a squat or deadlift as its first (or "primary") exercise. */
+export function heavyOf(d: BuiltBlock["days"][number], meta: Map<string, RawExercise>): HeavyDay {
+  const has = (l: Lift) => d.exercises.some((e, i) => isPrimary(e, i) && liftOfBuilt(e, e.exercise_id ? meta.get(e.exercise_id) : undefined) === l);
+  return { squat: has("squat"), deadlift: has("deadlift") };
+}
+
+/**
+ * Pairs of training days, in order, where a heavy squat day and a heavy deadlift day fall on back-to-back
+ * calendar days, the last training day into the first of the next week included (Sunday → Monday).
+ */
+export function heavyClashes(days: HeavyDay[], trainingDays: string[]): Array<[number, number]> {
+  const order = trainingDays.map((d) => WEEKDAY.indexOf(d.toLowerCase()));
+  const n = days.length;
+  if (n < 2 || order.length !== n || order.some((x) => x < 0)) return [];
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    if ((order[j] - order[i] + 7) % 7 !== 1) continue;
+    const a = days[i];
+    const b = days[j];
+    if ((a.squat && b.deadlift) || (a.deadlift && b.squat)) out.push([i, j]);
+  }
+  return out;
+}
+
+/**
+ * The week's days rotated (the split's own order kept, the smallest turn that works) so no heavy squat
+ * day sits the day before or after a heavy deadlift day; null when nothing clashes or no turn fixes it.
+ */
+export function spreadHeavyDays<T>(days: T[], trainingDays: string[], heavy: (d: T) => HeavyDay): { days: T[]; shift: number } | null {
+  const flags = days.map(heavy);
+  if (!heavyClashes(flags, trainingDays).length) return null;
+  for (let shift = 1; shift < days.length; shift++) {
+    const turned = days.map((_, k) => days[(k + shift) % days.length]);
+    if (!heavyClashes(turned.map(heavy), trainingDays).length) return { days: turned, shift };
+  }
+  return null;
+}
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** Numbers and week labels an evidence line cites that the brief doesn't contain (an invented claim). */
@@ -149,10 +207,12 @@ export function auditProgram(x: AuditInput): AuditResult {
     for (let w = 1; w <= b.weeks; w++) {
       const lifts = Object.fromEntries(LIFTS.map((l) => [l, { sets: 0, days: 0 }])) as Record<Lift, { sets: number; days: number }>;
       const muscles: Record<string, { sets: number; days: number }> = {};
+      const direct: Record<string, { sets: number; days: number }> = {};
       let total = 0;
       b.days.forEach((d, di) => {
         const dayLift = new Set<Lift>();
         const dayMuscle = new Map<string, number>();
+        const dayDirect = new Map<string, number>();
         const timed: TimedExercise[] = [];
         for (const e of d.exercises) {
           const rx = rxForWeek(e, w);
@@ -165,6 +225,8 @@ export function auditProgram(x: AuditInput): AuditResult {
           }
           const hard = !rx.rpe || (rpeRange(rx.rpe)?.[1] ?? 10) >= 6;
           if (hard) for (const mu of musclesOf(m)) dayMuscle.set(mu.group, (dayMuscle.get(mu.group) ?? 0) + mu.weight * rx.sets);
+          const aimed = hard ? directGroupOf(m) : null;
+          if (aimed) dayDirect.set(aimed, (dayDirect.get(aimed) ?? 0) + (Number(m?.volume_multiplier) || 1) * rx.sets);
           timed.push({ name: e.exercise_name, equipment: m?.equipment ?? null, sets: rx.sets, reps: rx.reps, restSeconds: e.rest_seconds ?? null, superset: e.superset ?? null });
         }
         for (const l of dayLift) lifts[l].days++;
@@ -173,10 +235,15 @@ export function auditProgram(x: AuditInput): AuditResult {
           muscles[mu].sets = Math.round((muscles[mu].sets + n) * 10) / 10;
           if (n >= 2) muscles[mu].days++;
         }
+        for (const [mu, n] of dayDirect) {
+          direct[mu] = direct[mu] ?? { sets: 0, days: 0 };
+          direct[mu].sets = Math.round((direct[mu].sets + n) * 10) / 10;
+          if (n >= 2) direct[mu].days++;
+        }
         const est = estimateDay(timed, { adjustableDumbbells: adjustable, calibration });
         sessions.push({ block: bi, week: w, day: di, title: d.title, minutes: est.minutes, stationChanges: est.stationChanges });
       });
-      weekly.push({ block: bi, week: w, sets: total, lifts, muscles });
+      weekly.push({ block: bi, week: w, sets: total, lifts, muscles, direct });
     }
   });
   const w1 = weekly[0];
@@ -188,6 +255,15 @@ export function auditProgram(x: AuditInput): AuditResult {
     return key ? wk.muscles[key] : { sets: 0, days: 0 };
   };
   const findTarget = (target: string) => targetIn(w1, target);
+  const isLiftTarget = (target: string) => LIFTS.some((l) => norm(target).includes(l));
+  /** Sets and days aimed at a target (a lift's own sets for squat / bench / deadlift). */
+  const directIn = (wk: AuditResult["weekly"][number] | undefined, target: string): { sets: number; days: number } | null => {
+    if (!wk) return null;
+    if (isLiftTarget(target)) return targetIn(wk, target);
+    const t = norm(target);
+    const key = Object.keys(wk.direct ?? {}).find((m) => norm(m) === t || norm(m).includes(t) || t.includes(norm(m)));
+    return key ? wk.direct![key] : { sets: 0, days: 0 };
+  };
 
   // 2. Goal alignment: priorities get at least the dose they had (or the strategy's target).
   const prios = [...new Set([...setup.priorities, ...strategy.prioritize.map((p) => p.item)])].slice(0, 8);
@@ -222,24 +298,31 @@ export function auditProgram(x: AuditInput): AuditResult {
   if (factsWithoutEvidence.length) add("evidence", "review", `${factsWithoutEvidence.length} decision${factsWithoutEvidence.length === 1 ? " is" : "s are"} marked as fact without evidence; read ${factsWithoutEvidence.length === 1 ? "it" : "them"} as hypotheses.`);
 
   // 5. Frequency against the strategy (its own commitment): a target is a minimum. A block that trains
-  // something a whole session less often goes back for repair; more often is only worth a look when
-  // it's two or more sessions over (fatigue is checked on its own below).
+  // something a whole session less often goes back for repair (counting every day that reaches it); more
+  // often is only worth a look when it's two or more days of work aimed at it over (a squat day's upper
+  // back or a bench day's triceps is not a back or triceps day). Fatigue is checked on its own below.
   program.blocks.forEach((b, bi) => {
     const wk = weekly.find((w) => w.block === bi && w.week === 1);
     for (const t of strategy.frequency_targets) {
       const got = targetIn(wk, t.target);
       if (!got || t.per_week > setup.daysPerWeek) continue;
+      const aimed = directIn(wk, t.target) ?? got;
       if (t.per_week - got.days >= 1) add("frequency", "failed", `${t.target}: ${got.days}×/week in block ${bi + 1}; the strategy targets ${t.per_week}×.`, bi, true);
-      else if (got.days - t.per_week >= 2) add("frequency", "review", `${t.target}: ${got.days}×/week in block ${bi + 1}, well over the strategy's ${t.per_week}×.`, bi);
+      else if (aimed.days - t.per_week >= 2) add("frequency", "review", `${t.target}: work aimed at it ${aimed.days}×/week in block ${bi + 1}, well over the strategy's ${t.per_week}×.`, bi);
     }
   });
   for (const t of setup.frequency.filter((q) => q.perWeek > setup.daysPerWeek)) add("frequency", "review", `${t.target} target ${t.perWeek}× is more than the ${setup.daysPerWeek} training days.`);
 
   // 6. Volume and intensity: targets, jumps, and % vs reps.
+  // Like with like: a target is sets for that muscle, so "too much" counts only sets aimed at it (a bench set is
+  // chest work, not a full triceps set) and "too little" counts everything that reaches it (squats do train glutes).
   for (const t of strategy.volume_targets) {
-    const got = findTarget(t.target);
-    if (!got || !t.sets_per_week) continue;
-    if (Math.abs(got.sets - t.sets_per_week) / t.sets_per_week > 0.25 && Math.abs(got.sets - t.sets_per_week) >= 3) add("volume", "review", `${t.target}: ${got.sets} sets in week 1 vs the strategy's ${t.sets_per_week}.`);
+    const reach = findTarget(t.target);
+    if (!reach || !t.sets_per_week) continue;
+    const aimed = directIn(w1, t.target) ?? reach;
+    const want = t.sets_per_week;
+    if (aimed.sets > want * 1.25 && aimed.sets - want >= 3) add("volume", "review", isLiftTarget(t.target) ? `${t.target}: ${aimed.sets} sets in week 1 vs the strategy's ${want}.` : `${t.target}: ${aimed.sets} sets aimed at it in week 1 vs the strategy's ${want}.`);
+    else if (reach.sets < want * 0.75 && want - reach.sets >= 3) add("volume", "review", isLiftTarget(t.target) ? `${t.target}: ${reach.sets} sets in week 1 vs the strategy's ${want}.` : `${t.target}: ${reach.sets} sets reach it in week 1 (compounds included) vs the strategy's ${want}.`);
   }
   for (let i = 1; i < weekly.length; i++) {
     const a = weekly[i - 1];
@@ -270,18 +353,14 @@ export function auditProgram(x: AuditInput): AuditResult {
     const lighter = weekly.some((w, i) => i > 0 && (w.sets <= maxSets * 0.8 || /deload|taper|light|reset/i.test(program.blocks[w.block].week_phases?.find((p) => p.week === w.week)?.phase ?? "")));
     if (!lighter && !program.blocks.some((b) => b.deload_rule)) add("fatigue", "review", `${programWeeks} weeks with no lighter week or deload rule.`);
   }
-  if (brain === "powerlifting" || brain === "powerbuilding") {
+  if (HEAVY_SPACING_BRAINS.includes(brain)) {
     const order = setup.trainingDays.map((d) => WEEKDAY.indexOf(d.toLowerCase())).filter((n) => n >= 0);
     if (order.length === setup.daysPerWeek) {
-      const b0 = program.blocks[0];
-      b0?.days.forEach((d, di) => {
-        const next = b0.days[di + 1];
-        if (!next) return;
-        const heavy = (day: typeof d, l: Lift) => day.exercises.some((e, i) => isPrimary(e, i) && liftOfBuilt(e, e.exercise_id ? meta.get(e.exercise_id) : undefined) === l);
-        const gap = (order[di + 1] - order[di] + 7) % 7;
-        if (gap === 1 && ((heavy(d, "squat") && heavy(next, "deadlift")) || (heavy(d, "deadlift") && heavy(next, "squat"))))
-          add("fatigue", "review", `Heavy squat and heavy deadlift on back-to-back days (${setup.trainingDays[di]} / ${setup.trainingDays[di + 1]}).`, 0);
+      program.blocks.forEach((b, bi) => {
+        for (const [i, j] of heavyClashes(b.days.map((d) => heavyOf(d, meta)), setup.trainingDays))
+          add("fatigue", "review", `Heavy squat and heavy deadlift on back-to-back days (${setup.trainingDays[i]} / ${setup.trainingDays[j]}${j < i ? ", into the next week" : ""}).`, bi);
       });
+      for (const line of x.dayOrder ?? []) add("fatigue", "passed", line);
     } else add("fatigue", "skipped", "Training weekdays aren't set, so back-to-back heavy days can't be checked.");
   }
   const allSets = allEx.flatMap(({ e, b }) => Array.from({ length: b.weeks }, (_, i) => rxForWeek(e, i + 1)));
@@ -398,13 +477,18 @@ export function auditProgram(x: AuditInput): AuditResult {
 
   // 14. Data completeness (what the program was built on).
   for (const c of x.quality?.confidence ?? []) if (c.level === "none" || c.level === "low") if (["Effort and proximity to failure", "Strength and load progression", "Recovery, fatigue and pain"].includes(c.topic)) add("data", "review", `${c.topic}: ${c.level === "none" ? "no data" : "low confidence"}. ${c.why}`);
-  if (!x.quality) add("data", "review", "No training logged: the program rests on goals and defaults.");
+  // a first program has no training to read by definition: said, not flagged
+  if (!x.quality) add("data", "skipped", "No training logged yet (a first program): built from their setup and the starting dose.");
 
   // 15. Coach instructions.
   for (const r of strategy.coach_requirements.filter((c) => c.status === "conflict")) add("instructions", "review", `Requirement in conflict: ${r.requirement}. ${r.how}`);
   const free = [setup.coachNotes && "coach notes", setup.preferences && "exercise preferences", setup.newCircumstances && "new circumstances", setup.recovery && "recovery constraints"].filter(Boolean);
   if (free.length) add("instructions", "skipped", `Your ${free.join(", ")} can't be verified automatically: check the draft against them.`);
-  for (const c of strategy.conflicts) add("instructions", "review", `Conflict the strategy raised: ${c.description}${c.resolution ? ` (${c.resolution})` : ""}`);
+  // equipment that isn't on file is already the Equipment row's "confirm their equipment", not a conflict with your instructions
+  for (const c of strategy.conflicts) {
+    if (x.equipment.confidence === "unknown" && /equipment/i.test(c.description)) continue;
+    add("instructions", "review", `Conflict the strategy raised: ${c.description}${c.resolution ? ` (${c.resolution})` : ""}`);
+  }
 
   // The scorecard.
   const order: Record<CheckStatus, number> = { passed: 0, skipped: 1, review: 2, failed: 3 };
