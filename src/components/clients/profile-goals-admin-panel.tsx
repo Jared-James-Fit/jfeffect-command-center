@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { clientAccountLabel } from "@/lib/client-account-label";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -117,7 +118,7 @@ function CoachingSetupSummary({ client, coach }: { client: any; coach: any }) {
         <InfoRow label="Coaching type" value={client?.coaching_type} />
         <InfoRow label="Coaching package" value={client?.coaching_package} />
         <InfoRow label="Start date" value={client?.start_date ? new Date(client.start_date).toLocaleDateString() : null} icon={<Calendar className="h-3 w-3" />} />
-        <InfoRow label="Status" value={client?.status} />
+        <InfoRow label="Account" value={client ? clientAccountLabel(client).label : null} />
         <InfoRow label="Account status" value={client?.account_status} />
         {(client?.bodyweight_goal_value != null) && (
           <InfoRow

@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { WORKSPACE_CONTAINER_CLASS, WORKSPACE_GRID_CLASS } from "@/components/workspace/workspace-container";
 import { ClientDriveFolderPanel } from "@/components/client-drive-folder-panel";
 import { profileChanges, rebaseProfileForm } from "@/lib/client-profile-form";
+import { clientAccountLabel, statusChoicesFor } from "@/lib/client-account-label";
 import { SETUP_INVITE_DAYS } from "@/lib/setup-invite";
 import { PowerlifterBadge, POWERLIFTER_BADGE_LABELS } from "@/components/powerlifter-badge";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
@@ -145,7 +146,6 @@ export function ClientDetailRoute() {
   );
 }
 
-const STATUSES = ["Active", "New Client", "Needs Attention", "Check-In Overdue", "Payment Overdue", "Injured / Modified Plan", "Paused", "Cancelling", "Deactivated", "Archived", "High Priority"];
 const ACCOUNT_FIELDS = ["first_name", "last_name", "preferred_name", "email", "phone", "date_of_birth", "height_cm", "preferred_height_unit", "address", "city", "province", "postal_code", "country", "timezone", "emergency_contact_name", "emergency_contact_phone"] as const;
 
 export function ClientProfileWorkspace({
@@ -579,7 +579,7 @@ export function ClientProfileWorkspace({
             <SocialIcons client={form} size="sm" />
           </>
         }
-        subtitle={form.coaching_type ?? "Coaching client"}
+        subtitle={accountSubtitle(form)}
         actions={
           <>
             {/* Back lives in the page header; Nutrition and Training are the tabs
@@ -686,10 +686,15 @@ export function ClientProfileWorkspace({
               </div>
               <div>
                 <Label>Client status</Label>
-                <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                  <SelectTrigger className="min-h-[44px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                {/* Only what the data can't tell: a lead becomes a client on their first
+                    sign-in by itself, and Deactivate / Archive are their own actions. */}
+                <Select value={form.status ?? ""} onValueChange={(v) => set("status", v)}>
+                  <SelectTrigger className="min-h-[44px]"><SelectValue placeholder="Client" /></SelectTrigger>
+                  <SelectContent>
+                    {statusChoicesFor(form.status).map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
                 </Select>
+                <p className="mt-1 text-xs text-muted-foreground">{clientAccountLabel(form).hint}</p>
               </div>
               {/* What a client owes comes from their sales (Billing); the only
                   thing set here is that they don't pay at all, the same switch
@@ -1560,6 +1565,13 @@ function ClientNativeFormsAssignment({ clientId }: { clientId: string }) {
   );
 }
 
+/** "Client · Online Coaching", "Lead", "Member": the account's label, then how they're coached. */
+function accountSubtitle(form: any): string {
+  const account = clientAccountLabel(form);
+  const type = account.kind === "member" ? null : (form.coaching_type ?? "").trim() || null;
+  return [account.label, type].filter(Boolean).join(" · ");
+}
+
 function fmtDate(v?: string | null) {
   if (!v) return "—";
   return new Date(v).toLocaleString();
@@ -1809,7 +1821,10 @@ function EmbeddedIdentityHeader({
         titleAfter: form.is_powerlifter ? (
           <PowerlifterBadge label={form.powerlifter_badge_label} size="xs" />
         ) : null,
-        badges: form.status ? [{ label: form.status }] : [],
+        badges: [(() => {
+          const account = clientAccountLabel(form);
+          return { label: account.label, tone: account.tone === "warn" ? "warn" : "default" };
+        })()],
         meta: [
           form.coaching_package,
           form.program_phase ? `· ${form.program_phase}` : null,
