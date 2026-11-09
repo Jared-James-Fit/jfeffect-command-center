@@ -50,18 +50,56 @@ export function isUnassignedDraftBlock(b: Pick<RawBlock, "client_visible" | "sta
   return b.client_visible === false && !b.start_date;
 }
 
-/** The program a client is on now: the blocks of the meet prep / program their current block belongs to (else that block). */
-export function currentProgramBlocks(blocks: RawBlock[], today: string): { blocks: RawBlock[]; label: string; prepId: string | null } {
+/**
+ * The program a client is on now: the blocks of the meet prep / program their current block belongs
+ * to (else that block). When two programs overlap today (a replaced one never archived), the one
+ * they actually train wins (`lastTrained`: block id → latest finished workout), then the later
+ * start, then the newer one; never whichever was created first.
+ */
+export function currentProgramBlocks(blocks: RawBlock[], today: string, lastTrained?: Map<string, string>): { blocks: RawBlock[]; label: string; prepId: string | null } {
   const live = blocks.filter((b) => !b.archived && b.status !== "Archived" && !isAtHomeBackupReservedBlock(b));
-  const started = live.filter((b) => b.start_date && b.start_date <= today).sort((a, b) => String(b.start_date).localeCompare(String(a.start_date)));
+  const running = live.filter((b) => b.start_date && b.start_date <= today && (!b.end_date || b.end_date >= today));
+  const started = live.filter((b) => b.start_date && b.start_date <= today);
+  const pool = running.length ? running : started.length ? started : live;
+  // the latest training anywhere in a block's program (its meet prep), else in the block itself
+  const programTrained = (b: RawBlock): string => {
+    const sameProgram = b.prep_id ? live.filter((x) => x.prep_id === b.prep_id) : [b];
+    return sameProgram.map((x) => lastTrained?.get(x.id) ?? "").sort().pop() ?? "";
+  };
   const current =
-    live.find((b) => b.start_date && b.start_date <= today && (!b.end_date || b.end_date >= today)) ??
-    started[0] ??
-    [...live].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] ??
-    null;
+    [...pool].sort(
+      (a, b) =>
+        programTrained(b).localeCompare(programTrained(a)) ||
+        String(b.start_date ?? "").localeCompare(String(a.start_date ?? "")) ||
+        String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")),
+    )[0] ?? null;
   if (!current) return { blocks: [], label: "Current program", prepId: null };
   if (!current.prep_id) return { blocks: [current], label: current.name ?? "Current block", prepId: null };
   return { blocks: live.filter((b) => b.prep_id === current.prep_id), label: "Current program", prepId: current.prep_id };
+}
+
+/** Block id → the date of its latest finished workout, from records already loaded. */
+export function lastTrainedByBlock(rec: Pick<IntelRecords, "weeks" | "days" | "completions">): Map<string, string> {
+  const blockOfWeek = new Map(rec.weeks.map((w) => [w.id, w.block_id]));
+  const blockOfDay = new Map(rec.days.map((d) => [d.id, blockOfWeek.get(d.week_id)]));
+  const out = new Map<string, string>();
+  for (const c of rec.completions) {
+    const block = blockOfDay.get(c.day_id);
+    const at = c.completed_at?.slice(0, 10);
+    if (!block || !at) continue;
+    if (at > (out.get(block) ?? "")) out.set(block, at);
+  }
+  return out;
+}
+
+/** Block id → its latest finished workout's date, read for the given blocks. */
+async function latestTrainingFor(sb: Db, blockIds: string[]): Promise<Map<string, string>> {
+  const weeks = await fetchByIds<{ id: string; block_id: string }>(blockIds, (chunk, f, t) => sb.from("pl_weeks").select("id, block_id").in("block_id", chunk).range(f, t));
+  const days = await fetchByIds<{ id: string; week_id: string }>(weeks.map((w) => w.id), (chunk, f, t) => sb.from("pl_days").select("id, week_id").in("week_id", chunk).range(f, t));
+  const completions = await fetchByIds<{ day_id: string; completed_at: string | null }>(days.map((d) => d.id), (chunk, f, t) =>
+    sb.from("pl_day_completions").select("day_id, completed_at").in("day_id", chunk).not("completed_at", "is", null).range(f, t),
+  );
+  return lastTrainedByBlock({ weeks: weeks as any, days: days as any, completions: completions as any });
 }
 
 export async function loadIntelRecords(
@@ -103,7 +141,11 @@ export async function loadIntelRecords(
   let blocks: RawBlock[];
   let scope: IntelScope;
   if (req.kind === "program") {
-    const cur = currentProgramBlocks(allBlocks, today);
+    // two programs on the go at once (a replaced one never archived): read which one they train
+    const running = allBlocks.filter((b) => !b.archived && b.status !== "Archived" && b.start_date && b.start_date <= today && (!b.end_date || b.end_date >= today));
+    const programs = new Set(running.map((b) => b.prep_id ?? b.id));
+    const trained = programs.size > 1 ? await optional("latest training per program", () => latestTrainingFor(sb, allBlocks.map((b) => b.id)), new Map<string, string>()) : undefined;
+    const cur = currentProgramBlocks(allBlocks, today, trained);
     const prep = preps.find((p: any) => p.id === cur.prepId);
     blocks = cur.blocks;
     scope = { kind: "program", label: prep?.title ? `Current program: ${prep.title}` : cur.blocks.length === 1 ? `Current block: ${cur.label}` : cur.label, from: null, to: null, blockIds: blocks.map((b) => b.id) };

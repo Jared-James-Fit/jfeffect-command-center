@@ -216,6 +216,23 @@ export function strategyStandardIssues(s: Strategy, setup: Pick<GenerationSetup,
     .map((n) => `${n} is below the exercise standard; replace it with a dumbbell, cable or machine exercise for the same muscle.`);
 }
 
+/**
+ * Parts of a strategy the workouts are written from that came back empty (blind grading on Nov 9
+ * 2026 found two of the best strategies with no intensity, progression model or a day's main
+ * lifts, so construction had to guess). They go back with the one retry; what's still empty after
+ * it is kept on the run (`strategyGaps`) and never stops it.
+ */
+export function strategyGaps(s: Strategy): string[] {
+  const out: string[] = [];
+  const blank = (v: string | null | undefined) => !String(v ?? "").trim();
+  if (blank(s.intensity)) out.push("intensity is empty: say how hard each phase is (RPE / RIR or % ranges for the main lifts, and how that changes week to week).");
+  if (blank(s.progression.model)) out.push("progression.model is empty: say how loads, reps or sets progress week to week for the main lifts and the accessories.");
+  if (blank(s.progression.fatigue)) out.push("progression.fatigue is empty: say how fatigue is managed across the weeks (and when it's shed, if it needs to be).");
+  if (!s.frequency_targets.length) out.push("frequency_targets is empty: give how many days a week each main lift and major muscle is trained.");
+  for (const d of s.weekly_layout) if (!d.primary.length) out.push(`weekly_layout day ${d.day} ("${d.title}") lists no main exercises in primary.`);
+  return out;
+}
+
 /** Where the strategy doesn't match the coach's setup: these stop the run. */
 export function strategyIssues(s: Strategy, setup: GenerationSetup): string[] {
   const out: string[] = [];
@@ -408,8 +425,10 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
   const brain: Brain = setup.brain;
 
   if (stage === "strategy") {
-    const { value, model } = await askChecked<Strategy>(admin, job, result, "strategy", "strategy", strategySystemPrompt(brain, { first: !!ctxRow.first_program }), strategyUserPrompt(brief, setup, { first: !!ctxRow.first_program }), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup)]);
+    const { value, model } = await askChecked<Strategy>(admin, job, result, "strategy", "strategy", strategySystemPrompt(brain, { first: !!ctxRow.first_program }), strategyUserPrompt(brief, setup, { first: !!ctxRow.first_program }), strategySchema, (v) => [...strategyIssues(v, setup), ...strategyStandardIssues(v, setup), ...strategyGaps(v)]);
     const issues = strategyIssues(value, setup);
+    const gaps = strategyGaps(value);
+    if (gaps.length) result.strategyGaps = gaps;
     if (issues.length) throw new Error(`The strategy didn't match your setup: ${issues.join(" ")}`);
     // anything still below the exercise standard after the retry comes out here, never fails the run
     const clean = withStandardStrategy(value, setup.required);

@@ -11,7 +11,7 @@ import { buildAthleteDevelopment, type AthleteDevelopment } from "./athlete-deve
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { buildAthleteContext, type AthleteContext } from "./context";
 import { resolveEquipment, type EquipmentResolution } from "./equipment";
-import { currentProgramBlocks, isUnassignedDraftBlock, sliceRecords } from "./load";
+import { currentProgramBlocks, isUnassignedDraftBlock, lastTrainedByBlock, sliceRecords } from "./load";
 import { findPatterns, type Pattern } from "./patterns";
 import { dataQuality, type DataQuality } from "./quality";
 import { recommendSetup, type SetupRecommendation } from "./recommend";
@@ -67,7 +67,7 @@ export function buildGeneratorIntel(rec: IntelRecords, opts: { brainOverride?: B
   const generatedAt = opts.generatedAt ?? new Date().toISOString();
   const history = buildIntelReport(rec, { brainOverride: opts.brainOverride ?? null, generatedAt });
   const live = rec.blocks.filter((b) => !isUnassignedDraft(b));
-  const cur = currentProgramBlocks(live, rec.today);
+  const cur = currentProgramBlocks(live, rec.today, lastTrainedByBlock(rec));
   const prepTitle = cur.prepId ? rec.preps.find((p) => p.id === cur.prepId)?.title ?? null : null;
   const prevLabel = prepTitle ?? (cur.blocks.length === 1 ? cur.blocks[0].name ?? "Last block" : "Last program");
   const prevRec = cur.blocks.length ? sliceRecords(rec, cur.blocks.map((b) => b.id), prevLabel) : null;

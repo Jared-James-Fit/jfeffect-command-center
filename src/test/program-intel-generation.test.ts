@@ -7,7 +7,7 @@ import { rxForWeek } from "@/lib/program-intel/program-view";
 import { blockIssues, strategyIssues } from "@/lib/program-intel/pipeline.server";
 import { DEFAULT_ROUTES, resolveRoute, STRONG_MODELS } from "@/lib/ai/routing";
 import { BRAINS } from "@/lib/program-intel/types";
-import { currentProgramBlocks, fetchAll, fetchByIds } from "@/lib/program-intel/load";
+import { currentProgramBlocks, lastTrainedByBlock, fetchAll, fetchByIds } from "@/lib/program-intel/load";
 
 const block = (over: any = {}): any => ({
   name: "Accumulation",
@@ -160,6 +160,22 @@ describe("Program Intelligence loader never cuts a list short", () => {
     const lone = currentProgramBlocks([b("solo", null, "2026-10-01", "2026-10-31")], "2026-10-15");
     expect(lone.blocks.map((x) => x.id)).toEqual(["solo"]);
   });
+  it("two programs overlapping today (a replaced one never archived): the one they train, never the one created first (Alyssa, Nov 9 2026)", () => {
+    const b = (id: string, prep: string, start: string, end: string, created: string) => ({ id, prep_id: prep, name: id, status: "Draft", start_date: start, end_date: end, weeks: 4, training_focus: null, goal: null, coach_notes: null, client_visible: true, archived: false, sort_order: 0, created_at: created });
+    // the old program (made Sep 7, 2 workouts ever) and the meet prep she trains (made Sep 28)
+    const blocks = [
+      b("old1", "old", "2026-09-07", "2026-09-27", "2026-09-07"),
+      b("old3", "old", "2026-11-02", "2026-11-29", "2026-09-07"),
+      b("new1", "meet", "2026-09-28", "2026-10-18", "2026-09-28"),
+      b("new2", "meet", "2026-10-19", "2026-11-08", "2026-09-28"),
+      b("new3", "meet", "2026-11-09", "2026-11-22", "2026-09-28"),
+    ];
+    const trained = new Map([["old1", "2026-09-10"], ["new1", "2026-10-15"], ["new2", "2026-11-06"]]);
+    expect(currentProgramBlocks(blocks, "2026-11-09", trained).prepId).toBe("meet");
+    // with no training read yet, the later start wins, still never the first created
+    expect(currentProgramBlocks(blocks, "2026-11-09").prepId).toBe("meet");
+    expect(lastTrainedByBlock({ weeks: [{ id: "w", block_id: "new2" }] as any, days: [{ id: "d", week_id: "w" }] as any, completions: [{ day_id: "d", completed_at: "2026-11-06T18:00:00Z" }, { day_id: "d", completed_at: null }] as any }).get("new2")).toBe("2026-11-06");
+  });
 });
 
 describe("Program Intelligence is for the client's coaches and admins only", () => {
@@ -212,5 +228,16 @@ describe("Program Intelligence is for the client's coaches and admins only", () 
     const hooks = readFileSync("src/components/program-intel/use-program-intel.ts", "utf8");
     expect(hooks).toContain('import { supabase } from "@/integrations/supabase/client";');
     expect(hooks).not.toContain("supabaseAdmin");
+  });
+});
+
+describe("a lift's trend across blocks reads as the evidence says (Jared's bench, Nov 9 2026)", () => {
+  it("+1.2% and +13% is one block progressed and one small gain, never 'didn't progress in any'", async () => {
+    const { liftTrend } = await import("@/lib/program-intel/patterns");
+    expect(liftTrend("Bench", [1.2, 13]).statement).toBe("Bench progressed (+2% e1RM or more) in 1 of the 2 blocks with enough data, with a small gain (1 to 2%) in 1.");
+    expect(liftTrend("Bench", [3, 13]).statement).toMatch(/progressed in every one of the 2/);
+    expect(liftTrend("Bench", [0.5, -4]).statement).toMatch(/didn't progress in any of the 2/);
+    expect(liftTrend("Bench", [1.5, 0.2, -1]).statement).toBe("Bench made at most small gains (under 2% e1RM) in the 3 blocks with enough data: a small gain in 1, none in 2.");
+    expect(liftTrend("Squat", [4, 1.1, 0]).statement).toBe("Squat progressed (+2% e1RM or more) in 1 of the 3 blocks with enough data, with a small gain (1 to 2%) in 1 and no progress in 1.");
   });
 });

@@ -47,6 +47,25 @@ function perBlockLift(h: IntelReport, lift: Lift): BlockLift[] {
   return out;
 }
 
+/**
+ * One lift across blocks, said as it is: progressed = +2% e1RM or more, a small gain = +1 to 2%,
+ * flat = under +1%. Every mix gets its own sentence, so a block at +1.2% next to one at +13%
+ * never reads as "didn't progress in any".
+ */
+export function liftTrend(name: string, changes: number[]): { statement: string; caveat: string } {
+  const n = changes.length;
+  const up = changes.filter((c) => c >= 2).length;
+  const flat = changes.filter((c) => c < 1).length;
+  const small = n - up - flat;
+  if (up === n) return { statement: `${name} progressed in every one of the ${n} blocks with enough data.`, caveat: "What those blocks had in common is a candidate to keep." };
+  if (flat === n) return { statement: `${name} didn't progress in any of the ${n} blocks with enough data.`, caveat: "Look at what those blocks shared before changing one variable." };
+  if (up) {
+    const rest = [small ? `a small gain (1 to 2%) in ${small}` : null, flat ? `no progress in ${flat}` : null].filter(Boolean).join(" and ");
+    return { statement: `${name} progressed (+2% e1RM or more) in ${up} of the ${n} blocks with enough data, with ${rest}.`, caveat: CAVEAT };
+  }
+  return { statement: `${name} made at most small gains (under 2% e1RM) in the ${n} blocks with enough data: a small gain in ${small}, none in ${flat}.`, caveat: "Look at what those blocks shared before changing one variable." };
+}
+
 export function findPatterns(h: IntelReport, rec: IntelRecords): Pattern[] {
   const out: Pattern[] = [];
   const u = h.client.unit;
@@ -82,7 +101,7 @@ export function findPatterns(h: IntelReport, rec: IntelRecords): Pattern[] {
           caveat: CAVEAT,
         });
     } else if (bl.length >= 2) {
-      out.push({ id: `lift:${lift}:trend`, level: bl.length >= 3 ? "recurring" : "single", subject: lift, statement: up.length === bl.length ? `${LIFT_NAME[lift]} progressed in every one of the ${bl.length} blocks with enough data.` : `${LIFT_NAME[lift]} didn't progress in any of the ${bl.length} blocks with enough data.`, evidence: bl.map(line), caveat: up.length === bl.length ? "What those blocks had in common is a candidate to keep." : "Look at what those blocks shared before changing one variable." });
+      out.push({ id: `lift:${lift}:trend`, level: bl.length >= 3 ? "recurring" : "single", subject: lift, ...liftTrend(LIFT_NAME[lift], bl.map((b) => b.change)), evidence: bl.map(line) });
     }
   }
   // Deadlift and the combined lower-body load.
