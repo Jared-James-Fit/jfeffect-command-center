@@ -24,7 +24,7 @@ describe("progress photos show how to take each pose", () => {
 
   it("the setup covers time, light, phone height and distance, framing, clothes and stance", () => {
     const text = PHOTO_SETUP.map((s) => `${s.title} ${s.body}`).join(" ").toLowerCase();
-    for (const w of ["morning", "light", "belly-button height", "6 to 8 feet", "head to feet", "same thing every time", "don't flex"]) {
+    for (const w of ["morning", "light", "belly-button height", "6 to 8 feet", "head to feet", "same thing every time", "full physique", "don't flex"]) {
       expect(text, w).toContain(w);
     }
   });
