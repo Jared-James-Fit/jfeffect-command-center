@@ -21,6 +21,7 @@
  * program_intel_job_calls (coach-readable) for the context inspector.
  */
 import { resolveRoute, type AiTask } from "@/lib/ai/routing";
+import type { Effort } from "@/lib/ai/model-client.server";
 import { auditProgram, type AuditResult } from "./audit";
 import { reviewRepairs, reviewReplySchema, reviewSystemPrompt, reviewUserPrompt, withReview, type CoachingReview, type ReviewReply } from "./coaching-review";
 import { buildBrief, CONSTRUCT_EXCLUDE, loadReferences } from "./brief";
@@ -105,7 +106,9 @@ async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, 
   if (result.calls[key]) return result.calls[key];
   const { submitBackground, callModel, parseModelRef, ModelHttpError } = await import("@/lib/ai/model-client.server");
   const route = resolveRoute(task, await routeOverride(admin, job), { anyModel: !!job.options?.bench });
-  const req = { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.3 };
+  // a benchmark run may compare a model at another effort (e.g. Claude at its own default, medium)
+  const benchEffort = job.options?.bench ? (job.options?.effort?.[task] as Effort | undefined) : undefined;
+  const req = { system, prompt, effort: benchEffort && ["low", "medium", "high"].includes(benchEffort) ? benchEffort : route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.3 };
   const pending = result.pending[key] as { id?: string; model?: string; at?: number; failed?: string[] } | undefined;
   const tried: string[] = [...(pending?.failed ?? [])];
   const done = async (text: string, model: string, usage: any, ms: number) => {

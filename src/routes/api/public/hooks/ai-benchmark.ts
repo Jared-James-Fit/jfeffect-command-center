@@ -32,6 +32,7 @@ export const Route = createFileRoute("/api/public/hooks/ai-benchmark")({
         const options: Record<string, unknown> = { bench: true, label: String(body.label ?? "").slice(0, 120), models, setupPatch: body.setupPatch ?? null, skipReview: !!body.skipReview };
         if (body.strategy) options.strategy = body.strategy;
         if (body.benchMeet) options.benchMeet = body.benchMeet;
+        if (body.effort && typeof body.effort === "object") options.effort = body.effort;
         if (body.benchGoal) options.benchGoal = body.benchGoal;
         const { data, error } = await db
           .from("program_intel_jobs")
