@@ -57,18 +57,6 @@ export function weeklyChange(series: Array<{ date: string; value: number }>): nu
   return latest.value - prior.value;
 }
 
-export function averageNumeric(rows: ProgressMetric[], field: keyof ProgressMetric, days = 7): number | null {
-  const cutoff = new Date();
-  cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - days);
-  const vals = rows
-    .filter((r) => new Date(r.entry_date + "T00:00:00") >= cutoff)
-    .map((r) => r[field] as unknown as number | null)
-    .filter((v): v is number => v != null);
-  if (vals.length === 0) return null;
-  return vals.reduce((s, v) => s + Number(v), 0) / vals.length;
-}
-
 export const RANGE_OPTIONS = [
   { value: "7", label: "7 days", days: 7 },
   { value: "30", label: "30 days", days: 30 },
@@ -87,23 +75,6 @@ export function filterByRange<T extends { date: string }>(rows: T[], range: Rang
   return rows.filter((r) => new Date(r.date + "T00:00:00") >= cutoff);
 }
 
-export function toCsv(rows: ProgressMetric[]): string {
-  const header = [
-    "entry_date","bodyweight","bodyweight_unit","steps","sleep_hours",
-    "resting_heart_rate","calories_burned","active_minutes","source","notes",
-  ];
-  const lines = [header.join(",")];
-  for (const r of rows) {
-    const row = header.map((h) => {
-      const v = (r as any)[h];
-      if (v == null) return "";
-      const s = String(v).replace(/"/g, '""');
-      return /[",\n]/.test(s) ? `"${s}"` : s;
-    });
-    lines.push(row.join(","));
-  }
-  return lines.join("\n");
-}
 // ============================================================
 // Bodyweight goal helpers
 // ============================================================
