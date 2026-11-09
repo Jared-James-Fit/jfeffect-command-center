@@ -275,12 +275,12 @@ export function freeMealRule(wants: boolean | null, pick: string): string {
       "Client wants a FREE MEAL on the HIGH-DAY MENU only (never on the other menus).",
       "Make it the last meal of the day, never the Pre-Workout meal, with the header exactly \"Meal X – Free Meal\".",
       `Under it, instead of weighed foods, write one line "Your choice: ${theirs}burger + fries, steak + potatoes, pasta or whatever you're craving" and one line "Aim for about <kcal> kcal with 40+ g protein. Enjoy it, then straight back to the plan."`,
-      "Budget it at about 25–35% of the High Day calories, and give its Approximate macros as that budget (protein 40 g or more).",
-      "Build the other High-Day meals lean and high-protein with less fat, so the whole day still lands on the High Day totals.",
+      "The other High-Day meals stay the prepped meals of the other menus, same foods and same amounts (MEAL PREP).",
+      "The free meal's budget is what's left of the High Day calories after them, usually about 25–35% of the High Day calories: give its Approximate macros as that budget (protein 40 g or more).",
     ].join(" ");
   }
   if (wants === false) {
-    return "No free meal: the client chose a fully planned High Day. Put the High Day's extra carbs into foods they enjoy from their list (e.g. bagels, rice, pasta, cereal, fruit) so it still feels like a reward, every food weighed like the other days.";
+    return "No free meal: the client chose a fully planned High Day. The prepped meals stay as they are, and the extra carbs come as whole extra portions or a carb snack they enjoy from their list (e.g. a bagel, cereal, fruit, an extra rice portion) so it still feels like a reward.";
   }
   return "";
 }

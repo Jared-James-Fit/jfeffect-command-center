@@ -38,7 +38,7 @@ import {
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
 import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
-import { LEAN_GROCERY_LIST, planFoodStats, type PlanFoodStats } from "@/lib/nutrition-targets/plan-foods";
+import { LEAN_GROCERY_LIST, planFoodStats, prepDrift, prepDriftLine, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 
 type Req = {
   id: string;
@@ -460,7 +460,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       {submitted && plan && (plan.status === "ready" || revising) && (
         <div className="space-y-3">
           <LastPlanSummary previous={plan.previous_plan ?? null} />
-          {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} />}
+          {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} drift={prefill ? prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes }))) : null} />}
           {plan.targets_text && <CopyBlock title="AI targets" text={plan.targets_text} icon={<ClipboardList className="h-4 w-4 text-primary" />} />}
           {plan.meal_plan_text && (
             <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
@@ -741,8 +741,9 @@ function LastPlanSummary({ previous }: { previous: PreviousPlan | null }) {
 }
 
 /** Each day type's numbers, steps and cardio from the AI plan, before opening the editor. */
-function PlanPreview({ rows, foods }: { rows: Array<{ label: string; kcal: number | null; p: number | null; c: number | null; f: number | null; steps: number | null; cardio: string }>; foods: PlanFoodStats | null }) {
+function PlanPreview({ rows, foods, drift }: { rows: Array<{ label: string; kcal: number | null; p: number | null; c: number | null; f: number | null; steps: number | null; cardio: string }>; foods: PlanFoodStats | null; drift: PrepDrift[] | null }) {
   const heavy = !!foods && foods.total > LEAN_GROCERY_LIST;
+  const drifting = !!drift?.length;
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
       {foods && foods.total > 0 && (
@@ -753,6 +754,23 @@ function PlanPreview({ rows, foods }: { rows: Array<{ label: string; kcal: numbe
           <span className="font-semibold">Grocery list: {foods.total} foods</span>
           {foods.days > 1 && <span>· {foods.everyDay} used every day</span>}
           {heavy && <span>· a lot to shop for. Regenerate, or swap foods in the editor so days share the same staples</span>}
+        </div>
+      )}
+      {foods && foods.total > 0 && drift && (
+        <div
+          data-prep-check={drifting ? "drift" : "same"}
+          className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", drifting ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "text-muted-foreground")}
+          title={drifting ? drift.flatMap((d) => d.odd).join("\n") : undefined}
+        >
+          {drifting ? (
+            <>
+              <span className="font-semibold">Meal prep: {drift.length} {drift.length === 1 ? "food changes" : "foods change"} weight</span>
+              <span>· {drift.slice(0, 3).map(prepDriftLine).join(" · ")}</span>
+              <span>· Change something ("same portions in every meal") or fix them in the editor</span>
+            </>
+          ) : (
+            <span className="font-semibold">Meal prep: every weighed portion is one amount</span>
+          )}
         </div>
       )}
       <table className="w-full min-w-[520px] text-xs">
