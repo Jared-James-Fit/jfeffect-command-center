@@ -130,3 +130,42 @@ describe("a dated long-term goal", () => {
     expect(goalDeadline({ text: " ", date: "2027-11-01" })).toBeNull();
   });
 });
+
+describe("benchmark deadlines (bench.ts): a pretend meet or goal for one benchmark run", () => {
+  it("leaves a coach's run untouched", async () => {
+    const { benchRecords } = await import("@/lib/program-intel/bench");
+    const { homeGym } = await import("./program-intel-scenarios");
+    const rec = homeGym();
+    expect(benchRecords(rec, { options: { benchMeet: { name: "X", date: "2027-03-01" } } })).toBe(rec);
+  });
+  it.each([
+    [6, 6],
+    [8, 8],
+    [16, 12],
+    [24, 12],
+  ])("a meet %i weeks out reaches the goal timeline (%i weeks now)", async (weeksOut, expected) => {
+    const { benchRecords } = await import("@/lib/program-intel/bench");
+    const { buildGeneratorIntel } = await import("@/lib/program-intel/intelligence");
+    const { horizonFor } = await import("@/lib/program-intel/recommend");
+    const { homeGym } = await import("./program-intel-scenarios");
+    const start = "2026-11-16";
+    // the meet sits in week N counted from the start (its Saturday)
+    const date = addDays(start, (weeksOut - 1) * 7 + 5);
+    const intel = buildGeneratorIntel(benchRecords(homeGym(), { options: { bench: true, benchMeet: { name: "Test meet", date } } }));
+    expect(intel.ctx.competition.next?.date).toBe(date);
+    const h = horizonFor(intel.ctx, "goal", null, start);
+    expect(h.weeks).toBe(expected);
+    expect(h.deadline?.week).toBe(weeksOut);
+  });
+  it("a dated goal over a year out: the first 12 weeks of a roadmap to it", async () => {
+    const { benchRecords } = await import("@/lib/program-intel/bench");
+    const { buildGeneratorIntel } = await import("@/lib/program-intel/intelligence");
+    const { horizonFor } = await import("@/lib/program-intel/recommend");
+    const { homeGym } = await import("./program-intel-scenarios");
+    const intel = buildGeneratorIntel(benchRecords(homeGym(), { options: { bench: true, benchGoal: { text: "500 kg total", date: "2028-03-04" } } }));
+    expect(intel.ctx.goals.longTerm?.text).toBe("500 kg total");
+    const h = horizonFor(intel.ctx, "goal", null, "2026-11-16");
+    expect(h.weeks).toBe(12);
+    expect(h.roadmap.length).toBeGreaterThan(5);
+  });
+});

@@ -25,10 +25,14 @@ export const Route = createFileRoute("/api/public/hooks/ai-benchmark")({
         // the program type the generator would pick (or the one asked for)
         const { loadIntelRecords } = await import("@/lib/program-intel/load");
         const { buildGeneratorIntel } = await import("@/lib/program-intel/intelligence");
-        const intel = buildGeneratorIntel(await loadIntelRecords(db, body.clientId, { kind: "history" }));
+        const { benchRecords } = await import("@/lib/program-intel/bench");
+        const benchJob = { options: { bench: true, benchMeet: body.benchMeet, benchGoal: body.benchGoal } };
+        const intel = buildGeneratorIntel(benchRecords(await loadIntelRecords(db, body.clientId, { kind: "history" }), benchJob));
         const brain = typeof body.brain === "string" ? body.brain : intel.brain;
         const options: Record<string, unknown> = { bench: true, label: String(body.label ?? "").slice(0, 120), models, setupPatch: body.setupPatch ?? null, skipReview: !!body.skipReview };
         if (body.strategy) options.strategy = body.strategy;
+        if (body.benchMeet) options.benchMeet = body.benchMeet;
+        if (body.benchGoal) options.benchGoal = body.benchGoal;
         const { data, error } = await db
           .from("program_intel_jobs")
           .insert({ client_id: body.clientId, kind, status: "pending", scope: { kind: "history" }, brain, options, created_by: body.createdBy })
