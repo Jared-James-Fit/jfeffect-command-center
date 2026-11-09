@@ -12,6 +12,7 @@ import {
   TARGETS_PROMPT,
   cleanAiText,
   mealPlanUserPrompt,
+  mealPrepFixPrompt,
   reviseMealPlanUserPrompt,
   reviseTargetsUserPrompt,
   revisionLooksRight,
@@ -21,6 +22,7 @@ import {
   type WorkoutMealsMode,
 } from "@/lib/nutrition-ai-prompts";
 import { phaseFromText } from "@/lib/nutrition-cardio";
+import { planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
 import { sexLabel } from "@/lib/athlete-sex";
 import { summarizeTrainingTimes, type TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
@@ -301,12 +303,11 @@ export async function runPlan(
     });
     const targetsText = cleanAiText(t.text);
 
-    const m = await generateText({
-      model: gateway(modelId),
-      system: MEAL_PLAN_PROMPT,
-      prompt: mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history, previousMealsText(previous)),
-    });
-    const mealPlanText = cleanAiText(m.text);
+    const mealPrompt = mealPlanUserPrompt(qas, targetsText, phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history, previousMealsText(previous));
+    const m = await generateText({ model: gateway(modelId), system: MEAL_PLAN_PROMPT, prompt: mealPrompt });
+    const mealPlanText = await withPrepFix(cleanAiText(m.text), mealPrompt, (prompt) =>
+      generateText({ model: gateway(modelId), system: MEAL_PLAN_PROMPT, prompt }).then((r) => r.text),
+    );
 
     await sb.from("nutrition_ai_plans").update({
       status: "ready",
@@ -329,6 +330,22 @@ export async function runPlan(
     }).eq("submission_id", submissionId);
     return { status: "error" as const, error: String(e?.message ?? e) };
   }
+}
+
+/**
+ * Meal prep is checked in code, not trusted to the model: a plan that writes
+ * a weighed food at different amounts between meals or day types (prepDrift)
+ * gets one targeted fix, and the fix is kept only when it still reads as the
+ * same plan (same menus, a Daily Total) with fewer foods drifting. A failed
+ * fix never costs the plan already written. Exported for tests.
+ */
+export async function withPrepFix(draft: string, userPrompt: string, ask: (prompt: string) => Promise<string>): Promise<string> {
+  const drift = prepDrift(planMenus(draft));
+  if (!drift.length) return draft;
+  const fixed = cleanAiText(await ask(mealPrepFixPrompt(userPrompt, draft, drift)).catch(() => ""));
+  if (!fixed || !revisionLooksRight("meals", draft, fixed)) return draft;
+  if (planMenus(fixed).length !== planMenus(draft).length) return draft;
+  return prepDrift(planMenus(fixed)).length < drift.length ? fixed : draft;
 }
 
 /** A plan for this submission is already being written (started under 3 minutes ago). */
