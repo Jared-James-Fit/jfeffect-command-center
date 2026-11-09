@@ -47,6 +47,8 @@ import {
 } from "@/lib/sale-dialog-layout";
 import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { DateField } from "@/components/ui/date-field";
+import { PlusTax } from "@/components/billing/plus-tax";
+import { useChargesTax } from "@/hooks/use-charges-tax";
 
 function money(cents: number, currency: string) {
   try {
@@ -76,6 +78,7 @@ export function AddSaleDialog({
 }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listCoachingProducts);
+  const chargesTax = useChargesTax();
   const createProductFn = useServerFn(createCoachingProduct);
 
   const [tab, setTab] = useState<"existing" | "custom">("existing");
@@ -261,6 +264,7 @@ export function AddSaleDialog({
                           <span className="font-semibold text-foreground">
                             {money(p.price_cents, p.currency)}
                           </span>
+                          <PlusTax />
                           {p.payment_structure ? ` · ${p.payment_structure}` : ""}
                           {p.term_length && p.term_unit ? ` · ${p.term_length} ${p.term_unit}` : ""}
                         </div>
@@ -324,7 +328,7 @@ export function AddSaleDialog({
                     {paid && (
                       <div className="grid grid-cols-[1fr_auto] gap-2">
                         <div className="space-y-1.5">
-                          <Label>Price</Label>
+                          <Label>Price{chargesTax ? " before tax" : ""}</Label>
                           <Input
                             inputMode="decimal"
                             value={draft.priceText}

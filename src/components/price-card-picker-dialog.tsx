@@ -10,6 +10,7 @@ import { AssignOfferDialog } from "@/components/assign-offer-dialog";
 import { OfferDetailDialog } from "@/components/offer-detail-dialog";
 import { Eye, Search, X } from "lucide-react";
 import { listCoachingProducts } from "@/lib/coaching-products.functions";
+import { PlusTax } from "@/components/billing/plus-tax";
 
 type Product = {
   id: string;
@@ -212,7 +213,7 @@ export function PriceCardPickerDialog({ open, onClose, fixedClientId }: { open: 
                       </div>
                       <Badge variant={status === "Active" ? "default" : "outline"} className={status === "Active" ? "bg-primary" : ""}>{status}</Badge>
                     </div>
-                    <div className="text-lg font-bold">{formatPrice(p.price_cents, p.currency)}</div>
+                    <div className="text-lg font-bold">{formatPrice(p.price_cents, p.currency)}<PlusTax className="text-xs font-medium" /></div>
                     <div className="flex flex-wrap gap-1 text-[10px] text-muted-foreground">
                       {p.payment_structure && <span className="rounded border border-border px-1.5 py-0.5">{p.payment_structure}</span>}
                       {term && <span className="rounded border border-border px-1.5 py-0.5">{term}</span>}

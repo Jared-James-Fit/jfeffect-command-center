@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { listSessionSaleProducts, sellSessions } from "@/lib/session-sale.functions";
 import { money, parseDollars, saleQuote, type SaleProduct, type SaleQuote } from "@/lib/session-sale";
 import { invalidatePtSessionCaches } from "@/lib/pt-session-manage";
+import { PlusTax } from "@/components/billing/plus-tax";
 
 /** What the coach picked to charge, before the booking is saved. */
 export type SaleDraft = {
@@ -83,7 +84,7 @@ export function SessionSalePicker({
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="What to charge">
             {products.map((p) => (
               <Chip key={p.id} selected={value.productId === p.id} onClick={() => set({ productId: p.id })}>
-                {p.name} <span className="font-bold">{money(p.price_cents, p.currency)}</span>
+                {p.name} <span className="font-bold">{money(p.price_cents, p.currency)}</span><PlusTax />
               </Chip>
             ))}
             <Chip selected={value.productId === null} onClick={() => set({ productId: null })}>Custom price</Chip>

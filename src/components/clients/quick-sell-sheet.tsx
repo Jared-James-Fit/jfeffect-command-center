@@ -29,6 +29,7 @@ import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { getShareablePaymentUrl } from "@/components/payments/copy-payment-link-button";
 import { findReusablePurchaseIntent } from "@/lib/purchase-idempotency";
 import { supabase } from "@/integrations/supabase/client";
+import { PlusTax } from "@/components/billing/plus-tax";
 
 interface Props {
   open: boolean;
@@ -260,6 +261,7 @@ export function QuickSellSheet({ open, onOpenChange, clientId, clientName }: Pro
                             <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                               <span className="font-bold text-foreground">
                                 {formatPrice(p.price_cents, p.currency ?? "cad")}
+                                <PlusTax />
                               </span>
                               {p.payment_structure && (
                                 <span>· {p.payment_structure}</span>

@@ -40,6 +40,7 @@ import { createPreviewCheckoutSession } from "@/lib/stripe-checkout.functions";
 import { ProductAccessGrantDialog } from "@/components/product-access-grant-dialog";
 import { Lock as LockIcon } from "lucide-react";
 import { BILLING_FREQUENCY_OPTIONS, toStripeRecurring, type BillingFrequency } from "@/lib/billing-frequency";
+import { PlusTax } from "@/components/billing/plus-tax";
 
 const NewProductModal = lazyWithRetry(() => import("@/components/products/new-product-modal"));
 
@@ -687,7 +688,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                         </div>
                       </div>
                       <div className="truncate text-xs text-muted-foreground">{normalizeProductType(p.product_type)}</div>
-                      <div className="text-sm font-bold">{formatPrice(p.price_cents, p.currency)}</div>
+                      <div className="text-sm font-bold">{formatPrice(p.price_cents, p.currency)}<PlusTax className="text-xs" /></div>
                       <div className="truncate text-xs text-muted-foreground">
                         {p.payment_structure ? normalizePaymentStructure(p.payment_structure) : "One-time payment"}
                       </div>
@@ -715,7 +716,7 @@ export function PaymentLinksPage({ embedded = false }: { embedded?: boolean } = 
                           {menu}
                         </div>
                         <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-bold">{formatPrice(p.price_cents, p.currency)}</span>
+                          <span className="text-sm font-bold">{formatPrice(p.price_cents, p.currency)}<PlusTax className="text-xs" /></span>
                           {statusBadge}
                         </div>
                         <div className="mt-2">{primary}</div>
@@ -1148,7 +1149,7 @@ function SharePaymentLinkDialog({
               <div className="text-xs text-muted-foreground">
                 {product.description && /every|payment|week|month|year/i.test(product.description)
                   ? product.description
-                  : `${product.currency.toUpperCase()} ${formatPrice(product.price_cents, product.currency)}${product.payment_structure ? ` · ${product.payment_structure}` : ""}`
+                  : <>{product.currency.toUpperCase()} {formatPrice(product.price_cents, product.currency)}<PlusTax />{product.payment_structure ? ` · ${product.payment_structure}` : ""}</>
                 }
               </div>
               {product.notes && /total/i.test(product.notes) && (
