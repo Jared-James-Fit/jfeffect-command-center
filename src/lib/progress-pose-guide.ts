@@ -28,7 +28,9 @@ export const PHOTO_SETUP: Array<{ title: string; body: string }> = [
   { title: "Same spot, good light", body: "Bright, even light coming from in front of you. No window or lamp behind you, and not only a light straight overhead." },
   { title: "Phone at belly-button height", body: "Upright (portrait), about 6 to 8 feet away. Prop it up and use the timer, or have someone take them." },
   { title: "Whole body in the frame", body: "Head to feet, with a little space above your head and below your feet." },
-  { title: "Wear what you're comfortable in", body: "Anything that shows your full physique: underwear, shorts, a sports bra or no shirt all work. The more of you we can see, the better. Wear the same thing every time." },
+  // Comfort first and the athlete's own choice, worded so it reads right for
+  // anyone (Nov 9 2026: the coach wanted it to land well with women too).
+  { title: "Wear what you're comfortable in", body: "Anything fitted that shows your shape, like a sports bra and shorts, a swimsuit or underwear. It's your call, go with what feels right, and wear the same thing every time. Your photos are private: only you and your coach can see them." },
   { title: "Stand relaxed and tall", body: "Don't flex, pose or suck in. Just stand like you normally would." },
 ];
 
