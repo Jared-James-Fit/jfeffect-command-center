@@ -15,11 +15,12 @@ function FrontBody({ back = false }: { back?: boolean }) {
       <g fill="currentColor" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <ellipse cx="30" cy="11" rx="6.5" ry="7.5" stroke="none" />
         <rect x="27" y="17" width="6" height="6" rx="2" stroke="none" />
-        <path d="M17 25 Q30 21 43 25 L41 40 Q39 48 39.5 54 L41.5 64 L18.5 64 L20.5 54 Q21 48 19 40 Z" stroke="none" />
+        {/* hips no wider than the legs under them, so it never reads as a skirt */}
+        <path d="M17 25 Q30 21 43 25 L41 40 Q39 47 39.3 53 L38.6 61 L21.4 61 L20.7 53 Q21 47 19 40 Z" stroke="none" />
         <path d="M18 27 L13 45 L11 62" fill="none" strokeWidth="5.5" />
         <path d="M42 27 L47 45 L49 62" fill="none" strokeWidth="5.5" />
-        <path d="M25.5 63 L24.5 88 L24 112" fill="none" strokeWidth="8" />
-        <path d="M34.5 63 L35.5 88 L36 112" fill="none" strokeWidth="8" />
+        <path d="M25.4 58 L24.6 88 L24 112" fill="none" strokeWidth="8" />
+        <path d="M34.6 58 L35.4 88 L36 112" fill="none" strokeWidth="8" />
       </g>
       {back && (
         // the back: a spine and shoulder blades, drawn in the tile's own colour
@@ -38,9 +39,9 @@ function SideBody() {
       <ellipse cx="29" cy="11" rx="6.2" ry="7.5" stroke="none" />
       <path d="M23.3 12 L21.6 14.2 L23.4 15" stroke="none" />
       <rect x="28" y="17" width="5.5" height="6" rx="2" stroke="none" />
-      <path d="M25 25 Q31 22 36 25 Q37.5 33 36 40 Q35 47 35.5 53 Q37.5 58 36.5 64 L25 64 Q23.5 58 25 53 Q26 47 25 41 Q22.5 35 25 25 Z" stroke="none" />
+      <path d="M25 25 Q31 22 36 25 Q37.5 33 36 40 Q35 47 35.5 53 Q37.2 57.5 34.6 63 L26 63 Q24 58 25 53 Q26 47 25 41 Q22.5 35 25 25 Z" stroke="none" />
       <path d="M30.5 27 L28 44 L24.5 60" fill="none" strokeWidth="5.2" />
-      <path d="M30 63 L30.5 88 L31 111" fill="none" strokeWidth="8.5" />
+      <path d="M30.2 59 L30.5 88 L31 111" fill="none" strokeWidth="8.5" />
       <path d="M31 112 L24.5 112" fill="none" strokeWidth="4" />
     </g>
   );
