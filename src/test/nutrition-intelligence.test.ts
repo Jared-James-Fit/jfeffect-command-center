@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 
 const replies: Array<string | Error> = [];
 const asked: string[] = [];
+const sent: Array<{ model: string; prompt: string }> = [];
+/** Background calls answered from the test: each id holds its answer until polled. */
+const background = new Map<string, string | Error>();
+const bg = { stillThinking: 0, submitted: 0 };
 vi.mock("@/lib/ai/model-client.server", () => {
   class ModelHttpError extends Error {
     constructor(
@@ -14,11 +18,35 @@ vi.mock("@/lib/ai/model-client.server", () => {
   }
   return {
     ModelHttpError,
+    parseModelRef: (ref: string) => ({
+      via: ref.startsWith("openai:") ? "openai" : "gateway",
+      family: "openai",
+      id: ref,
+    }),
     callModel: vi.fn(async (model: string) => {
       asked.push(model);
       const x = replies.shift() ?? "";
       if (x instanceof Error) throw x;
       return { text: x, model, usage: { input: 1, output: 1, reasoning: null }, ms: 1 };
+    }),
+    submitBackground: vi.fn(async (model: string, r: any) => {
+      asked.push(model);
+      sent.push({ model, prompt: r.prompt });
+      const id = `resp-${++bg.submitted}`;
+      background.set(id, replies.shift() ?? "");
+      return { id };
+    }),
+    pollBackground: vi.fn(async (id: string) => {
+      if (bg.stillThinking > 0) {
+        bg.stillThinking--;
+        return { status: "running" };
+      }
+      const x = background.get(id);
+      if (x instanceof Error) return { status: "failed", error: x.message };
+      return {
+        status: "done",
+        reply: { text: x ?? "", usage: { input: 1, output: 1, reasoning: null } },
+      };
     }),
   };
 });
@@ -42,7 +70,13 @@ import { TARGETS_PROMPT, targetsUserPrompt } from "@/lib/nutrition-ai-prompts";
 import { DEFAULT_ROUTES, STRONG_MODELS, resolveRoute } from "@/lib/ai/routing";
 import { developmentText } from "@/lib/program-intel/athlete-development";
 import { nutritionAthleteText } from "@/lib/nutrition-targets/nutrition-athlete";
-import { askNutrition, withPrepFix } from "@/lib/nutrition-ai-plans.server";
+import {
+  nutritionCall,
+  nutritionPollConfig,
+  runPlan,
+  withPrepFix,
+} from "@/lib/nutrition-ai-plans.server";
+import { WaitingForModel, type CallState } from "@/lib/ai/staged-call.server";
 
 const day = (start: string, n: number) =>
   new Date(Date.parse(`${start}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
@@ -374,11 +408,12 @@ describe("a written meal plan is checked against its targets", () => {
   });
 });
 
-describe("routing: the targets are a coaching decision, the meal plan is writing", () => {
-  it("nutrition targets go only to the strong tier; meal plans go fast first", () => {
+describe("routing: the targets are a coaching decision, the meal plan is writing, all on the OpenAI key", () => {
+  it("nutrition targets go only to the strong tier; meal plans on GPT-5.5; nothing through Lovable", () => {
     expect(DEFAULT_ROUTES.nutrition.strongOnly).toBe(true);
+    expect(DEFAULT_ROUTES.nutrition.models).toEqual(["openai:gpt-6-astra", "openai:gpt-5.5"]);
     expect(DEFAULT_ROUTES.nutrition.models.every((m) => STRONG_MODELS.includes(m))).toBe(true);
-    expect(DEFAULT_ROUTES.nutrition_write.models[0]).toBe("gateway:google/gemini-3-flash-preview");
+    expect(DEFAULT_ROUTES.nutrition_write.models).toEqual(["openai:gpt-5.5", "openai:gpt-5-mini"]);
     // an override can't hand the targets to a weaker model
     expect(
       resolveRoute("nutrition", { nutrition: ["gateway:google/gemini-3-flash-preview"] }).models,
@@ -388,42 +423,104 @@ describe("routing: the targets are a coaching decision, the meal plan is writing
   const sb = {
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
   };
+  const before = { ...nutritionPollConfig };
   beforeEach(() => {
     replies.length = 0;
     asked.length = 0;
+    background.clear();
+    bg.stillThinking = 0;
+    bg.submitted = 0;
+    Object.assign(nutritionPollConfig, { ms: 0, every: 0 });
+    return () => Object.assign(nutritionPollConfig, before);
   });
+  const run = (
+    state: CallState,
+    saves: CallState[],
+    task: "nutrition" | "nutrition_write" = "nutrition",
+    key = "targets",
+  ) =>
+    nutritionCall(
+      sb,
+      state,
+      async () => void saves.push(JSON.parse(JSON.stringify(state))),
+      task,
+      key,
+      "s",
+      "p",
+    );
 
   it("falls back to the next strong model, never to a weaker one, and says so when none answers", async () => {
     replies.push(new Error("busy"), "CALORIE TARGETS");
-    const r = await askNutrition(sb, "nutrition", "s", "p", Date.now() + 300_000);
-    expect(r).toEqual({ text: "CALORIE TARGETS", model: "gateway:openai/gpt-5.5" });
-    expect(asked).toEqual(["openai:gpt-6-astra", "gateway:openai/gpt-5.5"]);
+    const state: CallState = {};
+    const r = await run(state, []);
+    expect(r).toEqual({ text: "CALORIE TARGETS", model: "openai:gpt-5.5" });
+    expect(asked).toEqual(["openai:gpt-6-astra", "openai:gpt-5.5"]);
+    // kept: asking again never calls a model
+    expect(await run(state, [])).toEqual(r);
+    expect(asked).toHaveLength(2);
     replies.push(new Error("busy"), new Error("busy"));
-    await expect(askNutrition(sb, "nutrition", "s", "p", Date.now() + 300_000)).rejects.toThrow(
-      /aren't handed to a weaker model/,
-    );
-    expect(asked).not.toContain("gateway:google/gemini-3-flash-preview");
+    await expect(run({}, [])).rejects.toThrow(/aren't handed to a weaker model/);
+    expect(asked.every((m) => m.startsWith("openai:"))).toBe(true);
   });
 
-  it("never runs past the plan's time budget", async () => {
-    await expect(askNutrition(sb, "nutrition_write", "s", "p", Date.now() + 5_000)).rejects.toThrow(
-      /out of time/,
+  it("while the model thinks the request hands back, and the next one polls the same call", async () => {
+    replies.push("MEAL PLAN");
+    bg.stillThinking = 1;
+    const state: CallState = {};
+    const saves: CallState[] = [];
+    await expect(run(state, saves, "nutrition_write", "meals")).rejects.toBeInstanceOf(
+      WaitingForModel,
     );
-    expect(asked).toEqual([]);
+    // the call it's waiting on is saved before the request hands back
+    expect(saves.at(-1)?.pending?.meals).toMatchObject({ id: "resp-1", model: "openai:gpt-5.5" });
+    const r = await run(state, saves, "nutrition_write", "meals");
+    expect(r).toEqual({ text: "MEAL PLAN", model: "openai:gpt-5.5" });
+    // submitted once, never twice
+    expect(asked).toEqual(["openai:gpt-5.5"]);
+    expect(state.pending?.meals).toBeUndefined();
   });
 
-  it("the plan writer routes through it, with no direct gateway calls left", () => {
+  it("a meal-plan fix still thinking carries on next request instead of dropping the fix", async () => {
+    const waiting = withPrepFix(
+      plan(150),
+      "x",
+      async () => {
+        throw new WaitingForModel();
+      },
+      SMALL_TARGETS,
+    );
+    await expect(waiting).rejects.toBeInstanceOf(WaitingForModel);
+  });
+
+  it("the plan writer runs staged on the shared helper, with no Lovable calls left", () => {
     const server = readFileSync("src/lib/nutrition-ai-plans.server.ts", "utf8");
-    expect(server).toMatch(/askNutrition\(\s*sb,\s*"nutrition",\s*TARGETS_PROMPT/);
-    expect(server).toMatch(
-      /askNutrition\(sb, "nutrition_write", MEAL_PLAN_PROMPT, mealPrompt, deadline\)/,
+    expect(server).toContain(
+      'nutritionCall(sb, progress, save, "nutrition", "targets", TARGETS_PROMPT, progress.targetsPrompt)',
+    );
+    expect(server).toContain(
+      'nutritionCall(sb, progress, save, "nutrition_write", "meals", MEAL_PLAN_PROMPT, mealPrompt)',
     );
     expect(server).toContain("loadNutritionAthlete(sb, sub.client_id)");
+    // still thinking: back in line, never an error
+    expect(server).toMatch(
+      /if \(e instanceof WaitingForModel\) \{\s*await sb\.from\("nutrition_ai_plans"\)\.update\(\{ status: "pending"/,
+    );
+    // a new run or update starts clean
+    expect(server).toMatch(
+      /revisions: \[\],\s*\/\/ and a run starts from the beginning\s*progress: null,/,
+    );
     // the meal plan is the client's: COACH NOTES never reaches its writer
-    expect(server).toContain("mealPlanUserPrompt(qas, withoutCoachNotes(targetsText)");
+    expect(server).toContain("mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText)");
     expect(server).toContain("targetsText: withoutCoachNotes(targetsText)");
     expect(server).not.toContain("createLovableAiGateway");
     expect(server).not.toContain("global_ai_config");
+    const pipeline = readFileSync("src/lib/program-intel/pipeline.server.ts", "utf8");
+    expect(pipeline).toContain("stagedCall({");
+    const sql = readFileSync(
+      "supabase/migrations/20270223090000_nutrition_plans_openai_background.sql",
+      "utf8",
+    );
+    expect(sql).toContain("add column if not exists progress jsonb");
   });
 });
 
@@ -562,5 +659,75 @@ describe("the athlete read, end to end on a real scenario", () => {
     expect(text).toContain("Lifts (competition lift e1RMs");
     expect(text).toMatch(/Adherence: /);
     expect(text).not.toContain("Exercise by exercise");
+  });
+});
+
+describe("a Nutrition Update plan runs across requests while OpenAI thinks", () => {
+  /** Just the tables a run in flight touches once its prompts are built. */
+  function fakeDb(progress: any) {
+    const row: any = { submission_id: "s1", status: "generating", progress };
+    const db = {
+      from(table: string) {
+        const q: any = {
+          select: () => q,
+          eq: () => q,
+          maybeSingle: async () =>
+            table === "nf_submissions"
+              ? { data: { client_id: "c1" } }
+              : table === "nutrition_ai_plans"
+                ? { data: { progress: row.progress } }
+                : { data: null },
+          upsert: async (v: any) => {
+            Object.assign(row, v);
+            return { error: null };
+          },
+          update: (v: any) => {
+            Object.assign(row, JSON.parse(JSON.stringify(v)));
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+        return q;
+      },
+    };
+    return { db, row };
+  }
+  const TARGETS_REPLY =
+    "CALORIE TARGETS\nTraining Day: 1060\n\nMACRO TARGETS\n\nTraining Day\nProtein: 100\nCarbs: 120\nFats: 20\n\nCOACH NOTES\nWhy: secret reasoning\nFlags: none";
+
+  it("hands back while the targets think, then finishes without asking twice", async () => {
+    replies.length = 0;
+    asked.length = 0;
+    sent.length = 0;
+    background.clear();
+    bg.submitted = 0;
+    Object.assign(nutritionPollConfig, { ms: 0, every: 0 });
+    replies.push(TARGETS_REPLY, plan(120));
+    bg.stillThinking = 1;
+    const { db, row } = fakeDb({
+      kind: "plan",
+      calls: {},
+      pending: {},
+      targetsPrompt: "CLIENT DATA",
+      meals: { qas: [], phase: "Fat Loss", workoutMeals: "auto", history: null, previousMeals: "" },
+    });
+
+    expect(await runPlan(db, "s1")).toEqual({ status: "pending" });
+    expect(row.status).toBe("pending");
+    expect(row.progress.pending.targets).toMatchObject({
+      id: "resp-1",
+      model: "openai:gpt-6-astra",
+    });
+
+    expect(await runPlan(db, "s1")).toEqual({ status: "ready" });
+    expect(row).toMatchObject({
+      status: "ready",
+      progress: null,
+      targets_text: TARGETS_REPLY,
+      meal_plan_text: plan(120),
+      model: "targets openai:gpt-6-astra · meals openai:gpt-5.5",
+    });
+    // the targets were submitted once; the meal plan never saw COACH NOTES
+    expect(asked).toEqual(["openai:gpt-6-astra", "openai:gpt-5.5"]);
+    expect(sent[1].prompt).not.toContain("secret reasoning");
   });
 });

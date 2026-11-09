@@ -20,6 +20,7 @@ const TASK_LABEL: Record<string, string> = {
   edit: "Edit with AI",
   nutrition: "Nutrition targets (coaching decisions)",
   nutrition_write: "Writing meal plans and plan updates",
+  roadmap: "Roadmap words (block purpose, weekly focus)",
 };
 
 /** Admin only: which models run the coaching AI, whether they're reachable, and how the calls have gone. Nothing here changes a program. */
@@ -50,7 +51,7 @@ function AiSettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <PageHeader title="AI models" />
-      <p className="text-[13px] text-muted-foreground">Which models write and review programs. Coaching decisions only ever go to the top tier; if none answers, the run stops and says so. This page only reports: nothing here changes a program.</p>
+      <p className="text-[13px] text-muted-foreground">Which models write and review programs, nutrition plans and roadmap words. Every default runs on the OpenAI key, never Lovable credits. Coaching decisions only ever go to the top tier; if none answers, the run stops and says so. This page only reports: nothing here changes a program.</p>
       {q.isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : q.error ? (

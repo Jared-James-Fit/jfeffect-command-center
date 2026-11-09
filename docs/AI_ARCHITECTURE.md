@@ -1,7 +1,8 @@
 # AI architecture for programming
 
-How Generate Next Program, the coaching review and Edit with AI use models: which one
-answers what, how a slow model is waited for, and how the choice was made.
+How Generate Next Program, the coaching review, Edit with AI, the Nutrition Update AI and the
+roadmap words use models: which one answers what, how a slow model is waited for, and how the
+choice was made.
 
 ## Stages
 
@@ -19,14 +20,32 @@ Simple, deterministic changes (dates, moving a workout, Undo) never reach a mode
 
 ## Routing (`src/lib/ai/routing.ts`)
 
-- `strategy`, `review`, `interpret` are **strong only**: every model on the route is top tier.
-  If none answers, the run stops with a message that says so. A coaching decision is never
-  handed to a weaker model quietly.
-- `construct`, `repair` may fall back to a cheaper model; the model that answered is logged per
-  call (`program_intel_job_calls.model`) and shown in the job inspector.
-- `edit` (Edit with AI) keeps its own route.
-- `app_settings.ai_routes` (JSON, per task) overrides the defaults without a deploy; an override
-  on a strong-only task is filtered to the top tier.
+Every default route runs on the OpenAI key (`openai:`), never the Lovable gateway (Nov 9 2026:
+the coach doesn't want Lovable credits spent; direct calls also run in background mode, so they
+never hit the gateway's 524 or hold a request open).
+
+| Task | Models, in order | Effort |
+|---|---|---|
+| `strategy` (strong only) | GPT-6 Astra, GPT-5.5 | high |
+| `review`, `interpret` (strong only) | GPT-6 Astra, GPT-5.5 | medium |
+| `construct`, `repair` | GPT-5.5, GPT-6 Astra | low |
+| `edit` (Edit with AI) | GPT-5.5, GPT-5-mini | medium |
+| `nutrition` (Nutrition Update targets, strong only) | GPT-6 Astra, GPT-5.5 | medium |
+| `nutrition_write` (meal plans, their fix, coach updates) | GPT-5.5, GPT-5-mini | low |
+| `roadmap` (block purpose, weekly focus) | GPT-5-mini, GPT-5.5 | low |
+
+- `strategy`, `review`, `interpret`, `nutrition` are **strong only**: every model on the route is
+  top tier. If none answers, the run stops with a message that says so. A coaching decision is
+  never handed to a weaker model quietly.
+- `construct`, `repair` were Gemini 3 Flash first: the benchmark below found Flash and GPT-5.5
+  build to the same audit result, Flash 2-5x faster, but Flash only exists through the gateway,
+  so GPT-5.5 builds (in the background, slower) with Astra behind it.
+- GPT-5-mini is only ever on routes whose output code checks before it's used (Edit with AI's
+  `engine.ts`, the meal plan's `prepDrift` / `planTotalsIssues`, `parseRoadmapReply`).
+- The model that answered is logged per call (`program_intel_job_calls.model`,
+  `program_ai_edit_calls.model`) or kept on the row (`nutrition_ai_plans.model`).
+- `app_settings.ai_routes` (JSON, per task) overrides the defaults without a deploy (and can
+  still name a `gateway:` model); an override on a strong-only task is filtered to the top tier.
 
 Model refs: `openai:<id>` calls OpenAI directly (`OPENAI_API_KEY`); `gateway:<family>/<id>` goes
 through the Lovable AI gateway (chat completions for OpenAI and Google, the native Messages
@@ -35,7 +54,10 @@ route for Claude).
 ## Slow models
 
 A request on the hosting is cut off after a few minutes, and a strong model thinking hard on a
-long brief can take longer. Direct OpenAI calls run in **background mode**: the stage submits
+long brief can take longer. Direct OpenAI calls run in **background mode** through one helper,
+`stagedCall` (`src/lib/ai/staged-call.server.ts`), shared by Generate Next Program and the
+Nutrition Update AI (whose run state is `nutrition_ai_plans.progress`, and whose "still
+thinking" puts the row back to `pending`, which calls its hook again): the stage submits
 the request, keeps its id in `result.pending[key]`, polls for `pollConfig.ms` (45s), and if it
 isn't done throws `WaitingForModel`; the job goes back to `pending` and the next tick polls the same
 id (never a second submission), up to `BACKGROUND_LIMIT_MS`. A finished answer is kept in

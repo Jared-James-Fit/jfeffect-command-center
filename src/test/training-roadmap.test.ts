@@ -207,6 +207,14 @@ describe("roadmap wiring", () => {
     expect(sql).toMatch(/after insert or update of name[^;]*on public\.pl_blocks/);
   });
 
+  it("Cleo's words come from the router on the OpenAI key, never Lovable credits", async () => {
+    const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
+    expect(server).toContain('resolveRoute("roadmap", override)');
+    expect(server).not.toMatch(/createLovableAiGateway|global_ai_config/);
+    const { DEFAULT_ROUTES } = await import("@/lib/ai/routing");
+    expect(DEFAULT_ROUTES.roadmap.models).toEqual(["openai:gpt-5-mini", "openai:gpt-5.5"]);
+  });
+
   it("Cleo only ever writes her own columns", () => {
     const server = readFileSync("src/lib/training-roadmap.server.ts", "utf8");
     expect(server).not.toMatch(/coach_label|coach_summary/);

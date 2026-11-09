@@ -24,6 +24,7 @@ import {
 import { phaseFromText } from "@/lib/nutrition-cardio";
 import { planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { configuredHighWeekday } from "@/lib/client-nutrition-day";
+import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall, type CallState } from "@/lib/ai/staged-call.server";
 import { bodyweightAnswerKg, parseAiTargets, planTotalsIssues, safetyNotes, weeklyAverageKcal, withoutCoachNotes, type DayTargets } from "@/lib/nutrition-targets/nutrition-intel";
 import { calcAge, formatHeight, type HeightUnit } from "@/lib/basic-info";
 import { sexLabel } from "@/lib/athlete-sex";
@@ -257,6 +258,18 @@ async function coachSettings(sb: any, clientId: string): Promise<{ phase: string
   return { phase: st.phase ?? null, workoutMeals: st.workout_meals ?? null };
 }
 
+/**
+ * A run in flight (`nutrition_ai_plans.progress`): the prompts, built once (the
+ * targets prompt reads the athlete's whole history), the answers it already has
+ * and the OpenAI call it's waiting on (stagedCall).
+ */
+type PlanProgress = CallState & {
+  kind: "plan" | "update";
+  targetsPrompt?: string;
+  /** What the meal plan prompt needs once the targets are in. */
+  meals?: { qas: QA[]; phase: string | null; workoutMeals: WorkoutMealsMode; history: TrainingPattern | null; previousMeals: string };
+};
+
 export async function runPlan(
   sb: any,
   submissionId: string,
@@ -267,66 +280,69 @@ export async function runPlan(
   // The row goes in first, so the coach's panel shows it building, and
   // anything that goes wrong after this (a lookup, the AI) is on the row as
   // the error instead of leaving no trace.
-  const startedMs = Date.now();
-  const startedAt = new Date(startedMs).toISOString();
+  const startedAt = new Date().toISOString();
   const { data: subRow } = await sb.from("nf_submissions").select("client_id").eq("id", submissionId).maybeSingle();
   if (!subRow) throw new Error("Submission not found");
+  const { data: current } = await sb.from("nutrition_ai_plans").select("progress").eq("submission_id", submissionId).maybeSingle();
   const { error: rowError } = await sb.from("nutrition_ai_plans").upsert(
     { submission_id: submissionId, client_id: subRow.client_id, status: "generating", error: null, updated_at: startedAt },
     { onConflict: "submission_id" },
   );
   if (rowError) throw new Error(rowError.message);
+  // A run already in flight carries on where the last request stopped.
+  const progress: PlanProgress = current?.progress?.kind === "plan" ? current.progress : { kind: "plan", calls: {}, pending: {} };
+  const save = async () => {
+    await sb.from("nutrition_ai_plans").update({ progress }).eq("submission_id", submissionId);
+  };
   try {
-    const { sub, qas } = await loadQAs(sb, submissionId);
-    const { loadProgramContext } = await import("@/lib/program-context.server");
-    // The plan they were on, snapshotted the first time so a regenerate after
-    // it was replaced or deleted still sees it.
-    const { data: planRow } = await sb.from("nutrition_ai_plans").select("previous_plan").eq("submission_id", submissionId).maybeSingle();
-    let previous = (planRow?.previous_plan ?? null) as PreviousPlan | null;
-    if (!previous) {
-      previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
-      if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
-    }
-    const [coach, basics, history, program, cardioRows, trainingDays, athlete] = await Promise.all([
-      coachSettings(sb, sub.client_id),
-      loadClientBasics(sb, sub.client_id),
-      // Never let a history lookup block the plan.
-      loadTrainingPattern(sb, sub.client_id).catch(() => null),
-      // Which block / week they're in, so fuel matches training demand.
-      loadProgramContext(sb, sub.client_id),
-      // Their cardio now: the AI adjusts it with the calories.
-      loadCardioRows(sb, sub.client_id),
-      loadTrainingDays(sb, sub.client_id).catch(() => [] as string[]),
-      // Their records as Program Intelligence reads them (never blocks the plan).
-      loadNutritionAthlete(sb, sub.client_id),
-    ]);
-    const selected = phaseOverride ?? coach.phase;
-    const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
-    const goalAnswer = qas.find((q) => /^goal$/i.test(q.label.trim()))?.value ?? "";
-    const phase = selected ?? phaseFromText(goalAnswer);
-    await sb.from("nutrition_ai_plans").update({ phase, workout_meals: workoutMeals }).eq("submission_id", submissionId);
-
-    // The targets are the coaching decision (the strong tier); the meal plan is writing to them.
-    const deadline = startedMs + RUN_BUDGET_MS;
-    const t = await askNutrition(
-      sb,
-      "nutrition",
-      TARGETS_PROMPT,
-      targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays }), {
+    if (!progress.targetsPrompt || !progress.meals) {
+      const { sub, qas } = await loadQAs(sb, submissionId);
+      const { loadProgramContext } = await import("@/lib/program-context.server");
+      // The plan they were on, snapshotted the first time so a regenerate after
+      // it was replaced or deleted still sees it.
+      const { data: planRow } = await sb.from("nutrition_ai_plans").select("previous_plan").eq("submission_id", submissionId).maybeSingle();
+      let previous = (planRow?.previous_plan ?? null) as PreviousPlan | null;
+      if (!previous) {
+        previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
+        if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
+      }
+      const [coach, basics, history, program, cardioRows, trainingDays, athlete] = await Promise.all([
+        coachSettings(sb, sub.client_id),
+        loadClientBasics(sb, sub.client_id),
+        // Never let a history lookup block the plan.
+        loadTrainingPattern(sb, sub.client_id).catch(() => null),
+        // Which block / week they're in, so fuel matches training demand.
+        loadProgramContext(sb, sub.client_id),
+        // Their cardio now: the AI adjusts it with the calories.
+        loadCardioRows(sb, sub.client_id),
+        loadTrainingDays(sb, sub.client_id).catch(() => [] as string[]),
+        // Their records as Program Intelligence reads them (never blocks the plan).
+        loadNutritionAthlete(sb, sub.client_id),
+      ]);
+      const selected = phaseOverride ?? coach.phase;
+      const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
+      const goalAnswer = qas.find((q) => /^goal$/i.test(q.label.trim()))?.value ?? "";
+      const phase = selected ?? phaseFromText(goalAnswer);
+      await sb.from("nutrition_ai_plans").update({ phase, workout_meals: workoutMeals }).eq("submission_id", submissionId);
+      progress.targetsPrompt = targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays }), {
         athlete: athlete?.text ?? null,
         safety: safetyNotes(qas),
-      }),
-      deadline - WRITE_RESERVE_MS,
-    );
-    const targetsText = cleanAiText(t.text);
+      });
+      progress.meals = { qas, phase, workoutMeals, history, previousMeals: previousMealsText(previous) };
+      await save();
+    }
 
+    // The targets are the coaching decision (the strong tier); the meal plan is writing to them.
+    const t = await nutritionCall(sb, progress, save, "nutrition", "targets", TARGETS_PROMPT, progress.targetsPrompt);
+    const targetsText = cleanAiText(t.text);
+    const mi = progress.meals;
     // The meal plan is the client's: the targets' COACH NOTES (reasoning, health flags) stay out of it.
-    const mealPrompt = mealPlanUserPrompt(qas, withoutCoachNotes(targetsText) ?? "", phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), workoutMeals, history, previousMealsText(previous));
-    const m = await askNutrition(sb, "nutrition_write", MEAL_PLAN_PROMPT, mealPrompt, deadline);
+    const mealPrompt = mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText) ?? "", mi.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), mi.workoutMeals, mi.history, mi.previousMeals);
+    const m = await nutritionCall(sb, progress, save, "nutrition_write", "meals", MEAL_PLAN_PROMPT, mealPrompt);
     const mealPlanText = await withPrepFix(
       cleanAiText(m.text),
       mealPrompt,
-      (prompt) => (deadline - Date.now() > FIX_MIN_MS ? askNutrition(sb, "nutrition_write", MEAL_PLAN_PROMPT, prompt, deadline).then((r) => r.text) : Promise.resolve("")),
+      (prompt) => nutritionCall(sb, progress, save, "nutrition_write", "fix", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
       parseAiTargets(targetsText),
     );
     const modelId = `targets ${t.model} · meals ${m.model}`;
@@ -336,18 +352,25 @@ export async function runPlan(
       targets_text: targetsText,
       meal_plan_text: mealPlanText,
       model: modelId,
+      progress: null,
       generated_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("submission_id", submissionId);
     if (notifyStaff) {
       const { notifyAppEvent } = await import("@/lib/push/app-events.server");
-      await notifyAppEvent(sb, "nutrition_plan_ready", { clientId: sub.client_id, sourceId: submissionId });
+      await notifyAppEvent(sb, "nutrition_plan_ready", { clientId: subRow.client_id, sourceId: submissionId });
     }
     return { status: "ready" as const };
   } catch (e: any) {
+    // Still thinking: back in line (which calls the hook again), carrying on from `progress`.
+    if (e instanceof WaitingForModel) {
+      await sb.from("nutrition_ai_plans").update({ status: "pending", updated_at: new Date().toISOString() }).eq("submission_id", submissionId);
+      return { status: "pending" as const };
+    }
     await sb.from("nutrition_ai_plans").update({
       status: "error",
       error: String(e?.message ?? e).slice(0, 500),
+      progress: null,
       updated_at: new Date().toISOString(),
     }).eq("submission_id", submissionId);
     return { status: "error" as const, error: String(e?.message ?? e) };
@@ -367,7 +390,13 @@ export async function withPrepFix(draft: string, userPrompt: string, ask: (promp
   const before = issues(draft);
   const count = (x: ReturnType<typeof issues>) => x.drift.length + x.totals.length;
   if (!count(before)) return draft;
-  const fixed = cleanAiText(await ask(mealPrepFixPrompt(userPrompt, draft, before.drift, before.totals)).catch(() => ""));
+  const fixed = cleanAiText(
+    await ask(mealPrepFixPrompt(userPrompt, draft, before.drift, before.totals)).catch((e) => {
+      // still thinking: the run carries on next request; any other failure keeps the draft
+      if (e instanceof WaitingForModel) throw e;
+      return "";
+    }),
+  );
   if (!fixed || !revisionLooksRight("meals", draft, fixed)) return draft;
   if (planMenus(fixed).length !== planMenus(draft).length) return draft;
   return count(issues(fixed)) < count(before) ? fixed : draft;
@@ -376,24 +405,30 @@ export async function withPrepFix(draft: string, userPrompt: string, ask: (promp
 /* ------------------------------------------------------------------------ */
 /* Which model answers                                                       */
 
-/** A whole plan (targets, meals, one fix) finishes inside one background request. */
-export const RUN_BUDGET_MS = 270_000;
-/** Kept back from the targets for writing the meal plan. */
-const WRITE_RESERVE_MS = 90_000;
-/** The fix only runs with this much of the budget left. */
-const FIX_MIN_MS = 45_000;
-/** Each model's own limit: the first gets longer (a strong model thinks), the fallback less. */
-const FIRST_MODEL_MS = 150_000;
-const NEXT_MODEL_MS = 110_000;
+/** How long one request polls an OpenAI background call before handing back (like the generator's). */
+export const nutritionPollConfig = { ms: 45_000, every: 4000 };
+/** A background call that hasn't answered by now is given up on (and the next model tried). */
+const BACKGROUND_LIMIT_MS = 20 * 60_000;
+/** A gateway model (only when an admin override names one) is waited on in the request. */
+const SYNC_TIMEOUT_MS = 240_000;
 
 /**
  * One nutrition call, routed like the training AI (src/lib/ai/routing.ts: "nutrition" for the
- * targets, the strong tier only; "nutrition_write" for meal plans, fast first; an admin
- * override in app_settings.ai_routes wins), trying the next model when one fails or runs out of
- * time, never past `deadline`.
+ * targets, the strong tier only; "nutrition_write" for meal plans and updates; an admin override
+ * in app_settings.ai_routes wins), on the OpenAI key in background mode: the answer, or the call
+ * it's waiting on, is kept in `state` under `key` (stagedCall), so a request never waits more
+ * than ~45 s and a resumed run never asks twice. Throws WaitingForModel while it thinks.
  */
-export async function askNutrition(sb: any, task: "nutrition" | "nutrition_write", system: string, prompt: string, deadline: number): Promise<{ text: string; model: string }> {
-  const { callModel, ModelHttpError } = await import("@/lib/ai/model-client.server");
+export async function nutritionCall(
+  sb: any,
+  state: CallState,
+  save: () => Promise<void>,
+  task: "nutrition" | "nutrition_write",
+  key: string,
+  system: string,
+  prompt: string,
+): Promise<{ text: string; model: string }> {
+  if (state.calls?.[key]) return state.calls[key];
   const { resolveRoute } = await import("@/lib/ai/routing");
   const { data } = await sb.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
   let override: any = null;
@@ -403,27 +438,25 @@ export async function askNutrition(sb: any, task: "nutrition" | "nutrition_write
     override = null;
   }
   const route = resolveRoute(task, override);
-  const errors: string[] = [];
-  for (const [i, model] of route.models.entries()) {
-    const timeoutMs = Math.min(i === 0 ? FIRST_MODEL_MS : NEXT_MODEL_MS, deadline - Date.now());
-    if (timeoutMs < 20_000) {
-      errors.push(`${model}: out of time`);
-      break;
-    }
-    try {
-      const r = await callModel(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, timeoutMs, temperature: 0.3 });
-      if (!r.text.trim()) throw new Error("an empty answer");
-      return { text: r.text, model };
-    } catch (e: any) {
-      if (e instanceof ModelHttpError && e.status === 402) throw new Error("Lovable AI credits are used up. Add credits in Lovable, then Regenerate.");
-      errors.push(`${model}: ${String(e?.message ?? e).slice(0, 120)}`);
-    }
+  try {
+    return await stagedCall({
+      state,
+      key,
+      route,
+      req: { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.3 },
+      save,
+      poll: nutritionPollConfig,
+      backgroundLimitMs: BACKGROUND_LIMIT_MS,
+      syncTimeoutMs: SYNC_TIMEOUT_MS,
+    });
+  } catch (e) {
+    if (!(e instanceof ModelsExhausted)) throw e;
+    throw new Error(
+      (route.strongOnly
+        ? `The coaching model didn't answer (tried ${e.tried.join(", ")}). Nutrition targets aren't handed to a weaker model; Regenerate in a few minutes.`
+        : `No model answered (tried ${e.tried.join(", ")}). Try again in a few minutes.`) + (e.noOpenAiCredits ? OPENAI_CREDITS_HINT : ""),
+    );
   }
-  throw new Error(
-    route.strongOnly
-      ? `The coaching model didn't answer (${errors.join("; ")}). Nutrition targets aren't handed to a weaker model; Regenerate in a few minutes.`
-      : `No model answered (${errors.join("; ")}). Try again in a few minutes.`,
-  );
 }
 
 /**
@@ -497,6 +530,8 @@ export async function queueNutritionPlan(
       // A whole new plan: earlier updates (and their Undo) belong to the old one.
       revise_instructions: null,
       revisions: [],
+      // and a run starts from the beginning
+      progress: null,
       updated_at: now,
     },
     { onConflict: "submission_id" },
@@ -530,7 +565,7 @@ export async function queueNutritionRevision(sb: any, submissionId: string, inst
   if (row.status !== "ready") throw new Error("The plan isn't ready to update");
   const { error } = await sb
     .from("nutrition_ai_plans")
-    .update({ status: "pending", revise_instructions: instructions.trim(), error: null, updated_at: new Date().toISOString() })
+    .update({ status: "pending", revise_instructions: instructions.trim(), error: null, progress: null, updated_at: new Date().toISOString() })
     .eq("submission_id", submissionId);
   if (error) throw new Error(error.message);
   return { status: "pending" as const };
@@ -568,7 +603,7 @@ export async function undoNutritionRevision(sb: any, submissionId: string) {
 export async function runRevision(sb: any, submissionId: string, instructions: string, notifyStaff = false) {
   const { data: row } = await sb
     .from("nutrition_ai_plans")
-    .select("client_id, targets_text, meal_plan_text, phase, workout_meals, revisions")
+    .select("client_id, targets_text, meal_plan_text, phase, workout_meals, revisions, progress")
     .eq("submission_id", submissionId)
     .maybeSingle();
   if (!row?.meal_plan_text) {
@@ -576,24 +611,31 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
     await sb.from("nutrition_ai_plans").update({ revise_instructions: null }).eq("submission_id", submissionId);
     return runPlan(sb, submissionId, row?.phase ?? null, notifyStaff, (row?.workout_meals as WorkoutMealsMode | null) ?? null);
   }
+  // An update already in flight carries on where the last request stopped.
+  const progress: PlanProgress = row.progress?.kind === "update" ? row.progress : { kind: "update", calls: {}, pending: {} };
+  const save = async () => {
+    await sb.from("nutrition_ai_plans").update({ progress }).eq("submission_id", submissionId);
+  };
   try {
     const { qas } = await loadQAs(sb, submissionId);
     const history = await loadTrainingPattern(sb, row.client_id).catch(() => null);
-    const deadline = Date.now() + RUN_BUDGET_MS;
     const models: string[] = [];
 
     const oldTargets = String(row.targets_text ?? "");
     let targetsText = oldTargets;
     if (oldTargets.trim()) {
-      const t = await askNutrition(sb, "nutrition_write", REVISE_TARGETS_PROMPT, reviseTargetsUserPrompt(oldTargets, instructions), deadline - WRITE_RESERVE_MS);
+      const t = await nutritionCall(sb, progress, save, "nutrition_write", "update_targets", REVISE_TARGETS_PROMPT, reviseTargetsUserPrompt(oldTargets, instructions));
       models.push(`targets ${t.model}`);
       const next = cleanAiText(t.text);
       if (revisionLooksRight("targets", oldTargets, next)) targetsText = next;
     }
     const phase = row.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]);
-    const m = await askNutrition(
+    const m = await nutritionCall(
       sb,
+      progress,
+      save,
       "nutrition_write",
+      "update_meals",
       MEAL_PLAN_PROMPT,
       reviseMealPlanUserPrompt({
         qas,
@@ -604,7 +646,6 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
         workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
         history,
       }),
-      deadline,
     );
     models.push(`meals ${m.model}`);
     const modelId = `update · ${models.join(" · ")}`;
@@ -626,6 +667,7 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
       revisions,
       error: null,
       model: modelId,
+      progress: null,
       generated_at: now,
       updated_at: now,
     }).eq("submission_id", submissionId);
@@ -635,10 +677,16 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
     }
     return { status: "ready" as const };
   } catch (e: any) {
+    // Still thinking: back in line as the same update, carrying on from `progress`.
+    if (e instanceof WaitingForModel) {
+      await sb.from("nutrition_ai_plans").update({ status: "pending", updated_at: new Date().toISOString() }).eq("submission_id", submissionId);
+      return { status: "pending" as const };
+    }
     const msg = String(e?.message ?? e);
     await sb.from("nutrition_ai_plans").update({
       status: "ready",
       error: msg.slice(0, 500),
+      progress: null,
       updated_at: new Date().toISOString(),
     }).eq("submission_id", submissionId);
     return { status: "error" as const, error: msg };
