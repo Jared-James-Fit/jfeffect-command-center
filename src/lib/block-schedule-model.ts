@@ -26,6 +26,7 @@
  * scheduled end.
  */
 import { addDays, format } from "date-fns";
+import { plannedStart } from "@/lib/program-intel/horizon";
 import { parseLocalDate } from "@/lib/today";
 
 export type ScheduleBlockStatus =
@@ -42,6 +43,8 @@ export type ScheduleBlockInput = {
   prep_id?: string | null;
   status?: string | null;
   archived?: boolean | null;
+  /** false: a coach's draft the client can't see yet (a generated program waiting to be assigned). */
+  client_visible?: boolean | null;
   completed_at?: string | null;
   start_date?: string | null;
   end_date?: string | null;
@@ -413,6 +416,30 @@ export function gapDays(prevEnd: string | null, nextStart: string | null): numbe
 }
 
 /** Suggested start for the next block: the day after the current one ends. */
+/**
+ * The best start for the next block: the Monday after the client's most recent program ends, or
+ * next Monday when nothing runs past today (the same rule as Generate Next Program's planned start,
+ * `plannedStart`), so a new block lines up with the week and never overlaps or leaves a stray gap.
+ * `exclude` leaves out the block(s) being scheduled (a draft that already carries dates). Pure.
+ */
+export function bestNextStart(
+  blocks: ScheduleBlock[],
+  today: string = todayISO(),
+  exclude: ReadonlySet<string> = new Set(),
+): { date: string; why: string; after: ScheduleBlock | null } {
+  const last =
+    blocks
+      .filter((b) => !exclude.has(b.id) && b.status_derived !== "Archived" && !b.archived && b.effective_end && b.effective_end >= today)
+      .sort((a, b) => String(b.effective_end).localeCompare(String(a.effective_end)))[0] ?? null;
+  const p = plannedStart(today, last?.effective_end ?? null);
+  const afterLast = !!last && p.date > (last.effective_end as string);
+  return {
+    date: p.date,
+    why: afterLast ? `the Monday after ${last!.name ?? "the last block"} ends` : "next Monday, with nothing else running",
+    after: afterLast ? last : null,
+  };
+}
+
 export function suggestedNextStart(
   current: ScheduleBlock | null,
   today: string = todayISO(),

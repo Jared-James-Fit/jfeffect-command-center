@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { format, parseISO } from "date-fns";
 import {
@@ -43,12 +43,14 @@ import {
 } from "@/lib/use-client-training-schedule";
 import {
   currentBlock as pickCurrent, upcomingBlocks, draftBlocks, historyBlocks,
-  findOverlaps, gapDays, suggestedNextStart, todayISO, addDaysISO,
+  findOverlaps, gapDays, suggestedNextStart, bestNextStart, todayISO, addDaysISO,
   formatRange, durationLabel, STATUS_LABEL, type ScheduleBlock,
 } from "@/lib/block-schedule-model";
 import {
   previewEndBlockEarlyFn, endBlockEarlyFn, setBlockScheduleFn,
 } from "@/lib/block-lifecycle.functions";
+import { assignIntelDraftFn } from "@/lib/program-intel/intel.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 type View = "schedule" | "calendar" | "history";
 
@@ -842,7 +844,7 @@ export function ChangeBlockDatesDialog({
 }
 
 export function AddNextBlockDialog({
-  open, onOpenChange, blocks, current, onDone, onAssignLibrary, initialBlockId,
+  open, onOpenChange, clientId, blocks, current, onDone, onAssignLibrary, initialBlockId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -856,20 +858,66 @@ export function AddNextBlockDialog({
   initialBlockId?: string | null;
 }) {
   const setSchedule = useServerFn(setBlockScheduleFn);
+  const assignDraft = useServerFn(assignIntelDraftFn);
   const candidates = blocks.filter(
-    (b) => b.id !== current?.id && (b.status_derived === "Draft" || b.status_derived === "Upcoming"),
+    (b) => b.id !== current?.id && (b.status_derived === "Draft" || b.status_derived === "Upcoming" || (b.status_derived === "Active" && b.client_visible === false)),
   );
   const [blockId, setBlockId] = useState(
     (initialBlockId && candidates.some((b) => b.id === initialBlockId) ? initialBlockId : null) ?? candidates[0]?.id ?? "",
   );
-  const [start, setStart] = useState(suggestedNextStart(current));
+  // A program written with Generate Next Program goes on whole (its blocks back to back), through
+  // the same Assign as its own page: visible to the client, workouts on their training days.
+  const drafts = useQuery({
+    queryKey: ["intel-ready-drafts", clientId],
+    enabled: open,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("program_intel_jobs")
+        .select("id, result")
+        .eq("client_id", clientId)
+        .eq("kind", "generate")
+        .eq("status", "ready");
+      return ((data ?? []) as Array<{ id: string; result: any }>).map((j) => ({
+        id: j.id,
+        blockIds: ((j.result?.blockIds ?? []) as string[]).filter(Boolean),
+        failed: j.result?.audit?.overall === "failed",
+      }));
+    },
+  });
+  const draft = (drafts.data ?? []).find((d) => d.blockIds.includes(blockId)) ?? null;
+  const draftBlocks = draft ? draft.blockIds.map((id) => blocks.find((b) => b.id === id)).filter((b): b is ScheduleBlock => !!b) : [];
+  const exclude = useMemo(() => new Set(draft ? draft.blockIds : [blockId]), [draft, blockId]);
+  const best = useMemo(() => bestNextStart(blocks, todayISO(), exclude), [blocks, exclude]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const start = picked ?? best.date;
+  const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const chosen = candidates.find((b) => b.id === blockId) ?? null;
   const dur = Number(chosen?.week_duration_days ?? 7) || 7;
-  const expectedEnd = chosen?.weeks ? addDaysISO(start, Number(chosen.weeks) * dur - 1) : null;
-  const gap = gapDays(current?.effective_end ?? null, start);
-  const overlaps = !!current?.effective_end && start <= current.effective_end;
+  const totalWeeks = draft ? draftBlocks.reduce((n, b) => n + (Number(b.weeks) || 0), 0) : Number(chosen?.weeks ?? 0);
+  const expectedEnd = totalWeeks ? addDaysISO(start, totalWeeks * dur - 1) : null;
+  const before = best.after;
+  const gap = gapDays(before?.effective_end ?? null, start);
+  const overlaps = !!before?.effective_end && start <= before.effective_end;
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      if (draft) {
+        const r: any = await assignDraft({ data: { jobId: draft.id, startDate: start, acknowledgeAudit: ack, allowOverlap: overlaps } });
+        toast.success(`Program starts ${pretty(start)}`, { description: r?.placedOnTrainingDays ? "Its workouts are on their training days." : undefined });
+      } else {
+        const r: any = await setSchedule({ data: { blockId, startDate: start, start: true } });
+        toast.success(`Block starts ${pretty(start)}`, { description: r?.placedOnTrainingDays ? "Its workouts are on their training days." : undefined });
+      }
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message ?? "Could not start this block");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -890,7 +938,7 @@ export function AddNextBlockDialog({
           <div className="space-y-3">
             <div>
               <Label>Block</Label>
-              <Select value={blockId} onValueChange={setBlockId}>
+              <Select value={blockId} onValueChange={(v) => { setBlockId(v); setPicked(null); }}>
                 <SelectTrigger className="min-h-[44px]"><SelectValue placeholder="Choose block" /></SelectTrigger>
                 <SelectContent>
                   {candidates.map((b) => (
@@ -900,25 +948,42 @@ export function AddNextBlockDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {draft && draftBlocks.length > 1 && (
+                <p className="mt-1 text-[12px] text-muted-foreground" data-generated-draft>
+                  Written with Generate Next Program: its {draftBlocks.length} blocks ({totalWeeks} weeks) start together, back to back.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="next-block-start">Start date</Label>
-              <Input id="next-block-start" type="date" className="min-h-[44px]" value={start} onChange={(e) => setStart(e.target.value)} />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Suggested: the day after the current block ends ({pretty(suggestedNextStart(current))}).
-              </p>
+              <Input id="next-block-start" type="date" className="min-h-[44px]" value={start} onChange={(e) => setPicked(e.target.value || null)} />
+              <div className="mt-1 flex items-center justify-between gap-2 text-[12px] text-muted-foreground" data-best-start>
+                <span>Best start: {pretty(best.date)}, {best.why}{before?.effective_end ? ` (${pretty(before.effective_end)})` : ""}.</span>
+                {start !== best.date && (
+                  <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[12px]" onClick={() => setPicked(null)}>
+                    Use it
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="rounded-md border border-border bg-secondary/20 p-3 text-xs">
               <div>Start: <span className="font-semibold">{pretty(start)}</span></div>
               <div>Expected end: <span className="font-semibold">{pretty(expectedEnd)}</span></div>
-              {gap > 0 && <div className="mt-1 text-amber-600 dark:text-amber-400">{gap}-day training gap (allowed)</div>}
+              {gap > 0 && <div className="mt-1 text-amber-600 dark:text-amber-400">{gap}-day gap after {before?.name ?? "the last block"} (allowed)</div>}
               {overlaps && (
                 <div className="mt-1 inline-flex items-start gap-1 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                  Overlaps the current block ({formatRange(current?.effective_start, current?.effective_end)}).
+                  Overlaps {before?.name ?? "the last block"} ({formatRange(before?.effective_start, before?.effective_end)}).
                 </div>
               )}
+              <div className="mt-1 text-muted-foreground">They'll see it, with its workouts on their training days.</div>
             </div>
+            {draft?.failed && (
+              <label className="flex items-start gap-2 text-[12px]">
+                <input type="checkbox" className="mt-0.5 h-4 w-4" checked={ack} onChange={(e) => setAck(e.target.checked)} />
+                <span>Its quality check failed. Start it anyway (you've reviewed it).</span>
+              </label>
+            )}
             <Button variant="ghost" size="sm" className="min-h-[40px]" onClick={onAssignLibrary}>
               <ArrowRightLeft className="mr-1 h-4 w-4" /> Use a library program instead
             </Button>
@@ -928,23 +993,8 @@ export function AddNextBlockDialog({
         <DialogFooter className="gap-2">
           <Button variant="outline" className="min-h-[44px]" onClick={() => onOpenChange(false)}>Cancel</Button>
           {candidates.length > 0 && (
-            <Button
-              className="min-h-[44px]"
-              disabled={busy || !blockId || !start}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await setSchedule({ data: { blockId, startDate: start } });
-                  toast.success(`Block starts ${pretty(start)}`);
-                  onDone();
-                } catch (e: any) {
-                  toast.error(e.message ?? "Could not start this block");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} Start block
+            <Button className="min-h-[44px]" disabled={busy || !blockId || !start || (!!draft?.failed && !ack)} onClick={run}>
+              {busy && <Loader2 className="mr-1 h-4 w-4 animate-spin" />} {draft && draftBlocks.length > 1 ? "Start program" : "Start block"}
             </Button>
           )}
         </DialogFooter>
