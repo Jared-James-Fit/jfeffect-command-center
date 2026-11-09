@@ -311,7 +311,8 @@ export type RealignResult = {
 export async function realignClientToCommittedDays(args: {
   clientId: string;
   userId: string;
-  role: Role;
+  /** "system": the background schedule sync (pl_schedule_sync_queue), never a person's request */
+  role: Role | "system";
   includePinned: boolean;
 }): Promise<RealignResult> {
   const { clientId, userId, role, includePinned } = args;
@@ -519,10 +520,86 @@ export const rescheduleFromCommittedDays = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { role } = await resolveActorAccess({ supabase, userId }, data.clientId);
-    return realignClientToCommittedDays({
+    const res = await realignClientToCommittedDays({
       clientId: data.clientId, userId, role, includePinned: data.includePinned,
     });
+    // workouts that just got a date get the cardio plan's session, as on assign
+    if (res.applied > 0) await syncProgramCardio(data.clientId);
+    return res;
   });
+
+async function syncProgramCardio(clientId: string): Promise<void> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await (supabaseAdmin as any).rpc("program_cardio_sync", { p_client: clientId });
+  } catch (e) {
+    console.warn("[schedule] cardio sync failed", e);
+  }
+}
+
+/** How long a queued change waits so every write of one save has landed before the sync reads it. */
+export const SCHEDULE_SYNC_SETTLE_MS = 20_000;
+const SCHEDULE_SYNC_BATCH = 25;
+const SCHEDULE_SYNC_MAX_ATTEMPTS = 3;
+/** changed_by on the history rows when nobody signed in caused the change */
+const SYSTEM_USER = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * The safety net behind every way a program's dates or a client's training days change: the
+ * database queues the client (`pl_schedule_sync_queue`, 20270220090000_program_follows_training_days.sql)
+ * when their training days, a block's dates / visibility, or a program's weeks / workouts change,
+ * and this (the `schedule-sync` hook, pg_cron every minute while something waits) puts their
+ * upcoming, unstarted workouts on their training days and syncs cardio. The screens that change
+ * them already do this at once; this catches every other path (the builder adding a week, Cleo,
+ * a member's own app, SQL). Same engine and rules: done, started and past workouts and ones placed
+ * by hand never move. Idempotent, so a client a screen already placed is a no-op.
+ */
+export async function runScheduleSyncQueue(): Promise<{ processed: number; placed: number; failed: number }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const admin = supabaseAdmin as any;
+  const cutoff = new Date(Date.now() - SCHEDULE_SYNC_SETTLE_MS).toISOString();
+  const { data: rows, error } = await admin
+    .from("pl_schedule_sync_queue")
+    .select("client_id, queued_at, queued_by, attempts")
+    .lt("queued_at", cutoff)
+    .order("queued_at")
+    .limit(SCHEDULE_SYNC_BATCH);
+  if (error) throw new Error(error.message);
+  let processed = 0;
+  let placed = 0;
+  let failed = 0;
+  for (const r of (rows ?? []) as Array<{ client_id: string; queued_at: string; queued_by: string | null; attempts: number | null }>) {
+    // claim it: only while nothing re-queued it since it was read (then it waits to settle again)
+    const { data: claimed } = await admin
+      .from("pl_schedule_sync_queue")
+      .delete()
+      .eq("client_id", r.client_id)
+      .eq("queued_at", r.queued_at)
+      .select("client_id");
+    if (!claimed?.length) continue;
+    processed++;
+    try {
+      const res = await realignClientToCommittedDays({
+        clientId: r.client_id,
+        userId: r.queued_by ?? SYSTEM_USER,
+        role: "system",
+        includePinned: false,
+      });
+      placed += res.applied;
+      await syncProgramCardio(r.client_id);
+    } catch (e: any) {
+      failed++;
+      console.error("[schedule-sync] realign failed", r.client_id, e?.message ?? e);
+      const attempts = (r.attempts ?? 0) + 1;
+      if (attempts < SCHEDULE_SYNC_MAX_ATTEMPTS) {
+        await admin
+          .from("pl_schedule_sync_queue")
+          .upsert({ client_id: r.client_id, queued_by: r.queued_by, attempts, last_error: String(e?.message ?? e).slice(0, 500) }, { onConflict: "client_id", ignoreDuplicates: true });
+      }
+    }
+  }
+  return { processed, placed, failed };
+}
 
 /**
  * Save someone's committed training days (frequency = the number of days) the

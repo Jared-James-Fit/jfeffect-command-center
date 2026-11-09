@@ -22,7 +22,7 @@ export const WEEKDAY_INDEX: Record<WeekDay, number> = {
   Friday: 5, Saturday: 6, Sunday: 0,
 };
 
-export type RealignRole = "client" | "member" | "coach" | "admin";
+export type RealignRole = "client" | "member" | "coach" | "admin" | "system";
 
 export interface RealignBlock {
   id: string;

@@ -38,21 +38,29 @@ export function trainingRoadmap(blocks: ScheduleBlock[], assignmentId: string | 
 }
 
 export type TrainingAlert =
+  /** dated program blocks the client can't see: Start puts them on (visible, workouts on their training days) */
+  | { kind: "hidden"; blocks: ScheduleBlock[] }
   | { kind: "unscheduled"; count: number }
   | { kind: "ends_soon"; end: string; daysLeft: number }
   | { kind: "gap"; days: number }
   | { kind: "overlap"; a: string; b: string };
 
+/** Dated blocks still hidden from the client (a program they can't see, however it's dated). */
+export function hiddenLiveBlocks(roadmap: TrainingRoadmap): ScheduleBlock[] {
+  return roadmap.live.filter((b) => b.client_visible === false);
+}
+
 /**
  * Workouts on a live block with no date: the current block from this week on,
  * every upcoming block. A draft has none by design (it isn't on the calendar
- * yet), and a finished week is history.
+ * yet), a finished week is history, and a hidden block's are placed when it's
+ * started (its own alert).
  */
 export function unscheduledCount(roadmap: TrainingRoadmap, unscheduled: UnscheduledWorkout[]): number {
   const liveIds = new Map(roadmap.live.map((b) => [b.id, b]));
   return unscheduled.filter((u) => {
     const b = liveIds.get(u.blockId);
-    if (!b) return false;
+    if (!b || b.client_visible === false) return false;
     if (b.status_derived === "Active" && b.week_of) return u.weekIndex >= b.week_of;
     return true;
   }).length;
@@ -67,6 +75,8 @@ export function trainingAlerts(input: {
 }): TrainingAlert[] {
   const { roadmap, today } = input;
   const out: TrainingAlert[] = [];
+  const hidden = hiddenLiveBlocks(roadmap);
+  if (hidden.length) out.push({ kind: "hidden", blocks: hidden });
   const count = unscheduledCount(roadmap, input.unscheduled);
   if (count > 0) out.push({ kind: "unscheduled", count });
 

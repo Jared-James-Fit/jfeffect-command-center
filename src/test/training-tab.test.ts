@@ -80,6 +80,21 @@ describe("trainingAlerts", () => {
     expect(alerts.map((a) => a.kind)).toEqual(["unscheduled", "gap"]);
     expect(alerts[1]).toEqual({ kind: "gap", days: 6 });
   });
+  it("a dated program the client can't see comes first, with its workouts left to Start (never also 'need a date')", () => {
+    const blocks = [
+      block("h1", "Upcoming", "2026-11-09", "2026-12-20", { client_visible: false }),
+      block("h2", "Upcoming", "2026-12-21", "2027-01-31", { client_visible: false }),
+    ];
+    const alerts = trainingAlerts({
+      blocks,
+      roadmap: trainingRoadmap(blocks, "p1"),
+      unscheduled: [{ dayId: "x", blockId: "h1", weekIndex: 1, title: "x" }, { dayId: "y", blockId: "h2", weekIndex: 1, title: "y" }],
+      today,
+    });
+    expect(alerts[0]).toMatchObject({ kind: "hidden" });
+    expect((alerts[0] as any).blocks.map((b: ScheduleBlock) => b.id)).toEqual(["h1", "h2"]);
+    expect(alerts.some((a) => a.kind === "unscheduled")).toBe(false);
+  });
   it("doesn't nag about a block a month from its end", () => {
     const blocks = [block("b1", "Active", "2026-10-01", "2026-12-28")];
     expect(trainingAlerts({ blocks, roadmap: trainingRoadmap(blocks, "p1"), unscheduled: [], today })).toEqual([]);
@@ -123,6 +138,54 @@ describe("the Training tab holds only training", () => {
   it("the calendar's tray never offers a workout that's done or from a finished block", () => {
     const cal = read("src/components/schedule/ScheduleCalendar.tsx");
     expect(cal).toContain('return blk.status !== "Completed" && !(blk.end_date && blk.end_date < todayIso);');
+  });
+});
+
+describe("placing a program puts its workouts on the client's training days", () => {
+  const tab = read("src/components/clients/client-training-tab.tsx");
+  const board = read("src/components/clients/training-schedule-board.tsx");
+  const lifecycle = read("src/lib/block-lifecycle.functions.ts");
+  const bulk = read("src/lib/schedule-bulk.functions.ts");
+  const sql = read("supabase/migrations/20270220090000_program_follows_training_days.sql");
+
+  it("Place them is one tap onto their training days (no days set: Athlete setup)", () => {
+    expect(tab).toContain('if (a.kind === "unscheduled") return { label: placing ? "Placing…" : "Place them", run: placeOnTrainingDays };');
+    expect(tab).toContain("placeWorkouts({ data: { clientId, includePinned: false } })");
+    expect(tab).toContain("goTo(ATHLETE_SETUP_ANCHOR)");
+    expect(tab).toContain('if (a.kind === "hidden") return { label: "Start"');
+  });
+
+  it("starting or moving a block re-places its workouts; ending one early starts the next", () => {
+    expect(lifecycle).toContain("if (data.start || data.shiftWorkouts !== false) {");
+    expect(lifecycle).toContain('status: isActive || live ? "Active" : "Draft"');
+    expect(lifecycle).toContain('schedule_source: inst.schedule_source === "manual" ? "manual" : "moved"');
+    expect(board).toContain("await setSchedule({ data: { blockId: nextId, startDate: nextStart, start: true } });");
+  });
+
+  it("a hidden dated block can be started from the dialog", () => {
+    expect(board).toContain('if (b.client_visible === false) return s === "Draft" || s === "Upcoming" || s === "Active";');
+    expect(board).toContain("defaultStartFor(chosenStart, best.date)");
+  });
+
+  it("the database queues a re-place on every change that can move a program, never on a date move", () => {
+    expect(sql).toContain("after update of committed_training_days on public.clients");
+    expect(sql).toContain("after insert or update of start_date, week_duration_days, client_visible, archived on public.pl_blocks");
+    expect(sql).toMatch(/pl_weeks_schedule_sync_ins[\s\S]*pl_weeks_schedule_sync_upd/);
+    expect(sql).toMatch(/pl_days_schedule_sync_ins[\s\S]*pl_days_schedule_sync_upd/);
+    // scheduled_date alone never queues (the realign writes it, and so does a hand move)
+    const days = sql.slice(sql.indexOf("tg_pl_days_schedule_sync()"), sql.indexOf("drop trigger if exists pl_days_schedule_sync_ins"));
+    expect(days).not.toContain("scheduled_date");
+    expect(sql).toContain("revoke all on public.pl_schedule_sync_queue from anon, authenticated");
+    expect(sql).toContain("'pl-schedule-sync'");
+    expect(sql).toContain("where queued_at < now() - interval '20 seconds'");
+  });
+
+  it("the background sync is the same realign: never hand-placed, done or past workouts", () => {
+    const run = bulk.slice(bulk.indexOf("export async function runScheduleSyncQueue"));
+    expect(run).toContain('role: "system"');
+    expect(run).toContain("includePinned: false");
+    expect(run).toContain('.eq("queued_at", r.queued_at)'); // claimed only while nothing re-queued it
+    expect(run).toContain("syncProgramCardio(r.client_id)");
   });
 });
 

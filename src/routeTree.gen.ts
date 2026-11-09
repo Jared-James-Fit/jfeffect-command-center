@@ -263,6 +263,7 @@ import { Route as ApiPublicHooksPostPicturesTickRouteImport } from './routes/api
 import { Route as ApiPublicHooksProgramAiTickRouteImport } from './routes/api/public/hooks/program-ai-tick'
 import { Route as ApiPublicHooksProgramIntelTickRouteImport } from './routes/api/public/hooks/program-intel-tick'
 import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/api/public/hooks/progress-archive-tick'
+import { Route as ApiPublicHooksScheduleSyncRouteImport } from './routes/api/public/hooks/schedule-sync'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
@@ -1752,6 +1753,12 @@ const ApiPublicHooksProgressArchiveTickRoute =
     path: '/api/public/hooks/progress-archive-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksScheduleSyncRoute =
+  ApiPublicHooksScheduleSyncRouteImport.update({
+    id: '/api/public/hooks/schedule-sync',
+    path: '/api/public/hooks/schedule-sync',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksScheduledMessagesWorkerRoute =
   ApiPublicHooksScheduledMessagesWorkerRouteImport.update({
     id: '/api/public/hooks/scheduled-messages-worker',
@@ -2155,6 +2162,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
+  '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -2434,6 +2442,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
+  '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -2719,6 +2728,7 @@ export interface FileRoutesById {
   '/api/public/hooks/program-ai-tick': typeof ApiPublicHooksProgramAiTickRoute
   '/api/public/hooks/program-intel-tick': typeof ApiPublicHooksProgramIntelTickRoute
   '/api/public/hooks/progress-archive-tick': typeof ApiPublicHooksProgressArchiveTickRoute
+  '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
@@ -3004,6 +3014,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
+    | '/api/public/hooks/schedule-sync'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -3283,6 +3294,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
+    | '/api/public/hooks/schedule-sync'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -3567,6 +3579,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/program-ai-tick'
     | '/api/public/hooks/program-intel-tick'
     | '/api/public/hooks/progress-archive-tick'
+    | '/api/public/hooks/schedule-sync'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
     | '/api/public/hooks/sms-reminders'
@@ -3684,6 +3697,7 @@ export interface RootRouteChildren {
   ApiPublicHooksProgramAiTickRoute: typeof ApiPublicHooksProgramAiTickRoute
   ApiPublicHooksProgramIntelTickRoute: typeof ApiPublicHooksProgramIntelTickRoute
   ApiPublicHooksProgressArchiveTickRoute: typeof ApiPublicHooksProgressArchiveTickRoute
+  ApiPublicHooksScheduleSyncRoute: typeof ApiPublicHooksScheduleSyncRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
@@ -5481,6 +5495,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksProgressArchiveTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/schedule-sync': {
+      id: '/api/public/hooks/schedule-sync'
+      path: '/api/public/hooks/schedule-sync'
+      fullPath: '/api/public/hooks/schedule-sync'
+      preLoaderRoute: typeof ApiPublicHooksScheduleSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/scheduled-messages-worker': {
       id: '/api/public/hooks/scheduled-messages-worker'
       path: '/api/public/hooks/scheduled-messages-worker'
@@ -6397,6 +6418,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksProgramIntelTickRoute: ApiPublicHooksProgramIntelTickRoute,
   ApiPublicHooksProgressArchiveTickRoute:
     ApiPublicHooksProgressArchiveTickRoute,
+  ApiPublicHooksScheduleSyncRoute: ApiPublicHooksScheduleSyncRoute,
   ApiPublicHooksScheduledMessagesWorkerRoute:
     ApiPublicHooksScheduledMessagesWorkerRoute,
   ApiPublicHooksScheduledSendWorkerRoute:

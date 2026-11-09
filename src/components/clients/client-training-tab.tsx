@@ -51,6 +51,8 @@ import {
   AddNextBlockDialog, ChangeBlockDatesDialog, EndBlockEarlyDialog,
 } from "@/components/clients/training-schedule-board";
 import { TrainingScheduleCard } from "@/components/training-schedule-card";
+import { useServerFn } from "@tanstack/react-start";
+import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
 import { ClientNotesCard } from "@/components/messages/client-notes-log";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
@@ -68,8 +70,10 @@ type ClientRow = {
   [k: string]: unknown;
 };
 
-/** Element id of the schedule card; "Place them" and /admin/clients/$id/schedule land here. */
+/** Element id of the schedule card; /admin/clients/$id/schedule lands here. */
 export const TRAINING_SCHEDULE_ANCHOR = "schedule";
+/** Element id of Athlete setup (training days): "Place them" goes there when no days are set. */
+const ATHLETE_SETUP_ANCHOR = "athlete-setup";
 
 export function ClientTrainingTab({ clientId, client }: { clientId: string; client: ClientRow | null }) {
   const name = (client?.full_name as string | null) ?? null;
@@ -85,7 +89,7 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
   return (
     <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:col-span-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
       <div className="min-w-0 space-y-4 lg:space-y-5">
-        <ProgramCard clientId={clientId} clientName={name} />
+        <ProgramCard clientId={clientId} clientName={name} trainingDays={client?.committed_training_days ?? null} />
         <section id={TRAINING_SCHEDULE_ANCHOR} aria-label="Schedule" className="min-w-0 scroll-mt-24">
           <Suspense fallback={<Card className="p-6 text-sm text-muted-foreground">Loading schedule…</Card>}>
             <ScheduleManagerShell clientId={clientId} mode="coach" />
@@ -102,8 +106,11 @@ export function ClientTrainingTab({ clientId, client }: { clientId: string; clie
 
 /* ───────────────────────────── Program ───────────────────────────── */
 
-function ProgramCard({ clientId, clientName }: { clientId: string; clientName: string | null }) {
+function ProgramCard({ clientId, clientName, trainingDays }: { clientId: string; clientName: string | null; trainingDays: string[] | null }) {
   const qc = useQueryClient();
+  const placeWorkouts = useServerFn(rescheduleFromCommittedDays);
+  const [placing, setPlacing] = useState(false);
+  const first = clientName?.split(" ")[0] ?? null;
   const { data, isLoading } = useClientTrainingSchedule(clientId);
   const [addOpen, setAddOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -144,12 +151,40 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
     qc.invalidateQueries({ queryKey: ["program-intel-jobs", clientId] });
   };
 
-  const goToSchedule = () => {
-    document.getElementById(TRAINING_SCHEDULE_ANCHOR)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const goTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  // One tap: every undated or off-schedule upcoming workout onto their training days (the same
+  // engine as a schedule change; done, past and hand-placed workouts stay put).
+  const placeOnTrainingDays = async () => {
+    if (!(trainingDays ?? []).length) {
+      toast.error(`Set ${first ?? "their"}${first ? "'s" : ""} training days first`, { description: "Their workouts go on the days you pick." });
+      goTo(ATHLETE_SETUP_ANCHOR);
+      return;
+    }
+    setPlacing(true);
+    try {
+      const r: any = await placeWorkouts({ data: { clientId, includePinned: false } });
+      refresh();
+      if (r?.unplaced > 0) {
+        toast.warning(`${r.unplaced} workout${r.unplaced === 1 ? "" : "s"} didn't fit`, {
+          description: `A week has more workouts than ${first ?? "their"}${first ? "'s" : ""} ${(trainingDays ?? []).length} training days. Pick a date for ${r.unplaced === 1 ? "it" : "them"} in the schedule.`,
+        });
+        goTo(TRAINING_SCHEDULE_ANCHOR);
+      } else {
+        toast.success(r?.applied ? `${r.applied} workout${r.applied === 1 ? "" : "s"} on ${first ?? "their"}${first ? "'s" : ""} training days` : "Already on their training days");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't place the workouts");
+    } finally {
+      setPlacing(false);
+    }
   };
 
   const alertAction = (a: TrainingAlert) => {
-    if (a.kind === "unscheduled") return { label: "Place them", run: goToSchedule };
+    if (a.kind === "hidden") return { label: "Start", run: () => setScheduleBlock({ id: a.blocks[0].id }) };
+    if (a.kind === "unscheduled") return { label: placing ? "Placing…" : "Place them", run: placeOnTrainingDays };
     if (a.kind === "ends_soon") return { label: "Plan next", run: () => setAddOpen(true) };
     const target = a.kind === "gap" ? roadmap.live[1] : roadmap.live[1] ?? current;
     return target ? { label: "Fix dates", run: () => setDatesFor(target) } : null;
@@ -263,9 +298,9 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
               return (
                 <li key={i} className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 flex-1">{alertText(a)}</span>
+                  <span className="min-w-0 flex-1">{alertText(a, first)}</span>
                   {action && (
-                    <Button size="sm" variant="outline" className="h-9 shrink-0 border-amber-500/50 bg-background/60 px-3 text-xs" onClick={action.run}>
+                    <Button size="sm" variant="outline" className="h-9 shrink-0 border-amber-500/50 bg-background/60 px-3 text-xs" disabled={placing && a.kind === "unscheduled"} onClick={action.run}>
                       {action.label}
                     </Button>
                   )}
@@ -324,7 +359,8 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
                 block={b}
                 label={b.status_derived === "Active" ? "Now" : i === (current ? 1 : 0) ? "Next" : "Planned"}
                 onDates={() => setDatesFor(b)}
-                onEndEarly={b.status_derived === "Active" ? () => setEndEarlyFor(b) : undefined}
+                onStart={b.client_visible === false ? () => setScheduleBlock({ id: b.id }) : undefined}
+                onEndEarly={b.status_derived === "Active" && b.client_visible !== false ? () => setEndEarlyFor(b) : undefined}
                 onDelete={() => setDeleteFor(b)}
               />
             ))}
@@ -417,8 +453,13 @@ function ProgramCard({ clientId, clientName }: { clientId: string; clientName: s
   );
 }
 
-function alertText(a: TrainingAlert): string {
+function alertText(a: TrainingAlert, first: string | null): string {
   switch (a.kind) {
+    case "hidden": {
+      const who = first ?? "the client";
+      if (a.blocks.length === 1) return `${blockNameParts(a.blocks[0].name)?.name ?? a.blocks[0].name ?? "A block"} is hidden from ${who}`;
+      return `This program is hidden from ${who}`;
+    }
     case "unscheduled":
       return `${a.count} workout${a.count === 1 ? "" : "s"} need${a.count === 1 ? "s" : ""} a date`;
     case "ends_soon":
@@ -437,11 +478,13 @@ function pretty(iso: string, fmt: string): string {
 }
 
 function RoadmapRow({
-  block, label, onDates, onEndEarly, onSchedule, onDelete,
+  block, label, onDates, onStart, onEndEarly, onSchedule, onDelete,
 }: {
   block: ScheduleBlock;
   label: string;
   onDates?: () => void;
+  /** a dated block the client can't see: start it (visible, workouts on their training days) */
+  onStart?: () => void;
   onEndEarly?: () => void;
   onSchedule?: () => void;
   onDelete?: () => void;
@@ -469,7 +512,7 @@ function RoadmapRow({
             {parts?.name ?? block.name ?? "Block"}
           </span>
           <span className="block truncate text-xs text-muted-foreground">
-            {[parts?.tag, draft ? (block.weeks ? `${block.weeks} weeks` : null) : formatRange(block.effective_start, block.effective_end)]
+            {[parts?.tag, draft ? (block.weeks ? `${block.weeks} weeks` : null) : formatRange(block.effective_start, block.effective_end), !draft && block.client_visible === false ? "Hidden from client" : null]
               .filter(Boolean).join(" · ")}
           </span>
         </span>
@@ -499,6 +542,7 @@ function RoadmapRow({
             <DropdownMenuItem asChild>
               <Link to="/admin/blocks/$blockId" params={{ blockId: block.id }}><Pencil className="mr-2 h-4 w-4" /> Edit in builder</Link>
             </DropdownMenuItem>
+            {onStart && <DropdownMenuItem onClick={onStart}><CalendarPlus className="mr-2 h-4 w-4" /> Start program</DropdownMenuItem>}
             {onDates && <DropdownMenuItem onClick={onDates}><CalendarDays className="mr-2 h-4 w-4" /> Change dates</DropdownMenuItem>}
             {onEndEarly && <DropdownMenuItem onClick={onEndEarly}><FlagOff className="mr-2 h-4 w-4" /> End early</DropdownMenuItem>}
             {onDelete && (
@@ -671,7 +715,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
     : null;
 
   return (
-    <Card className="min-w-0 border-border bg-card p-2" aria-label="Athlete setup" data-athlete-setup>
+    <Card id={ATHLETE_SETUP_ANCHOR} className="min-w-0 scroll-mt-24 border-border bg-card p-2" aria-label="Athlete setup" data-athlete-setup>
       <div className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Athlete setup</div>
       <SetupRow icon={<CalendarDays className="h-4 w-4" />} title="Training days" value={daysValue} empty="Not set: workouts can't be placed" onClick={() => setSheet("days")} />
       <SetupRow icon={<Dumbbell className="h-4 w-4" />} title="Maxes" value={maxesValue} empty="None yet: % loads can't be worked out" onClick={() => setSheet("maxes")} />
