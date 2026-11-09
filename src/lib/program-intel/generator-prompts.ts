@@ -14,7 +14,7 @@ import type { BuiltBlock, Strategy } from "./generator-schemas";
 import type { CatalogExercise } from "./next-program";
 import type { GenerationSetup } from "./recommend";
 
-export const PIPELINE_PROMPT_VERSION = 9;
+export const PIPELINE_PROMPT_VERSION = 10;
 
 const EVIDENCE_RULES = `Evidence rules:
 - Facts about the past come only from the brief. Copy numbers exactly as they appear there (week labels like "B1·W2", exercises, loads, reps, RPE, percentages). Never compute, estimate or invent a past result.
@@ -86,7 +86,7 @@ Reply with ONE JSON object and nothing else:
   "monitor": [string]
 }
 "structure" must match the coach's setup (weeks, days per week; the blocks' weeks add up to the total). "weekly_layout" has exactly one entry per training day, in the order of their training days, and places the demanding sessions so recovery fits this athlete: a heavy squat day and a heavy deadlift day on back-to-back calendar days (their last training day into the first of the next week counts) can be fine or a problem depending on the loads, the volume, the phase and the athlete, so decide it on purpose and say why in that day's focus.
-"volume_targets" for a muscle are sets aimed at that muscle (exercises whose target it is); what a compound gives its other muscles (a bench set's triceps, a row's biceps) comes on top and isn't counted.`;
+"volume_targets" for a muscle count sets the way the coach's setup does: a set counts 1 for the muscle the exercise targets and ½ for each muscle it trains secondarily (a bench set is 1 chest, ½ triceps, ½ front delts; a row is 1 back, ½ biceps), so a target of 8 for triceps is met by 4 direct triceps sets plus 8 sets of pressing. Never turn the setup's numbers into direct sets, and say so in "vs_previous" when you change one.`;
 }
 
 export function strategyUserPrompt(brief: string, setup: GenerationSetup, opts: { first?: boolean } = {}): string {

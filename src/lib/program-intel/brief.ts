@@ -90,7 +90,7 @@ export function setupText(s: GenerationSetup): string {
     if (k === "durationMode") return s.durationMode === "goal" ? "the goal timeline" : s.durationMode === "custom" ? "the coach (their own number of weeks)" : "the 12-week default";
     if (k === "equipment") return `${s.equipment.location ?? "—"}: ${s.equipment.items.map((i) => EQUIPMENT_LABEL[i]).join(", ") || "unknown"}${s.equipment.cableStations ? ` · ${s.equipment.cableStations} cable column(s)` : ""}${s.equipment.notes ? ` · ${s.equipment.notes}` : ""} (${s.equipment.confidence})`;
     if (k === "frequency") return s.frequency.map((f) => `${f.target} ${f.perWeek}×/wk`).join(", ");
-    if (k === "volume") return s.volume.map((f) => `${f.target} ${f.setsPerWeek} sets/wk`).join(", ");
+    if (k === "volume") return s.volume.length ? `${s.volume.map((f) => `${f.target} ${f.setsPerWeek} sets/wk`).join(", ")} (a muscle's sets count 1 when it's the exercise's target and ½ when it's trained secondarily)` : "";
     if (Array.isArray(x)) return x.map((y: any) => (typeof y === "string" ? y : y?.name ?? JSON.stringify(y))).join(", ");
     return x == null || x === "" ? "" : String(x);
   };
