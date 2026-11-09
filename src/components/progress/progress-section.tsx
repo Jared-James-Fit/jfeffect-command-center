@@ -40,6 +40,8 @@ import { convertWeight, type ProgressMetric } from "@/lib/progress-metrics";
 import { compressImage } from "@/lib/image-compress";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import { looksLikeVideo, pickVideo } from "@/lib/video-edit/pick";
+import { PoseFigure, PoseGuideButton } from "@/components/progress/pose-guide";
+import { POSE_CUES, SINGLE_VIDEO_CUE } from "@/lib/progress-pose-guide";
 
 /**
  * Mobile-safe date picker: defaults to today and shows a plain text
@@ -907,7 +909,8 @@ function PhotoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Progress Photos</DialogTitle>
-          <p className="text-sm text-muted-foreground">Tap a tile to add a photo — or upload all four at once.</p>
+          <p className="text-sm text-muted-foreground">Tap a pose to add its photo, or upload all four at once.</p>
+          <PoseGuideButton kind="photo" />
         </DialogHeader>
 
         <div className="space-y-4">
@@ -1133,10 +1136,21 @@ function AngleUploadCard({
         ) : existing ? (
           <div className="progress-thumb-in h-full w-full"><MediaThumb m={existing} /></div>
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
-            {mediaType === "video" ? <VideoIcon className="h-10 w-10" /> : <Camera className="h-10 w-10" />}
-            <span className="text-[13px] font-bold">{ANGLE_LABEL[angle]}</span>
-            <span className="text-[11px]">Tap to {mediaType === "video" ? "record" : "add photo"}</span>
+          // Empty: how to stand for this pose (a single video: the turn), so
+          // every check-in is taken the same way.
+          <div className="relative flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-muted-foreground" data-pose-tile={angle}>
+            {angle === "all" ? (
+              <VideoIcon className="h-10 w-10" />
+            ) : (
+              <PoseFigure angle={angle} className="h-[46%]" />
+            )}
+            <span className="text-[13px] font-semibold text-foreground">{ANGLE_LABEL[angle]}</span>
+            <span className="text-center text-[11px] leading-snug">
+              {angle === "all" ? SINGLE_VIDEO_CUE : POSE_CUES[angle]}
+            </span>
+            <span className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-background/70">
+              {mediaType === "video" ? <VideoIcon className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+            </span>
           </div>
         )}
 
@@ -1244,6 +1258,7 @@ function VideoSubmissionDialog({ ctx, open, onOpenChange }: { ctx: ProgressConte
         <DialogHeader>
           <DialogTitle>Add Progress Video</DialogTitle>
           <p className="text-sm text-muted-foreground">Tap the tile to record or pick a video from your library.</p>
+          <PoseGuideButton kind="video" />
         </DialogHeader>
         <div className="space-y-4">
           {/* Format toggle — quick, big, single row */}
