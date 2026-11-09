@@ -20,12 +20,12 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
 type Ctx = { supabase: any; userId: string };
 
-async function assertCoachOrAdmin(ctx: Ctx, clientId: string) {
+async function assertCoachOrAdmin(ctx: Ctx, clientId: string): Promise<"admin" | "coach"> {
   const { data: isAdmin } = await ctx.supabase.rpc("has_role", {
     _user_id: ctx.userId,
     _role: "admin",
   });
-  if (isAdmin === true) return;
+  if (isAdmin === true) return "admin";
   const { data: client } = await ctx.supabase
     .from("clients")
     .select("id, assigned_coach_id")
@@ -37,7 +37,7 @@ async function assertCoachOrAdmin(ctx: Ctx, clientId: string) {
       .select("id, user_id")
       .eq("id", client.assigned_coach_id)
       .maybeSingle();
-    if (coach?.user_id === ctx.userId) return;
+    if (coach?.user_id === ctx.userId) return "coach";
   }
   throw new Error("Only this client's coach can change their training schedule.");
 }
@@ -230,20 +230,22 @@ export const endBlockEarlyFn = createServerFn({ method: "POST" })
 export const setBlockScheduleFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (d: { blockId: string; startDate: string; endDate?: string | null; shiftWorkouts?: boolean }) =>
+    (d: { blockId: string; startDate: string; endDate?: string | null; shiftWorkouts?: boolean; start?: boolean }) =>
       z
         .object({
           blockId: z.string().uuid(),
           startDate: isoDate,
           endDate: isoDate.nullable().optional(),
           shiftWorkouts: z.boolean().optional(),
+          /** Starting a built block (Add next block): the client sees it and its workouts go on their training days. */
+          start: z.boolean().optional(),
         })
         .parse(d),
   )
   .handler(async ({ data, context }) => {
     const ctx = context as unknown as Ctx;
     const loaded = await loadBlockSchedule(ctx.supabase, data.blockId);
-    await assertCoachOrAdmin(ctx, loaded.block.client_id);
+    const role = await assertCoachOrAdmin(ctx, loaded.block.client_id);
 
     const dur = Number(loaded.block.week_duration_days ?? 7) || 7;
     const weeks = Number(loaded.block.weeks ?? 0);
@@ -265,6 +267,8 @@ export const setBlockScheduleFn = createServerFn({ method: "POST" })
         completed_at: null,
         completion_method: null,
         archived: false,
+        // a started block is the client's: never a dated program they can't see
+        ...(data.start ? { client_visible: true } : {}),
       })
       .eq("id", data.blockId);
     if (upErr) throw new Error(upErr.message);
@@ -296,7 +300,26 @@ export const setBlockScheduleFn = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true as const, startDate: data.startDate, endDate, movedWorkouts: moved };
+    // Starting a block: its workouts go on the client's training days and its cardio follows the
+    // plan, exactly as when a program is assigned (Generate Next Program's Assign does the same).
+    let placed = false;
+    if (data.start) {
+      try {
+        const { realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
+        const r = await realignClientToCommittedDays({ clientId: loaded.block.client_id, userId: ctx.userId, role, includePinned: false });
+        placed = !r.noop;
+      } catch (e) {
+        console.warn("[block start] placing workouts failed", e);
+      }
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await (supabaseAdmin as any).rpc("program_cardio_sync", { p_client: loaded.block.client_id });
+      } catch (e) {
+        console.warn("[block start] cardio sync failed", e);
+      }
+    }
+
+    return { ok: true as const, startDate: data.startDate, endDate, movedWorkouts: moved, placedOnTrainingDays: placed };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -320,7 +343,7 @@ export const endAndStartNextFn = createServerFn({ method: "POST" })
       data: { blockId: data.currentBlockId, newEnd: data.newEnd },
     });
     const started = await (setBlockScheduleFn as any)({
-      data: { blockId: data.nextBlockId, startDate: data.nextStart },
+      data: { blockId: data.nextBlockId, startDate: data.nextStart, start: true },
     });
     return { ok: true as const, ended, started };
   });
