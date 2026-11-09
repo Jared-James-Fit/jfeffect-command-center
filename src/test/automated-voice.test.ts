@@ -192,3 +192,13 @@ describe("the templates read the same way", () => {
     expect(sql).toContain("IF def <> src THEN EXECUTE def; END IF;");
   });
 });
+
+describe("Athlete Insights wake up as far ahead as they're made (Nov 9 2026)", () => {
+  it("the cron's wake-up window is AHEAD_DAYS, never shorter", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { AHEAD_DAYS } = await import("@/lib/daily-visuals.server");
+    const files = readdirSync("supabase/migrations").filter((f) => f.endsWith(".sql")).sort();
+    const latest = files.filter((f) => readFileSync(`supabase/migrations/${f}`, "utf8").includes("FUNCTION public.community_daily_visuals_kick")).pop()!;
+    expect(readFileSync(`supabase/migrations/${latest}`, "utf8")).toContain(`v_today - 45 AND v_today + ${AHEAD_DAYS}`);
+  });
+});
