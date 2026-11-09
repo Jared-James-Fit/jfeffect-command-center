@@ -6,6 +6,7 @@
  * budget, in which case they're summarized per exercise AND the brief, the
  * job's context and the inspector all say so (never silently cut).
  */
+import { horizonText } from "./horizon";
 import { developmentText } from "./athlete-development";
 import { cardioBriefLines } from "./cardio";
 import { fmtLoad, fmtSet } from "./core";
@@ -14,7 +15,7 @@ import { EQUIPMENT_LABEL } from "./equipment";
 import { trainingLogMarkdown } from "./export";
 import type { GeneratorIntel } from "./intelligence";
 import { REVIEW_SECTIONS } from "./review";
-import type { Conflict, GenerationSetup, Redistribution, SetupField } from "./recommend";
+import { setupHorizon, type Conflict, type GenerationSetup, type Redistribution, type SetupField } from "./recommend";
 import { BRAIN_LABEL, LIFTS, type IntelReport } from "./types";
 
 export const BRIEF_VERSION = 2;
@@ -55,7 +56,9 @@ const FIELD_LABEL: Partial<Record<SetupField, string>> = {
   secondaryGoals: "Secondary goals",
   daysPerWeek: "Days per week",
   trainingDays: "Training days",
-  weeks: "Weeks",
+  weeks: "Weeks written now",
+  durationMode: "Length chosen by",
+  startDate: "Starts",
   sessionMinutes: "Target session minutes",
   maxSessionMinutes: "Maximum session minutes",
   blocks: "Blocks",
@@ -83,7 +86,8 @@ export function setupText(s: GenerationSetup): string {
   const v = (k: SetupField): string => {
     const x = s[k] as unknown;
     if (k === "brain") return BRAIN_LABEL[s.brain];
-    if (k === "blocks") return s.blocks.map((b) => `${b.name} (${b.weeks} wk): ${b.objective}`).join(" | ");
+    if (k === "blocks") return s.blocks.length ? s.blocks.map((b) => `${b.name} (${b.weeks} wk): ${b.objective}`).join(" | ") + " (set by the coach: keep them)" : "yours to decide (phases, block lengths, lighter weeks)";
+    if (k === "durationMode") return s.durationMode === "goal" ? "the goal timeline" : s.durationMode === "custom" ? "the coach (their own number of weeks)" : "the 12-week default";
     if (k === "equipment") return `${s.equipment.location ?? "—"}: ${s.equipment.items.map((i) => EQUIPMENT_LABEL[i]).join(", ") || "unknown"}${s.equipment.cableStations ? ` · ${s.equipment.cableStations} cable column(s)` : ""}${s.equipment.notes ? ` · ${s.equipment.notes}` : ""} (${s.equipment.confidence})`;
     if (k === "frequency") return s.frequency.map((f) => `${f.target} ${f.perWeek}×/wk`).join(", ");
     if (k === "volume") return s.volume.map((f) => `${f.target} ${f.setsPerWeek} sets/wk`).join(", ");
@@ -177,7 +181,7 @@ export function firstProgramText(intel: GeneratorIntel): string {
   ].join("\n");
 }
 
-export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[]; exclude?: string[] }): Brief {
+export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; edited: SetupField[]; conflicts: Conflict[]; redistribution: Redistribution | null; budgetChars?: number; outcomes?: string[]; exclude?: string[]; previousRoadmap?: string | null }): Brief {
   const budget = x.budgetChars ?? BRIEF_BUDGET_CHARS;
   const { ctx, prev, history } = intel;
   const sections: Array<BriefSection & { text: string }> = [];
@@ -192,6 +196,19 @@ export function buildBrief(intel: GeneratorIntel, x: { setup: GenerationSetup; e
     "setup",
     intel.firstProgram ? "First program setup (approved by the coach)" : "Next program setup (approved by the coach)",
     [setupText(x.setup), editedLines.length ? `\nChanged by the coach (these are requirements; honor them and adapt everything else around them):\n${editedLines.join("\n")}` : "\nThe coach accepted the recommended setup.", x.redistribution ? `\nWorkload redistribution (days changed):\n${list(x.redistribution.lines)}` : ""].join("\n"),
+  );
+  // the horizon written now vs the longer timeline, and the road the last program was on (continuity)
+  const goal = ctx.goals.longTerm;
+  add(
+    "timeline",
+    "Program length and timeline",
+    [
+      horizonText(setupHorizon(x.setup, ctx)),
+      goal?.text ? `Long-term goal on file: ${goal.text}${goal.date ? ` by ${goal.date}` : " (no date)"}.` : "",
+      x.previousRoadmap ? `\nThe previous program's roadmap (what it was meant to do and where it sat in the longer plan):\n${x.previousRoadmap}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
   );
   add("cardio", "Cardio (the client's cardio plan, never workout rows)", cardioBriefLines(x.setup.cardio).join("\n") || "Not set: write no cardio into the workouts.");
   add(

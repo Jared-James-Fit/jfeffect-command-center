@@ -23,7 +23,6 @@ import type { CatalogExercise, ProgramSnapshot } from "./types";
 type Db = any;
 const STALE_RUN_MS = 6 * 60_000;
 const MAX_ATTEMPTS = 3;
-const CALL_TIMEOUT_MS = 170_000;
 /** The athlete's brief: the full history unless it's larger (then summarized and said so). */
 const BRIEF_CHARS = 170_000;
 /** At most this many model calls per turn (the first, then a fix round), and no fix round once a turn has run this long. */
@@ -54,41 +53,39 @@ async function stage(admin: Db, id: string, text: string) {
 }
 
 /**
- * The model that edits programs: the strongest one the gateway takes (Cleo's, which does her
- * program edits too; PROGRAM_AI_MODEL overrides it), then the app's fast default if it fails or
- * runs out of time. A live test on Nov 8 2026 had the fast model put "rear delt work" on a
- * lateral raise and overwrite an athlete's cue; programming judgment is worth the wait.
+ * The models that edit programs, from the routing table (src/lib/ai/routing.ts "edit"; an admin
+ * override in app_settings.ai_routes, or PROGRAM_AI_MODEL, wins): the strongest model first, a
+ * fast one if it fails or runs out of time. A live test on Nov 8 2026 had the fast model put
+ * "rear delt work" on a lateral raise and overwrite an athlete's cue; programming judgment is
+ * worth the wait.
  */
-export const EDIT_PRIMARY_MODEL = "openai/gpt-5.5";
 const PRIMARY_TIMEOUT_MS = 150_000;
 const FALLBACK_TIMEOUT_MS = 90_000;
 
 async function callModel(admin: Db, edit: any, label: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
-  const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-  const { generateText } = await import("ai");
-  const { data: cfg } = await admin.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-  const primary = process.env.PROGRAM_AI_MODEL || EDIT_PRIMARY_MODEL;
-  const models = [...new Set([primary, (cfg?.default_model as string | undefined) || DEFAULT_AI_MODEL])];
+  const { callModel: call, ModelHttpError } = await import("@/lib/ai/model-client.server");
+  const { resolveRoute } = await import("@/lib/ai/routing");
+  const { data: cfg } = await admin.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
+  let override: any = null;
+  try {
+    override = cfg?.value ? JSON.parse(cfg.value) : null;
+  } catch {
+    override = null;
+  }
+  if (process.env.PROGRAM_AI_MODEL) override = { ...(override ?? {}), edit: [process.env.PROGRAM_AI_MODEL] };
+  const route = resolveRoute("edit", override);
   let last: any = null;
-  for (const [i, model] of models.entries()) {
+  for (const [i, model] of route.models.entries()) {
     const t0 = Date.now();
     try {
-      // OpenAI's reasoning models take only their default temperature
-      const r = await generateText({
-        model: createLovableAiGateway()(model),
-        system,
-        prompt,
-        ...(model.startsWith("openai/") ? {} : { temperature: 0.2 }),
-        abortSignal: AbortSignal.timeout(i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS),
-      });
-      await logCall(admin, edit.id, { label, model, system, prompt, response: r.text, ok: true, ms: Date.now() - t0, usage: (r as any).usage });
+      const r = await call(model, { system, prompt, effort: route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.2, timeoutMs: i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS });
+      await logCall(admin, edit.id, { label, model, system, prompt, response: r.text, ok: true, ms: r.ms, usage: r.usage });
       return { text: r.text, model };
     } catch (e: any) {
-      const status = e?.statusCode ?? e?.status;
       await logCall(admin, edit.id, { label, model, system, prompt, response: null, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 500) });
       last = e;
-      if (status === 402) throw new Error("AI credits are used up.");
-      // busy: the next model may not be
+      if (e instanceof ModelHttpError && e.status === 402) throw new Error("AI credits are used up.");
+      // busy or too slow: the next model may not be
     }
   }
   throw new Error(`The AI service didn't answer: ${String(last?.message ?? last).slice(0, 200)}`);
@@ -106,8 +103,8 @@ async function logCall(admin: Db, editId: string, x: { label: string; model: str
       response: x.response,
       prompt_chars: x.system.length + x.prompt.length,
       response_chars: x.response?.length ?? 0,
-      input_tokens: x.usage?.inputTokens ?? x.usage?.promptTokens ?? null,
-      output_tokens: x.usage?.outputTokens ?? x.usage?.completionTokens ?? null,
+      input_tokens: x.usage?.input ?? x.usage?.inputTokens ?? x.usage?.promptTokens ?? null,
+      output_tokens: x.usage?.output ?? x.usage?.outputTokens ?? x.usage?.completionTokens ?? null,
       duration_ms: x.ms,
       ok: x.ok,
       error: x.error ?? null,

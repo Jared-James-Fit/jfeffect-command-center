@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import type { BuiltProgram, Strategy } from "@/lib/program-intel/generator-schemas";
 import { fmtRx, rxForWeek } from "@/lib/program-intel/program-view";
 import { BRAIN_LABEL } from "@/lib/program-intel/types";
+import { addDays, assignChecks, mondayOnOrAfter, weekOf } from "@/lib/program-intel/horizon";
 import type { IntelJob } from "../use-program-intel";
 import { SectionTitle, StatusIcon } from "./overview";
 import { DecisionCard, StrategySummary } from "./strategy-view";
@@ -171,29 +172,36 @@ export function DraftView({
   onAssign,
   onDiscard,
   onInspect,
+  plan,
 }: {
   job: IntelJob;
   today: string;
   busy: boolean;
-  onAssign: (startDate: string, acknowledge: boolean) => void;
+  onAssign: (startDate: string, acknowledge: boolean, allowOverlap: boolean) => void;
   onDiscard: () => void;
   onInspect: () => void;
+  /** Where the next program goes: its planned start, when the current one ends, and the deadline on file. */
+  plan?: { start: string; currentEnd: string | null; deadline: { name: string; date: string } | null };
 }) {
   const program: BuiltProgram | null = job.result?.program ?? null;
   const strategy: Strategy | null = job.result?.strategy ?? null;
   const blockIds: string[] = job.result?.blockIds ?? [];
   const unmatched: string[] = job.result?.unmatched ?? [];
   const audit = job.result?.audit ?? null;
-  const nextMonday = (() => {
-    const d = new Date(`${today}T00:00:00Z`);
-    const add = ((8 - d.getUTCDay()) % 7) || 7;
-    return new Date(d.getTime() + add * 86_400_000).toISOString().slice(0, 10);
-  })();
-  const [start, setStart] = useState(nextMonday);
+  // the start it was written for (after the program running now), else the planned one, else next Monday
+  const written: string | null = job.result?.setup?.startDate ?? null;
+  const fallbackStart = plan?.start ?? mondayOnOrAfter(addDays(today, 1));
+  const [start, setStart] = useState(written && written > today ? written : fallbackStart);
   const [confirming, setConfirming] = useState(false);
   const [ack, setAck] = useState(false);
+  const [overlapOk, setOverlapOk] = useState(false);
   if (!program) return null;
   const failed = audit?.overall === "failed";
+  const weeks = program.blocks.reduce((n, b) => n + b.weeks, 0);
+  const deadline = plan?.deadline ?? null;
+  const endsAtDeadline = !!deadline && job.result?.setup?.durationMode === "goal" && weekOf(written ?? start, deadline.date) === (job.result?.setup?.weeks ?? weeks);
+  const checks = assignChecks({ start, weeks, currentEnd: plan?.currentEnd ?? null, deadline, endsAtDeadline });
+  const overlap = checks.some((c) => c.id === "overlap");
   return (
     <Card className="space-y-3 p-3.5" data-testid="gen-draft" data-status={job.status}>
       <div className="flex items-start justify-between gap-2">
@@ -238,6 +246,22 @@ export function DraftView({
             <div className="space-y-2 rounded-xl bg-secondary/50 p-2.5">
               <Label className="text-xs">Start date</Label>
               <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-11" />
+              {checks.map((c) => (
+                <div key={c.id} className="space-y-1 rounded-lg bg-amber-500/10 p-2 text-[12px] text-amber-900 dark:text-amber-100" data-testid={`gen-assign-${c.id}`}>
+                  <p>{c.text}</p>
+                  {c.suggest && c.suggest !== start && (
+                    <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setStart(c.suggest!)}>
+                      Start {c.suggest}
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {overlap && (
+                <label className="flex items-start gap-2 text-[12px]">
+                  <input type="checkbox" className="mt-0.5" checked={overlapOk} onChange={(e) => setOverlapOk(e.target.checked)} />
+                  <span>Start anyway: I'll end the current program myself.</span>
+                </label>
+              )}
               {failed && (
                 <label className="flex items-start gap-2 text-[12px] text-destructive">
                   <input type="checkbox" className="mt-0.5" checked={ack} onChange={(e) => setAck(e.target.checked)} />
@@ -246,7 +270,7 @@ export function DraftView({
               )}
               <p className="text-[11px] text-muted-foreground">Assigning makes it visible to the client and places the workouts on their training days. Earlier programs and logged workouts aren't touched.</p>
               <div className="flex gap-1.5">
-                <Button size="sm" className="h-10 flex-1" disabled={busy || !start || (failed && !ack)} onClick={() => onAssign(start, ack)} data-testid="gen-assign-confirm">
+                <Button size="sm" className="h-10 flex-1" disabled={busy || !start || (failed && !ack) || (overlap && !overlapOk)} onClick={() => onAssign(start, ack, overlap && overlapOk)} data-testid="gen-assign-confirm">
                   {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CalendarCheck className="mr-1.5 h-4 w-4" />} Assign from {start}
                 </Button>
                 <Button size="sm" variant="ghost" className="h-10" onClick={() => setConfirming(false)}>Cancel</Button>

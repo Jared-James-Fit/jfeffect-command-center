@@ -219,6 +219,7 @@ import { Route as AuthenticatedAdminSalesIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminSalesCoachingRouteImport } from './routes/_authenticated/admin/sales.coaching'
 import { Route as AuthenticatedAdminSalesCoachingApplicationsRouteImport } from './routes/_authenticated/admin/sales.coaching-applications'
 import { Route as AuthenticatedAdminSalesMembershipRouteImport } from './routes/_authenticated/admin/sales.membership'
+import { Route as AuthenticatedAdminSettingsAiRouteImport } from './routes/_authenticated/admin/settings_.ai'
 import { Route as AuthenticatedAdminSettingsChatRouteImport } from './routes/_authenticated/admin/settings_.chat'
 import { Route as AuthenticatedAdminSettingsNutritionAutomationRouteImport } from './routes/_authenticated/admin/settings_.nutrition-automation'
 import { Route as AuthenticatedAdminSettingsSmsRouteImport } from './routes/_authenticated/admin/settings_.sms'
@@ -242,6 +243,7 @@ import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_
 import { Route as AuthenticatedPortalWorkoutsAnalyticsRouteImport } from './routes/_authenticated/portal/workouts.analytics'
 import { Route as AuthenticatedPortalWorkoutsPrsRouteImport } from './routes/_authenticated/portal/workouts.prs'
 import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api/public/hooks/action-centre-tick'
+import { Route as ApiPublicHooksAiBenchmarkRouteImport } from './routes/api/public/hooks/ai-benchmark'
 import { Route as ApiPublicHooksAiModelsCheckRouteImport } from './routes/api/public/hooks/ai-models-check'
 import { Route as ApiPublicHooksAppointmentRemindersRouteImport } from './routes/api/public/hooks/appointment-reminders'
 import { Route as ApiPublicHooksBirthdayNotificationsRouteImport } from './routes/api/public/hooks/birthday-notifications'
@@ -1487,6 +1489,12 @@ const AuthenticatedAdminSalesMembershipRoute =
     path: '/sales/membership',
     getParentRoute: () => AuthenticatedAdminRouteRoute,
   } as any)
+const AuthenticatedAdminSettingsAiRoute =
+  AuthenticatedAdminSettingsAiRouteImport.update({
+    id: '/settings_/ai',
+    path: '/settings/ai',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminSettingsChatRoute =
   AuthenticatedAdminSettingsChatRouteImport.update({
     id: '/settings_/chat',
@@ -1623,6 +1631,12 @@ const ApiPublicHooksActionCentreTickRoute =
   ApiPublicHooksActionCentreTickRouteImport.update({
     id: '/api/public/hooks/action-centre-tick',
     path: '/api/public/hooks/action-centre-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksAiBenchmarkRoute =
+  ApiPublicHooksAiBenchmarkRouteImport.update({
+    id: '/api/public/hooks/ai-benchmark',
+    path: '/api/public/hooks/ai-benchmark',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicHooksAiModelsCheckRoute =
@@ -2104,6 +2118,7 @@ export interface FileRoutesByFullPath {
   '/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
   '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
+  '/admin/settings/ai': typeof AuthenticatedAdminSettingsAiRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
@@ -2120,6 +2135,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
+  '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
@@ -2381,6 +2397,7 @@ export interface FileRoutesByTo {
   '/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
   '/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
+  '/admin/settings/ai': typeof AuthenticatedAdminSettingsAiRoute
   '/admin/settings/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/admin/settings/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/admin/settings/sms': typeof AuthenticatedAdminSettingsSmsRoute
@@ -2397,6 +2414,7 @@ export interface FileRoutesByTo {
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
+  '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
@@ -2664,6 +2682,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sales/coaching': typeof AuthenticatedAdminSalesCoachingRoute
   '/_authenticated/admin/sales/coaching-applications': typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   '/_authenticated/admin/sales/membership': typeof AuthenticatedAdminSalesMembershipRoute
+  '/_authenticated/admin/settings_/ai': typeof AuthenticatedAdminSettingsAiRoute
   '/_authenticated/admin/settings_/chat': typeof AuthenticatedAdminSettingsChatRoute
   '/_authenticated/admin/settings_/nutrition-automation': typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   '/_authenticated/admin/settings_/sms': typeof AuthenticatedAdminSettingsSmsRoute
@@ -2680,6 +2699,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/_authenticated/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
+  '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
   '/api/public/hooks/appointment-reminders': typeof ApiPublicHooksAppointmentRemindersRoute
   '/api/public/hooks/birthday-notifications': typeof ApiPublicHooksBirthdayNotificationsRoute
@@ -2947,6 +2967,7 @@ export interface FileRouteTypes {
     | '/admin/sales/coaching'
     | '/admin/sales/coaching-applications'
     | '/admin/sales/membership'
+    | '/admin/settings/ai'
     | '/admin/settings/chat'
     | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
@@ -2963,6 +2984,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
     | '/api/public/hooks/action-centre-tick'
+    | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
@@ -3224,6 +3246,7 @@ export interface FileRouteTypes {
     | '/admin/sales/coaching'
     | '/admin/sales/coaching-applications'
     | '/admin/sales/membership'
+    | '/admin/settings/ai'
     | '/admin/settings/chat'
     | '/admin/settings/nutrition-automation'
     | '/admin/settings/sms'
@@ -3240,6 +3263,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
     | '/api/public/hooks/action-centre-tick'
+    | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
@@ -3506,6 +3530,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sales/coaching'
     | '/_authenticated/admin/sales/coaching-applications'
     | '/_authenticated/admin/sales/membership'
+    | '/_authenticated/admin/settings_/ai'
     | '/_authenticated/admin/settings_/chat'
     | '/_authenticated/admin/settings_/nutrition-automation'
     | '/_authenticated/admin/settings_/sms'
@@ -3522,6 +3547,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/analytics'
     | '/_authenticated/portal/workouts/prs'
     | '/api/public/hooks/action-centre-tick'
+    | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
     | '/api/public/hooks/appointment-reminders'
     | '/api/public/hooks/birthday-notifications'
@@ -3638,6 +3664,7 @@ export interface RootRouteChildren {
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   ChallengesSlugIndexRoute: typeof ChallengesSlugIndexRoute
   ApiPublicHooksActionCentreTickRoute: typeof ApiPublicHooksActionCentreTickRoute
+  ApiPublicHooksAiBenchmarkRoute: typeof ApiPublicHooksAiBenchmarkRoute
   ApiPublicHooksAiModelsCheckRoute: typeof ApiPublicHooksAiModelsCheckRoute
   ApiPublicHooksAppointmentRemindersRoute: typeof ApiPublicHooksAppointmentRemindersRoute
   ApiPublicHooksBirthdayNotificationsRoute: typeof ApiPublicHooksBirthdayNotificationsRoute
@@ -5146,6 +5173,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSalesMembershipRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/settings_/ai': {
+      id: '/_authenticated/admin/settings_/ai'
+      path: '/settings/ai'
+      fullPath: '/admin/settings/ai'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsAiRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/settings_/chat': {
       id: '/_authenticated/admin/settings_/chat'
       path: '/settings/chat'
@@ -5305,6 +5339,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/hooks/action-centre-tick'
       fullPath: '/api/public/hooks/action-centre-tick'
       preLoaderRoute: typeof ApiPublicHooksActionCentreTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/ai-benchmark': {
+      id: '/api/public/hooks/ai-benchmark'
+      path: '/api/public/hooks/ai-benchmark'
+      fullPath: '/api/public/hooks/ai-benchmark'
+      preLoaderRoute: typeof ApiPublicHooksAiBenchmarkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/ai-models-check': {
@@ -5893,6 +5934,7 @@ interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminSalesCoachingRoute: typeof AuthenticatedAdminSalesCoachingRoute
   AuthenticatedAdminSalesCoachingApplicationsRoute: typeof AuthenticatedAdminSalesCoachingApplicationsRoute
   AuthenticatedAdminSalesMembershipRoute: typeof AuthenticatedAdminSalesMembershipRoute
+  AuthenticatedAdminSettingsAiRoute: typeof AuthenticatedAdminSettingsAiRoute
   AuthenticatedAdminSettingsChatRoute: typeof AuthenticatedAdminSettingsChatRoute
   AuthenticatedAdminSettingsNutritionAutomationRoute: typeof AuthenticatedAdminSettingsNutritionAutomationRoute
   AuthenticatedAdminSettingsSmsRoute: typeof AuthenticatedAdminSettingsSmsRoute
@@ -6050,6 +6092,7 @@ const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren
       AuthenticatedAdminSalesCoachingApplicationsRoute,
     AuthenticatedAdminSalesMembershipRoute:
       AuthenticatedAdminSalesMembershipRoute,
+    AuthenticatedAdminSettingsAiRoute: AuthenticatedAdminSettingsAiRoute,
     AuthenticatedAdminSettingsChatRoute: AuthenticatedAdminSettingsChatRoute,
     AuthenticatedAdminSettingsNutritionAutomationRoute:
       AuthenticatedAdminSettingsNutritionAutomationRoute,
@@ -6328,6 +6371,7 @@ const rootRouteChildren: RootRouteChildren = {
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   ChallengesSlugIndexRoute: ChallengesSlugIndexRoute,
   ApiPublicHooksActionCentreTickRoute: ApiPublicHooksActionCentreTickRoute,
+  ApiPublicHooksAiBenchmarkRoute: ApiPublicHooksAiBenchmarkRoute,
   ApiPublicHooksAiModelsCheckRoute: ApiPublicHooksAiModelsCheckRoute,
   ApiPublicHooksAppointmentRemindersRoute:
     ApiPublicHooksAppointmentRemindersRoute,

@@ -24,10 +24,11 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
 import { assignIntelDraftFn, discardIntelDraftFn, queueIntelJobFn, retryIntelJobFn } from "@/lib/program-intel/intel.functions";
 import { generatedProgramOutcomes } from "@/lib/program-intel/outcomes";
-import { blockStructure, findConflicts, redistribution, type GenerationSetup, type SetupField } from "@/lib/program-intel/recommend";
+import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "@/lib/program-intel/recommend";
+import { DEFAULT_PROGRAM_WEEKS, MAX_PROGRAM_WEEKS } from "@/lib/program-intel/horizon";
 import type { Strategy } from "@/lib/program-intel/generator-schemas";
 import type { Brain } from "@/lib/program-intel/types";
-import { useBrainOverride, useGeneratorIntel, useIntelJobs, useIntelRecords, useJobContext, useObservations, useSaveEquipmentProfile, type IntelJob } from "../use-program-intel";
+import { useBrainOverride, useGeneratorIntel, useIntelJobs, useIntelRecords, useJobContext, useObservations, useSaveEquipmentProfile, useSaveLongTermGoal, type IntelJob } from "../use-program-intel";
 import { DraftView, PipelineProgress } from "./draft-view";
 import { ContextInspector } from "./inspector";
 import { OutcomesCard } from "./outcomes-card";
@@ -38,7 +39,7 @@ import { StrategyReview } from "./strategy-view";
 const HISTORY = { kind: "history" } as const;
 
 /** prefill: what Edit with AI handed over ("rebuild the next 12 weeks…"): the coach's words as notes, and the weeks / days it read from them. */
-export function NextProgramWorkstation({ clientId, prefill }: { clientId: string; prefill?: { notes?: string; weeks?: number; days?: number } }) {
+export function NextProgramWorkstation({ clientId, prefill }: { clientId: string; prefill?: { notes?: string; weeks?: number; days?: number; duration?: "goal" } }) {
   const { viewOnly } = useAuth();
   const qc = useQueryClient();
   const records = useIntelRecords(clientId, HISTORY);
@@ -47,6 +48,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
   const jobs = useIntelJobs(clientId);
   const observations = useObservations(clientId);
   const saveEquipment = useSaveEquipmentProfile(clientId);
+  const saveGoal = useSaveLongTermGoal(clientId);
   const queue = useServerFn(queueIntelJobFn);
   const retry = useServerFn(retryIntelJobFn);
   const assign = useServerFn(assignIntelDraftFn);
@@ -77,10 +79,8 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
       if (!s || !intel) return s;
       const next = { ...s, [field]: value } as GenerationSetup;
       const ed = editedRef.current;
-      if (field === "weeks" && !ed.has("blocks")) {
-        const meetWeeks = next.meetDate ? Math.round((Date.parse(next.meetDate) - Date.parse(intel.ctx.today)) / (7 * 86_400_000)) : null;
-        next.blocks = blockStructure(next.brain, next.weeks, meetWeeks);
-      }
+      // blocks the coach set must still add up; otherwise the AI picks them for the new length
+      if (field === "weeks" && !ed.has("blocks")) next.blocks = [];
       if (field === "daysPerWeek" && !ed.has("trainingDays") && next.trainingDays.length !== next.daysPerWeek) {
         const pool = intel.ctx.schedule.committedDays.length === next.daysPerWeek ? intel.ctx.schedule.committedDays : intel.ctx.schedule.observedWeekdays.length === next.daysPerWeek ? intel.ctx.schedule.observedWeekdays : [];
         next.trainingDays = pool;
@@ -101,7 +101,14 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
     if (prefilled.current || !setup || !intel || !prefill) return;
     prefilled.current = true;
     if (prefill.notes?.trim()) change("coachNotes", prefill.notes.trim().slice(0, 2000));
-    if (prefill.weeks && prefill.weeks >= 1 && prefill.weeks <= 52) change("weeks", prefill.weeks);
+    // "Create the next program based on the goal timeline" / "Build the remaining 17 weeks until Nationals" / "a 6-week block"
+    if (prefill.duration === "goal") {
+      change("durationMode", "goal");
+      change("weeks", horizonFor(intel.ctx, "goal", null, setup.startDate).weeks);
+    } else if (prefill.weeks && prefill.weeks >= 1 && prefill.weeks <= MAX_PROGRAM_WEEKS) {
+      change("durationMode", prefill.weeks === DEFAULT_PROGRAM_WEEKS ? "default" : "custom");
+      change("weeks", prefill.weeks);
+    }
     if (prefill.days && prefill.days >= 1 && prefill.days <= 7) change("daysPerWeek", prefill.days);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setup, intel, prefill]);
@@ -127,6 +134,12 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
   }, [intel, setup]);
   const red = useMemo(() => (intel && setup ? redistribution(setup, intel.recommendation.baseline) : null), [intel, setup]);
   const blockers = conflicts.filter((c) => c.severity === "blocker");
+  // where an assigned program goes: after the one running now, aligned to the deadline on file
+  const assignPlan = useMemo(() => {
+    if (!intel) return undefined;
+    const h = horizonFor(intel.ctx, "goal");
+    return { start: h.start, currentEnd: intel.ctx.schedule.currentEnd ?? null, deadline: h.deadline ? { name: h.deadline.name, date: h.deadline.date } : null };
+  }, [intel]);
 
   const all = jobs.data ?? [];
   const consumed = new Set(all.filter((j) => j.kind === "generate" && j.strategy_job_id).map((j) => j.strategy_job_id as string));
@@ -209,7 +222,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
                 today={intel.ctx.today}
                 busy={busy}
                 onInspect={() => setInspecting(activeGenerate)}
-                onAssign={(startDate, ack) => run(() => assign({ data: { jobId: activeGenerate.id, startDate, acknowledgeAudit: ack } }), "Assigned to the client")}
+                plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: activeGenerate.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")}
                 onDiscard={() => run(() => discard({ data: { jobId: activeGenerate.id } }), "Draft discarded")}
               />
             )}
@@ -236,7 +249,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
             <ProgramReviewCard intel={intel} />
             <DataQualityCard intel={intel} />
             <PatternsCard intel={intel} />
-            <SetupCard intel={intel} setup={setup} edited={edited} onChange={change} onBrain={setBrain} onReset={resetSetup} redistribution={red} onEditEquipment={() => setEquipmentOpen(true)} />
+            <SetupCard intel={intel} setup={setup} edited={edited} onChange={change} onBrain={setBrain} onReset={resetSetup} redistribution={red} onEditEquipment={() => setEquipmentOpen(true)} onSaveGoal={async (g) => { await saveGoal.mutateAsync(g); }} />
             <ProgramNotesCard intel={intel} value={setup.coachNotes} edited={edited.has("coachNotes")} onChange={(v) => change("coachNotes", v)} />
             <AdvancedControls intel={intel} setup={setup} edited={edited} onChange={change} />
             <ConflictsCard conflicts={conflicts} />
@@ -266,7 +279,7 @@ export function NextProgramWorkstation({ clientId, prefill }: { clientId: string
                 <summary className="cursor-pointer select-none font-semibold text-muted-foreground">Earlier programs generated ({earlier.length})</summary>
                 <div className="mt-2 space-y-2">
                   {earlier.map((j) => (
-                    <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={() => setInspecting(j)} onAssign={(startDate, ack) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
+                    <DraftView key={j.id} job={j} today={intel.ctx.today} busy={busy} onInspect={() => setInspecting(j)} plan={assignPlan} onAssign={(startDate, ack, allowOverlap) => run(() => assign({ data: { jobId: j.id, startDate, acknowledgeAudit: ack, allowOverlap } }), "Assigned to the client")} onDiscard={() => run(() => discard({ data: { jobId: j.id } }), "Draft discarded")} />
                   ))}
                 </div>
               </details>

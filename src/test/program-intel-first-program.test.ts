@@ -73,15 +73,16 @@ describe("setup answers, read for a first program", () => {
 });
 
 describe("a brand-new client: the recommended first program", () => {
-  it("'Build muscle' reads as bodybuilding (it used to fall to general fitness), 4 weeks, with a starting dose", () => {
+  it("'Build muscle' reads as bodybuilding (it used to fall to general fitness), 12 weeks, with a starting dose", () => {
     const { intel, conflicts } = conflictsOf(newClient({ goal_target: "Bigger chest and arms" }));
     const s = intel.recommendation.setup;
     const why = intel.recommendation.why;
     expect(intel.firstProgram).toBe(true);
     expect(intel.brain).toBe("bodybuilding");
     expect(intel.classification.reasons[0]).toBe('No training on file yet: their goal is "Build muscle"');
-    expect(s.weeks).toBe(4);
-    expect(why.weeks?.source).toBe("First program");
+    expect(s.weeks).toBe(12);
+    expect(why.weeks?.source).toBe("Default");
+    expect(why.weeks?.reason).toMatch(/Week 1 finds their working weights/);
     expect(s.priorities).toEqual(["Biceps", "Triceps", "Chest"]);
     const vol = Object.fromEntries(s.volume.map((v) => [v.target, v.setsPerWeek]));
     expect(vol).toMatchObject({ Chest: 10, Quads: 8, Hamstrings: 8, Glutes: 8, Back: 6, Lats: 6, Shoulders: 6, Biceps: 8, Triceps: 8, Calves: 6 });
@@ -166,12 +167,12 @@ describe("what the AI is told for a first program", () => {
   });
 
   it("the prompts: first-program rules only for a first program; the coach's notes are followed either way", () => {
-    expect(PIPELINE_PROMPT_VERSION).toBe(8);
+    expect(PIPELINE_PROMPT_VERSION).toBe(9);
     const first = strategySystemPrompt("bodybuilding", { first: true });
     expect(first).toContain(FIRST_PROGRAM_RULES);
     expect(first).toContain('"previous_program" is { "intent": "None: first program", "outcome": "None" }');
     expect(strategySystemPrompt("bodybuilding")).not.toContain("FIRST PROGRAM");
-    expect(strategyUserPrompt(brief, setup, { first: true })).toMatch(/^Write the programming strategy for their first 4-week, 3-day program/);
+    expect(strategyUserPrompt(brief, setup, { first: true })).toMatch(/^Write the programming strategy for their first 12-week, 3-day program/);
     const build = constructSystemPrompt("bodybuilding", { first: true });
     expect(build).toContain("Never write a starting weight: nothing is logged.");
     expect(build).toContain("Week 1 doubles as an assessment");

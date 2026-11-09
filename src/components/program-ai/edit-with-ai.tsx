@@ -446,7 +446,7 @@ export function TurnView({ turn, latest, picked, onToggle, appliedResult, onUndo
               <p className="font-medium">That's a new program, not an edit.</p>
               <p className="text-muted-foreground">It'll be written from their whole history by Generate Next Program, audited, and saved as a hidden draft you review before they see it.</p>
               <Button asChild size="sm">
-                <Link to="/admin/client-programs/$clientId/next-program" params={{ clientId }} search={{ notes: r.generate.notes || turn.instruction, weeks: r.generate.weeks, days: r.generate.days_per_week } as any}>
+                <Link to="/admin/client-programs/$clientId/next-program" params={{ clientId }} search={{ notes: r.generate.notes || turn.instruction, weeks: r.generate.weeks, days: r.generate.days_per_week, duration: r.generate.timeline === "goal" && !r.generate.weeks ? "goal" : undefined } as any}>
                   Open Generate Next Program
                 </Link>
               </Button>

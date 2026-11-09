@@ -9,7 +9,10 @@ import { z } from "zod";
 import { BRAINS, type Brain } from "./types";
 import { EQUIPMENT_ITEMS } from "./equipment";
 
-export const MAX_PROGRAM_WEEKS = 16;
+import { MAX_PROGRAM_WEEKS } from "./horizon";
+export { MAX_PROGRAM_WEEKS };
+/** One block is at most this long (a longer program is several blocks, each built in its own request). */
+export const MAX_BLOCK_WEEKS = 12;
 
 const ref = z.object({ id: z.string().trim().max(64).nullable(), name: z.string().trim().min(1).max(120) });
 const shortText = (n: number) => z.string().trim().max(n).catch("");
@@ -39,9 +42,11 @@ export const setupSchema = z.object({
   daysPerWeek: z.number().int().min(1).max(7),
   trainingDays: z.array(z.string().trim().max(12)).max(7).default([]),
   weeks: z.number().int().min(1).max(MAX_PROGRAM_WEEKS),
+  durationMode: z.enum(["default", "custom", "goal"]).default("default"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
   sessionMinutes: z.number().int().min(15).max(240).nullable(),
   maxSessionMinutes: z.number().int().min(15).max(300).nullable(),
-  blocks: z.array(z.object({ name: z.string().trim().min(1).max(80), weeks: z.number().int().min(1).max(MAX_PROGRAM_WEEKS), objective: z.string().trim().max(400) })).min(1).max(4),
+  blocks: z.array(z.object({ name: z.string().trim().min(1).max(80), weeks: z.number().int().min(1).max(MAX_BLOCK_WEEKS), objective: z.string().trim().max(400) })).max(6).default([]),
   priorities: z.array(z.string().trim().max(60)).max(10).default([]),
   equipment: z.object({
     items: z.array(z.enum(EQUIPMENT_ITEMS as [string, ...string[]])).max(40),
@@ -103,14 +108,25 @@ export const strategySchema = z.object({
       .array(
         z.object({
           name: z.string().trim().min(1).max(80),
-          weeks: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS),
+          weeks: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS),
           objective: shortText(600),
           phases: z.array(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), phase: z.string().trim().max(60) })).max(MAX_PROGRAM_WEEKS).catch([]),
         }),
       )
       .min(1)
-      .max(4),
+      .max(6),
   }),
+  /** How these weeks fit the longer timeline (a deadline months away, a long-term goal): what's written now vs later. */
+  roadmap: z
+    .object({
+      timeline: shortText(700),
+      this_program: shortText(700),
+      phases: z.array(z.object({ weeks: z.string().trim().max(24), focus: shortText(300), milestone: shortText(300) })).max(10).catch([]),
+      track: z.enum(["ahead", "on_track", "behind", "unknown"]).catch("unknown"),
+      track_why: shortText(600),
+    })
+    .nullish()
+    .catch(null),
   weekly_layout: z
     .array(z.object({ day: z.coerce.number().int().min(1).max(7), title: z.string().trim().min(1).max(80), focus: shortText(300), primary: z.array(z.string().trim().max(100)).max(5).catch([]), notes: shortText(400) }))
     .min(1)
@@ -170,8 +186,8 @@ export type BuiltDay = z.infer<typeof builtDaySchema>;
 export const builtBlockSchema = z.object({
   name: z.string().trim().min(1).max(80),
   objective: z.string().trim().max(600).nullish(),
-  weeks: z.coerce.number().int().min(1).max(12),
-  week_phases: z.array(z.object({ week: z.coerce.number().int().min(1).max(12), phase: z.string().trim().max(60) })).max(12).catch([]),
+  weeks: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS),
+  week_phases: z.array(z.object({ week: z.coerce.number().int().min(1).max(MAX_BLOCK_WEEKS), phase: z.string().trim().max(60) })).max(MAX_BLOCK_WEEKS).catch([]),
   deload_rule: z.string().trim().max(400).nullish(),
   progression_rules: z.array(z.string().trim().max(400)).max(10).catch([]),
   days: z.array(builtDaySchema).min(1).max(7),

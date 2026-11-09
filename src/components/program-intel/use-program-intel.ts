@@ -156,7 +156,8 @@ export function useIntelJobs(clientId: string) {
         .order("created_at", { ascending: false })
         .limit(20);
       if (error) throw new Error(error.message);
-      return (data ?? []) as IntelJob[];
+      // model benchmark runs are the admin AI panel's, never a coach's draft or strategy
+      return ((data ?? []) as IntelJob[]).filter((j) => !(j.options as any)?.bench);
     },
     // while anything is being written, look again every few seconds
     refetchInterval: (q) => ((q.state.data ?? []).some((j) => j.status === "pending" || j.status === "running") ? 4000 : false),
@@ -190,6 +191,21 @@ export function useSaveEquipmentProfile(clientId: string) {
   return useMutation({
     mutationFn: async (profile: EquipmentProfile | null) => {
       const { error } = await sb.from("program_intel_profiles").upsert({ client_id: clientId, equipment_profile: profile ? { ...profile, confirmedAt: new Date().toISOString() } : null }, { onConflict: "client_id" });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["program-intel-records", clientId] });
+    },
+  });
+}
+
+/** The athlete's dated long-term goal (e.g. "600 kg total" by a date): set once, read by every program's goal timeline. */
+export function useSaveLongTermGoal(clientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (goal: { text: string; date: string | null } | null) => {
+      const value = goal && goal.text.trim() ? { text: goal.text.trim().slice(0, 120), date: goal.date || null, savedAt: new Date().toISOString() } : null;
+      const { error } = await sb.from("program_intel_profiles").upsert({ client_id: clientId, long_term_goal: value }, { onConflict: "client_id" });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {

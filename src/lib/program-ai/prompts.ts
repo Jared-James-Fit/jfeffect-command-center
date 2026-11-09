@@ -9,7 +9,7 @@ import { dayMinutes, dayName, lockReason, rxLine, type EngineCtx } from "./engin
 import type { RuleKind } from "./ops";
 import type { CatalogExercise, ProgramSnapshot } from "./types";
 
-export const EDIT_PROMPT_VERSION = 5;
+export const EDIT_PROMPT_VERSION = 6;
 
 export type RuleLine = { kind: RuleKind; rule: string; expiresOn: string | null; scope: "athlete" | "all" };
 
@@ -107,7 +107,7 @@ WHAT YOU CAN'T CHANGE
 - "notes" is the cue the athlete reads on that exercise. Never use it to explain your change (that goes in "why"), and leave an existing cue alone unless it no longer fits the exercise or the prescription.
 - Swapping to a different kind of exercise: give it the prescription that fits the new exercise (sets, reps, effort and rest), not the old one's.
 - Loads: from the athlete's logged performance: a set they did, or one standard step on from it when the records say progress (2.5 kg / 5 lb on a barbell, the next dumbbell). Otherwise use RPE/RIR, or a % when the lift has a max on file. Never a starting weight you can't support.
-- A brand-new client program or a full rebuild (new weeks or blocks that don't exist yet, "rebuild the next 12 weeks", "write a new program") is not an edit: reply intent "generate" with generate {weeks, days_per_week, notes} and no changes; the app's program generator writes it from the athlete's whole history and audits it. Templates are rebuilt with operations.
+- A brand-new client program or a full rebuild (new weeks or blocks that don't exist yet, "generate the next 12 weeks", "create an 8-week competition prep", "build the remaining 17 weeks until Nationals", "a 6-week hypertrophy block", "the next program from their goal timeline") is not an edit: reply intent "generate" with generate {weeks, days_per_week, timeline, notes} and no changes; the app's program generator writes it from the athlete's whole history and audits it. "weeks" only when the coach named a number; "timeline": "goal" when they asked for it to follow their goal or deadline ("until Nationals", "based on the goal timeline") without a number; never both guessed. Put the coach's words in notes. Templates are rebuilt with operations.
 
 OPERATIONS (refs: B1 block, B1W3 week 3, B1W3D2 a workout, B1W3D2E4 an exercise; a ref never changes during a proposal, even after an earlier op removes or adds something)
 {"op":"update","rows":["B1W3D2E1","B1W4D2E1"],"set":{...}}  change prescriptions (only the fields in set)
@@ -130,7 +130,7 @@ REPLY: ONE JSON object, nothing else:
   "analysis": [{"text": "one finding, with its number", "kind": "fact" | "estimate" | "hypothesis"}],   // up to 6, only what matters
   "changes": [{"id": "c1", "title": "Swap hack squat for belt squat", "why": "1–2 sentences", "basis": "requested" | "data" | "speculative", "evidence": ["..."], "ops": [ ... ]}],
   "drop": ["c2"],          // ids from the CURRENT PROPOSAL to take out
-  "generate": null,        // or {"weeks": 12, "days_per_week": 4, "notes": "what the new program should do"}
+  "generate": null,        // or {"weeks": 12, "days_per_week": 4, "timeline": null, "notes": "what the new program should do"}; timeline "goal" = follow their goal / deadline
   "remember": [{"kind": "hard_constraint" | "coach_preference" | "client_preference" | "temporary_restriction", "rule": "Prefers SBD on Fridays", "why": "the coach said so"}],   // only lasting rules the coach stated, never your own hypotheses; [] usually
   "questions": []          // only when you truly can't act without an answer
 }

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { NextProgramWorkstation } from "@/components/program-intel/generator/workstation";
 
-type Prefill = { notes?: string; weeks?: number; days?: number };
+type Prefill = { notes?: string; weeks?: number; days?: number; duration?: "goal" };
 
 export const Route = createFileRoute("/_authenticated/admin/client-programs/$clientId/next-program")({
   component: NextProgramRoute,
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_authenticated/admin/client-programs/$cli
       notes: typeof s.notes === "string" && s.notes.trim() ? s.notes.slice(0, 2000) : undefined,
       weeks: num(s.weeks),
       days: num(s.days),
+      duration: s.duration === "goal" ? "goal" : undefined,
     };
   },
 });
@@ -22,5 +23,5 @@ export const Route = createFileRoute("/_authenticated/admin/client-programs/$cli
 function NextProgramRoute() {
   const { clientId } = Route.useParams();
   const prefill = Route.useSearch();
-  return <NextProgramWorkstation clientId={clientId} prefill={prefill.notes || prefill.weeks || prefill.days ? prefill : undefined} />;
+  return <NextProgramWorkstation clientId={clientId} prefill={prefill.notes || prefill.weeks || prefill.days || prefill.duration ? prefill : undefined} />;
 }

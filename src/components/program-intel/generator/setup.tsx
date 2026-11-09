@@ -17,7 +17,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { cn } from "@/lib/utils";
 import { EQUIPMENT_ITEMS, EQUIPMENT_LABEL } from "@/lib/program-intel/equipment";
 import type { GeneratorIntel } from "@/lib/program-intel/intelligence";
-import { blockStructure, type Conflict, type ExerciseRef, type GenerationSetup, type Redistribution, type SetupField, type Why } from "@/lib/program-intel/recommend";
+import { blockStructure, horizonFor, setupHorizon, type Conflict, type ExerciseRef, type GenerationSetup, type Redistribution, type SetupField, type Why } from "@/lib/program-intel/recommend";
+import { DEFAULT_PROGRAM_WEEKS, MAX_PROGRAM_WEEKS, type DurationMode } from "@/lib/program-intel/horizon";
 import { BRAIN_LABEL, BRAINS, HYPERTROPHY_BRAINS, STRENGTH_BRAINS, type Brain, type EquipmentItem, type EquipmentProfile } from "@/lib/program-intel/types";
 import { SectionTitle } from "./overview";
 
@@ -163,6 +164,7 @@ export function SetupCard({
   onReset,
   redistribution,
   onEditEquipment,
+  onSaveGoal,
 }: {
   intel: GeneratorIntel;
   setup: GenerationSetup;
@@ -172,6 +174,8 @@ export function SetupCard({
   onReset: () => void;
   redistribution: Redistribution | null;
   onEditEquipment: () => void;
+  /** Saves the athlete's dated long-term goal on their profile (read by every later program). */
+  onSaveGoal?: (goal: { text: string; date: string | null } | null) => Promise<void>;
 }) {
   const why = intel.recommendation.why;
   const meetWeeks = setup.meetDate ? Math.round((Date.parse(setup.meetDate) - Date.parse(intel.ctx.today)) / (7 * 86_400_000)) : null;
@@ -213,9 +217,7 @@ export function SetupCard({
           {redistribution.lines.map((l) => <div key={l}>{l}</div>)}
         </div>
       )}
-      <Row label="Duration" value={`${setup.weeks} weeks${meetWeeks != null ? ` · meet in ${meetWeeks}` : ""}`} why={why.weeks} edited={edited.has("weeks")}>
-        <Stepper value={setup.weeks} min={1} max={16} onChange={(n) => onChange("weeks", n)} suffix="wk" />
-      </Row>
+      <DurationRow intel={intel} setup={setup} edited={edited} onChange={onChange} onSaveGoal={onSaveGoal} />
       <Row label="Session length" value={`${setup.sessionMinutes ?? "—"} min${setup.maxSessionMinutes ? ` (max ${setup.maxSessionMinutes})` : ""}`} why={why.sessionMinutes} edited={edited.has("sessionMinutes") || edited.has("maxSessionMinutes")}>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -229,7 +231,7 @@ export function SetupCard({
         </div>
       </Row>
       <CardioRow setup={setup} recommended={intel.recommendation.setup.cardio} why={why.cardio} edited={edited.has("cardio")} onChange={onChange} />
-      <Row label="Block structure" value={setup.blocks.map((b) => `${b.name} ${b.weeks}w`).join(" → ")} why={why.blocks} edited={edited.has("blocks")}>
+      <Row label="Block structure" value={setup.blocks.length ? setup.blocks.map((b) => `${b.name} ${b.weeks}w`).join(" → ") : "The AI decides"} why={why.blocks} edited={edited.has("blocks")}>
         <BlocksEditor setup={setup} onChange={onChange} meetWeeks={meetWeeks} />
       </Row>
       <Row label="Priorities" value={setup.priorities.join(", ") || "None set"} why={why.priorities} edited={edited.has("priorities")}>
@@ -326,16 +328,141 @@ export function exerciseOptions(intel: GeneratorIntel): ExerciseRef[] {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const MODES: Array<[DurationMode, string]> = [
+  ["default", `${DEFAULT_PROGRAM_WEEKS} weeks`],
+  ["custom", "Custom"],
+  ["goal", "Goal timeline"],
+];
+
+/**
+ * How long the program is: the 12-week default, the coach's own number, or the goal timeline
+ * (read from the meet and the long-term goal on file). Shows where the deadline falls, the road
+ * to it, and when it starts; a dated goal is set here once and kept on the athlete's profile.
+ */
+function DurationRow({ intel, setup, edited, onChange, onSaveGoal }: { intel: GeneratorIntel; setup: GenerationSetup; edited: Set<SetupField>; onChange: SetupChange; onSaveGoal?: (goal: { text: string; date: string | null } | null) => Promise<void> }) {
+  const hz = setupHorizon(setup, intel.ctx);
+  const goalHz = horizonFor(intel.ctx, "goal", null, setup.startDate);
+  const mode = setup.durationMode ?? "default";
+  const longTerm = intel.ctx.goals.longTerm ?? null;
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [goalText, setGoalText] = useState(longTerm?.text ?? "");
+  const [goalDate, setGoalDate] = useState(longTerm?.date ?? "");
+  const [saving, setSaving] = useState(false);
+  const setMode = (m: DurationMode) => {
+    onChange("durationMode", m);
+    if (m === "default") onChange("weeks", DEFAULT_PROGRAM_WEEKS);
+    if (m === "goal") onChange("weeks", goalHz.weeks);
+  };
+  const setStart = (d: string) => {
+    onChange("startDate", d || null);
+    if (mode === "goal" && d) onChange("weeks", horizonFor(intel.ctx, "goal", null, d).weeks);
+  };
+  const saveGoal = async () => {
+    if (!onSaveGoal) return;
+    setSaving(true);
+    try {
+      await onSaveGoal(goalText.trim() ? { text: goalText, date: goalDate || null } : null);
+      setGoalOpen(false);
+      toast.success(goalText.trim() ? "Goal saved to their profile" : "Goal cleared");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save the goal");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const summary = `${setup.weeks} weeks${hz.deadline ? ` · ${hz.deadline.name} in week ${hz.deadline.week}` : ""}`;
+  const why: Why = mode === "goal" ? { source: "Goal timeline", reason: goalHz.recommended.why, confidence: "high" } : mode === "custom" ? { source: "Your length", reason: hz.why, confidence: "high" } : (intel.recommendation.why.weeks as Why) ?? { source: "Default", reason: hz.why, confidence: "medium" };
+  return (
+    <Row label="Program length" value={summary} why={why} edited={edited.has("weeks") || edited.has("durationMode") || edited.has("startDate")} testId="gen-row-duration">
+      <div role="radiogroup" aria-label="Program length" className="grid grid-cols-3 gap-1 rounded-lg bg-background p-1">
+        {MODES.map(([m, label]) => (
+          <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)} className={cn("h-10 rounded-md text-[12px] font-semibold", mode === m ? "bg-secondary text-foreground" : "text-muted-foreground")} data-testid={`gen-duration-${m}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === "custom" && (
+        <div className="mt-2">
+          <Stepper value={setup.weeks} min={1} max={MAX_PROGRAM_WEEKS} onChange={(n) => onChange("weeks", n)} suffix="wk" testId="gen-weeks-stepper" />
+        </div>
+      )}
+      {mode === "goal" && !goalHz.deadline && <p className="mt-2 text-[12px] text-muted-foreground">No meet or dated goal on file, so it's {DEFAULT_PROGRAM_WEEKS} weeks. Add their goal and date below and the length follows it.</p>}
+      {mode !== "goal" && goalHz.deadline && goalHz.weeks !== setup.weeks && (
+        <p className="mt-2 text-[12px]">
+          The goal timeline would write {goalHz.weeks} weeks: {goalHz.recommended.why}{" "}
+          <button type="button" className="font-semibold underline" onClick={() => setMode("goal")}>Use it</button>
+        </p>
+      )}
+      {hz.roadmap.length > 1 && (
+        <ol className="mt-2 space-y-0.5 text-[11px] text-muted-foreground" data-testid="gen-roadmap">
+          {hz.roadmap.map((r) => (
+            <li key={r.from}>
+              Weeks {r.from}–{r.to}: {r.label}
+              {r.label === "This program" ? " (written now)" : " (written later, from how this one goes)"}
+            </li>
+          ))}
+        </ol>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+        <Label htmlFor="gen-start" className="text-[11px]">Starts</Label>
+        <Input id="gen-start" type="date" value={setup.startDate ?? ""} onChange={(e) => setStart(e.target.value)} className="h-9 w-auto" />
+        <span className="text-[11px] text-muted-foreground">{hz.startWhy && hz.startWhy !== "the start you set" ? hz.startWhy : ""}</span>
+      </div>
+      <div className="mt-2 border-t border-border/50 pt-2 text-[12px]">
+        {longTerm?.text && !goalOpen ? (
+          <p>
+            <span className="font-semibold">Long-term goal:</span> {longTerm.text}
+            {longTerm.date ? ` by ${longTerm.date}` : " (no date)"}{" "}
+            {onSaveGoal && <button type="button" className="font-semibold underline" onClick={() => setGoalOpen(true)}>Edit</button>}
+          </p>
+        ) : goalOpen || (mode === "goal" && !goalHz.deadline) ? (
+          onSaveGoal ? (
+            <div className="space-y-1.5">
+              <Label className="text-[11px]">Their long-term goal (saved to their profile)</Label>
+              <Input value={goalText} onChange={(e) => setGoalText(e.target.value)} placeholder="e.g. 600 kg total, compete at 74 kg, reach 90 kg" className="h-10" maxLength={120} />
+              <div className="flex items-center gap-2">
+                <Input type="date" value={goalDate} onChange={(e) => setGoalDate(e.target.value)} className="h-10 w-auto" aria-label="Goal date" />
+                <Button type="button" size="sm" className="h-10" disabled={saving} onClick={saveGoal}>Save goal</Button>
+              </div>
+            </div>
+          ) : null
+        ) : (
+          onSaveGoal && <button type="button" className="text-[11px] font-semibold underline" onClick={() => setGoalOpen(true)}>Add a long-term goal</button>
+        )}
+      </div>
+    </Row>
+  );
+}
+
+/** A starting layout the coach can edit: the usual structure for the length, no block over 12 weeks. */
+function startingBlocks(setup: GenerationSetup, meetWeeks: number | null): GenerationSetup["blocks"] {
+  return blockStructure(setup.brain, setup.weeks, meetWeeks).flatMap((b) => {
+    if (b.weeks <= 12) return [b];
+    const a = Math.ceil(b.weeks / 2);
+    return [
+      { ...b, name: `${b.name} 1`, weeks: a },
+      { ...b, name: `${b.name} 2`, weeks: b.weeks - a },
+    ];
+  });
+}
+
 function BlocksEditor({ setup, onChange, meetWeeks }: { setup: GenerationSetup; onChange: SetupChange; meetWeeks: number | null }) {
   const total = setup.blocks.reduce((n, b) => n + b.weeks, 0);
   const set = (i: number, patch: Partial<GenerationSetup["blocks"][number]>) => onChange("blocks", setup.blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+  if (!setup.blocks.length)
+    return (
+      <div className="space-y-2 text-[12px]">
+        <p className="text-muted-foreground">The AI picks the phases, how long each runs and any lighter weeks, from how this athlete trains and recovers{setup.meetDate ? " and the meet" : ""}.</p>
+        <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => onChange("blocks", startingBlocks(setup, meetWeeks))}>Set them myself</Button>
+      </div>
+    );
   return (
     <div className="space-y-2">
       {setup.blocks.map((b, i) => (
         <div key={i} className="space-y-1 rounded-lg bg-background p-2">
           <div className="flex items-center gap-1">
             <Input value={b.name} onChange={(e) => set(i, { name: e.target.value })} className="h-9 flex-1 text-[13px] font-semibold" aria-label="Block name" />
-            <Stepper value={b.weeks} min={1} max={16} onChange={(n) => set(i, { weeks: n })} suffix="wk" />
+            <Stepper value={b.weeks} min={1} max={12} onChange={(n) => set(i, { weeks: n })} suffix="wk" />
             {setup.blocks.length > 1 && <Button type="button" size="icon" variant="ghost" className="h-9 w-9" onClick={() => onChange("blocks", setup.blocks.filter((_, j) => j !== i))} aria-label="Remove block"><X className="h-4 w-4" /></Button>}
           </div>
           <Textarea value={b.objective} onChange={(e) => set(i, { objective: e.target.value })} rows={2} className="text-[12px]" aria-label="Objective" />
@@ -343,8 +470,9 @@ function BlocksEditor({ setup, onChange, meetWeeks }: { setup: GenerationSetup; 
       ))}
       <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
         <span className={cn("font-semibold", total !== setup.weeks && "text-destructive")}>{total} of {setup.weeks} weeks</span>
-        {setup.blocks.length < 4 && <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => onChange("blocks", [...setup.blocks, { name: `Block ${setup.blocks.length + 1}`, weeks: Math.max(1, setup.weeks - total), objective: "" }])}>Add block</Button>}
-        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => onChange("blocks", blockStructure(setup.brain, setup.weeks, meetWeeks))}>Fit to {setup.weeks} weeks</Button>
+        {setup.blocks.length < 6 && <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => onChange("blocks", [...setup.blocks, { name: `Block ${setup.blocks.length + 1}`, weeks: Math.min(12, Math.max(1, setup.weeks - total)), objective: "" }])}>Add block</Button>}
+        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => onChange("blocks", startingBlocks(setup, meetWeeks))}>Fit to {setup.weeks} weeks</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => onChange("blocks", [])}>Let the AI decide</Button>
       </div>
     </div>
   );

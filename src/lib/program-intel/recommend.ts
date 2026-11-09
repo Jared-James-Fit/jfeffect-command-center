@@ -15,6 +15,7 @@ import { calibrationFactor, estimateDay, type TimedExercise } from "./session-ti
 import { cardioGoal, liftingMinutesWith, proposeCardio, type CardioPlan } from "./cardio";
 import { LEVEL_LABEL, PRIORITY_GROUPS, startingDose } from "./first-program";
 import { BRAIN_LABEL, LIFTS, STRENGTH_BRAINS, type Brain, type EquipmentItem, type IntelReport, type Lift, type RawExercise } from "./types";
+import { defaultMode, goalDeadline, planHorizon, plannedStart, type Deadline, type DurationMode, type Horizon } from "./horizon";
 
 export type ExerciseRef = { id: string | null; name: string };
 export type BlockPlan = { name: string; weeks: number; objective: string };
@@ -24,9 +25,15 @@ export type GenerationSetup = {
   secondaryGoals: string[];
   daysPerWeek: number;
   trainingDays: string[];
+  /** Weeks written and scheduled now (the horizon; horizon.ts). */
   weeks: number;
+  /** How the length was chosen: the 12-week default, the coach's own number, or the goal timeline. */
+  durationMode: DurationMode;
+  /** The program's first day (a Monday after whatever is running now). */
+  startDate: string | null;
   sessionMinutes: number | null;
   maxSessionMinutes: number | null;
+  /** The coach's own block layout; empty = the strategy chooses the phases and block lengths. */
   blocks: BlockPlan[];
   priorities: string[];
   equipment: { items: EquipmentItem[]; location: string | null; cableStations: number | null; notes: string | null; source: EquipmentResolution["source"]; confidence: EquipmentResolution["confidence"] };
@@ -161,6 +168,29 @@ function prescriptionStyle(prev: IntelReport | null): { intensity: string; effor
   };
 }
 
+/** Every dated deadline on file: the next meet, and the long-term goal when it has a date. */
+export function deadlinesOf(ctx: AthleteContext): Deadline[] {
+  const out: Deadline[] = [];
+  const meet = ctx.competition.next;
+  if (meet) out.push({ kind: "meet", name: meet.name, date: meet.date, source: "Meet prep" });
+  const goal = goalDeadline(ctx.goals.longTerm);
+  if (goal) out.push(goal);
+  return out;
+}
+
+/** The horizon for a mode (and the coach's own number of weeks), from when the next program starts. */
+export function horizonFor(ctx: AthleteContext, mode: DurationMode, customWeeks?: number | null, startDate?: string | null): Horizon {
+  const start = startDate ? { date: startDate, why: "the start you set" } : plannedStart(ctx.today, ctx.schedule.currentEnd ?? null);
+  return planHorizon({ mode, customWeeks, start: start.date, startWhy: start.why, deadlines: deadlinesOf(ctx) });
+}
+
+/** The horizon a setup describes (a default length other than 12 is the coach's own number). */
+export function setupHorizon(setup: Pick<GenerationSetup, "weeks" | "durationMode" | "startDate">, ctx: AthleteContext): Horizon {
+  const mode: DurationMode = setup.durationMode === "default" && setup.weeks !== 12 ? "custom" : setup.durationMode ?? "default";
+  const h = horizonFor(ctx, mode === "goal" ? "custom" : mode, setup.weeks, setup.startDate);
+  return mode === "goal" ? { ...h, mode: "goal", why: horizonFor(ctx, "goal", null, setup.startDate).recommended.why, conflicts: [] } : h;
+}
+
 export function recommendSetup(x: {
   ctx: AthleteContext;
   brain: Brain;
@@ -235,22 +265,14 @@ export function recommendSetup(x: {
   const trainingDays = ctx.schedule.committedDays.length === days ? ctx.schedule.committedDays : ctx.schedule.observedWeekdays.length === days ? ctx.schedule.observedWeekdays : ctx.schedule.committedDays;
   why.trainingDays = trainingDays.length ? { source: trainingDays === ctx.schedule.committedDays ? "Committed schedule" : "When they trained", reason: trainingDays.join(", "), confidence: trainingDays.length === days ? "high" : "low" } : { source: "Not on file", reason: "Workouts are placed on their training days when you assign.", confidence: "low" };
 
-  // Weeks.
+  // Weeks: 12 written at a time by default; a deadline within 16 weeks of the start sets the length
+  // (Goal timeline), counted from when the program starts (after whatever is running now).
   const meet = ctx.competition.next;
-  let weeks: number;
-  if (meet && meet.weeksOut >= 2 && meet.weeksOut <= 16) {
-    weeks = meet.weeksOut;
-    why.weeks = { source: "Meet prep", reason: `${meet.name} is ${meet.weeksOut} weeks away (${meet.date}).`, confidence: "high" };
-  } else if (p && p.weeks >= 3) {
-    weeks = Math.min(12, Math.max(4, p.weeks));
-    why.weeks = { source: "Last program", reason: `Same length as the last program (${p.weeks} weeks), then reassess from its results.`, confidence: "medium" };
-  } else if (fresh) {
-    weeks = 4;
-    why.weeks = { source: "First program", reason: "4 weeks to learn how they move, recover and respond; the next program is built from what they log.", confidence: "medium" };
-  } else {
-    weeks = brain === "powerlifting" || brain === "powerbuilding" ? 8 : 6;
-    why.weeks = { source: "Default", reason: `A typical ${BRAIN_LABEL[brain].toLowerCase()} cycle.`, confidence: "low" };
-  }
+  const auto = horizonFor(ctx, "goal");
+  const mode = defaultMode(auto);
+  const hz = mode === "goal" ? auto : horizonFor(ctx, "default");
+  const weeks = hz.weeks;
+  why.weeks = mode === "goal" ? { source: "Goal timeline", reason: hz.why, confidence: "high" } : { source: "Default", reason: `${hz.why}${fresh ? " Week 1 finds their working weights; the rest progresses from what they log." : ""}`, confidence: "medium" };
 
   // Session length: as long as their sessions actually take, within their stated limit, and for a
   // client who trains in booked PT sessions within that hour (warm-up, lifting and cardio all inside it).
@@ -300,8 +322,9 @@ export function recommendSetup(x: {
     confidence: cardio.source === "plan" ? "high" : "medium",
   };
 
-  const blocks = blockStructure(brain, weeks, meet?.weeksOut ?? null);
-  why.blocks = { source: "Brain + timeline", reason: meet ? `Built back from the meet (${meet.weeksOut} weeks).` : blocks.length === 1 ? `One block of ${weeks} weeks: ${p ? `the last program ran as ${prev?.blocks.length ?? 1} block${(prev?.blocks.length ?? 1) === 1 ? "" : "s"}` : "no need to split it"}.` : `${blocks.length} blocks over ${weeks} weeks.`, confidence: "medium" };
+  // the strategy decides the phases and block lengths for this athlete and timeline (no fixed 4-week blocks)
+  const blocks: BlockPlan[] = [];
+  why.blocks = { source: "Strategy", reason: `The AI picks the phases, block lengths and any lighter weeks for this athlete${hz.deadline ? ` and ${hz.deadline.name}` : ""}; set your own in Advanced if you want them fixed.`, confidence: "medium" };
 
   // Priorities: what the evidence says is lagging (never invented).
   const priorities: string[] = [];
@@ -402,6 +425,8 @@ export function recommendSetup(x: {
     daysPerWeek: days,
     trainingDays,
     weeks,
+    durationMode: mode,
+    startDate: hz.start,
     sessionMinutes,
     maxSessionMinutes,
     blocks,
@@ -502,14 +527,16 @@ export function findConflicts(setup: GenerationSetup, ctx: AthleteContext, basel
   const avail = ctx.schedule.availableWeekdays.length;
   if (avail && setup.daysPerWeek > avail) out.push({ id: "days-avail", severity: "warning", title: `${setup.daysPerWeek} days a week but only ${avail} available days on file`, detail: `Available (Goals & Setup${ctx.goals.updatedAt ? `, updated ${ctx.goals.updatedAt.slice(0, 10)}` : ""}): ${ctx.schedule.availableWeekdays.join(", ")}.`, options: [`Train ${avail} days`, "Keep it and update their availability"] });
   if (setup.trainingDays.length && setup.trainingDays.length !== setup.daysPerWeek) out.push({ id: "days-list", severity: "warning", title: `${setup.daysPerWeek} days a week but ${setup.trainingDays.length} training days picked`, detail: `Picked: ${setup.trainingDays.join(", ")}.`, options: ["Match the days to the count"] });
-  if (setup.meetDate) {
-    if (setup.meetDate < ctx.today) out.push({ id: "meet-past", severity: "blocker", title: "The meet date is in the past", detail: setup.meetDate, options: ["Clear or fix the meet date"] });
-    else {
-      const weeksOut = Math.round((Date.parse(setup.meetDate) - Date.parse(ctx.today)) / (7 * 86_400_000));
-      if (weeksOut < setup.weeks) out.push({ id: "meet-before-end", severity: "warning", title: `The meet is ${weeksOut} weeks out but the program is ${setup.weeks} weeks`, detail: "The program would run past the meet.", options: [`Make it ${weeksOut} weeks`, "Keep it (a post-meet phase)"] });
-      else if (weeksOut > setup.weeks + 1 && setup.brain === "powerlifting") out.push({ id: "meet-after-end", severity: "warning", title: `The program ends ${weeksOut - setup.weeks} weeks before the meet`, detail: "It won't include the peak and taper.", options: [`Make it ${Math.min(16, weeksOut)} weeks`, "Keep it (peak in the next program)"] });
-    }
+  if (setup.meetDate && setup.meetDate < ctx.today) out.push({ id: "meet-past", severity: "blocker", title: "The meet date is in the past", detail: setup.meetDate, options: ["Clear or fix the meet date"] });
+  // the length against the deadlines on file (counted from the program's start): your length wins, the conflict is named
+  const hz = setupHorizon(setup, ctx);
+  for (const c of hz.conflicts) out.push({ id: c.id, severity: "warning", title: c.title, detail: c.detail, options: c.options });
+  if (setup.durationMode === "goal") {
+    const now = horizonFor(ctx, "goal", null, setup.startDate);
+    if (now.weeks !== setup.weeks) out.push({ id: "goal-moved", severity: "warning", title: `The goal timeline now gives ${now.weeks} weeks, not ${setup.weeks}`, detail: now.recommended.why, options: [`Make it ${now.weeks} weeks`, `Keep ${setup.weeks}`] });
   }
+  if (setup.startDate && ctx.schedule.currentEnd && setup.startDate <= ctx.schedule.currentEnd)
+    out.push({ id: "start-overlaps", severity: "warning", title: `It starts ${setup.startDate}, before the current program ends (${ctx.schedule.currentEnd})`, detail: "Both programs would have workouts on the same days until then.", options: [`Start after it (${plannedStart(ctx.today, ctx.schedule.currentEnd).date})`, "Keep the date (end the current program yourself)"] });
   const blockWeeks = setup.blocks.reduce((n, b) => n + b.weeks, 0);
   if (setup.blocks.length && blockWeeks !== setup.weeks) out.push({ id: "blocks-weeks", severity: "blocker", title: `The blocks add up to ${blockWeeks} weeks, not ${setup.weeks}`, detail: setup.blocks.map((b) => `${b.name} ${b.weeks}`).join(" + "), options: ["Adjust the blocks", "Reset the blocks to the recommendation"] });
   for (const f of setup.frequency) if (f.perWeek > setup.daysPerWeek) out.push({ id: `freq:${f.target}`, severity: "warning", title: `${f.target} ${f.perWeek}×/week is more than ${setup.daysPerWeek} training days`, detail: "It will be capped at one exposure per day.", options: [`${f.target} ${setup.daysPerWeek}×/week`] });

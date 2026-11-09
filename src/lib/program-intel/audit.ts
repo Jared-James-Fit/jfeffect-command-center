@@ -69,6 +69,8 @@ export type AuditResult = {
    * read from), so a bench set is chest work, never a full triceps set.
    */
   weekly: Array<{ block: number; week: number; sets: number; lifts: Record<Lift, { sets: number; days: number }>; muscles: Record<string, { sets: number; days: number }>; direct?: Record<string, { sets: number; days: number }> }>;
+  /** Things worth a coach's judgment in context that aren't findings by themselves (e.g. a heavy squat the day after a heavy deadlift); the coaching review weighs them. */
+  facts?: string[];
 };
 
 export type AuditInput = {
@@ -84,8 +86,6 @@ export type AuditInput = {
   /** the athlete's own exercise ids (from their history) */
   athleteExerciseIds: Set<string>;
   brief: string;
-  /** Blocks whose days were rotated before the audit so heavy squat and deadlift days aren't back to back (`spreadHeavyDays`). */
-  dayOrder?: string[];
 };
 
 const LIFT_RE: Record<Lift, RegExp> = { squat: /squat/i, bench: /bench/i, deadlift: /deadlift/i };
@@ -109,7 +109,7 @@ export function directGroupOf(m: RawExercise | undefined): string | null {
   return normalizeMuscle(m.primary_muscle_group) ?? normalizeMuscle(m.muscle_groups?.[0]);
 }
 
-/** Programs where a heavy squat day and a heavy deadlift day are kept off back-to-back days. */
+/** Programs where a heavy squat day next to a heavy deadlift day is worth the coaching review's eye. */
 export const HEAVY_SPACING_BRAINS = ["powerlifting", "powerbuilding", "general_strength"];
 export type HeavyDay = { squat: boolean; deadlift: boolean };
 
@@ -138,19 +138,6 @@ export function heavyClashes(days: HeavyDay[], trainingDays: string[]): Array<[n
   return out;
 }
 
-/**
- * The week's days rotated (the split's own order kept, the smallest turn that works) so no heavy squat
- * day sits the day before or after a heavy deadlift day; null when nothing clashes or no turn fixes it.
- */
-export function spreadHeavyDays<T>(days: T[], trainingDays: string[], heavy: (d: T) => HeavyDay): { days: T[]; shift: number } | null {
-  const flags = days.map(heavy);
-  if (!heavyClashes(flags, trainingDays).length) return null;
-  for (let shift = 1; shift < days.length; shift++) {
-    const turned = days.map((_, k) => days[(k + shift) % days.length]);
-    if (!heavyClashes(turned.map(heavy), trainingDays).length) return { days: turned, shift };
-  }
-  return null;
-}
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** Numbers and week labels an evidence line cites that the brief doesn't contain (an invented claim). */
@@ -353,15 +340,15 @@ export function auditProgram(x: AuditInput): AuditResult {
     const lighter = weekly.some((w, i) => i > 0 && (w.sets <= maxSets * 0.8 || /deload|taper|light|reset/i.test(program.blocks[w.block].week_phases?.find((p) => p.week === w.week)?.phase ?? "")));
     if (!lighter && !program.blocks.some((b) => b.deload_rule)) add("fatigue", "review", `${programWeeks} weeks with no lighter week or deload rule.`);
   }
+  // a heavy squat day next to a heavy deadlift day isn't a mistake by itself: it's a fact the coaching review judges in context
+  const facts: string[] = [];
   if (HEAVY_SPACING_BRAINS.includes(brain)) {
     const order = setup.trainingDays.map((d) => WEEKDAY.indexOf(d.toLowerCase())).filter((n) => n >= 0);
-    if (order.length === setup.daysPerWeek) {
+    if (order.length === setup.daysPerWeek)
       program.blocks.forEach((b, bi) => {
         for (const [i, j] of heavyClashes(b.days.map((d) => heavyOf(d, meta)), setup.trainingDays))
-          add("fatigue", "review", `Heavy squat and heavy deadlift on back-to-back days (${setup.trainingDays[i]} / ${setup.trainingDays[j]}${j < i ? ", into the next week" : ""}).`, bi);
+          facts.push(`Block ${bi + 1}: ${b.days[i].title} (${setup.trainingDays[i]}) and ${b.days[j].title} (${setup.trainingDays[j]}${j < i ? ", the next week" : ""}) lead with a heavy squat and a heavy deadlift on back-to-back days.`);
       });
-      for (const line of x.dayOrder ?? []) add("fatigue", "passed", line);
-    } else add("fatigue", "skipped", "Training weekdays aren't set, so back-to-back heavy days can't be checked.");
   }
   const allSets = allEx.flatMap(({ e, b }) => Array.from({ length: b.weeks }, (_, i) => rxForWeek(e, i + 1)));
   const veryHard = allSets.filter((r) => (rpeRange(r.rpe)?.[1] ?? 0) >= 9.5).length;
@@ -503,7 +490,7 @@ export function auditProgram(x: AuditInput): AuditResult {
     const bis = y.block != null ? [y.block] : program.blocks.map((_, i) => i);
     for (const bi of bis) repairs[bi] = [...(repairs[bi] ?? []), y.text];
   }
-  return { scorecard, overall, findings: f, repairs, sessions, weekly };
+  return { scorecard, overall, findings: f, repairs, sessions, weekly, facts };
 }
 
 /** Which unmatched names live in a block (to point a repair at it). */
