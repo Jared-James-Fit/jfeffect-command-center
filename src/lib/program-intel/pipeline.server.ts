@@ -45,8 +45,13 @@ type Db = any;
  * the job, and polled across requests, so a long think never hits a request's time limit.
  */
 const MAX_REPAIR_ROUNDS = 2;
-/** How long one request polls a background call before handing over to the next request, and how often. */
-export const pollConfig = { ms: 200_000, every: 4000 };
+/**
+ * How long one request polls a background call before handing over to the next request, and how
+ * often. Kept short: the database sends these requests through pg_net, which waits for a whole
+ * batch before starting the next, so a request held for minutes delays every other scheduled hook
+ * in the app (reminders, syncs) by as long (seen Nov 9 2026: 3-5 minute gaps during the benchmark).
+ */
+export const pollConfig = { ms: 45_000, every: 4000 };
 /** A gateway (synchronous) call's limit. */
 const SYNC_TIMEOUT_MS = 240_000;
 /** A background call that hasn't finished by now is given up on (and the next model tried). */

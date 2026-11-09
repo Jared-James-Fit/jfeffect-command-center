@@ -36,8 +36,8 @@ route for Claude).
 
 A request on the hosting is cut off after a few minutes, and a strong model thinking hard on a
 long brief can take longer. Direct OpenAI calls run in **background mode**: the stage submits
-the request, keeps its id in `result.pending[key]`, polls for `pollConfig.ms`, and if it isn't
-done throws `WaitingForModel`; the job goes back to `pending` and the next tick polls the same
+the request, keeps its id in `result.pending[key]`, polls for `pollConfig.ms` (45s), and if it
+isn't done throws `WaitingForModel`; the job goes back to `pending` and the next tick polls the same
 id (never a second submission), up to `BACKGROUND_LIMIT_MS`. A finished answer is kept in
 `result.calls[key]`, so a resumed stage never re-asks. A failed stage clears both, so Try again
 asks fresh.
@@ -47,6 +47,13 @@ answers 524 to a request that sends nothing back for ~125s, which a strong model
 long brief always hits. Streamed, a call can run up to `SYNC_TIMEOUT_MS` (240s, inside the 300s
 the database gives the worker request). A model that fails is saved on the job at once, so a
 request cut off while trying the next model never retries the one that failed.
+
+Why requests are kept short: the database sends every hook request through pg_net, which
+finishes a whole batch before it starts the next. One generator request held for minutes
+delays every scheduled hook in the app (reminders, Google sync, lift archive) by as long; the
+benchmark showed 3-5 minute gaps where there are normally none. Background polls hand over
+every 45s; only a gateway call holds a request for long, which is one reason the strong tasks
+run on OpenAI's background mode.
 
 ## Claude via the gateway
 
