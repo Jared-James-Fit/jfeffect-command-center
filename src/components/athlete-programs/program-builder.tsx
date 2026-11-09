@@ -1,20 +1,10 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowDown,
-  ArrowUp,
-  Copy,
-  Loader2,
-  Minus,
-  MoreHorizontal,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { ArrowDown, ArrowUp, Copy, Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -23,20 +13,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { WorkoutAddExercise } from "@/components/workout-day/workout-add-exercise";
-import { cn } from "@/lib/utils";
+import { useIsMobileNow } from "@/hooks/use-mobile";
 import {
-  GOALS,
-  LEVELS,
-  draftProblem,
-  programError,
   useProgram,
-  useProgramActions,
   type ProgramDay,
   type ProgramDraft,
   type ProgramExercise,
 } from "@/lib/athlete-programs";
-import { moveItem, newDay, REST_CHOICES } from "@/lib/athlete-program-draft";
+import {
+  MAX_DAYS,
+  MAX_EXERCISES,
+  REST_CHOICES,
+  addExercises,
+  duplicateDay,
+  moveItem,
+  newDay,
+  removeAt,
+} from "@/lib/athlete-program-draft";
+import { ProgramDetailsFields } from "./program-builder-parts";
+import { ExercisePickerSheet } from "./exercise-picker-sheet";
+import { MobileProgramBuilder } from "./program-builder-mobile";
+import { useProgramEditor, type ProgramEditor } from "./use-program-editor";
 
 const EMPTY: ProgramDraft = {
   id: null,
@@ -52,7 +49,8 @@ const EMPTY: ProgramDraft = {
  * Build or edit your own program: a week of training days, each a list of
  * library exercises with sets, reps and (if you use it) RPE and rest. That
  * week repeats for the weeks you pick. Saved privately; sharing is a switch
- * on the program's page.
+ * on the program's page. A phone gets its own layout (one day at a time, big
+ * taps, MobileProgramBuilder); both edit the same draft.
  */
 export function ProgramBuilder({ editId }: { editId: string | null }) {
   const { data: existing, isLoading } = useProgram(editId);
@@ -95,56 +93,37 @@ export function ProgramBuilder({ editId }: { editId: string | null }) {
         })),
       }
     : EMPTY;
-  return <Builder initial={start} />;
+  return <Builder initial={start} base={existing?.updated_at ?? null} />;
 }
 
-function Builder({ initial }: { initial: ProgramDraft }) {
-  const navigate = useNavigate();
-  const { save } = useProgramActions();
-  const [d, setD] = useState<ProgramDraft>(initial);
-  const [dirty, setDirty] = useState(false);
-  const editing = !!initial.id;
+function Builder({ initial, base }: { initial: ProgramDraft; base: string | null }) {
+  const editor = useProgramEditor(initial, base);
+  const phone = useIsMobileNow();
+  return phone ? <MobileProgramBuilder editor={editor} /> : <DesktopBuilder editor={editor} />;
+}
 
-  // a half-built program shouldn't vanish on a stray back tap
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
-
-  const update = (fn: (x: ProgramDraft) => ProgramDraft) => {
-    setD(fn);
-    setDirty(true);
-  };
-  const setDay = (i: number, fn: (day: ProgramDay) => ProgramDay) =>
-    update((x) => ({ ...x, days: x.days.map((day, j) => (j === i ? fn(day) : day)) }));
+/** Everything on one page: every day open, every number a box. */
+function DesktopBuilder({ editor }: { editor: ProgramEditor }) {
+  const { d, update, setDay } = editor;
 
   const onSave = async () => {
-    const problem = draftProblem(d);
-    if (problem) return toast.error(problem);
-    try {
-      const id = await save.mutateAsync(d);
-      setDirty(false);
-      toast.success(editing ? "Saved" : "Program saved. Share it or start it from here.");
-      navigate({ to: "/portal/programs/$programId", params: { programId: id }, replace: editing });
-    } catch (e) {
-      toast.error(programError(e, "Couldn't save it. Try again."));
+    const r = await editor.save();
+    if (!r.ok && typeof r.at === "number") {
+      document
+        .getElementById(`program-day-${r.at}`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
     }
   };
 
   return (
     <div className="mx-auto w-full max-w-2xl pb-28">
       <PageHeader
-        title={editing ? "Edit program" : "New program"}
-        backTo={editing ? `/portal/programs/${initial.id}` : "/portal/programs"}
+        title={editor.editing ? "Edit program" : "New program"}
+        backTo={editor.backTo}
         actionsInline
         actions={
-          <Button onClick={onSave} disabled={save.isPending} className="min-w-[76px]">
-            {save.isPending ? (
+          <Button onClick={onSave} disabled={editor.saving} className="min-w-[76px]">
+            {editor.saving ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-label="Saving" />
             ) : (
               "Save"
@@ -171,28 +150,11 @@ function Builder({ initial }: { initial: ProgramDraft }) {
               count={d.days.length}
               onChange={(fn) => setDay(i, fn)}
               onMove={(dir) => update((x) => ({ ...x, days: moveItem(x.days, i, dir) }))}
-              onDuplicate={() =>
-                update((x) =>
-                  x.days.length >= 7
-                    ? x
-                    : {
-                        ...x,
-                        days: [
-                          ...x.days.slice(0, i + 1),
-                          {
-                            ...day,
-                            title: `${day.title} (copy)`.slice(0, 40),
-                            exercises: day.exercises.map((e) => ({ ...e })),
-                          },
-                          ...x.days.slice(i + 1),
-                        ],
-                      },
-                )
-              }
-              onDelete={() => update((x) => ({ ...x, days: x.days.filter((_, j) => j !== i) }))}
+              onDuplicate={() => update((x) => ({ ...x, days: duplicateDay(x.days, i) }))}
+              onDelete={() => update((x) => ({ ...x, days: removeAt(x.days, i) }))}
             />
           ))}
-          {d.days.length < 7 ? (
+          {d.days.length < MAX_DAYS ? (
             <Button
               variant="outline"
               className="h-12 w-full border-dashed"
@@ -208,68 +170,8 @@ function Builder({ initial }: { initial: ProgramDraft }) {
           )}
         </div>
 
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[15px] font-medium">Weeks</div>
-              <div className="text-[13px] text-muted-foreground">
-                This week repeats this many times.
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-10 w-10"
-                aria-label="Fewer weeks"
-                disabled={d.weeks <= 1}
-                onClick={() => update((x) => ({ ...x, weeks: Math.max(1, x.weeks - 1) }))}
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span
-                className="w-8 text-center text-[17px] font-semibold tabular-nums"
-                aria-live="polite"
-              >
-                {d.weeks}
-              </span>
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-10 w-10"
-                aria-label="More weeks"
-                disabled={d.weeks >= 16}
-                onClick={() => update((x) => ({ ...x, weeks: Math.min(16, x.weeks + 1) }))}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <ChoiceRow
-            label="Goal"
-            options={GOALS}
-            value={d.goal}
-            onChange={(goal) => update((x) => ({ ...x, goal }))}
-          />
-          <ChoiceRow
-            label="Level"
-            options={LEVELS}
-            value={d.level}
-            onChange={(level) => update((x) => ({ ...x, level }))}
-          />
-          <div>
-            <div className="mb-1.5 text-[15px] font-medium">
-              About it <span className="font-normal text-muted-foreground">(optional)</span>
-            </div>
-            <Textarea
-              value={d.description}
-              onChange={(e) =>
-                update((x) => ({ ...x, description: e.target.value.slice(0, 1000) }))
-              }
-              placeholder="Who it's for, how to progress, what it's good at"
-              className="min-h-[88px] text-base"
-            />
-          </div>
+        <section className="rounded-2xl border border-border bg-card p-4">
+          <ProgramDetailsFields d={d} update={update} />
         </section>
       </div>
     </div>
@@ -293,6 +195,7 @@ function DayEditor({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const [picking, setPicking] = useState(false);
   const setEx = (j: number, patch: Partial<ProgramExercise>) =>
     onChange((x) => ({
       ...x,
@@ -300,7 +203,10 @@ function DayEditor({
     }));
 
   return (
-    <section className="rounded-2xl border border-border bg-card">
+    <section
+      id={`program-day-${index}`}
+      className="scroll-mt-4 rounded-2xl border border-border bg-card"
+    >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="shrink-0 pl-1 text-[12px] font-medium text-muted-foreground">
           Day {index + 1}
@@ -332,7 +238,7 @@ function DayEditor({
               <ArrowDown className="mr-2 h-4 w-4" />
               Move down
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={count >= 7} onSelect={onDuplicate}>
+            <DropdownMenuItem disabled={count >= MAX_DAYS} onSelect={onDuplicate}>
               <Copy className="mr-2 h-4 w-4" />
               Duplicate day
             </DropdownMenuItem>
@@ -390,7 +296,7 @@ function DayEditor({
                   <DropdownMenuItem
                     className="text-destructive"
                     onSelect={() =>
-                      onChange((x) => ({ ...x, exercises: x.exercises.filter((_, k) => k !== j) }))
+                      onChange((x) => ({ ...x, exercises: removeAt(x.exercises, j) }))
                     }
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
@@ -407,7 +313,9 @@ function DayEditor({
                   aria-label="Sets"
                   onChange={(ev) =>
                     setEx(j, {
-                      sets: Number(ev.target.value.replace(/\D/g, "").slice(0, 2)) || ("" as any),
+                      sets:
+                        Number(ev.target.value.replace(/\D/g, "").slice(0, 2)) ||
+                        ("" as unknown as number),
                     })
                   }
                   className="h-10 text-center text-base"
@@ -463,34 +371,37 @@ function DayEditor({
       </ol>
 
       <div className="p-3">
-        {day.exercises.length < 20 ? (
-          <WorkoutAddExercise
-            className="border-solid border-border bg-transparent font-medium text-foreground"
-            description="Pick from the JF Effect exercise library."
-            onAdd={async (ex) => {
-              onChange((x) => ({
-                ...x,
-                exercises: [
-                  ...x.exercises,
-                  {
-                    exercise_id: ex.id,
-                    name: ex.name,
-                    sets: 3,
-                    reps: "8-10",
-                    rpe: null,
-                    rest_seconds: 120,
-                    notes: null,
-                  },
-                ],
-              }));
-            }}
-          />
+        {day.exercises.length < MAX_EXERCISES ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-full"
+            onClick={() => setPicking(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" aria-hidden />
+            Add exercises
+          </Button>
         ) : (
           <p className="text-center text-[13px] text-muted-foreground">
             20 exercises is the most for one day.
           </p>
         )}
       </div>
+
+      <ExercisePickerSheet
+        open={picking}
+        onOpenChange={setPicking}
+        mode="multi"
+        room={MAX_EXERCISES - day.exercises.length}
+        title={`Add to ${day.title.trim() || `Day ${index + 1}`}`}
+        description="Pick from the JF Effect exercise library, as many as you want."
+        onPick={(list) => {
+          const r = addExercises(day, list);
+          onChange(() => r.day);
+          if (r.skipped)
+            toast(`${r.skipped} didn't fit: ${MAX_EXERCISES} is the most for one day.`);
+        }}
+      />
     </section>
   );
 }
@@ -501,43 +412,5 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-center text-[11px] text-muted-foreground">{label}</span>
       {children}
     </label>
-  );
-}
-
-function ChoiceRow<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { id: T; label: string }[];
-  value: T | null;
-  onChange: (v: T | null) => void;
-}) {
-  return (
-    <div>
-      <div className="mb-1.5 text-[15px] font-medium">
-        {label} <span className="font-normal text-muted-foreground">(optional)</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {options.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            aria-pressed={value === o.id}
-            onClick={() => onChange(value === o.id ? null : o.id)}
-            className={cn(
-              "h-10 rounded-full border px-3.5 text-[14px] transition",
-              value === o.id
-                ? "border-foreground bg-foreground text-background"
-                : "border-border bg-background",
-            )}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
