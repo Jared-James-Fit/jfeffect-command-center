@@ -31,6 +31,7 @@ import { autoCalculatePurchaseTermDates } from "@/lib/purchase-term-dates.functi
 import { FIRST50_CODE } from "@/lib/first50-policy";
 import { findReusablePurchaseIntent } from "@/lib/purchase-idempotency";
 import { DateField } from "@/components/ui/date-field";
+import { PlusTax } from "@/components/billing/plus-tax";
 
 /** What actually happens when the admin confirms. */
 type AssignMode = "payment_request" | "paid_in_full" | "draft";
@@ -333,7 +334,7 @@ export function AssignOfferDialog({ offer, onClose, fixedClientId }: { offer: an
             )}
             <div className="rounded-md border border-border bg-secondary/30 p-3">
               <div className="font-bold">{offer.name}</div>
-              <div className="text-xs text-muted-foreground">{offer.offer_type} · v{offer.version ?? 1} · {offer.currency ?? "USD"} {Number(offer.full_payable_amount ?? offer.price ?? 0).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">{offer.offer_type} · v{offer.version ?? 1} · {offer.currency ?? "USD"} {Number(offer.full_payable_amount ?? offer.price ?? 0).toLocaleString()}<PlusTax /></div>
               {entitlement && (
                 <div className="mt-2 border-t border-border/60 pt-2">
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">

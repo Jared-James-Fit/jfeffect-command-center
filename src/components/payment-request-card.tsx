@@ -9,6 +9,7 @@ import { listenChannel } from "@/lib/realtime-channel";
 import { saleMoney } from "@/lib/sale-money";
 import { money } from "@/lib/session-sale";
 import type { SharedAttachment } from "@/components/chat-shared";
+import { PlusTax } from "@/components/billing/plus-tax";
 
 /**
  * The payment card in a chat. It reads its sale live (the attachment's status is
@@ -77,7 +78,7 @@ export function PaymentRequestCard({ att, mine, staff }: { att: SharedAttachment
           <div className="mt-0.5 text-lg font-bold tracking-tight">{money(paidCents, currency)}</div>
         ) : amount ? (
           <div className="mt-0.5 text-lg font-bold tracking-tight">
-            {amount} <span className="text-xs font-medium text-muted-foreground">+ tax</span>
+            {amount}<PlusTax className="text-xs font-medium" />
           </div>
         ) : null}
         <div className="text-[11px] text-muted-foreground">
