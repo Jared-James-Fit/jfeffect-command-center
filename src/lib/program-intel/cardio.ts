@@ -152,13 +152,28 @@ export function proposeCardio(x: { goalText: string; trainingDays: readonly stri
   const walk = (minutes: number, perWeek: number | null, weekdays: string[]): CardioSession => ({ type: "Incline Treadmill Walk", minutes, perWeek, weekdays, incline: 5, zone: "Zone 2" });
   const train = x.trainingDays.slice();
   const proposed = (t: CardioSession | null, r: CardioSession | null, why: string): CardioPlan => ({ source: "proposed", origin: null, trainingDay: t, restDay: r, updatedAt: null, done: null, why });
+  // Walks on days off: as many as asked for, but never more than the days they have off (Devin
+  // trains 6 days, so "three walks on days off" was one Thursday counted as 3 a week).
+  const offWalks = (minutes: number, want: number): { session: CardioSession | null; words: string } => {
+    const days = restWeekdays(train, want);
+    const n = days.length;
+    const words = n === 0 ? "" : ` and ${n === 1 ? "one" : n === 2 ? "two" : "three"} ${minutes}-min walk${n === 1 ? "" : "s"} on ${n === 1 ? "their day off" : "days off"}`;
+    return { session: n ? walk(minutes, n, days) : null, words };
+  };
   switch (goal) {
-    case "fat_loss":
-      return proposed(walk(15, train.length || null, train), walk(25, 3, restWeekdays(train, 3)), "No cardio plan yet and the goal is fat loss: a 15-min Zone 2 walk after lifting and three 25-min walks on days off. Their nutrition plan replaces it when it's made.");
-    case "recomp":
-      return proposed(walk(10, train.length || null, train), walk(20, 2, restWeekdays(train, 2)), "No cardio plan yet and the goal is recomposition: a 10-min walk after lifting and two 20-min walks on days off. Their nutrition plan replaces it when it's made.");
-    case "general":
-      return proposed(null, walk(20, 2, restWeekdays(train, 2)), "No cardio plan yet: two 20-min walks on days off for general fitness. Their nutrition plan replaces it when it's made.");
+    case "fat_loss": {
+      const off = offWalks(25, 3);
+      return proposed(walk(15, train.length || null, train), off.session, `No cardio plan yet and the goal is fat loss: a 15-min Zone 2 walk after lifting${off.words}. Their nutrition plan replaces it when it's made.`);
+    }
+    case "recomp": {
+      const off = offWalks(20, 2);
+      return proposed(walk(10, train.length || null, train), off.session, `No cardio plan yet and the goal is recomposition: a 10-min walk after lifting${off.words}. Their nutrition plan replaces it when it's made.`);
+    }
+    case "general": {
+      const off = offWalks(20, 2);
+      if (!off.session) return { source: "none", origin: null, trainingDay: null, restDay: null, updatedAt: null, done: null, why: "General fitness with no day off: no added cardio beyond daily steps." };
+      return proposed(null, off.session, `No cardio plan yet: ${off.words.replace(/^ and /, "")} for general fitness. Their nutrition plan replaces it when it's made.`);
+    }
     default:
       return {
         source: "none",

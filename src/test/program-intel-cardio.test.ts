@@ -94,6 +94,18 @@ describe("a cardio plan proposed when there is none (program built first)", () =
     for (const d of p.restDay!.weekdays) expect(days).not.toContain(d);
   });
 
+  it("never more walks on days off than days off (Devin trains 6 days: one walk, Thursday)", () => {
+    const six = ["Monday", "Tuesday", "Wednesday", "Friday", "Saturday", "Sunday"];
+    const p = proposeCardio({ goalText: "Lose body fat", trainingDays: six });
+    expect(p.restDay).toMatchObject({ minutes: 25, perWeek: 1, weekdays: ["Thursday"] });
+    expect(p.why).toContain("one 25-min walk on their day off");
+    const rows = cardioTargetsFromProposal(p, { clientId: "c1", trainingDays: six, today: TODAY });
+    expect(rows.find((r) => r.day_type === "Non-Training Day")).toMatchObject({ frequency_per_week: 1, scheduled_weekdays: ["Thursday"] });
+    const seven = [...six, "Thursday"];
+    expect(proposeCardio({ goalText: "Lose body fat", trainingDays: seven }).restDay).toBeNull();
+    expect(proposeCardio({ goalText: "General fitness", trainingDays: seven }).source).toBe("none");
+  });
+
   it("general fitness: rest-day walks only; a meet within 6 weeks or a strength goal: none", () => {
     const g = proposeCardio({ goalText: "General fitness", trainingDays: ["Monday", "Wednesday", "Friday"] });
     expect(g.trainingDay).toBeNull();
