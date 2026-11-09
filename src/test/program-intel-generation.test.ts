@@ -241,3 +241,33 @@ describe("a lift's trend across blocks reads as the evidence says (Jared's bench
     expect(liftTrend("Squat", [4, 1.1, 0]).statement).toBe("Squat progressed (+2% e1RM or more) in 1 of the 3 blocks with enough data, with a small gain (1 to 2%) in 1 and no progress in 1.");
   });
 });
+
+describe("a thorough model answer is read, never wiped (Nov 9 2026 benchmark)", () => {
+  const base = { athlete_read: "x", previous_program: {}, progression: {}, structure: { weeks: 4, days_per_week: 2, blocks: [{ name: "A", weeks: 4 }] }, weekly_layout: [{ day: 1, title: "A" }], exercise_plan: {}, decisions: [{ observation: "o", change: "c" }] };
+  it("long text is kept (cut only past its cap), and an object where text belongs is kept as its text", () => {
+    const intensity = "RPE 7–8 on compounds, ".repeat(60); // ~1300 characters: a 900 cap used to make it ""
+    const s = strategySchema.parse({ ...base, intensity, progression: { model: { main: "+2.5 kg when every set is at RPE 8 or under", accessories: "double progression" } } });
+    expect(s.intensity).toBe(intensity.trim());
+    expect(s.progression.model).toContain("+2.5 kg when every set");
+    expect(strategySchema.parse({ ...base, intensity: "x".repeat(9000) }).intensity).toHaveLength(4000);
+  });
+  it("one long or broken item never empties the list: the rest are kept", () => {
+    const s = strategySchema.parse({
+      ...base,
+      frequency_targets: [
+        { target: "Back — direct upper/mid-back work, averaged over alternating weeks", per_week: 3.5 },
+        { target: "Chest", per_week: 3 },
+        { target: "Quads", per_week: "nine" },
+      ],
+      weekly_layout: [{ day: 1, title: "Monday", primary: ["Competition Squat", "Paused Bench", "Romanian Deadlift", "Chest Supported Row", "Leg Press", "Lat Pulldown"] }],
+    });
+    expect(s.frequency_targets.map((f) => f.target)).toEqual(["Back — direct upper/mid-back work, averaged over alternating weeks", "Chest"]);
+    expect(s.weekly_layout[0].primary).toHaveLength(6);
+  });
+  it("a review issue with a long problem is kept, not the whole list dropped", async () => {
+    const { reviewReplySchema } = await import("@/lib/program-intel/coaching-review");
+    const r = reviewReplySchema.parse({ verdict: "needs_fixes", issues: [{ block: 1, area: "fatigue", severity: "must_fix", problem: "p".repeat(800), fix: "move it" }, { problem: "" }] });
+    expect(r.issues).toHaveLength(1);
+    expect(r.issues[0].problem).toHaveLength(800);
+  });
+});

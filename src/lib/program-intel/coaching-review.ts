@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 import type { AuditResult, Criterion } from "./audit";
-import type { BuiltProgram, Strategy } from "./generator-schemas";
+import { clip, clipReq, list, type BuiltProgram, type Strategy } from "./generator-schemas";
 import { fmtRx, rxForWeek } from "./program-view";
 import type { GenerationSetup } from "./recommend";
 import { BRAIN_LABEL, type Brain } from "./types";
@@ -22,19 +22,17 @@ export type ReviewArea = (typeof REVIEW_AREAS)[number];
 
 export const reviewReplySchema = z.object({
   verdict: z.enum(["sound", "needs_fixes"]).catch("sound"),
-  summary: z.string().trim().max(1200).catch(""),
-  issues: z
-    .array(
-      z.object({
-        block: z.coerce.number().int().min(1).max(6).nullish(),
-        area: z.enum(REVIEW_AREAS).catch("other"),
-        severity: z.enum(["must_fix", "consider"]).catch("consider"),
-        problem: z.string().trim().min(1).max(600),
-        fix: z.string().trim().max(600).catch(""),
-      }),
-    )
-    .max(10)
-    .catch([]),
+  summary: clip(2000),
+  issues: list(
+    z.object({
+      block: z.coerce.number().int().min(1).max(6).nullish().catch(null),
+      area: z.enum(REVIEW_AREAS).catch("other"),
+      severity: z.enum(["must_fix", "consider"]).catch("consider"),
+      problem: clipReq(1000),
+      fix: clip(1000),
+    }),
+    10,
+  ),
 });
 export type ReviewReply = z.infer<typeof reviewReplySchema>;
 export type CoachingReview = ReviewReply & { model: string; at: string; repaired: number[] };

@@ -33,7 +33,7 @@ export const interpretReplySchema = z.object({
 export type InterpretReply = z.infer<typeof interpretReplySchema>;
 
 /** Pull the JSON object out of a model reply (fences, prose around it) and check it. */
-export function parseJsonReply<T>(text: string, schema: z.ZodType<T>): { ok: true; value: T } | { ok: false; error: string } {
+export function parseJsonReply<T>(text: string, schema: z.ZodType<T, z.ZodTypeDef, any>): { ok: true; value: T } | { ok: false; error: string } {
   const t = String(text ?? "").replace(/```(?:json)?/gi, "");
   const start = t.indexOf("{");
   const end = t.lastIndexOf("}");
