@@ -65,6 +65,17 @@ function openaiHeaders(): Record<string, string> {
 }
 
 /** Thinking budget for Claude by effort (tokens it may think before answering). */
+async function gatewayChat(id: string, r: ModelRequest): Promise<Omit<ModelReply, "model" | "ms">> {
+  const body: Record<string, unknown> = { model: id, messages: [{ role: "system", content: r.system }, { role: "user", content: r.prompt }] };
+  if (isReasoning(id)) {
+    if (r.effort) body.reasoning_effort = r.effort;
+  } else if (r.temperature != null) body.temperature = r.temperature;
+  if (r.maxOutputTokens) body[isReasoning(id) ? "max_completion_tokens" : "max_tokens"] = r.maxOutputTokens;
+  const j = await post(`${GATEWAY}/chat/completions`, gatewayHeaders(), body, r.timeoutMs ?? 170_000);
+  const text = String(j?.choices?.[0]?.message?.content ?? "");
+  return { text, usage: { input: j?.usage?.prompt_tokens ?? null, output: j?.usage?.completion_tokens ?? null, reasoning: j?.usage?.completion_tokens_details?.reasoning_tokens ?? null } };
+}
+
 /**
  * Claude (Opus 5.5, Sonnet 5) through the gateway's native Messages route. Thinking is adaptive
  * and its depth is `output_config.effort`: a thinking budget (`budget_tokens`) and any sampling
