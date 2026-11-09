@@ -28,7 +28,7 @@ export const PHOTO_SETUP: Array<{ title: string; body: string }> = [
   { title: "Same spot, good light", body: "Bright, even light coming from in front of you. No window or lamp behind you, and not only a light straight overhead." },
   { title: "Phone at belly-button height", body: "Upright (portrait), about 6 to 8 feet away. Prop it up and use the timer, or have someone take them." },
   { title: "Whole body in the frame", body: "Head to feet, with a little space above your head and below your feet." },
-  { title: "Same clothes", body: "Shorts, plus a sports bra or no shirt, so your shape shows. Wear the same thing every time." },
+  { title: "Wear what you're comfortable in", body: "Anything that shows your full physique: underwear, shorts, a sports bra or no shirt all work. The more of you we can see, the better. Wear the same thing every time." },
   { title: "Stand relaxed and tall", body: "Don't flex, pose or suck in. Just stand like you normally would." },
 ];
 
