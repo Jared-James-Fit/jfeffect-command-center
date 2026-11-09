@@ -32,6 +32,7 @@ import { isLowValueExercise, meetsStandard, withStandardStrategy, withStandardSu
 import { loadIntelRecords } from "./load";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
+import { benchRecords } from "./bench";
 import { findConflicts, horizonFor, redistribution, type GenerationSetup, type SetupField } from "./recommend";
 import { BRAIN_LABEL, type Brain, type IntelRecords, type RawExercise } from "./types";
 
@@ -293,7 +294,7 @@ function setStage(stages: StageState[], key: string, status: StageState["status"
 
 /** Rebuild the intelligence for a job (records read fresh with the service role). */
 async function intelFor(admin: Db, job: any): Promise<{ intel: GeneratorIntel; rec: IntelRecords; setup: GenerationSetup; edited: SetupField[] }> {
-  const raw = await loadIntelRecords(admin, job.client_id, { kind: "history" });
+  const raw = benchRecords(await loadIntelRecords(admin, job.client_id, { kind: "history" }), job);
   // privacy-safe: no name, no notes or check-ins the athlete typed (training data kept)
   const rec = job.privacy_safe ? privacySafeRecords(raw) : raw;
   const intel = buildGeneratorIntel(rec, { brainOverride: job.brain as Brain });
