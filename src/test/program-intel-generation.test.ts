@@ -271,3 +271,11 @@ describe("a thorough model answer is read, never wiped (Nov 9 2026 benchmark)", 
     expect(r.issues[0].problem).toHaveLength(800);
   });
 });
+
+describe("the brief speaks the athlete's units and plans (blind grading, Nov 9 2026)", () => {
+  it("rest-day cardio 2× a week with three days ticked reads as two of those days", async () => {
+    const { cardioBriefLines } = await import("@/lib/program-intel/cardio");
+    const lines = cardioBriefLines({ source: "plan", origin: "nutrition", why: "their nutrition plan", trainingDay: null, restDay: { type: "Incline Treadmill Walk", minutes: 30, perWeek: 2, weekdays: ["Tuesday", "Saturday", "Sunday"], incline: 5, zone: "Zone 2" }, updatedAt: null, done: null });
+    expect(lines.join("\n")).toContain("2× a week (2 of Tuesday, Saturday, Sunday)");
+  });
+});

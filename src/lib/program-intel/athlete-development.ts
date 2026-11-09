@@ -410,7 +410,9 @@ export function progressionSignals(h: IntelReport, ctx: AthleteContext, level: T
     const evidence = last3.map((e) => {
       const r = e.row;
       const top = r.topSet;
-      return `${e.date}: ${r.setsDone}/${r.prescribed.sets ?? "?"} sets${r.repsHitPct != null ? `, ${Math.round(r.repsHitPct)}% of reps` : ""}${top?.kg ? `, top ${fmt(top.kg)} kg × ${top.reps ?? "?"}` : ""}${top?.rpe != null ? ` @${top.rpe}` : ""}${r.prescribed.rpe ? ` (target ${r.prescribed.rpe})` : ""}`;
+      // the load in the athlete's own unit (an lb lifter's 205 reads as 205 lb, never 93 kg)
+      const load = top?.kg ? (ctx.unit === "lb" ? `${Math.round(top.kg * LB)} lb` : `${fmt(top.kg)} kg`) : null;
+      return `${e.date}: ${r.setsDone}/${r.prescribed.sets ?? "?"} sets${r.repsHitPct != null ? `, ${Math.round(r.repsHitPct)}% of reps` : ""}${load ? `, top ${load} × ${top?.reps ?? "?"}` : ""}${top?.rpe != null ? ` @${top.rpe}` : ""}${r.prescribed.rpe ? ` (target ${r.prescribed.rpe})` : ""}`;
     });
     const pain = info.lift ? recentPain.filter((p) => PAIN_REGION[info.lift!].test(p.area ?? "")) : [];
     const base = { exerciseId: info.exerciseId, exercise: info.exercise, lift: info.lift, competition: info.competition, sessions: list.length, lastKg: list.length ? list[list.length - 1].row.topSet?.kg ?? null : null, pain: pain.length > 0 };

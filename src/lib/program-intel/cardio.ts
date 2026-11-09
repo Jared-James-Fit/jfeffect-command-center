@@ -193,7 +193,12 @@ export function cardioBriefLines(plan: CardioPlan | null | undefined): string[] 
     out.push(`${plan.source === "plan" ? "Their cardio plan" : "Proposed cardio plan (none on file)"}: ${plan.why}`);
     if (plan.trainingDay) out.push(`- Training days: ${sessionText(plan.trainingDay)}, added by the app as the LAST exercise of every workout.`);
     else out.push(`- Training days: no cardio after lifting.`);
-    if (plan.restDay) out.push(`- Days off: ${sessionText(plan.restDay)}${plan.restDay.perWeek ? `, ${plan.restDay.perWeek}× a week` : ""}${plan.restDay.weekdays.length ? ` (${plan.restDay.weekdays.join(", ")})` : ""}.`);
+    if (plan.restDay) {
+      const r = plan.restDay;
+      // 2× a week with three days ticked means two of those days, never a contradiction
+      const days = r.weekdays.length ? ` (${r.perWeek && r.perWeek < r.weekdays.length ? `${r.perWeek} of ` : ""}${r.weekdays.join(", ")})` : "";
+      out.push(`- Days off: ${sessionText(r)}${r.perWeek ? `, ${r.perWeek}× a week` : ""}${days}.`);
+    }
     if (plan.done) out.push(`- Done in the last 4 weeks: ${plan.done.done} of about ${plan.done.planned} planned sessions.`);
   }
   out.push(

@@ -167,7 +167,7 @@ describe("what the AI is told for a first program", () => {
   });
 
   it("the prompts: first-program rules only for a first program; the coach's notes are followed either way", () => {
-    expect(PIPELINE_PROMPT_VERSION).toBe(9);
+    expect(PIPELINE_PROMPT_VERSION).toBe(10);
     const first = strategySystemPrompt("bodybuilding", { first: true });
     expect(first).toContain(FIRST_PROGRAM_RULES);
     expect(first).toContain('"previous_program" is { "intent": "None: first program", "outcome": "None" }');
