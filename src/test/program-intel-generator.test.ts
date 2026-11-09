@@ -588,3 +588,24 @@ describe("Cardio in a generated program is logged as time", () => {
     for (const n of ["Walking Lunges", "Dumbbell Farmer Walks", "Air Bike", "Lateral Band Walks", "Barbell Bench Press"]) expect(isTimedCardio(n)).toBe(false);
   });
 });
+
+describe("a strategy with empty parts goes back with its retry (blind grading, Nov 9 2026)", () => {
+  it("names each empty part the workouts are written from; a complete one has none", async () => {
+    const { strategyGaps } = await import("@/lib/program-intel/pipeline.server");
+    const setup = setupWith(buildGeneratorIntel(homeGym()), { weeks: 4, daysPerWeek: 2, blocks: [] });
+    const empty = strategyFor(setup, { progression: { model: "", expected: "", fatigue: " ", success_criteria: [] } });
+    const gaps = strategyGaps(empty);
+    expect(gaps.some((g) => g.startsWith("intensity is empty"))).toBe(true);
+    expect(gaps.some((g) => g.startsWith("progression.model is empty"))).toBe(true);
+    expect(gaps.some((g) => g.startsWith("progression.fatigue is empty"))).toBe(true);
+    expect(gaps.some((g) => g.startsWith("frequency_targets is empty"))).toBe(true);
+    expect(gaps.filter((g) => g.includes("lists no main exercises"))).toHaveLength(2);
+    const full = strategyFor(setup, {
+      intensity: "RPE 7-8 on the main lifts, +0.5 RPE every two weeks.",
+      progression: { model: "Double progression on accessories; main lifts add 2.5 kg when all sets hit at RPE 8 or under.", expected: "", fatigue: "Volume drops a third in week 4.", success_criteria: [] },
+      frequency_targets: [{ target: "Squat", per_week: 2 }],
+      weekly_layout: [1, 2].map((d) => ({ day: d, title: `Day ${d}`, focus: "Full body", primary: ["Competition Squat"], notes: "" })),
+    });
+    expect(strategyGaps(full)).toEqual([]);
+  });
+});
