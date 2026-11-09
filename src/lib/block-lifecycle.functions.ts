@@ -60,7 +60,7 @@ function diffDays(fromISO: string, toISO: string): number {
 async function loadBlockSchedule(supabase: any, blockId: string) {
   const { data: block } = await supabase
     .from("pl_blocks")
-    .select("id, client_id, name, status, start_date, end_date, weeks, week_duration_days, archived, completed_at")
+    .select("id, client_id, name, status, start_date, end_date, weeks, week_duration_days, archived, completed_at, client_visible")
     .eq("id", blockId)
     .maybeSingle();
   if (!block) throw new Error("Block not found.");
@@ -84,7 +84,7 @@ async function loadBlockSchedule(supabase: any, blockId: string) {
   const { data: instances } = dayIds.length
     ? await supabase
         .from("pl_scheduled_workouts")
-        .select("id, source_day_id, scheduled_date")
+        .select("id, source_day_id, scheduled_date, schedule_source")
         .eq("client_id", block.client_id)
         .in("source_day_id", dayIds)
     : { data: [] as any[] };
@@ -258,12 +258,15 @@ export const setBlockScheduleFn = createServerFn({ method: "POST" })
     const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const isActive = data.startDate <= todayISO && (!endDate || endDate >= todayISO);
 
+    // A program the client sees (or is being started) is live whatever its dates: "Draft" is only
+    // for a hidden block, or a dated one would be skipped by the overlap checks (they ignore drafts).
+    const live = !!data.start || loaded.block.client_visible === true;
     const { error: upErr } = await ctx.supabase
       .from("pl_blocks")
       .update({
         start_date: data.startDate,
         end_date: endDate,
-        status: isActive ? "Active" : "Draft",
+        status: isActive || live ? "Active" : "Draft",
         completed_at: null,
         completion_method: null,
         archived: false,
@@ -292,18 +295,22 @@ export const setBlockScheduleFn = createServerFn({ method: "POST" })
         if (!inst.scheduled_date || inst.scheduled_date < todayISO) continue;
         if (isCompletedInstance(inst, loaded.completedInstanceIds, loaded.completedDayIds)) continue;
         const next = addDaysISO(inst.scheduled_date, delta);
+        // placed by hand stays placed by hand (the realign below keeps it where it lands); the rest
+        // go back to their training days below
         const { error } = await ctx.supabase
           .from("pl_scheduled_workouts")
-          .update({ scheduled_date: next, schedule_source: "moved" })
+          .update({ scheduled_date: next, schedule_source: inst.schedule_source === "manual" ? "manual" : "moved" })
           .eq("id", inst.id);
         if (!error) moved += 1;
       }
     }
 
-    // Starting a block: its workouts go on the client's training days and its cardio follows the
-    // plan, exactly as when a program is assigned (Generate Next Program's Assign does the same).
+    // Starting or moving a block: its workouts go on the client's training days (undated ones
+    // too) and its cardio follows the plan, exactly as when a program is assigned (Generate Next
+    // Program's Assign does the same). Done and past workouts and ones placed by hand stay put.
+    // "Leave its workouts where they are" (shiftWorkouts: false) touches none of them.
     let placed = false;
-    if (data.start) {
+    if (data.start || data.shiftWorkouts !== false) {
       try {
         const { realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
         const r = await realignClientToCommittedDays({ clientId: loaded.block.client_id, userId: ctx.userId, role, includePinned: false });

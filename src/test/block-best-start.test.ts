@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bestNextStart, type ScheduleBlock } from "@/lib/block-schedule-model";
+import { bestNextStart, defaultStartFor, type ScheduleBlock } from "@/lib/block-schedule-model";
 
 const block = (id: string, end: string | null, extra: Partial<ScheduleBlock> = {}) =>
   ({ id, name: id, status_derived: "Upcoming", archived: false, effective_start: null, effective_end: end, ...extra }) as unknown as ScheduleBlock;
@@ -25,5 +25,18 @@ describe("Add next block starts at the best time (Nov 9 2026)", () => {
   it("leaves out the block being scheduled (a draft that already carries dates) and archived ones", () => {
     const blocks = [block("Draft 1", "2026-12-20"), block("Old", "2027-01-31", { status_derived: "Archived", archived: true })];
     expect(bestNextStart(blocks, TODAY, new Set(["Draft 1"])).date).toBe("2026-11-09");
+  });
+});
+
+describe("a program hidden from the client (Devin, Nov 9 2026)", () => {
+  it("never pushes the best start later: it isn't running for them", () => {
+    const blocks = [block("Hidden 1", "2026-12-20", { client_visible: false }), block("Hidden 2", "2027-01-31", { client_visible: false })];
+    expect(bestNextStart(blocks, TODAY).date).toBe("2026-11-09");
+  });
+  it("the Start dialog opens on the coach's own date while it's still ahead, else the best start", () => {
+    expect(defaultStartFor("2026-11-16", "2026-11-09", TODAY)).toBe("2026-11-16");
+    expect(defaultStartFor("2026-11-08", "2026-11-09", TODAY)).toBe("2026-11-08");
+    expect(defaultStartFor("2026-11-02", "2026-11-09", TODAY)).toBe("2026-11-09");
+    expect(defaultStartFor(null, "2026-11-09", TODAY)).toBe("2026-11-09");
   });
 });

@@ -43,7 +43,7 @@ import {
 } from "@/lib/use-client-training-schedule";
 import {
   currentBlock as pickCurrent, upcomingBlocks, draftBlocks, historyBlocks,
-  findOverlaps, gapDays, suggestedNextStart, bestNextStart, todayISO, addDaysISO,
+  findOverlaps, gapDays, suggestedNextStart, bestNextStart, defaultStartFor, todayISO, addDaysISO,
   formatRange, durationLabel, STATUS_LABEL, type ScheduleBlock,
 } from "@/lib/block-schedule-model";
 import {
@@ -733,7 +733,8 @@ export function EndBlockEarlyDialog({
               try {
                 await endEarly({ data: { blockId: block.id, newEnd } });
                 if (startNext && nextId) {
-                  await setSchedule({ data: { blockId: nextId, startDate: nextStart } });
+                  // the next block is starting: visible, its workouts on their training days
+                  await setSchedule({ data: { blockId: nextId, startDate: nextStart, start: true } });
                 }
                 toast.success(`Block ends ${pretty(newEnd)}`);
                 onDone();
@@ -777,8 +778,8 @@ export function ChangeBlockDatesDialog({
         <DialogHeader>
           <DialogTitle>Change block dates</DialogTitle>
           <DialogDescription>
-            Moving a block moves its future, uncompleted workouts by the same number of days.
-            Past and completed sessions keep the dates they really happened.
+            Its upcoming workouts move with it onto their training days; ones you placed by hand keep
+            their spacing. Done and past sessions keep the dates they really happened.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -826,7 +827,11 @@ export function ChangeBlockDatesDialog({
                     shiftWorkouts: shift,
                   },
                 });
-                toast.success(res?.movedWorkouts ? `Dates saved · ${res.movedWorkouts} workouts moved` : "Dates saved");
+                toast.success("Dates saved", {
+                  description: res?.placedOnTrainingDays
+                    ? "Its workouts are on their training days."
+                    : res?.movedWorkouts ? `${res.movedWorkouts} workouts moved` : undefined,
+                });
                 onDone();
               } catch (e: any) {
                 toast.error(e.message ?? "Could not save dates");
@@ -859,9 +864,13 @@ export function AddNextBlockDialog({
 }) {
   const setSchedule = useServerFn(setBlockScheduleFn);
   const assignDraft = useServerFn(assignIntelDraftFn);
-  const candidates = blocks.filter(
-    (b) => b.id !== current?.id && (b.status_derived === "Draft" || b.status_derived === "Upcoming" || (b.status_derived === "Active" && b.client_visible === false)),
-  );
+  // Built blocks not on the calendar, upcoming ones, and any dated block the client can't see yet
+  // (dated by hand but never started: Devin's Nov 9 program).
+  const candidates = blocks.filter((b) => {
+    const s = b.status_derived;
+    if (b.client_visible === false) return s === "Draft" || s === "Upcoming" || s === "Active";
+    return b.id !== current?.id && (s === "Draft" || s === "Upcoming");
+  });
   const [blockId, setBlockId] = useState(
     (initialBlockId && candidates.some((b) => b.id === initialBlockId) ? initialBlockId : null) ?? candidates[0]?.id ?? "",
   );
@@ -889,7 +898,8 @@ export function AddNextBlockDialog({
   const exclude = useMemo(() => new Set(draft ? draft.blockIds : [blockId]), [draft, blockId]);
   const best = useMemo(() => bestNextStart(blocks, todayISO(), exclude), [blocks, exclude]);
   const [picked, setPicked] = useState<string | null>(null);
-  const start = picked ?? best.date;
+  const chosenStart = draft ? draftBlocks[0]?.start_date ?? null : blocks.find((b) => b.id === blockId)?.start_date ?? null;
+  const start = picked ?? defaultStartFor(chosenStart, best.date);
   const [ack, setAck] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -923,8 +933,12 @@ export function AddNextBlockDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={DIALOG_CLASS}>
         <DialogHeader>
-          <DialogTitle>Add next block</DialogTitle>
-          <DialogDescription>Start one of this client's programmed blocks, or assign a new one from the library.</DialogDescription>
+          <DialogTitle>{chosen?.client_visible === false ? "Start program" : "Add next block"}</DialogTitle>
+          <DialogDescription>
+            {chosen?.client_visible === false
+              ? "They can't see it yet. Starting it shows it to them and puts its workouts on their training days."
+              : "Start one of this client's programmed blocks, or assign a new one from the library."}
+          </DialogDescription>
         </DialogHeader>
 
         {candidates.length === 0 ? (
@@ -960,7 +974,7 @@ export function AddNextBlockDialog({
               <div className="mt-1 flex items-center justify-between gap-2 text-[12px] text-muted-foreground" data-best-start>
                 <span>Best start: {pretty(best.date)}, {best.why}{before?.effective_end ? ` (${pretty(before.effective_end)})` : ""}.</span>
                 {start !== best.date && (
-                  <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[12px]" onClick={() => setPicked(null)}>
+                  <Button size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-[12px]" onClick={() => setPicked(best.date)}>
                     Use it
                   </Button>
                 )}

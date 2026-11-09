@@ -420,7 +420,8 @@ export function gapDays(prevEnd: string | null, nextStart: string | null): numbe
  * The best start for the next block: the Monday after the client's most recent program ends, or
  * next Monday when nothing runs past today (the same rule as Generate Next Program's planned start,
  * `plannedStart`), so a new block lines up with the week and never overlaps or leaves a stray gap.
- * `exclude` leaves out the block(s) being scheduled (a draft that already carries dates). Pure.
+ * `exclude` leaves out the block(s) being scheduled (a draft that already carries dates); a block
+ * hidden from the client isn't running for them, so it never pushes the start later. Pure.
  */
 export function bestNextStart(
   blocks: ScheduleBlock[],
@@ -429,7 +430,7 @@ export function bestNextStart(
 ): { date: string; why: string; after: ScheduleBlock | null } {
   const last =
     blocks
-      .filter((b) => !exclude.has(b.id) && b.status_derived !== "Archived" && !b.archived && b.effective_end && b.effective_end >= today)
+      .filter((b) => !exclude.has(b.id) && b.client_visible !== false && b.status_derived !== "Archived" && !b.archived && b.effective_end && b.effective_end >= today)
       .sort((a, b) => String(b.effective_end).localeCompare(String(a.effective_end)))[0] ?? null;
   const p = plannedStart(today, last?.effective_end ?? null);
   const afterLast = !!last && p.date > (last.effective_end as string);
@@ -438,6 +439,14 @@ export function bestNextStart(
     why: afterLast ? `the Monday after ${last!.name ?? "the last block"} ends` : "next Monday, with nothing else running",
     after: afterLast ? last : null,
   };
+}
+
+/**
+ * The date the Start dialog opens on: the date the coach already gave this block (or the first
+ * block of a generated program) when it's today or later, else the best start. Pure.
+ */
+export function defaultStartFor(existingStart: string | null | undefined, best: string, today: string = todayISO()): string {
+  return existingStart && existingStart >= today ? existingStart : best;
 }
 
 export function suggestedNextStart(
