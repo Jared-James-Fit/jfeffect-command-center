@@ -183,7 +183,14 @@ export const builtExerciseSchema = z.object({
   exercise_name: clipReq(160),
   role: z.string().trim().max(60).nullish().catch(null),
   station: z.string().trim().max(40).nullish().catch(null),
-  superset: z.string().trim().max(4).nullish(),
+  // "A1" / "A2": a longer label ("SS A1", "Superset A-2") is read down to its letter and number,
+  // and one with neither is dropped (no superset), never failing the block
+  superset: z.preprocess((v) => {
+    if (v == null || v === "") return null;
+    const t = String(v).toUpperCase();
+    const m = t.match(/\b([A-Z])\s*-?\s*(\d{1,2})\b/) ?? t.match(/([A-Z])(\d{1,2})/);
+    return m ? `${m[1]}${m[2]}` : t.trim().length <= 4 ? t.trim() : null;
+  }, z.string().max(4).nullable()).optional(),
   ...rxFields,
   sets: z.coerce.number().int().min(1).max(15),
   reps: z.coerce.string().trim().min(1).max(30),
@@ -191,7 +198,20 @@ export const builtExerciseSchema = z.object({
   tempo: z.string().trim().max(20).nullish().catch(null),
   progression: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 800) || null)).optional(),
   substitutions: list(z.object({ exercise_id: z.string().trim().max(64).nullish().catch(null), exercise_name: clipReq(160) }), 3),
-  weeks: z.array(z.object({ week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS), ...rxFields })).max(MAX_PROGRAM_WEEKS).nullish(),
+  // a week's changes, each field read on its own: an impossible value (0 sets for "skip it that
+  // week") is dropped for that field instead of failing the whole block (Devin, Nov 9 2026)
+  weeks: list(
+    z.object({
+      week: z.coerce.number().int().min(1).max(MAX_PROGRAM_WEEKS),
+      sets: rxFields.sets.catch(undefined),
+      reps: rxFields.reps.catch(undefined),
+      rpe: rxFields.rpe.catch(undefined),
+      rir: rxFields.rir.catch(undefined),
+      percentage: rxFields.percentage.catch(undefined),
+      notes: rxFields.notes.catch(undefined),
+    }),
+    MAX_PROGRAM_WEEKS,
+  ),
 });
 export type BuiltExercise = z.infer<typeof builtExerciseSchema>;
 

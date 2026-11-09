@@ -288,3 +288,21 @@ describe("a strategy's week-by-week detail is kept (blind grading, Nov 9 2026)",
     expect(s.weekly_layout[0].notes).toHaveLength(2000);
   });
 });
+
+describe("one impossible week change never fails a block (Devin, Nov 9 2026)", () => {
+  it("0 sets in a week's change is dropped for that field; the rest of the change and the block stay", async () => {
+    const { builtBlockSchema } = await import("@/lib/program-intel/generator-schemas");
+    const ex = { exercise_name: "Leg Press", sets: 3, reps: "10", weeks: [{ week: 4, sets: 0, rpe: "6" }, { week: 2, sets: 4 }] };
+    const b = builtBlockSchema.parse({ name: "Block 2", weeks: 4, days: [{ title: "Lower", exercises: [ex] }] });
+    expect(b.days[0].exercises[0].weeks).toEqual([{ week: 4, rpe: "6" }, { week: 2, sets: 4 }]);
+  });
+});
+
+describe("a superset label a model writes long still pairs (Devin, Nov 9 2026)", () => {
+  it("'SS A1' / 'Superset A-2' read as A1 / A2; nonsense is no superset; the block stands", async () => {
+    const { builtBlockSchema } = await import("@/lib/program-intel/generator-schemas");
+    const e = (superset: unknown) => ({ exercise_name: "Curl", sets: 3, reps: "10", superset });
+    const b = builtBlockSchema.parse({ name: "B", weeks: 4, days: [{ title: "Arms", exercises: [e("SS A1"), e("Superset A-2"), e("pair with curls"), e("B1"), e(null)] }] });
+    expect(b.days[0].exercises.map((x) => x.superset ?? null)).toEqual(["A1", "A2", null, "B1", null]);
+  });
+});
