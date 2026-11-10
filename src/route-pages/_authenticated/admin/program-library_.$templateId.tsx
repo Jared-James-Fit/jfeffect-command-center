@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
-import { AlertTriangle, ArrowLeft, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MoreHorizontal, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -27,6 +27,10 @@ import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shor
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIsMobileNow } from "@/hooks/use-mobile";
+import { BestOnComputerTip } from "@/components/best-on-computer-tip";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DayDateButton } from "@/components/workout-day/day-date-button";
 import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import {
@@ -426,6 +430,15 @@ type MaxesCtx = {
 };
 const MaxesContext = createContext<MaxesCtx>({ clientId: null, blockId: null, maxes: [], index: new Map(), refresh: () => {} });
 export function useClientMaxesCtx() { return useContext(MaxesContext); }
+
+// ---- Phone layout (under 768px), set by StructureCanvas ----
+// One week at a time, exercise rows that keep their names, a ⋯ per row, and
+// exercises added and swapped from a searchable sheet instead of tiny
+// popovers and a 2,000-item dropdown. Desktop is unchanged.
+const BuilderPhoneContext = createContext(false);
+const useBuilderPhone = () => useContext(BuilderPhoneContext);
+const inRowMenu = (t: EventTarget | null) =>
+  t instanceof Element && !!t.closest("[data-row-menu]");
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
@@ -896,7 +909,13 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     setPrefsState(next);
     writePrefs(next);
   };
-  const { compact, zoom, sidebarCollapsed } = prefs;
+  const { compact: compactPref, zoom: zoomPref, sidebarCollapsed } = prefs;
+  // A phone gets the builder at full width and natural scroll: no library
+  // sidebar (exercises go in with each day's + buttons), no zoom, no full
+  // screen, and every card opens (compact rows only help on a wide screen).
+  const phone = useIsMobileNow();
+  const zoom = phone ? 1 : zoomPref;
+  const compact = phone ? false : compactPref;
   const [fullscreen, setFullscreen] = useState(false);
   const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
   const fitToScreen = () => {
@@ -962,13 +981,33 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
   return (
     <MaxesContext.Provider value={maxesCtx}>
+    <BuilderPhoneContext.Provider value={phone}>
     <div
       className={cn(
         "workout-card-surface overflow-hidden",
         fullscreen && "fixed inset-0 z-[60] rounded-none border-0 shadow-none",
       )}
     >
-      {/* Sticky compact toolbar */}
+      {phone ? (
+        <div className="space-y-2 border-b border-border px-3 py-2" data-builder-phone>
+          <BestOnComputerTip storageKey="jf.coach-builder.desktop-tip">
+            The exercise library, drag and drop and side by side weeks are on a computer. Days,
+            exercises, sets and reps all edit here.
+          </BestOnComputerTip>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button size="icon" variant="ghost" className="h-10 w-10" disabled={!canUndo} aria-label="Undo" onClick={undo}>
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-10 w-10" disabled={!canRedo} aria-label="Redo" onClick={redo}>
+              <Redo2 className="h-4 w-4" />
+            </Button>
+            <div className="ml-auto inline-flex items-center gap-1.5">
+              <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
+              {toolbarExtras}
+            </div>
+          </div>
+        </div>
+      ) : (
       <div
         className={cn(
           "z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur",
@@ -1039,8 +1078,15 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           <ProgramBuilderShortcutsButton />
         </div>
       </div>
+      )}
 
-      <div className={cn("flex gap-0 overflow-hidden", fullscreen ? "h-[calc(100vh-46px)]" : "h-[calc(100vh-150px)]")}>
+      <div
+        className={cn(
+          !phone && "flex gap-0 overflow-hidden",
+          !phone && (fullscreen ? "h-[calc(100vh-46px)]" : "h-[calc(100vh-150px)]"),
+        )}
+      >
+        {!phone && (
         <ExerciseLibraryPanel
           exercises={exercises as ExerciseRef[]}
           collapsed={sidebarCollapsed}
@@ -1058,21 +1104,27 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
             toast.success("Added — drag onto a day for placement");
           }}
         />
-        <div className="flex-1 overflow-auto" ref={canvasRef}>
+        )}
+        <div className={cn(!phone && "flex-1 overflow-auto")} ref={canvasRef}>
           <div
-            style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "top left",
-              width: `${100 / zoom}%`,
-              minHeight: `${100 / zoom}%`,
-            }}
-            className="pl-1 pr-2 py-2"
+            style={
+              phone
+                ? undefined
+                : {
+                    transform: `scale(${zoom})`,
+                    transformOrigin: "top left",
+                    width: `${100 / zoom}%`,
+                    minHeight: `${100 / zoom}%`,
+                  }
+            }
+            className={phone ? "px-2 py-2" : "pl-1 pr-2 py-2"}
           >
             <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />
           </div>
         </div>
       </div>
     </div>
+    </BuilderPhoneContext.Provider>
     </MaxesContext.Provider>
   );
 }
@@ -1362,7 +1414,7 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
 
       {/* Active block weeks editor */}
       {activeBlock ? (
-        <div className="rounded-md border border-border p-2">
+        <div className="rounded-md border border-border p-2 max-md:border-0 max-md:p-0">
           <BlockPayloadEditor
             key={activeBlock.id}
             weeksData={activeBlock.weeks}
@@ -1400,12 +1452,16 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   };
   const initialPos = readPos();
   const [activeIdx, _setActiveIdx] = useState(initialPos.activeIdx);
-  const [view, _setView] = useState<"block" | "week">(initialPos.view);
+  const [viewPref, _setView] = useState<"block" | "week">(initialPos.view);
+  // A phone shows one week at a time (side by side weeks don't fit); the
+  // desktop choice is kept as it was.
+  const phone = useBuilderPhone();
+  const view: "block" | "week" = phone ? "week" : viewPref;
   const writePos = (next: { view: "block" | "week"; activeIdx: number }) => {
     if (typeof window === "undefined") return;
     try { window.localStorage.setItem(POS_KEY, JSON.stringify(next)); } catch {}
   };
-  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view, activeIdx: idx }); };
+  const setActiveIdx = (idx: number) => { _setActiveIdx(idx); writePos({ view: viewPref, activeIdx: idx }); };
   const setView = (v: "block" | "week") => { _setView(v); writePos({ view: v, activeIdx }); };
   // Clamp activeIdx if weeks were removed since last visit.
   useEffect(() => {
@@ -1502,7 +1558,8 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   };
   return (
     <div className="space-y-2">
-      <div className="sticky top-0 z-20 -mx-2 mb-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-2 backdrop-blur">
+      <div className="sticky top-0 z-20 -mx-2 mb-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-2 backdrop-blur max-md:mx-0">
+        {!phone && (
         <div className="inline-flex rounded-md border border-border p-0.5">
           <button onClick={() => setView("block")} className={cn("inline-flex items-center gap-1 rounded px-2 py-1 text-xs", view === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
             <LayoutGrid className="h-3 w-3" /> Full Block
@@ -1511,6 +1568,7 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <CalendarRange className="h-3 w-3" /> Weekly
           </button>
         </div>
+        )}
         {/* Active editing context — always visible while scrolling deep into a week */}
         {view === "week" && weeksData[activeIdx] && (() => {
           const aw = weeksData[activeIdx];
@@ -1547,18 +1605,18 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
             <ArrowRight className="mr-1 h-3 w-3" /> Apply → future
           </Button>
         )}
-        <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={addWeek}>
+        {!phone && <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />}
+        <Button size="sm" variant="ghost" className="ml-auto max-md:h-10" onClick={addWeek}>
           <Plus className="mr-1 h-3 w-3" /> Add week
         </Button>
       </div>
 
       {view === "week" ? (
         <>
-          <div className="-mx-2 overflow-x-auto px-2 pb-2">
+          <div className="-mx-2 overflow-x-auto px-2 pb-2 max-md:mx-0 max-md:px-0">
             <div className="flex w-max items-center gap-1">
               {weeksData.map((w: any, i: number) => (
-                <button key={i} onClick={() => setActiveIdx(i)} className={`h-8 w-[112px] shrink-0 rounded-md border px-2 py-1 text-xs ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
+                <button key={i} onClick={() => setActiveIdx(i)} className={`h-8 w-[112px] shrink-0 rounded-md border px-2 py-1 text-xs max-md:h-10 max-md:w-auto max-md:min-w-[88px] max-md:text-[13px] ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
                   Week {w.week_index}{w.phase ? ` · ${w.phase}` : ""}
                 </button>
               ))}
@@ -1845,7 +1903,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
         // win over the legacy pl_days.scheduled_date mirror.
         const dayStatus = d._dbId ? dayScheduleStatus?.get(d._dbId) : undefined;
         return (
-        <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3")}>
+        <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3 max-md:p-2")}>
           <div className={cn("flex flex-col gap-2", compact ? "mb-1" : "mb-2")}>
             <div className="flex items-start gap-3 flex-wrap">
               {/* Derived Day label + optional coach subtitle. Reordering
@@ -1982,6 +2040,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
       ),
     [day, exercises],
   );
+  const phone = useBuilderPhone();
   const [dragOver, setDragOver] = useState(false);
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -2085,7 +2144,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
       onMouseDownCapture={activateDay}
       onFocusCapture={activateDay}
       className={cn(
-        "relative space-y-3 rounded-lg bg-builder-canvas p-3 sm:p-4 ring-1 ring-builder-card-border/40 transition-all",
+        "relative space-y-3 rounded-lg bg-builder-canvas p-2 md:p-4 ring-1 ring-builder-card-border/40 transition-all",
         pbDragging === "exercise" && !dragOver && "ring-2 ring-dashed ring-primary/40",
         dragOver && "ring-4 ring-primary ring-offset-2 ring-offset-background bg-primary/10 shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]",
         isActive && "ring-2 ring-primary/60 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]",
@@ -2116,7 +2175,7 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
       )}
       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-2">
-          <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
           {videoStats.total > 0 && (
             <span
               className={cn(
@@ -2164,7 +2223,8 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
               <ClipboardPaste className="mr-1 h-3 w-3" /> Paste ({clip.rows.length})
             </Button>
           )}
-          <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
+          {/* a phone adds from the searchable "Add exercise" under the day instead of an empty row */}
+          <Button size="sm" variant="outline" className="h-7 text-[11px] max-md:hidden" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
         </div>
       </div>
       {dayIssues.length > 0 && rows.length > 0 && (
@@ -2189,20 +2249,31 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
         </div>
       )}
       {rows.length === 0 ? (
+        phone ? (
+          <InlineAddExerciseButton
+            exercises={exercises}
+            onPick={(exId: string) => insertExercise(exId, 0)}
+            label="Add exercise"
+            prominent
+          />
+        ) : (
         <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
           {dragOver ? "Release to drop here" : pbDragging === "exercise" ? "Drop the exercise anywhere in this card" : "Drag exercises from the library, or click + Row"}
         </p>
+        )
       ) : (
         <div className="space-y-3" data-pb-day>
           {rows.map((r: any, i: number) => (
             <Fragment key={i}>
+              {!phone && (
               <InlineAddExerciseButton
                 exercises={exercises}
                 onPick={(exId: string) => insertExercise(exId, i)}
                 label={i === 0 ? "Add exercise at the start" : "Insert exercise here"}
               />
+              )}
             <div
-              draggable
+              draggable={!phone}
               onDragStart={(e) => {
                 // Don't start a row-drag when the user is interacting with
                 // a form control or button inside the row.
@@ -2271,7 +2342,8 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
           <InlineAddExerciseButton
             exercises={exercises}
             onPick={(exId: string) => insertExercise(exId, rows.length)}
-            label="Add exercise at the end"
+            label={phone ? "Add exercise" : "Add exercise at the end"}
+            prominent
           />
         </div>
       )}
@@ -2286,6 +2358,147 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
  * until the user hovers the slot, so it doesn't clutter the day.
  */
 function InlineAddExerciseButton({
+  exercises,
+  onPick,
+  label,
+  prominent = false,
+}: {
+  exercises: any[];
+  onPick: (exerciseId: string) => void;
+  label: string;
+  /** The day's own add (end of the day): a full button on a phone. */
+  prominent?: boolean;
+}) {
+  const phone = useBuilderPhone();
+  if (phone) {
+    return prominent ? (
+      <PhoneAddExerciseButton exercises={exercises} onPick={onPick} label={label} />
+    ) : null;
+  }
+  return <InlineAddExercisePopover exercises={exercises} onPick={onPick} label={label} />;
+}
+
+function PhoneAddExerciseButton({
+  exercises,
+  onPick,
+  label,
+}: {
+  exercises: any[];
+  onPick: (exerciseId: string) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 w-full border-dashed text-[15px]"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="mr-1.5 h-4 w-4" aria-hidden /> {label}
+      </Button>
+      <PhoneExercisePickerSheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Add exercise"
+        exercises={exercises}
+        onPick={(ex) => onPick(ex.id)}
+      />
+    </>
+  );
+}
+
+/**
+ * The library on a phone: a tall sheet with a search box and rows a thumb can
+ * hit (the desktop popovers are 24px rows in a 256px box).
+ */
+function PhoneExercisePickerSheet({
+  open,
+  onOpenChange,
+  title,
+  description,
+  exercises,
+  excludeId,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description?: string;
+  exercises: any[];
+  excludeId?: string | null;
+  onPick: (exercise: any) => void;
+}) {
+  const [q, setQ] = useState("");
+  const searched = useMemo(() => {
+    const list = (exercises as SearchableExercise[]).filter((e) => !excludeId || e.id !== excludeId);
+    return searchExercises(list, q, { limit: q.trim() ? 200 : 100 });
+  }, [exercises, q, excludeId]);
+  const filtered = searched.results.map((r) => r.exercise) as any[];
+  const terms = searched.highlightTerms;
+  const close = (next: boolean) => {
+    if (!next) setQ("");
+    onOpenChange(next);
+  };
+  return (
+    <Sheet open={open} onOpenChange={close}>
+      <SheetContent side="bottom" hideCloseButton className="flex h-[88dvh] flex-col gap-0 overflow-hidden rounded-t-2xl p-0">
+        <div className="shrink-0 border-b border-border px-4 pb-3 pt-2">
+          <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
+          <SheetTitle className="text-base font-semibold">{title}</SheetTitle>
+          <SheetDescription className={description ? "text-[13px]" : "sr-only"}>
+            {description ?? "Search the exercise library"}
+          </SheetDescription>
+          <div className="relative mt-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              enterKeyHint="search"
+              type="search"
+              placeholder="Search exercises"
+              aria-label="Search exercises"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className="h-11 pl-9 text-base"
+            />
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
+          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
+            <p className="pb-2 text-[12px] text-muted-foreground">No exact matches. Showing the closest.</p>
+          )}
+          {filtered.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">Nothing matches that. Try another word.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {filtered.map((ex) => {
+                const tagLine = [ex.muscle_group, ex.category].filter(Boolean).join(" · ");
+                return (
+                  <li key={ex.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onPick(ex); close(false); }}
+                      className="flex min-h-[52px] w-full flex-col justify-center rounded-xl border border-border bg-card px-3 py-2 text-left transition active:scale-[0.99]"
+                    >
+                      <span className="text-[15px] font-medium"><HighlightedText text={ex.name} terms={terms} /></span>
+                      {tagLine && <span className="text-[12px] text-muted-foreground">{tagLine}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function InlineAddExercisePopover({
   exercises,
   onPick,
   label,
@@ -2432,7 +2645,8 @@ function InlineAddExerciseButton({
   );
 }
 
-function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: any) => void; exercises: any[] }) {
+function SwapExerciseButton({ row, setRow, exercises, className }: { row: any; setRow: (r: any) => void; exercises: any[]; className?: string }) {
+  const phone = useBuilderPhone();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const searched = useMemo(() => {
@@ -2449,6 +2663,24 @@ function SwapExerciseButton({ row, setRow, exercises }: { row: any; setRow: (r: 
     setQ("");
     toast.success(`Swapped to ${ex.name}`);
   };
+  if (phone) {
+    return (
+      <>
+        <Button size="icon" variant="ghost" className={cn("h-7 w-7", className)} aria-label="Swap exercise" onClick={() => setOpen(true)}>
+          <ArrowLeftRight className="h-4 w-4" />
+        </Button>
+        <PhoneExercisePickerSheet
+          open={open}
+          onOpenChange={setOpen}
+          title={row.exercise_id || row.exercise_name_override ? "Swap exercise" : "Pick an exercise"}
+          description="Sets, reps, load, rest, tempo and notes stay as they are."
+          exercises={exercises}
+          excludeId={row.exercise_id}
+          onPick={pick}
+        />
+      </>
+    );
+  }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -2673,6 +2905,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   };
   const multiBlockFlag = useMultiBlockBuilderFlag();
   const [blocksOpen, setBlocksOpen] = useState(false);
+  // A phone: the name gets its own line, a row's moves live in one ⋯, and
+  // every button is a 40px tap.
+  const phone = useBuilderPhone();
+  const iconBtn = phone ? "h-10 w-10" : "h-7 w-7";
 
   // Build a short human summary of the prescription for the collapsed view.
   const summaryParts: string[] = [];
@@ -2709,8 +2945,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   return (
     <div
       data-pb-row
-      onClickCapture={() => { if (collapsed) { cancelCollapse(); setCollapsed(false); } }}
-      onFocusCapture={() => { cancelCollapse(); setCollapsed(false); }}
+      // a row's ⋯ (phone) is its own: opening it or picking from it never
+      // opens the card (React events bubble out of the menu's portal)
+      onClickCapture={(e) => { if (collapsed && !inRowMenu(e.target)) { cancelCollapse(); setCollapsed(false); } }}
+      onFocusCapture={(e) => { if (inRowMenu(e.target)) return; cancelCollapse(); setCollapsed(false); }}
       onBlurCapture={(e) => {
         if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) scheduleCollapse();
       }}
@@ -2743,6 +2981,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
       {collapsed ? (
         <div className="flex items-center gap-2 min-w-0">
+          {!phone && (
           <span
             draggable={!!onDragStartRow}
             onDragStart={onDragStartRow}
@@ -2753,9 +2992,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           >
             <GripVertical className="h-4 w-4" />
           </span>
+          )}
           {RowIndexBadge}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className={cn("flex items-center gap-1.5 min-w-0", phone && "flex-wrap gap-y-1")}>
               {purposeLabel && (
                 <span className={cn(
                   "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide",
@@ -2763,14 +3003,51 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 )}>{purposeLabel}</span>
               )}
               {(row.exercise_id || row.exercise_name_override) && VideoBadge}
-              <span className="truncate text-sm font-semibold">{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
+              <span className={cn("text-sm font-semibold", phone ? "order-first basis-full line-clamp-2 text-[15px] leading-snug" : "truncate")}>{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            <div className={cn("mt-0.5 text-muted-foreground", phone ? "line-clamp-2 text-[13px]" : "truncate text-[11px]")}>
               {summaryParts.length > 0 ? summaryParts.join(" · ") : <span className="italic">No prescription yet — click to fill in</span>}
               <span className="mx-1 opacity-40">·</span>
               <span>{restSummary}</span>
             </div>
           </div>
+          {phone ? (
+            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="ghost" className="h-10 w-10" data-row-menu aria-label={`${exName || "Exercise"} options`}>
+                    <MoreHorizontal className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52" data-row-menu>
+                  <DropdownMenuItem onSelect={() => { cancelCollapse(); setCollapsed(false); }}>
+                    <Settings2 className="mr-2 h-4 w-4" /> Edit
+                  </DropdownMenuItem>
+                  {onMoveUp && (
+                    <DropdownMenuItem disabled={canMoveUp === false} onSelect={onMoveUp}>
+                      <ChevronUp className="mr-2 h-4 w-4" /> Move up
+                    </DropdownMenuItem>
+                  )}
+                  {onMoveDown && (
+                    <DropdownMenuItem disabled={canMoveDown === false} onSelect={onMoveDown}>
+                      <ChevronDown className="mr-2 h-4 w-4" /> Move down
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => { copyRows([row]); toast.success("Exercise copied"); }}>
+                    <ClipboardCopy className="mr-2 h-4 w-4" /> Copy
+                  </DropdownMenuItem>
+                  {onDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" onSelect={onDelete}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
           <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
             {onMoveUp && (
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveUp} disabled={canMoveUp === false} title="Move up">
@@ -2791,13 +3068,15 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               </Button>
             )}
           </div>
+          )}
         </div>
       ) : (
       <>
-      {/* ---- Header row: identity (left) + actions (right) ---- */}
-      <div className="flex items-start gap-2">
+      {/* ---- Header row: identity (left) + actions (right; under it on a phone) ---- */}
+      <div className={cn("flex gap-2", phone ? "flex-col" : "items-start")}>
         <Field className="min-w-0 flex-1" label="Exercise">
         <div className="flex items-center gap-1">
+          {!phone && (
           <span
             draggable={!!onDragStartRow}
             onDragStart={onDragStartRow}
@@ -2807,8 +3086,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           >
             <GripVertical className="h-4 w-4" />
           </span>
+          )}
           {RowIndexBadge}
           <div className="min-w-0 flex-1">
+        {phone ? (
+          // the library is thousands of exercises: a phone picks and swaps
+          // through the searchable sheet (Swap, below), never a long dropdown
+          <div className="py-1 text-[15px] font-semibold leading-snug">
+            {exName || <span className="italic text-muted-foreground">No exercise yet: tap Swap</span>}
+          </div>
+        ) : (
         <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
           <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left [&>span]:leading-tight")}>
             <SelectValue placeholder="Exercise" />
@@ -2818,6 +3105,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        )}
         {!row.exercise_id && (
           <RowCell className="mt-1 h-7 text-sm font-semibold" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
         )}
@@ -2912,12 +3200,12 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           </div>
         </div>
         </Field>
-        <div className="flex shrink-0 items-center gap-0.5 pt-4">
+        <div className={cn("flex shrink-0 items-center gap-0.5", phone ? "-ml-2 flex-wrap" : "pt-4")}>
           {onMoveUp && (
             <Button
               size="icon"
               variant="ghost"
-              className="h-7 w-7"
+              className={iconBtn}
               onClick={onMoveUp}
               disabled={canMoveUp === false}
               title="Move up"
@@ -2929,7 +3217,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
             <Button
               size="icon"
               variant="ghost"
-              className="h-7 w-7"
+              className={iconBtn}
               onClick={onMoveDown}
               disabled={canMoveDown === false}
               title="Move down"
@@ -2937,10 +3225,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               <ChevronDown className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
+          <Button size="icon" variant="ghost" className={iconBtn} onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
             <ClipboardCopy className="h-3.5 w-3.5" />
           </Button>
-          <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} />
+          <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} className={iconBtn} />
           {multiBlockFlag && row._dbId && (
             <Button
               size="icon"
@@ -2954,7 +3242,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           )}
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-7 w-7" title="Advanced settings (exercise classification)">
+              <Button size="icon" variant="ghost" className={iconBtn} title="Advanced settings (exercise classification)">
                 <Settings2 className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
@@ -2981,11 +3269,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
           )}
-          {onDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
+          {onDelete && <Button size="icon" variant="ghost" className={cn(iconBtn, "text-destructive")} onClick={onDelete} aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>}
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7"
+            className={cn(iconBtn, phone && "hidden")}
             onClick={resetCard}
             title="Reset card (Alt+R)"
             aria-label="Reset card"
@@ -2995,11 +3283,11 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         </div>
       </div>
       {/* ---- Primary programming row ---- */}
-      <div className="grid grid-cols-12 items-end gap-1">
+      <div className={cn("grid items-end gap-1", phone ? "grid-cols-6 gap-y-2" : "grid-cols-12")}>
         <Field className="col-span-2" label="Sets">
           <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
         </Field>
-        <Field className="col-span-3" label=" ">
+        <Field className={phone ? "col-span-4" : "col-span-3"} label=" ">
           {(() => {
             // Three explicit tracking types: reps + weight, reps only, time only.
             // The prescription drives what the client logs — no name-based guesses.
@@ -3105,7 +3393,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         <Field className="col-span-2" label="RIR">
           <RowCell dataField="rir" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
         </Field>
-        <Field className="col-span-3" label={`Rest time${restIsOverride ? " *" : ""}`}>
+        <Field className={phone ? "col-span-2" : "col-span-3"} label={`Rest time${restIsOverride ? " *" : ""}`}>
           {(() => {
             const REST_PRESETS: { v: number; label: string }[] = [
               { v: 30, label: "30 sec" },
@@ -3332,6 +3620,16 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           rowId={row._dbId}
           exerciseName={exName || "Exercise"}
         />
+      )}
+      {phone && meetsMinimum && (
+        // a phone has no "click away" to fold the card back into its row
+        <Button
+          variant="secondary"
+          className="mt-1 h-11 w-full"
+          onClick={() => { (document.activeElement as HTMLElement | null)?.blur?.(); cancelCollapse(); setCollapsed(true); }}
+        >
+          Done
+        </Button>
       )}
       </>
       )}
