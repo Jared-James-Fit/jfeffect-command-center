@@ -108,25 +108,46 @@ async function loadBlock(admin: Admin, blockId: string) {
   };
 }
 
+/**
+ * Cleo's words for a block, from the router (src/lib/ai/routing.ts "roadmap": GPT-5-mini on the
+ * OpenAI key, GPT-5.5 behind it; an admin override in app_settings.ai_routes wins). A reply that
+ * doesn't parse is asked for once more from the same model; a model that fails hands over to the
+ * next.
+ */
 async function askCleo(admin: Admin, digest: string, weekIndexes: number[]): Promise<RoadmapReply> {
-  const { createLovableAiGateway, DEFAULT_AI_MODEL } = await import("@/lib/ai-gateway.server");
-  const { generateText } = await import("ai");
-  const gateway = createLovableAiGateway();
-  const { data: g } = await admin.from("global_ai_config").select("default_model").limit(1).maybeSingle();
-  const modelId = g?.default_model || DEFAULT_AI_MODEL;
-  let lastText = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await generateText({
-      model: gateway(modelId),
-      system: ROADMAP_SYSTEM_PROMPT,
-      prompt: `${digest}\n\nWeeks to describe: ${weekIndexes.join(", ")}.`,
-      temperature: 0.3,
-    });
-    lastText = r.text;
-    const parsed = parseRoadmapReply(r.text, weekIndexes);
-    if (parsed) return parsed;
+  const { callModel } = await import("@/lib/ai/model-client.server");
+  const { resolveRoute } = await import("@/lib/ai/routing");
+  const { data: cfg } = await admin.from("app_settings").select("value").eq("key", "ai_routes").maybeSingle();
+  let override: any = null;
+  try {
+    override = cfg?.value ? JSON.parse(cfg.value) : null;
+  } catch {
+    override = null;
   }
-  throw new Error(`Cleo's reply wasn't usable: ${lastText.slice(0, 160)}`);
+  const route = resolveRoute("roadmap", override);
+  let lastText = "";
+  const errors: string[] = [];
+  for (const model of route.models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await callModel(model, {
+          system: ROADMAP_SYSTEM_PROMPT,
+          prompt: `${digest}\n\nWeeks to describe: ${weekIndexes.join(", ")}.`,
+          effort: route.effort,
+          maxOutputTokens: route.maxOutputTokens,
+          temperature: 0.3,
+          timeoutMs: 90_000,
+        });
+        lastText = r.text;
+        const parsed = parseRoadmapReply(r.text, weekIndexes);
+        if (parsed) return parsed;
+      } catch (e: any) {
+        errors.push(`${model}: ${String(e?.message ?? e).slice(0, 120)}`);
+        break;
+      }
+    }
+  }
+  throw new Error(lastText ? `Cleo's reply wasn't usable: ${lastText.slice(0, 160)}` : `No model answered (${errors.join("; ")})`);
 }
 
 /** Cleo's words for the same structure written for another block, if any. */

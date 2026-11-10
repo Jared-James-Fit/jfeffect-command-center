@@ -626,7 +626,8 @@ export function buildAthleteDevelopment(rec: IntelRecords, ctx: AthleteContext, 
 
 const DECISION_LABEL: Record<Decision, string> = { progress: "PROGRESS", maintain: "HOLD", regress: "BACK OFF", not_enough_data: "NOT ENOUGH DATA" };
 
-export function developmentText(d: AthleteDevelopment, unit: Unit): string {
+/** `exercises: false` leaves out the exercise-by-exercise signals (the nutrition AI reads the athlete, not the program). */
+export function developmentText(d: AthleteDevelopment, unit: Unit, opts: { exercises?: boolean } = {}): string {
   const u = (kg: number | null | undefined) => (kg == null ? "?" : unit === "lb" ? `${Math.round(kg * LB)} lb` : `${round(kg, 1)} kg`);
   const L: string[] = [];
   const who = [
@@ -658,9 +659,11 @@ export function developmentText(d: AthleteDevelopment, unit: Unit): string {
   }
   if (d.gymTotal) L.push(`Gym total (e1RM estimate, NOT a meet result): ${u(d.gymTotal.kg)}${d.gymTotal.gl != null ? ` ≈ ${d.gymTotal.gl} IPF GL points at ${u(d.gymTotal.bodyweightKg)}` : ""} (as of ${d.gymTotal.asOf})`);
   if (d.meets.length) L.push(`Meet results (competition, classic GL): ${d.meets.map((m) => `${m.date ?? "?"} ${m.name ?? ""}: ${u(m.totalKg)} @${u(m.bodyweightKg)}${m.gl != null ? ` = ${m.gl} GL` : ""}`).join("; ")}`);
-  L.push("Exercise by exercise (from the last 8 weeks; one hard session isn't a trend):");
-  if (!d.progression.length) L.push("- nothing upcoming or recently trained to read");
-  for (const p of d.progression.slice(0, 40)) L.push(`- ${p.exercise}: ${DECISION_LABEL[p.decision]} (${p.confidence}) — ${p.why}. Next: ${p.method}.${p.evidence.length ? ` [${p.evidence.join(" | ")}]` : ""}`);
+  if (opts.exercises !== false) {
+    L.push("Exercise by exercise (from the last 8 weeks; one hard session isn't a trend):");
+    if (!d.progression.length) L.push("- nothing upcoming or recently trained to read");
+    for (const p of d.progression.slice(0, 40)) L.push(`- ${p.exercise}: ${DECISION_LABEL[p.decision]} (${p.confidence}) — ${p.why}. Next: ${p.method}.${p.evidence.length ? ` [${p.evidence.join(" | ")}]` : ""}`);
+  }
   const a = d.adherence;
   L.push(`Adherence: ${a.recentPct != null ? `${a.recentPct}% of workouts in the last 4 weeks` : "too few workouts due in the last 4 weeks to read"}${a.earlierPct != null ? `, ${a.earlierPct}% the 8 weeks before (${a.trend})` : ""}${a.missed.length ? ` · often missed: ${a.missed.map((m) => `${m.workout} (${m.missed} of ${m.due})`).join(", ")}` : ""}`);
   L.push(`Fatigue: ${d.fatigue.signs.length ? `${d.fatigue.possible ? "POSSIBLE ACCUMULATION — " : ""}${d.fatigue.signs.join("; ")}` : "no signs in the last 6 weeks"}`);

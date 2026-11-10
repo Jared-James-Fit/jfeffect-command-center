@@ -2,16 +2,17 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { ActionButton } from "@/components/action-button";
-import { Badge } from "@/components/ui/badge";
-import { Heart, Plus, Pencil, Trash2, Copy, EyeOff, LayoutList, Sparkles, Link2, Link2Off, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CardHeader, MoreButton, StatusChip } from "@/components/nutrition/nutrition-ui";
+import { cn } from "@/lib/utils";
+import { Heart, Plus, Pencil, Trash2, Copy, LayoutList, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { CardioTargetDialog } from "./cardio-target-dialog";
 import { CardioProgramBuilderDialog } from "./cardio-program-builder-dialog";
 import { CardioApplyDefaultsDialog } from "./cardio-apply-defaults-dialog";
 import { CardioSyncRenameDialog } from "./cardio-sync-rename-dialog";
 import { deriveTarget, formatCalorieTarget, nutritionLabelsFromTargets, findOrphanedCardio } from "@/lib/nutrition-cardio";
-import { dayTypeLabel, dayTypeTone } from "@/lib/training-schedule";
+import { dayTypeLabel } from "@/lib/training-schedule";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +21,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cardioActivityLabel } from "@/lib/cardio-activity";
+
+/** A session's dates, only when they're news (a running one says nothing). */
+const CARDIO_STATE: Record<string, string> = { "past-due": "Ended", "due-today": "Ends today", "ending-soon": "Ends soon", upcoming: "Starts later", archived: "Archived" };
 
 export function CardioTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
@@ -67,6 +71,7 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
   const nutritionLabels = nutritionLabelsFromTargets(nutritionTargets as any[]);
   const orphaned = findOrphanedCardio(targets as any[], nutritionLabels);
   const showOrphanBanner = !bannerDismissed && nutritionLabels.length > 0 && orphaned.length > 0;
+  const orphanIds = new Set((orphaned as any[]).map((o) => o.id));
 
   const del = async (t: any) => {
     if (!confirm("Delete this cardio target?")) return;
@@ -97,101 +102,116 @@ export function CardioTargetsPanel({ clientId }: { clientId: string }) {
     (groups[key] ??= []).push(t);
   });
 
+  const add = (dayType: string) => {
+    setEditing(null);
+    setDefaultDayType(dayType);
+    setOpen(true);
+  };
+
   return (
-    <Card className="border-border bg-card p-4 sm:p-6 md:col-span-3 space-y-4 overflow-hidden">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-          <Heart className="h-4 w-4 shrink-0" /> Cardio Targets
-        </h3>
-        <div className="flex flex-wrap gap-2">
-          <ActionButton size="sm" className="flex-1 bg-primary font-semibold sm:flex-none" onClick={() => setDefaultsOpen(true)}>
-            <Sparkles className="mr-1 h-4 w-4" /> Apply Default Cardio
-          </ActionButton>
+    <Card className="space-y-4 overflow-hidden border-border bg-card p-4 md:col-span-3 md:p-6" data-cardio-card>
+      <CardHeader
+        icon={Heart}
+        title="Cardio"
+        actions={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <ActionButton size="sm" variant="outline" className="flex-1 sm:flex-none">
-                <Plus className="mr-1 h-4 w-4" /> Create Custom
-              </ActionButton>
+              <Button variant="outline" className="h-10 gap-1.5">
+                <Plus className="h-4 w-4" /> Add
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setEditing(null); setDefaultDayType("General"); setOpen(true); }}>Simple / General</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setEditing(null); setDefaultDayType("Training Day"); setOpen(true); }}>Training Day</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setEditing(null); setDefaultDayType("Rest Day"); setOpen(true); }}>Non-Training / Rest Day</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setEditing(null); setDefaultDayType("High Day"); setOpen(true); }}>High Day</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setEditing(null); setDefaultDayType("Custom"); setOpen(true); }}>Custom Day Type</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem onClick={() => setDefaultsOpen(true)}>
+                <Sparkles className="mr-2 h-4 w-4" /> The default plan for their days
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => add("Training Day")}>Training day</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => add("Rest Day")}>Non-training day</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => add("High Day")}>High day</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => add("General")}>Any day</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => add("Custom")}>A day type of your own</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setBuilderOpen(true)}>
-                <LayoutList className="mr-2 h-4 w-4" /> Create Multi-Week Program
+                <LayoutList className="mr-2 h-4 w-4" /> A multi-week program
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-      </div>
+        }
+      />
 
       {showOrphanBanner && (
-        <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2 text-warning">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="flex flex-col gap-2 rounded-xl border border-warning/40 px-3 py-2.5 text-[13px] sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>
-              Nutrition day types changed. {orphaned.length} cardio target{orphaned.length > 1 ? "s" : ""} no longer match a nutrition day.
+              The nutrition plan's days changed: {orphaned.length} cardio {orphaned.length > 1 ? "targets don't" : "target doesn't"} match a day any more.
             </span>
-          </div>
-          <div className="flex gap-2">
-            <ActionButton size="sm" variant="outline" onClick={() => setBannerDismissed(true)}>Dismiss</ActionButton>
-            <ActionButton size="sm" onClick={() => setRenameOpen(true)}>Sync Names</ActionButton>
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" className="h-10" onClick={() => setBannerDismissed(true)}>Not now</Button>
+            <Button variant="outline" className="h-10" onClick={() => setRenameOpen(true)}>Match the days</Button>
           </div>
         </div>
       )}
 
       {targets.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No cardio targets yet. Tap <span className="font-semibold text-foreground">Apply Default Cardio</span> to set up a quick starter plan.
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">No cardio yet. The default plan sets a session for each kind of day in one tap.</p>
+          <Button variant="outline" className="h-10 w-full gap-2 sm:w-auto" onClick={() => setDefaultsOpen(true)}>
+            <Sparkles className="h-4 w-4" /> Add the default plan
+          </Button>
         </div>
       ) : (
         <div className="space-y-4">
           {Object.entries(groups).map(([programName, items]) => (
             <div key={programName} className="space-y-2">
               {programName !== "__single__" && (
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
-                  <LayoutList className="h-3.5 w-3.5" /> {programName}
-                  <span className="text-muted-foreground">· {items.length} target{items.length > 1 ? "s" : ""}</span>
+                <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <LayoutList className="h-4 w-4" /> <span className="font-medium text-foreground">{programName}</span> · {items.length} {items.length > 1 ? "sessions" : "session"}
                 </div>
               )}
-              <ul className="space-y-2">
+              <ul className="divide-y divide-border rounded-xl border border-border">
                 {items.map((t: any) => {
                   const d = deriveTarget(t);
                   const cal = formatCalorieTarget(t.calorie_target_min, t.calorie_target_max);
-                  const linked = nutritionLabels.length > 0 && nutritionLabels.includes(t.day_type);
+                  // The same rule as the banner: a session for a day the nutrition plan doesn't have.
+                  const unlinked = orphanIds.has(t.id);
+                  const meta = [
+                    dayTypeLabel(t),
+                    t.frequency_per_week ? `${t.frequency_per_week}×/wk` : null,
+                    t.duration_minutes ? `${t.duration_minutes} min` : null,
+                    t.intensity || null,
+                    cal || null,
+                  ].filter(Boolean);
                   return (
-                    <li key={t.id} className={`grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-md border border-border bg-secondary/20 px-3 py-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between ${t.enabled === false ? "opacity-60" : ""}`}>
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm sm:gap-2">
-                        <Badge variant="outline" className={dayTypeTone(t.day_type)}>{dayTypeLabel(t)}</Badge>
-                        <Badge variant="outline" className={d.tone}>{d.label}</Badge>
-                        <span className="truncate font-semibold">{cardioActivityLabel(t as any)}</span>
-                        <span className="w-full text-xs text-muted-foreground sm:w-auto">
-                          {t.frequency_per_week ? `${t.frequency_per_week}x/wk` : ""} {t.duration_minutes ? `· ${t.duration_minutes} min` : ""} {t.intensity ? `· ${t.intensity}` : ""}
-                        </span>
-                        {cal && <Badge variant="outline" className="text-[10px]">{cal}</Badge>}
-                        {nutritionLabels.length > 0 && (
-                          linked ? (
-                            <Badge variant="outline" className="border-success/40 text-[10px] text-success">
-                              <Link2 className="mr-1 h-3 w-3" />Linked to {t.day_type} nutrition
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-muted-foreground/40 text-[10px] text-muted-foreground">
-                              <Link2Off className="mr-1 h-3 w-3" />Not linked to nutrition day
-                            </Badge>
-                          )
-                        )}
-                        {t.enabled === false && (
-                          <Badge variant="outline" className="text-[10px]"><EyeOff className="mr-1 h-3 w-3" />Disabled</Badge>
-                        )}
+                    <li key={t.id} className={cn("flex items-start gap-2 px-3 py-2.5", t.enabled === false && "opacity-60")}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[15px] font-medium">{cardioActivityLabel(t as any)}</span>
+                          {/* Only what's news: a session that's ended, not started yet, or switched off. */}
+                          {CARDIO_STATE[d.state] && <StatusChip tone={d.state === "past-due" ? "attention" : "neutral"}>{CARDIO_STATE[d.state]}</StatusChip>}
+                          {t.enabled === false && <StatusChip>Off</StatusChip>}
+                        </div>
+                        <div className="mt-0.5 text-[13px] text-muted-foreground">{meta.join(" · ")}</div>
+                        {unlinked && <div className="mt-0.5 text-[13px] text-warning">Not on any day of their nutrition plan</div>}
                       </div>
-                      <div className="flex shrink-0 gap-0.5">
-                        <ActionButton size="icon" variant="ghost" className="h-9 w-9" onClick={() => duplicate(t)} jobLabel="Duplicating cardio target" aria-label="Duplicate"><Copy className="h-4 w-4" /></ActionButton>
-                        <ActionButton size="icon" variant="ghost" className="h-9 w-9" onClick={() => { setEditing(t); setDefaultDayType(undefined); setOpen(true); }} aria-label="Edit"><Pencil className="h-4 w-4" /></ActionButton>
-                        <ActionButton size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => del(t)} jobLabel="Deleting cardio target" aria-label="Delete"><Trash2 className="h-4 w-4" /></ActionButton>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <MoreButton label="Cardio options" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { setEditing(t); setDefaultDayType(undefined); setOpen(true); }}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => void duplicate(t)}>
+                            <Copy className="mr-2 h-4 w-4" /> Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => void del(t)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </li>
                   );
                 })}

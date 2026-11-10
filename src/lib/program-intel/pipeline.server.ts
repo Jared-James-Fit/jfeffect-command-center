@@ -21,6 +21,7 @@
  * program_intel_job_calls (coach-readable) for the context inspector.
  */
 import { resolveRoute, type AiTask } from "@/lib/ai/routing";
+import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall } from "@/lib/ai/staged-call.server";
 import type { Effort } from "@/lib/ai/model-client.server";
 import { auditProgram, type AuditResult } from "./audit";
 import { reviewRepairs, reviewReplySchema, reviewSystemPrompt, reviewUserPrompt, withReview, type CoachingReview, type ReviewReply } from "./coaching-review";
@@ -57,12 +58,8 @@ const SYNC_TIMEOUT_MS = 240_000;
 /** A background call that hasn't finished by now is given up on (and the next model tried). */
 const BACKGROUND_LIMIT_MS = 25 * 60_000;
 
-/** The model hasn't answered yet; the job is re-queued and the next request keeps polling. */
-export class WaitingForModel extends Error {
-  constructor() {
-    super("Waiting for the model");
-  }
-}
+/** The model hasn't answered yet; the job is re-queued and the next request keeps polling (staged-call.server.ts). */
+export { WaitingForModel };
 
 export type StageState = { key: string; label: string; status: "pending" | "running" | "done" | "skipped" | "error"; detail?: string };
 
@@ -90,81 +87,37 @@ async function routeOverride(admin: Db, job: any): Promise<Partial<Record<AiTask
   }
 }
 
-async function pollFor(id: string, ms: number) {
-  const { pollBackground } = await import("@/lib/ai/model-client.server");
-  const t0 = Date.now();
-  for (;;) {
-    const st = await pollBackground(id);
-    if (st.status !== "running" || Date.now() - t0 >= ms) return st;
-    await new Promise((r) => setTimeout(r, pollConfig.every));
-  }
-}
-
 /**
  * One model call for a stage, routed (`task`) and logged. `key` names the call within the job: a
  * finished answer is kept on the job (so a stage resumed by the next request never asks twice) and
- * a background call in flight is resumed, not restarted.
+ * a background call in flight is resumed, not restarted (stagedCall, staged-call.server.ts).
  */
 async function ask(admin: Db, job: any, result: any, task: AiTask, key: string, system: string, prompt: string): Promise<{ text: string; model: string }> {
-  result.calls = result.calls ?? {};
-  result.pending = result.pending ?? {};
-  if (result.calls[key]) return result.calls[key];
-  const { submitBackground, callModel, parseModelRef, ModelHttpError } = await import("@/lib/ai/model-client.server");
+  if (result.calls?.[key]) return result.calls[key];
   const route = resolveRoute(task, await routeOverride(admin, job), { anyModel: !!job.options?.bench });
   // a benchmark run may compare a model at another effort (e.g. Claude at its own default, medium)
   const benchEffort = job.options?.bench ? (job.options?.effort?.[task] as Effort | undefined) : undefined;
   const req = { system, prompt, effort: benchEffort && ["low", "medium", "high"].includes(benchEffort) ? benchEffort : route.effort, maxOutputTokens: route.maxOutputTokens, temperature: 0.3 };
-  const pending = result.pending[key] as { id?: string; model?: string; at?: number; failed?: string[] } | undefined;
-  const tried: string[] = [...(pending?.failed ?? [])];
-  const done = async (text: string, model: string, usage: any, ms: number) => {
-    result.calls[key] = { text, model };
-    delete result.pending[key];
-    await logCall(admin, job, { stage: key, model, system, prompt, response: text, ok: true, ms, usage });
-    await save(admin, job.id, { result });
-    return { text, model };
-  };
-  const lastErrors: string[] = [];
-  const failed = async (model: string, ms: number, error: string) => {
-    tried.push(model);
-    lastErrors.push(error);
-    result.pending[key] = { failed: tried };
-    await logCall(admin, job, { stage: key, model, system, prompt, response: null, ok: false, ms, error: error.slice(0, 500) });
-    // kept at once: if this request is cut off trying the next model, the next one skips this
-    await save(admin, job.id, { result });
-  };
-  if (pending?.id && pending.model) {
-    const st = await pollFor(pending.id, pollConfig.ms);
-    if (st.status === "running" && Date.now() - (pending.at ?? 0) < BACKGROUND_LIMIT_MS) throw new WaitingForModel();
-    if (st.status === "done") return done(st.reply.text, pending.model, st.reply.usage, Date.now() - (pending.at ?? Date.now()));
-    await failed(pending.model, Date.now() - (pending.at ?? Date.now()), st.status === "failed" ? st.error : "no answer in time");
+  try {
+    return await stagedCall({
+      state: result,
+      key,
+      route,
+      req,
+      save: () => save(admin, job.id, { result }),
+      log: (x) => logCall(admin, job, { stage: key, model: x.model, system, prompt, response: x.response, ok: x.ok, ms: x.ms, error: x.error, usage: x.usage }),
+      poll: pollConfig,
+      backgroundLimitMs: BACKGROUND_LIMIT_MS,
+      syncTimeoutMs: SYNC_TIMEOUT_MS,
+    });
+  } catch (e) {
+    if (!(e instanceof ModelsExhausted)) throw e;
+    throw new Error(
+      (route.strongOnly
+        ? `The coaching model didn't answer (tried ${e.tried.join(", ")}). Coaching decisions aren't handed to a weaker model; try again in a few minutes.`
+        : `No model answered (tried ${e.tried.join(", ")}). Try again in a few minutes.`) + (e.noOpenAiCredits ? OPENAI_CREDITS_HINT : ""),
+    );
   }
-  for (const model of route.models.filter((m) => !tried.includes(m))) {
-    const t0 = Date.now();
-    try {
-      if (parseModelRef(model).via === "openai") {
-        const { id } = await submitBackground(model, req);
-        result.pending[key] = { id, model, at: t0, failed: tried };
-        await save(admin, job.id, { result });
-        const st = await pollFor(id, pollConfig.ms);
-        if (st.status === "running") throw new WaitingForModel();
-        if (st.status === "done") return done(st.reply.text, model, st.reply.usage, Date.now() - t0);
-        throw new Error(st.error);
-      }
-      const r = await callModel(model, { ...req, timeoutMs: SYNC_TIMEOUT_MS });
-      return done(r.text, model, r.usage, r.ms);
-    } catch (e: any) {
-      if (e instanceof WaitingForModel) throw e;
-      if (e instanceof ModelHttpError && e.status === 402) throw new Error("Lovable AI credits are used up. Add credits in Lovable (workspace settings, usage), then tap Try again: finished steps aren't redone.");
-      await failed(model, Date.now() - t0, String(e?.message ?? e));
-    }
-  }
-  await save(admin, job.id, { result });
-  const noOpenAiCredits = /no credits remaining|insufficient_quota/i.test(JSON.stringify(result.pending?.[key] ?? "")) || lastErrors.some((m) => /no credits remaining|insufficient_quota/i.test(m));
-  throw new Error(
-    (route.strongOnly
-      ? `The coaching model didn't answer (tried ${tried.join(", ")}). Coaching decisions aren't handed to a weaker model; try again in a few minutes.`
-      : `No model answered (tried ${tried.join(", ")}). Try again in a few minutes.`) + (noOpenAiCredits ? " The OpenAI account has no credits left: add credits at platform.openai.com (billing)." : ""),
-  );
 }
 
 /** A stage finished: the answers kept for it aren't needed any more. */

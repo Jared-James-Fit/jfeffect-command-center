@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -29,21 +29,40 @@ export type Route = {
 export const STRONG_MODELS = ["openai:gpt-6-astra", "gateway:openai/gpt-6-astra", "gateway:anthropic/claude-opus-5-5", "openai:gpt-5.5", "gateway:openai/gpt-5.5"];
 
 /**
+ * Every default runs on the OpenAI key (`openai:`, background mode), never the Lovable gateway:
+ * the coach doesn't want Lovable credits spent, and direct calls also never hit the gateway's
+ * ~125s 524 or hold a request open (Nov 9 2026). An admin override (app_settings.ai_routes) can
+ * still name a `gateway:` model.
+ *
  * Chosen from the Nov 9 2026 benchmark on real athletes (docs/AI_ARCHITECTURE.md): the strategy,
  * blind-graded, was best from GPT-6 Astra (47/60 average, all 5 head-to-heads against GPT-5.5's
- * 43; Flash 24), which runs in OpenAI's background mode with no time ceiling; GPT-5.5 through
- * the gateway is the fallback (it can 524 on a think over ~125s). Claude through the gateway
- * couldn't finish a strategy inside one request (no background mode there), so it isn't routed.
- * Building from an approved strategy: Flash and GPT-5.5 had the same audit results on every
- * paired build, Flash 2-5x faster, so Flash builds and GPT-5.5 is its fallback.
+ * 43; Flash 24); GPT-5.5 is its fallback. Claude through the gateway couldn't finish a strategy
+ * inside one request (no background mode there), so it isn't routed. Building from an approved
+ * strategy: Flash and GPT-5.5 had the same audit results on every paired build (Flash 2-5x
+ * faster); Flash only exists through the gateway, so GPT-5.5 builds (slower, in the background,
+ * the same quality) and Astra is its fallback. Edits, meal plans and roadmap words fall back to
+ * GPT-5-mini, which is checked by code before anything is used (engine.ts, prepDrift,
+ * planTotalsIssues, parseRoadmapReply).
  */
 export const DEFAULT_ROUTES: Record<AiTask, Route> = {
-  strategy: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "high", maxOutputTokens: 40_000, strongOnly: true },
-  review: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
-  interpret: { models: ["openai:gpt-6-astra", "gateway:openai/gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
-  construct: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
-  repair: { models: ["gateway:google/gemini-3-flash-preview", "gateway:openai/gpt-5.5"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
-  edit: { models: ["gateway:openai/gpt-5.5", "gateway:google/gemini-3-flash-preview"], effort: "medium", strongOnly: false },
+  strategy: { models: ["openai:gpt-6-astra", "openai:gpt-5.5"], effort: "high", maxOutputTokens: 40_000, strongOnly: true },
+  review: { models: ["openai:gpt-6-astra", "openai:gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
+  interpret: { models: ["openai:gpt-6-astra", "openai:gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
+  construct: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
+  repair: { models: ["openai:gpt-5.5", "openai:gpt-6-astra"], effort: "low", maxOutputTokens: 48_000, strongOnly: false },
+  edit: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "medium", strongOnly: false },
+  /**
+   * A Nutrition Update's targets: calories, macros, steps and cardio from the athlete's records
+   * and how the last plan went. A coaching decision, so the strong tier only, like the strategy.
+   */
+  nutrition: { models: ["openai:gpt-6-astra", "openai:gpt-5.5"], effort: "medium", maxOutputTokens: 24_000, strongOnly: true },
+  /**
+   * Writing a meal plan to those targets, its meal-prep fix and coach updates: structured writing
+   * checked in code (prepDrift, planTotalsIssues), like construct.
+   */
+  nutrition_write: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 24_000, strongOnly: false },
+  /** The roadmap's words (block purpose, weekly focus): short writing, re-run on every program change. */
+  roadmap: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
 };
 
 /**

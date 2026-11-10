@@ -8,6 +8,16 @@
  * deleted still sees exactly what the client was on. Pure.
  */
 
+import {
+  foodLogSummary,
+  observedMaintenance,
+  weightTrend,
+  type FoodLog,
+  type FoodLogEntry,
+  type Maintenance,
+  type WeightTrend,
+} from "@/lib/nutrition-targets/nutrition-intel";
+
 /** The new form questions (Nutrition Update Request). */
 export const MEAL_CHOICE_LABEL = "What should happen with the meals in your current plan?";
 export const MEAL_SWAP_LABEL = "Which foods or meals do you want changed, and what would you rather have?";
@@ -58,6 +68,12 @@ export type PlanResults = {
   adherence_avg: number | null;
   /** How many weekly check-ins flagged each. */
   flags: { hunger: number; energy: number; digestion: number; sleep: number };
+  /** A line through every weigh-in, with its scatter (older snapshots don't have it). */
+  trend?: WeightTrend | null;
+  /** The app's food log over the plan, per logged day. */
+  food?: FoodLog | null;
+  /** The maintenance their own results imply. */
+  maintenance?: Maintenance | null;
 };
 
 export type PreviousPlan = {
@@ -101,6 +117,11 @@ export function planResults(input: {
   weights: Array<{ date: string; kg: number }>;
   checkins: Array<{ answers: Record<string, unknown> | null }>;
   formFallback?: { fromKg: number; toKg: number; days: number } | null;
+  /** The app's food log entries in the window. */
+  food?: FoodLogEntry[];
+  tz?: string;
+  /** The plan's average calories a day across their week (weeklyAverageKcal). */
+  planKcal?: number | null;
 }): PlanResults {
   const { unit } = input;
   const w = input.weights
@@ -133,6 +154,9 @@ export function planResults(input: {
   }
 
   const ratings = input.checkins.map((c) => num(c.answers?.nutrition_rating)).filter((v): v is number => v != null);
+  const adherence = ratings.length ? round1(avg(ratings)) : null;
+  const trend = weightTrend(input.weights, input.start, input.end);
+  const food = input.food?.length ? foodLogSummary(input.food, input.start, input.end, input.tz) : null;
   const flagCount = (re: RegExp) =>
     input.checkins.filter((c) => Array.isArray(c.answers?.recovery_flags) && (c.answers!.recovery_flags as unknown[]).some((f) => re.test(String(f)))).length;
 
@@ -145,13 +169,16 @@ export function planResults(input: {
     bw_weeks: weeks != null ? round1(weeks) : null,
     bw_source: source,
     checkins: input.checkins.length,
-    adherence_avg: ratings.length ? round1(avg(ratings)) : null,
+    adherence_avg: adherence,
     flags: {
       hunger: flagCount(/hunger|appetite/i),
       energy: flagCount(/energy/i),
       digestion: flagCount(/digestion|bloat/i),
       sleep: flagCount(/sleep/i),
     },
+    trend,
+    food,
+    maintenance: observedMaintenance({ trend, food, planKcal: input.planKcal ?? null, adherence }),
   };
 }
 
@@ -189,6 +216,23 @@ export function previousPlanText(p: PreviousPlan | null | undefined): string {
       );
     } else {
       lines.push("- bodyweight: not enough weigh-ins to call a trend");
+    }
+    const t = r.trend;
+    if (t) {
+      const inUnit = (kg: number) => round1(toUnit(kg, r.unit));
+      lines.push(
+        `- bodyweight trend (a line through all ${t.weighIns} weigh-ins${t.settledFrom ? ` from ${fmtDate(t.settledFrom)}, the plan's first 2 weeks left out for water and glycogen` : ""}): ${signed(t.pctPerWeek, 2)}% of bodyweight a week (${signed(inUnit(t.kgPerWeek))} ${r.unit}/week) over ${t.weeks} weeks; day-to-day scatter ±${inUnit(t.noiseKg)} ${r.unit}, so ${t.clear ? "this is a clear trend" : "this is within normal fluctuation: read it as about flat"}`,
+      );
+    }
+    if (r.food) {
+      const f = r.food;
+      lines.push(
+        `- food log: ${f.daysLogged} of ${f.daysInWindow} days logged; on logged days about ${f.kcal} kcal · protein ${f.protein} g · carbs ${f.carbs} g · fat ${f.fat} g (days with nothing logged left out; a partly logged day undercounts)`,
+      );
+    }
+    if (r.maintenance) {
+      const m = r.maintenance;
+      lines.push(`- maintenance their results imply: about ${m.kcal} kcal a day (${m.why}; ${m.confidence} confidence, an estimate from their own data, not a measurement)`);
     }
     if (r.checkins) {
       const f = r.flags;
@@ -275,12 +319,12 @@ export function freeMealRule(wants: boolean | null, pick: string): string {
       "Client wants a FREE MEAL on the HIGH-DAY MENU only (never on the other menus).",
       "Make it the last meal of the day, never the Pre-Workout meal, with the header exactly \"Meal X – Free Meal\".",
       `Under it, instead of weighed foods, write one line "Your choice: ${theirs}burger + fries, steak + potatoes, pasta or whatever you're craving" and one line "Aim for about <kcal> kcal with 40+ g protein. Enjoy it, then straight back to the plan."`,
-      "Budget it at about 25–35% of the High Day calories, and give its Approximate macros as that budget (protein 40 g or more).",
-      "Build the other High-Day meals lean and high-protein with less fat, so the whole day still lands on the High Day totals.",
+      "The other High-Day meals stay the prepped meals of the other menus, same foods and same amounts (MEAL PREP).",
+      "The free meal's budget is what's left of the High Day calories after them, usually about 25–35% of the High Day calories: give its Approximate macros as that budget (protein 40 g or more).",
     ].join(" ");
   }
   if (wants === false) {
-    return "No free meal: the client chose a fully planned High Day. Put the High Day's extra carbs into foods they enjoy from their list (e.g. bagels, rice, pasta, cereal, fruit) so it still feels like a reward, every food weighed like the other days.";
+    return "No free meal: the client chose a fully planned High Day. The prepped meals stay as they are, and the extra carbs come as whole extra containers or a carb snack they enjoy from their list (e.g. a bagel, cereal, fruit, one extra container) so it still feels like a reward.";
   }
   return "";
 }

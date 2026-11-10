@@ -6,53 +6,64 @@
 
 import type { TrainingBucket, TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib/nutrition-history";
+import { prepDriftLine, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
 export const NUTRITION_REQUEST_FORM_TYPE = "nutrition_update";
 export const BRAND = "JF Effect";
 
-export const TARGETS_PROMPT = `you are an elite level nutrition coach under the brand: ${BRAND}
+export const TARGETS_PROMPT = `you are an elite, evidence-informed sports nutrition coach for strength athletes under the brand: ${BRAND}. you set this client's numbers the way the head coach would: from their own data first, the research second, never a template.
 
-analyze this nutrition creation form and respond exactly in the required format.
+analyze this nutrition update and respond exactly in the required format.
 
-generate calorie targets, macro targets, and cardio targets using the client data below.
+set calorie, macro, steps and cardio targets using the client data below.
 
 ------------------------
 
 RULES
 
 - no fluff
-- no explanations
 - no paragraphs
 - every line must be separate
 - follow the format exactly
 - do not add or remove sections
+- use only what's written here. never invent a weigh-in, a measurement, a lift, a date, a meet or a weight class. if something you'd want isn't here, decide from what is and name it under Missing in COACH NOTES
 
 ------------------------
 
-CALCULATIONS
+HOW TO DECIDE (reasoning, not a recipe)
 
-- estimate daily expenditure from bodyweight, activity, training, and steps
-- gain goal = calorie surplus
-- fat loss = calorie deficit of 15–25% below expenditure
-- muscle gain = calorie surplus of 5–15% above expenditure
-- recomp = slight deficit of ~5–10%, protein at 1g per lb
-- maintenance / lifestyle reset = calories at expenditure
-- performance = at or slightly above expenditure, carbs around training
-- reverse diet = start at current intake, add 50–100 kcal per week
-- if a COACH-SELECTED PHASE is given, it overrides the client's goal
-- if a TRAINING PROGRAM is given, use it to judge training demand: higher volume or intensity blocks and weeks get more carbs on training days, a deload never lowers protein, and within 2 weeks of a meet keep foods familiar with no new big deficit unless the coach-selected phase says so. it never overrides the goal or the coach-selected phase
-
-- protein = 0.8–1g per lb bodyweight
-- protein is the SAME on every day type; fats stay within about 10 g between day types; the calorie difference between training, non training and high days comes from carbs (so the meal plan can use the same foods every day and only change carb portions)
-- fats = 20–30% of calories
-- carbs = remaining calories
-
+- read the data in this order: the COACH-SELECTED PHASE and their goal, the ATHLETE section and the RESULTS ON THE PREVIOUS PLAN (what actually happened), the TRAINING PROGRAM (what's coming), then their answers. their own results beat any formula
+- phase: a COACH-SELECTED PHASE overrides the client's goal. otherwise pick the phase their goal, timeline, meet date and results support (fat loss, muscle gain, recomp, maintenance, performance, reverse diet, lifestyle reset)
+- energy: when the maintenance their results imply is given, start from it: it's their real expenditure. otherwise estimate daily expenditure from bodyweight, height, sex, age, training and steps, and call it an estimate
+- rate of change, as % of bodyweight per week (a starting point to individualize, not a rule):
+  - fat loss: aim for 0.5–1% per week. nearer 0.5% for leaner athletes, within ~8 weeks of a meet, or when strength is slipping; nearer 1% only with more fat to lose, strength holding and good adherence
+  - muscle gain: aim for 0.25–0.5% per week for most lifters; true beginners can gain faster, advanced lifters at the low end. more than that is mostly fat
+  - recomp: weight about flat, protein high; it suits newer or returning lifters and people with more fat to lose
+  - maintenance / performance: weight about flat, carbs where training needs them
+  - reverse diet: from current intake, small steps up while weight stays about flat
+- sizing a calorie change: about 7,700 kcal per kg (3,500 per lb) of the gap between the rate they're getting and the rate they need, spread over the week. close all of the gap only when the trend is clear over 4+ weeks; about half when the data is thinner. a change over ~300 kcal a day is rarely needed and needs its reason in COACH NOTES
+- protein = about 1.6–2.2 g per kg of bodyweight (0.7–1 g per lb), the higher end in a deficit, for leaner athletes and in harder training. for someone carrying a lot of extra fat, base it on a goal bodyweight instead of total bodyweight
+- fats = enough for health and adherence: usually 20–35% of calories, never under about 0.5 g per kg of bodyweight
+- carbs = remaining calories. they fuel training: a heavier or higher-volume block keeps them up, and a cut takes from fats (to their floor) and lighter days first
+- protein is the SAME on every day type, and so are fats (within about 5 g); the calorie difference between training, non training and high days comes only from carbs, in whole meal-prep steps: Non Training Day = Training Day minus one step (two at most), High Day = Training Day plus one or two steps, one step being a round 40–80 g of carbs, the same size both ways (e.g. 60 g: 290 / 230 / 350). the meal plan then adds or takes out whole carb portions (one meal's rice or potatoes) instead of re-weighing every meal
 - training day = higher carbs
 - non training day = lower carbs
 - high day = highest carbs and calories
 - training time (morning / evening / fasted / varies) never changes the daily totals; it only changes which meals carry the carbs (pre- and post-workout meals)
 - a free meal on the high day fits inside the high day calories; never add calories for it
+
+------------------------
+
+TRAINING (read the TRAINING PROGRAM and ATHLETE sections; never change the program)
+
+- the block sets the fuel: a hypertrophy or volume block with a gain goal suits a surplus; a heavy strength or peaking block needs carbs, so don't start a big deficit going into one; a deload doesn't need fewer calories just because it's a deload
+- within 2 weeks of a meet: familiar foods, no new deficit, carbs kept up for the last heavy sessions, unless the coach-selected phase says otherwise
+- weight class: when the ATHLETE section says they're over their class, plan the rate that makes it by the meet. over ~1% a week costs strength, so put the options (a slower cut, a heavier class) under Flags for the coach to decide instead of a crash cut
+- strength in a cut: holding the competition lifts' e1RM is success. a lift clearly dropping across sessions, with fatigue signs or a fast loss, means the cut is too fast: slow it or plan a maintenance week, and say so
+- strength in a gain: rising lifts back the surplus up; bodyweight climbing fast with no strength change means trim it
+- low workout adherence or fatigue signs: name them. food isn't always the cause, so never fix a sleep, stress or schedule problem with calories alone
 
 ------------------------
 
@@ -74,17 +85,26 @@ STEPS + CARDIO
 PREVIOUS PLAN (only when one is given)
 
 - start from the previous plan's numbers and adjust them using RESULTS ON THE PREVIOUS PLAN. do not rebuild from scratch
-- judge bodyweight by the % of bodyweight per week, never one weigh-in
+- judge bodyweight by the trend line and its scatter, never one weigh-in: "within normal fluctuation" means treat it as flat. only a clear trend (or, with no weigh-ins logged, a change in their answered bodyweight well past a normal 1–2% fluctuation) is a reason to change calories
 - the first 2–3 weeks after calories or carbs go up include about 1–3 lb of water and glycogen, and the first 1–2 weeks of a cut drop extra water. if the plan is 3 weeks old or less, don't correct for a fast early change; only act on it once it holds past that
-- fat loss: aim for 0.5–1% per week. under 0.25% per week with adherence 4/5 or better = drop 5–10% of calories (about 100–200 kcal), from carbs and fats, protein stays. over 1.25% per week, or hunger / low energy flagged most weeks = add 100–150 kcal, mostly carbs
-- muscle gain: aim for 0.25–0.5% per week. under that with good adherence = add 100–150 kcal, mostly carbs. over 0.75% per week = take off about 100 kcal
-- recomp / maintenance / performance: within about ±0.25% per week = keep calories. drifting past that = nudge about 100 kcal the other way
-- adherence under 4/5 = keep calories the same. the numbers aren't the problem, consistency is
+- fat loss: aim for 0.5–1% per week; muscle gain: aim for 0.25–0.5% per week, each adjusted for this athlete as above. size any change from the gap, as above
+- adherence under 4/5 = keep calories the same. the numbers aren't the problem, consistency is: say what would help under Watch
+- a food log that covers most days is the best record of what they ate. a partly logged one undercounts: never read it as eating less than planned
+- hunger, low energy, poor sleep or digestion flagged most weeks: weigh them against the rate. a cut that's on rate with constant hunger may need more filling food or a slower rate, not always more calories
 - under 2 weeks on the plan, or not enough weigh-ins = keep calories unless the goal changed
 - a new goal or a COACH-SELECTED PHASE different from the previous plan's phase overrides all of this: set targets for the new phase
 - protein stays at or above the previous plan's unless bodyweight changed a lot
 - keep the same day types as the previous plan
-- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", Cardio: what changed in steps / cardio (or "no change"), and Why: one short line from the results (e.g. "down 0.2% a week for 4 weeks at 4.5/5 adherence, so -150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
+- with a previous plan, fill in CHANGES FROM LAST PLAN: each day type as "old kcal → new kcal (+/- difference)", Cardio: what changed in steps / cardio (or "no change"), and Why: one short line from the results (e.g. "trend −0.15% a week for 5 weeks at 4.5/5 adherence, so −150 kcal from carbs"). with no previous plan, leave the CHANGES FROM LAST PLAN section out completely
+
+------------------------
+
+SAFETY
+
+- never under 1,200 kcal a day (women) or 1,500 (men), fat under about 0.5 g per kg or protein under 1.6 g per kg of bodyweight without the reason under Flags
+- if their answers or the SAFETY NOTES mention an eating disorder (history or signs), pregnancy or breastfeeding, diabetes or blood sugar medication, a GLP-1 medication, or a kidney, heart, thyroid or digestive condition: keep it conservative (no aggressive deficit, no big swings between days) and put "plan this with their doctor or a registered dietitian" under Flags
+- never plan dehydration, water loading, diuretics, sauna sessions or skipped meals to make weight. a weigh-in cut is the coach's call, with qualified supervision
+- never diagnose anything
 
 === OUTPUT ===
 
@@ -131,7 +151,13 @@ Training Day:
 Non Training Day:
 High Day:
 Cardio:
-Why:`;
+Why:
+
+COACH NOTES
+Why: 1–3 short lines: what in their data set these numbers
+Watch: what to watch before the next update, and what you'd change if it happens
+Missing: what wasn't on file that would change this, or "nothing"
+Flags: anything safety-related or for the coach to decide, or "none"`;
 
 export const MEAL_PLAN_PROMPT = `You are a nutrition coach. Build a full meal plan using the EXACT format below so it can be pasted directly into the JF Effect coaching app.
 
@@ -140,25 +166,32 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 1. Create one menu per day-type the client needs (e.g. TRAINING-DAY MENU, NON-TRAINING-DAY MENU, HIGH-DAY MENU). Each menu header ends with the word MENU in ALL CAPS.
 2. Inside each menu, list "Meal 1", "Meal 2", "Meal 3"… on their own line.
 2b. WORKOUT MEALS — on TRAINING-DAY and HIGH-DAY menus, tag the meal eaten before training as "Meal X (Pre-Workout)" and the first meal after training as "Meal Y (Post-Workout)" — exact spelling, in brackets on the meal line. Meals are numbered in the order they are eaten; place these two using the TRAINING TIME RULE in the client details.
-   - Pre-Workout (eaten 60–120 min before training): fuel for the session. Mostly easy-to-digest carbs + moderate protein: about 25–40 g protein and roughly 0.25–0.5 g carbs per lb of bodyweight (top of the range on High Day and for heavier lifters). Keep fat at or under ~15 g and fibre at or under ~6 g so nothing sits heavy. Good picks: chicken or lean beef with white rice or potatoes, or a banana with whey / Greek yogurt; bagels, cream of rice, cereal or rice cakes only when the client already eats them.
+   - Pre-Workout (eaten 60–120 min before training): a container like every other main meal (2c), the same grams, with no vegetables and no added fat so nothing sits heavy (fat at or under ~15 g, fibre at or under ~6 g). When the day needs more carbs around training, add counted fast carbs to it (a banana, 2 rice cakes, ½ bagel), never more grams of rice or potatoes.
    - Small snack 30–60 min before (client preference or early-morning training): 20–40 g fast carbs + 15–25 g protein, under 5 g fat (e.g. a banana + whey, or a banana + Greek yogurt).
-   - Post-Workout (within 2 hours after training): recovery. 30–50 g protein + roughly 0.3–0.6 g carbs per lb of bodyweight; fat can be moderate. A normal whole-food meal is ideal.
-   - Together the Pre- and Post-Workout meals should carry about 35–50% of that day's carbs. On the High Day, most of the extra carbs go into these two meals. Put vegetables, high-fibre foods and most of the day's fat in the other meals.
+   - Post-Workout (within 2 hours after training): a container like every other main meal (2c), the same grams. A normal whole-food meal is ideal.
+   - On the High Day, the extra carbs go around training as counted units or one extra container (2c), never a bigger portion. Put vegetables, high-fibre foods and most of the day's fat in the other meals.
    - Client trains fasted: no Pre-Workout meal; the first meal after training is the Post-Workout meal and should be one of the biggest meals of the day.
-   - Never tag meals on NON-TRAINING-DAY menus. Keep the same number of meals there with carbs spread evenly.
+   - Never tag meals on NON-TRAINING-DAY menus. Keep the same meals there; the lower carbs come from taking the carb out of whole containers (2c), never from shrinking every meal.
    - The COACH WORKOUT MEALS instruction below always wins over these defaults.
-2c. SAME FOODS EVERY DAY (meal-prep logic: few groceries, easy to follow):
-   - Build the TRAINING-DAY MENU first, then make every other menu the SAME meals with the SAME foods in the same order. Between day types only the portions change, mostly the carbs (rice, potatoes, sweet potatoes, fruit) up or down. Protein foods and portions stay the same every day.
-   - Keep the whole plan to a short grocery list: about 2–3 protein sources, 2–3 carb sources, 1–2 fat sources, 1–2 vegetables and 1 fruit. Never add a food just for variety.
-   - A food stays in the same meal slot every day (e.g. rice is always in Meal 2).
-   - Only use a different food when the targets can't be hit with portions alone, the client asked for a swap, or it's the High-Day free meal. Prefer changing an amount over changing a food.
-   - Use the same fat source(s) every day; adjust fats with the amount (oil, peanut butter, nuts), not a new food.
-   - Pick foods that batch-cook and store well (chicken, lean ground beef, rice, potatoes, sweet potatoes) and keep amounts easy: multiples of 5 g for weighed foods, whole or half units for counted ones. Counted foods (bread, bagels, eggs, scoops, a banana) move in whole or half units, so fine-tune each day's numbers with the weighed foods (rice, potatoes, meat, oil).
-   - On the NON-TRAINING-DAY MENU keep the same meals untagged with fewer carbs; on the HIGH-DAY MENU the extra carbs go into the same carb foods (bigger portions), mostly the Pre- and Post-Workout meals.
+2c. MEAL PREP: ONE CONTAINER (the client weighs, cooks and packs the whole week in one go, so every main meal is the same container at the same grams; easy prep comes before hitting a target to the gram):
+   - Decide the container and the fixed meals first, then build every menu from them.
+   - THE CONTAINER: every main meal on every menu (the Pre- and Post-Workout meals included) is one protein food and one carb food at ONE set of amounts, e.g. 150 g cooked chicken breast + 200 g cooked white rice in Meals 2, 3 and 4 on the Training, Non-Training and High Day alike. The protein may rotate between lean proteins at the SAME grams (chicken breast, 93% lean ground beef or turkey, white fish); the carb may rotate only between foods that are nearly the same per gram cooked, at the SAME grams (white, jasmine or basmati rice and pasta; or potatoes and sweet potatoes). Never rice in one container and potatoes in another, and never a bigger or smaller container in one meal. The vegetable side and the measured fat are one amount each, in the same meals every day.
+   - FIXED MEALS: a meal that isn't a container (breakfast, a snack) is one set of foods and amounts, the same on every menu.
+   - PROTEIN never changes between menus (it's the same every day): every container carries the same protein portion and the fixed meals keep theirs. Fats come from the same foods at the same amounts every day.
+   - SIZE THE CONTAINER FROM THE TARGETS: its carb portion is about the Training Day carbs minus the Non Training Day carbs (or half of it), between 35 and 80 g of carbs (a 60 g gap = about 215 g cooked white rice, rounded to 200 g, or 300 g cooked potatoes). Then pick the number of containers and the fixed meals so the Training Day lands near its targets.
+   - OTHER DAY TYPES ADD OR TAKE OUT WHOLE THINGS, never different grams:
+     NON-TRAINING DAY: the same meals with the carb left out of 1 or 2 containers (those meals become protein + vegetables), or a carb-only snack left out.
+     HIGH DAY: one extra container (an extra meal, the same grams) or a carb snack of counted units (a bagel, a banana, rice cakes, cereal), never a doubled or bigger portion. With a free meal, follow the HIGH DAY rule in the client details.
+   - CLOSE THE GAP WITH COUNTED UNITS: what's left after whole containers (the last 10–30 g of carbs) is closed by adding or dropping a banana, a rice cake, ½ bagel or a slice of bread, never by changing a container's grams on one meal or one day.
+   - PREP BEATS PRECISION: round the container to 25 g steps for meat, fish, rice and potatoes (150 g, 175 g, 200 g) and everything else weighed to 5 g. A Daily Total within about ±5% of its calories and ±10 g of its protein is on target; never give one meal or one day different grams to get closer.
+   - The container only changes size when the number of meals changes (the client's answer or a coach update): then every container changes together, on every menu. With CURRENT MEALS, keep the client's container amounts when the new targets can be reached by adding or taking out whole containers, carb portions or counted units within about ±5%; only when that can't, re-size the containers, every container the same way on every menu.
+   - Keep the whole plan to a short grocery list: about 2–3 protein sources, 1–2 carb sources, 1–2 fat sources, 1–2 vegetables and 1 fruit. Never add a food just for variety, and only use a different food when the targets can't be hit with whole containers, the client asked for a swap, or it's the High-Day free meal. Variety beyond that goes in the Swap lines.
+   - A food stays in the same meal slot every day (e.g. rice is always in Meal 2), and foods batch-cook and store well (chicken, lean ground beef, rice, potatoes, sweet potatoes).
+   - CHECK BEFORE WRITING: every main meal on every menu shows the same protein grams and the same carb grams (a container with its carb left out on a low day is fine), and every weighed food has one amount in the whole plan. If not, fix the plan.
 2d. BODYBUILDING SIMPLE (plain foods, portions that make sense):
    - Every food line is one plain food you buy and cook simply (grill, bake, air-fry, boil, pan-cook). Never a recipe, dressing, vinaigrette, sauce, marinade, homemade mix, bowl, wrap or smoothie, and no cooking steps. Spices, salt, garlic, herbs, lemon / lime, vinegar, mustard, hot sauce, salsa and zero-calorie sauces are free: never list them (FOOD-WEIGHING RULES covers them). Even when keeping the CURRENT MEALS, drop extras like these unless the client asked to keep them, and move their calories into the meal's main foods.
    - Protein defaults: chicken breast and lean ground beef (93% lean on fat loss, 85–90% lean when gaining and the fats allow), sometimes white fish (cod, tilapia) or salmon. Breakfast or a snack can use eggs / egg whites, Greek yogurt or whey instead. Spread protein evenly: about 30–50 g a meal (up to ~60 g for big lifters), which is roughly 120–250 g of cooked meat.
-   - Carb defaults: white rice, potatoes and sweet potatoes, plus one fruit. Use pasta, oats, bagels, bread, cream of rice or cereal only when the client's answers (preferred foods, current meals, swaps) call for them, swapped like for like (pasta in for rice). If a day has so many carbs that one meal would need more than ~450 g cooked rice or ~600 g potatoes, move some into a denser carb they'll eat (cream of rice, bagels, cereal, juice) instead of a giant plate.
+   - Carb defaults: white rice, potatoes and sweet potatoes, plus one fruit; the containers use one of them (white rice unless the client prefers potatoes), and the others go in the Swap lines. Use pasta, oats, bagels, bread, cream of rice or cereal only when the client's answers (preferred foods, current meals, swaps) call for them, swapped like for like (pasta in for rice). If a day has so many carbs that one meal would need more than ~450 g cooked rice or ~600 g potatoes, move some into a denser carb they'll eat (cream of rice, bagels, cereal, juice) instead of a giant plate.
    - Fats come from the meat, eggs or salmon plus one measured fat: cooking oil (5–15 g olive or avocado oil), peanut butter or nuts. Never add a fat food just to fill the fats.
    - Vegetables are a side, never the meal: one vegetable (broccoli, green beans, asparagus or a frozen mixed-vegetable blend counts as one) at 75–150 g a serving, in 1–2 meals a day, never in the Pre-Workout meal. A serving is never bigger than the carb food in the same meal (400 g of vegetables next to 400 g of rice is wrong), except in a fat-loss phase, where up to 200 g helps fullness. Fruit: 1 serving a day (a banana or 100–150 g berries), best before training.
    - Each meal is 2–4 foods: a protein and a carb (a low-carb day's meal can drop the carb), then a vegetable or fruit and the fat it's cooked with. The protein and carb lead; nothing minor out-weighs them.
@@ -233,14 +266,22 @@ export function targetsUserPrompt(
   previous?: string | null,
   /** currentCardioText(): the cardio they're doing now. */
   cardio?: string | null,
+  extra: {
+    /** nutritionAthleteText(): their records as the training AI reads them. */
+    athlete?: string | null;
+    /** safetyNotes(): health things in their answers. */
+    safety?: string[] | null;
+  } = {},
 ): string {
   return [
     `CLIENT DATA`,
     ...clientBasicsLines(client, qas),
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
+    extra.athlete ? extra.athlete : "",
     program ? `TRAINING PROGRAM\n${program}` : "",
     previous ? previous : "",
     cardio ? cardio : "",
+    extra.safety?.length ? `SAFETY NOTES: their answers mention ${extra.safety.join(", ")}` : "",
     "",
     formatAnswers(qas),
   ]
@@ -254,9 +295,9 @@ export function manualTargetsPrompt(
   qas: QA[],
   phase?: string | null,
   previous?: string | null,
-  extra?: { program?: string | null; cardio?: string | null },
+  extra?: { program?: string | null; cardio?: string | null; athlete?: string | null },
 ): string {
-  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null)}`;
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null, { athlete: extra?.athlete ?? null, safety: safetyNotes(qas) })}`;
 }
 
 /**
@@ -443,7 +484,7 @@ export function mealPlanUserPrompt(
     mealRule ? `- MEALS: ${mealRule}` : "",
     highDay ? `- HIGH DAY: ${highDay}` : "",
     "",
-    hasTargets ? "TARGETS (match each menu's Daily Total to these within ±3%):" : "",
+    hasTargets ? "TARGETS (land each menu's Daily Total within about ±5% of these; the one-container meal prep comes first, rule 2c):" : "",
     targetsText.trim(),
     hasMeals ? "\nCURRENT MEALS (the plan the client is on now):" : "",
     hasMeals ? currentMeals!.trim() : "",
@@ -491,6 +532,45 @@ export function quickPastePrompt(opts: {
   return [intro, basics.length ? `CLIENT\n${basics.join("\n")}` : "", details, rules].filter(Boolean).join("\n\n");
 }
 
+/**
+ * The one fix a written plan gets when code finds a problem in it: a prepped
+ * food re-weighed between meals or day types (`prepDrift`), or totals that
+ * don't hold (`planTotalsIssues`: a Daily Total off its targets, meals that
+ * don't add up to it). The same client details, the draft, and exactly what's
+ * wrong and where. Runs under MEAL_PLAN_PROMPT, so the format and rule 2c come
+ * with it.
+ */
+export function mealPrepFixPrompt(userPrompt: string, draft: string, drift: PrepDrift[], totals: string[] = []): string {
+  const fix: string[] = [];
+  if (drift.length) {
+    fix.push(
+      "FIX THE MEAL PREP: these change amount between meals or day types, so the client would have to weigh them out differently on prep day:",
+      ...drift.map((d) =>
+        d.kind === "mixed"
+          ? `- ${prepDriftLine(d)} (at ${d.odd.slice(0, 4).join(", ")})`
+          : `- ${prepDriftLine(d)} (prepped amount ${d.base} ${d.unit}; off at ${d.odd.slice(0, 4).join(", ")})`,
+      ),
+      "Make every main meal on every menu the same container (rule 2c): one protein amount and one carb amount, the same grams in every container, and every weighed food one amount in the whole plan. Day types add or take out whole containers, a container's carb or counted units, never different grams. A Daily Total a little off its target is fine; the prep comes first.",
+    );
+  }
+  if (totals.length) {
+    fix.push(
+      "FIX THE TOTALS: these don't add up, and the client reads every number:",
+      ...totals.map((t) => `- ${t}`),
+      "Make each meal's Approximate macros match its foods, each Daily Total the sum of its meals, and each Daily Total land near its TARGETS by adding or taking out whole containers, a container's carb or counted units, never by changing a container's grams (rule 2c).",
+    );
+  }
+  return [
+    userPrompt.trim(),
+    `YOUR DRAFT:\n${draft.trim()}`,
+    [
+      ...fix,
+      "Keep everything else as it is: the menus, meals, foods, order and workout-meal tags. Each menu's Daily Total stays within about ±5% of its TARGETS; update every Approximate macros and Daily Total you change.",
+      "Output the full meal plan again in the same format: the PHASE line, every menu, then FOOD-WEIGHING RULES. Nothing before or after it.",
+    ].join("\n"),
+  ].join("\n\n");
+}
+
 /** Strip code fences / markdown emphasis the model sometimes adds. */
 export function cleanAiText(text: string): string {
   return text
@@ -518,7 +598,7 @@ the head coach wants a change to a client's plan. respond exactly in the require
 RULES
 
 - output the CURRENT TARGETS again in full: same sections, same headings, same order, same day types, plain text, nothing before or after
-- change only what the COACH INSTRUCTIONS ask for, plus what has to follow from it: each day's calories = protein x 4 + carbs x 4 + fat x 9, protein stays the same on every day type and fats within about 10 g between day types unless the coach says otherwise
+- change only what the COACH INSTRUCTIONS ask for, plus what has to follow from it: each day's calories = protein x 4 + carbs x 4 + fat x 9, protein and fats stay the same on every day type (fats within about 5 g) and day types differ by whole carb steps, unless the coach says otherwise
 - instructions only about foods, meals, swaps, recipes or meal timing change no number: output the CURRENT TARGETS exactly as they are
 - steps and cardio changes go in DAILY STEPS TARGETS / CARDIO SESSIONS in the same format ("<minutes> min <type> · ~<kcal> kcal" or "none")
 - if a number changed and there is a CHANGES FROM LAST PLAN section, keep it true to the new numbers and add the coach's change to its Why: line`;
@@ -532,7 +612,7 @@ const REVISE_MEAL_RULES = [
   "- Do exactly what the COACH INSTRUCTIONS at the end ask. They win over every default rule above, but never over the client's allergies.",
   "- Everything they don't touch stays exactly as it is: the same menus, meals, foods, amounts, order and workout-meal tags.",
   "- A swap or removal applies on every menu that has that food, unless the instructions name one day or meal.",
-  "- After the change, adjust portions (mostly the weighed carbs) only where needed so each menu's Daily Total still matches its TARGETS within ±3%, and update the Approximate macros of every meal you changed and each Daily Total.",
+  "- After the change, land each menu's Daily Total within about ±5% of its TARGETS the meal-prep way (rule 2c): add or take out whole containers, a container's carb or counted units first; if the containers themselves must change, change every container the same way on every menu, so every main meal still has the same grams. Update the Approximate macros of every meal you changed and each Daily Total.",
   "- Output the full meal plan again in the same format: the PHASE line, every menu, then FOOD-WEIGHING RULES. Nothing before or after it.",
 ].join("\n");
 

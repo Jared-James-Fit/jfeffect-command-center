@@ -118,7 +118,7 @@ describe("coach updates to a written nutrition plan", () => {
     });
     expect(p).toContain("Do not build a new plan");
     expect(p).toContain("- Allergies / dislikes: shellfish");
-    expect(p).toContain("TARGETS (match each menu's Daily Total");
+    expect(p).toContain("TARGETS (land each menu's Daily Total");
     expect(p).toContain("CURRENT MEAL PLAN:\nTRAINING-DAY MENU");
     expect(p.trim().endsWith("COACH INSTRUCTIONS:\nswap the beef for salmon on rest days")).toBe(true);
     expect(p).not.toContain("CURRENT MEALS (the plan the client is on now)");
