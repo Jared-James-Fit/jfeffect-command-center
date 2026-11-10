@@ -90,8 +90,11 @@ import { ClientSessionSheet, type ClientSession } from "@/components/schedule/cl
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
 import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
-import { ProgramRoadmapCard, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
+import { ProgramRoadmapCard, programName, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
+import { ManageProgramSheet } from "@/components/athlete-programs/manage-program-sheet";
+import { useProgramOrigin } from "@/components/athlete-programs/use-my-program";
+import { programProgressLine } from "@/lib/my-program";
 
 type Mode = "self" | "coach";
 
@@ -103,12 +106,15 @@ export function WorkoutsExperience({
   mode = "self",
   clientName,
   openDate,
+  openDays = false,
 }: {
   clientId: string;
   mode?: Mode;
   clientName?: string | null;
   /** yyyy-mm-dd: open that day's workout (or show that day when it isn't exactly one). */
   openDate?: string | null;
+  /** open the training days editor once the client is known */
+  openDays?: boolean;
 }) {
   const { data: client, isFetched: clientFetched } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
@@ -157,7 +163,7 @@ export function WorkoutsExperience({
   }, [sessionItems]);
   const sessionDays = useMemo(() => new Set(sessionsByDate.keys()), [sessionsByDate]);
   // Coaching clients book sessions: say where appointments live even on a week with none.
-  const { isCoaching } = useServiceTier();
+  const { isCoaching, isSelfServe } = useServiceTier();
   const showAppointmentsLink = mode === "self" && isCoaching;
 
 
@@ -181,6 +187,11 @@ export function WorkoutsExperience({
   const currentBlockId = todayItem?.block?.id ?? pickCurrentBlock(allBlocks, today)?.id ?? null;
   const [historyOpen, setHistoryOpen] = useState(false);
   const [daysOpen, setDaysOpen] = useState(false);
+  // ?days=1 (after a program's workouts a week changed): the days editor, once
+  useEffect(() => {
+    if (openDays && mode === "self" && client) setDaysOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDays, mode, !!client]);
   const daysState = client ? trainingDaysState(client as any, mode === "self") : null;
   // The athlete's days are in ⋯ once set (the strip already shows them); the
   // chip shows only while they still have to set them, or read-only for a coach.
@@ -196,6 +207,13 @@ export function WorkoutsExperience({
     programId: roadmapProgramId,
     ownerName: (client as any)?.full_name ?? (client as any)?.first_name ?? null,
   });
+  // A JF member's own program (a plan they started, or one they built) is
+  // theirs to manage: the Program card's ⋯ opens Edit / Switch / End. A
+  // coach's program never offers it.
+  const origin = useProgramOrigin(roadmap, visibleBlocks, mode === "self" ? (client as any)?.user_id ?? null : null);
+  const canManageProgram = mode === "self" && isSelfServe && origin.owned && !!origin.blockId;
+  const [manageOpen, setManageOpen] = useState(false);
+
   // One control for the three ways to look at the schedule: this week, the
   // month, or the block's workouts in order.
   const [view, setView] = useState<"week" | "month" | "block">("week");
@@ -431,6 +449,7 @@ export function WorkoutsExperience({
             }}
             coach={mode === "coach"}
             onSelectProgram={setRoadmapProgramId}
+            onManage={canManageProgram ? () => setManageOpen(true) : undefined}
           />
           </div>
         )}
@@ -473,6 +492,21 @@ export function WorkoutsExperience({
       />
       {mode === "self" && client && (
         <TrainingDaysSheet client={client as any} open={daysOpen} onOpenChange={setDaysOpen} />
+      )}
+      {canManageProgram && roadmap && (
+        <ManageProgramSheet
+          open={manageOpen}
+          onOpenChange={setManageOpen}
+          name={programName(roadmap.program)}
+          progressLine={programProgressLine({
+            programWeek: roadmap.programWeek,
+            totalWeeks: roadmap.totalWeeks,
+            start: roadmap.start,
+            end: roadmap.end,
+            today: toLocalISO(today),
+          })}
+          origin={origin}
+        />
       )}
     </>
   );
@@ -1495,10 +1529,10 @@ function SelfEmptyState() {
       </p>
       <div className="mt-3 flex flex-wrap justify-center gap-2">
         <Button asChild size="sm">
-          <Link to="/portal/plans">Browse plans</Link>
+          <Link to="/portal/programs" search={{ tab: "jf" }}>Browse plans</Link>
         </Button>
         <Button asChild size="sm" variant="secondary">
-          <Link to="/portal/programs">Build or copy one</Link>
+          <Link to="/portal/programs" search={{ tab: "mine" }}>Build or copy one</Link>
         </Button>
       </div>
     </Card>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Sparkles } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, MoreHorizontal, Pencil, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -130,8 +130,11 @@ export function ProgramRoadmapCard({
   onSelectBlock,
   coach = false,
   onSelectProgram,
+  onManage,
 }: {
   roadmap: ProgramRoadmap | null;
+  /** The athlete's own program (one they started or built): its ⋯ opens Manage program. */
+  onManage?: () => void;
   /** Look at another program (read-only: nothing about the schedule changes). null = back to the current one. */
   onSelectProgram?: (programId: string | null) => void;
   selectedBlockId?: string | null;
@@ -213,6 +216,17 @@ export function ProgramRoadmapCard({
           ) : allDone && roadmap.start ? (
             <span className="shrink-0 text-[12px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</span>
           ) : null}
+          {onManage && !browsing && (
+            <button
+              type="button"
+              onClick={onManage}
+              aria-label="Manage program"
+              data-manage-program-button
+              className="-my-2 -mr-2.5 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary/60 hover:text-foreground"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+          )}
         </div>
         <div className="mt-1 truncate text-xl font-semibold leading-tight tracking-tight">{headline}</div>
         {position && <div className="mt-0.5 text-[13px] text-muted-foreground tabular-nums" data-roadmap-position>{position}</div>}
@@ -425,7 +439,7 @@ function RoadmapStep({
   );
 }
 
-function programName(p: ProgramSummary): string {
+export function programName(p: ProgramSummary): string {
   return p.title ?? (p.start ? `Program from ${fmt(p.start, "MMM yyyy")}` : "Program");
 }
 
