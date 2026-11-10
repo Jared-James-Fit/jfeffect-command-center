@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Accordion } from "@/components/ui/accordion";
+import { Section } from "@/components/nutrition/nutrition-ui";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +22,8 @@ import { currentRequest } from "@/lib/form-request-state";
 import { phaseSourceText, suggestTargetsPhase } from "@/lib/nutrition-targets/phase-suggest";
 import { NUTRITION_PHASES, NUTRITION_STRUCTURES, PHASE_GOAL, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
-import { FileText, Upload, X, Plus, ChevronDown } from "lucide-react";
+import type React from "react";
+import { CalendarDays, ClipboardPaste, FileText, Lock, MessageSquare, Plus, Settings2, Upload, X } from "lucide-react";
 import { todayLocalISO } from "@/lib/today";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
@@ -95,6 +99,8 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
   const [phaseSource, setPhaseSource] = useState<string | null>(null);
   /** What set it: the suggestion re-runs (another client picked), a paste or an AI prefill stays. */
   const [phaseFrom, setPhaseFrom] = useState<"suggest" | "paste" | "prefill" | null>(null);
+  /** Which days are open (a new plan opens its first, an added day opens itself). */
+  const [openDays, setOpenDays] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,6 +109,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     setPhasePicked(false);
     setPhaseSource(null);
     setPhaseFrom(null);
+    setOpenDays([]);
     if (initial) {
       setForm({ ...initial });
       supabase.from("nutrition_target_days").select("*").eq("target_id", initial.id).order("sort_order").then(({ data }) => {
@@ -285,9 +292,14 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       return { ...d, cardio: { ...base, ...patch, fromAi: false } };
     }));
 
-  const addDay = (label?: string) =>
+  const addDay = (label?: string) => {
+    setOpenDays((o) => [...o, `day-${days.length}`]);
     setDays([...days, { day_label: label ?? `Day ${days.length + 1}`, sort_order: days.length }]);
-  const removeDay = (i: number) => setDays(days.filter((_, idx) => idx !== i));
+  };
+  const removeDay = (i: number) => {
+    setOpenDays([]);
+    setDays(days.filter((_, idx) => idx !== i));
+  };
 
   const save = async () => {
     if (!form.client_id) return toast.error("Pick a client first");
@@ -368,222 +380,286 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
     onOpenChange(false);
   };
 
+  const phaseText = form.phase === "Custom" ? form.custom_phase || "Custom" : form.phase;
+  const numberField = (i: number, k: keyof Day) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    updateDay(i, k, e.target.value.replace(/[^0-9.]/g, ""));
+  const fmtNum = (v: number | null | undefined) => (v == null ? "—" : Math.round(v));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{form.id ? "Edit Nutrition Targets" : "Create Nutrition Targets"}</DialogTitle>
+      <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-3xl sm:p-0" data-plan-editor>
+        <DialogHeader className="shrink-0 space-y-0.5 border-b border-border py-2 pr-4 sm:pr-6">
+          <DialogTitle>{form.id ? "Edit nutrition plan" : "New nutrition plan"}</DialogTitle>
+          <DialogDescription className="text-[13px]">
+            {[phaseText, form.start_date ? (form.end_date ? `${format(parseISO(form.start_date), "MMM d")} – ${format(parseISO(form.end_date), "MMM d")}` : `from ${format(parseISO(form.start_date), "MMM d")}, ongoing`) : null].filter(Boolean).join(" · ")}
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 md:grid-cols-2">
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6">
           {!clientId && (
-            <div className="md:col-span-2">
-              <Label>Client</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[13px] text-muted-foreground">Client</Label>
               <Select value={form.client_id} onValueChange={(v) => set("client_id", v)}>
-                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Pick a client" /></SelectTrigger>
                 <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}
-          <div>
-            <Label className="flex items-center gap-2">
-              Phase / Goal
-              {phaseAuto && (
-                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">Auto-filled · change anytime</span>
-              )}
-            </Label>
-            <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); setPhasePicked(true); setPhaseSource(null); setPhaseFrom(null); set("phase", v); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {NUTRITION_PHASES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}{PHASE_GOAL[s] ? <span className="text-muted-foreground"> · {PHASE_GOAL[s]}</span> : null}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {phaseAuto && phaseSource && <p className="mt-1 text-[11px] text-muted-foreground">{phaseSource}</p>}
-          </div>
-          {form.phase === "Custom" && <div><Label>Custom phase / goal</Label><Input value={form.custom_phase ?? ""} onChange={(e) => set("custom_phase", e.target.value)} placeholder="e.g. Contest prep — 12 weeks out" /></div>}
-          <div>
-            <Label>Structure</Label>
-            <Select value={form.structure} onValueChange={updateStructure}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{NUTRITION_STRUCTURES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Status</Label>
-            <Select value={form.status} onValueChange={(v) => set("status", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{TARGET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div><Label>Start date</Label><Input type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} /></div>
-          <div>
-            <Label>End date · update due</Label>
-            <Input type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {([["2 wks", 2], ["4 wks", 4], ["6 wks", 6], ["8 wks", 8], ["12 wks", 12]] as const).map(([label, w]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => form.start_date && set("end_date", format(addWeeks(parseISO(form.start_date), w), "yyyy-MM-dd"))}
-                  className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted"
-                >
-                  {label}
-                </button>
-              ))}
-              <button type="button" onClick={() => set("end_date", "")} className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold hover:bg-muted">Ongoing</button>
-            </div>
-          </div>
-          <div><Label>Ending soon (days)</Label><Input type="number" value={form.ending_soon_days} onChange={(e) => set("ending_soon_days", e.target.value)} /></div>
-          <div>
-            <Label>Water target</Label>
-            <div className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
-              Water targets are now synced from the Nutrition Targets panel. Edit there to update everywhere.
-            </div>
-          </div>
-          <div className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2 md:col-span-2">
-            <Label className="text-xs">Visible to client</Label>
-            <Switch checked={form.visible_to_client} onCheckedChange={(v) => set("visible_to_client", v)} />
-          </div>
-        </div>
 
-        <div className="space-y-3">
-          <MealPlanBulkPaste
-            clientId={form.client_id || clientId || null}
-            phase={initial || phasePicked || phaseAuto ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
-            onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
-              setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
-              setForm((f: any) => ({
-                ...f,
-                ...(rules ? { food_weighing_rules: rules } : {}),
-                ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
-              }));
-              if (phase) {
-                setPhaseAuto(true);
-                setPhaseFrom("paste");
-                setPhaseSource("From the pasted plan's PHASE line");
-              }
-            }}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="text-xs uppercase tracking-widest text-muted-foreground">Day Targets</h4>
+          {/* What it's for and when it runs: the three things every plan needs. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="col-span-2 space-y-1.5 sm:col-span-1">
+              <Label className="text-[13px] text-muted-foreground">Phase</Label>
+              <Select value={form.phase} onValueChange={(v) => { setPhaseAuto(false); setPhasePicked(true); setPhaseSource(null); setPhaseFrom(null); set("phase", v); }}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {NUTRITION_PHASES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}{PHASE_GOAL[s] ? <span className="text-muted-foreground"> · {PHASE_GOAL[s]}</span> : null}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {phaseAuto && phaseSource && <p className="text-[13px] text-muted-foreground">{phaseSource}</p>}
+              {form.phase === "Custom" && (
+                <Input className="h-11" value={form.custom_phase ?? ""} onChange={(e) => set("custom_phase", e.target.value)} placeholder="e.g. Contest prep, 12 weeks out" />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[13px] text-muted-foreground">Starts</Label>
+              <Input className="h-11" type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[13px] text-muted-foreground">Next update due</Label>
+              <Input className="h-11" type="date" value={form.end_date ?? ""} onChange={(e) => set("end_date", e.target.value)} />
+            </div>
+            <div className="col-span-2 flex flex-wrap gap-1.5 sm:col-span-3" aria-label="Next update in">
+              {([["2 weeks", 2], ["4 weeks", 4], ["6 weeks", 6], ["8 weeks", 8], ["12 weeks", 12]] as const).map(([label, w]) => {
+                const end = form.start_date ? format(addWeeks(parseISO(form.start_date), w), "yyyy-MM-dd") : null;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => end && set("end_date", end)}
+                    aria-pressed={!!end && form.end_date === end}
+                    className={cn(
+                      "h-9 rounded-full border border-border px-3 text-[13px] transition-colors hover:bg-muted",
+                      end && form.end_date === end && "border-foreground bg-foreground text-background hover:bg-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => set("end_date", "")}
+                aria-pressed={!form.end_date}
+                className={cn("h-9 rounded-full border border-border px-3 text-[13px] transition-colors hover:bg-muted", !form.end_date && "border-foreground bg-foreground text-background hover:bg-foreground")}
+              >
+                Ongoing
+              </button>
+            </div>
+          </div>
+
+          <Accordion type="single" collapsible defaultValue={!initial && !prefill ? "paste" : undefined} className="rounded-xl border border-border">
+            <Section value="paste" icon={ClipboardPaste} title="Paste a meal plan" meta="Fills the days">
+              <MealPlanBulkPaste
+                clientId={form.client_id || clientId || null}
+                phase={initial || phasePicked || phaseAuto ? (form.phase === "Custom" ? form.custom_phase || null : form.phase) : null}
+                onApply={(parsed: ParsedDay[], rules: string | null, phase: string | null) => {
+                  setDays(parsed.map((d, i) => ({ ...d, sort_order: i })));
+                  setOpenDays([]);
+                  setForm((f: any) => ({
+                    ...f,
+                    ...(rules ? { food_weighing_rules: rules } : {}),
+                    ...(phase ? { phase, goal: PHASE_GOAL[phase] ?? f.goal } : {}),
+                  }));
+                  if (phase) {
+                    setPhaseAuto(true);
+                    setPhaseFrom("paste");
+                    setPhaseSource("From the pasted plan's PHASE line");
+                  }
+                }}
+              />
+            </Section>
+          </Accordion>
+
+          <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-            <AutoLabelWorkoutMeals clientId={form.client_id || clientId} days={days} onApply={setDays} />
+              <h3 className="text-base font-semibold">Days</h3>
+              <div className="ml-auto">
+                <AutoLabelWorkoutMeals clientId={form.client_id || clientId} days={days} onApply={setDays} />
+              </div>
+            </div>
+            {days.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">No days yet. Paste a meal plan, or add a day.</p>
+            ) : (
+              <Accordion type="multiple" value={openDays} onValueChange={setOpenDays} className="rounded-xl border border-border">
+                {days.map((d, i) => (
+                  <Section
+                    key={i}
+                    value={`day-${i}`}
+                    title={d.day_label || "Untitled day"}
+                    sub={d.calories == null && d.protein == null && d.carbs == null && d.fats == null
+                      ? "Not filled in yet"
+                      : `${fmtNum(d.calories)} kcal · P ${fmtNum(d.protein)} · C ${fmtNum(d.carbs)} · F ${fmtNum(d.fats)}`}
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-end gap-2">
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <Label className="text-[13px] text-muted-foreground">Name</Label>
+                          <Input className="h-11" value={d.day_label} onChange={(e) => updateDay(i, "day_label", e.target.value)} />
+                        </div>
+                        {days.length > 1 && (
+                          <Button variant="ghost" className="h-11 text-destructive" onClick={() => removeDay(i)}>
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                      <PlanDayUseEditor day={d} planSize={days.length} onChange={(patch) => setDayRule(i, patch)} />
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                        {([["calories", "Calories"], ["protein", "Protein (g)"], ["carbs", "Carbs (g)"], ["fats", "Fat (g)"], ["fibre", "Fibre (g)"], ["steps", "Steps"]] as const).map(([k, label]) => (
+                          <div key={k} className="space-y-1.5">
+                            <Label className="text-[13px] text-muted-foreground">{label}</Label>
+                            <Input className="h-11 tabular-nums" inputMode="numeric" value={d[k] ?? ""} onChange={numberField(i, k)} />
+                          </div>
+                        ))}
+                      </div>
+                      <DayCardio draft={d.cardio} onChange={(patch) => setCardio(i, patch)} willSync={form.status === "Active"} />
+                      <div className="space-y-1.5">
+                        <Label className="text-[13px] text-muted-foreground">Meals</Label>
+                        <Textarea
+                          rows={8}
+                          placeholder={`Meal 1\n120 g oats\n3 whole eggs\n\nApproximate macros:\n40 g protein\n70 g carbohydrates\n18 g fat`}
+                          value={d.notes ?? ""}
+                          onChange={(e) => updateDay(i, "notes", e.target.value)}
+                          className="font-mono text-xs leading-relaxed whitespace-pre"
+                          spellCheck={false}
+                        />
+                        <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
+                        <p className="text-[13px] text-muted-foreground">Write "Meal 1", "Meal 2"… on their own lines; the client sees each meal as a card.</p>
+                      </div>
+                    </div>
+                  </Section>
+                ))}
+              </Accordion>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Add day <ChevronDown className="h-3 w-3 opacity-70" />
+                <Button variant="outline" className="h-11 w-full gap-1.5">
+                  <Plus className="h-4 w-4" /> Add day
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="center" className="w-56">
                 {QUICK_DAY_TYPES.map((t) => (
-                  <DropdownMenuItem key={t} onClick={() => addDay(t === "Custom Day" ? "Custom Day" : t)}>
+                  <DropdownMenuItem key={t} onClick={() => addDay(t)}>
                     {t}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            </div>
           </div>
-          <PlanDayWeekPreview clientId={form.client_id || clientId} days={days} />
-          {days.map((d, i) => (
-            <div key={i} className="rounded-md border border-border bg-secondary/20 p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <Input value={d.day_label} onChange={(e) => updateDay(i, "day_label", e.target.value)} className="max-w-xs font-semibold" />
-                {days.length > 1 && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeDay(i)}>Remove</Button>}
+
+          <Accordion type="multiple" className="rounded-xl border border-border">
+            <Section value="week" icon={CalendarDays} title="This week for the client">
+              <PlanDayWeekPreview clientId={form.client_id || clientId} days={days} />
+            </Section>
+            <Section value="client-notes" icon={MessageSquare} title="For the client" meta={form.pdf_url ? "Notes · weighing rules · PDF" : "Notes · weighing rules"}>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Notes to the client</Label>
+                  <Textarea rows={3} value={form.client_notes ?? ""} onChange={(e) => set("client_notes", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Food-weighing rules</Label>
+                  <Textarea rows={4} placeholder="Filled in from the FOOD-WEIGHING RULES section when you paste a meal plan" value={form.food_weighing_rules ?? ""} onChange={(e) => set("food_weighing_rules", e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">PDF</Label>
+                  {form.pdf_url ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{form.pdf_name || "nutrition-plan.pdf"}</span>
+                      <Button variant="ghost" size="sm" className="h-9 text-destructive" onClick={removePdf}><X className="mr-1 h-4 w-4" /> Remove</Button>
+                    </div>
+                  ) : (
+                    <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-3 text-sm text-muted-foreground hover:bg-muted/40">
+                      <Upload className="h-4 w-4" /> Upload a PDF
+                      <input type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])} />
+                    </label>
+                  )}
+                </div>
               </div>
-              <PlanDayUseEditor day={d} planSize={days.length} onChange={(patch) => setDayRule(i, patch)} />
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
-                {(["calories","protein","carbs","fats","fibre"] as const).map((k) => (
-                  <div key={k}><Label className="text-[10px] uppercase">{k}</Label><Input type="number" value={d[k] ?? ""} onChange={(e) => updateDay(i, k, e.target.value)} /></div>
-                ))}
-                <div><Label className="text-[10px] uppercase">Daily steps</Label><Input type="number" inputMode="numeric" placeholder="e.g. 10000" value={d.steps ?? ""} onChange={(e) => updateDay(i, "steps", e.target.value)} /></div>
+            </Section>
+            <Section value="private" icon={Lock} title="Private notes" meta="Only staff see these">
+              <Textarea rows={4} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} />
+            </Section>
+            <Section value="settings" icon={Settings2} title="Settings" meta={[form.status, form.structure].filter(Boolean).join(" · ")}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Status</Label>
+                  <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>{TARGET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Day types</Label>
+                  <Select value={form.structure} onValueChange={updateStructure}>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>{NUTRITION_STRUCTURES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Warn me this many days before the update</Label>
+                  <Input className="h-11" inputMode="numeric" value={form.ending_soon_days} onChange={(e) => set("ending_soon_days", e.target.value.replace(/[^0-9]/g, ""))} />
+                </div>
+                <div className="flex min-h-11 items-center justify-between gap-3 self-end rounded-lg border border-border px-3">
+                  <Label htmlFor="plan-visible" className="text-sm">The client can see it</Label>
+                  <Switch id="plan-visible" checked={form.visible_to_client} onCheckedChange={(v) => set("visible_to_client", v)} />
+                </div>
               </div>
-              <DayCardio
-                draft={d.cardio}
-                onChange={(patch) => setCardio(i, patch)}
-                willSync={form.status === "Active"}
-              />
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Meal Plan</Label>
-                <Textarea
-                  rows={10}
-                  placeholder={`Meal 1\n120g oats\n300ml egg whites\n3 whole eggs\n\nApprox:\n50P / 115C / 22F\n\nDaily Total\n~190P / 390C / 80F`}
-                  value={d.notes ?? ""}
-                  onChange={(e) => updateDay(i, "notes", e.target.value)}
-                  className="font-mono text-xs leading-relaxed whitespace-pre"
-                  spellCheck={false}
-                />
-                <WorkoutMealTagger text={d.notes ?? ""} onChange={(t) => updateDay(i, "notes", t)} />
-                <p className="text-[10px] text-muted-foreground">Paste meals as plain text — line breaks, “Meal N”, “Approx”, and “Daily Total” are auto-styled for the client view. Tag a meal “(Pre-Workout)” or “(Post-Workout)” above or by typing it on the meal line.</p>
-              </div>
-            </div>
-          ))}
+            </Section>
+          </Accordion>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <div><Label>Coach notes (visible to client)</Label><Textarea rows={3} value={form.client_notes ?? ""} onChange={(e) => set("client_notes", e.target.value)} /></div>
-          <div><Label>Food-weighing rules (visible to client)</Label><Textarea rows={4} placeholder="Filled automatically from the FOOD-WEIGHING RULES section when you paste a meal plan" value={form.food_weighing_rules ?? ""} onChange={(e) => set("food_weighing_rules", e.target.value)} /></div>
-          <div><Label>Private admin notes</Label><Textarea rows={3} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} /></div>
+        <div className="flex shrink-0 gap-2 border-t border-border bg-background px-4 py-3 dark:bg-card sm:justify-end sm:px-6">
+          <Button variant="outline" className="h-11 flex-1 sm:flex-none" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button className="h-11 flex-1 sm:flex-none" onClick={save} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Save plan"}</Button>
         </div>
-
-        <div className="rounded-md border border-border bg-secondary/20 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs uppercase tracking-widest text-muted-foreground">Nutrition Plan PDF (visible to client)</Label>
-            {form.pdf_url && (
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={removePdf}><X className="mr-1 h-3 w-3" /> Remove</Button>
-            )}
-          </div>
-          {form.pdf_url ? (
-            <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-              <FileText className="h-4 w-4 text-primary" />
-              <span className="font-semibold truncate">{form.pdf_name || "nutrition-plan.pdf"}</span>
-            </div>
-          ) : (
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border bg-card px-3 py-6 text-sm text-muted-foreground hover:bg-secondary/30">
-              <Upload className="h-4 w-4" /> Click to upload PDF
-              <input type="file" accept="application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadPdf(e.target.files[0])} />
-            </label>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-primary font-semibold">{saving ? "Saving…" : "Save"}</Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
 /** One day type's cardio, edited with its calories and saved with the plan. */
 function DayCardio({ draft, onChange, willSync }: { draft?: CardioDraft; onChange: (p: Partial<CardioDraft>) => void; willSync: boolean }) {
   if (draft?.program) {
     return (
-      <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
-        Cardio: covered by the <span className="font-semibold text-foreground">{draft.program}</span> program. Edit it in Cardio Targets.
-      </div>
+      <p className="rounded-lg border border-dashed border-border px-3 py-2 text-[13px] text-muted-foreground">
+        Cardio comes from the <span className="font-medium text-foreground">{draft.program}</span> program. Change it in Cardio.
+      </p>
     );
   }
   const on = !!draft?.enabled;
-  const num = (v: string) => (v === "" ? null : Math.max(0, Math.round(Number(v))));
+  const num = (v: string) => (v === "" ? null : Math.max(0, Math.round(Number(v.replace(/[^0-9]/g, "")))));
   return (
-    <div className="rounded-md border border-border bg-card/60 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-3 rounded-lg border border-border px-3 py-2.5">
+      <div className="flex items-center gap-3">
         <Switch checked={on} onCheckedChange={(v) => onChange({ enabled: v })} aria-label="Cardio on this day" />
-        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Cardio</span>
-        {draft?.fromAi && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">AI</span>}
-        <span className="text-[11px] text-muted-foreground">
-          {on ? draft?.cardio_type : "None on this day"}
-          {!willSync && " · syncs when the plan is Active"}
+        <span className="text-sm font-medium">Cardio</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+          {on ? draft?.cardio_type ?? "On" : "None on this day"}
+          {draft?.fromAi ? " · from the AI" : ""}
+          {!willSync ? " · saved to Cardio when the plan is Active" : ""}
         </span>
       </div>
       {on && (
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          <div><Label className="text-[10px] uppercase">Minutes</Label><Input type="number" inputMode="numeric" value={draft?.duration_minutes ?? ""} onChange={(e) => onChange({ duration_minutes: num(e.target.value) })} /></div>
-          <div><Label className="text-[10px] uppercase">Times / week</Label><Input type="number" inputMode="numeric" value={draft?.frequency_per_week ?? ""} onChange={(e) => onChange({ frequency_per_week: num(e.target.value) })} /></div>
-          <div><Label className="text-[10px] uppercase">kcal</Label><Input type="number" inputMode="numeric" placeholder="auto" value={draft?.kcal ?? ""} onChange={(e) => onChange({ kcal: num(e.target.value) })} /></div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1.5"><Label className="text-[13px] text-muted-foreground">Minutes</Label><Input className="h-11" inputMode="numeric" value={draft?.duration_minutes ?? ""} onChange={(e) => onChange({ duration_minutes: num(e.target.value) })} /></div>
+          <div className="space-y-1.5"><Label className="text-[13px] text-muted-foreground">Times a week</Label><Input className="h-11" inputMode="numeric" value={draft?.frequency_per_week ?? ""} onChange={(e) => onChange({ frequency_per_week: num(e.target.value) })} /></div>
+          <div className="space-y-1.5"><Label className="text-[13px] text-muted-foreground">kcal</Label><Input className="h-11" inputMode="numeric" placeholder="auto" value={draft?.kcal ?? ""} onChange={(e) => onChange({ kcal: num(e.target.value) })} /></div>
         </div>
       )}
     </div>

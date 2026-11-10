@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Copy, ClipboardPaste, Sparkles, Check, Wand2 } from "lucide-react";
+import { Copy, ClipboardPaste, Check, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { phaseFromPlanText } from "@/lib/nutrition-cardio";
 import { quickPastePrompt, type ClientBasics, type QA, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
@@ -367,32 +367,31 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
   const preview = text.trim() ? parseMealPlan(text) : [];
 
   return (
-    <div className="rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 p-4 space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <div>
-            <div className="text-sm font-semibold">Quick paste meal plan</div>
-            <div className="text-[11px] text-muted-foreground">Paste a full plan and we'll auto-split it into days with macros.</div>
-            {source && <div className="mt-1 text-[11px] text-foreground/80">{source}</div>}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => copy("prompt")}>
-            {copied === "prompt" ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-            Copy ChatGPT prompt
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => copy("template")}>
-            {copied === "template" ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-            Copy format example
-          </Button>
-        </div>
+    <div className="space-y-3" data-meal-plan-paste>
+      <p className="text-[13px] text-muted-foreground">
+        Paste a plan from ChatGPT and it's split into days with their macros.
+        {source ? <span className="block text-foreground/80">{source}</span> : null}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" className="h-10 gap-1.5" onClick={() => copy("prompt")}>
+          {copied === "prompt" ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+          Copy ChatGPT prompt
+        </Button>
+        <Button type="button" variant="ghost" className="h-10 gap-1.5" onClick={() => copy("template")}>
+          {copied === "template" ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+          Copy format example
+        </Button>
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-[11px] uppercase tracking-widest text-muted-foreground">Paste full plan here</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-[13px] text-muted-foreground">The plan</Label>
+          <Button type="button" variant="ghost" className="h-9 gap-1.5 px-2" onClick={pasteFromClipboard}>
+            <ClipboardPaste className="h-4 w-4" /> Paste
+          </Button>
+        </div>
         <Textarea
-          rows={10}
+          rows={8}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={`TRAINING-DAY MENU\n\nMeal 1\n300 g greek yogurt\n50 g oats\n...\n\nApproximate macros:\n67 g protein\n68 g carbohydrates\n13 g fat\n10 g fibre\n\n...\n\nDaily Total\nApproximately 185 g protein, 230 g carbohydrates, 60 g fat and 25 g fibre`}
@@ -402,29 +401,22 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
       </div>
 
       {preview.length > 0 && (
-        <div className="rounded-md border border-border bg-card p-3 space-y-1.5">
-          <div className="text-[11px] uppercase tracking-widest text-muted-foreground">Preview ({preview.length} day{preview.length > 1 ? "s" : ""})</div>
-          <ul className="space-y-1 text-xs">
-            {preview.map((d, i) => (
-              <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/60 bg-secondary/30 px-2 py-1">
-                <span className="font-semibold">{d.day_label}</span>
-                <span className="text-muted-foreground">
-                  {d.calories ?? "—"} kcal · P {d.protein ?? "—"} / C {d.carbs ?? "—"} / F {d.fats ?? "—"} / Fb {d.fibre ?? "—"}
-                </span>
-              </li>
-            ))}
-          </ul>
+        <div className="divide-y divide-border rounded-xl border border-border">
+          {preview.map((d, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3 px-3 py-2">
+              <span className="min-w-0 truncate text-sm font-medium">{d.day_label}</span>
+              <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">
+                {d.calories ?? "—"} kcal · P {d.protein ?? "—"} · C {d.carbs ?? "—"} · F {d.fats ?? "—"}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={pasteFromClipboard}>
-          <ClipboardPaste className="h-3.5 w-3.5" /> Paste from clipboard
-        </Button>
-        <Button type="button" size="sm" className="bg-primary font-semibold gap-1" onClick={apply} disabled={!text.trim()}>
-          <Wand2 className="h-3.5 w-3.5" /> Import into day targets
-        </Button>
-      </div>
+      <Button type="button" variant="outline" className="h-11 w-full gap-1.5" onClick={apply} disabled={!text.trim()}>
+        <Wand2 className="h-4 w-4" />
+        {preview.length ? `Use these ${preview.length} day${preview.length > 1 ? "s" : ""}` : "Fill the days from it"}
+      </Button>
     </div>
   );
 }

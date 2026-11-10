@@ -120,12 +120,16 @@ export function Section({
   value,
   title,
   meta,
+  sub,
   icon: Icon,
   children,
 }: {
   value: string;
   title: string;
+  /** Short, on the right of the title. */
   meta?: ReactNode;
+  /** A line under the title, for what's too long to sit beside it (a day's macros). */
+  sub?: ReactNode;
   icon?: ComponentType<{ className?: string }>;
   children: ReactNode;
 }) {
@@ -134,7 +138,16 @@ export function Section({
       <AccordionTrigger className="min-h-12 gap-3 px-3 py-3 font-normal hover:no-underline">
         <span className="flex min-w-0 flex-1 items-center gap-3">
           {Icon ? <Icon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden /> : null}
-          <span className="shrink-0 text-[15px] font-medium">{title}</span>
+          {sub ? (
+            <span className="min-w-0 text-left">
+              <span className="block truncate text-[15px] font-medium">{title}</span>
+              <span className="mt-0.5 block truncate text-[13px] tabular-nums text-muted-foreground">
+                {sub}
+              </span>
+            </span>
+          ) : (
+            <span className="shrink-0 text-[15px] font-medium">{title}</span>
+          )}
           {meta ? (
             <span className="ml-auto min-w-0 truncate text-right text-[13px] text-muted-foreground">
               {meta}

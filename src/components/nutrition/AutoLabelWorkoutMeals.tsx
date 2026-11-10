@@ -60,19 +60,19 @@ export function AutoLabelWorkoutMeals<D extends { day_label: string; notes?: str
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1" title="Label the Pre-/Post-Workout meal on every training day">
-          <Dumbbell className="h-3.5 w-3.5 text-primary" /> Auto-label workout meals <ChevronDown className="h-3 w-3 opacity-70" />
+        <Button variant="outline" className="h-10 gap-1.5" title="Label the Pre-/Post-Workout meal on every training day">
+          <Dumbbell className="h-4 w-4 text-muted-foreground" /> Workout meals <ChevronDown className="h-4 w-4 opacity-70" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">
-          {pattern ? pattern.summary : clientId ? "No logged workouts yet — pick when they train." : "Pick when they train."}
+        <DropdownMenuLabel className="text-[13px] font-normal text-muted-foreground">
+          {pattern ? pattern.summary : clientId ? "No logged workouts yet. Pick when they train." : "Pick when they train."}
         </DropdownMenuLabel>
         {detected && (
           <>
-            <DropdownMenuItem onClick={() => apply(detected)} className="font-semibold">
+            <DropdownMenuItem onClick={() => apply(detected)} className="font-medium">
               {TRAINING_TIME_LABELS[detected as keyof typeof TRAINING_TIME_LABELS]}
-              <span className="ml-auto text-[10px] font-normal text-primary">from logged workouts</span>
+              <span className="ml-auto text-xs font-normal text-muted-foreground">from their workouts</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
@@ -83,7 +83,7 @@ export function AutoLabelWorkoutMeals<D extends { day_label: string; notes?: str
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <div className="px-2 py-1.5 text-[10px] leading-snug text-muted-foreground">
+        <div className="px-2 py-1.5 text-xs leading-snug text-muted-foreground">
           Only the meal names change (e.g. “Meal 3 (Pre-Workout)”). Foods and macros stay exactly as they are. Rest days are skipped.
         </div>
       </DropdownMenuContent>

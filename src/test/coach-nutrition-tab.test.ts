@@ -77,3 +77,42 @@ describe("the coach's Nutrition tab reads as one calm screen", () => {
     expect(cardio).toContain('"past-due": "Ended"');
   });
 });
+
+describe("the plan editor (new plan, Review & edit first, Edit) is one calm sheet", () => {
+  const editor = read("src/components/nutrition-target-dialog.tsx");
+  const paste = read("src/components/nutrition/MealPlanBulkPaste.tsx");
+  const rules = read("src/components/nutrition/PlanDayRules.tsx");
+  const tagger = read("src/components/nutrition/WorkoutMealTagger.tsx");
+  const autoLabel = read("src/components/nutrition/AutoLabelWorkoutMeals.tsx");
+
+  it("Save is its only red button, and nothing on it shouts in caps", () => {
+    expect(editor).toMatch(/<Button className="h-11 flex-1 sm:flex-none" onClick=\{save\}/);
+    for (const src of [editor, paste, rules, tagger, autoLabel]) {
+      expect(src).not.toMatch(/uppercase|font-bold|font-black/);
+      expect(src).not.toContain("bg-primary");
+    }
+    expect(paste).toContain('variant="outline" className="h-11 w-full gap-1.5" onClick={apply}');
+  });
+
+  it("each day is a row with its calories and macros under the name, opened in place", () => {
+    expect(editor).toContain('<Accordion type="multiple" value={openDays}');
+    expect(editor).toContain('"Not filled in yet"');
+    expect(editor).not.toContain('type="number"');
+    // phase, start and the next update up top; the rest in sections
+    for (const t of [
+      'title="Paste a meal plan"',
+      'title="This week for the client"',
+      'title="For the client"',
+      'title="Private notes"',
+      'title="Settings"',
+    ])
+      expect(editor).toContain(t);
+    // the old read-only Water box is gone (water lives on the Current plan card)
+    expect(editor).not.toContain("Water target");
+  });
+
+  it("a picked weekday or workout meal is neutral, never brand red or traffic-light colours", () => {
+    expect(rules).toContain('"bg-foreground text-background"');
+    expect(tagger).not.toMatch(/amber|emerald/);
+  });
+});

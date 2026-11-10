@@ -53,21 +53,19 @@ export function PlanDayUseEditor({
     });
   };
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-plan-day-rule>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          Used on
-        </span>
+    <div className="space-y-3" data-plan-day-rule>
+      <div className="space-y-1.5">
+        <span className="block text-[13px] text-muted-foreground">Used on</span>
         <Select
           value={use}
           onValueChange={(v) => onChange({ use_on: v as PlanDayUse, weekdays: rule.weekdays })}
         >
-          <SelectTrigger className="h-8 w-[150px] text-xs font-semibold">
+          <SelectTrigger className="h-11 w-full sm:w-[220px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {PLAN_DAY_USES.map((u) => (
-              <SelectItem key={u} value={u} className="text-xs">
+              <SelectItem key={u} value={u}>
                 {PLAN_DAY_USE_LABEL[u]}
               </SelectItem>
             ))}
@@ -75,11 +73,11 @@ export function PlanDayUseEditor({
         </Select>
       </div>
       {use !== "manual" && (
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            {rule.weekdays.length ? "Only on" : "Any day · or only on"}
+        <div className="space-y-1.5">
+          <span className="block text-[13px] text-muted-foreground">
+            {rule.weekdays.length ? "Only on" : "Any day, or only on"}
           </span>
-          <div className="flex gap-1" role="group" aria-label="Only on these weekdays">
+          <div className="flex gap-1.5" role="group" aria-label="Only on these weekdays">
             {WEEK_DAYS.map((d) => {
               const on = rule.weekdays.includes(d);
               return (
@@ -91,10 +89,10 @@ export function PlanDayUseEditor({
                   title={d}
                   onClick={() => toggle(d)}
                   className={cn(
-                    "grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold transition-colors",
+                    "grid h-10 w-10 place-items-center rounded-full text-[13px] font-medium transition-colors",
                     on
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-border bg-card text-muted-foreground hover:bg-muted",
+                      ? "bg-foreground text-background"
+                      : "border border-border text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {d.slice(0, 2)}
@@ -105,9 +103,7 @@ export function PlanDayUseEditor({
         </div>
       )}
       {rule.useFromName && rule.weekdaysFromName && (
-        <span className="text-[10px] text-muted-foreground">
-          Read from the name · change it anytime
-        </span>
+        <p className="text-[13px] text-muted-foreground">Read from the name · change it anytime</p>
       )}
     </div>
   );
@@ -120,9 +116,9 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 const KIND_TONE: Record<string, string> = {
-  training: "text-primary",
+  training: "text-foreground",
   non_training: "text-muted-foreground",
-  high: "text-amber-500",
+  high: "text-foreground",
 };
 
 /** This week, date by date, as the client's Nutrition page will pick it. */
@@ -184,30 +180,25 @@ export function PlanDayWeekPreview({
   });
 
   return (
-    <div className="rounded-md border border-border bg-card p-3" data-plan-week-preview>
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h4 className="text-xs uppercase tracking-widest text-muted-foreground">
-          This week for the client
-        </h4>
-        <span className="text-[10px] text-muted-foreground">
-          {q.isLoading
-            ? "Reading their schedule…"
-            : "From their workouts, High Day and day overrides"}
-        </span>
-      </div>
-      <ul className="grid gap-x-4 gap-y-1 md:grid-cols-2">
+    <div className="space-y-2" data-plan-week-preview>
+      <p className="text-[13px] text-muted-foreground">
+        {q.isLoading
+          ? "Reading their schedule…"
+          : "From their workouts, High Day and day overrides"}
+      </p>
+      <ul className="divide-y divide-border rounded-xl border border-border">
         {rows.map(({ dateISO, kind, day }) => (
           <li
             key={dateISO}
             className={cn(
-              "flex min-w-0 items-center gap-2 rounded px-1.5 py-1 text-xs",
-              dateISO === today && "bg-primary/10",
+              "flex min-h-10 min-w-0 items-center gap-3 px-3 py-2 text-[13px]",
+              dateISO === today && "bg-muted/60",
             )}
           >
-            <span className="w-[84px] shrink-0 whitespace-nowrap font-semibold">
+            <span className="w-[84px] shrink-0 whitespace-nowrap font-medium">
               {format(parseLocalDate(dateISO)!, "EEE MMM d")}
             </span>
-            <span className={cn("w-[58px] shrink-0 text-[11px] font-bold", KIND_TONE[kind])}>
+            <span className={cn("w-[64px] shrink-0", KIND_TONE[kind])}>
               {KIND_LABEL[kind]}
             </span>
             {day ? (
@@ -215,7 +206,7 @@ export function PlanDayWeekPreview({
                 {String(day.day_label ?? "").trim() || "Untitled day"}
               </span>
             ) : (
-              <span className="min-w-0 truncate font-semibold text-amber-500">
+              <span className="min-w-0 truncate font-medium text-warning">
                 No plan for this day
               </span>
             )}
