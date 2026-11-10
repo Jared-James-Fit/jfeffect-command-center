@@ -11,9 +11,9 @@ export const Route = createFileRoute("/account-deletion")({
       {
         name: "description",
         content:
-          "Request permanent deletion of your JF Effect account and personal data. Submit a request from inside the app or by email.",
+          "Delete your JF Effect account from inside the app or by email. It waits 30 days in Recently deleted so you can restore it, then it's deleted for good.",
       },
-      ...shareMeta({ title: "Delete your JF Effect account", description: "How to permanently delete your JF Effect account and data.", path: "/account-deletion" }),
+      ...shareMeta({ title: "Delete your JF Effect account", description: "How to delete your JF Effect account and data.", path: "/account-deletion" }),
     ],
   }),
   component: AccountDeletionPage,
@@ -38,9 +38,10 @@ function AccountDeletionPage() {
             Delete your JF Effect account
           </h1>
           <p className="text-sm text-muted-foreground">
-            You can permanently delete your account and personal data at any time.
-            Once a deletion request is processed, your profile, training history,
-            check-ins, messages, and uploaded media are removed and cannot be recovered.
+            You can delete your account and personal data at any time. To protect you from
+            deleting it by mistake, it waits in Recently deleted for 30 days first: sign back in
+            before then and tap Restore, and everything comes back. After 30 days it's deleted
+            for good and can't be recovered.
           </p>
         </header>
 
@@ -51,13 +52,17 @@ function AccountDeletionPage() {
           <ol className="ml-4 list-decimal space-y-2 text-sm text-muted-foreground">
             <li>Sign in to your account.</li>
             <li>
-              Open <span className="font-medium text-foreground">Settings → Account</span>.
+              Open <span className="font-medium text-foreground">More → Account Settings</span>.
             </li>
             <li>
-              Tap <span className="font-medium text-foreground">Delete account</span> and
-              confirm.
+              Tap <span className="font-medium text-foreground">Delete account</span>, then{" "}
+              <span className="font-medium text-foreground">Delete my account</span>, and confirm.
             </li>
           </ol>
+          <p className="text-sm text-muted-foreground">
+            You're signed out right away and hidden from the Crew. Changed your mind? Sign back in
+            within 30 days and tap Restore my account.
+          </p>
           <div className="pt-2">
             <Button asChild>
               <Link to="/auth">Sign in to continue</Link>
@@ -71,7 +76,8 @@ function AccountDeletionPage() {
           </h2>
           <p className="text-sm text-muted-foreground">
             If you can't access your account, email us from the address you signed up
-            with and we'll verify and process the deletion within 7 days.
+            with. We'll verify it's you and start the deletion within 7 days; it's then
+            deleted for good 30 days later.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button asChild variant="default">
@@ -95,8 +101,13 @@ function AccountDeletionPage() {
             <li>Your profile, login, and contact information.</li>
             <li>Training programs, completed workouts, and progress logs.</li>
             <li>Check-ins, photos, measurements, and uploaded media.</li>
-            <li>Messages with coaches and notification preferences.</li>
+            <li>Notification preferences and your Crew profile, posts and programs.</li>
           </ul>
+          <p className="text-xs text-muted-foreground">
+            Chat messages are kept as a record of the conversation for the other people in it, as
+            our Privacy Policy explains: if you have any, your account is closed and your login
+            removed instead of the chats being deleted.
+          </p>
           <p className="text-xs text-muted-foreground">
             Billing records and other data we are required to retain for tax,
             accounting, or legal reasons are kept for the minimum period required

@@ -27,6 +27,7 @@ import type { DirectoryRow } from "@/lib/clients-directory.functions";
 import { filtersFromSearch, matchFromSearch, type DirectoryFilterKey } from "@/lib/clients-directory-filters";
 import { STATUS_META } from "@/components/clients/clients-status";
 import { ClientToolbar } from "@/components/clients/client-toolbar";
+import { RecentlyDeletedRow } from "@/components/account/recently-deleted";
 import { ClientRow, ClientRowSkeleton } from "@/components/clients/client-row";
 import { Pager } from "@/components/clients/pager";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
@@ -198,7 +199,11 @@ function ClientsDirectoryPage() {
           right swipe is still the app's "back". */}
       <div {...swipe} data-no-swipe-back={kind === "clients" ? undefined : ""} className="min-h-[60vh]">
       {kind === "members" ? (
-        <div className="p-3 sm:p-4 md:p-6"><MembersDirectory showTest={false} /></div>
+        <div className="space-y-3 p-3 sm:p-4 md:p-6">
+          <MembersDirectory showTest={false} />
+          {/* accounts waiting out their 30 days, with Restore */}
+          <RecentlyDeletedRow />
+        </div>
       ) : kind === "team" ? (
         <div>
           {/* The one test account lives with the logins that run the business. */}
@@ -260,6 +265,8 @@ function ClientsDirectoryPage() {
         )}
 
         {total > 0 && <Pager page={search.page} size={search.size} total={total} />}
+        {/* accounts waiting out their 30 days, with Restore (iMessage's Recently Deleted) */}
+        <RecentlyDeletedRow />
       </div>
       )}
       </div>

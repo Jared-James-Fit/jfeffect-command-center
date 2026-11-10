@@ -599,68 +599,45 @@ export const archiveClient = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * "Delete client" never deletes on the spot: the account goes to Recently
+ * deleted for 30 days (account_delete_by_admin: held, out of the Clients list
+ * and Crew, restorable from Recently deleted), then the purge job deletes it
+ * for good the way this always did (chat history kept: account-deletion.server.ts).
+ */
 export const deleteClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
         clientId: z.string().uuid(),
+        /** older builds send it; the login always goes with the account on day 30 */
         deleteAuthUser: z.boolean().optional(),
+        reason: z.string().max(500).optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
-
-    const { data: client, error: cErr } = await supabase
-      .from("clients")
-      .select("id, user_id")
-      .eq("id", data.clientId)
-      .single();
-    if (cErr) throw new Error(cErr.message);
-
+    const { data: res, error } = await (supabase as any).rpc("account_delete_by_admin", {
+      _client_id: data.clientId,
+      _member_id: null,
+      _reason: data.reason ?? null,
+    });
+    if (error) throw new Error(error.message);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // Chats are never deleted with an account (the database refuses it too,
-    // clients_guard_chat_delete): a client with any chat history is
-    // deactivated instead, portal off and login kept, so every message and
-    // who sent it stays.
-    const { data: anyMessage, error: mErr } = await supabaseAdmin
-      .from("messages")
-      .select("id")
-      .eq("client_id", data.clientId)
-      .limit(1);
-    if (mErr) throw new Error(mErr.message);
-    if (anyMessage?.length) {
-      const { error: deErr } = await supabaseAdmin.from("clients").update({
-        status: "Deactivated",
-        deactivated_at: new Date().toISOString(),
-        deactivated_by: userId,
-        deactivation_reason: "Deleted by admin (chat history kept)",
-        portal_access_disabled: true,
-      }).eq("id", data.clientId);
-      if (deErr) throw new Error(deErr.message);
-      await supabaseAdmin.from("client_activity_log").insert({
-        client_id: data.clientId,
-        actor_user_id: userId,
-        actor_role: "admin",
-        action: "client_deactivated",
-        details: { instead_of_delete: true, reason: "chat history kept", portal_disabled: true },
-      });
-      return { ok: true, kept: true as const };
-    }
-
-    const { error: delErr } = await supabaseAdmin
-      .from("clients")
-      .delete()
-      .eq("id", data.clientId);
-    if (delErr) throw new Error(delErr.message);
-
-    if (data.deleteAuthUser && client.user_id) {
-      // Refused (and the login kept) if it has chats elsewhere, e.g. a member's group chats.
-      const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(client.user_id);
-      if (authErr) console.warn("[deleteClient] login kept:", authErr.message);
-    }
-    return { ok: true, kept: false as const };
+    await supabaseAdmin.from("client_activity_log").insert({
+      client_id: data.clientId,
+      actor_user_id: userId,
+      actor_role: "admin",
+      action: "client_moved_to_recently_deleted",
+      details: { purge_after: (res as any)?.purge_after ?? null },
+    } as any);
+    return {
+      ok: true,
+      kept: false as const,
+      binned: true as const,
+      purgeAfter: ((res as any)?.purge_after ?? null) as string | null,
+    };
   });

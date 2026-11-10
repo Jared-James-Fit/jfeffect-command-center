@@ -37,6 +37,7 @@ import { isNative } from "@/platform";
 import { healthStoreProvider } from "@/platform/health";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { DeleteAccountButton } from "@/components/account/delete-account";
 import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
@@ -554,16 +555,9 @@ function AccountPage() {
               </SettingsSection>
             )}
 
-            {/* ── Delete Account — required by Google Play and Apple App Store policies ── */}
+            {/* ── Delete Account (Apple / Google require it in the app): 30 days in Recently deleted first ── */}
             <SettingsSection id="delete-account" icon={Trash2} title="Delete account" destructive>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Permanently delete your JF Effect account and all associated data. This action cannot be undone.
-                </p>
-                <Button variant="destructive" asChild className="h-10">
-                  <a href="/account-deletion">Delete my account</a>
-                </Button>
-              </div>
+              <DeleteAccountButton />
             </SettingsSection>
           </SettingsGroup>
         </Accordion>

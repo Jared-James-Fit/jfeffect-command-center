@@ -242,6 +242,7 @@ import { Route as AuthenticatedPortalWorkoutsIndexRouteImport } from './routes/_
 import { Route as AuthenticatedPortalWorkoutsDayIdRouteImport } from './routes/_authenticated/portal/workouts.$dayId'
 import { Route as AuthenticatedPortalWorkoutsAnalyticsRouteImport } from './routes/_authenticated/portal/workouts.analytics'
 import { Route as AuthenticatedPortalWorkoutsPrsRouteImport } from './routes/_authenticated/portal/workouts.prs'
+import { Route as ApiPublicHooksAccountDeletionsPurgeRouteImport } from './routes/api/public/hooks/account-deletions-purge'
 import { Route as ApiPublicHooksActionCentreTickRouteImport } from './routes/api/public/hooks/action-centre-tick'
 import { Route as ApiPublicHooksAiBenchmarkRouteImport } from './routes/api/public/hooks/ai-benchmark'
 import { Route as ApiPublicHooksAiModelsCheckRouteImport } from './routes/api/public/hooks/ai-models-check'
@@ -1628,6 +1629,12 @@ const AuthenticatedPortalWorkoutsPrsRoute =
     path: '/workouts/prs',
     getParentRoute: () => AuthenticatedPortalRouteRoute,
   } as any)
+const ApiPublicHooksAccountDeletionsPurgeRoute =
+  ApiPublicHooksAccountDeletionsPurgeRouteImport.update({
+    id: '/api/public/hooks/account-deletions-purge',
+    path: '/api/public/hooks/account-deletions-purge',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksActionCentreTickRoute =
   ApiPublicHooksActionCentreTickRouteImport.update({
     id: '/api/public/hooks/action-centre-tick',
@@ -2141,6 +2148,7 @@ export interface FileRoutesByFullPath {
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
+  '/api/public/hooks/account-deletions-purge': typeof ApiPublicHooksAccountDeletionsPurgeRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
@@ -2421,6 +2429,7 @@ export interface FileRoutesByTo {
   '/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
+  '/api/public/hooks/account-deletions-purge': typeof ApiPublicHooksAccountDeletionsPurgeRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
@@ -2707,6 +2716,7 @@ export interface FileRoutesById {
   '/_authenticated/portal/workouts/$dayId': typeof AuthenticatedPortalWorkoutsDayIdRoute
   '/_authenticated/portal/workouts/analytics': typeof AuthenticatedPortalWorkoutsAnalyticsRoute
   '/_authenticated/portal/workouts/prs': typeof AuthenticatedPortalWorkoutsPrsRoute
+  '/api/public/hooks/account-deletions-purge': typeof ApiPublicHooksAccountDeletionsPurgeRoute
   '/api/public/hooks/action-centre-tick': typeof ApiPublicHooksActionCentreTickRoute
   '/api/public/hooks/ai-benchmark': typeof ApiPublicHooksAiBenchmarkRoute
   '/api/public/hooks/ai-models-check': typeof ApiPublicHooksAiModelsCheckRoute
@@ -2993,6 +3003,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
+    | '/api/public/hooks/account-deletions-purge'
     | '/api/public/hooks/action-centre-tick'
     | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
@@ -3273,6 +3284,7 @@ export interface FileRouteTypes {
     | '/portal/workouts/$dayId'
     | '/portal/workouts/analytics'
     | '/portal/workouts/prs'
+    | '/api/public/hooks/account-deletions-purge'
     | '/api/public/hooks/action-centre-tick'
     | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
@@ -3558,6 +3570,7 @@ export interface FileRouteTypes {
     | '/_authenticated/portal/workouts/$dayId'
     | '/_authenticated/portal/workouts/analytics'
     | '/_authenticated/portal/workouts/prs'
+    | '/api/public/hooks/account-deletions-purge'
     | '/api/public/hooks/action-centre-tick'
     | '/api/public/hooks/ai-benchmark'
     | '/api/public/hooks/ai-models-check'
@@ -3676,6 +3689,7 @@ export interface RootRouteChildren {
   ChallengesSlugRunRoute: typeof ChallengesSlugRunRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   ChallengesSlugIndexRoute: typeof ChallengesSlugIndexRoute
+  ApiPublicHooksAccountDeletionsPurgeRoute: typeof ApiPublicHooksAccountDeletionsPurgeRoute
   ApiPublicHooksActionCentreTickRoute: typeof ApiPublicHooksActionCentreTickRoute
   ApiPublicHooksAiBenchmarkRoute: typeof ApiPublicHooksAiBenchmarkRoute
   ApiPublicHooksAiModelsCheckRoute: typeof ApiPublicHooksAiModelsCheckRoute
@@ -5348,6 +5362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalWorkoutsPrsRouteImport
       parentRoute: typeof AuthenticatedPortalRouteRoute
     }
+    '/api/public/hooks/account-deletions-purge': {
+      id: '/api/public/hooks/account-deletions-purge'
+      path: '/api/public/hooks/account-deletions-purge'
+      fullPath: '/api/public/hooks/account-deletions-purge'
+      preLoaderRoute: typeof ApiPublicHooksAccountDeletionsPurgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/action-centre-tick': {
       id: '/api/public/hooks/action-centre-tick'
       path: '/api/public/hooks/action-centre-tick'
@@ -6391,6 +6412,8 @@ const rootRouteChildren: RootRouteChildren = {
   ChallengesSlugRunRoute: ChallengesSlugRunRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   ChallengesSlugIndexRoute: ChallengesSlugIndexRoute,
+  ApiPublicHooksAccountDeletionsPurgeRoute:
+    ApiPublicHooksAccountDeletionsPurgeRoute,
   ApiPublicHooksActionCentreTickRoute: ApiPublicHooksActionCentreTickRoute,
   ApiPublicHooksAiBenchmarkRoute: ApiPublicHooksAiBenchmarkRoute,
   ApiPublicHooksAiModelsCheckRoute: ApiPublicHooksAiModelsCheckRoute,
