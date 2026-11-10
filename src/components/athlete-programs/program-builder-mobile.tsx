@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Copy,
   Loader2,
-  Monitor,
   MoreHorizontal,
   Plus,
   Repeat2,
@@ -50,6 +49,7 @@ import {
   removeAt,
   swapExercise,
 } from "@/lib/athlete-program-draft";
+import { BestOnComputerTip } from "@/components/best-on-computer-tip";
 import { ChoiceChip, ProgramDetailsFields, Stepper } from "./program-builder-parts";
 import { ExercisePickerSheet } from "./exercise-picker-sheet";
 import type { ProgramEditor } from "./use-program-editor";
@@ -152,7 +152,10 @@ export function MobileProgramBuilder({ editor }: { editor: ProgramEditor }) {
       <PageHeader title={editor.editing ? "Edit program" : "New program"} backTo={editor.backTo} />
 
       <div className="space-y-4 px-4 pb-[calc(var(--mobile-bar-top,80px)+96px)] pt-3">
-        <DesktopTip />
+        <BestOnComputerTip storageKey={TIP_KEY}>
+          Big programs are quicker at jfeffect.com on a computer, same login. Everything works here
+          too.
+        </BestOnComputerTip>
 
         <Input
           ref={nameRef}
@@ -727,55 +730,6 @@ function QuickField({
           </ChoiceChip>
         ))}
       </div>
-    </div>
-  );
-}
-
-/**
- * "Best on a computer": building a long program is quicker on a bigger
- * screen, so a phone says so once, without stopping anyone building here.
- * Dismissed per device (a convenience, not something to sync).
- */
-function DesktopTip() {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(TIP_KEY) === "hidden";
-    } catch {
-      return false;
-    }
-  });
-  if (hidden) return null;
-  const dismiss = () => {
-    setHidden(true);
-    try {
-      localStorage.setItem(TIP_KEY, "hidden");
-    } catch {
-      /* shows again next time */
-    }
-  };
-  return (
-    <div
-      role="note"
-      className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 py-3 pl-3.5 pr-1.5"
-    >
-      <Monitor className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold">Best on a computer</div>
-        <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-          Big programs are quicker at jfeffect.com on a computer, same login. Everything works here
-          too.
-        </p>
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-10 w-10 shrink-0"
-        aria-label="Hide this tip"
-        onClick={dismiss}
-      >
-        <X className="h-4 w-4" />
-      </Button>
     </div>
   );
 }
