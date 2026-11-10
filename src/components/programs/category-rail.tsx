@@ -22,17 +22,17 @@ export function CategoryRail({ value, counts, profileReady, onChange }: Props) {
               type="button"
               onClick={() => onChange(c.id)}
               className={cn(
-                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm transition",
+                "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] transition",
                 active
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-foreground hover:bg-muted",
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-card text-foreground hover:bg-muted",
               )}
             >
               {c.label}
               {typeof n === "number" && (
                 <span className={cn(
                   "rounded-full px-1.5 text-[10px]",
-                  active ? "bg-primary-foreground/20" : "bg-muted text-muted-foreground",
+                  active ? "bg-background/20" : "bg-muted text-muted-foreground",
                 )}>{n}</span>
               )}
             </button>

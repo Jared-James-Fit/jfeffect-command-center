@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-/** A member with no program yet: one tap to the Plan Library. Hides once a plan is running. */
+/** A member with no program yet: one tap to JF Effect's plans. Hides once a plan is running. */
 export function PickPlanCard({ clientId }: { clientId: string }) {
   const { data: programs, isLoading } = useQuery({
     queryKey: ["my-program-count", clientId],
@@ -35,12 +35,12 @@ export function PickPlanCard({ clientId }: { clientId: string }) {
           {/* a member with no plan: this is Home's one red action */}
           <div className="mt-3 flex flex-wrap gap-2">
             <Button asChild className="h-10">
-              <Link to="/portal/plans">
+              <Link to="/portal/programs" search={{ tab: "jf" }}>
                 Browse plans <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>
             </Button>
             <Button asChild variant="secondary" className="h-10">
-              <Link to="/portal/programs">Build or copy one</Link>
+              <Link to="/portal/programs" search={{ tab: "mine" }}>Build or copy one</Link>
             </Button>
           </div>
         </div>

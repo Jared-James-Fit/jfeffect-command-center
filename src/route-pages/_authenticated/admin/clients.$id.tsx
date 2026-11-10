@@ -1,3 +1,4 @@
+import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -389,10 +390,11 @@ export function ClientProfileWorkspace({
 
   const confirmDelete = async () => {
     try {
-      const res = await deleteFn({ data: { clientId: id, deleteAuthUser: true } });
-      toast.success(res?.kept ? "Chat history kept: client deactivated instead of deleted" : "Client deleted");
+      const res = await deleteFn({ data: { clientId: id } });
+      toast.success(deletedToast(form.full_name, res?.purgeAfter ?? null), { duration: 8000 });
       setDeleteStep(0);
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["recently-deleted"] });
       if (embedded) onClose?.(); else navigate({ to: "/admin/clients" });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete");
@@ -1225,29 +1227,28 @@ export function ClientProfileWorkspace({
       <AlertDialog open={deleteStep > 0} onOpenChange={(o) => !o && setDeleteStep(0)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{deleteStep === 1 ? `Delete ${form.full_name}?` : "Are you absolutely sure?"}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteStep === 1
-                ? "This will permanently remove the client record and their login. If they have any chat history, it's kept: they're deactivated instead. You'll be asked to confirm one more time."
-                : "This action cannot be undone. The client's account, login, and all associated records will be permanently deleted. Chats are never deleted: if they have any, the client is deactivated instead."}
+            {/* one step: nothing is deleted on the spot, it waits 30 days in Recently deleted */}
+            <AlertDialogTitle>{adminDeleteCopy(form.full_name).title}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {adminDeleteCopy(form.full_name).lines.map((l) => (
+                  <p key={l}>{l}</p>
+                ))}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            {deleteStep === 1 ? (
-              <AlertDialogAction onClick={(e) => { e.preventDefault(); setDeleteStep(2); }}>Continue</AlertDialogAction>
-            ) : (
-              <ActionButton
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                loadingLabel="Deleting…"
-                successLabel="Deleted"
-                successToast={false}
-                errorToast
-                onAction={async () => { await confirmDelete(); }}
-              >
-                Yes, delete permanently
-              </ActionButton>
-            )}
+            <ActionButton
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              loadingLabel="Moving…"
+              successLabel="Moved"
+              successToast={false}
+              errorToast
+              onAction={async () => { await confirmDelete(); }}
+            >
+              {adminDeleteCopy(form.full_name).action}
+            </ActionButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

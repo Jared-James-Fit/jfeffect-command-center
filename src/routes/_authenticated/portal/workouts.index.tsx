@@ -18,14 +18,17 @@ export const Route = createFileRoute("/_authenticated/portal/workouts/")({
     throw redirect({ to: "/portal/community", hash: post ? `post=${post}` : undefined, replace: true });
   },
   // ?open=<yyyy-mm-dd>: open that day's workout (a coach jumping in from a session).
-  validateSearch: (s: Record<string, unknown>): { open?: string } =>
-    typeof s.open === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.open) ? { open: s.open } : {},
+  // ?days=1: open the training days editor (a program's workouts a week changed).
+  validateSearch: (s: Record<string, unknown>): { open?: string; days?: 1 } => ({
+    ...(typeof s.open === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.open) ? { open: s.open } : {}),
+    ...(s.days === 1 || s.days === "1" ? { days: 1 as const } : {}),
+  }),
   component: WorkoutsPage,
 });
 
 function WorkoutsPage() {
   const portalUserId = usePortalUserId();
-  const { open } = Route.useSearch();
+  const { open, days } = Route.useSearch();
   // The client row (one small read, kept on the phone a day and warmed when the
   // app opens: useWarmClientPages) opens the program; until it's known the page
   // keeps its title and shows the schedule's own shape, never a spinner.
@@ -45,7 +48,7 @@ function WorkoutsPage() {
 
   return (
     <>
-      <WorkoutsExperience clientId={client.id} mode="self" openDate={open ?? null} />
+      <WorkoutsExperience clientId={client.id} mode="self" openDate={open ?? null} openDays={days === 1} />
       <div className="px-4 pb-24 md:px-6">
         <WorkoutArchiveSection clientId={client.id} mode="client" />
       </div>

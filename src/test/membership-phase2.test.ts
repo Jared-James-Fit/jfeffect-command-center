@@ -61,10 +61,16 @@ describe("the Plan Library lives in the portal", () => {
 
   it("library and detail start plans through one dialog, preview from the real payload shape", () => {
     const lib = read("src/route-pages/_authenticated/portal/plans.tsx");
-    expect(read("src/routes/_authenticated/portal/plans.index.tsx")).toContain('createFileRoute("/_authenticated/portal/plans/")');
+    // the library is the Programs page's JF Effect tab; the old address lands there
+    const index = read("src/routes/_authenticated/portal/plans.index.tsx");
+    expect(index).toContain('createFileRoute("/_authenticated/portal/plans/")');
+    expect(index).toContain('throw redirect({ to: "/portal/programs", search: { tab: "jf" }, replace: true });');
     expect(lib).toContain('previewTo={{ to: "/portal/plans/$planId", params: { planId: p.id } }}');
     expect(lib).toContain("<StartPlanDialog plan={starting}");
-    expect(lib).toContain("if (isCoaching) return <CoachWritesYourProgram />;");
+    // coaching clients don't get the tab: their coach writes the program
+    expect(read("src/components/athlete-programs/programs-hub.tsx")).toContain(
+      'const tabs: ProgramsTab[] = isSelfServe ? ["mine", "jf", "crew"] : ["mine", "crew"];',
+    );
     expect(lib).not.toContain("/portal/goals-setup");
     const detail = read("src/routes/_authenticated/portal/plans.$planId.tsx");
     expect(detail).toContain('createFileRoute("/_authenticated/portal/plans/$planId")');
@@ -98,6 +104,6 @@ describe("the Plan Library lives in the portal", () => {
     const workouts = read("src/components/workouts/WorkoutsExperience.tsx");
     expect(workouts).toContain('if (mode === "self") return <SelfEmptyState />;');
     expect(workouts).toContain("Your coach will publish your block soon.");
-    expect(workouts).toContain('<Link to="/portal/plans">Browse plans</Link>');
+    expect(workouts).toContain('<Link to="/portal/programs" search={{ tab: "jf" }}>Browse plans</Link>');
   });
 });

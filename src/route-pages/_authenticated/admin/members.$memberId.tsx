@@ -1,3 +1,4 @@
+import { adminDeleteCopy, deletedToast } from "@/lib/recently-deleted";
 import { Link } from "@tanstack/react-router";
 import { CLIENT_VIEW_HOME } from "@/lib/launch-home";
 import { isMemberAccessActive } from "@/lib/memberAccess";
@@ -574,10 +575,12 @@ export function MemberProfileWorkspace({
       </div>
       <DangerZone
         memberEmail={member.email}
+        memberName={member.full_name ?? member.email}
         onDelete={async () => {
           const res = await deleteMemberFn({ data: { memberId } });
-          toast.success(res?.kept ? "Chat history kept: member deactivated instead of deleted" : "Member account deleted");
+          toast.success(deletedToast(member.full_name ?? member.email, res?.purgeAfter ?? null), { duration: 8000 });
           await qc.invalidateQueries({ queryKey: ["admin-members"] });
+          await qc.invalidateQueries({ queryKey: ["recently-deleted"] });
           navigate({ to: "/admin/members" });
         }}
       />
@@ -585,7 +588,16 @@ export function MemberProfileWorkspace({
   );
 }
 
-function DangerZone({ memberEmail, onDelete }: { memberEmail: string; onDelete: () => Promise<void> }) {
+function DangerZone({
+  memberEmail,
+  memberName,
+  onDelete,
+}: {
+  memberEmail: string;
+  memberName: string;
+  onDelete: () => Promise<void>;
+}) {
+  const copy = adminDeleteCopy(memberName);
   const [open, setOpen] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -605,10 +617,12 @@ function DangerZone({ memberEmail, onDelete }: { memberEmail: string; onDelete: 
   return (
     <Card className="space-y-4 border-destructive/40 bg-destructive/5 p-5">
       <div>
-        <div className="text-xs uppercase tracking-wider text-destructive">Danger zone</div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Permanently deletes the member row and removes their auth account. This cannot be undone. Chats are never deleted: if they have any chat history, they're deactivated instead (access off, chats kept).
-        </p>
+        <div className="text-[15px] font-semibold text-destructive">Delete account</div>
+        <div className="mt-1 space-y-1 text-sm text-muted-foreground">
+          {copy.lines.map((l) => (
+            <p key={l}>{l}</p>
+          ))}
+        </div>
       </div>
       {!open ? (
         <Button variant="destructive" onClick={() => setOpen(true)}>
@@ -631,7 +645,7 @@ function DangerZone({ memberEmail, onDelete }: { memberEmail: string; onDelete: 
           </div>
           <div className="flex gap-2">
             <Button variant="destructive" disabled={!matches || deleting} onClick={handleDelete}>
-              {deleting ? "Deleting…" : "Permanently delete account"}
+              {deleting ? "Moving…" : copy.action}
             </Button>
             <Button variant="ghost" disabled={deleting} onClick={() => { setOpen(false); setConfirmEmail(""); }}>
               Cancel

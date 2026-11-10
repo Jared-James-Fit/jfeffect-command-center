@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Bookmark,
+  CalendarCheck,
   Copy,
   Flag,
   Globe2,
@@ -39,7 +40,12 @@ import { StartPlanDialog, type StartPlanFn } from "@/components/programs/start-p
 import { useServerFn } from "@tanstack/react-start";
 import { startMyProgram } from "@/lib/athlete-programs.functions";
 import { useServiceTier } from "@/lib/service-tier";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { programProgressLine } from "@/lib/my-program";
+import { todayLocalISO } from "@/lib/today";
+import { programName } from "@/components/workouts/program-roadmap";
+import { ManageProgramSheet } from "./manage-program-sheet";
+import { useMyCurrentProgram } from "./use-my-program";
 import {
   authorHandle,
   goalLabel,
@@ -107,13 +113,19 @@ export function ProgramDetailPage({
 
 function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
   const navigate = useNavigate();
-  const { isSelfServe } = useServiceTier();
+  const { isSelfServe, clientId } = useServiceTier();
   const { isImpersonating } = useClientImpersonation();
+  const userId = usePortalUserId();
   const { share, copy, remove, moderate } = useProgramActions();
   const startFn = useServerFn(startMyProgram);
   const [reporting, setReporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [managing, setManaging] = useState(false);
+  // is this the program on their calendar? (started from it, still running)
+  const current = useMyCurrentProgram(p.is_mine ? clientId : null, userId);
+  const running =
+    p.is_mine && current.origin.origin.kind === "own" && current.origin.origin.programId === p.id && !!current.roadmap;
   // "Save a copy and start" lands here on the new copy: open the days picker once the tier is known
   const autoOpened = useRef(false);
   useEffect(() => {
@@ -128,7 +140,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
     if (preview) return toast.message("Preview only: this is how it looks to them.");
     try {
       const id = await copy.mutateAsync(p.id);
-      toast.success(p.is_mine ? "Copied" : "Saved to your programs");
+      toast.success(p.is_mine ? "Duplicated. It's in My programs." : "Saved to My programs. It's your copy to change.");
       navigate({
         to: "/portal/programs/$programId",
         params: { programId: id },
@@ -237,7 +249,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
           />
           <div className="min-w-0">
             <div className="truncate text-[14px] font-medium">
-              {p.is_mine ? "You" : authorHandle(p.author)}
+              {p.is_mine ? (p.forked_from ? "Your copy" : "Built by you") : authorHandle(p.author)}
             </div>
             <div className="text-[13px] text-muted-foreground">{programMeta(p)}</div>
           </div>
@@ -287,7 +299,24 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
         {/* the one main action */}
         {p.is_mine ? (
           <div className="space-y-3">
-            {isSelfServe ? (
+            {running ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5 text-[14px]">
+                  <CalendarCheck className="h-4 w-4 shrink-0" aria-hidden />
+                  It's on your calendar. Edits reach the workouts you haven't done.
+                </div>
+                <div className="flex gap-2">
+                  <Button asChild className="h-12 flex-1 text-[16px]">
+                    <Link to="/portal/workouts">Open workouts</Link>
+                  </Button>
+                  {isSelfServe && current.origin.owned && (
+                    <Button variant="outline" className="h-12 flex-1 text-[16px]" onClick={() => setManaging(true)}>
+                      Manage
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : isSelfServe ? (
               <Button
                 className="h-12 w-full text-[16px]"
                 onClick={() => (preview ? null : setStarting(true))}
@@ -376,6 +405,21 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
       </div>
 
       <ReportSheet kind="program" targetId={p.id} open={reporting} onOpenChange={setReporting} />
+      {running && current.roadmap && current.origin.owned && (
+        <ManageProgramSheet
+          open={managing}
+          onOpenChange={setManaging}
+          name={programName(current.roadmap.program)}
+          progressLine={programProgressLine({
+            programWeek: current.roadmap.programWeek,
+            totalWeeks: current.roadmap.totalWeeks,
+            start: current.roadmap.start,
+            end: current.roadmap.end,
+            today: todayLocalISO(),
+          })}
+          origin={current.origin}
+        />
+      )}
       <StartPlanDialog
         plan={starting ? startPlan : null}
         open={starting}
@@ -389,6 +433,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
             <AlertDialogDescription>
               It leaves your programs and the crew. Workouts you already logged stay in your
               history, and copies other people saved stay theirs.
+              {running ? " It stays on your calendar as it is until you end it from Manage." : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

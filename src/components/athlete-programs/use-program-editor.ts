@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
@@ -16,6 +18,8 @@ import {
   usableBackup,
   type DraftBackup,
 } from "@/lib/athlete-program-draft";
+import { syncRunningProgram } from "@/lib/athlete-programs.functions";
+import { savedEditLine } from "@/lib/my-program";
 
 export type SaveResult = { ok: true } | { ok: false; at: "title" | "days" | number | null };
 
@@ -63,6 +67,8 @@ function clearBackup(key: string | null) {
 export function useProgramEditor(initial: ProgramDraft, base: string | null): ProgramEditor {
   const navigate = useNavigate();
   const { save: saveMutation } = useProgramActions();
+  const syncRunning = useServerFn(syncRunningProgram);
+  const qc = useQueryClient();
   const { user } = useAuth();
   const key = user?.id ? draftBackupKey(user.id, initial.id ?? null) : null;
   const editing = !!initial.id;
@@ -135,8 +141,35 @@ export function useProgramEditor(initial: ProgramDraft, base: string | null): Pr
       dirtyRef.current = false;
       clearBackup(key);
       setDirty(false);
-      toast.success(editing ? "Saved" : "Program saved. Share it or start it from here.");
       navigate({ to: "/portal/programs/$programId", params: { programId: id }, replace: editing });
+      if (!editing) {
+        toast.success("Program saved to My programs. Start it or share it from here.");
+        return { ok: true };
+      }
+      // a program on their calendar: the workouts they haven't done follow the edit
+      try {
+        const r = await syncRunning({ data: { programId: id } });
+        if (!r.running) {
+          toast.success("Saved");
+          return { ok: true };
+        }
+        void qc.invalidateQueries();
+        toast.success(savedEditLine(r));
+        if (r.trainingDays > 0 && r.daysPerWeek !== r.trainingDays) {
+          toast.warning(
+            `It has ${r.daysPerWeek} workouts a week now and you train ${r.trainingDays} days. Pick ${r.daysPerWeek} training days so each one has a day.`,
+            {
+              duration: 12000,
+              action: {
+                label: "Set days",
+                onClick: () => navigate({ to: "/portal/workouts", search: { days: 1 } } as any),
+              },
+            },
+          );
+        }
+      } catch (e) {
+        toast.warning(programError(e, "Saved, but your calendar didn't update. Save again to retry."));
+      }
       return { ok: true };
     } catch (e) {
       toast.error(programError(e, "Couldn't save it. Try again."));

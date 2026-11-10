@@ -106,6 +106,8 @@ export function StartPlanDialog({
   const daysReady = perWeek ? short === 0 : true;
   const changesSchedule = mine.length > 0 && days.length > 0 && days.join() !== mine.join();
   const preview = useMemo(() => weekOnePreview(startDate, days), [startDate, days]);
+  // starting the plan they're already running is starting it over
+  const sameAgain = !!replaceName && replaceName.trim().toLowerCase() === title.trim().toLowerCase();
 
   const submit = async (confirmReplace = false) => {
     if (!plan || !daysReady) return;
@@ -227,15 +229,24 @@ export function StartPlanDialog({
       <AlertDialog open={!!replaceName} onOpenChange={(o) => !o && setReplaceName(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Switch plans?</AlertDialogTitle>
+            <AlertDialogTitle>{sameAgain ? "Start over from week 1?" : "Switch plans?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              You're running <strong>{replaceName}</strong>. Starting <strong>{title}</strong> ends it. Every workout
-              you've logged stays in your history and PRs.
+              {sameAgain ? (
+                <>
+                  <strong>{title}</strong> starts again from week 1 on the date you picked. Every workout you've logged
+                  stays in your history and PRs.
+                </>
+              ) : (
+                <>
+                  You're running <strong>{replaceName}</strong>. Starting <strong>{title}</strong> ends it. Every
+                  workout you've logged stays in your history and PRs.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep current</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void submit(true)}>Switch plan</AlertDialogAction>
+            <AlertDialogAction onClick={() => void submit(true)}>{sameAgain ? "Start over" : "Switch plan"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

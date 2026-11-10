@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bookmark, Globe2, Lock, Play } from "lucide-react";
+import { Bookmark, CalendarCheck, Globe2, Lock, Play } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   authorHandle,
@@ -9,15 +9,23 @@ import {
   type ProgramCard,
 } from "@/lib/athlete-programs";
 
-/** One program in a list: what it is, who made it, how many people took it. */
+/**
+ * One program in a list: what it is, who made it, how many people took it.
+ * In your own list (`showAuthor` off) it says whether it's on your calendar,
+ * shared or private, and whose program a copy came from.
+ */
 export function ProgramListCard({
   program: p,
   showAuthor = true,
+  running = false,
 }: {
   program: ProgramCard;
   showAuthor?: boolean;
+  /** it's the program on your calendar */
+  running?: boolean;
 }) {
   const tags = [goalLabel(p.goal), levelLabel(p.level)].filter(Boolean) as string[];
+  const copiedFrom = !showAuthor && p.forked_from?.author ? authorHandle(p.forked_from.author) : null;
   return (
     <Link
       to="/portal/programs/$programId"
@@ -29,7 +37,11 @@ export function ProgramListCard({
           <div className="truncate text-[16px] font-semibold">{p.title}</div>
           <div className="mt-0.5 text-[13px] text-muted-foreground">{programMeta(p)}</div>
         </div>
-        {p.is_mine && (
+        {running ? (
+          <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-foreground px-2 py-0.5 text-[11px] font-medium text-background">
+            <CalendarCheck className="h-3 w-3" aria-hidden /> On your calendar
+          </span>
+        ) : p.is_mine && (
           <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
             {p.hidden ? (
               "Taken down"
@@ -45,6 +57,9 @@ export function ProgramListCard({
           </span>
         )}
       </div>
+      {copiedFrom && (
+        <div className="mt-0.5 truncate text-[13px] text-muted-foreground">Copied from {copiedFrom}</div>
+      )}
       {p.day_titles.length > 0 && (
         <div className="mt-2 truncate text-[13px]">{p.day_titles.join(" · ")}</div>
       )}

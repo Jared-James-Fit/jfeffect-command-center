@@ -99,3 +99,63 @@ export const startMyProgram = createServerFn({ method: "POST" })
 
     return { conflict: false as const, blockId: blockId ?? null, days, unplaced };
   });
+
+/**
+ * After a member saves a program they're running, the workouts on their
+ * calendar they haven't touched follow it (athlete_program_sync_running, as
+ * the member: past, started and logged workouts never change), then any new
+ * workouts go onto their training days and get the cardio plan's session.
+ * `running: false` when the program isn't on their calendar.
+ */
+export const syncRunningProgram = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ programId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: res, error } = await (supabase as any).rpc("athlete_program_sync_running", {
+      _id: data.programId,
+    });
+    if (error) throw new Error(error.message);
+    if (!res) return { running: false as const };
+    const r = res as {
+      client_id: string;
+      updated: number;
+      added: number;
+      removed: number;
+      kept: number;
+      days_per_week: number;
+    };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: client } = await supabaseAdmin
+      .from("clients")
+      .select("committed_training_days")
+      .eq("id", r.client_id)
+      .maybeSingle();
+    const trainingDays = normalizeTrainingDays((client as any)?.committed_training_days).length;
+    let unplaced = 0;
+    if (r.added || r.removed) {
+      try {
+        const { realignClientToCommittedDays } = await import("@/lib/schedule-bulk.functions");
+        const placed = await realignClientToCommittedDays({
+          clientId: r.client_id,
+          userId,
+          role: "client",
+          includePinned: false,
+        });
+        unplaced = placed.unplaced ?? 0;
+        await (supabaseAdmin as any).rpc("program_cardio_sync", { p_client: r.client_id });
+      } catch (e) {
+        console.error("[syncRunningProgram] schedule failed", e);
+      }
+    }
+    return {
+      running: true as const,
+      updated: r.updated,
+      added: r.added,
+      removed: r.removed,
+      kept: r.kept,
+      daysPerWeek: r.days_per_week,
+      trainingDays,
+      unplaced,
+    };
+  });
