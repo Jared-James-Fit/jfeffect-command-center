@@ -22,7 +22,7 @@ export const getMyProfileAndGoalsFn = createServerFn({ method: "GET" })
     const { data: client } = await supabase
       .from("clients")
       .select(
-        "id, first_name, last_name, preferred_name, full_name, email, phone, date_of_birth, timezone, height_cm, preferred_height_unit, address, city, province, postal_code, country, emergency_contact_name, emergency_contact_phone, status, account_status, coaching_type, coaching_package, assigned_coach_id, start_date, created_at, info_last_updated_at, info_update_requested, goals, bodyweight_goal_value, bodyweight_goal_unit",
+        "id, first_name, last_name, preferred_name, full_name, email, phone, date_of_birth, timezone, height_cm, preferred_height_unit, address, city, province, postal_code, country, emergency_contact_name, emergency_contact_phone, status, account_status, archived, service_tier, last_signed_in_at, coaching_type, coaching_package, assigned_coach_id, start_date, created_at, info_last_updated_at, info_update_requested, goals, bodyweight_goal_value, bodyweight_goal_unit",
       )
       .eq("user_id", userId)
       .maybeSingle();
@@ -61,7 +61,7 @@ export const getAdminClientProfileAndGoalsFn = createServerFn({ method: "GET" })
       context.supabase
         .from("clients")
         .select(
-          "id, first_name, last_name, preferred_name, full_name, email, phone, date_of_birth, timezone, height_cm, preferred_height_unit, address, city, province, postal_code, country, emergency_contact_name, emergency_contact_phone, status, account_status, coaching_type, coaching_package, assigned_coach_id, start_date, created_at, info_last_updated_at, goals, bodyweight_goal_value, bodyweight_goal_unit",
+          "id, first_name, last_name, preferred_name, full_name, email, phone, date_of_birth, timezone, height_cm, preferred_height_unit, address, city, province, postal_code, country, emergency_contact_name, emergency_contact_phone, status, account_status, archived, service_tier, last_signed_in_at, coaching_type, coaching_package, assigned_coach_id, start_date, created_at, info_last_updated_at, goals, bodyweight_goal_value, bodyweight_goal_unit",
         )
         .eq("id", data.clientId)
         .maybeSingle(),

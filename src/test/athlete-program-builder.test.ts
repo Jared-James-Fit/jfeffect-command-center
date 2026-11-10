@@ -212,8 +212,10 @@ describe("program builder: the phone layout", () => {
   });
 
   it("says it's best on a computer, once, without blocking anyone", () => {
-    expect(mobile).toContain("Best on a computer");
-    expect(mobile).toContain('aria-label="Hide this tip"');
+    const tip = read("src/components/best-on-computer-tip.tsx");
+    expect(tip).toContain("Best on a computer");
+    expect(tip).toContain('aria-label="Hide this tip"');
+    expect(mobile).toContain("<BestOnComputerTip storageKey={TIP_KEY}>");
   });
 
   it("its action bar steps aside for the keyboard", () => {
@@ -221,5 +223,37 @@ describe("program builder: the phone layout", () => {
     expect(read("src/styles.css")).toContain(
       'html[data-keyboard-open="true"] [data-hide-on-keyboard]',
     );
+  });
+});
+
+describe("coach builder: the phone layout", () => {
+  const read = (p: string) => readFileSync(p, "utf8");
+  const editor = read("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx");
+
+  it("a phone gets the canvas full width, with the tip and no desktop tools", () => {
+    expect(editor).toContain("const phone = useIsMobileNow();");
+    expect(editor).toContain("const zoom = phone ? 1 : zoomPref;");
+    expect(editor).toContain('<BestOnComputerTip storageKey="jf.coach-builder.desktop-tip">');
+    // the drag-and-drop library sidebar is desktop only
+    expect(editor).toMatch(/\{!phone && \(\s*<ExerciseLibraryPanel/);
+    expect(editor).toContain("<BuilderPhoneContext.Provider value={phone}>");
+  });
+
+  it("one week at a time on a phone, without changing the desktop choice", () => {
+    expect(editor).toContain('const view: "block" | "week" = phone ? "week" : viewPref;');
+    expect(editor).toContain("writePos({ view: viewPref, activeIdx: idx })");
+  });
+
+  it("exercises are added and swapped from a searchable sheet, never the long dropdown", () => {
+    expect(editor).toContain("function PhoneExercisePickerSheet(");
+    expect(editor).toContain("<PhoneAddExerciseButton");
+    expect(editor).toContain(
+      'title={row.exercise_id || row.exercise_name_override ? "Swap exercise" : "Pick an exercise"}',
+    );
+  });
+
+  it("a row's ⋯ never opens the card under it", () => {
+    expect(editor).toContain("if (collapsed && !inRowMenu(e.target))");
+    expect(editor).toContain('<DropdownMenuContent align="end" className="w-52" data-row-menu>');
   });
 });
