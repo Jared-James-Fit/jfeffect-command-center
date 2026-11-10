@@ -34,7 +34,7 @@ describe("Copy ChatGPT prompt (Quick Paste)", () => {
     expect(p).toContain("- Meals per day: 5");
     expect(p).toContain("TRAINING TIME RULE: Trains in the evening");
     expect(p).toContain('"Meal X (Pre-Workout)"');
-    expect(p).toContain("TARGETS (match each menu's Daily Total");
+    expect(p).toContain("TARGETS (land each menu's Daily Total");
     expect(p).toContain("Calories: 2200");
     // the details come before the format rules, like the coach's old template
     expect(p.indexOf("CLIENT DETAILS")).toBeLessThan(p.indexOf("FORMAT RULES"));
@@ -44,7 +44,7 @@ describe("Copy ChatGPT prompt (Quick Paste)", () => {
     const p = quickPastePrompt({ client: "David McIntyre", qas: QAS, targetsText: null });
     expect(p).toContain("- Phase / goal: Lose body fat");
     expect(p).toContain("- Daily calorie target: (fill in for each day-type menu)");
-    expect(p).not.toContain("TARGETS (match");
+    expect(p).not.toContain("TARGETS (land");
     expect(p).not.toContain("see targets");
   });
 

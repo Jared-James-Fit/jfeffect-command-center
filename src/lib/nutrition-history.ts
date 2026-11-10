@@ -324,7 +324,7 @@ export function freeMealRule(wants: boolean | null, pick: string): string {
     ].join(" ");
   }
   if (wants === false) {
-    return "No free meal: the client chose a fully planned High Day. The prepped meals stay as they are, and the extra carbs come as whole extra portions or a carb snack they enjoy from their list (e.g. a bagel, cereal, fruit, an extra rice portion) so it still feels like a reward.";
+    return "No free meal: the client chose a fully planned High Day. The prepped meals stay as they are, and the extra carbs come as whole extra containers or a carb snack they enjoy from their list (e.g. a bagel, cereal, fruit, one extra container) so it still feels like a reward.";
   }
   return "";
 }

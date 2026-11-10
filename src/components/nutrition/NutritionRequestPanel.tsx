@@ -747,13 +747,13 @@ function TextBlock({ title, text }: { title: string; text: string }) {
   );
 }
 
-/** One line on how the plan shops and preps: the grocery list size, and any food weighed differently from meal to meal. */
+/** One line on how the plan shops and preps: the grocery list size, and anything weighed differently from meal to meal (prepDrift). */
 function PrepLine({ foods, drift }: { foods: PlanFoodStats; drift: PrepDrift[] }) {
   if (!foods.total) return null;
   const heavy = foods.total > LEAN_GROCERY_LIST;
   const parts = [
     `${foods.total} foods to shop for${foods.days > 1 ? `, ${foods.everyDay} every day` : ""}`,
-    drift.length ? `${drift.length} ${drift.length === 1 ? "food is" : "foods are"} weighed differently: ${drift.slice(0, 2).map(prepDriftLine).join("; ")}` : "every weighed portion is one amount",
+    drift.length ? `weighed differently between meals: ${drift.slice(0, 2).map(prepDriftLine).join("; ")}${drift.length > 2 ? ` and ${drift.length - 2} more` : ""}` : "every main meal is the same container",
   ];
   return (
     <p

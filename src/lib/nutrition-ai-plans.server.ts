@@ -342,7 +342,8 @@ export async function runPlan(
     const mealPlanText = await withPrepFix(
       cleanAiText(m.text),
       mealPrompt,
-      (prompt) => nutritionCall(sb, progress, save, "nutrition_write", "fix", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
+      // each round its own key, so a resumed run reuses the answers it already has
+      (prompt, round) => nutritionCall(sb, progress, save, "nutrition_write", round ? `fix${round + 1}` : "fix", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
       parseAiTargets(targetsText),
     );
     const modelId = `targets ${t.model} · meals ${m.model}`;
@@ -378,28 +379,42 @@ export async function runPlan(
 }
 
 /**
- * A written plan is checked in code, not trusted to the model: a weighed food
- * at different amounts between meals or day types (prepDrift), a menu whose
+ * A written plan is checked in code, not trusted to the model: main meals that
+ * aren't one container at the same grams, or a weighed food at different
+ * amounts between meals or day types (prepDrift), a menu whose
  * Daily Total is off its targets or whose meals don't add up to it
- * (planTotalsIssues). One that fails gets one targeted fix, kept only when it
+ * (planTotalsIssues). One that fails gets a targeted fix (two rounds at most), each kept only when it
  * still reads as the same plan (same menus, a Daily Total) with fewer
  * problems. A failed fix never costs the plan already written. Exported for tests.
  */
-export async function withPrepFix(draft: string, userPrompt: string, ask: (prompt: string) => Promise<string>, targets: DayTargets[] = []): Promise<string> {
+export async function withPrepFix(
+  draft: string,
+  userPrompt: string,
+  ask: (prompt: string, round: number) => Promise<string>,
+  targets: DayTargets[] = [],
+  rounds = 2,
+): Promise<string> {
   const issues = (text: string) => ({ drift: prepDrift(planMenus(text)), totals: targets.length ? planTotalsIssues(text, targets) : [] });
-  const before = issues(draft);
-  const count = (x: ReturnType<typeof issues>) => x.drift.length + x.totals.length;
-  if (!count(before)) return draft;
-  const fixed = cleanAiText(
-    await ask(mealPrepFixPrompt(userPrompt, draft, before.drift, before.totals)).catch((e) => {
-      // still thinking: the run carries on next request; any other failure keeps the draft
-      if (e instanceof WaitingForModel) throw e;
-      return "";
-    }),
-  );
-  if (!fixed || !revisionLooksRight("meals", draft, fixed)) return draft;
-  if (planMenus(fixed).length !== planMenus(draft).length) return draft;
-  return count(issues(fixed)) < count(before) ? fixed : draft;
+  // prep comes first: a fix that evens out the containers but leaves a total a little off still wins
+  const count = (x: ReturnType<typeof issues>) => x.drift.length * 3 + x.totals.length;
+  let current = draft;
+  for (let round = 0; round < rounds; round++) {
+    const before = issues(current);
+    if (!count(before)) break;
+    const fixed = cleanAiText(
+      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals), round).catch((e) => {
+        // still thinking: the run carries on next request; any other failure keeps the draft
+        if (e instanceof WaitingForModel) throw e;
+        return "";
+      }),
+    );
+    if (!fixed || !revisionLooksRight("meals", current, fixed)) break;
+    if (planMenus(fixed).length !== planMenus(current).length) break;
+    const after = issues(fixed);
+    if (after.drift.length > before.drift.length || count(after) >= count(before)) break;
+    current = fixed;
+  }
+  return current;
 }
 
 /* ------------------------------------------------------------------------ */

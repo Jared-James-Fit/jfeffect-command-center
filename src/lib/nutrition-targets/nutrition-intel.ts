@@ -439,14 +439,15 @@ export function planTotalsIssues(planText: string, targets: DayTargets[]): strin
     const target = byType.get(normalizeDayLabel(menu.label) ?? menu.label.toLowerCase());
     if (!target || totalKcal == null) continue;
     const want = target.kcal ?? macroKcal(target);
-    if (want && Math.abs(totalKcal - want) / want > 0.03)
+    // meal prep comes first (MEAL_PLAN_PROMPT rule 2c): within about 5% is on target
+    if (want && Math.abs(totalKcal - want) / want > 0.05)
       out.push(
         `${menu.label}: Daily Total is ${Math.round(totalKcal)} kcal against a target of ${want} kcal`,
       );
     if (
       target.protein &&
       total.protein != null &&
-      Math.abs(total.protein - target.protein) / target.protein > 0.05
+      Math.abs(total.protein - target.protein) > Math.max(10, target.protein * 0.05)
     )
       out.push(`${menu.label}: ${total.protein} g protein against a target of ${target.protein} g`);
   }
