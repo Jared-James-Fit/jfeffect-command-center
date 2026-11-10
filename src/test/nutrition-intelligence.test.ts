@@ -517,7 +517,7 @@ describe("routing: the targets are a coaching decision, the meal plan is writing
     const pipeline = readFileSync("src/lib/program-intel/pipeline.server.ts", "utf8");
     expect(pipeline).toContain("stagedCall({");
     const sql = readFileSync(
-      "supabase/migrations/20270223090000_nutrition_plans_openai_background.sql",
+      "supabase/migrations/20270224090000_nutrition_plans_openai_background.sql",
       "utf8",
     );
     expect(sql).toContain("add column if not exists progress jsonb");
