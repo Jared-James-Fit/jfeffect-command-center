@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, ClipboardList, Copy, Dumbbell, Footprints, Loader2, MessageSquarePlus, PencilLine, RefreshCw, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Copy, Loader2, PencilLine, RefreshCw, Send, Sparkles, Undo2, Wand2 } from "lucide-react";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { clientPlansQuery, publishAiPlan } from "@/lib/nutrition-targets/plan-publish";
@@ -15,14 +15,15 @@ import { nextPlanDates, planDate, planPeriod, splitPlans } from "@/lib/nutrition
 import { todayLocalISO } from "@/lib/today";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Accordion } from "@/components/ui/accordion";
+import { CardHeader, DayRows, MoreButton, Section, StatusChip, type ChipTone } from "@/components/nutrition/nutrition-ui";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
 import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, answerFor, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
-import { WorkoutMealsSelect, workoutMealsLabel } from "@/components/nutrition/WorkoutMealsSelect";
+import { WorkoutMealsSelect } from "@/components/nutrition/WorkoutMealsSelect";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -106,38 +107,6 @@ function structureFor(labels: string[]) {
   return labels.length === 1 ? "Same Every Day" : "Custom";
 }
 
-function CopyBlock({ title, text, icon, defaultOpen = true }: { title: string; text: string; icon: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      toast.success(`${title} copied`);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      toast.error("Couldn't copy — long-press the text to copy it");
-    }
-  };
-  return (
-    <div className="overflow-hidden rounded-xl border border-border bg-secondary/20">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <button type="button" onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          {icon}
-          <span className="truncate text-xs font-bold uppercase tracking-widest">{title}</span>
-          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open && "rotate-180")} />
-        </button>
-        <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1.5" onClick={copy}>
-          {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      {open && (
-        <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap border-t border-border bg-background/60 px-3 py-2.5 font-mono text-[12px] leading-relaxed">{text}</pre>
-      )}
-    </div>
-  );
-}
-
 export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listNutritionRequestsFn);
@@ -157,7 +126,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
-  const [showAnswers, setShowAnswers] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [sendPhase, setSendPhase] = useState<string>(AUTO);
   const [regenPhase, setRegenPhase] = useState<string>(AUTO);
   const [sendWorkoutMeals, setSendWorkoutMeals] = useState<WorkoutMealsMode>("auto");
@@ -224,6 +194,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         f: d.fats as number | null,
         steps: c?.steps ?? null,
         cardio: !c ? "—" : c.none ? "none" : [c.minutes ? `${c.minutes} min` : null, c.kcal ? `~${c.kcal} kcal` : null].filter(Boolean).join(" · ") || "—",
+        cardioMin: c && !c.none ? c.minutes : null,
+        noCardio: !!c?.none,
       };
     });
   }, [prefill, plan?.targets_text]);
@@ -363,323 +335,337 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  const statusChip = !latest
-    ? data?.requestedAt ? { label: "Sent · waiting on client", tone: "sky" } : { label: "Not requested", tone: "muted" }
-    : !submitted ? { label: "Client filling it out", tone: "sky" }
-    : revising ? { label: "Updating the plan…", tone: "amber" }
-    : plan?.applied_at && lastChangeAt && lastChangeAt > plan.applied_at ? { label: "Changed · publish again", tone: "amber" }
-    : plan?.applied_at ? { label: `Published ${new Date(plan.applied_at).toLocaleDateString([], { month: "short", day: "numeric" })}`, tone: "emerald" }
-    : plan?.status === "ready" ? { label: "AI plan ready", tone: "amber" }
-    : plan?.status === "error" ? { label: "AI failed", tone: "rose" }
-    : { label: "AI is building the plan…", tone: "amber" };
-  const tones: Record<string, string> = {
-    muted: "border-border text-muted-foreground",
-    sky: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    rose: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  };
+  // What the card is about right now. A plan waiting on the coach opens its review; a
+  // published one is one line until the coach asks to see it again.
+  const ready = !!submitted && !!plan && (plan.status === "ready" || revising);
+  const changedSincePublish = !!(plan?.applied_at && lastChangeAt && lastChangeAt > plan.applied_at);
+  const published = !!plan?.applied_at && !changedSincePublish;
+  const reviewOpen = ready && (!published || showDetails);
+  const writing = !!submitted && !revising && (!plan || plan.status === "generating" || plan.status === "pending");
+  const answered = latest?.answers.filter((a) => a.value).length ?? 0;
+
+  const status: { tone: ChipTone; label: string } | null = isLoading
+    ? null
+    : !latest
+      ? data?.requestedAt ? { tone: "neutral", label: `Waiting on ${firstName}` } : null
+      : !submitted ? { tone: "neutral", label: "Filling it in" }
+      : revising ? { tone: "neutral", label: "Updating…" }
+      : plan?.status === "error" ? { tone: "error", label: "Didn't finish" }
+      : changedSincePublish ? { tone: "attention", label: "Changed · publish again" }
+      : published ? { tone: "done", label: `Published ${shortDate(plan!.applied_at)}` }
+      : plan?.status === "ready" ? { tone: "attention", label: "Ready to review" }
+      : { tone: "neutral", label: "Writing…" };
+
+  const extraFor = (r: (typeof preview)[number]) =>
+    [r.steps != null ? `${r.steps.toLocaleString()} steps` : null, r.noCardio ? "no cardio" : r.cardioMin ? `${r.cardioMin} min cardio` : null].filter(Boolean).join(" · ") || null;
 
   return (
-    <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
-              <Sparkles className="h-4 w-4 text-primary" /> Nutrition Plan
-            </h3>
-            <Badge variant="outline" className={cn("text-[10px]", tones[statusChip.tone])}>{statusChip.label}</Badge>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isLoading ? "Loading…"
-              : submitted ? `Submitted ${fmt(latest!.submitted_at)} · AI builds the targets and a paste-ready meal plan automatically.`
-              : "1 · Send the Nutrition Update → 2 · AI builds targets, meal plan, steps + cardio → 3 · Review, edit and publish. Or build it by hand."}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Sent automatically every month while they have an active nutrition plan: the Monday that starts the final week, 9am their time.
-          </p>
-          {data?.trainingPattern && (
-            <p className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground" title="From their logged workouts in the last 8 weeks. Used to place Pre/Post-Workout meals when their form answer is 'It varies' or blank.">
-              <Dumbbell className="mt-px h-3 w-3 shrink-0 text-primary" />
-              <span>Trains: {data.trainingPattern.summary}</span>
-            </p>
-          )}
-        </div>
-        <div className="grid w-full shrink-0 grid-cols-3 gap-2 sm:flex sm:w-auto">
+    <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6" data-nutrition-update>
+      <CardHeader
+        icon={Sparkles}
+        title="Nutrition update"
+        chip={status ? <StatusChip tone={status.tone}>{status.label}</StatusChip> : null}
+        actions={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-1.5" title="Copy prompts, answers and the plan to do it by hand">
-                <Copy className="h-4 w-4" /> Copy
-              </Button>
+              <MoreButton label="Nutrition update options" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel className="text-xs">Prompts to run it yourself (ChatGPT / Claude)</DropdownMenuLabel>
-              {submitted ? (
-                <>
-                  <DropdownMenuItem onClick={() => copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest!.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null }), "Targets prompt")}>
-                    1 · Targets + steps + cardio prompt <span className="ml-auto text-[10px] text-muted-foreground">all context</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!plan?.targets_text}
-                    onClick={() => plan?.targets_text && copyText(manualMealPlanPrompt(latest!.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan)), "Meal plan prompt")}
-                  >
-                    2 · Meal plan prompt <span className="ml-auto text-[10px] text-muted-foreground">with targets</span>
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <DropdownMenuItem disabled>Prompts with answers unlock when the client submits</DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => copyText(TARGETS_PROMPT, "Targets formula")}>Blank targets formula</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copyText(MEAL_PLAN_PROMPT, "Meal plan formula")}>Blank meal plan formula</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs">Copy text</DropdownMenuLabel>
-              <DropdownMenuItem disabled={!submitted} onClick={() => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers")}>
-                Client answers
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem onClick={() => setSendOpen(true)}>
+                <Send className="mr-2 h-4 w-4" /> {latest || data?.requestedAt ? "Send a new request" : "Send request"}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={!plan?.targets_text} onClick={() => plan?.targets_text && copyText(plan.targets_text, "AI targets")}>AI targets + steps + cardio</DropdownMenuItem>
-              <DropdownMenuItem disabled={!plan?.meal_plan_text} onClick={() => plan?.meal_plan_text && copyText(plan.meal_plan_text, "AI meal plan")}>AI meal plan (paste-ready)</DropdownMenuItem>
-              <DropdownMenuItem disabled={!plan?.previous_plan} onClick={() => copyText(previousPlanText(plan?.previous_plan), "Last plan + results")}>Last plan + results</DropdownMenuItem>
-              <DropdownMenuItem disabled={!plan?.previous_plan} onClick={() => copyText(previousMealsText(plan?.previous_plan), "Last plan's meals")}>Last plan's meals</DropdownMenuItem>
-              <DropdownMenuItem disabled={!data?.cardioText} onClick={() => data?.cardioText && copyText(data.cardioText, "Current cardio")}>Current cardio</DropdownMenuItem>
-              <DropdownMenuItem disabled={!data?.programText} onClick={() => data?.programText && copyText(data.programText, "Training program")}>Training program (block + week)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setManualOpen(true)}>
+                <PencilLine className="mr-2 h-4 w-4" /> Build a plan by hand
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => copyText(everything(), "Everything")} className="font-semibold">
-                Everything in one block
+              <DropdownMenuItem onClick={() => setCopyOpen(true)}>
+                <Copy className="mr-2 h-4 w-4" /> Copy prompts and text…
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" className="gap-1.5" onClick={() => setManualOpen(true)} title="Build or paste a plan yourself (targets, meals, steps and cardio)">
-            <PencilLine className="h-4 w-4" /> Build
-          </Button>
-          <Button className="gap-2 bg-primary font-semibold" onClick={() => setSendOpen(true)}>
-            <Send className="h-4 w-4" /> {latest || data?.requestedAt ? "New request" : "Send request"}
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
-      {submitted && !revising && (!plan || plan.status === "generating" || plan.status === "pending") && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-3 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-          AI is calculating targets and writing the meal plan. Usually a minute or two, and you can leave this page.
-        </div>
-      )}
-
-      {submitted && plan?.status === "error" && (
-        <div className="flex flex-col gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 px-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <span>AI couldn't finish: <span className="text-muted-foreground">{plan.error ?? "unknown error"}</span></span>
-          <Button size="sm" variant="outline" onClick={regenerate} disabled={regenerating}>
-            <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", regenerating && "animate-spin")} /> Try again
-          </Button>
-        </div>
-      )}
-
-      {submitted && plan && (plan.status === "ready" || revising) && (
+      {/* One line for where it stands, and the one thing to do next when there is one. */}
+      {isLoading ? (
+        <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+      ) : !latest && !data?.requestedAt ? (
         <div className="space-y-3">
-          <LastPlanSummary previous={plan.previous_plan ?? null} />
-          {preview.length > 0 && <PlanPreview rows={preview} foods={prefill ? planFoodStats(prefill.days) : null} drift={prefill ? prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes }))) : null} checks={checks} />}
-          {plan.targets_text && <CopyBlock title="AI targets" text={plan.targets_text} icon={<ClipboardList className="h-4 w-4 text-primary" />} />}
-          {plan.meal_plan_text && (
-            <CopyBlock title="Meal plan · paste-ready" text={plan.meal_plan_text} icon={<Wand2 className="h-4 w-4 text-primary" />} defaultOpen={false} />
-          )}
-          <div className="space-y-2 rounded-xl border border-border bg-secondary/20 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="plan-change" className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest">
-                <MessageSquarePlus className="h-4 w-4 text-primary" /> Change something
-              </Label>
-              {revisions.length > 0 && !revising && (
-                <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={undoChange} disabled={changing}>
-                  <Undo2 className="h-3.5 w-3.5" /> Undo last change
-                </Button>
-              )}
-            </div>
-            {revising ? (
-              <div className="flex items-start gap-2 text-sm">
-                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-500" />
-                <span>Updating: <span className="text-muted-foreground">“{plan.revise_instructions}”</span></span>
-              </div>
-            ) : (
-              <>
-                {updateFailed && (
-                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-2.5 py-2 text-xs">
-                    Couldn't apply “{plan.revise_instructions}”: <span className="text-muted-foreground">{plan.error}</span>. The plan is unchanged.{" "}
-                    <button type="button" className="font-bold underline" onClick={() => sendChange(plan.revise_instructions ?? "")} disabled={changing}>
-                      Try again
-                    </button>
-                  </div>
-                )}
-                <Textarea
-                  id="plan-change"
-                  rows={3}
-                  maxLength={REVISE_MAX_CHARS}
-                  value={change}
-                  onChange={(e) => setChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      void sendChange();
-                    }
-                  }}
-                  placeholder="Tell the AI what to change, e.g. swap the beef for salmon on rest days · 4 meals instead of 5 · drop training-day carbs by 30 g · no bagels"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" className="gap-1.5 font-bold" onClick={() => sendChange()} disabled={changing || change.trim().length < 3}>
-                    {changing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Update plan
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1.5 text-xs"
-                    disabled={change.trim().length < 3 || !plan.meal_plan_text}
-                    title="The same update as a prompt, to run in ChatGPT or Claude yourself"
-                    onClick={() =>
-                      plan.meal_plan_text &&
-                      copyText(
-                        manualRevisePrompt({
-                          qas: latest!.answers,
-                          targetsText: plan.targets_text ?? "",
-                          mealPlanText: plan.meal_plan_text,
-                          instructions: change,
-                          phase: plan.phase,
-                          workoutMeals: plan.workout_meals ?? null,
-                          history: data?.trainingPattern ?? null,
-                        }),
-                        "Update prompt",
-                      )
-                    }
-                  >
-                    <Copy className="h-3.5 w-3.5" /> Copy as prompt
-                  </Button>
-                  <span className="text-[11px] text-muted-foreground sm:ml-auto">Only what you ask changes; portions rebalance to the targets.</span>
-                </div>
-              </>
-            )}
-            {revisions.length > 0 && (
-              <ol className="space-y-0.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
-                {revisions.slice().reverse().map((r) => (
-                  <li key={r.at} className="truncate" title={r.instructions}>
-                    <span className="font-semibold text-foreground">{fmt(r.at)}</span> · {r.instructions}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-          {(plan.phase || plan.workout_meals) && (
-            <div className="space-y-0.5 text-xs text-muted-foreground">
-              {plan.phase && (
-                <div>Phase used: <span className="font-bold text-foreground">{plan.phase}</span> · {PHASE_GOAL[plan.phase] ?? ""}</div>
-              )}
-              {plan.workout_meals && (
-                <div>Workout meals: <span className="font-bold text-foreground">{workoutMealsLabel(plan.workout_meals)}</span></div>
-              )}
-            </div>
-          )}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {/* Default: one tap updates the client's plan. The editor is there for anything to change by hand. */}
-            <Button className="gap-2 font-bold" onClick={() => setPublishOpen(true)} disabled={!prefill?.days.length || revising}>
-              <Check className="h-4 w-4" /> {plan.applied_at ? "Update plan again" : `Update ${firstName}'s plan`}
+          <p className="text-sm text-muted-foreground">
+            Send {firstName} the Nutrition Update form. The AI writes their targets and meal plan from the answers, ready for you to check. It also goes out by itself in the last week of each plan.
+          </p>
+          <Button variant={currentPlan ? "outline" : "default"} className="w-full gap-2 sm:w-auto" onClick={() => setSendOpen(true)}>
+            <Send className="h-4 w-4" /> Send request
+          </Button>
+        </div>
+      ) : !latest ? (
+        <p className="text-sm text-muted-foreground">
+          Sent {shortDate(data?.requestedAt)}. When {firstName} fills it in, the AI writes the plan here.
+        </p>
+      ) : !submitted ? (
+        <p className="text-sm text-muted-foreground">{firstName} has started the form. The AI writes the plan when they send it.</p>
+      ) : writing ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> Writing the targets and meal plan. A minute or two; you can leave this page.
+        </p>
+      ) : plan?.status === "error" ? (
+        <div className="space-y-3">
+          <p className="text-sm">
+            The AI couldn't finish: <span className="text-muted-foreground">{plan.error ?? "unknown error"}</span>
+          </p>
+          <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={regenerate} disabled={regenerating}>
+            <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Try again
+          </Button>
+        </div>
+      ) : ready ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            {[`${firstName} sent it ${shortDate(latest.submitted_at)}`, plan?.phase].filter(Boolean).join(" · ")}
+          </p>
+          {published && (
+            <Button variant="outline" size="sm" className="h-10 gap-1.5" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails}>
+              {showDetails ? "Hide" : "Details"} <ChevronDown className={cn("h-4 w-4 transition", showDetails && "rotate-180")} />
             </Button>
-            <Button variant="outline" className="gap-2" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length || revising}>
+          )}
+        </div>
+      ) : null}
+
+      {reviewOpen && plan && (
+        <div className="space-y-3">
+          {lastPlanSummary(plan.previous_plan ?? null) && (
+            <p className="text-[13px] text-muted-foreground">
+              <span className="font-medium text-foreground">Last plan:</span> {lastPlanSummary(plan.previous_plan ?? null)}
+            </p>
+          )}
+          {checks.length > 0 && (
+            <div data-coach-checks className="rounded-xl border border-warning/40 px-3 py-2.5 text-[13px]">
+              <div className="flex items-center gap-1.5 font-medium text-warning">
+                <AlertTriangle className="h-4 w-4 shrink-0" /> Check before publishing
+              </div>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
+                {checks.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <DayRows rows={preview.map((r) => ({ label: r.label, kcal: r.kcal, protein: r.p, carbs: r.c, fat: r.f, extra: extraFor(r) }))} />
+          {prefill && <PrepLine foods={planFoodStats(prefill.days)} drift={prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })))} />}
+          {prefill && !prefill.days.length && (
+            <p className="text-[13px] text-warning">The meal plan didn't read as days. Copy it and paste it into Build a plan by hand, or regenerate.</p>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {/* Default: one tap updates the client's plan. The editor is there for anything to change by hand. */}
+            <Button
+              variant={published ? "outline" : "default"}
+              className="h-11 gap-2"
+              onClick={() => setPublishOpen(true)}
+              disabled={!prefill?.days.length || revising}
+            >
+              <Check className="h-4 w-4" /> {published ? "Publish again" : changedSincePublish ? "Publish the changes" : `Update ${firstName}'s plan`}
+            </Button>
+            <Button variant="outline" className="h-11 gap-2" onClick={() => setApplyOpen(true)} disabled={!prefill?.days.length || revising}>
               <PencilLine className="h-4 w-4" /> Review & edit first
             </Button>
-            <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
-              <div className="min-w-0 sm:w-44">
-                <PhaseSelect value={regenPhase} onChange={setRegenPhase} autoLabel="Phase: keep / auto" />
-              </div>
-              <div className="min-w-0 sm:w-52">
-                <WorkoutMealsSelect
-                  value={regenWorkoutMeals ?? plan.workout_meals ?? "auto"}
-                  onChange={setRegenWorkoutMeals}
-                />
-              </div>
-              <Button variant="outline" className="col-span-2 shrink-0 gap-2 sm:col-span-1" onClick={regenerate} disabled={regenerating || revising}>
-                <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Regenerate
-              </Button>
-            </div>
           </div>
-          {prefill && !prefill.days.length && (
-            <p className="text-xs text-amber-600">The meal plan didn't parse into days — copy it and paste it into Add Targets, or regenerate.</p>
-          )}
         </div>
       )}
 
-      {submitted && latest!.answers.length > 0 && (
-        <div className="rounded-xl border border-border">
-          <div className="flex items-center gap-1 pr-1.5">
-            <button
-              type="button"
-              onClick={() => setShowAnswers(!showAnswers)}
-              className="flex min-w-0 flex-1 items-center justify-between px-3 py-2 text-xs font-bold text-muted-foreground"
-            >
-              <span className="truncate">
-                Client answers ({latest!.answers.filter((a) => a.value).length})
-              </span>
-              <ChevronDown
-                className={cn("h-4 w-4 shrink-0 transition", showAnswers && "rotate-180")}
-              />
-            </button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 shrink-0 gap-1.5 text-xs font-bold"
-              title="Copy name, sex, age, height and every answer as one block"
-              onClick={() =>
-                copyText(
-                  nutritionSubmissionSummary({
-                    client: data?.client ?? data?.clientName ?? "Client",
-                    qas: latest!.answers,
-                    phase: plan?.phase ?? data?.requestedPhase ?? null,
-                    submittedAt: latest!.submitted_at,
-                  }),
-                  "Client form",
-                )
-              }
-            >
-              <Copy className="h-3.5 w-3.5" /> Copy all
-            </Button>
-          </div>
-          {showAnswers && (
-            <dl className="space-y-2 border-t border-border px-3 py-3 text-sm">
-              {data?.client && (
-                <div className="rounded-lg bg-muted/40 px-2.5 py-2 text-xs">
-                  {clientBasicsLines(data.client, latest!.answers).map((l) => (
-                    <div key={l}>{l}</div>
-                  ))}
-                </div>
-              )}
-              {latest!.answers.map((a) => (
-                <div key={a.label}>
-                  <dt className="text-[11px] font-semibold text-muted-foreground">{a.label}</dt>
-                  <dd className="whitespace-pre-wrap">{a.value || "—"}</dd>
-                </div>
-              ))}
-            </dl>
+      {submitted && (reviewOpen || !ready) && (
+        <Accordion type="multiple" className="rounded-xl border border-border">
+          {reviewOpen && plan && (
+            <Section value="change" title="Change something" meta={revising ? "Updating…" : revisions.length ? `${revisions.length} made` : null}>
+              <div className="space-y-2">
+                {revising ? (
+                  <p className="flex items-start gap-2 text-sm">
+                    <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                    <span>Updating: <span className="text-muted-foreground">“{plan.revise_instructions}”</span></span>
+                  </p>
+                ) : (
+                  <>
+                    {updateFailed && (
+                      <p className="text-[13px]">
+                        <span className="text-destructive">Couldn't apply “{plan.revise_instructions}”:</span>{" "}
+                        <span className="text-muted-foreground">{plan.error}. The plan is unchanged.</span>{" "}
+                        <button type="button" className="font-medium underline" onClick={() => sendChange(plan.revise_instructions ?? "")} disabled={changing}>
+                          Try again
+                        </button>
+                      </p>
+                    )}
+                    <Textarea
+                      id="plan-change"
+                      rows={3}
+                      maxLength={REVISE_MAX_CHARS}
+                      value={change}
+                      onChange={(e) => setChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          void sendChange();
+                        }
+                      }}
+                      placeholder="e.g. salmon instead of beef on rest days · 4 meals instead of 5 · 30 g fewer carbs on training days"
+                    />
+                    <p className="text-[13px] text-muted-foreground">Only what you ask changes; the portions rebalance to the targets.</p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button variant="outline" className="h-10 gap-1.5" onClick={() => sendChange()} disabled={changing || change.trim().length < 3}>
+                        {changing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Make the change
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="h-10 gap-1.5"
+                        disabled={change.trim().length < 3 || !plan.meal_plan_text}
+                        title="The same change as a prompt, to run in ChatGPT or Claude yourself"
+                        onClick={() =>
+                          plan.meal_plan_text &&
+                          copyText(
+                            manualRevisePrompt({
+                              qas: latest!.answers,
+                              targetsText: plan.targets_text ?? "",
+                              mealPlanText: plan.meal_plan_text,
+                              instructions: change,
+                              phase: plan.phase,
+                              workoutMeals: plan.workout_meals ?? null,
+                              history: data?.trainingPattern ?? null,
+                            }),
+                            "Change prompt",
+                          )
+                        }
+                      >
+                        <Copy className="h-4 w-4" /> Copy as a prompt
+                      </Button>
+                    </div>
+                  </>
+                )}
+                {revisions.length > 0 && (
+                  <div className="space-y-1 border-t border-border pt-2">
+                    <ol className="space-y-0.5 text-[13px] text-muted-foreground">
+                      {revisions.slice().reverse().map((r) => (
+                        <li key={r.at} className="truncate" title={r.instructions}>
+                          <span className="text-foreground">{fmt(r.at)}</span> · {r.instructions}
+                        </li>
+                      ))}
+                    </ol>
+                    {!revising && (
+                      <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" onClick={undoChange} disabled={changing}>
+                        <Undo2 className="h-4 w-4" /> Undo the last change
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Section>
           )}
-        </div>
+          {reviewOpen && plan?.targets_text && (
+            <Section value="targets" title="AI targets">
+              <TextBlock title="AI targets" text={plan.targets_text} />
+            </Section>
+          )}
+          {reviewOpen && plan?.meal_plan_text && (
+            <Section value="meals" title="Meal plan">
+              <TextBlock title="Meal plan" text={plan.meal_plan_text} />
+            </Section>
+          )}
+          {latest.answers.length > 0 && (
+            <Section value="answers" title="Client answers" meta={`${answered} answered`}>
+              <div className="space-y-3">
+                {data?.client && (
+                  <div className="rounded-lg bg-muted px-3 py-2 text-[13px]">
+                    {clientBasicsLines(data.client, latest.answers).map((l) => (
+                      <div key={l}>{l}</div>
+                    ))}
+                  </div>
+                )}
+                <dl className="space-y-2.5">
+                  {latest.answers.map((a) => (
+                    <div key={a.label}>
+                      <dt className="text-[13px] text-muted-foreground">{a.label}</dt>
+                      <dd className="whitespace-pre-wrap text-sm">{a.value || "—"}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <Button
+                  variant="outline"
+                  className="h-10 gap-1.5"
+                  onClick={() =>
+                    copyText(
+                      nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }),
+                      "Client answers",
+                    )
+                  }
+                >
+                  <Copy className="h-4 w-4" /> Copy all answers
+                </Button>
+              </div>
+            </Section>
+          )}
+          {reviewOpen && plan && (
+            <Section value="regenerate" title="Regenerate" meta={plan.phase ?? null}>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Phase</Label>
+                  <PhaseSelect value={regenPhase} onChange={setRegenPhase} autoLabel={plan.phase ? `Keep ${plan.phase}` : "From their answers"} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-muted-foreground">Pre / post-workout meals</Label>
+                  <WorkoutMealsSelect value={regenWorkoutMeals ?? plan.workout_meals ?? "auto"} onChange={setRegenWorkoutMeals} />
+                  {data?.trainingPattern && (
+                    <p className="text-[13px] text-muted-foreground" title="From their logged workouts in the last 8 weeks. Places the pre / post-workout meals when their answer is 'It varies' or blank.">
+                      They train: {data.trainingPattern.summary}
+                    </p>
+                  )}
+                </div>
+                <Button variant="outline" className="h-10 w-full gap-2 sm:w-auto" onClick={regenerate} disabled={regenerating || revising}>
+                  <RefreshCw className={cn("h-4 w-4", regenerating && "animate-spin")} /> Regenerate
+                </Button>
+              </div>
+            </Section>
+          )}
+        </Accordion>
       )}
+
+      <CopyDialog
+        open={copyOpen}
+        onOpenChange={setCopyOpen}
+        items={[
+          { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null }), "Targets prompt") },
+          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyText(manualMealPlanPrompt(latest.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan)), "Meal plan prompt") },
+          { group: "Prompts to run it yourself", label: "Blank targets formula", run: () => copyText(TARGETS_PROMPT, "Targets formula") },
+          { group: "Prompts to run it yourself", label: "Blank meal plan formula", run: () => copyText(MEAL_PLAN_PROMPT, "Meal plan formula") },
+          { group: "Text", label: "Client answers", disabled: !submitted, run: () => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers") },
+          { group: "Text", label: "AI targets, steps and cardio", disabled: !plan?.targets_text, run: () => plan?.targets_text && copyText(plan.targets_text, "AI targets") },
+          { group: "Text", label: "AI meal plan", disabled: !plan?.meal_plan_text, run: () => plan?.meal_plan_text && copyText(plan.meal_plan_text, "AI meal plan") },
+          { group: "Text", label: "Last plan and how it went", disabled: !plan?.previous_plan, run: () => copyText(previousPlanText(plan?.previous_plan), "Last plan + results") },
+          { group: "Text", label: "Last plan's meals", disabled: !plan?.previous_plan, run: () => copyText(previousMealsText(plan?.previous_plan), "Last plan's meals") },
+          { group: "Text", label: "Current cardio", disabled: !data?.cardioText, run: () => data?.cardioText && copyText(data.cardioText, "Current cardio") },
+          { group: "Text", label: "Training program", disabled: !data?.programText, run: () => data?.programText && copyText(data.programText, "Training program") },
+          { group: "Text", label: "Everything in one block", run: () => copyText(everything(), "Everything") },
+        ]}
+      />
 
       <Dialog open={sendOpen} onOpenChange={(o) => !sending && setSendOpen(o)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Send Nutrition Update Request</DialogTitle>
-            <DialogDescription>Lands in the client's messages as a form card. When they submit, AI builds their targets and meal plan here.</DialogDescription>
+            <DialogTitle>Send the Nutrition Update</DialogTitle>
+            <DialogDescription>
+              It lands in {firstName}'s messages as a form. When they send it, the AI writes their targets and meal plan here. It also goes out by itself in the last week of each plan.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label className="text-xs">Phase / goal for this plan</Label>
-            <PhaseSelect value={sendPhase} onChange={setSendPhase} autoLabel="Let the client's answer decide" />
-            <p className="text-[11px] text-muted-foreground">Sets the calorie direction the AI uses (deficit, surplus or maintenance).</p>
+            <Label className="text-[13px] text-muted-foreground">Phase for this plan</Label>
+            <PhaseSelect value={sendPhase} onChange={setSendPhase} autoLabel="Let their answer decide" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Pre / Post-Workout meals</Label>
+            <Label className="text-[13px] text-muted-foreground">Pre / post-workout meals</Label>
             <WorkoutMealsSelect value={sendWorkoutMeals} onChange={setSendWorkoutMeals} />
-            <p className="text-[11px] text-muted-foreground">The client is asked when they train; this overrides it if you want.</p>
           </div>
           <Textarea
             rows={3}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Optional message, e.g. “New phase starting Monday — fill this out so I can build your plan 🔥”"
+            placeholder="Optional message, e.g. “New phase starting Monday, fill this out so I can build your plan”"
           />
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setSendOpen(false)} disabled={sending}>Cancel</Button>
             <Button onClick={send} disabled={sending} className="gap-2">
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send
@@ -717,25 +703,16 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             <DialogTitle>Update {firstName}'s plan?</DialogTitle>
             <DialogDescription>The AI plan goes live as it is. Use Review & edit first to change anything.</DialogDescription>
           </DialogHeader>
-          {preview.length > 0 && (
-            <ul className="space-y-1 rounded-xl border border-border p-3 text-xs">
-              {preview.map((r) => (
-                <li key={r.label} className="flex justify-between gap-3">
-                  <span className="font-semibold">{r.label}</span>
-                  <span className="tabular-nums text-muted-foreground">{r.kcal ?? "—"} kcal · {[r.p, r.c, r.f].map((n) => n ?? "—").join("/")}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <ul className="space-y-1.5 text-sm">
-            <li>• Starts today. {planDate(nextPlanDates(todayLocalISO()).end_date)} is when the next update is due (the Nutrition Update goes out in its last week); {firstName} keeps this plan after that until a new one replaces it</li>
-            {currentPlan && <li>• The current plan ({planPeriod(currentPlan)}) moves to Previous plans, kept with its dates</li>}
-            <li>• Meals, steps and cardio update together; water and notes to {firstName} carry over</li>
-            <li>• {firstName} gets a notification</li>
+          <DayRows rows={preview.map((r) => ({ label: r.label, kcal: r.kcal, protein: r.p, carbs: r.c, fat: r.f }))} />
+          <ul className="space-y-1.5 text-sm text-muted-foreground">
+            <li>Starts today. The next update is due {planDate(nextPlanDates(todayLocalISO()).end_date)}, and {firstName} keeps this plan until a new one replaces it.</li>
+            {currentPlan && <li>The current plan ({planPeriod(currentPlan)}) moves to Previous plans with its dates.</li>}
+            <li>Meals, steps and cardio update together; water and notes to {firstName} carry over.</li>
+            <li>{firstName} gets a notification.</li>
           </ul>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => { setPublishOpen(false); setApplyOpen(true); }} disabled={publishing}>Review & edit first</Button>
-            <Button onClick={publish} disabled={publishing} className="gap-2 font-bold">
+            <Button onClick={publish} disabled={publishing} className="gap-2">
               {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Update plan
             </Button>
           </DialogFooter>
@@ -745,82 +722,92 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   );
 }
 
-/** "Last plan: Fat Loss for 6 weeks · −0.4%/wk (−2.6 lb) · stuck to it 4.3/5" — what the AI adjusted from. */
-function LastPlanSummary({ previous }: { previous: PreviousPlan | null }) {
-  const line = lastPlanSummary(previous);
-  if (!line) return null;
+const shortDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString([], { month: "short", day: "numeric" }) : "—");
+
+/** The AI's text as it'll be pasted or read, with Copy. */
+function TextBlock({ title, text }: { title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success(`${title} copied`);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      toast.error("Couldn't copy. Press and hold the text to copy it.");
+    }
+  };
   return (
-    <div className="rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs">
-      <span className="font-semibold">Adjusted from the last plan:</span> <span className="text-muted-foreground">{line}</span>
+    <div className="space-y-2">
+      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-lg bg-muted px-3 py-2.5 font-mono text-[12px] leading-relaxed">{text}</pre>
+      <Button variant="outline" className="h-10 gap-1.5" onClick={copy}>
+        {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />} {copied ? "Copied" : "Copy"}
+      </Button>
     </div>
   );
 }
 
-/** Each day type's numbers, steps and cardio from the AI plan, before opening the editor. */
-function PlanPreview({ rows, foods, drift, checks = [] }: { rows: Array<{ label: string; kcal: number | null; p: number | null; c: number | null; f: number | null; steps: number | null; cardio: string }>; foods: PlanFoodStats | null; drift: PrepDrift[] | null; checks?: string[] }) {
-  const heavy = !!foods && foods.total > LEAN_GROCERY_LIST;
-  const drifting = !!drift?.length;
+/** One line on how the plan shops and preps: the grocery list size, and any food weighed differently from meal to meal. */
+function PrepLine({ foods, drift }: { foods: PlanFoodStats; drift: PrepDrift[] }) {
+  if (!foods.total) return null;
+  const heavy = foods.total > LEAN_GROCERY_LIST;
+  const parts = [
+    `${foods.total} foods to shop for${foods.days > 1 ? `, ${foods.everyDay} every day` : ""}`,
+    drift.length ? `${drift.length} ${drift.length === 1 ? "food is" : "foods are"} weighed differently: ${drift.slice(0, 2).map(prepDriftLine).join("; ")}` : "every weighed portion is one amount",
+  ];
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      {checks.length > 0 && (
-        <div data-coach-checks className="border-b border-border bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300">
-          <div className="font-semibold">Check before publishing</div>
-          <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-            {checks.map((c) => (
-              <li key={c}>{c}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {foods && foods.total > 0 && (
-        <div
-          className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", heavy ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "text-muted-foreground")}
-          title={foods.foods.join(", ")}
-        >
-          <span className="font-semibold">Grocery list: {foods.total} foods</span>
-          {foods.days > 1 && <span>· {foods.everyDay} used every day</span>}
-          {heavy && <span>· a lot to shop for. Regenerate, or swap foods in the editor so days share the same staples</span>}
-        </div>
-      )}
-      {foods && foods.total > 0 && drift && (
-        <div
-          data-prep-check={drifting ? "drift" : "same"}
-          className={cn("flex flex-wrap items-center gap-x-2 border-b border-border px-3 py-1.5 text-[11px]", drifting ? "bg-amber-500/10 text-amber-800 dark:text-amber-300" : "text-muted-foreground")}
-          title={drifting ? drift.flatMap((d) => d.odd).join("\n") : undefined}
-        >
-          {drifting ? (
-            <>
-              <span className="font-semibold">Meal prep: {drift.length} {drift.length === 1 ? "food changes" : "foods change"} weight</span>
-              <span>· {drift.slice(0, 3).map(prepDriftLine).join(" · ")}</span>
-              <span>· Change something ("same portions in every meal") or fix them in the editor</span>
-            </>
-          ) : (
-            <span className="font-semibold">Meal prep: every weighed portion is one amount</span>
-          )}
-        </div>
-      )}
-      <table className="w-full min-w-[520px] text-xs">
-        <thead className="bg-muted/40 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 text-left">Day</th>
-            <th className="px-2 py-2 text-right">kcal</th>
-            <th className="px-2 py-2 text-right">P / C / F</th>
-            <th className="px-2 py-2 text-right"><Footprints className="inline h-3 w-3" /> Steps</th>
-            <th className="px-3 py-2 text-left">Cardio</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label} className="border-t border-border">
-              <td className="px-3 py-2 font-semibold">{r.label}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.kcal ?? "—"}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{[r.p, r.c, r.f].map((n) => n ?? "—").join(" / ")}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.steps != null ? r.steps.toLocaleString() : "—"}</td>
-              <td className="px-3 py-2">{r.cardio}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <p
+      data-prep-check={drift.length ? "drift" : "same"}
+      className={cn("text-[13px]", heavy || drift.length ? "text-warning" : "text-muted-foreground")}
+      title={[foods.foods.join(", "), ...drift.flatMap((d) => d.odd)].join("\n")}
+    >
+      {parts.join(" · ")}
+      {heavy ? ". A lot to shop for: Change something can share staples across the days." : ""}
+      {drift.length ? " Change something (\"same portions in every meal\") or fix them in Review & edit first." : ""}
+    </p>
+  );
+}
+
+type CopyItem = { group: string; label: string; hint?: string; disabled?: boolean; run: () => unknown };
+
+/** Everything that can be copied to run it by hand, one tap each. */
+function CopyDialog({ open, onOpenChange, items }: { open: boolean; onOpenChange: (o: boolean) => void; items: CopyItem[] }) {
+  const groups = [...new Set(items.map((i) => i.group))];
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Copy for ChatGPT or Claude</DialogTitle>
+          <DialogDescription>Each copies to your clipboard, ready to paste.</DialogDescription>
+        </DialogHeader>
+        {groups.map((g) => (
+          <div key={g} className="space-y-1.5">
+            <div className="text-[13px] text-muted-foreground">{g}</div>
+            <div className="divide-y divide-border rounded-xl border border-border">
+              {items
+                .filter((i) => i.group === g)
+                .map((i) => (
+                  <button
+                    key={i.label}
+                    type="button"
+                    disabled={i.disabled}
+                    onClick={() => {
+                      i.run();
+                      onOpenChange(false);
+                    }}
+                    className="flex min-h-12 w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 active:bg-muted/60 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <Copy className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-medium">{i.label}</span>
+                      {i.hint ? <span className="block text-[13px] text-muted-foreground">{i.hint}</span> : null}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        ))}
+      </DialogContent>
+    </Dialog>
   );
 }
