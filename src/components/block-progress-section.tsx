@@ -196,7 +196,7 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
                 <XAxis dataKey="label" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
-                <Bar dataKey={blockMetric} fill="hsl(var(--primary))" />
+                <Bar dataKey={blockMetric} fill="var(--primary)" />
               </BarChart>
             ) : (
               <LineChart data={filteredWeekly}>
@@ -204,7 +204,7 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
                 <XAxis dataKey="label" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
-                <Line type="monotone" dataKey={blockMetric} stroke="hsl(var(--primary))" strokeWidth={2} dot />
+                <Line type="monotone" dataKey={blockMetric} stroke="var(--primary)" strokeWidth={2} dot />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -238,7 +238,7 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
                   <XAxis dataKey="label" fontSize={11} />
                   <YAxis fontSize={11} />
                   <Tooltip />
-                  <Bar dataKey={exMetric} fill="hsl(var(--primary))" />
+                  <Bar dataKey={exMetric} fill="var(--primary)" />
                 </BarChart>
               ) : (
                 <LineChart data={exSeries.map((p) => ({ label: p.date ? format(parseISO(p.date), "MMM d") : `W${p.week_index}`, ...p }))}>
@@ -246,7 +246,7 @@ export function BlockProgressSection({ blockId, mode }: { blockId: string; mode:
                   <XAxis dataKey="label" fontSize={11} />
                   <YAxis fontSize={11} />
                   <Tooltip />
-                  <Line type="monotone" dataKey={exMetric} stroke="hsl(var(--primary))" strokeWidth={2} dot />
+                  <Line type="monotone" dataKey={exMetric} stroke="var(--primary)" strokeWidth={2} dot />
                 </LineChart>
               )}
             </ResponsiveContainer>

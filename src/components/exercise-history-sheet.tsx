@@ -15,11 +15,16 @@ import { listenChannel } from "@/lib/realtime-channel";
 import { toast } from "sonner";
 import {
   HISTORY_EDIT_QUERY_KEYS,
+  cardioDraftIssue,
+  cardioEditDraft,
+  cardioEditPatch,
   setDraftIssue,
   setEditDraft,
   setEditPatch,
+  type CardioDraft,
   type SetDraft,
 } from "@/lib/history-set-edit";
+import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio-history";
 
 const sb = supabase as any;
 
@@ -86,6 +91,7 @@ export function ExerciseHistorySheet({
   // One day in edit mode at a time; drafts keyed by set id.
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, SetDraft>>({});
+  const [cardioDrafts, setCardioDrafts] = useState<Record<string, CardioDraft>>({});
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [days, setDays] = useState<number | null>(null);
@@ -148,6 +154,7 @@ export function ExerciseHistorySheet({
         .select(`
           id, set_index, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rpe_num, mean_concentric_velocity_mps,
+          completed_duration_seconds, actual_calories,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit, load_type, is_bodyweight,
           pl_exercise_rows!inner(
@@ -257,6 +264,16 @@ export function ExerciseHistorySheet({
     return list;
   }, [rows, showPartial, completionMap]);
 
+  // A treadmill walk or a bike is time, calories and effort, never load / reps / velocity.
+  const cardio = useMemo(() => isCardioHistory(exerciseName, rows), [exerciseName, rows]);
+  const cardioSummary = useMemo(() => {
+    if (!cardio) return null;
+    const ymd = (t: number) => (t ? format(new Date(t), "yyyy-MM-dd") : "");
+    return cardioHistorySummary(grouped.map((g) => ({ date: ymd(resolveGroupDate(g)), sets: g.sets })));
+    // resolveGroupDate reads completionMap, which `grouped` already depends on
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardio, grouped]);
+
   const fmtLoad = (r: any): string => {
     // Always show the load in the unit the client actually entered on
     // that set. Converting historical entries into the caller's current
@@ -286,30 +303,47 @@ export function ExerciseHistorySheet({
 
   const startEdit = (key: string, sets: any[]) => {
     const next: Record<string, SetDraft> = {};
-    for (const set of sets) next[set.id] = setEditDraft(set, displayUnit);
+    const nextCardio: Record<string, CardioDraft> = {};
+    for (const set of sets) {
+      next[set.id] = setEditDraft(set, displayUnit);
+      nextCardio[set.id] = cardioEditDraft(set);
+    }
     setDrafts(next);
+    setCardioDrafts(nextCardio);
     setEditError(null);
     setEditingKey(key);
   };
   const cancelEdit = () => {
     setEditingKey(null);
     setDrafts({});
+    setCardioDrafts({});
     setEditError(null);
   };
   const patchDraft = (id: string, change: Partial<SetDraft>) => {
     setEditError(null);
     setDrafts((d) => (d[id] ? { ...d, [id]: { ...d[id], ...change } } : d));
   };
+  const patchCardioDraft = (id: string, change: Partial<CardioDraft>) => {
+    setEditError(null);
+    setCardioDrafts((d) => (d[id] ? { ...d, [id]: { ...d[id], ...change } } : d));
+  };
   const saveEdit = async (sets: any[]) => {
     for (const set of sets) {
-      const issue = drafts[set.id] ? setDraftIssue(drafts[set.id]) : null;
+      const issue = cardio
+        ? cardioDrafts[set.id] ? cardioDraftIssue(cardioDrafts[set.id]) : null
+        : drafts[set.id] ? setDraftIssue(drafts[set.id]) : null;
       if (issue) {
         setEditError(`Set ${sets.indexOf(set) + 1}: ${issue}`);
         return;
       }
     }
     const writes = sets
-      .map((set) => ({ id: set.id as string, patch: drafts[set.id] ? setEditPatch(set, drafts[set.id], displayUnit) : null }))
+      .map((set) => ({
+        id: set.id as string,
+        patch: cardio
+          ? cardioDrafts[set.id] ? cardioEditPatch(set, cardioDrafts[set.id]) : null
+          : drafts[set.id] ? setEditPatch(set, drafts[set.id], displayUnit) : null,
+      }))
       .filter((w) => w.patch);
     if (!writes.length) {
       cancelEdit();
@@ -350,12 +384,16 @@ export function ExerciseHistorySheet({
             <History className="h-4 w-4" /> {exerciseName} history
           </SheetTitle>
           <SheetDescription>
-            Past logged sets across all blocks. Velocity is mean concentric velocity (m/s), so the same metric is compared session to session.
+            {cardio
+              ? "Every logged session across all blocks: how long, the calories and how hard it felt (RPE)."
+              : "Past logged sets across all blocks. Velocity is mean concentric velocity (m/s), so the same metric is compared session to session."}
           </SheetDescription>
         </SheetHeader>
-        <div className="px-4 pt-2 sm:px-0">
-          <ExerciseRecordsForClient clientId={clientId} exerciseId={exerciseId} exerciseName={exerciseName} unit={displayUnit} />
-        </div>
+        {!cardio && (
+          <div className="px-4 pt-2 sm:px-0">
+            <ExerciseRecordsForClient clientId={clientId} exerciseId={exerciseId} exerciseName={exerciseName} unit={displayUnit} />
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {[null, 30, 90, 180, 365].map((d) => (
@@ -380,6 +418,29 @@ export function ExerciseHistorySheet({
           </label>
         </div>
 
+        {cardioSummary && cardioSummary.sessions > 0 && (
+          <div className="mt-3 rounded-xl border border-border p-3" data-cardio-history-summary>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {[
+                { label: "Sessions", value: String(cardioSummary.sessions) },
+                { label: "Avg time", value: cardioClock(cardioSummary.avgSeconds) },
+                { label: "Avg kcal", value: cardioSummary.avgCalories != null ? String(cardioSummary.avgCalories) : "—" },
+                { label: "Avg RPE", value: cardioSummary.avgRpe != null ? String(cardioSummary.avgRpe) : "—" },
+              ].map((x) => (
+                <div key={x.label} className="min-w-0">
+                  <div className="text-base font-semibold tabular-nums text-foreground">{x.value}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">{x.label}</div>
+                </div>
+              ))}
+            </div>
+            {cardioSummary.effort && (
+              <p className="mt-2 border-t border-border pt-2 text-xs text-muted-foreground" data-cardio-history-effort={cardioSummary.effort.direction}>
+                {cardioSummary.effort.text}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 space-y-3">
           {isLoading && (
             <div className="space-y-2">
@@ -393,7 +454,9 @@ export function ExerciseHistorySheet({
               <div className="text-2xl mb-2">🏋️</div>
               <div className="text-sm font-semibold mb-1">No history yet</div>
               <div className="text-xs text-muted-foreground">
-                This is your first time logging this exercise. Complete a set and it will appear here next time.
+                {cardio
+                  ? "Nothing logged for this cardio yet. Log a session and it will show here next time."
+                  : "This is your first time logging this exercise. Complete a set and it will appear here next time."}
               </div>
             </Card>
           )}
@@ -447,7 +510,63 @@ export function ExerciseHistorySheet({
                   )}
                 </div>
               </div>
-              {editingKey === dayKey ? (
+              {editingKey === dayKey && cardio ? (
+                <div data-history-editor data-history-editor-cardio>
+                  <div className="overflow-hidden rounded-md border border-border">
+                    <div className="grid grid-cols-[24px_minmax(0,1fr)_72px_56px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <span>Set</span>
+                      <span>Time</span>
+                      <span>Cal</span>
+                      <span>RPE</span>
+                    </div>
+                    {g.sets.map((s: any, i: number) => {
+                      const d = cardioDrafts[s.id];
+                      if (!d) return null;
+                      return (
+                        <div key={s.id} className="grid grid-cols-[24px_minmax(0,1fr)_72px_56px] items-center gap-2 border-t border-border/60 px-2 py-1.5">
+                          <span className="font-mono text-xs text-muted-foreground">{i + 1}</span>
+                          <Input
+                            value={d.time}
+                            onChange={(e) => patchCardioDraft(s.id, { time: e.target.value.replace(/[^0-9:.]/g, "") })}
+                            inputMode="decimal"
+                            enterKeyHint="done"
+                            placeholder="mm:ss"
+                            aria-label={`Set ${i + 1} time`}
+                            className="h-10 min-w-0 px-2 text-center text-base tabular-nums"
+                          />
+                          <Input
+                            value={d.calories}
+                            onChange={(e) => patchCardioDraft(s.id, { calories: e.target.value.replace(/[^0-9]/g, "") })}
+                            inputMode="numeric"
+                            enterKeyHint="done"
+                            placeholder="—"
+                            aria-label={`Set ${i + 1} calories`}
+                            className="h-10 px-1 text-center text-base tabular-nums"
+                          />
+                          <Input
+                            value={d.rpe}
+                            onChange={(e) => patchCardioDraft(s.id, { rpe: e.target.value.replace(/[^0-9.]/g, "") })}
+                            inputMode="decimal"
+                            enterKeyHint="done"
+                            placeholder="—"
+                            aria-label={`Set ${i + 1} RPE`}
+                            className="h-10 px-1 text-center text-base tabular-nums"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {editError && <p className="mt-2 text-xs font-medium text-destructive" role="alert">{editError}</p>}
+                  <div className="mt-2 flex gap-2">
+                    <Button type="button" variant="outline" className="h-10 flex-1" onClick={cancelEdit} disabled={saving}>
+                      Cancel
+                    </Button>
+                    <Button type="button" className="h-10 flex-1" onClick={() => void saveEdit(g.sets)} disabled={saving}>
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                    </Button>
+                  </div>
+                </div>
+              ) : editingKey === dayKey ? (
                 <div data-history-editor>
                   <div className="overflow-hidden rounded-md border border-border">
                     <div className="grid grid-cols-[24px_minmax(0,1fr)_56px_56px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -519,6 +638,35 @@ export function ExerciseHistorySheet({
                     </Button>
                   </div>
                 </div>
+              ) : cardio ? (
+              <div className="overflow-hidden rounded-md border border-border" data-history-cardio>
+                <div className="grid grid-cols-[30px_minmax(56px,1fr)_56px_44px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <span>Set</span>
+                  <span>Time</span>
+                  <span>Cal</span>
+                  <span>RPE</span>
+                  <span></span>
+                </div>
+                {g.sets.map((s: any, i: number) => (
+                  <div
+                    key={s.id}
+                    className={cn(
+                      "grid grid-cols-[30px_minmax(56px,1fr)_56px_44px_20px] items-center gap-1.5 border-t border-border/60 px-2 py-1.5 text-xs",
+                      s.completed_at && "bg-green-500/5",
+                    )}
+                  >
+                    <span className="font-mono text-muted-foreground">{i + 1}</span>
+                    <span className="font-medium tabular-nums">{cardioClock(s.completed_duration_seconds)}</span>
+                    <span className="tabular-nums">{s.actual_calories != null ? s.actual_calories : "—"}</span>
+                    <span className="tabular-nums">{s.actual_rpe ?? "—"}</span>
+                    <span className="text-right">
+                      {s.completed_at
+                        ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-green-500" />
+                        : <Circle className="ml-auto h-3.5 w-3.5 text-muted-foreground/60" />}
+                    </span>
+                  </div>
+                ))}
+              </div>
               ) : (
               <div className="overflow-hidden rounded-md border border-border">
                 <div className="grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">

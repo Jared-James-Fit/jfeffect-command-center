@@ -345,8 +345,8 @@ export function WearablesCard({ mode = "full", bare = false }: { mode?: "full" |
                   <Area
                     type="monotone"
                     dataKey="v"
-                    stroke="hsl(var(--primary))"
-                    fill="hsl(var(--primary) / 0.15)"
+                    stroke="var(--primary)"
+                    fill="color-mix(in oklch, var(--primary) 15%, transparent)"
                     strokeWidth={2}
                     dot={false}
                   />

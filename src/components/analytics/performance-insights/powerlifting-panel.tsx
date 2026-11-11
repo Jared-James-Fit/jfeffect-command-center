@@ -73,7 +73,7 @@ export function PowerliftingPanel({
                   <XAxis dataKey="label" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 9 }} width={30} />
                   <Tooltip contentStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="est_1rm" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" dataKey="est_1rm" stroke="var(--primary)" strokeWidth={2} dot={{ r: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
