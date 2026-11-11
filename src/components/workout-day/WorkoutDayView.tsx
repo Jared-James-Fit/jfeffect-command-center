@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -62,7 +62,7 @@ import {
 import { WorkoutEmptyCard } from "@/components/workout-empty-state";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { useServiceTier } from "@/lib/service-tier";
+import { useEntitlement, useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import { writeSetEditAudit } from "@/lib/logged-set-audit";
 import { saveExerciseUnitPref, type WUnit } from "@/lib/exercise-unit-prefs";
@@ -96,6 +96,10 @@ import { RestTimerButton } from "@/components/workout-day/RestTimerButton";
 import { SwipeToReveal } from "@/components/workout-day/swipe-to-reveal";
 import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row";
 import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
+import { setGridTemplate } from "@/components/workout-day/set-grid";
+import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
+import { SetVideoCell, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
+import { setVideoLabel } from "@/lib/set-videos/label";
 import {
   DeferredExerciseHistoryButton,
   DeferredQuickSwapSheet,
@@ -3496,19 +3500,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const hideWeight = !showWeight;
   // Single shared column template so the header and every set row line up
   // no matter which inputs are active.
-  // Phone-first: 44px-tall cells, a thumb-sized done circle, and room for the
-  // remove control only when a set can actually be removed.
+  // Phone-first: 44px-tall cells. The set number is the done button (no
+  // status column), so reps / effort / weight get the width; a coaching
+  // client's sets end in a slim video column (set-video-cell.tsx).
   const canRemoveSet = !readonly && adapter?.kind !== "member" && setCount > 1;
-  const gridTemplate = [
-    focusMode ? "30px" : "22px",
-    showReps ? "1fr" : null,
-    showTimer ? "1fr" : null,
-    showCalories ? "1fr" : null,
-    showVelocity ? "1fr" : null,
-    "1fr",
-    !hideWeight ? "1.35fr" : null,
-    canRemoveSet ? "68px" : "44px",
-  ].filter(Boolean).join(" ");
+  const setVideosOn = useEntitlement("lift_review") && adapter?.kind !== "member" && !!clientId;
+  const rowHasVideos = useRowHasSetVideos(dayId, row.id, setVideosOn);
+  const videoColumn = setVideosOn && (!readonly || rowHasVideos);
+  const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, showCalories, showVelocity, hideWeight, videoColumn });
   // The logging frontier: helper chips (suggested load, repeat previous set)
   // appear only on the next set to log — never on every row.
   const frontier = Array.from({ length: setCount }, (_, k) => k + 1)
@@ -4410,6 +4409,26 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                 )}
               </>
             )}
+            {canRemoveSet && (
+              <>
+                {/* Remove one set (it used to be a − on every row): later sets
+                    move up, and its confirm says if it has logged numbers. */}
+                <CardMenuSeparator />
+                <div className="px-2 pb-0.5 pt-1.5 text-xs text-muted-foreground">Remove a set (later sets move up)</div>
+                <div className="grid grid-cols-5 gap-1 p-1" data-testid="card-remove-set">
+                  {Array.from({ length: setCount }, (_, i) => i + 1).map((n) => (
+                    <CardMenuItem
+                      key={n}
+                      onSelect={() => void removeSet(n)}
+                      aria-label={`Remove set ${n} from ${name}`}
+                      className="h-10 justify-center rounded-lg border border-border p-0 font-semibold tabular-nums"
+                    >
+                      {n}
+                    </CardMenuItem>
+                  ))}
+                </div>
+              </>
+            )}
             {onRemove && (
               <>
                 <CardMenuSeparator />
@@ -4538,71 +4557,74 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           )}
           style={{ gridTemplateColumns: gridTemplate }}
         >
-          <span>Set</span>
+          {/* The Set column's header is the column picker (reps, weight, timer,
+              calories, velocity): the numbers under it explain themselves. */}
+          {readonly ? <span>Set</span> : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Log columns for ${name}`}
+                  title="Choose what to log (reps, weight, timer, calories, velocity)"
+                  className="-my-1 inline-flex h-7 w-full items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  <span className="sr-only">Log columns</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52">
+                {([
+                  ["reps", "Reps", showReps],
+                  ["weight", "Weight", showWeight],
+                  ["timer", "Timer", showTimer],
+                  ["calories", "Calories", showCalories],
+                  ["velocity", "Avg velocity (m/s)", showVelocity],
+                ] as const).map(([field, label, on]) => (
+                  <DropdownMenuItem
+                    key={field}
+                    onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
+                    className="text-xs font-semibold"
+                  >
+                    <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    const next = !velocityDefault;
+                    void persistVelocityDefault(next)
+                      .then(() => {
+                        if (next && !showVelocity) {
+                          const updated = { ...inputOverrides, velocity: true };
+                          setInputOverridesState(updated);
+                          setRowInputs(row.id, updated);
+                        }
+                        toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
+                      })
+                      .catch(() => toast.error("Could not save velocity default"));
+                  }}
+                  className="text-xs font-semibold"
+                >
+                  Velocity default: {velocityDefault ? "On" : "Off"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
           {showCalories && <span title="Calories from the machine or your watch (optional)">Cal</span>}
           <EffortScaleHeader rir={showRir} />
           {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
           {!hideWeight && <span className="truncate">{loadColumnLabel(rowLoadType, activeUnit)}</span>}
-          {/* Status column header doubles as the column picker — the circles
-              below explain themselves, and the picker sits with the columns it changes. */}
-          {readonly ? <span className="justify-self-end">Done</span> : (
-            <div className="flex justify-self-end">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={`Log columns for ${name}`}
-                    title="Choose what to log (reps, weight, timer, calories, velocity)"
-                    className="-my-1 ml-auto inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    <span className="sr-only">Log columns</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
-                  {([
-                    ["reps", "Reps", showReps],
-                    ["weight", "Weight", showWeight],
-                    ["timer", "Timer", showTimer],
-                    ["calories", "Calories", showCalories],
-                    ["velocity", "Avg velocity (m/s)", showVelocity],
-                  ] as const).map(([field, label, on]) => (
-                    <DropdownMenuItem
-                      key={field}
-                      onSelect={(e) => { e.preventDefault(); toggleInput(field); }}
-                      className="text-xs font-semibold"
-                    >
-                      <span className={cn("mr-2 inline-flex h-3.5 w-3.5 items-center justify-center", !on && "opacity-0")}>
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                      {label}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      const next = !velocityDefault;
-                      void persistVelocityDefault(next)
-                        .then(() => {
-                          if (next && !showVelocity) {
-                            const updated = { ...inputOverrides, velocity: true };
-                            setInputOverridesState(updated);
-                            setRowInputs(row.id, updated);
-                          }
-                          toast.success(next ? "Velocity will open by default on your workouts" : "Velocity default turned off");
-                        })
-                        .catch(() => toast.error("Could not save velocity default"));
-                    }}
-                    className="text-xs font-semibold"
-                  >
-                    Velocity default: {velocityDefault ? "On" : "Off"}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+          {videoColumn && (
+            <span className="flex justify-center" title="A video of the set, for your coach">
+              <Video className="h-3.5 w-3.5" aria-hidden />
+              <span className="sr-only">Video</span>
+            </span>
           )}
         </div>
         {(warmupSets.length > 0 || (warmupAllowed && (!!warmupForm || !!warmupPrompt))) && (
@@ -4679,8 +4701,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               focusMode={focusMode}
               onChange={onChange}
               onSetCompleted={bumpRestTimer}
-              onRemoveSet={canRemoveSet ? removeSet : undefined}
               onSwitchUnit={!readonly && onUnitChange && !hideWeight ? handleUnitToggle : undefined}
+              videoColumn={videoColumn}
+              dayTitle={dayTitle}
             />
           );
         })}
@@ -5011,7 +5034,8 @@ function SetRow({
   setCount, showReps = true, showTimer = false, showCalories = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
   onTimerCascade,
-  onRemoveSet,
+  videoColumn = false,
+  dayTitle = "",
   onSwitchUnit,
 }: {
   loadHint?: LoadSuggestion | null;
@@ -5095,8 +5119,10 @@ function SetRow({
   focusMode?: boolean;
   onChange: () => void;
   onSetCompleted?: (setIndex: number) => void;
-  /** Removes this exact set after parent confirmation; later sets shift up. */
-  onRemoveSet?: (setIndex: number) => void | Promise<void>;
+  /** The set ends in a video cell (a coaching client: film or attach this set for the coach). */
+  videoColumn?: boolean;
+  /** The workout's name, for the set video's chat card. */
+  dayTitle?: string;
 }) {
   const { user } = useAuth();
   const { isImpersonating, client: povClient } = useClientImpersonation();
@@ -5958,7 +5984,7 @@ function SetRow({
     } catch (err: any) {
       const message = err?.message ?? "Set status failed to save";
       setStatusError(message);
-      toast.error("Set status didn’t save — tap the status icon to retry");
+      toast.error("Set status didn’t save — tap the set number to retry");
     } finally {
       setStatusSaving(false);
     }
@@ -6207,7 +6233,51 @@ function SetRow({
       className="grid items-center gap-1.5 px-2 py-1.5"
       style={{ gridTemplateColumns: gridTemplate }}
     >
-      <span className={cn("text-center font-semibold tabular-nums text-muted-foreground", focusMode ? "text-base" : "text-sm")}>{setIndex}</span>
+      {/* The set number is the done button: green when the set is done, tap
+          to mark it done / not done (the same save as before), a spinner while
+          that saves, red to retry. Logging the set's numbers still completes
+          it by itself. */}
+      <div className="relative flex justify-center">
+        {(() => {
+          if (readonly || isConfirmed) return null;
+          const dirty = save.hasPending();
+          const displayState: typeof save.state =
+            save.state === "saving" || save.state === "offline" || save.state === "saved"
+              ? save.state
+              : dirty
+                ? "idle"
+                : null as any;
+          if (!displayState) return null;
+          // A corner badge on the number, so nothing in the row moves mid-save.
+          return (
+            <SaveStatus
+              state={displayState}
+              savedAt={save.savedAt}
+              compact
+              className="pointer-events-none absolute -right-1 -top-1 z-10 rounded-full bg-background p-0.5"
+            />
+          );
+        })()}
+        {!readonly ? (
+          <button
+            type="button"
+            onClick={() => void saveCompletionStatus()}
+            disabled={statusSaving}
+            aria-pressed={isConfirmed}
+            data-set-done={isConfirmed ? "true" : "false"}
+            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : "Mark set complete"}
+            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : `Mark set ${setIndex} complete`}
+            className={cn(
+              "flex h-11 w-full items-center justify-center sm:h-9",
+              statusSaving && "cursor-wait",
+            )}
+          >
+            <SetNumberBadge setIndex={setIndex} done={isConfirmed} saving={statusSaving} error={!!statusError} focusMode={focusMode} />
+          </button>
+        ) : (
+          <SetNumberBadge setIndex={setIndex} done={isConfirmed} focusMode={focusMode} />
+        )}
+      </div>
       {/* Fast tap reps selector — smart chips from the prescription, custom entry inside */}
       {showReps && (
       <TypedValueInput
@@ -6315,72 +6385,29 @@ function SetRow({
         }}
       />
       )}
-      <div className="relative flex items-center justify-end gap-1">
-        {/* Compact indicator — smooth pencil (pending) → spinner (saving) →
-            check (saved) transition so the row reflects sync status in real
-            time. Full error label renders below the row to avoid overlapping
-            the weight input. */}
-        {(() => {
-          if (readonly || isConfirmed) return null;
-          const dirty = save.hasPending();
-          const displayState: typeof save.state =
-            save.state === "saving" || save.state === "offline" || save.state === "saved"
-              ? save.state
-              : dirty
-                ? "idle"
-                : null as any;
-          if (!displayState) return null;
-          // A corner badge, so the status column never changes width mid-save.
-          return (
-            <SaveStatus
-              state={displayState}
-              savedAt={save.savedAt}
-              compact
-              className="pointer-events-none absolute -top-1 left-0 z-10 rounded-full bg-background p-0.5"
-            />
-          );
-        })()}
-        {!readonly ? (
-          <button
-            type="button"
-            onClick={() => void saveCompletionStatus()}
-            disabled={statusSaving}
-            title={statusError ? "Status failed to save — tap to retry" : isConfirmed ? "Mark set incomplete" : "Mark set complete"}
-            aria-label={statusError ? `Retry saving set ${setIndex} status` : isConfirmed ? `Mark set ${setIndex} incomplete` : `Mark set ${setIndex} complete`}
-            className={cn(
-              "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:h-9 sm:w-9 [&_svg]:size-5",
-              isConfirmed
-                ? "border-green-500/40 bg-green-500/10 text-green-500"
-                : "border-border bg-background text-muted-foreground hover:border-green-500/50 hover:text-green-500",
-              statusError && "border-destructive bg-destructive/10 text-destructive hover:text-destructive",
-              statusSaving && "cursor-wait opacity-70",
-            )}
-          >
-            {statusSaving ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : statusError ? (
-              <AlertTriangle className="h-4 w-4" />
-            ) : isConfirmed ? (
-              <CheckCircle2 className="h-4 w-4" />
-            ) : (
-              <Circle className="h-4 w-4" />
-            )}
-          </button>
-        ) : (
-          isConfirmed && <CheckCircle2 className="h-4 w-4 text-green-500" />
-        )}
-        {onRemoveSet && (
-          <button
-            type="button"
-            onClick={() => void onRemoveSet(setIndex)}
-            title={`Remove set ${setIndex}`}
-            aria-label={`Remove set ${setIndex}`}
-            className="inline-flex h-10 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-9"
-          >
-            <span className="text-base font-medium leading-none">−</span>
-          </button>
-        )}
-      </div>
+      {videoColumn && (
+        workoutId ? <SetVideoCell
+          clientId={clientId}
+          rowId={rowId}
+          dayId={workoutId}
+          dayTitle={dayTitle}
+          exerciseName={exerciseName ?? "Exercise"}
+          setIndex={setIndex}
+          resultId={existing?.id ?? null}
+          logged={!!existing?.id && (isConfirmed || hasLoggedValue || existing?.actual_reps != null || existing?.actual_load != null)}
+          readonly={readonly}
+          focusMode={focusMode}
+          label={setVideoLabel({
+            load: bw ? (load ? Number(load) : 0) : load ? Number(load) : null,
+            unit,
+            reps: reps ? Number(reps) : null,
+            rpe: !showRir && effortSelectValue ? Number(effortSelectValue) : null,
+            rir: showRir && effortSelectValue ? Number(effortSelectValue) : null,
+            loadType,
+            durationSec: showTimer ? durationSec ?? null : null,
+          })}
+        /> : <div aria-hidden />
+      )}
     </div>
     {/* Record badge — one pill, highest scope only, never interrupts logging */}
     {recordForBadge || loadRecordForBadge ? (
@@ -6409,7 +6436,7 @@ function SetRow({
     )}
     {statusError && (
       <div className="px-3 pb-1.5 text-[11px] font-medium text-destructive">
-        Status failed to save. Tap the status icon to retry.
+        Status failed to save. Tap the set number to retry.
       </div>
     )}
 

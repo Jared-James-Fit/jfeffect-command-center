@@ -525,6 +525,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (uid) clearCachedRole(uid); // clear role cache on explicit sign-out
       // and the saved last screen, so the next person here never lands in it
       if (uid) clearLastRoute(uid);
+      // and any set video still waiting to send, so it never sits on a shared phone
+      if (uid) void import("@/lib/set-videos/outbox").then((m) => m.outboxClearUser(uid)).catch(() => {});
       explicitSignOutRef.current = false;
     }
 
