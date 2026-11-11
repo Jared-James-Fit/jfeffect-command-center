@@ -20,8 +20,39 @@ import { DEFAULT_TZ } from "@/lib/schedule-time";
 type Admin = SupabaseClient<any, any, any>;
 
 const MAX_ATTEMPTS = 5;
-/** Sessions that ended longer ago than this are never pushed to Google. */
+/** Sessions that ended longer ago than this are never pushed to Google (but see LATE_ADD_MAX_MS). */
 const HISTORY_CUTOFF_MS = 2 * 24 * 60 * 60 * 1000;
+/** How far back a done session added after the fact still gets its Google event. */
+const LATE_ADD_MAX_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type GcalAction = "write" | "remove" | "keep";
+
+/**
+ * What the sync does with one session in Google: write it (create, or update
+ * the event it has), take it off, or leave Google as it is. A booked session is
+ * written until 2 days after it ends. A done session added in the last 2 days
+ * (`time_set_at`) that has no event yet is written too, if it ended in the last
+ * 30: it was logged or put back after the fact and the coach's calendar should
+ * show it happened (Marc's Nov 9 session, put back on Nov 11 after a request
+ * moved it away, never reached Google). A cancel, late cancel or move comes off
+ * Google only before the session ends; everything else in the past is history.
+ */
+export function gcalAction(
+  row: { status: string; ends_at: string; time_set_at?: string | null; google_event_id?: string | null },
+  now = Date.now(),
+): GcalAction {
+  const ends = new Date(row.ends_at).getTime();
+  if (row.status === "Scheduled") return ends < now - HISTORY_CUTOFF_MS ? "keep" : "write";
+  if (row.status === "Completed") {
+    const setAt = row.time_set_at ? new Date(row.time_set_at).getTime() : NaN;
+    const addedLate = !row.google_event_id && setAt > now - HISTORY_CUTOFF_MS && ends > now - LATE_ADD_MAX_MS;
+    return addedLate ? "write" : "keep";
+  }
+  if ((row.status === "Cancelled" || row.status === "Rescheduled" || row.status === "Missed") && ends > now && row.google_event_id) {
+    return "remove";
+  }
+  return "keep";
+}
 
 export function appOrigin(): string {
   return (process.env.PUBLIC_APP_URL || process.env.SITE_URL || "https://jfeffect.com").replace(/\/$/, "");
@@ -60,6 +91,7 @@ type SessionRow = {
   gcal_attempts: number | null;
   wants_meet?: boolean | null;
   meet_link?: string | null;
+  time_set_at?: string | null;
 };
 
 // Unique per attempt: Google ignores a repeated requestId, so a restored
@@ -199,9 +231,8 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
       }
       try {
         const client = clientById.get(row.client_id);
-        const stale = new Date(row.ends_at).getTime() < Date.now() - HISTORY_CUTOFF_MS;
-        const ended = new Date(row.ends_at).getTime() <= Date.now();
-        if (row.status === "Scheduled" && !stale) {
+        const action = gcalAction(row);
+        if (action === "write") {
           let target: string = calendarId || resolveCalendar(client?.assigned_coach_id);
           const body = sessionEventBody(row, client?.full_name ?? null);
           if (eventId) {
@@ -235,7 +266,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
             meetLink = meetLink || meetLinkOf(r.data);
             result.created++;
           }
-        } else if ((row.status === "Cancelled" || row.status === "Rescheduled" || row.status === "Missed") && !ended && eventId) {
+        } else if (action === "remove" && eventId) {
           // Off the calendar before it's over: a cancel or late cancel frees the slot. A session
           // banked or changed after it ended stays in Google as history (it's the coach's own record).
           const r = await gapi("DELETE", eventPath(calendarId || resolveCalendar(client?.assigned_coach_id), eventId));
@@ -246,7 +277,7 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
           meetLink = null; // the Meet went with the event; a restored session gets a new one
           result.removed++;
         }
-        // Completed and past sessions keep whatever is in Google as history.
+        // Otherwise past sessions keep whatever is in Google as history.
 
         const now = new Date().toISOString();
         const { data: done } = await admin
