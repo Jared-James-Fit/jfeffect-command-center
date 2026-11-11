@@ -114,6 +114,7 @@ import { convertWeight } from "@/lib/progress-metrics";
 import {
   formatPreviousLiftLoad,
   selectPreviousLifts,
+  formatPreviousTimed,
   matchHistoryLogs,
   type PreviousLift,
   type PreviousLiftIdentity,
@@ -156,7 +157,7 @@ import { WorkoutRecordsContext, SetRecordBadge, useSetRecord } from "@/component
 import { cardioStatus } from "@/lib/cardio-plan";
 import { toLocalISO, todayLocalISO } from "@/lib/today";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
-import { formatDuration } from "@/lib/duration";
+import { formatClockSeconds, formatDuration } from "@/lib/duration";
 import {
   getTimerTarget, setTimerTarget, getRowInputs, setRowInputs, getVelocityDefault, setVelocityDefault, type RowInputOverrides,
 } from "@/lib/log-as-override";
@@ -898,12 +899,15 @@ function WorkoutDay({
     () => (rows as any[]).map((row) => {
       const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
       const tracking = row.tracking_type ?? row.measurement_type ?? row.exercises?.default_measurement_type;
+      const timedRow = row.tracking_type === "time" || row.measurement_type === "time";
       return {
         rowId: row.id,
         exerciseId: row.exercises?.id ?? row.exercise_id ?? null,
         exerciseName: name,
         repsOnly: tracking === "reps",
         purposeLabel: row.purpose_label ?? null,
+        // a walk or a bike: last time is its time, calories and effort; a plank: its longest hold
+        timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null,
       };
     }),
     [rows],
@@ -983,7 +987,7 @@ function WorkoutDay({
       const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
-          is_bodyweight, load_type,
+          is_bodyweight, load_type, completed_duration_seconds, actual_calories,
           pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, exercises(name))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
@@ -1026,6 +1030,8 @@ function WorkoutDay({
           isWorkingSet: log.is_working_set ?? null,
           loadType: resolveLoadType(log.load_type, log.is_bodyweight),
           purposeLabel: historyRow?.purpose_label ?? null,
+          durationSeconds: log.completed_duration_seconds ?? null,
+          calories: log.actual_calories ?? null,
         };
       });
     },
@@ -3225,6 +3231,54 @@ function DayCoachNotes({ day }: { day: { notes?: string | null; notes_client_vis
   );
 }
 
+/** "today", "yesterday", "4d", else "Nov 3": the chip shares its row with the Suggest switch. */
+function lastTimeWhen(occurredAt: string | null): string {
+  if (!occurredAt) return "";
+  const d = new Date(occurredAt);
+  const days = Math.round((Date.now() - d.getTime()) / 86400000);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
+ * "Last time" for an exercise done for time: a cardio session's time,
+ * calories and effort ("20:30 · 162 kcal · RPE 5.5"), a hold's longest set.
+ * The same chip as a lift's, and it opens the same History.
+ */
+function PreviousTimedChip({ data, className, onOpen, fallback }: {
+  data: PreviousLift;
+  className?: string;
+  onOpen?: () => void;
+  fallback?: ReactNode;
+}) {
+  const text = data.timed ? formatPreviousTimed(data.timed, formatClockSeconds) : "";
+  if (!text) return <>{fallback}</>;
+  const when = lastTimeWhen(data.occurredAt);
+  const body = (
+    <>
+      <span className="shrink-0 text-muted-foreground">Last time</span>
+      <span className="min-w-0 truncate font-semibold tabular-nums text-foreground">{text}</span>
+      {when && <span className="shrink-0 text-muted-foreground">· {when}</span>}
+    </>
+  );
+  const chip = "inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground";
+  if (!onOpen) {
+    return <div className={cn(chip, className)} data-last-time-timed={data.timed?.kind}>{body}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-testid="last-time-history"
+      data-last-time-timed={data.timed?.kind}
+      aria-label={`Last time: ${text}${when ? `, ${when}` : ""}. Open history`}
+      className={cn(chip, "h-8 transition hover:bg-muted active:scale-[0.97]", className)}
+    >
+      {body}
+      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </button>
+  );
+}
+
 /**
  * Compact "Last time" chip — shows the top set (heaviest × reps) the client
  * logged the last time they trained this exercise on a *different* day.
@@ -3242,6 +3296,7 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   fallback?: ReactNode;
 }) {
   if (!data) return <>{fallback}</>;
+  if (data.timed) return <PreviousTimedChip data={data} className={className} onOpen={onOpen} fallback={fallback} />;
   // A 0-load logged set is a bodyweight set — surface it as "BW × reps".
   // Assisted sets keep their load type so "50 lb" can never be mistaken for
   // weight the athlete actually lifted.
@@ -3254,13 +3309,7 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
         : (rawLoad ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return <>{fallback}</>;
-  let when = "";
-  if (data.occurredAt) {
-    const d = new Date(data.occurredAt);
-    const days = Math.round((Date.now() - d.getTime()) / 86400000);
-    // "7d", not "7d ago": the chip shares its row with the Suggest switch.
-    when = days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days}d` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  }
+  const when = lastTimeWhen(data.occurredAt);
   const body = (
     <>
       <span className="text-muted-foreground">Last time</span>

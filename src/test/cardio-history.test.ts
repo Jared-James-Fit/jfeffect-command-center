@@ -200,3 +200,57 @@ describe("charts draw in the theme's colours", () => {
     }
   });
 });
+
+describe("last time on a timed card (cardio, holds)", () => {
+  // lazy so the module's other tests don't depend on it
+  const lib = () => import("@/lib/workout-previous-lift");
+  const log = (o: Record<string, unknown>) => ({
+    id: String(o.id), exerciseId: "walk", exerciseName: "Treadmill Walk", sessionKey: String(o.session), occurredAt: String(o.at),
+    reps: null, rpe: (o.rpe as string) ?? null, rir: null, enteredValue: null, enteredUnit: null, normalizedKg: null, normalizedLb: null,
+    isWorkingSet: null, durationSeconds: (o.secs as number) ?? null, calories: (o.cal as number) ?? null,
+  });
+  it("shows the last cardio session added up: time, calories, the hardest RPE", async () => {
+    const { selectPreviousLifts, formatPreviousTimed } = await lib();
+    const logs = [
+      log({ id: 1, session: "day:a", at: "2026-11-04T18:00:00Z", secs: 1200, cal: 158, rpe: "5.5" }),
+      log({ id: 2, session: "day:b", at: "2026-11-07T18:00:00Z", secs: 600, cal: 80, rpe: "5" }),
+      log({ id: 3, session: "day:b", at: "2026-11-07T18:10:00Z", secs: 630, cal: 82, rpe: "6" }),
+      log({ id: 4, session: "today", at: "2026-11-11T18:00:00Z", secs: 900, cal: 100, rpe: "7" }),
+    ];
+    const m = selectPreviousLifts([{ rowId: "r", exerciseId: "walk", exerciseName: "Treadmill Walk", timed: "cardio" }], logs as any, "today");
+    const t = m.get("r")?.timed;
+    expect(t).toEqual({ kind: "cardio", seconds: 1230, calories: 162, rpe: 6, sets: 2 });
+    expect(formatPreviousTimed(t!, (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`)).toBe("20:30 · 162 kcal · RPE 6");
+  });
+  it("shows a hold's longest set", async () => {
+    const { selectPreviousLifts, formatPreviousTimed } = await lib();
+    const logs = [
+      log({ id: 1, session: "day:a", at: "2026-11-07T18:00:00Z", secs: 40, rpe: "7" }),
+      log({ id: 2, session: "day:a", at: "2026-11-07T18:02:00Z", secs: 45, rpe: "8" }),
+    ];
+    const t = selectPreviousLifts([{ rowId: "r", exerciseId: "walk", exerciseName: "Plank", timed: "hold" }], logs as any, "today").get("r")?.timed;
+    expect(t).toMatchObject({ kind: "hold", seconds: 45, rpe: 8, calories: null, sets: 2 });
+    expect(formatPreviousTimed(t!, (s) => `0:${s}`)).toBe("0:45 · RPE 8");
+  });
+  it("a cardio set with only RPE still counts; nothing logged doesn't", async () => {
+    const { selectPreviousLifts } = await lib();
+    const only = [log({ id: 1, session: "day:a", at: "2026-11-07T18:00:00Z", rpe: "6" })];
+    expect(selectPreviousLifts([{ rowId: "r", exerciseId: "walk", exerciseName: "Treadmill Walk", timed: "cardio" }], only as any, "today").get("r")?.timed)
+      .toMatchObject({ seconds: null, calories: null, rpe: 6 });
+    const none = [log({ id: 1, session: "day:a", at: "2026-11-07T18:00:00Z" })];
+    expect(selectPreviousLifts([{ rowId: "r", exerciseId: "walk", exerciseName: "Treadmill Walk", timed: "cardio" }], none as any, "today").has("r")).toBe(false);
+  });
+  it("lifts are unchanged: a timed flag is what switches it", async () => {
+    const { selectPreviousLifts } = await lib();
+    const lift = [{ ...log({ id: 1, session: "day:a", at: "2026-11-07T18:00:00Z" }), reps: 5, normalizedKg: 100, enteredValue: 100, enteredUnit: "kg" }];
+    const m = selectPreviousLifts([{ rowId: "r", exerciseId: "walk", exerciseName: "Bench" }], lift as any, "today");
+    expect(m.get("r")?.timed).toBeUndefined();
+    expect(m.get("r")?.reps).toBe(5);
+  });
+  it("the logger asks for time and calories, and marks walks as cardio", () => {
+    const src = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
+    expect(src).toContain("is_bodyweight, load_type, completed_duration_seconds, actual_calories,");
+    expect(src).toContain('timed: isTimedCardio(name) ? "cardio" : timedRow ? "hold" : null');
+    expect(src).toContain("<PreviousTimedChip");
+  });
+});

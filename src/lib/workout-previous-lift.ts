@@ -5,6 +5,11 @@ export type PreviousLiftIdentity = {
   repsOnly?: boolean;
   /** The card's role in the workout ("Primary Deadlift Backoff"), when the program names one. */
   purposeLabel?: string | null;
+  /**
+   * Done for time, so last time is time / calories / effort, never load × reps:
+   * "cardio" (a walk, a bike: the session added up) or "hold" (a plank: the longest set).
+   */
+  timed?: "cardio" | "hold" | null;
 };
 
 export type PreviousLiftLog = {
@@ -27,9 +32,25 @@ export type PreviousLiftLog = {
   bodyweightKg?: number | null;
   /** Role of the card it was logged on, when the program named one. */
   purposeLabel?: string | null;
+  /** A timed set's logged time and calories (cardio, holds). */
+  durationSeconds?: number | null;
+  calories?: number | null;
 };
 
-export type PreviousLift = PreviousLiftLog & { match: "exercise_id" | "name" };
+/** Last time for an exercise done for time. */
+export type PreviousTimed = {
+  kind: "cardio" | "hold";
+  /** cardio: the session's time added up; hold: the longest set. */
+  seconds: number | null;
+  /** cardio only: the session's calories added up. */
+  calories: number | null;
+  /** cardio: the hardest set's RPE; hold: the longest set's. */
+  rpe: number | null;
+  /** Sets that session. */
+  sets: number;
+};
+
+export type PreviousLift = PreviousLiftLog & { match: "exercise_id" | "name"; timed?: PreviousTimed };
 
 const COMPETITION_WORDS = new Set(["competition", "comp"]);
 
@@ -150,6 +171,41 @@ export function matchHistoryLogs(
   return matches.filter((log) => log.sessionKey !== currentSessionKey && occurredAtMs(log) > 0);
 }
 
+function hasTimedPerformance(log: PreviousLiftLog): boolean {
+  return finitePositive(log.durationSeconds) != null || finitePositive(log.calories) != null || finitePositive(log.rpe) != null;
+}
+
+/**
+ * Last time for a timed exercise, from that session's sets: a cardio session
+ * reads like the plan counts it (time and calories added up, the hardest RPE;
+ * the same as tg_pl_row_results_cardio_done and the History sheet), a hold by
+ * its longest set.
+ */
+export function summarizeTimedSession(kind: "cardio" | "hold", sets: PreviousLiftLog[]): PreviousTimed {
+  if (kind === "hold") {
+    const longest = sets
+      .filter((x) => finitePositive(x.durationSeconds) != null)
+      .sort((a, b) => Number(b.durationSeconds) - Number(a.durationSeconds))[0];
+    return {
+      kind,
+      seconds: longest ? Number(longest.durationSeconds) : null,
+      calories: null,
+      rpe: finitePositive((longest ?? sets[0])?.rpe),
+      sets: sets.length,
+    };
+  }
+  const secs = sets.map((x) => finitePositive(x.durationSeconds)).filter((n): n is number => n != null);
+  const cals = sets.map((x) => finitePositive(x.calories)).filter((n): n is number => n != null);
+  const rpes = sets.map((x) => finitePositive(x.rpe)).filter((n): n is number => n != null);
+  return {
+    kind,
+    seconds: secs.length ? Math.round(secs.reduce((t, n) => t + n, 0)) : null,
+    calories: cals.length ? Math.round(cals.reduce((t, n) => t + n, 0)) : null,
+    rpe: rpes.length ? Math.max(...rpes) : null,
+    sets: sets.length,
+  };
+}
+
 /** Select one Last Time set per current workout row from a single history batch. */
 export function selectPreviousLifts(
   identities: PreviousLiftIdentity[],
@@ -171,9 +227,19 @@ export function selectPreviousLifts(
     const valid = matches.filter((log) =>
       log.sessionKey !== currentSessionKey &&
       occurredAtMs(log) > 0 &&
-      hasUsefulPerformance(log, identity.repsOnly === true),
+      (identity.timed ? hasTimedPerformance(log) : hasUsefulPerformance(log, identity.repsOnly === true)),
     );
     if (valid.length === 0) continue;
+    if (identity.timed) {
+      const latest = valid.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0];
+      const session = valid.filter((log) => log.sessionKey === latest.sessionKey);
+      result.set(identity.rowId, {
+        ...latest,
+        match: idMatches.length > 0 ? "exercise_id" : "name",
+        timed: summarizeTimedSession(identity.timed, session),
+      });
+      continue;
+    }
     const latestSession = valid.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0]?.sessionKey;
     if (!latestSession) continue;
     // Same lift twice in a workout (top set + back-off): Last Time is the same
@@ -210,4 +276,11 @@ export function formatPreviousLiftLoad(log: PreviousLiftLog, unit: "kg" | "lb"):
   if (value == null) return null;
   const rounded = Math.abs(value - Math.round(value)) < 0.05 ? Math.round(value) : Number(value.toFixed(1));
   return `${rounded} ${unit}`;
+}
+/** "20:30 · 162 kcal · RPE 5.5" (cardio), "0:45 · RPE 7" (a hold), "" when nothing was logged. */
+export function formatPreviousTimed(t: PreviousTimed, clock: (seconds: number) => string): string {
+  const rpe = t.rpe != null ? `RPE ${Math.round(t.rpe * 10) / 10}` : null;
+  return [t.seconds != null ? clock(t.seconds) : null, t.calories != null ? `${t.calories} kcal` : null, rpe]
+    .filter(Boolean)
+    .join(" · ");
 }
