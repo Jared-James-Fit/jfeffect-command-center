@@ -1,0 +1,457 @@
+/**
+ * A set's video, at the end of its row (a coaching client's sets only):
+ *   · a quiet camera once the set is logged: one tap opens the phone's own
+ *     sheet (Take Video / Photo Library / Choose File) and the clip goes in
+ *     the background while they keep logging
+ *   · a ring with how far it's got while it's on its way
+ *   · the clip's poster once it's on the set (and in the coach chat): a tap
+ *     plays it, says where it is in the chat, or takes it off
+ *   · red when it didn't send (a dropped connection retries by itself)
+ * Light on purpose: the uploader, the trimmer and the sheet load only when a
+ * clip is picked or opened, so the logger doesn't carry any video code.
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Camera, CloudOff, Play } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+import { importWithRetry } from "@/lib/chunk-import";
+import { useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
+import {
+  dropSetVideoJob,
+  isActiveJob,
+  jobStatusText,
+  jobsForSet,
+  useSetVideoJobs,
+  type SetVideoJob,
+} from "@/lib/set-videos/jobs";
+
+export type SetVideo = {
+  id: string;
+  row_id: string | null;
+  result_id: string | null;
+  set_index: number;
+  exercise_name: string | null;
+  label: string;
+  storage_path: string;
+  thumbnail_path: string | null;
+  duration_s: number | null;
+  width: number | null;
+  height: number | null;
+  size_bytes: number | null;
+  message_id: string | null;
+  uploaded_by: string;
+  created_at: string;
+};
+
+type FlowComponent = (typeof import("@/components/workout-day/set-video-flow"))["default"];
+type SheetComponent = (typeof import("@/components/workout-day/set-video-sheet"))["default"];
+/**
+ * The flow and the sheet load on demand and render only once loaded: never
+ * through React.lazy, which suspends the workout or draws a "couldn't load"
+ * box inside the set row when there's no connection. A load that fails says
+ * so in a toast and leaves the row as it was.
+ */
+let Flow: FlowComponent | null = null;
+let Sheet: SheetComponent | null = null;
+const loadFlow = (): Promise<FlowComponent> =>
+  Flow
+    ? Promise.resolve(Flow)
+    : importWithRetry(() => import("@/components/workout-day/set-video-flow")).then(
+        (m) => (Flow = m.default),
+      );
+const loadSheet = (): Promise<SheetComponent> =>
+  Sheet
+    ? Promise.resolve(Sheet)
+    : importWithRetry(() => import("@/components/workout-day/set-video-sheet")).then(
+        (m) => (Sheet = m.default),
+      );
+
+const NO_CONNECTION =
+  "The video couldn't start without a connection. Try again once you have signal.";
+let warmed = false;
+/**
+ * The video code (uploader, engine, trimmer, sheet) is loaded in the
+ * background once someone is logging sets, so a clip picked at a gym with no
+ * signal still starts (and sends once the connection is back). The service
+ * worker never caches the app's code, so without this the pick would do
+ * nothing offline. Skipped on Save Data; once per app open.
+ */
+function warmSetVideoCode() {
+  if (warmed || typeof window === "undefined") return;
+  if (
+    navigator.onLine === false ||
+    (navigator as { connection?: { saveData?: boolean } }).connection?.saveData
+  )
+    return;
+  warmed = true;
+  const run = () => {
+    Promise.all([
+      loadFlow(),
+      loadSheet(),
+      import("@/lib/set-videos/uploader")
+        .then(() => import("@/lib/video-edit/pick"))
+        .then((m) => m.preloadVideoEngine()),
+    ]).catch(() => {
+      warmed = false;
+    });
+  };
+  window.setTimeout(() => {
+    const idle = (
+      window as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+    ).requestIdleCallback;
+    if (idle) idle(run, { timeout: 8_000 });
+    else run();
+  }, 6_000);
+}
+
+export const setVideosKey = (dayId: string) => ["set-videos", dayId] as const;
+/** Sent clips the day's list was already asked to read back (every cell shares one query: ask once). */
+const readBackAsked = new Set<string>();
+
+/** A workout's set videos (one read for every row), refreshed when one of its uploads lands. */
+export function useSetVideosForDay(dayId: string, enabled: boolean) {
+  const qc = useQueryClient();
+  const jobs = useSetVideoJobs();
+  const query = useQuery({
+    queryKey: setVideosKey(dayId),
+    enabled: enabled && !!dayId,
+    staleTime: 60_000,
+    queryFn: async (): Promise<SetVideo[]> => {
+      const { data, error } = await (supabase as any)
+        .from("pl_set_videos")
+        .select(
+          "id, row_id, result_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at",
+        )
+        .eq("day_id", dayId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as SetVideo[];
+    },
+  });
+  // A clip of this workout just landed: read the list again; once it's in it, the job is done with.
+  const data = query.data;
+  useEffect(() => {
+    if (!enabled) return;
+    const done = jobs.filter((j) => j.dayId === dayId && j.state === "done" && j.setVideoId);
+    if (!done.length) return;
+    const have = new Set((data ?? []).map((v) => v.id));
+    const missing = done.filter((j) => !have.has(j.setVideoId!) && !readBackAsked.has(j.id));
+    for (const j of done) {
+      if (!have.has(j.setVideoId!)) continue;
+      readBackAsked.delete(j.id);
+      dropSetVideoJob(j.id);
+    }
+    if (!missing.length) return;
+    for (const j of missing) readBackAsked.add(j.id);
+    void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
+  }, [jobs, data, dayId, enabled, qc]);
+  return query;
+}
+
+/** Whether this exercise has a video on any set (or one on its way): its rows get the video column even read-only. */
+export function useRowHasSetVideos(dayId: string, rowId: string, enabled: boolean): boolean {
+  const { data } = useSetVideosForDay(dayId, enabled);
+  const jobs = useSetVideoJobs();
+  return useMemo(
+    () =>
+      enabled &&
+      ((data ?? []).some((v) => v.row_id === rowId && v.result_id) ||
+        jobs.some((j) => j.rowId === rowId && j.state !== "done")),
+    [data, jobs, rowId, enabled],
+  );
+}
+
+export type SetVideoCellProps = {
+  clientId: string | undefined;
+  rowId: string;
+  dayId: string;
+  dayTitle: string;
+  exerciseName: string;
+  setIndex: number;
+  /** The logged set (pl_row_results.id): the video belongs to it. */
+  resultId: string | null;
+  /** The set has numbers saved: a video can go on it. */
+  logged: boolean;
+  readonly: boolean;
+  focusMode?: boolean;
+  /** "100 kg × 5 @ RPE 8": what the coach's card says about the set. */
+  label: string;
+};
+
+export function SetVideoCell(props: SetVideoCellProps) {
+  const { clientId, rowId, dayId, setIndex, resultId, logged, readonly, focusMode } = props;
+  const { user } = useAuth();
+  const { data } = useSetVideosForDay(dayId, !!clientId);
+  const allJobs = useSetVideoJobs();
+  const inputRef = useRef<HTMLInputElement>(null);
+  /** Each pick mounts its own flow (keyed), and clears only itself when it's done. */
+  const [picked, setPicked] = useState<{ file: File; key: number } | null>(null);
+  const pickSeq = useRef(0);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const stored = useMemo(
+    () => (resultId ? (data ?? []).filter((v) => v.result_id === resultId) : []),
+    [data, resultId],
+  );
+  // Just sent and not read back yet: shown from the job, so the set never flicks back to the camera.
+  const videos = useMemo(() => {
+    const landed = resultId
+      ? allJobs.filter(
+          (j) =>
+            j.state === "done" &&
+            j.rowId === rowId &&
+            j.resultId === resultId &&
+            j.setVideoId &&
+            !stored.some((v) => v.id === j.setVideoId),
+        )
+      : [];
+    if (!landed.length) return stored;
+    return [
+      ...stored,
+      ...landed.map(
+        (j): SetVideo => ({
+          id: j.setVideoId!,
+          row_id: j.rowId,
+          result_id: j.resultId,
+          set_index: j.setIndex,
+          exercise_name: j.exerciseName,
+          label: j.label,
+          storage_path: "",
+          thumbnail_path: j.posterPath ?? null,
+          duration_s: null,
+          width: null,
+          height: null,
+          size_bytes: null,
+          message_id: j.messageId ?? null,
+          uploaded_by: j.userId,
+          created_at: new Date(j.createdAt).toISOString(),
+        }),
+      ),
+    ];
+  }, [stored, allJobs, rowId, resultId]);
+  const jobs = useMemo(() => jobsForSet(allJobs, rowId, resultId), [allJobs, rowId, resultId]);
+  const active = jobs.find(isActiveJob) ?? null;
+  const failed = !active ? (jobs.find((j) => j.state === "failed") ?? null) : null;
+  const canAdd = !readonly && logged && !!clientId && !!resultId && !!user?.id;
+
+  useEffect(() => {
+    if (canAdd) warmSetVideoCode();
+  }, [canAdd]);
+
+  const openPicker = () => {
+    if (!canAdd) return;
+    // the video code starts loading while the phone's picker is open
+    void loadFlow().catch(() => {});
+    void import("@/lib/video-edit/pick").then((m) => m.preloadVideoEngine()).catch(() => {});
+    inputRef.current?.click();
+  };
+  const onPicked = (f: File) => {
+    loadFlow().then(
+      () => setPicked({ file: f, key: ++pickSeq.current }),
+      () => toast.error(NO_CONNECTION),
+    );
+  };
+  const openSheet = () => {
+    loadSheet().then(
+      () => setSheetOpen(true),
+      () => toast.error("Couldn't open it without a connection. Try again once you have signal."),
+    );
+  };
+
+  const size = focusMode ? "h-9 w-9" : "h-8 w-8";
+  let content: React.ReactNode = null;
+  let label = "";
+  let onTap: (() => void) | null = null;
+  if (active) {
+    const pct = Math.max(4, Math.min(100, active.progress));
+    label = `Set ${setIndex} video: ${jobStatusText(active)}`;
+    onTap = openSheet;
+    content = <ProgressRing pct={pct} className={size} />;
+  } else if (failed) {
+    label = failed.autoRetry
+      ? `Set ${setIndex} video: waiting for a connection`
+      : `Set ${setIndex} video didn't send. Open to try again`;
+    onTap = openSheet;
+    content = (
+      <span
+        className={cn(
+          "inline-flex items-center justify-center rounded-full border",
+          size,
+          failed.autoRetry
+            ? "border-amber-500/60 text-amber-600 dark:text-amber-400"
+            : "border-destructive bg-destructive/10 text-destructive",
+        )}
+      >
+        {failed.autoRetry ? (
+          <CloudOff className="h-3.5 w-3.5" />
+        ) : (
+          <AlertTriangle className="h-3.5 w-3.5" />
+        )}
+      </span>
+    );
+  } else if (videos.length) {
+    label = `Set ${setIndex} video${videos.length > 1 ? `s (${videos.length})` : ""}`;
+    onTap = openSheet;
+    content = (
+      <PosterChip video={videos[videos.length - 1]} count={videos.length} className={size} />
+    );
+  } else if (canAdd) {
+    label = `Add a video of set ${setIndex} for your coach`;
+    onTap = openPicker;
+    content = (
+      <span
+        className={cn(
+          "inline-flex items-center justify-center rounded-full text-muted-foreground/70",
+          size,
+        )}
+      >
+        <Camera className="h-4 w-4" />
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex justify-center">
+      {content && onTap ? (
+        <button
+          type="button"
+          onClick={onTap}
+          aria-label={label}
+          title={label}
+          data-set-video={active ? "uploading" : failed ? "failed" : videos.length ? "sent" : "add"}
+          className="flex h-11 w-full items-center justify-center rounded-md transition active:scale-95 sm:h-9"
+        >
+          {content}
+        </button>
+      ) : null}
+      {canAdd && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            e.target.value = "";
+            if (f) onPicked(f);
+          }}
+        />
+      )}
+      {picked && Flow && user?.id && clientId && resultId && (
+        <Flow
+          key={picked.key}
+          file={picked.file}
+          start={{
+            userId: user.id,
+            clientId,
+            rowId,
+            dayId,
+            resultId,
+            setIndex,
+            exerciseName: props.exerciseName,
+            dayTitle: props.dayTitle,
+            label: props.label,
+          }}
+          onDone={() => {
+            const done = picked.key;
+            setPicked((cur) => (cur?.key === done ? null : cur));
+          }}
+        />
+      )}
+      {sheetOpen && Sheet && (
+        <Sheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          dayId={dayId}
+          clientId={clientId ?? ""}
+          exerciseName={props.exerciseName}
+          setIndex={setIndex}
+          label={props.label}
+          videos={stored}
+          jobs={jobs as SetVideoJob[]}
+          canAdd={canAdd}
+          onAdd={openPicker}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProgressRing({ pct, className }: { pct: number; className?: string }) {
+  const r = 13;
+  const c = 2 * Math.PI * r;
+  return (
+    <span
+      className={cn("relative inline-flex items-center justify-center", className)}
+      role="progressbar"
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <svg viewBox="0 0 32 32" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden>
+        <circle
+          cx="16"
+          cy="16"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-muted"
+        />
+        <circle
+          cx="16"
+          cy="16"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct / 100)}
+          className="text-foreground transition-[stroke-dashoffset] duration-300"
+        />
+      </svg>
+      <span className="text-[9px] font-semibold tabular-nums text-foreground">
+        {Math.round(pct)}
+      </span>
+    </span>
+  );
+}
+
+function PosterChip({
+  video,
+  count,
+  className,
+}: {
+  video: SetVideo;
+  count: number;
+  className?: string;
+}) {
+  const poster = useChatSignedUrl(video.thumbnail_path ?? undefined);
+  return (
+    <span
+      className={cn(
+        "relative inline-flex overflow-hidden rounded-md border border-border bg-muted",
+        className,
+      )}
+    >
+      {poster ? (
+        <img src={poster} alt="" className="h-full w-full object-cover" draggable={false} />
+      ) : null}
+      <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white">
+        <Play className="h-3 w-3 fill-current" />
+      </span>
+      {count > 1 && (
+        <span className="absolute -right-0.5 -top-0.5 rounded-full bg-foreground px-1 text-[9px] font-bold leading-[14px] text-background">
+          {count}
+        </span>
+      )}
+    </span>
+  );
+}

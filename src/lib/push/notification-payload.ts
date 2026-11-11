@@ -89,6 +89,8 @@ export function messageAction(attachments: AttachmentLike[] | null | undefined, 
   if (kinds.has("recipe_share")) return `shared a recipe`;
   if (kinds.has("community_post")) return `sent${you} a post`;
   if (kinds.has("staff_invite")) return `sent${you} a team account invite`;
+  // a video of one set, from the workout logger (DB-made)
+  if (atts.some((a) => (a as { set_video?: unknown }).set_video)) return `sent${you} a set video`;
   if (kinds.has("gif")) return `sent${you} a GIF`;
   if (kinds.has("sound")) return `sent${you} a sound`;
   // Auto-detected links ride along with ordinary text, so they don't count.

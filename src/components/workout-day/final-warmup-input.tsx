@@ -335,7 +335,7 @@ function WarmupForm({
     try {
       await saveWarmup();
       const n = await onUseForAllSets(hint.target);
-      if (n > 0) toast.success(`${fmt(hint.target)} ${unit} in ${n} set${n === 1 ? "" : "s"} — tap ✓ as you finish each`);
+      if (n > 0) toast.success(`${fmt(hint.target)} ${unit} in ${n} set${n === 1 ? "" : "s"} — tap each set's number as you finish it`);
     } finally {
       setBusy(false);
     }
