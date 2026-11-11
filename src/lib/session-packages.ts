@@ -14,7 +14,7 @@
  */
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import { latestPackage } from "@/lib/client-owed";
-import { saleMoney, withTax, type MoneyLedgerRow, type MoneySale, type SaleMoney } from "@/lib/sale-money";
+import { billingPeriod, saleMoney, withTax, type MoneyLedgerRow, type MoneySale, type SaleMoney } from "@/lib/sale-money";
 import type { SessionBalanceRow } from "@/lib/sessions-inventory";
 
 export type PackageLedgerEvent = {
@@ -42,6 +42,17 @@ export type PackageSale = MoneySale & {
   term_start_date?: string | null;
   term_end_date?: string | null;
   package_expiry_date?: string | null;
+  // How it's paid in Stripe (auto-pay), when it is.
+  stripe_subscription_id?: string | null;
+  stripe_subscription_status?: string | null;
+  stripe_checkout_session_id?: string | null;
+  stripe_payment_link?: string | null;
+  stripe_payment_intent_id?: string | null;
+  cancel_at_period_end?: boolean | null;
+  next_billing_date?: string | null;
+  installment_amount?: number | string | null;
+  payment_frequency?: string | null;
+  offer_snapshot?: { source?: string | null } | null;
 };
 
 /** Where one session's credit sits: on a package (or none), used or held. */
@@ -137,6 +148,8 @@ export type SessionPackages = {
   unpriced: PackageSessionRow[];
   /** Covered by sessions given free (Adjust / Add free sessions), not by a package. */
   free: PackageSessionRow[];
+  /** The Stripe auto-pay paying their packages, when there is one. */
+  autoPay: AutoPay | null;
   totals: {
     done: number;
     booked: number;
@@ -155,6 +168,93 @@ const byWhen = (a: PackageSessionRow, b: PackageSessionRow) =>
 
 function saleStart(s: PackageSale, opened: string | null): string {
   return String(opened ?? s.term_start_date ?? s.purchased_at ?? s.created_at ?? "").slice(0, 10);
+}
+
+/**
+ * A Stripe subscription paying session packages (auto-pay). It pays the
+ * client's packages in order, the oldest still owed first: its own package,
+ * then the pay-later renewals after it, and stops once nothing's owed. That's
+ * the database's rule (session_plan_payment_target, which the webhook and the
+ * daily sync follow); this projects it forward so the tab can say when each
+ * package gets paid.
+ */
+export type AutoPay = {
+  /** The sale the subscription was sold with. */
+  saleId: string;
+  /** One payment, in the dollars the client pays. */
+  eachCents: number;
+  /** "2 weeks", "week", "month". */
+  per: string | null;
+  /** The next charge (null when Stripe hasn't said). */
+  next: string | null;
+  /** Set to stop at `next` (nothing else is owed, or it was cancelled). */
+  ending: boolean;
+  /** Per package (sale id): the payments still to come on it and their first and last dates. */
+  covers: Map<string, { payments: number; first: string | null; last: string | null }>;
+  /** The day the last package owed is paid off on this schedule. */
+  paidUpOn: string | null;
+};
+
+const LIVE_SUB = new Set(["active", "trialing", "past_due"]);
+
+/** The day after `iso` by one billing period. */
+export function addPeriod(iso: string, per: string | null, times = 1): string {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  if (per === "month") d.setUTCMonth(d.getUTCMonth() + times);
+  else if (per === "year") d.setUTCFullYear(d.getUTCFullYear() + times);
+  else d.setUTCDate(d.getUTCDate() + (per === "week" ? 7 : 14) * times);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Paid by Stripe in its own right (so auto-pay never pays it). */
+const paysItself = (s: PackageSale) =>
+  !!(s.stripe_subscription_id || s.stripe_checkout_session_id || s.stripe_payment_link || s.stripe_payment_intent_id) ||
+  s.offer_snapshot?.source === "booking";
+
+const startOf = (s: PackageSale) => String(s.term_start_date ?? s.purchased_at ?? s.created_at ?? "").slice(0, 10);
+
+export function autoPayPlan(sales: PackageSale[], views: Pick<PackageView, "id" | "money">[], rate: number | null): AutoPay | null {
+  const carriers = sales
+    .filter((s) => !s.archived_at && n(s.sessions_purchased) > 0 && s.stripe_subscription_id && n(s.installment_amount) > 0)
+    .filter((s) => LIVE_SUB.has(String(s.stripe_subscription_status ?? "").toLowerCase()) || String(s.payment_status ?? "") === "Active Subscription")
+    .sort((a, b) => startOf(b).localeCompare(startOf(a)));
+  const carrier = carriers[0];
+  if (!carrier) return null;
+  const eachCents = withTax(Math.round(n(carrier.installment_amount) * 100), rate);
+  const per = billingPeriod(carrier);
+  const next = carrier.next_billing_date ? String(carrier.next_billing_date).slice(0, 10) : null;
+  const ending = !!carrier.cancel_at_period_end;
+  const covers: AutoPay["covers"] = new Map();
+  if (ending || eachCents <= 0) return { saleId: carrier.id, eachCents, per, next, ending, covers, paidUpOn: null };
+
+  const moneyOf = new Map(views.map((v) => [v.id, v.money]));
+  const owedOf = (s: PackageSale) => {
+    const m = moneyOf.get(s.id);
+    return m && (m.state === "left" || m.state === "past_due") ? m.leftCents : 0;
+  };
+  const onPlan = sales
+    .filter((s) => !s.archived_at && n(s.sessions_purchased) > 0)
+    .filter((s) => s.id === carrier.id || (!paysItself(s) && startOf(s) >= startOf(carrier)))
+    .sort((a, b) => startOf(a).localeCompare(startOf(b)) || String(a.purchased_at ?? "").localeCompare(String(b.purchased_at ?? "")));
+
+  // Whole payments, oldest owed first (a payment never splits across packages).
+  let k = 0;
+  let paidUpOn: string | null = null;
+  for (const s of onPlan) {
+    let left = owedOf(s);
+    if (left <= 0) continue;
+    const first = next ? addPeriod(next, per, k) : null;
+    let payments = 0;
+    while (left > 0 && payments < 120) {
+      left -= eachCents;
+      payments += 1;
+      k += 1;
+    }
+    const last = next ? addPeriod(next, per, k - 1) : null;
+    covers.set(s.id, { payments, first, last });
+    paidUpOn = last;
+  }
+  return { saleId: carrier.id, eachCents, per, next, ending, covers, paidUpOn };
 }
 
 export function buildSessionPackages(input: {
@@ -268,6 +368,7 @@ export function buildSessionPackages(input: {
     next,
     unpriced,
     free,
+    autoPay: autoPayPlan(sales, views, rate),
     totals: {
       done,
       booked,
@@ -294,7 +395,13 @@ export function dayRange(from: string | null, to: string | null, thisYear = new 
 }
 
 /** A package's payment, in a few words, and how loud to say it. */
-export function packagePayLine(m: SaleMoney, fmt: (cents: number) => string): { text: string; tone: "done" | "attention" | "error" | "neutral" } {
+export function packagePayLine(
+  m: SaleMoney,
+  fmt: (cents: number) => string,
+  /** Auto-pay's payments still to come on this package, and how to say a day. */
+  auto?: { cover: { payments: number; first: string | null; last: string | null } | null | undefined; day: (iso: string) => string },
+): { text: string; tone: "done" | "attention" | "error" | "neutral" } {
+  const cover = auto?.cover;
   switch (m.state) {
     case "paid":
       return { text: `Paid ${fmt(m.paidCents)}`, tone: "done" };
@@ -303,6 +410,13 @@ export function packagePayLine(m: SaleMoney, fmt: (cents: number) => string): { 
     case "past_due":
       return { text: `Payment failed · ${fmt(m.leftCents)} owed`, tone: "error" };
     case "left":
+      // Auto-pay will collect it: say when, not that it's owed.
+      if (cover && cover.payments > 0) {
+        const when = cover.first && cover.last
+          ? cover.first === cover.last ? auto!.day(cover.first) : `${auto!.day(cover.first)} – ${auto!.day(cover.last)}`
+          : null;
+        return { text: `${fmt(m.leftCents)} · auto-pay${when ? ` ${when}` : ""}`, tone: "neutral" };
+      }
       return { text: `${fmt(m.leftCents)} owed`, tone: "attention" };
     case "waiting":
       return { text: `Payment link out · ${fmt(m.leftCents)}`, tone: "neutral" };

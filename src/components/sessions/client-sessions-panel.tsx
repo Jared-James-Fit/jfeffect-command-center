@@ -50,6 +50,7 @@ import {
   type PackageView,
   type SessionPackages,
   type SessionsNextStep,
+  type AutoPay,
 } from "@/lib/session-packages";
 import { cn } from "@/lib/utils";
 
@@ -353,6 +354,7 @@ export function SessionsTrackerBody({
         left={model.totals.leftToBook}
         nextUp={upcoming[0] ?? null}
         needsReview={needsReview.length}
+        autoPay={model.autoPay}
       />
 
       <NextStep
@@ -375,7 +377,7 @@ export function SessionsTrackerBody({
             <PendingPackage key={`next-${i}`} next={n} number={lastNumber + 2 + i} renderSession={sessionRow} />
           ))}
           {shown.map((p) => (
-            <PackageCard key={p.id} p={p} current={p.id === current?.id} renderSession={sessionRow} />
+            <PackageCard key={p.id} p={p} current={p.id === current?.id} autoPay={model.autoPay} renderSession={sessionRow} />
           ))}
           {folded > 0 && (
             <button
@@ -399,11 +401,27 @@ export function SessionsTrackerBody({
 
 /* ---------------- Summary ---------------- */
 
-function Summary({ owedCents, paidCents, taxIncluded, done, booked, left, nextUp, needsReview }: {
+/** "Nov 27" */
+const monthDay = (iso: string) =>
+  new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+
+/** What Stripe's auto-pay does from here, in one line. */
+function autoPayLine(a: AutoPay | null, owedCents: number): { text: string; tone: "muted" | "attention" } | null {
+  if (!a) return owedCents > 0 ? { text: "No auto-pay: nothing in Stripe collects this.", tone: "attention" } : null;
+  const each = `${money(a.eachCents)}${a.per ? ` every ${a.per}` : ""}`;
+  if (a.ending) return { text: `Auto-pay ${each} ends${a.next ? ` ${shortDay(a.next)}` : ""}.`, tone: owedCents > 0 ? "attention" : "muted" };
+  const parts = [`Auto-pay ${each}`];
+  if (a.next) parts.push(`next ${shortDay(a.next)}`);
+  if (a.paidUpOn) parts.push(`paid up ${shortDay(a.paidUpOn)}`);
+  return { text: parts.join(" · "), tone: "muted" };
+}
+
+function Summary({ owedCents, paidCents, taxIncluded, done, booked, left, nextUp, needsReview, autoPay }: {
   owedCents: number; paidCents: number; taxIncluded: boolean;
   done: number; booked: number; left: number;
-  nextUp: any | null; needsReview: number;
+  nextUp: any | null; needsReview: number; autoPay: AutoPay | null;
 }) {
+  const auto = autoPayLine(autoPay, owedCents);
   return (
     <div className="space-y-3 rounded-xl border border-border p-3 sm:p-4" data-sessions-summary>
       <div className="flex items-start justify-between gap-3">
@@ -433,6 +451,11 @@ function Summary({ owedCents, paidCents, taxIncluded, done, booked, left, nextUp
           </div>
         ))}
       </dl>
+      {auto && (
+        <p className={cn("text-[13px]", auto.tone === "attention" ? "text-warning" : "text-muted-foreground")} data-auto-pay>
+          {auto.text}
+        </p>
+      )}
       {nextUp && (
         <p className="text-[13px] text-muted-foreground">
           Next session <span className="font-medium text-foreground">{whenLabel(nextUp.session_date, String(nextUp.start_time).slice(0, 5))}</span>
@@ -565,9 +588,10 @@ function countLine(p: { size: number; done: number; booked: number; open: number
   return parts.join(" · ");
 }
 
-function PackageCard({ p, current, renderSession }: { p: PackageView; current: boolean; renderSession: (s: PackageSessionRow) => ReactNode }) {
+function PackageCard({ p, current, autoPay, renderSession }: { p: PackageView; current: boolean; autoPay: AutoPay | null; renderSession: (s: PackageSessionRow) => ReactNode }) {
   const [open, setOpen] = useState(current);
-  const pay = packagePayLine(p.money, (c) => money(c, p.money.currency));
+  const cover = autoPay?.covers.get(p.id) ?? null;
+  const pay = packagePayLine(p.money, (c) => money(c, p.money.currency), { cover, day: monthDay });
   const when = dayRange(p.from, p.to);
   const plan = p.money.plan;
   return (
@@ -598,6 +622,12 @@ function PackageCard({ p, current, renderSession }: { p: PackageView; current: b
                     ? ` · next ${money(p.money.next.cents)} on ${shortDay(p.money.next.date)}`
                     : ` · ${money(p.money.next.cents)} each`
                   : ""}
+              </div>
+            )}
+            {cover && cover.payments > 0 && autoPay && (
+              <div data-auto-pay-cover>
+                Auto-pay: {cover.payments === 1 ? `1 payment of ${money(autoPay.eachCents)}` : `${cover.payments} payments of ${money(autoPay.eachCents)}`}
+                {cover.first && cover.last ? (cover.first === cover.last ? ` on ${shortDay(cover.first)}` : `, ${shortDay(cover.first)} – ${shortDay(cover.last)}`) : ""}
               </div>
             )}
             {p.expired > 0 && <div>{plural(p.expired)} expired unused</div>}

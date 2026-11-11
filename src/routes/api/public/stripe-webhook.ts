@@ -1035,11 +1035,16 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
                 await provisionMemberFromPurchase(supabase, { ...purchase, stripe_customer_id: obj.customer ?? purchase.stripe_customer_id });
+                // A session package's auto-pay pays the client's packages in order: this
+                // payment goes to the oldest one still owed (its own, then the pay-later
+                // renewals after it), never onto a package that's already paid.
+                const { planPaymentTarget, planStillOwed, carriedNote } = await import("@/lib/stripe-plan-payments.server");
+                const payTo = invSubId ? await planPaymentTarget(supabase, purchase) : purchase;
                 // Create payment_ledger row for subscription renewal (idempotent via invoice id)
                 if ((obj.amount_paid ?? 0) > 0) {
                   const { error: ledgerErr } = await supabase.from("payment_ledger").upsert({
-                    client_id: purchase.client_id,
-                    purchase_id: purchase.id,
+                    client_id: payTo.client_id,
+                    purchase_id: payTo.id,
                     txn_type: "payment",
                     method: "stripe",
                     amount_minor: obj.amount_paid,
@@ -1059,7 +1064,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     hosted_invoice_url: obj.hosted_invoice_url ?? null,
                     invoice_pdf_url: obj.invoice_pdf ?? null,
                     source: "stripe_subscription",
-                    internal_note: `Stripe invoice.payment_succeeded — invoice ${obj.id}`,
+                    internal_note: `Stripe invoice.payment_succeeded — invoice ${obj.id}${carriedNote(purchase, payTo)}`,
                   }, { onConflict: "external_reference", ignoreDuplicates: true });
                   if (ledgerErr) {
                     console.error("[stripe-webhook] payment_ledger upsert failed (invoice)", {
@@ -1073,21 +1078,28 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                 // `payment_count` price metadata, so no Subscription Schedule
                 // exists to end the plan. Once the contracted number of
                 // installments has been paid, stop future billing.
+                // A session package's auto-pay carries on while any package on its plan is
+                // still owed (the pay-later renewals after it), and ends only once all are paid.
                 const contractedPayments = Number(purchase.number_of_payments ?? 0);
-                if (invSubId && contractedPayments > 0) {
-                  const { count: paidCount } = await supabase
-                    .from("payment_ledger")
-                    .select("id", { count: "exact", head: true })
-                    .eq("purchase_id", purchase.id)
-                    .eq("txn_type", "payment")
-                    .eq("voided", false);
-                  if ((paidCount ?? 0) >= contractedPayments) {
+                const stillOwed = invSubId ? await planStillOwed(supabase, purchase) : null;
+                if (invSubId && (stillOwed === false || (stillOwed === null && contractedPayments > 0))) {
+                  let done = stillOwed === false;
+                  if (!done) {
+                    const { count: paidCount } = await supabase
+                      .from("payment_ledger")
+                      .select("id", { count: "exact", head: true })
+                      .eq("purchase_id", purchase.id)
+                      .eq("txn_type", "payment")
+                      .eq("voided", false);
+                    done = (paidCount ?? 0) >= contractedPayments;
+                  }
+                  if (done) {
                     try {
                       await stripeFetch(`/subscriptions/${invSubId}`, {
                         apiKey: eventApiKey ?? undefined,
                         method: "POST",
                         body: "cancel_at_period_end=true",
-                        idempotencyKey: `fixedterm_end_${invSubId}_${contractedPayments}`,
+                        idempotencyKey: stillOwed === false ? `plan_paid_end_${invSubId}_${obj.id}` : `fixedterm_end_${invSubId}_${contractedPayments}`,
                       });
                       await supabase.from("purchase_records").update({
                         cancel_at_period_end: true,
