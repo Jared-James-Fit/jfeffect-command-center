@@ -42,6 +42,7 @@ import {
 import { bookButtonLabel, defaultSaleProduct } from "@/lib/session-sale";
 import { SessionPaymentLine } from "@/components/schedule/session-payment-line";
 import { RepeatDatePicker } from "@/components/schedule/repeat-date-picker";
+import { bookedToast } from "@/lib/session-booked";
 
 type Props = {
   open: boolean;
@@ -203,6 +204,14 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
 
   const selectedClient = form ? clients.find((c) => c.id === form.client_id) : undefined;
   const tracking = !!selectedClient?.package_tracking_enabled;
+  // A new booking tells the client in their chat (session-booked.server.ts) when they have a login to read it.
+  const { data: clientHasLogin = false } = useQuery<boolean>({
+    queryKey: ["client-has-login", form?.client_id ?? null],
+    enabled: !!form?.client_id && !form?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async () =>
+      !!(await supabase.from("clients").select("user_id").eq("id", form.client_id).maybeSingle()).data?.user_id,
+  });
   // Ledger-driven credit balance. Booking reserves 1 credit per session
   // (already netted out of `remaining`); completing converts reserved → used;
   // cancelling releases the reservation back to available.
@@ -436,13 +445,9 @@ export function PtSessionDialog({ open, onOpenChange, clientId, clients = [], in
     if (selling && createdIds.length) {
       await runSessionSale(sellFn as any, qc, { clientId: form.client_id, sessionIds: createdIds, draft: sale, first: clientFirst });
     } else {
-      toast.success(
-        form.id
-          ? "Session updated"
-          : previewDates.length > 1
-            ? `Booked ${previewDates.length} sessions`
-            : "Session booked",
-      );
+      const tellsClient = clientHasLogin && form.status === "Scheduled" && form.visible_to_client !== false
+        && form.send_confirmation_email !== false && previewDates.some((d) => d >= deviceTodayISO());
+      toast.success(form.id ? "Session updated" : bookedToast(previewDates.length, clientFirst, tellsClient));
     }
     setSaving(false);
     invalidatePtSessionCaches(qc, form.client_id);

@@ -267,6 +267,7 @@ import { Route as ApiPublicHooksProgressArchiveTickRouteImport } from './routes/
 import { Route as ApiPublicHooksScheduleSyncRouteImport } from './routes/api/public/hooks/schedule-sync'
 import { Route as ApiPublicHooksScheduledMessagesWorkerRouteImport } from './routes/api/public/hooks/scheduled-messages-worker'
 import { Route as ApiPublicHooksScheduledSendWorkerRouteImport } from './routes/api/public/hooks/scheduled-send-worker'
+import { Route as ApiPublicHooksSessionBookingsTickRouteImport } from './routes/api/public/hooks/session-bookings-tick'
 import { Route as ApiPublicHooksSmsRemindersRouteImport } from './routes/api/public/hooks/sms-reminders'
 import { Route as ApiPublicHooksSummerVoiceCheckRouteImport } from './routes/api/public/hooks/summer-voice-check'
 import { Route as ApiPublicHooksTrainingRoadmapTickRouteImport } from './routes/api/public/hooks/training-roadmap-tick'
@@ -1778,6 +1779,12 @@ const ApiPublicHooksScheduledSendWorkerRoute =
     path: '/api/public/hooks/scheduled-send-worker',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksSessionBookingsTickRoute =
+  ApiPublicHooksSessionBookingsTickRouteImport.update({
+    id: '/api/public/hooks/session-bookings-tick',
+    path: '/api/public/hooks/session-bookings-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksSmsRemindersRoute =
   ApiPublicHooksSmsRemindersRouteImport.update({
     id: '/api/public/hooks/sms-reminders',
@@ -2173,6 +2180,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
+  '/api/public/hooks/session-bookings-tick': typeof ApiPublicHooksSessionBookingsTickRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -2454,6 +2462,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
+  '/api/public/hooks/session-bookings-tick': typeof ApiPublicHooksSessionBookingsTickRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -2741,6 +2750,7 @@ export interface FileRoutesById {
   '/api/public/hooks/schedule-sync': typeof ApiPublicHooksScheduleSyncRoute
   '/api/public/hooks/scheduled-messages-worker': typeof ApiPublicHooksScheduledMessagesWorkerRoute
   '/api/public/hooks/scheduled-send-worker': typeof ApiPublicHooksScheduledSendWorkerRoute
+  '/api/public/hooks/session-bookings-tick': typeof ApiPublicHooksSessionBookingsTickRoute
   '/api/public/hooks/sms-reminders': typeof ApiPublicHooksSmsRemindersRoute
   '/api/public/hooks/summer-voice-check': typeof ApiPublicHooksSummerVoiceCheckRoute
   '/api/public/hooks/training-roadmap-tick': typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -3028,6 +3038,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/schedule-sync'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
+    | '/api/public/hooks/session-bookings-tick'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
@@ -3309,6 +3320,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/schedule-sync'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
+    | '/api/public/hooks/session-bookings-tick'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
@@ -3595,6 +3607,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/schedule-sync'
     | '/api/public/hooks/scheduled-messages-worker'
     | '/api/public/hooks/scheduled-send-worker'
+    | '/api/public/hooks/session-bookings-tick'
     | '/api/public/hooks/sms-reminders'
     | '/api/public/hooks/summer-voice-check'
     | '/api/public/hooks/training-roadmap-tick'
@@ -3714,6 +3727,7 @@ export interface RootRouteChildren {
   ApiPublicHooksScheduleSyncRoute: typeof ApiPublicHooksScheduleSyncRoute
   ApiPublicHooksScheduledMessagesWorkerRoute: typeof ApiPublicHooksScheduledMessagesWorkerRoute
   ApiPublicHooksScheduledSendWorkerRoute: typeof ApiPublicHooksScheduledSendWorkerRoute
+  ApiPublicHooksSessionBookingsTickRoute: typeof ApiPublicHooksSessionBookingsTickRoute
   ApiPublicHooksSmsRemindersRoute: typeof ApiPublicHooksSmsRemindersRoute
   ApiPublicHooksSummerVoiceCheckRoute: typeof ApiPublicHooksSummerVoiceCheckRoute
   ApiPublicHooksTrainingRoadmapTickRoute: typeof ApiPublicHooksTrainingRoadmapTickRoute
@@ -5537,6 +5551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksScheduledSendWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/session-bookings-tick': {
+      id: '/api/public/hooks/session-bookings-tick'
+      path: '/api/public/hooks/session-bookings-tick'
+      fullPath: '/api/public/hooks/session-bookings-tick'
+      preLoaderRoute: typeof ApiPublicHooksSessionBookingsTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/sms-reminders': {
       id: '/api/public/hooks/sms-reminders'
       path: '/api/public/hooks/sms-reminders'
@@ -6446,6 +6467,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksScheduledMessagesWorkerRoute,
   ApiPublicHooksScheduledSendWorkerRoute:
     ApiPublicHooksScheduledSendWorkerRoute,
+  ApiPublicHooksSessionBookingsTickRoute:
+    ApiPublicHooksSessionBookingsTickRoute,
   ApiPublicHooksSmsRemindersRoute: ApiPublicHooksSmsRemindersRoute,
   ApiPublicHooksSummerVoiceCheckRoute: ApiPublicHooksSummerVoiceCheckRoute,
   ApiPublicHooksTrainingRoadmapTickRoute:
