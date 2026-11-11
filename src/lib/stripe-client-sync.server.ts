@@ -43,6 +43,52 @@ export async function clientStripeCustomers(db: Admin, clientId: string, apiKey:
   return { ids: [...ids], emails };
 }
 
+/**
+ * Every sale on a Stripe subscription that hasn't ended: its status, next
+ * charge date and whether it's set to stop, as Stripe has them now (the
+ * webhook keeps these current; this catches an event that never arrived).
+ */
+export async function refreshSubscriptions(db: Admin, mode: StripeMode): Promise<{ checked: number; changed: number; errors: string[] }> {
+  const apiKey = getStripeKeyForMode(mode);
+  if (!apiKey) throw new Error(`No Stripe ${mode} key is configured.`);
+  const { data: sales, error } = await db
+    .from("purchase_records")
+    .select("id, stripe_subscription_id, stripe_subscription_status, next_billing_date, cancel_at_period_end, stripe_mode")
+    .not("stripe_subscription_id", "is", null)
+    .is("archived_at", null);
+  if (error) throw new Error(error.message);
+  const out = { checked: 0, changed: 0, errors: [] as string[] };
+  for (const s of (sales ?? []) as any[]) {
+    if (s.stripe_mode && s.stripe_mode !== mode) continue;
+    if (["canceled", "incomplete_expired"].includes(String(s.stripe_subscription_status ?? ""))) continue;
+    try {
+      const sub: any = await stripeFetch(`/subscriptions/${s.stripe_subscription_id}`, { apiKey });
+      out.checked += 1;
+      const status = sub?.status ?? null;
+      const periodEnd = sub?.current_period_end ?? sub?.items?.data?.[0]?.current_period_end ?? null;
+      const live = status === "active" || status === "trialing";
+      const next = live && !sub?.cancel_at_period_end && periodEnd ? new Date(periodEnd * 1000).toISOString().slice(0, 10) : null;
+      const patch = {
+        stripe_subscription_status: status,
+        next_billing_date: next,
+        cancel_at_period_end: !!sub?.cancel_at_period_end,
+      };
+      if (
+        patch.stripe_subscription_status !== s.stripe_subscription_status ||
+        String(patch.next_billing_date ?? "") !== String(s.next_billing_date ?? "").slice(0, 10) ||
+        patch.cancel_at_period_end !== !!s.cancel_at_period_end
+      ) {
+        const { error: upErr } = await db.from("purchase_records").update(patch).eq("id", s.id);
+        if (upErr) out.errors.push(`${s.id}: ${upErr.message}`);
+        else out.changed += 1;
+      }
+    } catch (e: any) {
+      out.errors.push(`${s.stripe_subscription_id}: ${e?.message ?? e}`);
+    }
+  }
+  return out;
+}
+
 export async function auditClientStripe(db: Admin, clientId: string, mode: StripeMode) {
   const apiKey = getStripeKeyForMode(mode);
   if (!apiKey) throw new Error(`No Stripe ${mode} key is configured.`);
