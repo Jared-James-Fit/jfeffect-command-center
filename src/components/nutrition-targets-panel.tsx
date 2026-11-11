@@ -23,6 +23,7 @@ import { ensureWaterTarget, formatWater } from "@/lib/water";
 import { useAuth } from "@/lib/auth";
 import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
 import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
+import { PlanAiChange } from "@/components/nutrition/PlanAiChange";
 
 export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
@@ -40,12 +41,13 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
     queryKey: ["client-user-id", clientId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("clients").select("user_id").eq("id", clientId).maybeSingle();
+        .from("clients").select("user_id, full_name").eq("id", clientId).maybeSingle();
       if (error) throw error;
       return data;
     },
   });
   const clientUserId = clientRow?.user_id ?? null;
+  const firstName = String((clientRow as any)?.full_name ?? "").trim().split(/\s+/)[0] || null;
 
   const { data: waterTarget } = useQuery({
     queryKey: ["water-target", clientUserId],
@@ -208,6 +210,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
             </div>
           )}
           <DayRows rows={dayRowsOf(plan)} />
+          <PlanAiChange clientId={clientId} plan={plan} firstName={firstName} />
           {current.slice(1).map((t: any) => (
             // More than one plan running is rare (two made the same day): each is shown, newest first.
             <div key={t.id} className="space-y-2 rounded-xl border border-border p-3">
@@ -315,5 +318,6 @@ function dayRowsOf(t: any): DayRow[] {
   return (t.nutrition_target_days ?? [])
     .slice()
     .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((day: any) => ({ label: day.day_label, kcal: day.calories, protein: day.protein, carbs: day.carbs, fat: day.fats }));
+    // tapping a day opens its meals
+    .map((day: any) => ({ label: day.day_label, kcal: day.calories, protein: day.protein, carbs: day.carbs, fat: day.fats, meals: day.notes ?? null }));
 }

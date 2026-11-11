@@ -232,3 +232,64 @@ export const markNutritionPlanAppliedFn = createServerFn({ method: "POST" })
     await sb.from("nf_submissions").update({ status: "reviewed", reviewed_at: now, reviewed_by: context.userId }).eq("id", data.submissionId);
     return { ok: true };
   });
+
+/* ------------------------------------------------------------------------ */
+/* "Change it with AI" on a client's current plan (nutrition-plan-edits.server.ts) */
+
+const planEdits = () => import("@/lib/nutrition-plan-edits.server");
+
+/** Staff who can see this plan through their own login (RLS decides, like the screen they're on). */
+async function canSeePlan(supabase: any, userId: string, targetId: string) {
+  if (!(await isStaff(supabase, userId))) return false;
+  const { data } = await supabase.from("nutrition_targets").select("id").eq("id", targetId).maybeSingle();
+  return !!data;
+}
+
+/** Staff who can see this change through their own login. */
+async function canSeeEdit(supabase: any, userId: string, editId: string) {
+  if (!(await isStaff(supabase, userId))) return false;
+  const { data } = await supabase.from("nutrition_plan_edits").select("id").eq("id", editId).maybeSingle();
+  return !!data;
+}
+
+/** Ask the AI to change the client's current plan; it's written in the background and nothing reaches the client until applied. */
+export const askPlanEditFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      clientId: z.string().uuid(),
+      targetId: z.string().uuid(),
+      instructions: z.string().trim().min(3, "Say what to change").max(REVISE_MAX_CHARS),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    if (!(await canSeePlan(context.supabase, context.userId, data.targetId))) throw new Error("Coach access required");
+    return (await planEdits()).queuePlanEdit(await admin(), { ...data, userId: context.userId });
+  });
+
+/** Put the AI's change on the plan (in place, with Undo). */
+export const applyPlanEditFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ editId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await canSeeEdit(context.supabase, context.userId, data.editId))) throw new Error("Coach access required");
+    return (await planEdits()).applyPlanEdit(await admin(), data.editId, context.userId);
+  });
+
+/** Put the plan back as it was before the AI's change. */
+export const undoPlanEditFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ editId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await canSeeEdit(context.supabase, context.userId, data.editId))) throw new Error("Coach access required");
+    return (await planEdits()).undoPlanEdit(await admin(), data.editId);
+  });
+
+/** Put a written or failed change away without applying it. */
+export const discardPlanEditFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ editId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    if (!(await canSeeEdit(context.supabase, context.userId, data.editId))) throw new Error("Coach access required");
+    return (await planEdits()).discardPlanEdit(await admin(), data.editId);
+  });
