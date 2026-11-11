@@ -1928,6 +1928,10 @@ function ClientOverviewSnapshot({
 
   return (
     <div className="md:col-span-3 space-y-6">
+      {/* The coach's notes on this client first (Quick Notes saved to them land here). */}
+      <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
+        <ClientFileNotes clientId={clientId} limit={3} />
+      </Suspense>
       <ClientCalendarSyncStatus clientId={clientId} />
       {/*
         No identity card or quick-action grid here: the page header already

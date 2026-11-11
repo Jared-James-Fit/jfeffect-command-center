@@ -1202,7 +1202,7 @@ export function MessagesInbox({
               peerName={selected.full_name}
               peerAvatarPath={selected.profile_picture_url}
             />
-            <ClientNotesSheet clientId={notesOpen ? selected.id : null} name={selected.full_name ?? null} onClose={() => setNotesOpen(false)} />
+            <ClientNotesSheet clientId={notesOpen ? selected.id : null} name={selected.full_name ?? null} onClose={() => setNotesOpen(false)} coachNotes />
             <SendSmsDialog
               open={smsOpen}
               onOpenChange={setSmsOpen}

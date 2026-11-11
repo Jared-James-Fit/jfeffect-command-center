@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { NOTES_FILTERS, matchesNotesFilter, painLine, type NotesFilter, type WorkoutNoteEntry } from "@/lib/workout-notes";
 import { useClientWorkoutNotes } from "@/lib/workout-notes.queries";
 import { OpenWorkout } from "@/components/messages/open-client-workout";
+import { ClientFileNotes } from "@/components/clients/client-file-notes";
 
 /**
  * A client's notes log for the coach: every review note, pain report and
@@ -104,21 +105,40 @@ function byMonth(entries: WorkoutNoteEntry[]): [string, WorkoutNoteEntry[]][] {
   return [...out.entries()];
 }
 
-/** The whole log in a sheet (from the coach chat's Notes, or a card's "All notes"). */
-export function ClientNotesSheet({ clientId, name, onClose }: { clientId: string | null; name?: string | null; onClose: () => void }) {
+/**
+ * The whole log in a sheet (from the coach chat's Notes, or a card's "All notes"), under
+ * the coach's own notes on the client (`ClientFileNotes`, staff only) when `coachNotes`.
+ */
+export function ClientNotesSheet({
+  clientId, name, onClose, coachNotes = false,
+}: { clientId: string | null; name?: string | null; onClose: () => void; coachNotes?: boolean }) {
   return (
     <Sheet open={!!clientId} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="bottom" hideCloseButton className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[560px]">
         <SheetHeader className="sticky top-0 z-10 flex-row items-center justify-between gap-3 space-y-0 border-b border-border/60 bg-background/95 px-5 pb-3 pt-4 text-left backdrop-blur">
           <div className="min-w-0">
             <SheetTitle className="text-[16px] font-bold">{name ? `${name.split(" ")[0]}'s notes` : "Workout notes"}</SheetTitle>
-            <SheetDescription className="text-[12px]">Pain, workout and exercise notes they've sent you</SheetDescription>
+            <SheetDescription className="text-[12px]">
+              {coachNotes ? "Your notes, then what they've sent you" : "Pain, workout and exercise notes they've sent you"}
+            </SheetDescription>
           </div>
           <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
             <X className="h-4 w-4" />
           </SheetClose>
         </SheetHeader>
-        <div className="px-4 pb-[max(env(safe-area-inset-bottom),20px)] pt-3">{clientId && <ClientNotesLog clientId={clientId} />}</div>
+        <div className="px-4 pb-[max(env(safe-area-inset-bottom),20px)] pt-3">
+          {clientId && coachNotes && (
+            <div className="mb-4 border-b border-border/60 pb-4" data-chat-coach-notes>
+              <ClientFileNotes clientId={clientId} limit={3} bare />
+            </div>
+          )}
+          {clientId && (
+            <>
+              {coachNotes && <h3 className="mb-2 text-base font-semibold">What they've sent you</h3>}
+              <ClientNotesLog clientId={clientId} />
+            </>
+          )}
+        </div>
       </SheetContent>
     </Sheet>
   );

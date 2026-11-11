@@ -92,7 +92,7 @@ export function WorkoutNoteCard({ att, messageId, role, clientId }: {
             <button type="button" onClick={() => setLog(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-bold text-muted-foreground active:bg-muted" data-workout-note-log>
               All notes <ChevronRight className="h-3.5 w-3.5" />
             </button>
-            <ClientNotesSheet clientId={log ? clientId : null} onClose={() => setLog(false)} />
+            <ClientNotesSheet clientId={log ? clientId : null} onClose={() => setLog(false)} coachNotes />
           </>
         ) : (
           <>
