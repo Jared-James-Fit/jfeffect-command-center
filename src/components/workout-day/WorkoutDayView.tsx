@@ -98,6 +98,8 @@ import { ExerciseActionRow } from "@/components/workout-day/exercise-action-row"
 import { CardMenuItem, CardMenuSeparator } from "@/components/workout-day/card-menu";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
 import { SetNumberBadge } from "@/components/workout-day/set-number-badge";
+import { SetPrIndicator } from "@/components/workout-day/set-pr-indicator";
+import { setPrItems } from "@/lib/set-pr-items";
 import { SetVideoCell, useRowHasSetVideos } from "@/components/workout-day/set-video-cell";
 import { setVideoLabel } from "@/lib/set-videos/label";
 import {
@@ -153,7 +155,7 @@ import { WorkoutSubmissionSummary } from "@/components/workout-submission-summar
 import { computeWorkoutSummary, type WorkoutSummary } from "@/lib/workout-summary";
 import { collectSessionPRs } from "@/lib/workout-takeaways";
 import { useWorkoutPoints, useWorkoutRecords } from "@/lib/training-records";
-import { WorkoutRecordsContext, SetRecordBadge, useSetRecord } from "@/components/records/training-records";
+import { WorkoutRecordsContext, useSetRecord } from "@/components/records/training-records";
 import { cardioStatus } from "@/lib/cardio-plan";
 import { toLocalISO, todayLocalISO } from "@/lib/today";
 import { WorkoutTimerSheet, QuickConfirmDuration, type TimerCompletionPayload } from "@/components/workout-timer-sheet";
@@ -6158,6 +6160,25 @@ function SetRow({
     ? (setLoadRecord && existing?.completed_at ? setLoadRecord : null)
     : null;
 
+  // The same records the pills showed, as one indicator (set-pr-items.ts): the
+  // server's records for this set, else (no records here, or assisted) the on-phone check.
+  const assistedSet = (existing as any)?.load_type === "assisted";
+  const prItems = useMemo(
+    () => setPrItems({
+      record: recordForBadge,
+      loadRecord: loadRecordForBadge,
+      localPr: prBadge && (!hasRecords || assistedSet) ? prBadge : null,
+      assisted: assistedSet,
+      unit,
+    }),
+    [recordForBadge, loadRecordForBadge, prBadge, hasRecords, assistedSet, unit],
+  );
+  // It pops in once when it's just been earned, never on reopening an old workout.
+  const prFresh = useMemo(() => {
+    const at = existing?.completed_at ? Date.parse(existing.completed_at) : NaN;
+    return Number.isFinite(at) && Date.now() - at < 2 * 60_000;
+  }, [existing?.completed_at]);
+
   // ── Time-based completion (per-set countdown timer + quick-confirm) ────
   const prSoundedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -6274,7 +6295,8 @@ function SetRow({
   return (
     <div className={cn(
       "border-t border-builder-card-border/70 transition-colors",
-      isConfirmed && "bg-emerald-500/[0.07] border-l-2 border-l-emerald-500/70",
+      // done: a whisper of green (the number says it), no left bar shifting the row
+      isConfirmed && "bg-success/[0.04]",
       isDraft && "bg-amber-500/[0.07] border-l-2 border-l-amber-500/60",
       statusError && "bg-destructive/10 border-l-2 border-l-destructive ring-1 ring-destructive/40",
     )}>
@@ -6458,22 +6480,8 @@ function SetRow({
         /> : <div aria-hidden />
       )}
     </div>
-    {/* Record badge — one pill, highest scope only, never interrupts logging */}
-    {recordForBadge || loadRecordForBadge ? (
-      <div className="px-3 pb-1.5">
-        <SetRecordBadge record={recordForBadge} loadRecord={loadRecordForBadge} />
-      </div>
-    ) : prBadge && (!hasRecords || (existing as any)?.load_type === "assisted") && (
-      <div className="px-3 pb-1.5">
-        <span
-          className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-500"
-          title={`Beats your previous all-time best for ${prBadge.reps} reps by ${fmtNum(prBadge.amount)} ${prBadge.unit}`}
-        >
-          <Trophy className="h-3 w-3" />
-          {(existing as any)?.load_type === "assisted" ? `New ${prBadge.reps}-rep ATPR · −${fmtNum(prBadge.amount)} ${prBadge.unit} assist` : `New ${prBadge.reps}-rep ATPR · +${fmtNum(prBadge.amount)} ${prBadge.unit}`}
-        </span>
-      </div>
-    )}
+    {/* The set's PRs: one small gold trophy under the set, tap for each record and what it beat */}
+    <SetPrIndicator items={prItems} celebrate={prFresh} />
     {!readonly && !isConfirmed && save.state === "error" && (
       <div className="flex items-center justify-between gap-2 px-3 pb-1.5">
         <SaveStatus
