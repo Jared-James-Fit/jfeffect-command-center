@@ -14,7 +14,7 @@ import {
   suggestReplaced, type SessionRequest,
 } from "@/lib/session-requests";
 import { invalidatePtSessionCaches } from "@/lib/pt-session-manage";
-import { DEFAULT_TZ, addDaysISO, deviceTodayISO, minutesBetweenHM } from "@/lib/schedule-time";
+import { DEFAULT_TZ, addDaysISO, deviceNowHM, deviceTodayISO, minutesBetweenHM } from "@/lib/schedule-time";
 import { useConflictCheck } from "@/components/schedule/use-conflict-check";
 import { useCreditOutlook } from "@/components/schedule/use-credit-outlook";
 import { kickGoogleSync } from "@/components/schedule/session-actions-sheet";
@@ -110,8 +110,10 @@ export function SessionRequestCard({ requestId, staff, clientId }: { requestId: 
     () => (req ? booked.filter((s) => (s.uses_credit !== false) === requestUsesCredit(req.request_type)) : []),
     [req, booked],
   );
-  const candidates = useMemo(() => (req ? replaceCandidates(req, sameKind, today) : []), [req, sameKind, today]);
-  const suggested = useMemo(() => (req ? suggestReplaced(req, sameKind, today) : null), [req, sameKind, today]);
+  // Only sessions that haven't started: one earlier today already happened.
+  const nowHM = deviceNowHM();
+  const candidates = useMemo(() => (req ? replaceCandidates(req, sameKind, today, nowHM) : []), [req, sameKind, today, nowHM]);
+  const suggested = useMemo(() => (req ? suggestReplaced(req, sameKind, today, nowHM) : null), [req, sameKind, today, nowHM]);
   const replaceId = choice === undefined ? suggested : choice;
   const replacing = candidates.find((s) => s.id === replaceId) ?? null;
   const first = who?.first_name || who?.full_name?.split(" ")[0] || "";

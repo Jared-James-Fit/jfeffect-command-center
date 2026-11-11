@@ -83,6 +83,27 @@ describe("session requests", () => {
     expect(mentionedWeekdays("Thurs or Sat works, not mon")).toEqual([1, 4, 6]);
   });
 
+  it("never swaps away a session that's already happened (Marc, Mon Nov 9 2026)", () => {
+    // He trained Mon Nov 9 at 10:30 AM; at 6:12 PM he asked for Tue Nov 10, 5:30 PM:
+    // "Move Thursday session for tomorrow." He had no Thursday booked.
+    const booked = [{ id: "mon09", session_date: "2026-11-09", start_time: "10:30:00", status: "Scheduled" }];
+    const req = { preferred_date: "2026-11-10", preferred_time: "17:30:00", note: "Move Thursday session for tomorrow. 👍" };
+    // Earlier today and already started: not something a request can be instead of.
+    expect(replaceCandidates(req, booked, "2026-11-09", "18:12")).toEqual([]);
+    expect(replaceCandidates(req, booked, "2026-11-09", "09:00").map((s) => s.id)).toEqual(["mon09"]);
+    expect(suggestReplaced({ ...req, replaces_session_id: "mon09" }, booked, "2026-11-09", "18:12")).toBeNull();
+    // Even before it starts, a note that names Thursday never means Monday's session.
+    expect(suggestReplaced(req, booked, "2026-11-09", "09:00")).toBeNull();
+    // A "move" with one session that week still means that one when the note names no other day.
+    expect(suggestReplaced({ ...req, note: "Can I move my session to tomorrow" }, booked, "2026-11-09", "09:00")).toBe("mon09");
+  });
+
+  it("the server refuses to swap or move a session that's already started", () => {
+    const fns = readFileSync("src/lib/session-requests.functions.ts", "utf8");
+    expect(fns).toMatch(/That session has already started, so it can't be swapped/);
+    expect(fns).toMatch(/That session already happened, so it can't be moved/);
+  });
+
   it("only kinds the app can book on its own go in one tap", () => {
     expect(oneTapApprovable("training")).toBe(true);
     expect(oneTapApprovable("call")).toBe(true);

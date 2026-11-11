@@ -111,6 +111,11 @@ export function deviceTodayISO(now: Date = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+/** The device's own wall-clock "HH:MM" (24h), beside deviceTodayISO. */
+export function deviceNowHM(now: Date = new Date()): string {
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
 /** "HH:MM" + minutes, clamped to the same day. */
 export function addMinutesHM(timeHM: string, minutes: number): string {
   const [h, m] = timeHM.split(":").map(Number);
