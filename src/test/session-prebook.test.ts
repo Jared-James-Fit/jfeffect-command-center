@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDaysISO } from "@/lib/schedule-time";
-import { holidayOn, patternDays, planPrebook, recentPattern, type PrebookSession } from "@/lib/session-prebook";
+import { holidayOn, patternDays, planPrebook, prebookCountNote, recentPattern, type PrebookSession } from "@/lib/session-prebook";
 
 /** Every given weekday between two days, as booked sessions. */
 function series(from: string, to: string, weekdays: number[], start: string, end: string, status = "Scheduled"): PrebookSession[] {
@@ -73,9 +73,75 @@ describe("booking the rest", () => {
     expect(planPrebook({ sessions: withExtra, available: 1, today }).slots[0].date).toBe("2027-01-06");
   });
 
-  it("starts from today when nothing is booked ahead, and needs a pattern", () => {
+  it("starts tomorrow when nothing is booked ahead, and needs a pattern", () => {
     const done = series("2026-08-31", "2026-10-21", [1, 3, 5], "12:00", "13:00", "Completed");
     expect(planPrebook({ sessions: done, available: 2, today }).slots.map((s) => s.date)).toEqual(["2026-10-23", "2026-10-26"]);
     expect(planPrebook({ sessions: [], available: 5, today }).slots).toEqual([]);
+  });
+});
+
+// Marc Asugui's real sessions, Sep 7 – Nov 10 2026 (4 a week, Mon–Fri, mostly 5:30 PM).
+const MARC: Array<[string, string]> = [
+  ["2026-09-07", "17:30"], ["2026-09-08", "11:00"], ["2026-09-09", "17:30"], ["2026-09-11", "15:30"],
+  ["2026-09-14", "17:30"], ["2026-09-15", "11:00"], ["2026-09-16", "17:30"], ["2026-09-18", "15:30"],
+  ["2026-09-21", "15:00"], ["2026-09-23", "17:30"], ["2026-09-25", "15:30"], ["2026-09-27", "16:30"],
+  ["2026-09-28", "17:30"], ["2026-09-29", "12:00"], ["2026-09-30", "17:30"], ["2026-10-02", "15:30"],
+  ["2026-10-05", "14:00"], ["2026-10-06", "10:00"], ["2026-10-07", "17:30"], ["2026-10-08", "18:00"],
+  ["2026-10-12", "10:00"], ["2026-10-13", "11:00"], ["2026-10-14", "17:30"], ["2026-10-16", "17:30"],
+  ["2026-10-19", "11:00"], ["2026-10-20", "11:00"], ["2026-10-21", "17:30"], ["2026-10-22", "17:30"],
+  ["2026-10-26", "17:30"], ["2026-10-28", "17:30"], ["2026-10-29", "17:30"], ["2026-10-30", "17:30"],
+  ["2026-11-02", "10:30"], ["2026-11-04", "17:30"], ["2026-11-05", "17:30"], ["2026-11-06", "17:30"],
+];
+const marcSessions: PrebookSession[] = [
+  ...MARC.map(([d, t]) => ({ session_date: d, start_time: `${t}:00`, end_time: `${String(Number(t.slice(0, 2)) + 1).padStart(2, "0")}${t.slice(2)}:00`, status: "Completed", location: "800 Vaughan Ave", title: "1:1 Training" })),
+  { session_date: "2026-11-10", start_time: "17:30:00", end_time: "18:30:00", status: "Scheduled", location: "800 Vaughan Ave", title: "1:1 Training" },
+  { session_date: "2026-10-23", start_time: "17:30:00", end_time: "18:30:00", status: "Cancelled", location: "800 Vaughan Ave", title: "1:1 Training" },
+];
+
+describe("Marc: his next 16 from his last 16", () => {
+  it("reads 4 a week on the days of his last full week, at his usual times", () => {
+    const r = recentPattern(marcSessions);
+    expect(r.perWeek).toBe(4);
+    expect(r.basis).toEqual({ sessions: 16, from: "2026-10-13", to: "2026-11-10" });
+    expect(patternDays(r.pattern)).toBe("Mon, Wed, Thu & Fri");
+    expect(r.pattern.map((p) => [p.weekday, p.start, p.end])).toEqual([
+      [1, "10:30", "11:30"], [3, "17:30", "18:30"], [4, "17:30", "18:30"], [5, "17:30", "18:30"],
+    ]);
+  });
+
+  it("books the 11 left of his next 16 past his last credit, skipping Remembrance Day", () => {
+    const plan = planPrebook({ sessions: marcSessions, available: 0, count: 11, today: "2026-11-10" });
+    expect(plan.count).toBe(11);
+    expect(plan.skipped).toEqual([{ date: "2026-11-11", reason: "Remembrance Day" }]);
+    expect(plan.slots.map((s) => s.date)).toEqual([
+      "2026-11-12", "2026-11-13", "2026-11-16", "2026-11-18", "2026-11-19", "2026-11-20",
+      "2026-11-23", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-30",
+    ]);
+  });
+
+  it("follows the coach's own days and times instead, keeping the place", () => {
+    const plan = planPrebook({
+      sessions: marcSessions, available: 0, count: 4, today: "2026-11-10",
+      pattern: [{ weekday: 2, start: "06:00", end: "07:00" }, { weekday: 4, start: "06:00", end: "07:00" }],
+    });
+    expect(plan.read.map((p) => p.weekday)).toEqual([1, 3, 4, 5]);
+    expect(plan.slots.map((s) => [s.date, s.start, s.location])).toEqual([
+      ["2026-11-12", "06:00", "800 Vaughan Ave"], ["2026-11-17", "06:00", "800 Vaughan Ave"],
+      ["2026-11-19", "06:00", "800 Vaughan Ave"], ["2026-11-24", "06:00", "800 Vaughan Ave"],
+    ]);
+  });
+
+  it("a package's last day only limits the sessions it pays for", () => {
+    expect(planPrebook({ sessions: marcSessions, available: 3, today: "2026-11-10", until: "2026-11-13" }).slots).toHaveLength(2);
+    expect(planPrebook({ sessions: marcSessions, available: 3, count: 5, today: "2026-11-10", until: "2026-11-13" }).slots).toHaveLength(5);
+  });
+});
+
+describe("what the count books", () => {
+  it("says where the sessions come from", () => {
+    expect(prebookCountNote({ count: 11, available: 11, size: 16, first: "Marc" })).toBe("Books the 11 left on their package.");
+    expect(prebookCountNote({ count: 4, available: 11, size: 16, first: "Marc" })).toBe("Uses 4 of the 11 sessions left.");
+    expect(prebookCountNote({ count: 11, available: 0, size: 16, first: "Marc" })).toBe("They go on Marc's next 16. Renew to bill it: nothing is charged now.");
+    expect(prebookCountNote({ count: 8, available: 3, size: 16, first: "Marc" })).toBe("Uses the 3 left, then 5 go on Marc's next 16. Renew to bill it: nothing is charged now.");
   });
 });

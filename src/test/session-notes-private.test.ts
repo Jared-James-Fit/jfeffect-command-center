@@ -28,7 +28,8 @@ describe("a coach's reason never lands in the client's note", () => {
 
   it("the Sessions list shows both, the client's labelled as theirs", () => {
     const list = read("src/components/sessions/client-sessions-panel.tsx");
-    expect(list).toContain("{coachNotes?.get(s.id) && (");
+    expect(list).toContain("{coachNote && (");
+    expect(list).toContain("coachNote={coachNotes?.get(s.id)}");
     expect(list).toContain("To {clientFirst}: {s.notes.trim()}");
   });
 
