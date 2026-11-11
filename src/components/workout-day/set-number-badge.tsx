@@ -2,9 +2,10 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * A set's number, which is also whether it's done: a quiet outlined number
- * while it's open, the same number in solid green once it's done (green =
- * done, design system), a spinner while that saves and red when it didn't.
+ * A set's number, which is also whether it's done: a neutral grey circle
+ * while it's open, the same number in solid green once it's done (the theme's
+ * success green: done, design system), a spinner while that saves and red
+ * when it didn't.
  */
 export function SetNumberBadge({
   setIndex,
@@ -23,13 +24,13 @@ export function SetNumberBadge({
     <span
       aria-hidden
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full border font-semibold tabular-nums transition-colors",
+        "inline-flex shrink-0 items-center justify-center rounded-full border font-semibold tabular-nums transition-colors duration-200",
         focusMode ? "h-9 w-9 text-base" : "h-8 w-8 text-sm sm:h-7 sm:w-7 sm:text-xs",
         error
           ? "border-destructive bg-destructive/10 text-destructive"
           : done
-            ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-border bg-background text-muted-foreground",
+            ? "border-success bg-success text-white"
+            : "border-transparent bg-muted text-muted-foreground",
         saving && "opacity-70",
       )}
     >
