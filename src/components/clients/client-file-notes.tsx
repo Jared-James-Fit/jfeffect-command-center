@@ -32,8 +32,21 @@ const bodyWithoutHeading = (n: Pick<ClientFileNote, "title" | "body">) => {
 /**
  * Staff notes kept on the client's file. Newest first (pinned on top); anything archived,
  * including notes whose Quick Note was deleted, stays in the Archive below.
+ *
+ * The same card is on the client's Summary (the first thing their profile opens on,
+ * `limit` 3), behind Notes in their chat (`bare`, inside the sheet) and on Coach notes
+ * (everything, with the Archive). Quick Notes saved to the client land here.
  */
-export function ClientFileNotes({ clientId, className }: { clientId: string; className?: string }) {
+export function ClientFileNotes({
+  clientId, className, limit, bare = false,
+}: {
+  clientId: string;
+  className?: string;
+  /** Show the pinned and newest few; the rest open in place ("Show all N"). The Archive shows once open. */
+  limit?: number;
+  /** No card around it (inside a sheet). */
+  bare?: boolean;
+}) {
   const qc = useQueryClient();
   const key = clientFileNotesKey(clientId);
   const { data: notes = [], isLoading } = useQuery({
@@ -46,12 +59,16 @@ export function ClientFileNotes({ clientId, className }: { clientId: string; cla
   const [draft, setDraft] = useState({ title: "", body: "" });
   const [saving, setSaving] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [q, setQ] = useState("");
 
   const active = useMemo(() => sortActive(notes.filter((n) => !n.archived_at)), [notes]);
   const archived = useMemo(() => sortArchived(notes.filter((n) => n.archived_at)), [notes]);
   const match = (n: ClientFileNote) => !q.trim() || `${n.title}\n${n.body}`.toLowerCase().includes(q.trim().toLowerCase());
-  const shownActive = active.filter(match);
+  const full = !limit || showAll;
+  const matching = active.filter(match);
+  const shownActive = full ? matching : matching.slice(0, limit);
+  const hiddenCount = matching.length - shownActive.length;
   const shownArchived = archived.filter(match);
 
   const refresh = () => qc.invalidateQueries({ queryKey: key });
@@ -95,21 +112,26 @@ export function ClientFileNotes({ clientId, className }: { clientId: string; cla
     finally { void refresh(); }
   };
 
+  // A stable element type (never a component made in render, which would remount the
+  // composer on every keystroke and drop its focus).
+  const Wrap = bare ? "div" : Card;
+
   return (
-    <Card className={cn("space-y-3 border-border bg-card p-4 md:p-6", className)}>
-      <div className="flex items-start gap-2">
+    <Wrap
+      className={cn("space-y-3", !bare && "border-border bg-card p-4 md:p-5", className)}
+      data-client-file-notes=""
+    >
+      <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-            <StickyNote className="h-3.5 w-3.5" /> Client file
-            {active.length > 0 && <span className="tabular-nums text-muted-foreground/70">{active.length}</span>}
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            <StickyNote className="h-4 w-4 text-muted-foreground" /> Notes
+            {active.length > 0 && <span className="text-sm font-normal tabular-nums text-muted-foreground">{active.length}</span>}
           </h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Staff-only notes. Quick Notes saved to this client sync here; deleted ones stay in the Archive.
-          </p>
+          <p className="text-xs text-muted-foreground">Only you and your team see these</p>
         </div>
         {!composing && (
-          <Button size="sm" variant="outline" className="h-8 shrink-0 gap-1 text-xs" onClick={() => setComposing(true)}>
-            <Plus className="h-3.5 w-3.5" /> Add note
+          <Button size="sm" variant="outline" className="h-10 shrink-0 gap-1" onClick={() => setComposing(true)}>
+            <Plus className="h-4 w-4" /> Add note
           </Button>
         )}
       </div>
@@ -137,7 +159,7 @@ export function ClientFileNotes({ clientId, className }: { clientId: string; cla
         </div>
       )}
 
-      {notes.length > 5 && (
+      {full && notes.length > 5 && (
         <label className="flex items-center gap-2 rounded-lg border border-border bg-background/40 px-2.5">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <input
@@ -151,7 +173,7 @@ export function ClientFileNotes({ clientId, className }: { clientId: string; cla
 
       {isLoading ? (
         <div className="h-14 animate-pulse rounded-lg bg-secondary/40" />
-      ) : shownActive.length === 0 ? (
+      ) : matching.length === 0 ? (
         !composing && (
           <p className="rounded-lg bg-secondary/30 px-3 py-3 text-xs text-muted-foreground">
             {q.trim() ? "No notes match." : "No notes yet. Add one here, or save a Quick Note to this client from Tasks."}
@@ -165,7 +187,17 @@ export function ClientFileNotes({ clientId, className }: { clientId: string; cla
         </ul>
       )}
 
-      {archived.length > 0 && (
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium text-muted-foreground active:bg-muted"
+        >
+          Show all {matching.length}
+        </button>
+      )}
+
+      {full && archived.length > 0 && (
         <div>
           <button
             type="button"
@@ -199,7 +231,7 @@ export function ClientFileNotes({ clientId, className }: { clientId: string; cla
           )}
         </div>
       )}
-    </Card>
+    </Wrap>
   );
 }
 
@@ -256,9 +288,9 @@ function NoteRow({
     <li className="flex items-start gap-2 px-3 py-2.5">
       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => long && setExpanded((v) => !v)}>
         <div className="flex items-center gap-1.5">
-          {n.pinned && <Pin className="h-3 w-3 shrink-0 text-primary" aria-label="Pinned" />}
+          {n.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Pinned" />}
           <span className="truncate text-sm font-semibold">{heading(n)}</span>
-          {isFresh(n.created_at) && <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">New</span>}
+          {isFresh(n.created_at) && <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground">New</span>}
         </div>
         {rest && <p className={cn("mt-0.5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground", !expanded && "line-clamp-3")}>{rest}</p>}
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground/70">
@@ -268,7 +300,7 @@ function NoteRow({
               <RefreshCw className="h-2.5 w-2.5" /> {n.quick_note_id ? "Synced with Quick Notes" : "From Quick Notes"}
             </span>
           )}
-          {long && <span className="font-semibold text-primary">{expanded ? "Less" : "More"}</span>}
+          {long && <span className="font-semibold text-foreground">{expanded ? "Less" : "More"}</span>}
         </div>
       </button>
       <DropdownMenu>

@@ -54,7 +54,7 @@ describe("the card and where the log lives", () => {
   const card = read("src/components/messages/workout-note-card.tsx");
   it("the chat shows the card (its text is for previews)", () => {
     expect(thread).toContain('if (att.kind === "workout_note" && message) {');
-    expect(thread).toContain('a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "workout_note"');
+    expect(thread).toContain('a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || a?.kind === "workout_note"');
     // live note, a newer card takes over, removed shows as removed
     expect(card).toContain("const superseded = !!live?.latestMessageId && live.latestMessageId !== messageId;");
     expect(card).toContain("They removed this note.");
