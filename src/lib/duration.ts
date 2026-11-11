@@ -63,6 +63,16 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m} min ${s} sec`;
 }
 
+/** 1110 → "18:30", 45 → "0:45", 3720 → "1:02:00", nothing → "—". */
+export function formatClockSeconds(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(Number(seconds)) || Number(seconds) <= 0) return "—";
+  const t = Math.round(Number(seconds));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const ss = String(t % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
 export function formatDurationShort(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) return "";
   const total = Math.round(seconds);

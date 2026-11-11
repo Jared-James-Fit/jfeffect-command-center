@@ -4,7 +4,7 @@
  * Pure, so it's tested.
  */
 import { isTimedCardio } from "@/lib/timed-cardio";
-import { parseDurationInput } from "@/lib/duration";
+import { formatClockSeconds, parseDurationInput } from "@/lib/duration";
 import { effortTrend, type EffortTrend } from "@/lib/analytics/cardio-adherence";
 
 export type CardioHistorySet = {
@@ -36,16 +36,8 @@ export function isCardioHistory(exerciseName: string | null | undefined, sets: C
   );
 }
 
-/** 1110 → "18:30", 3720 → "1:02:00", null → "—". */
-export function cardioClock(seconds: number | null | undefined): string {
-  if (seconds == null || !Number.isFinite(Number(seconds)) || Number(seconds) <= 0) return "—";
-  const t = Math.round(Number(seconds));
-  const h = Math.floor(t / 3600);
-  const m = Math.floor((t % 3600) / 60);
-  const s = t % 60;
-  const ss = String(s).padStart(2, "0");
-  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
-}
+/** 1110 → "18:30", 3720 → "1:02:00", null → "—" (the logger's "Last time" uses the same clock). */
+export const cardioClock = formatClockSeconds;
 
 /** The longest cardio a set can say (6 hours). */
 export const MAX_CARDIO_SECONDS = 6 * 3600;
