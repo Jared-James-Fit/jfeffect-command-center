@@ -299,7 +299,12 @@ export const answerSessionRequest = createServerFn({ method: "POST" })
         let row = same;
         if (!row) {
           const insert = await sessionFromRequest(db, req as SessionRequest, client, start);
-          const { data: created, error } = await db.from("pt_sessions").insert(insert).select("id, title, location").single();
+          // This answer's own "✅ Booked" message is the confirmation (session-booked.ts never repeats it).
+          const { data: created, error } = await db
+            .from("pt_sessions")
+            .insert({ ...insert, confirmation_sent_at: new Date().toISOString() })
+            .select("id, title, location")
+            .single();
           if (error) throw new Error(error.message);
           row = created;
         }

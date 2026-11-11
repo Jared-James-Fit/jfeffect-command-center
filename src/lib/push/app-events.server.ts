@@ -31,7 +31,8 @@ export type AppEvent =
   | "lift_reviewed"
   | "nutrition_targets_updated"
   | "community_coach_recognition"
-  | "session_request_answered";
+  | "session_request_answered"
+  | "session_booked";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -171,6 +172,13 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     to: "client", category: "messages",
     title: () => "Your session request",
     body: (coach) => `${coach} answered your session request. Tap to see it.`,
+    url: () => "/portal/messages", rateMinutes: 60,
+  },
+  // The coach booked a session for them (session-booked.server.ts); the card is in their chat.
+  session_booked: {
+    to: "client", category: "messages",
+    title: () => "📅 You're booked in",
+    body: (coach) => `${coach} booked your session. Tap for the details.`,
     url: () => "/portal/messages", rateMinutes: 60,
   },
   community_coach_recognition: {

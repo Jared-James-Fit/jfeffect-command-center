@@ -163,7 +163,8 @@ export async function applyPrebook(db: Db, clientId: string, dates: string[], op
         status: "Scheduled",
         uses_credit: true,
         visible_to_client: true,
-        send_confirmation_email: false,
+        // One "Booked N sessions" message in their chat for the whole batch (session-booked.server.ts).
+        send_confirmation_email: true,
         reminders_enabled: true,
         ...((last as any)?.booking_card_id ? { booking_card_id: (last as any).booking_card_id } : {}),
         ...((last as any)?.session_type ? { session_type: (last as any).session_type } : {}),

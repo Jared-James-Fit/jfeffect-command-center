@@ -4,6 +4,7 @@ import { MessageEditRow, type MessageEditRowHandle } from "@/components/message-
 import React, { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { SessionRequestCard } from "@/components/schedule/session-request-card";
 import { SessionChangeCard } from "@/components/schedule/session-change-card";
+import { SessionBookedCard } from "@/components/schedule/session-booked-card";
 import { getMicStream } from "@/lib/audio-session";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -488,6 +489,9 @@ function AttachmentView({
   }
   if (att.kind === "session_change" && att.change_request_id) {
     return <SessionChangeCard requestId={att.change_request_id} staff={role !== "client"} clientId={clientId} />;
+  }
+  if (att.kind === "session_booked" && att.session_ids?.length) {
+    return <SessionBookedCard ids={att.session_ids} staff={role !== "client"} clientId={clientId} />;
   }
   if (att.kind === "staff_invite") {
     return <StaffInviteChatCard att={att as any} mine={mine} />;
@@ -2339,7 +2343,7 @@ export function MessageThread({
                   </>
                 ) : (
                   // A session request's (or workout note's) card says it all; its text is for inbox previews.
-                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "workout_note") && renderBodyWithMeet(m.body, mine)
+                  m.body && !m.attachments?.some((a: any) => a?.kind === "session_request" || a?.kind === "session_change" || a?.kind === "session_booked" || a?.kind === "workout_note") && renderBodyWithMeet(m.body, mine)
                 )}
                 {!isDeleted && !isEditing && m.attachments?.some((a) => a !== replyCard) && (
                   <div className={cn("mt-2 space-y-2", m.body ? "" : "")}>
