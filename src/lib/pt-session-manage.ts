@@ -26,6 +26,7 @@ export function invalidatePtSessionCaches(qc: QueryClient, clientId?: string | n
   qc.invalidateQueries({ queryKey: ["pt-adhoc-credits"] });
   qc.invalidateQueries({ queryKey: ["pt-adhoc-sessions"] });
   qc.invalidateQueries({ queryKey: ["pt-session-events"] });
+  qc.invalidateQueries({ queryKey: ["pt-client-ledger"] });
   qc.invalidateQueries({ queryKey: ["calendar-upcoming"] });
   qc.invalidateQueries({ queryKey: ["appointments"] });
   qc.invalidateQueries({ queryKey: ["client-session-credits"] });

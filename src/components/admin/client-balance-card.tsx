@@ -76,9 +76,9 @@ function RenewalRow({ line, currency, onRenew, renewing }: {
       {onRenew && line.fromSaleId && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[26px]">
           <Button size="sm" variant={due ? "default" : "outline"} className="h-9" disabled={renewing} onClick={() => onRenew(line.fromSaleId!)}>
-            {renewing ? "Adding…" : "Add renewal"}
+            {renewing ? "Renewing…" : "Renew · pay later"}
           </Button>
-          <span className="text-xs text-muted-foreground">Adds it to Sales and moves these sessions onto it.</span>
+          <span className="text-xs text-muted-foreground">Adds it to Sales as owed (nothing is charged now) and moves these sessions onto it.</span>
         </div>
       )}
     </li>

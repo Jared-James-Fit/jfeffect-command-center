@@ -24,7 +24,7 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
     mutationFn: (purchaseId: string) => renewFn({ data: { purchase_id: purchaseId } }),
     onSuccess: () => {
       toast.success("Renewal added", { description: "It's in Sales below, with the sessions already trained and booked on it." });
-      for (const key of [["client-billing", clientId], ["client-purchases", clientId], ["pt-balance", clientId], ["pt-pack-purchases", clientId]]) {
+      for (const key of [["client-billing", clientId], ["client-purchases", clientId], ["pt-balance", clientId], ["pt-pack-purchases", clientId], ["pt-client-ledger", clientId]]) {
         qc.invalidateQueries({ queryKey: key });
       }
     },
