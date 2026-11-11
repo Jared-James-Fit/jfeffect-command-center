@@ -45,6 +45,8 @@ export type CardioCompletionRow = {
   calories?: number | null;
   avg_heart_rate?: number | null;
   rpe?: number | null;
+  /** 'workout' = logged as the last exercise of a workout; anything else = logged on its own. */
+  completion_target?: string | null;
 };
 
 export type CardioZone = "zone2" | "hiit" | "moderate" | "other";
@@ -203,6 +205,10 @@ export type CardioWeek = {
   prescribedMinutes: number;
   completedMinutes: number;
   adherence: number | null;
+  /** Average RPE of the week's rated sessions (null when none was rated). */
+  avgRpe: number | null;
+  /** Calories logged that week (null when none were). */
+  calories: number | null;
 };
 
 function weekLabel(start: string): string {
@@ -238,6 +244,8 @@ export function buildWeeks(
       prescribedMinutes: p.minutes,
       completedMinutes: Math.round(done.reduce((s, c) => s + (Number(c.duration_minutes) || 0), 0)),
       adherence: adherencePct(done.length, p.sessions),
+      avgRpe: avgOf(done.map((c) => c.rpe)),
+      calories: sumOf(done.map((c) => c.calories)),
     });
   }
   return weeks;
@@ -339,7 +347,101 @@ export type CardioSummary = {
   modalities: ModalityStat[];
   zones: ZoneStat[];
   zone2: Zone2Tracker | null;
+  /** Calories logged across completed sessions (null when none were). */
+  totalCalories: number | null;
+  /** Per session, over the sessions that logged calories. */
+  avgCalories: number | null;
+  caloriesSessions: number;
+  /** Average RPE over the sessions that were rated. */
+  avgRpe: number | null;
+  rpeSessions: number;
+  avgHeartRate: number | null;
+  /** Every session in range (done and skipped), newest first: the details a coach reads. */
+  sessions: CardioSession[];
+  /** How hard the same cardio feels over the range (the most-rated modality), or null. */
+  effort: (EffortTrend & { modality: string }) | null;
 };
+
+export type CardioSession = {
+  id: string | null;
+  date: string;
+  modality: string;
+  minutes: number | null;
+  calories: number | null;
+  rpe: number | null;
+  heartRate: number | null;
+  incline: number | null;
+  speed: number | null;
+  distance: number | null;
+  distanceUnit: string | null;
+  fromWorkout: boolean;
+  skipped: boolean;
+};
+
+/* ── effort trend ────────────────────────────────────────────────────── */
+
+export type EffortPoint = { date: string; minutes: number | null; rpe: number | null };
+
+export type EffortTrend = {
+  /** easier = lower RPE for the same (or more) work; harder = higher RPE for the same (or less). */
+  direction: "easier" | "harder" | "steady";
+  fromRpe: number;
+  toRpe: number;
+  fromMinutes: number | null;
+  toMinutes: number | null;
+  /** Rated sessions it read. */
+  sessions: number;
+  text: string;
+};
+
+/** Below this many rated sessions, one hard day would read as a trend. */
+export const EFFORT_MIN_SESSIONS = 4;
+
+/**
+ * Is the same cardio getting easier or harder? The first few rated sessions
+ * against the last few (up to 3 each), RPE beside session length, so "RPE 7 →
+ * 6 at the same 20 minutes" (fitter) is never confused with "RPE 6 because the
+ * walks got shorter". A half point of RPE is the smallest change it calls.
+ * Pass one modality at a time: a bike's RPE says nothing about a walk's.
+ */
+export function effortTrend(points: EffortPoint[]): EffortTrend | null {
+  const rated = points
+    .filter((p) => p.rpe != null && Number.isFinite(Number(p.rpe)) && Number(p.rpe) > 0)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (rated.length < EFFORT_MIN_SESSIONS) return null;
+  const k = Math.min(3, Math.floor(rated.length / 2));
+  const early = rated.slice(0, k);
+  const late = rated.slice(-k);
+  const fromRpe = round1(avg(early.map((p) => Number(p.rpe))));
+  const toRpe = round1(avg(late.map((p) => Number(p.rpe))));
+  const mins = (arr: EffortPoint[]) => {
+    const m = arr.map((p) => Number(p.minutes)).filter((n) => Number.isFinite(n) && n > 0);
+    return m.length ? Math.round(avg(m)) : null;
+  };
+  const fromMinutes = mins(early);
+  const toMinutes = mins(late);
+  const both = fromMinutes != null && toMinutes != null;
+  const longer = both && toMinutes! > fromMinutes! * 1.1;
+  const shorter = both && toMinutes! < fromMinutes! * 0.9;
+  const d = round1(toRpe - fromRpe);
+  const direction: EffortTrend["direction"] =
+    d <= -0.5 && !shorter ? "easier" : d >= 0.5 && !longer ? "harder" : "steady";
+  const length = !both
+    ? ""
+    : longer || shorter
+      ? ` while sessions went from ${fromMinutes} to ${toMinutes} min`
+      : ` for about the same ${toMinutes} min`;
+  const text =
+    direction === "easier"
+      ? `Effort is down from RPE ${fromRpe} to ${toRpe}${length}. The same cardio is getting easier, which usually means fitness is improving and there's room to progress it (more time or incline).`
+      : direction === "harder"
+        ? `Effort is up from RPE ${fromRpe} to ${toRpe}${length}. Worth a look at sleep, recovery, food and how hard lifting has been.`
+        : d === 0 || (!longer && !shorter)
+          ? `Effort is steady at about RPE ${toRpe}${length}.`
+          : `RPE went from ${fromRpe} to ${toRpe}${length}.`;
+  return { direction, fromRpe, toRpe, fromMinutes, toMinutes, sessions: rated.length, text };
+}
 
 export function summarizeCardio(input: {
   targets: CardioTargetRow[];
@@ -373,6 +475,43 @@ export function summarizeCardio(input: {
   });
 
   const withDuration = done.filter((c) => (Number(c.duration_minutes) || 0) > 0);
+  const calories = done.map((c) => c.calories).filter(isNum);
+  const rpes = done.map((c) => c.rpe).filter(isNum);
+
+  // the details, newest first
+  const sessions: CardioSession[] = completions
+    .filter((c) => isCompletedCardio(c) || isSkippedCardio(c))
+    .map((c) => {
+      const modality = classifyModality(c.cardio_type);
+      const unit = c.distance_unit?.toLowerCase() ?? null;
+      return {
+        id: c.id ?? null,
+        date: c.completed_date,
+        modality,
+        minutes: isNum(c.duration_minutes) ? Math.round(Number(c.duration_minutes)) : null,
+        calories: isNum(c.calories) ? Math.round(Number(c.calories)) : null,
+        rpe: isNum(c.rpe) ? round1(Number(c.rpe)) : null,
+        heartRate: isNum(c.avg_heart_rate) ? Math.round(Number(c.avg_heart_rate)) : null,
+        incline: modalitySupportsInclineSpeed(modality) && isNum(c.incline) ? round1(Number(c.incline)) : null,
+        speed: modalitySupportsInclineSpeed(modality) && isNum(c.avg_speed) ? round1(Number(c.avg_speed)) : null,
+        distance: isNum(c.distance) ? round1(Number(c.distance)) : null,
+        distanceUnit: unit,
+        fromWorkout: c.completion_target === "workout",
+        skipped: isSkippedCardio(c),
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  // effort, like with like: the modality with the most rated sessions
+  const byModality = new Map<string, EffortPoint[]>();
+  for (const x of sessions) {
+    if (x.skipped || x.rpe == null) continue;
+    const arr = byModality.get(x.modality) ?? [];
+    arr.push({ date: x.date, minutes: x.minutes, rpe: x.rpe });
+    byModality.set(x.modality, arr);
+  }
+  const [effortModality, effortPoints] = [...byModality.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? [null, []];
+  const trend = effortModality ? effortTrend(effortPoints) : null;
 
   return {
     hasPrescription: prescribed.sessions > 0,
@@ -404,6 +543,14 @@ export function summarizeCardio(input: {
             adherence: adherencePct(z2Done.length, z2Prescribed.sessions),
           }
         : null,
+    totalCalories: calories.length ? Math.round(calories.reduce((s, n) => s + n, 0)) : null,
+    avgCalories: calories.length ? Math.round(avg(calories)) : null,
+    caloriesSessions: calories.length,
+    avgRpe: rpes.length ? round1(avg(rpes)) : null,
+    rpeSessions: rpes.length,
+    avgHeartRate: avgOf(done.map((c) => c.avg_heart_rate), 0),
+    sessions,
+    effort: trend && effortModality ? { ...trend, modality: effortModality } : null,
   };
 }
 
@@ -434,6 +581,21 @@ export function cardioInsight(
 
 function avg(nums: number[]): number {
   return nums.reduce((s, n) => s + n, 0) / nums.length;
+}
+function isNum(v: unknown): v is number {
+  return v != null && v !== "" && Number.isFinite(Number(v)) && Number(v) > 0;
+}
+/** Average of the values that were logged (rounded to `digits`), or null when none were. */
+function avgOf(values: Array<number | null | undefined>, digits = 1): number | null {
+  const n = values.filter(isNum).map(Number);
+  if (!n.length) return null;
+  const f = 10 ** digits;
+  return Math.round(avg(n) * f) / f;
+}
+/** Sum of the values that were logged, or null when none were. */
+function sumOf(values: Array<number | null | undefined>): number | null {
+  const n = values.filter(isNum).map(Number);
+  return n.length ? Math.round(n.reduce((s, x) => s + x, 0)) : null;
 }
 function round1(n: number): number {
   return Math.round(n * 10) / 10;

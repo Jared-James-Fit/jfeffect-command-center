@@ -94,14 +94,14 @@ export function TrainingRecoveryPanel({
               <Bar
                 yAxisId="l"
                 dataKey="hard"
-                fill="hsl(var(--muted-foreground) / 0.45)"
+                fill="color-mix(in oklch, var(--muted-foreground) 45%, transparent)"
                 radius={[2, 2, 0, 0]}
               />
               <Line
                 yAxisId="r"
                 type="monotone"
                 dataKey="hrv"
-                stroke="hsl(var(--primary))"
+                stroke="var(--primary)"
                 strokeWidth={2}
                 dot={false}
                 connectNulls

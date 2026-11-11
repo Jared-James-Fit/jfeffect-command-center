@@ -7,6 +7,8 @@
  * Oct 2026), and the database works out the kg / lb mirrors from the pair.
  */
 import { WEIGHT_CAP, type WUnit } from "@/lib/workout-weight-input";
+import { MAX_SET_CALORIES } from "@/lib/timed-cardio";
+import { cardioClock, parseCardioTime, MAX_CARDIO_SECONDS } from "@/lib/cardio-history";
 
 export type HistorySetRow = {
   id: string;
@@ -118,4 +120,66 @@ export const HISTORY_EDIT_QUERY_KEYS: ReadonlyArray<readonly string[]> = [
   ["workout-records-review"],
   ["client-exercise-unit-history"],
   ["client-lift-family-unit-history"],
+  // a cardio set's time / calories / RPE feed the plan's cardio log and the analytics
+  ["cardio-analytics"],
+  ["cardio-completion"],
+  ["client-cardio-resolved"],
 ];
+
+/* ── cardio (a treadmill walk, a bike): time, calories, RPE ─────────────── */
+
+export type CardioHistoryRow = {
+  id: string;
+  completed_duration_seconds?: number | null;
+  actual_calories?: number | null;
+  actual_rpe?: string | number | null;
+};
+
+export type CardioDraft = { time: string; calories: string; rpe: string };
+
+export function cardioEditDraft(set: CardioHistoryRow): CardioDraft {
+  const secs = Number(set.completed_duration_seconds);
+  return {
+    time: Number.isFinite(secs) && secs > 0 ? cardioClock(secs) : "",
+    calories: set.actual_calories != null ? String(Math.round(Number(set.actual_calories))) : "",
+    rpe: numberText(set.actual_rpe),
+  };
+}
+
+/** What's wrong with a cardio draft, in words, or null when it can be saved. */
+export function cardioDraftIssue(d: CardioDraft): string | null {
+  if (d.time.trim() !== "") {
+    const t = parseCardioTime(d.time);
+    if (t == null) return "Time is minutes, or mm:ss (like 18:30)";
+    if (t > MAX_CARDIO_SECONDS) return "Time can't be over 6 hours";
+  }
+  if (d.calories.trim() !== "") {
+    if (!/^\d+$/.test(d.calories.trim())) return "Calories must be a whole number";
+    if (Number(d.calories) > MAX_SET_CALORIES) return `Calories can't be over ${MAX_SET_CALORIES}`;
+  }
+  if (d.rpe.trim() !== "") {
+    const r = Number(d.rpe);
+    if (!/^\d*\.?\d+$/.test(d.rpe.trim()) || r < 1 || r > 10 || (r * 2) % 1 !== 0) return "RPE is 1 to 10, in half steps";
+  }
+  return null;
+}
+
+export type CardioPatch = {
+  completed_duration_seconds?: number | null;
+  actual_calories?: number | null;
+  actual_rpe?: string | null;
+};
+
+/** Only what changed, or null when nothing did. The plan's cardio log follows by itself (its trigger). */
+export function cardioEditPatch(set: CardioHistoryRow, d: CardioDraft): CardioPatch | null {
+  const before = cardioEditDraft(set);
+  const patch: CardioPatch = {};
+  const t = d.time.trim() === "" ? null : parseCardioTime(d.time);
+  const tPrev = before.time === "" ? null : parseCardioTime(before.time);
+  if (t !== tPrev) patch.completed_duration_seconds = t;
+  const cal = d.calories.trim() === "" ? null : Number(d.calories);
+  if (cal !== (before.calories === "" ? null : Number(before.calories))) patch.actual_calories = cal;
+  const rpe = d.rpe.trim() === "" ? null : numberText(d.rpe);
+  if (rpe !== (before.rpe === "" ? null : before.rpe)) patch.actual_rpe = rpe;
+  return Object.keys(patch).length ? patch : null;
+}

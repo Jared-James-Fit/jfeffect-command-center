@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, ChevronDown } from "lucide-react";
+import { Heart, ChevronDown, TrendingDown, TrendingUp, Minus } from "lucide-react";
 import { format } from "date-fns";
 import {
   BarChart,
@@ -23,8 +23,12 @@ import {
   prescribedFor,
   modalitySupportsInclineSpeed,
   type CardioCompletionRow,
+  type CardioSession,
   type CardioTargetRow,
 } from "@/lib/analytics/cardio-adherence";
+
+type TrendMetric = "minutes" | "adherence" | "effort" | "calories";
+const SESSIONS_SHOWN = 8;
 
 interface Props {
   clientId: string;
@@ -42,8 +46,10 @@ interface Props {
 export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLabel }: Props) {
   const startStr = format(rangeStart, "yyyy-MM-dd");
   const endStr = format(rangeEnd, "yyyy-MM-dd");
-  const [metric, setMetric] = useState<"minutes" | "adherence">("minutes");
+  const [metric, setMetric] = useState<TrendMetric>("minutes");
   const [showWeeks, setShowWeeks] = useState(false);
+  const [showSessions, setShowSessions] = useState(false);
+  const [allSessions, setAllSessions] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["cardio-analytics", clientId, startStr, endStr],
@@ -62,7 +68,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         (supabase as any)
           .from("cardio_completions")
           .select(
-            "id, cardio_target_id, completed_date, completed, skipped, duration_minutes, cardio_type, incline, avg_speed, distance, distance_unit, calories, avg_heart_rate, rpe",
+            "id, cardio_target_id, completed_date, completed, skipped, duration_minutes, cardio_type, incline, avg_speed, distance, distance_unit, calories, avg_heart_rate, rpe, completion_target",
           )
           .eq("client_id", clientId)
           .gte("completed_date", priorStartStr)
@@ -110,9 +116,20 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         minutes: w.completedMinutes,
         prescribed: w.prescribedMinutes,
         adherence: w.adherence ?? 0,
+        effort: w.avgRpe,
+        calories: w.calories ?? 0,
       })),
     [summary],
   );
+  // a trend view only when there's something in it
+  const metrics = useMemo(() => {
+    const list: TrendMetric[] = ["minutes"];
+    if (summary?.hasPrescription) list.push("adherence");
+    if ((summary?.rpeSessions ?? 0) > 0) list.push("effort");
+    if ((summary?.caloriesSessions ?? 0) > 0) list.push("calories");
+    return list;
+  }, [summary]);
+  const shownMetric: TrendMetric = metrics.includes(metric) ? metric : "minutes";
 
   const insight = summary
     ? cardioInsight(summary, rangeLabel, data?.priorMinutes ?? null)
@@ -194,6 +211,39 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
           />
         </div>
 
+        {/* What each session was like: effort, calories, heart rate (only what was logged) */}
+        {(summary.avgRpe != null || summary.totalCalories != null || summary.avgHeartRate != null) && (
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" data-cardio-details>
+            {summary.avgRpe != null && (
+              <Cell
+                label="Avg effort"
+                value={`RPE ${summary.avgRpe}`}
+                sublabel={`${summary.rpeSessions} of ${summary.completedSessions} session${summary.completedSessions === 1 ? "" : "s"} rated`}
+                tip={
+                  <InfoTip label="About cardio effort" title="Effort" align="start">
+                    How hard the sessions felt (RPE 1–10), as the client logged it. The same cardio at a lower RPE over time usually means fitness is improving.
+                  </InfoTip>
+                }
+              />
+            )}
+            {summary.totalCalories != null && (
+              <Cell
+                label="Calories"
+                value={`${summary.totalCalories.toLocaleString()} kcal`}
+                sublabel={`avg ${summary.avgCalories} per session · ${summary.caloriesSessions} logged`}
+                tip={
+                  <InfoTip label="About cardio calories" title="Calories" align="end">
+                    As logged from the machine or a watch, so read it as a trend rather than an exact number.
+                  </InfoTip>
+                }
+              />
+            )}
+            {summary.avgHeartRate != null && (
+              <Cell label="Avg heart rate" value={`${summary.avgHeartRate} bpm`} />
+            )}
+          </div>
+        )}
+
         {/* Minutes target comparison */}
         {summary.prescribedMinutes > 0 && (
           <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
@@ -233,28 +283,45 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         {/* Trend */}
         {chartData.length > 1 && (
           <div className="mt-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="mb-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                 Cardio Trend
               </span>
-              <div className="flex gap-1">
-                {(["minutes", "adherence"] as const).map((m) => (
+              <div className="-mx-1 flex gap-1 overflow-x-auto px-1">
+                {metrics.map((m) => (
                   <Button
                     key={m}
                     type="button"
                     size="sm"
-                    variant={metric === m ? "secondary" : "ghost"}
-                    className="h-7 px-2 text-[11px] font-bold capitalize"
+                    variant={shownMetric === m ? "secondary" : "ghost"}
+                    className="h-8 shrink-0 px-2 text-[11px] font-bold"
                     onClick={() => setMetric(m)}
+                    data-cardio-metric={m}
                   >
-                    {m === "minutes" ? "Minutes" : "Adherence %"}
+                    {m === "minutes" ? "Minutes" : m === "adherence" ? "Adherence %" : m === "effort" ? "Effort" : "Calories"}
                   </Button>
                 ))}
               </div>
             </div>
             <div className="h-44 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                {metric === "minutes" ? (
+                {shownMetric === "effort" ? (
+                  <LineChart data={chartData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any) => [v == null ? "Not rated" : `RPE ${v}`, "Avg effort"]} />
+                    <Line type="monotone" dataKey="effort" connectNulls stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                ) : shownMetric === "calories" ? (
+                  <BarChart data={chartData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any) => [`${v} kcal`, "Calories"]} />
+                    <Bar dataKey="calories" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : shownMetric === "minutes" ? (
                   <BarChart data={chartData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -263,7 +330,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                       formatter={(v: any, n: any) => [`${v} min`, n === "minutes" ? "Completed" : "Prescribed"]}
                     />
-                    <Bar dataKey="minutes" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="minutes" fill="var(--primary)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 ) : (
                   <LineChart data={chartData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
@@ -271,7 +338,7 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={36} />
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any) => [`${v}%`, "Adherence"]} />
-                    <Line type="monotone" dataKey="adherence" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="adherence" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 )}
               </ResponsiveContainer>
@@ -348,6 +415,55 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
           </div>
         )}
 
+        {/* Is the same cardio getting easier? */}
+        {summary.effort && (
+          <div className="mt-4 flex gap-2 rounded-lg border border-border bg-muted/30 p-3" data-cardio-effort={summary.effort.direction}>
+            {summary.effort.direction === "easier" ? (
+              <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+            ) : summary.effort.direction === "harder" ? (
+              <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            ) : (
+              <Minus className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Effort · {summary.effort.modality} · {summary.effort.sessions} rated sessions
+              </div>
+              <p className="mt-0.5 text-xs font-semibold text-foreground">{summary.effort.text}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Every session, with what was logged */}
+        {summary.sessions.length > 0 && (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setShowSessions((v) => !v)}
+              aria-expanded={showSessions}
+              className="flex min-h-10 w-full items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-left"
+              data-cardio-sessions-toggle
+            >
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Sessions ({summary.sessions.length})
+              </span>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showSessions ? "rotate-180" : ""}`} />
+            </button>
+            {showSessions && (
+              <div className="mt-2 space-y-1" data-cardio-sessions>
+                {(allSessions ? summary.sessions : summary.sessions.slice(0, SESSIONS_SHOWN)).map((x, i) => (
+                  <SessionRow key={x.id ?? `${x.date}-${i}`} session={x} />
+                ))}
+                {!allSessions && summary.sessions.length > SESSIONS_SHOWN && (
+                  <Button type="button" variant="ghost" className="h-10 w-full text-xs font-semibold" onClick={() => setAllSessions(true)}>
+                    Show all {summary.sessions.length}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Weekly adherence */}
         {summary.weeks.length > 0 && (
           <div className="mt-4">
@@ -372,6 +488,8 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
                     <span className="font-semibold text-muted-foreground">
                       {w.completedSessions}/{w.prescribedSessions} · {w.completedMinutes}/{w.prescribedMinutes} min
                       {w.adherence != null ? ` · ${w.adherence}%` : " · no cardio prescribed"}
+                      {w.avgRpe != null ? ` · RPE ${w.avgRpe}` : ""}
+                      {w.calories != null ? ` · ${w.calories} kcal` : ""}
                     </span>
                   </div>
                 ))}
@@ -387,6 +505,39 @@ export function CardioAnalyticsSection({ clientId, rangeStart, rangeEnd, rangeLa
         )}
       </Card>
     </section>
+  );
+}
+
+/** One session: when, what, and every number that was logged for it. */
+function SessionRow({ session: x }: { session: CardioSession }) {
+  const facts = [
+    x.minutes != null ? `${x.minutes} min` : null,
+    x.calories != null ? `${x.calories} kcal` : null,
+    x.rpe != null ? `RPE ${x.rpe}` : null,
+    x.heartRate != null ? `${x.heartRate} bpm` : null,
+    x.incline != null ? `${x.incline}% incline` : null,
+    x.speed != null ? `${x.speed} ${x.distanceUnit === "km" || x.distanceUnit === "kilometers" ? "km/h" : "mph"}` : null,
+    x.distance != null ? `${x.distance} ${x.distanceUnit ?? ""}`.trim() : null,
+  ].filter(Boolean) as string[];
+  const date = (() => {
+    const [y, m, d] = x.date.split("-").map(Number);
+    return format(new Date(y, (m ?? 1) - 1, d ?? 1), "EEE MMM d");
+  })();
+  return (
+    <div className="rounded-lg border border-border/70 px-3 py-2 text-xs" data-cardio-session>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-bold text-foreground">{date}</span>
+        <span className="truncate text-[11px] font-semibold text-muted-foreground">
+          {x.modality}
+          {x.skipped ? " · skipped" : x.fromWorkout ? " · in a workout" : ""}
+        </span>
+      </div>
+      {!x.skipped && (
+        <div className="mt-0.5 font-semibold tabular-nums text-muted-foreground">
+          {facts.length ? facts.join(" · ") : "Done, nothing else logged"}
+        </div>
+      )}
+    </div>
   );
 }
 
