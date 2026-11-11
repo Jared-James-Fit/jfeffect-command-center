@@ -14,7 +14,7 @@ import {
   REQUEST_TYPES, replaceCandidates, sessionChipLabel, requestStatusLabel, requestTypeLabel, requestUsesCredit, requestWhen,
   type SessionRequest, type SessionRequestType,
 } from "@/lib/session-requests";
-import { minutesBetweenHM } from "@/lib/schedule-time";
+import { deviceNowHM, minutesBetweenHM } from "@/lib/schedule-time";
 import { cn } from "@/lib/utils";
 import { DayChips, localISO, summaryDate, summaryTime } from "@/components/schedule/day-chips";
 
@@ -69,6 +69,7 @@ export function RequestSessionSheet({ open, onOpenChange, isPov = false, initial
     { preferred_date: date, preferred_time: anyTime ? null : time },
     booked.filter((s) => (s.uses_credit !== false) === requestUsesCredit(type)),
     localISO(0),
+    deviceNowHM(),
   );
   const instead = swappable.find((s) => s.id === replaces) ?? null;
 

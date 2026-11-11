@@ -74,11 +74,15 @@ export const requestSession = createServerFn({ method: "POST" })
     let replaces: string | null = null;
     if (data.replacesSessionId) {
       const { data: s } = await db
-        .from("pt_sessions").select("id, client_id, status, session_date")
+        .from("pt_sessions").select("id, client_id, status, session_date, starts_at")
         .eq("id", data.replacesSessionId).maybeSingle();
       const near = !!s && Math.abs(Date.parse(s.session_date) - Date.parse(data.date)) <= REPLACE_WINDOW_DAYS * 86400000;
       if (!s || s.client_id !== client.id || s.status !== "Scheduled" || !near) {
         throw new Error("That session can't be swapped from here. Tap it in your calendar to change its time.");
+      }
+      // One that's already started has happened: asking for another time is an extra session.
+      if (s.starts_at && Date.parse(s.starts_at) <= Date.now()) {
+        throw new Error("That session has already started, so it can't be swapped. Send this as an extra session instead.");
       }
       replaces = s.id;
     }
@@ -267,10 +271,14 @@ export const answerSessionRequest = createServerFn({ method: "POST" })
 
       if (data.replaceSessionId) {
         const { data: s } = await db
-          .from("pt_sessions").select("id, client_id, title, session_type, session_date, start_time, end_time, status, timezone")
+          .from("pt_sessions").select("id, client_id, title, session_type, session_date, start_time, end_time, status, timezone, starts_at")
           .eq("id", data.replaceSessionId).maybeSingle();
         if (!s || s.client_id !== req.client_id) throw new Error("That session isn't for this client.");
         if (s.status !== "Scheduled") throw new Error("That session isn't booked anymore. Approve it as an extra session instead.");
+        // A session that's already started happened: moving it would erase it from their record.
+        if (s.starts_at && Date.parse(s.starts_at) <= Date.now()) {
+          throw new Error("That session already happened, so it can't be moved. Approve this as an extra session instead.");
+        }
         const tz = s.timezone || DEFAULT_TZ;
         const len = minutesBetweenHM(String(s.start_time).slice(0, 5), String(s.end_time).slice(0, 5));
         const end = endAfter(start, len > 0 ? len : req.duration_minutes);

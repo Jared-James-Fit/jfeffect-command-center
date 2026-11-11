@@ -133,19 +133,23 @@ export function mentionedWeekdays(note: string | null | undefined): number[] {
 }
 
 /**
- * The client's booked sessions a request could be instead of: still booked, today or
- * later, within a week of the asked-for day, and not already at the asked-for time.
- * Soonest first.
+ * The client's booked sessions a request could be instead of: still booked, not
+ * started yet (`nowHM` is the wall clock on `today`: a session earlier today has
+ * happened), within a week of the asked-for day, and not already at the asked-for
+ * time. Soonest first.
  */
 export function replaceCandidates<T extends BookedSessionLite>(
   req: Pick<SessionRequest, "preferred_date" | "preferred_time">,
   booked: T[],
   today: string,
+  nowHM?: string | null,
 ): T[] {
   const target = dayNumber(req.preferred_date);
   const time = req.preferred_time?.slice(0, 5) ?? null;
+  const notStarted = (s: T) =>
+    s.session_date > today || (s.session_date === today && (!nowHM || s.start_time.slice(0, 5) > nowHM.slice(0, 5)));
   return booked
-    .filter((s) => (s.status ?? "Scheduled") === "Scheduled" && s.session_date >= today)
+    .filter((s) => (s.status ?? "Scheduled") === "Scheduled" && notStarted(s))
     .filter((s) => Math.abs(dayNumber(s.session_date) - target) <= REPLACE_WINDOW_DAYS)
     .filter((s) => !(s.session_date === req.preferred_date && s.start_time.slice(0, 5) === time))
     .sort((a, b) => a.session_date.localeCompare(b.session_date) || a.start_time.localeCompare(b.start_time));
@@ -153,17 +157,21 @@ export function replaceCandidates<T extends BookedSessionLite>(
 
 /**
  * Which booked session a request is instead of, when it's clear: the one the client
- * picked; else one on a weekday the note names ("Changing Tuesday session for this
- * day"), the closest to the asked-for day; else, when the note talks about moving and
- * only one session is booked that week, that one. Null = an extra session (or not
- * clear, and the coach picks).
+ * picked (while it hasn't started); else one on a weekday the note names ("Changing
+ * Tuesday session for this day"), the closest to the asked-for day; else, when the
+ * note talks about moving and only one session is booked that week, that one. A note
+ * that names a day it's moving from with nothing booked that day is an extra session,
+ * never another day's ("Move Thursday session for tomorrow" with no Thursday booked
+ * moved Marc's Monday, already trained). Null = an extra session (or not clear, and
+ * the coach picks).
  */
 export function suggestReplaced(
   req: Pick<SessionRequest, "preferred_date" | "preferred_time" | "note"> & { replaces_session_id?: string | null },
   booked: BookedSessionLite[],
   today: string,
+  nowHM?: string | null,
 ): string | null {
-  const near = replaceCandidates(req, booked, today);
+  const near = replaceCandidates(req, booked, today, nowHM);
   if (req.replaces_session_id) return near.some((s) => s.id === req.replaces_session_id) ? req.replaces_session_id : null;
   const target = dayNumber(req.preferred_date);
   const closest = (list: BookedSessionLite[]) =>
@@ -178,6 +186,8 @@ export function suggestReplaced(
       const hit = near.filter((s) => set.includes(weekdayOf(s.session_date)));
       if (hit.length) return closest(hit);
     }
+    // It names the day it's leaving and nothing's booked then: not a guess at another day.
+    if (others.length) return null;
   }
   if (MOVE_WORDS.test(req.note ?? "")) {
     const sameWeek = near.filter((s) => weekOf(s.session_date) === weekOf(req.preferred_date));
