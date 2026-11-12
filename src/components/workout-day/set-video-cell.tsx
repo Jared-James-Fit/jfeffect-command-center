@@ -9,11 +9,19 @@
  *   · red when it didn't send (a dropped connection retries by itself)
  * Light on purpose: the uploader, the trimmer and the sheet load only when a
  * clip is picked or opened, so the logger doesn't carry any video code.
+ *
+ * The first set a client logs in a workout points its camera out ("Film your
+ * sets for Jared", set-videos/tip.ts): a small bubble with Film this set /
+ * Not now, at most once a day and a few days, until they've sent one.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Camera, CloudOff, Play } from "lucide-react";
+import { AlertTriangle, Camera, CloudOff, Play, Video } from "lucide-react";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -242,6 +250,55 @@ export function SetVideoCell(props: SetVideoCellProps) {
     if (canAdd) warmSetVideoCode();
   }, [canAdd]);
 
+  // The point-out: the moment this set is logged (not when the workout opens
+  // on sets logged before), if it's due and nothing else holds the screen.
+  const tip = useSetVideoTip(clientId, canAdd);
+  const [tipOpen, setTipOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const wasLogged = useRef(logged);
+  const tipLive = useRef({ due: tip.due, canAdd, has: false });
+  tipLive.current = { due: tip.due, canAdd, has: videos.length > 0 || !!active };
+  useEffect(() => {
+    const was = wasLogged.current;
+    wasLogged.current = logged;
+    if (was || !logged) return;
+    if (!canAdd || !tip.due || videos.length || active) return;
+    if (!claimSetVideoTip()) return;
+    let tries = 0;
+    let timer = 0;
+    let settled = false;
+    const settle = () => {
+      const live = tipLive.current;
+      if (!live.canAdd || !live.due || live.has || !buttonRef.current?.isConnected) {
+        settled = true;
+        releaseSetVideoTip();
+        return;
+      }
+      const el = document.activeElement;
+      // still typing (the RPE that finished the set), or a sheet / dialog is up: wait
+      const busy =
+        (el instanceof HTMLElement && el.matches("input, textarea, select, [contenteditable='true']")) ||
+        !!document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]');
+      if (busy) {
+        if (++tries > 20) {
+          settled = true;
+          releaseSetVideoTip(); // ~10 s: another set can have it
+        } else timer = window.setTimeout(settle, 500);
+        return;
+      }
+      settled = true;
+      setTipOpen(true);
+      tip.markShown();
+    };
+    timer = window.setTimeout(settle, 1200);
+    return () => {
+      window.clearTimeout(timer);
+      // the set came undone or left the screen before it showed: hand it on
+      if (!settled) releaseSetVideoTip();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logged]);
+
   const openPicker = () => {
     if (!canAdd) return;
     // the video code starts loading while the phone's picker is open
@@ -301,11 +358,17 @@ export function SetVideoCell(props: SetVideoCellProps) {
     );
   } else if (canAdd) {
     label = `Add a video of set ${setIndex} for your coach`;
-    onTap = openPicker;
+    onTap = () => {
+      setTipOpen(false);
+      openPicker();
+    };
     content = (
       <span
         className={cn(
-          "inline-flex items-center justify-center rounded-full text-muted-foreground/70",
+          "inline-flex items-center justify-center rounded-full transition-colors",
+          tipOpen
+            ? "bg-muted text-foreground ring-2 ring-foreground/50 motion-safe:animate-pulse"
+            : "text-muted-foreground/70",
           size,
         )}
       >
@@ -313,20 +376,67 @@ export function SetVideoCell(props: SetVideoCellProps) {
       </span>
     );
   }
+  const tipCopy = setVideoTipCopy(tip.coachFirst);
+  const showTip = tipOpen && canAdd && !active && !videos.length;
 
   return (
     <div className="flex justify-center">
       {content && onTap ? (
-        <button
-          type="button"
-          onClick={onTap}
-          aria-label={label}
-          title={label}
-          data-set-video={active ? "uploading" : failed ? "failed" : videos.length ? "sent" : "add"}
-          className="flex h-11 w-full items-center justify-center rounded-md transition active:scale-95 sm:h-9"
-        >
-          {content}
-        </button>
+        <Popover open={showTip} onOpenChange={(o) => { if (!o) setTipOpen(false); }}>
+          <PopoverAnchor asChild>
+            <button
+              ref={buttonRef}
+              type="button"
+              onClick={onTap}
+              aria-label={label}
+              title={label}
+              data-set-video={active ? "uploading" : failed ? "failed" : videos.length ? "sent" : "add"}
+              className="flex h-11 w-full items-center justify-center rounded-md transition active:scale-95 sm:h-9"
+            >
+              {content}
+            </button>
+          </PopoverAnchor>
+          {showTip && (
+            <PopoverContent
+              side="top"
+              align="end"
+              sideOffset={6}
+              collisionPadding={12}
+              data-set-video-tip
+              aria-label={tipCopy.title}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => e.preventDefault()}
+              className="w-[min(19rem,calc(100vw-2rem))] rounded-2xl p-3.5 shadow-lg"
+            >
+              <div className="flex gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+                  <Video className="h-4 w-4" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[15px] font-semibold leading-snug">{tipCopy.title}</p>
+                  <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">{tipCopy.body}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button type="button" variant="ghost" className="h-10 px-3" onClick={() => setTipOpen(false)}>
+                  Not now
+                </Button>
+                <Button
+                  type="button"
+                  className="h-10 gap-1.5 bg-foreground px-3.5 text-background hover:bg-foreground/90"
+                  onClick={() => {
+                    setTipOpen(false);
+                    // the phone's picker opens from this tap
+                    openPicker();
+                  }}
+                >
+                  <Camera className="h-4 w-4" aria-hidden /> Film this set
+                </Button>
+              </div>
+              <PopoverPrimitive.Arrow className="fill-popover" width={16} height={8} />
+            </PopoverContent>
+          )}
+        </Popover>
       ) : null}
       {canAdd && (
         <input
