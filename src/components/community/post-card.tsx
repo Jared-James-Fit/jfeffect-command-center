@@ -776,19 +776,45 @@ export function PostMedia({ post, thumbUrl, full = false, lead, trail, ratio: fi
 }
 
 /** One photo or video, filling its frame. A clip plays muted while it's on screen (InlineVideo). */
-function SlideMedia({ slide, thumbUrl, full, active = true }: { slide: PostSlide; thumbUrl: string | null; full: boolean; active?: boolean }) {
+function SlideMedia({ slide, thumbUrl, full, active = true, withDots = false }: { slide: PostSlide; thumbUrl: string | null; full: boolean; active?: boolean; withDots?: boolean }) {
   const isVideo = slide.type === "video";
   const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
   // data-pinch-zoom: pinch lifts just this (the page never zooms), see useMediaPinchZoom
   const position = focusPosition(slide.focus);
-  return isVideo ? (
-    <div data-pinch-zoom className="absolute inset-0">
-      <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />
-    </div>
-  ) : (
-    <div data-pinch-zoom className="absolute inset-0">
-      {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+  return (
+    <>
+      {isVideo ? (
+        <div data-pinch-zoom className="absolute inset-0">
+          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />
+        </div>
+      ) : (
+        <div data-pinch-zoom className="absolute inset-0">
+          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+        </div>
+      )}
+      {slide.caption && <SlideCaption caption={slide.caption} withDots={withDots} />}
+    </>
+  );
+}
+
+/**
+ * A workout film clip's own caption, on the clip: the exercise, then the set
+ * and what was lifted. It moves with its slide (each swipe has its own), sits
+ * on a soft scrim at the bottom, clear of the sound button and the dots, and
+ * never takes a tap (double-tap ❤️ and the clip's sound still work).
+ */
+function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string }; withDots: boolean }) {
+  return (
+    <div
+      data-slide-caption
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pl-3.5 pr-14 pt-12 text-white",
+        withDots ? "pb-7" : "pb-3",
+      )}
+    >
+      <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">{caption.title}</div>
+      <div className="mt-0.5 truncate text-[13px] tabular-nums text-white/85">{caption.detail}</div>
     </div>
   );
 }
@@ -863,7 +889,7 @@ function PostCarousel({ slides, coverUrl, ratio, full, lead, trail }: { slides: 
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
             <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
-              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} /> : <div className="h-full w-full bg-muted" />}
+              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots /> : <div className="h-full w-full bg-muted" />}
             </div>
           );
         })}

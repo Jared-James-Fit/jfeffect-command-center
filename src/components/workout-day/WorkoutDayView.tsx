@@ -2688,6 +2688,8 @@ function WorkoutDay({
             autoOpenReview={autoOpenReviewAfterFinish}
             onAutoOpenReviewConsumed={() => setAutoOpenReviewAfterFinish(false)}
             onOpenScore={openRecapSummary}
+            filmCompletionId={isClientWorkout && !isImpersonating ? completion.id ?? null : null}
+            completedAt={completion.completed_at ?? null}
             meta={
               /* Client workouts show their length on the Session time line below. */
               !isClientWorkout && completion.actual_duration_min != null && completion.actual_duration_min > 0
@@ -3056,6 +3058,7 @@ function WorkoutDay({
           // Sharing is the athlete's own choice: not offered on membership
           // workouts, and never from a coach's "View as client" session.
           completionId={isClientWorkout && !isImpersonating && completion?.completed_at ? completion.id ?? null : null}
+          dayId={dayId}
           sessionRating={
             lastSessionRating ??
             (completion as any)?.session_rating ??

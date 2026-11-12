@@ -5,6 +5,7 @@
  * workout number arrives as `WorkoutShareStats`, derived server-side from the
  * same records the recap uses (see migration 20261006090000_community_sharing).
  */
+import { filmCaption, type FilmSlide } from "@/lib/workout-film";
 import { SOURCE_MAX_BYTES } from "@/lib/video-edit/limits";
 import { formatLoad, formatTonnage } from "@/lib/training-records";
 import type { ShareCardData, ShareTemplate } from "@/lib/workout-share-card";
@@ -170,6 +171,8 @@ export type CommunityPost = {
   media_height: number | null;
   /** Slides 2..10 of a carousel, in order (the cover is media_*). Missing / null = one. */
   extra_media?: PostSlide[] | null;
+  /** A workout film's clip captions, keyed by path (workout-film.ts). */
+  film?: FilmSlide[] | null;
   /** Which part of the cover shows when the feed or the grid crops it (a clip's framing); centred when unset. */
   media_focus?: MediaFocus | null;
   /** A story (STORY on the camera): 24h in the story rail, never in the feed or on the profile grid. */
@@ -898,15 +901,30 @@ export type PostSlide = {
   height: number | null;
   /** Which part shows when the feed or the profile grid crops it (a clip's, or an older photo's); centred when unset. */
   focus?: MediaFocus | null;
+  /** A workout film's clip: its own caption, on the slide (the exercise, then "Set 2 · 145 kg × 5 @ RPE 8"). */
+  caption?: { title: string; detail: string } | null;
 };
 
 /** Every slide of a post, cover first. [] when it has no photo. */
-export function postSlides(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media"> & { media_focus?: MediaFocus | null }): PostSlide[] {
+export function postSlides(
+  post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media"> & {
+    media_focus?: MediaFocus | null;
+    film?: FilmSlide[] | null;
+    hide_loads?: boolean;
+  },
+): PostSlide[] {
   if (!post.media_path || !post.media_type) return [];
-  return [
+  const slides: PostSlide[] = [
     { path: post.media_path, thumb: post.media_thumb_path, type: post.media_type, width: post.media_width, height: post.media_height, focus: post.media_focus ?? null },
     ...(post.extra_media ?? []).filter((s) => !!s?.path),
   ];
+  if (!post.film?.length) return slides;
+  // a workout film: each clip carries its own caption (weights left out on a post that hides them)
+  const byPath = new Map(post.film.map((f) => [f.path, f]));
+  return slides.map((s) => {
+    const f = byPath.get(s.path);
+    return f ? { ...s, caption: filmCaption(f, !!post.hide_loads) } : s;
+  });
 }
 
 /** What to show small: the thumbnail, else the photo itself. */

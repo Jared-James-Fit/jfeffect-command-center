@@ -1,0 +1,107 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import {
+  FILM_CLIP_MAX_BYTES,
+  filmCaption,
+  filmLabels,
+  filmPaths,
+  filmPostCaption,
+  filmUpToDate,
+  isFilmPath,
+  pickFilmClips,
+} from "@/lib/workout-film";
+import { postSlides } from "@/lib/community";
+
+const clip = (id: string, order: number, set: number, extra: Partial<{ duration_s: number | null; size_bytes: number | null; created_at: string }> = {}) => ({
+  id,
+  order,
+  set_index: set,
+  created_at: extra.created_at ?? "2026-11-12T10:00:00Z",
+  duration_s: extra.duration_s ?? 20,
+  size_bytes: extra.size_bytes ?? 5_000_000,
+});
+
+describe("which clips go on the film", () => {
+  it("in the order they were trained: exercise, then set", () => {
+    const { picked } = pickFilmClips([clip("b2", 2, 1), clip("a2", 1, 2), clip("a1", 1, 1)]);
+    expect(picked.map((c) => c.id)).toEqual(["a1", "a2", "b2"]);
+  });
+  it("a clip too long or too big for a workout post stays out, and is counted", () => {
+    const { picked, tooLong } = pickFilmClips([clip("ok", 1, 1), clip("long", 1, 2, { duration_s: 140 }), clip("big", 1, 3, { size_bytes: FILM_CLIP_MAX_BYTES + 1 })]);
+    expect(picked.map((c) => c.id)).toEqual(["ok"]);
+    expect(tooLong).toBe(2);
+  });
+  it("ten at most", () => {
+    const many = Array.from({ length: 12 }, (_, i) => clip(`c${i}`, 1, i + 1));
+    const { picked, overMax } = pickFilmClips(many);
+    expect(picked).toHaveLength(10);
+    expect(overMax).toBe(2);
+  });
+});
+
+describe("each clip's caption", () => {
+  const values = { load: 145, unit: "kg" as const, reps: 5, rpe: 8, rir: null, loadType: "external" as const, durationSec: null };
+  it("the exercise, then the set and what was lifted", () => {
+    const labels = filmLabels(values, null);
+    expect(labels).toEqual({ label: "145 kg × 5 @ RPE 8", label_no_load: "5 reps @ RPE 8" });
+    expect(filmCaption({ exercise: "Competition Squat", set: 2, ...labels }, false)).toEqual({ title: "Competition Squat", detail: "Set 2 · 145 kg × 5 @ RPE 8" });
+  });
+  it("a post that hides weights never shows them", () => {
+    const labels = filmLabels(values, null);
+    expect(filmCaption({ exercise: "Competition Squat", set: 2, ...labels }, true).detail).toBe("Set 2 · 5 reps @ RPE 8");
+  });
+  it("falls back to the clip's own label when the set's numbers can't be read", () => {
+    expect(filmLabels(null, "100 kg × 5 @ RPE 8")).toEqual({ label: "100 kg × 5 @ RPE 8", label_no_load: "5 reps @ RPE 8" });
+  });
+  it("the post's caption when they haven't written one", () => {
+    expect(filmPostCaption("Lower A (Squat Focus)", 3)).toBe("Lower A (Squat Focus) · 3 sets on film 🎥");
+    expect(filmPostCaption(null, 1)).toBe("1 set on film 🎥");
+  });
+});
+
+describe("the film on the post", () => {
+  it("copies live in the athlete's own community folder, one per set video", () => {
+    expect(filmPaths("u1", "c1", "v1", "client/set-videos/v1.MOV")).toEqual({ path: "u1/film/c1/v1.mov", thumb: "u1/film/c1/v1-poster.jpg" });
+    expect(isFilmPath("u1/film/c1/v1.mov")).toBe(true);
+    expect(isFilmPath("u1/photo.jpg")).toBe(false);
+  });
+  it("is up to date only when every clip that should be on it is", () => {
+    expect(filmUpToDate([{ path: "a" }, { path: "b" }], ["a", "b"])).toBe(true);
+    expect(filmUpToDate([{ path: "a" }], ["a", "b"])).toBe(false);
+  });
+  it("every slide carries its own caption (each swipe its own), weights hidden when the post hides them", () => {
+    const post = {
+      media_path: "u/film/c/1.mp4", media_thumb_path: null, media_type: "video" as const, media_width: 720, media_height: 1280,
+      extra_media: [{ path: "u/film/c/2.mp4", thumb: null, type: "video" as const, width: 720, height: 1280 }],
+      film: [
+        { path: "u/film/c/1.mp4", exercise: "Squat", set: 1, label: "140 kg × 5", label_no_load: "5 reps" },
+        { path: "u/film/c/2.mp4", exercise: "Squat", set: 2, label: "145 kg × 5", label_no_load: "5 reps" },
+      ],
+    };
+    expect(postSlides(post).map((s) => s.caption?.detail)).toEqual(["Set 1 · 140 kg × 5", "Set 2 · 145 kg × 5"]);
+    expect(postSlides({ ...post, hide_loads: true }).map((s) => s.caption?.detail)).toEqual(["Set 1 · 5 reps", "Set 2 · 5 reps"]);
+    expect(postSlides({ ...post, film: null })[0].caption).toBeUndefined();
+  });
+});
+
+describe("posting it", () => {
+  const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8");
+  const card = readFileSync("src/components/workout/shared/completed-workout-actions.tsx", "utf8");
+  const sql = readFileSync("supabase/migrations/20270307090000_workout_film.sql", "utf8");
+  it("only the athlete posts their own film, and a post they took out of Crew stays out", () => {
+    expect(fn).toContain('if (!client || client.user_id !== userId) throw new Error("Only you can post your film.");');
+    expect(fn).toContain('if (data.auto && autoOn === false) return { status: "off", clips: 0, skipped: 0 };');
+    expect(fn).toMatch(/if \(data\.auto && post && !post\.auto_shared && \(post\.archived_at \|\| !crewVisible\(post\.visibility\)\)\)/);
+  });
+  it("copies are recorded as checked, so the post's video guard holds them to a workout post's limits", () => {
+    expect(fn).toContain('context: "workout",');
+    expect(fn).toContain('.from("media_video_checks").upsert(');
+  });
+  it("posts by itself only after the review (where the switch is), or once it was clearly skipped", () => {
+    expect(card).toContain("auto={hasReview || (!!completedAt && Date.now() - Date.parse(completedAt) > FILM_REVIEW_WAIT_MS)}");
+  });
+  it("the switch is on unless they turn it off, and the post carries each clip's caption", () => {
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS auto_post_film boolean NOT NULL DEFAULT true");
+    expect(sql).toContain("''film'', CASE WHEN jsonb_typeof(n.film) = ''array''");
+  });
+});

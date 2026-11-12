@@ -3,6 +3,7 @@
  * 20261006090000_community_sharing.sql. Row-level security and the RPCs are
  * the real gate; nothing here is trusted for permissions.
  */
+import type { FilmSlide } from "@/lib/workout-film";
 import { useCallback, useEffect } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import type { MyCommunitySettings } from "@/lib/community-discover";
@@ -777,6 +778,8 @@ export type MyPostRow = {
   gif_url?: string | null;
   audio_path?: string | null;
   audio_duration?: number | null;
+  /** Its workout film's clip captions (workout-film.ts), when the film is on it. */
+  film?: FilmSlide[] | null;
 };
 
 /**
@@ -795,7 +798,7 @@ export function useMyPostForCompletion(completionId: string | null | undefined, 
     queryFn: async (): Promise<MyPostRow | null> => {
       let q = db
         .from("community_posts")
-        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads, auto_shared, gif_url, audio_path, audio_duration")
+        .select("id, caption, visibility, media_path, media_thumb_path, media_type, extra_media, locked_in_at, hide_loads, auto_shared, gif_url, audio_path, audio_duration, film")
         .eq("completion_id", completionId);
       q = slot === "lockin" ? q.not("locked_in_at", "is", null) : q.is("locked_in_at", null);
       const { data, error } = await q.maybeSingle();
