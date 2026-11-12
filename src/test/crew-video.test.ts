@@ -74,10 +74,11 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(shutter).toContain("{...(on ? h.handlers : {})}");
   });
 
-  it("the feed plays a clip muted while it's on screen, sound one tap away; a story plays up to its first minute, its length runs the bar", () => {
+  it("the feed plays a clip with its sound while it's on screen, the speaker one tap away; a story plays up to its first minute, its length runs the bar", () => {
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain("setVisible(!!e && e.intersectionRatio >= 0.6)");
-    expect(inline).toContain('v.setAttribute("muted", "")');
+    // inline on an iPhone: the pooled elements carry playsinline themselves
+    expect(read("src/lib/video-pool.ts")).toContain('v.setAttribute("playsinline", "");');
     expect(inline).toContain("prefers-reduced-motion: reduce");
     expect(read("src/components/community/post-card.tsx")).toContain('<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" />');
     const stories = read("src/components/community/crew-stories.tsx");

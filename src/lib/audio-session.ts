@@ -113,6 +113,19 @@ export function holdPlaybackSession(): () => void {
   };
 }
 
+/**
+ * Sound nobody asked for this time (a feed clip playing by itself with its
+ * sound on): the page sits on "ambient", so it follows the silent switch and
+ * plays over the person's music instead of stopping it (Instagram's feed).
+ * Never while something holds "playback" (a demo, the full-screen clips).
+ */
+export function preferAmbientAudio() {
+  if (holds > 0) return;
+  const s = session();
+  if (!s || s.type === "ambient") return;
+  setAudioSessionType("ambient");
+}
+
 /** For tests. */
 export function playbackHolds() {
   return holds;
@@ -121,7 +134,9 @@ export function playbackHolds() {
 let mediaWatchInstalled = false;
 /**
  * Native <video>/<audio> anywhere in the app: hold "playback" while one is
- * playing with sound (muted feed autoplays don't count; unmuting does).
+ * playing with sound (muted clips don't count; unmuting does). A clip marked
+ * `data-ambient-audio` (a feed clip playing by itself) never holds it: it
+ * stays on the page's "ambient", following the silent switch.
  */
 export function installMediaPlaybackSession(doc: Document | undefined = typeof document === "undefined" ? undefined : document) {
   if (mediaWatchInstalled || !doc) return;
@@ -131,6 +146,7 @@ export function installMediaPlaybackSession(doc: Document | undefined = typeof d
   const start = (e: Event) => {
     const el = e.target as HTMLMediaElement | null;
     if (!el || typeof (el as any).paused !== "boolean" || held.has(el) || !audible(el)) return;
+    if (el.hasAttribute?.("data-ambient-audio")) return;
     held.add(el);
     const release = holdPlaybackSession();
     // On the element itself: a player removed mid-play still fires its pause

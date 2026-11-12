@@ -146,14 +146,14 @@ describe("full-screen clips, one per swipe", () => {
     expect(viewer).toContain("useEffect(() => holdFeedVideos(), []);");
     expect(viewer).toContain("snap-y snap-mandatory overflow-y-scroll");
     expect(viewer).toContain("snap-start snap-always");
-    expect(viewer).toContain("unlockReelSound(v);");
+    expect(viewer).toContain('import { reelVideo } from "@/lib/video-pool";');
     expect(viewer).toContain("if (!post.my_reaction) like(true);");
     expect(viewer).toContain("onClick={() => onOpenComments(post)}");
-    const pool = read("src/lib/reel-video-pool.ts");
-    expect(pool).toContain("pool = Array.from({ length: REEL_SLOTS }, make);");
+    const pool = read("src/lib/video-pool.ts");
+    expect(pool).toContain("reels = Array.from({ length: REEL_SLOTS }, () => {");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain(
-      "const shouldPlay = active && visible && !held && !!url && (auto || tapped) && !failed;",
+      "const shouldPlay = active && visible && !held && !!el && (auto || tapped) && !failed;",
     );
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("<ReelsViewer start={reel} posts={feedPosts}");
@@ -181,7 +181,9 @@ describe("the feed loads ahead of the scroll", () => {
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('{ rootMargin: "200% 0px" }');
     expect(inline).toContain('{ rootMargin: "100% 0px" }');
-    expect(inline).toContain('preload={soon && active && (auto || tapped) ? "auto" : "metadata"}');
+    expect(inline).toContain(
+      'if (el) el.preload = soon && active && (auto || tapped) ? "auto" : "metadata";',
+    );
     expect(inline).toContain("useFullMediaUrl(path, near);");
     expect(read("src/components/community/post-art.tsx")).toContain('{ rootMargin: "200%" },');
     const card = read("src/components/community/post-card.tsx");
