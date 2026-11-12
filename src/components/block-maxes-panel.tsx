@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
+import { fetchBuilderExerciseLibrary } from "@/lib/builder-exercise-library";
 import {
   listClientMaxes, upsertClientMax, deleteClientMax, effectiveMax, buildMaxIndex,
   defaultRoundingStep, type ClientMaxRow,
@@ -76,7 +76,7 @@ export function BlockMaxesButton({
   );
 }
 
-function BlockMaxesDialog({
+export function BlockMaxesDialog({
   clientId, blockId, onClose,
 }: { clientId: string; blockId: string; onClose: () => void }) {
   const qc = useQueryClient();
@@ -87,14 +87,8 @@ function BlockMaxesDialog({
   // Full exercise library for the "Add Exercise Max" picker.
   const { data: libraryExercises = [] } = useQuery<{ id: string; name: string; muscle_group: string | null; category: string | null }[]>({
     queryKey: ["pl-maxes-exercise-library"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("exercises")
-        .select("id, name, muscle_group, category")
-        .order("name");
-      if (error) throw error;
-      return data ?? [];
-    },
+    // the whole library, page by page (one request stops at 1,000 of ~2,040)
+    queryFn: fetchBuilderExerciseLibrary,
   });
 
   const [drafts, setDrafts] = useState<Draft[]>([]);

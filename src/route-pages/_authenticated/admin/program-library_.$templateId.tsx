@@ -9,9 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
-import { AlertTriangle, ArrowLeft, MoreHorizontal, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -21,7 +20,7 @@ import { ExerciseLibraryPanel, type ExerciseRef, DND_EXERCISE, readDrop, exercis
 import { searchExercises, type SearchableExercise } from "@/lib/exercise-search";
 import { resolveMovementFamily } from "@/lib/exercise-family";
 import { ExerciseOrderBadge } from "@/components/exercise-order-badge";
-import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass } from "@/lib/exercise-metadata";
+import { derivePurposeLabels, deriveWeeklyPurposeLabelByRowId, defaultRestSeconds, effectiveRestSeconds, PURPOSE_LABEL_OPTIONS, resolveCategory, purposeLabelBadgeClass, purposeLabelText } from "@/lib/exercise-metadata";
 import { validateDay } from "@/lib/pl-template-validation";
 import { ProgramBuilderShortcutsButton } from "@/components/program-builder-shortcuts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,7 +29,10 @@ import { cn } from "@/lib/utils";
 import { useIsMobileNow } from "@/hooks/use-mobile";
 import { BestOnComputerTip } from "@/components/best-on-computer-tip";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
+import { createPortal } from "react-dom";
 import { DayDateButton } from "@/components/workout-day/day-date-button";
 import { formatDayLabel, formatDaySubtitle } from "@/lib/workout-day-label";
 import {
@@ -42,10 +44,12 @@ import { SaveStatus } from "@/components/save-status";
 import { useConflictWatch } from "@/hooks/use-conflict-watch";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
-import { TemplateBuilderIdentityBadge } from "@/components/builder-identity-header";
+import { BuilderHeader, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
 import { ActionButton } from "@/components/action-button";
 import { copyRows, useClip } from "@/lib/program-builder-clipboard";
 import { formatDuration } from "@/lib/duration";
+import { useBuilderExerciseLibrary } from "@/lib/builder-exercise-library";
+import { weekPurposeLabelsByDay } from "@/lib/program-editor-labels";
 import { CountdownTimerButton } from "@/components/countdown-timer-button";
 import { DurationInput } from "@/components/duration-input";
 import { ExerciseBlocksEditor } from "@/components/exercise-blocks-editor";
@@ -54,7 +58,7 @@ import { Layers } from "lucide-react";
 import { createContext, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
-import { BlockMaxesButton } from "@/components/block-maxes-panel";
+import { BlockMaxesButton, BlockMaxesDialog } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
 import { WeeklyVolumeSummary } from "@/components/volume/weekly-volume-summary";
 import {
@@ -439,6 +443,12 @@ const BuilderPhoneContext = createContext(false);
 const useBuilderPhone = () => useContext(BuilderPhoneContext);
 const inRowMenu = (t: EventTarget | null) =>
   t instanceof Element && !!t.closest("[data-row-menu]");
+// Focus moving from an open card into something it opened (a menu, a select's
+// list, a popover, the exercise picker) isn't leaving the card: folding it
+// then would unmount what was just opened.
+const inFloatingLayer = (t: EventTarget | null) =>
+  t instanceof Element &&
+  !!t.closest('[data-row-menu], [data-radix-popper-content-wrapper], [role="menu"], [role="listbox"], [role="dialog"]');
 
 // ---- Editor preferences (compact mode, zoom, sidebar) ----
 const PREFS_KEY = "pl-tpl-editor-prefs:v1";
@@ -534,17 +544,7 @@ export function TemplateEditor() {
     queryKey: ["pl-template", templateId],
     queryFn: () => getTemplate(templateId),
   });
-  const { data: exercises = [] } = useQuery({
-    queryKey: ["exercises-min"],
-    queryFn: async () =>
-      (await supabase
-        .from("exercises")
-        .select("id, name, muscle_group, category, tags, exercise_category, is_competition_lift, competition_lift_type, movement_family, video_url, youtube_url, vimeo_url, primary_movement_pattern, muscle_groups, secondary_muscle_groups, lift_family, variation_type, counts_toward_volume, volume_multiplier")
-        .eq("archived", false)
-        .limit(10000)
-        .order("name")).data ?? [],
-    staleTime: 5 * 60_000,
-  });
+  const { data: exercises = [] } = useBuilderExerciseLibrary();
 
   // local working state
   const [meta, setMeta] = useState<any>(null);
@@ -589,6 +589,10 @@ export function TemplateEditor() {
   }, [tpl, reloadTick]);
 
   const setM = (patch: any) => { setMeta({ ...meta, ...patch }); setDirty(true); };
+  // The header's second row (the canvas's toolbar) and which view is open.
+  const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const phoneNow = useIsMobileNow();
   const setP = (next: any, opts?: { skipHistory?: boolean }) => {
     if (!opts?.skipHistory && payload != null) {
       const now = Date.now();
@@ -727,12 +731,18 @@ export function TemplateEditor() {
       meta={meta} summary={summary} typeLabel={type.replace("_", " ")}
       autosave={autosave} save={save} dirty={dirty}
       statusTemplate={{ ...tpl, payload }}
+      onRename={(name) => setM({ name })}
+      onToolbarEl={settingsOpen ? undefined : setToolbarEl}
+      settingsOpen={settingsOpen}
+      onToggleSettings={() => setSettingsOpen((v) => !v)}
       aiTool={["block", "full_prep", "program"].includes(type) ? (
         <EditWithAiButton
           target={{ kind: "template", templateId }}
           title={meta.name || tpl.name}
           size="sm"
-          className="h-7 px-2 text-xs"
+          variant="ghost"
+          className="h-9 px-2.5"
+          label={phoneNow ? "AI" : "Edit with AI"}
           // the AI reads what's saved: save what's on screen first
           beforeOpen={async () => { if (dirty || autosave.hasPending()) await save(); }}
           onApplied={async () => {
@@ -768,13 +778,13 @@ export function TemplateEditor() {
             </div>
           </Card>
         )}
-      <Tabs defaultValue="structure">
-        <TabsList className="h-8">
-          <TabsTrigger value="structure" className="h-7 text-xs px-2"><Rows3 className="mr-1 h-3 w-3" />Structure</TabsTrigger>
-          <TabsTrigger value="meta" className="h-7 text-xs px-2"><Settings2 className="mr-1 h-3 w-3" />Settings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="meta" className="mt-2">
+      {settingsOpen ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-9 -ml-2" onClick={() => setSettingsOpen(false)}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to the program
+            </Button>
+          </div>
           <Card className="p-4 space-y-3 max-w-2xl">
               <div><Label>Name</Label><Input value={meta.name} onChange={(e) => setM({ name: e.target.value })} /></div>
               <div>
@@ -819,10 +829,9 @@ export function TemplateEditor() {
               <div><Label>Tags (comma-separated)</Label><Input value={meta.tags} onChange={(e) => setM({ tags: e.target.value })} /></div>
               <div><Label>Notes</Label><Textarea value={meta.notes} onChange={(e) => setM({ notes: e.target.value })} rows={3} /></div>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="structure" className="mt-2">
-          <StructureCanvas
+        </div>
+      ) : (
+        <StructureCanvas
             type={type}
             payload={payload}
             setP={setP}
@@ -833,57 +842,99 @@ export function TemplateEditor() {
             canUndo={canUndo}
             canRedo={canRedo}
             templateId={templateId}
+            toolbarTarget={toolbarEl}
           />
-        </TabsContent>
-      </Tabs>
+      )}
     </EditorChrome>
   );
 }
 
-function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, aiTool, children }: {
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, aiTool, children, onRename, onToolbarEl, settingsOpen, onToggleSettings }: {
   meta: any; summary: any; typeLabel: string;
   autosave: any; save: () => Promise<void>; dirty: boolean;
   statusTemplate?: any;
   /** Edit with AI (block and program templates). */
   aiTool?: React.ReactNode;
   children: React.ReactNode;
+  onRename: (name: string) => void;
+  onToolbarEl?: (el: HTMLDivElement | null) => void;
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
 }) {
+  const phone = useIsMobileNow();
+  const kind = typeLabel ? typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1) : "Template";
   return (
-    <div className="space-y-2 p-2 md:p-3">
-      <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
-        <Link to="/admin/program-library" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" /> Library
-        </Link>
-        <TemplateBuilderIdentityBadge templateName={meta.name || "Template"} />
-        <div className="min-w-0 flex items-baseline gap-2">
-          <span className="truncate text-sm font-bold">{meta.name || "Template"}</span>
-          <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
-            {typeLabel} · {summary.weeks}w · {summary.days}d · {summary.rows} rows
-          </span>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          {statusTemplate && <ProgramStatusBadge template={statusTemplate} />}
-          {aiTool}
-          <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
-          <ActionButton
-            onAction={save}
-            loadingLabel="Saving…"
-            successLabel="Saved"
-            successToast="Template saved"
-            icon={<Save className="h-3.5 w-3.5" />}
-            size="sm"
-            className="h-7 text-xs"
+    <div className="space-y-3 px-2 pb-8 md:px-3">
+      <BuilderHeader
+        onToolbarEl={onToolbarEl}
+        back={
+          <Link
+            to="/admin/program-library"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Back to the library"
+            title="Back to the library"
           >
-            {dirty ? "Save now" : "Saved"}
-          </ActionButton>
-        </div>
-      </div>
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        }
+        title={<BuilderTitleInput value={meta.name ?? ""} onChange={onRename} placeholder="Template name" label="Template name" />}
+        meta={
+          <span className="inline-flex items-center gap-1.5">
+            <span className="truncate">{kind} template · {summary.weeks} week{summary.weeks === 1 ? "" : "s"} · {summary.days} day{summary.days === 1 ? "" : "s"}</span>
+            {statusTemplate && <ProgramStatusBadge template={statusTemplate} />}
+          </span>
+        }
+        actions={
+          <>
+            {/* only news: saving, saved, failed, offline (an unsaved edit shows as Save) */}
+            {autosave.state !== "idle" && (
+              <SaveStatus state={autosave.state} savedAt={autosave.savedAt} compact={phone} className="max-md:px-1" />
+            )}
+            {dirty && (
+              <ActionButton
+                onAction={save}
+                loadingLabel="Saving…"
+                successLabel="Saved"
+                successToast="Template saved"
+                size="sm"
+                variant="outline"
+                className="h-9"
+              >
+                Save
+              </ActionButton>
+            )}
+            {aiTool}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-10 w-10" aria-label="Template options">
+                  <MoreHorizontal className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onSelect={onToggleSettings}>
+                  {settingsOpen ? <Rows3 className="mr-2 h-4 w-4" /> : <Settings2 className="mr-2 h-4 w-4" />}
+                  {settingsOpen ? "Back to the program" : "Template settings"}
+                </DropdownMenuItem>
+                {!dirty && (
+                  <DropdownMenuItem onSelect={() => { void save().then(() => toast.success("Template saved")).catch((e: any) => toast.error(e?.message ?? "Couldn't save")); }}>
+                    <Save className="mr-2 h-4 w-4" /> Save now
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
       {children}
     </div>
   );
 }
 
-export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue }: {
+// Where the week navigation goes: the canvas toolbar's middle, so the weeks
+// share one row with undo / redo instead of stacking a bar of their own.
+const WeekNavSlotContext = createContext<HTMLElement | null>(null);
+
+export function StructureCanvas({ type, payload, setP, exercises, appendRowToFirstDay, undo, redo, canUndo, canRedo, clientId, blockId, toolbarExtras, templateId, dayScheduleStatus, onFixCalendarIssue, toolbarTarget, singleBlock }: {
   type: string; payload: any; setP: (p: any, opts?: { skipHistory?: boolean }) => void; exercises: any[];
   appendRowToFirstDay: (payload: any, type: string, row: any) => void;
   undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
@@ -902,6 +953,13 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>;
   /** Optional — one-click repair for "Calendar Issue" day badges. */
   onFixCalendarIssue?: (dayId: string) => void;
+  /** The page header's toolbar row: the canvas puts its controls there, so the
+   * editor has one sticky bar. Without it (or in full screen) they sit on top
+   * of the canvas. */
+  toolbarTarget?: HTMLElement | null;
+  /** A client's block: one block, so no program / block strip (adding a block
+   * inside it never saved anywhere, and archiving it would empty the block). */
+  singleBlock?: boolean;
 }) {
   const [prefs, setPrefsState] = useState<EditorPrefs>(() => readPrefs());
   const setPrefs = (patch: Partial<EditorPrefs>) => {
@@ -917,6 +975,8 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
   const zoom = phone ? 1 : zoomPref;
   const compact = phone ? false : compactPref;
   const [fullscreen, setFullscreen] = useState(false);
+  const [weekSlot, setWeekSlot] = useState<HTMLDivElement | null>(null);
+  const [maxesOpen, setMaxesOpen] = useState(false);
   const setZoom = (z: number) => setPrefs({ zoom: Math.max(0.5, Math.min(1.3, +z.toFixed(2))) });
   const fitToScreen = () => {
     // Rough fit heuristic based on viewport width
@@ -979,105 +1039,102 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
     refresh: () => maxesQuery.refetch(),
   }), [clientId, blockId, maxesQuery.data]);
 
+  const canSetMaxes = !!clientId && !!blockId;
+  const tap = phone ? "h-10 w-10" : "h-8 w-8";
+  // One row of controls: undo / redo, the weeks (BlockPayloadEditor fills the
+  // slot), and one ⋯ for everything a coach reaches for now and then.
+  const toolbar = (
+    <div className="flex items-center gap-0.5 px-1.5 py-1 md:px-2" data-builder-toolbar>
+      <Button size="icon" variant="ghost" className={cn(tap, "shrink-0")} disabled={!canUndo} aria-label="Undo" title="Undo (Cmd/Ctrl+Z)" onClick={undo}>
+        <Undo2 className="h-4 w-4" />
+      </Button>
+      <Button size="icon" variant="ghost" className={cn(tap, "shrink-0")} disabled={!canRedo} aria-label="Redo" title="Redo (Cmd/Ctrl+Shift+Z)" onClick={redo}>
+        <Redo2 className="h-4 w-4" />
+      </Button>
+      <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
+      <div ref={setWeekSlot} className="flex min-w-0 flex-1 items-center" />
+      {toolbarExtras}
+      {!phone && <ProgramBuilderShortcutsButton />}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className={cn(tap, "shrink-0")} aria-label="Editor options">
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          {canSetMaxes && (
+            <DropdownMenuItem onSelect={() => setMaxesOpen(true)}>
+              <Dumbbell className="mr-2 h-4 w-4" /> 1RM and training maxes
+            </DropdownMenuItem>
+          )}
+          {!phone && (
+            <>
+              {canSetMaxes && <DropdownMenuSeparator />}
+              <DropdownMenuItem onSelect={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
+                {sidebarCollapsed ? <PanelLeftOpen className="mr-2 h-4 w-4" /> : <PanelLeftClose className="mr-2 h-4 w-4" />}
+                {sidebarCollapsed ? "Show exercise library" : "Hide exercise library"}
+              </DropdownMenuItem>
+              <DropdownMenuCheckboxItem checked={compact} onCheckedChange={(v) => setPrefs({ compact: !!v })}>
+                Compact cards
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuItem onSelect={() => setFullscreen((v) => !v)}>
+                {fullscreen ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
+                {fullscreen ? "Exit full screen" : "Full screen"}
+                <DropdownMenuShortcut>⇧.</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <div className="flex items-center gap-1 px-2 py-1.5 text-sm">
+                <span className="flex-1 text-muted-foreground">Zoom</span>
+                <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Zoom out" onClick={() => setZoom(zoom - 0.05)}>
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </Button>
+                <button type="button" className="min-w-[44px] rounded px-1 text-center text-xs tabular-nums hover:bg-muted" title="Reset to 100%" onClick={() => setZoom(1)}>
+                  {Math.round(zoom * 100)}%
+                </button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Zoom in" onClick={() => setZoom(zoom + 0.05)}>
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <DropdownMenuItem onSelect={fitToScreen}>
+                <Maximize2 className="mr-2 h-4 w-4" /> Fit to screen
+              </DropdownMenuItem>
+            </>
+          )}
+          {phone && !canSetMaxes && (
+            <DropdownMenuItem disabled>Library, drag and drop and zoom are on a computer</DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+  const portalToolbar = !!toolbarTarget && !fullscreen;
+
   return (
     <MaxesContext.Provider value={maxesCtx}>
     <BuilderPhoneContext.Provider value={phone}>
+    <WeekNavSlotContext.Provider value={weekSlot}>
+    {portalToolbar && createPortal(toolbar, toolbarTarget!)}
+    {maxesOpen && clientId && blockId && (
+      <BlockMaxesDialog clientId={clientId} blockId={blockId} onClose={() => setMaxesOpen(false)} />
+    )}
     <div
       className={cn(
-        "workout-card-surface overflow-hidden",
-        fullscreen && "fixed inset-0 z-[60] rounded-none border-0 shadow-none",
+        !phone && "workout-card-surface overflow-hidden",
+        fullscreen && "fixed inset-0 z-[60] rounded-none border-0 bg-background shadow-none",
       )}
     >
-      {phone ? (
-        <div className="space-y-2 border-b border-border px-3 py-2" data-builder-phone>
+      {!portalToolbar && (
+        <div className={cn("z-20 border-b border-border bg-background", fullscreen ? "sticky top-0" : "sticky top-0")}>
+          {toolbar}
+        </div>
+      )}
+      {phone && (
+        <div className="pb-1 pt-2" data-builder-phone>
           <BestOnComputerTip storageKey="jf.coach-builder.desktop-tip">
             The exercise library, drag and drop and side by side weeks are on a computer. Days,
             exercises, sets and reps all edit here.
           </BestOnComputerTip>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button size="icon" variant="ghost" className="h-10 w-10" disabled={!canUndo} aria-label="Undo" onClick={undo}>
-              <Undo2 className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-10 w-10" disabled={!canRedo} aria-label="Redo" onClick={redo}>
-              <Redo2 className="h-4 w-4" />
-            </Button>
-            <div className="ml-auto inline-flex items-center gap-1.5">
-              <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
-              {toolbarExtras}
-            </div>
-          </div>
         </div>
-      ) : (
-      <div
-        className={cn(
-          "z-20 flex flex-wrap items-center gap-1.5 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur",
-          fullscreen ? "sticky top-0" : "sticky top-[42px]",
-        )}
-      >
-        <Button size="icon" variant="ghost" className="h-7 w-7" title={sidebarCollapsed ? "Show library" : "Hide library"} onClick={() => setPrefs({ sidebarCollapsed: !sidebarCollapsed })}>
-          {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-        </Button>
-        <div className="h-5 w-px bg-border" />
-        <div className="inline-flex items-center gap-0.5">
-          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!canUndo} title="Undo (Cmd/Ctrl+Z)" onClick={undo}>
-            <Undo2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!canRedo} title="Redo (Cmd/Ctrl+Shift+Z)" onClick={redo}>
-            <Redo2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        <div className="h-5 w-px bg-border" />
-        <button
-          onClick={() => setPrefs({ compact: !compact })}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition",
-            compact
-              ? "border-green-600 bg-green-600 text-white hover:bg-green-700 hover:border-green-700"
-              : "border-red-500 bg-red-500 text-white hover:bg-red-600 hover:border-red-600"
-          )}
-          title="Toggle compact mode"
-        >
-          <Rows3 className="h-3 w-3" /> {compact ? "Compact On" : "Compact Off"}
-        </button>
-        <div className="h-5 w-px bg-border" />
-        <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5">
-          <Button size="icon" variant="ghost" className="h-6 w-6" title="Zoom out" onClick={() => setZoom(zoom - 0.05)}>
-            <ZoomOut className="h-3 w-3" />
-          </Button>
-          <span className="min-w-[34px] text-center text-[10px] tabular-nums text-muted-foreground">{Math.round(zoom * 100)}%</span>
-          <Button size="icon" variant="ghost" className="h-6 w-6" title="Zoom in" onClick={() => setZoom(zoom + 0.05)}>
-            <ZoomIn className="h-3 w-3" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6" title="Reset to 100%" onClick={() => setZoom(1)}>
-            <span className="text-[9px] font-bold">1:1</span>
-          </Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6" title="Fit to screen" onClick={fitToScreen}>
-            <Maximize2 className="h-3 w-3" />
-          </Button>
-        </div>
-        <div className="ml-auto inline-flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant={fullscreen ? "default" : "outline"}
-            className="h-7 gap-1 text-[11px] font-semibold"
-            onClick={() => setFullscreen((v) => !v)}
-            title={fullscreen ? "Exit full screen (Esc)" : "Open full screen editor (Shift+.)"}
-          >
-            {fullscreen ? (
-              <>
-                <Minimize2 className="h-3.5 w-3.5" /> Exit Full Screen
-              </>
-            ) : (
-              <>
-                <Expand className="h-3.5 w-3.5" /> Full Screen Mode
-              </>
-            )}
-          </Button>
-          <BlockMaxesButton clientId={clientId ?? null} blockId={blockId ?? null} />
-          {toolbarExtras}
-          <ProgramBuilderShortcutsButton />
-        </div>
-      </div>
       )}
 
       <div
@@ -1105,7 +1162,7 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
           }}
         />
         )}
-        <div className={cn(!phone && "flex-1 overflow-auto")} ref={canvasRef}>
+        <div className={cn(!phone && "@container flex-1 overflow-auto")} ref={canvasRef}>
           <div
             style={
               phone
@@ -1117,13 +1174,14 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
                     minHeight: `${100 / zoom}%`,
                   }
             }
-            className={phone ? "px-2 py-2" : "pl-1 pr-2 py-2"}
+            className={phone ? "py-2" : "px-3 py-3"}
           >
-            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />
+            <StructureEditor type={type} payload={payload} setPayload={setP} exercises={exercises as any[]} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} singleBlock={singleBlock} />
           </div>
         </div>
       </div>
     </div>
+    </WeekNavSlotContext.Provider>
     </BuilderPhoneContext.Provider>
     </MaxesContext.Provider>
   );
@@ -1131,12 +1189,18 @@ export function StructureCanvas({ type, payload, setP, exercises, appendRowToFir
 
 // ---------- Structure editing for the JSON payload ----------
 
-function StructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
+function StructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue, singleBlock }: { type: string; payload: any; setPayload: (p: any) => void; exercises: any[]; compact?: boolean; templateId?: string; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; singleBlock?: boolean }) {
   if (type === "full_prep" || type === "block") {
-    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} />;
+    return <MultiBlockStructureEditor type={type} payload={payload} setPayload={setPayload} exercises={exercises} compact={compact} templateId={templateId} dayScheduleStatus={dayScheduleStatus} onFixCalendarIssue={onFixCalendarIssue} singleBlock={singleBlock} />;
   }
   if (type === "week") return <WeekEditor week={payload} setWeek={setPayload} exercises={exercises} compact={compact} />;
-  if (type === "day") return <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} dayKey="single" />;
+  if (type === "day") {
+    return (
+      <section className="rounded-2xl border border-border bg-card">
+        <DayEditor day={payload} setDay={setPayload} exercises={exercises} compact={compact} dayKey="single" standalone />
+      </section>
+    );
+  }
   return (
     <Card className="p-4 max-w-3xl">
       <RowEditor row={payload} setRow={setPayload} exercises={exercises} compact={compact} />
@@ -1145,8 +1209,9 @@ function StructureEditor({ type, payload, setPayload, exercises, compact, templa
 }
 
 // ---------- Multi-block (v2 payload) structure editor -----------------------
-function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue }: {
+function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compact, templateId, dayScheduleStatus, onFixCalendarIssue, singleBlock }: {
   type: "block" | "full_prep" | string;
+  singleBlock?: boolean;
   payload: any;
   setPayload: (p: any) => void;
   exercises: any[];
@@ -1277,7 +1342,7 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
     <div className="space-y-3">
       {type === "full_prep" && (
         <Card className="p-3 max-w-2xl">
-          <div className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Prep details</div>
+          <div className="mb-2 text-sm font-semibold">Prep details</div>
           <div className="grid grid-cols-2 gap-2">
             <div><Label className="text-xs">Event name</Label><Input value={prep.event_name ?? ""} onChange={(e) => setPrep({ event_name: e.target.value || null })} /></div>
             <div><Label className="text-xs">Event date</Label><Input type="date" value={prep.event_date ?? ""} onChange={(e) => setPrep({ event_date: e.target.value || null })} /></div>
@@ -1307,105 +1372,99 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
           </div>
         </Card>
       )}
-      <Card className="flex flex-wrap items-center gap-3 p-2 text-xs">
-        <span className="font-bold uppercase tracking-wide text-muted-foreground">Program</span>
-        <span>{active.length} active block{active.length === 1 ? "" : "s"}</span>
-        {archived.length > 0 && <span className="text-muted-foreground">· {archived.length} archived</span>}
-        {trashed.length > 0 && <span className="text-muted-foreground">· {trashed.length} in trash</span>}
-        <span className="ml-auto" />
-        <Button size="sm" variant="outline" className="h-7" onClick={handleAddBlock} disabled={inRecovery}>
-          <Plus className="mr-1 h-3 w-3" /> Add block
-        </Button>
-      </Card>
+      {/* The program's blocks (templates only): one row of tabs, the block
+          you're on carrying its settings, + to add one. A client's block
+          editor is one block, so it has none of this. */}
+      {!singleBlock && (
+        <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Blocks">
+          {active.map((b) => {
+            const isActive = b.id === activeBlockId;
+            return (
+              <div
+                key={b.id}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center gap-1 rounded-lg pl-3 pr-1 text-sm transition-colors max-md:h-10",
+                  isActive ? "bg-secondary font-semibold text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <button type="button" role="tab" aria-selected={isActive} className="max-w-[200px] truncate pr-1" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
+                  {b.name}
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">{b.phase || b.training_focus ? `${b.phase || b.training_focus} · ` : ""}{b.weeks.length}w</span>
+                </button>
+                {isActive && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground" aria-label={`${b.name} settings`}><Settings2 className="h-3.5 w-3.5" /></button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-2 text-xs" align="start">
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-1">
+                          <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleRename(b.id)}><Pencil className="mr-1.5 h-3.5 w-3.5" />Rename</Button>
+                          <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleDuplicate(b.id)}><Copy className="mr-1.5 h-3.5 w-3.5" />Duplicate</Button>
+                          <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleMove(b.id, -1)}>← Move left</Button>
+                          <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleMove(b.id, 1)}>Move right →</Button>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Phase</Label>
+                          <Select value={b.phase ?? "__none"} onValueChange={(v) => handleUpdatePhase(b.id, v === "__none" ? null : v)}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Optional phase" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none">None</SelectItem>
+                              {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Minutes per workout</Label>
+                          <Input
+                            inputMode="numeric"
+                            className="h-8 text-xs"
+                            value={b.estimated_minutes ?? ""}
+                            onChange={(e) => handleUpdateEst(b.id, parseInt(e.target.value) || null)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Notes</Label>
+                          <Textarea rows={2} className="text-xs" value={b.notes} onChange={(e) => handleUpdateNotes(b.id, e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 border-t border-border pt-2">
+                          <Button size="sm" variant="ghost" className="h-8 justify-start text-xs" onClick={() => handleArchive(b.id)}><ArchiveIcon className="mr-1.5 h-3.5 w-3.5" />Archive</Button>
+                          <Button size="sm" variant="ghost" className="h-8 justify-start text-xs text-destructive" onClick={() => handleTrash(b.id)}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            );
+          })}
+          <Button size="sm" variant="ghost" className="h-9 shrink-0 text-muted-foreground max-md:h-10" onClick={handleAddBlock} disabled={inRecovery}>
+            <Plus className="mr-1 h-4 w-4" /> Block
+          </Button>
+          {active.length === 0 && (
+            <span className="text-xs text-muted-foreground">No active blocks. Add one to start.</span>
+          )}
+        </div>
+      )}
 
-      {/* Block tab strip */}
-      <div className="flex flex-wrap items-center gap-1">
-        {active.map((b) => {
-          const isActive = b.id === activeBlockId;
-          return (
-            <div key={b.id} className={cn(
-              "group inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
-              isActive ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground",
-            )}>
-              <button type="button" className="font-semibold" onClick={() => setActive(b.id)} title={`${b.weeks.length} weeks`}>
-                {b.name}
-              </button>
-              {(b.phase || b.training_focus) && (
-                <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                  {b.phase || b.training_focus}
-                </span>
-              )}
-              <span className="text-[10px] opacity-70">·{b.weeks.length}w</span>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className="ml-1 opacity-60 hover:opacity-100" aria-label="Block menu"><Settings2 className="h-3 w-3" /></button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-2 text-xs">
-                  <div className="space-y-2">
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleRename(b.id)}><Pencil className="mr-1 h-3 w-3" />Rename</Button>
-                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleDuplicate(b.id)}><Copy className="mr-1 h-3 w-3" />Duplicate</Button>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleMove(b.id, -1)}>← Move left</Button>
-                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleMove(b.id, 1)}>Move right →</Button>
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Phase</Label>
-                      <Select value={b.phase ?? "__none"} onValueChange={(v) => handleUpdatePhase(b.id, v === "__none" ? null : v)}>
-                        <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Optional phase" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">— None —</SelectItem>
-                          {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Est minutes / workout</Label>
-                      <Input
-                        type="number" inputMode="numeric"
-                        className="h-7 text-[11px]"
-                        value={b.estimated_minutes ?? ""}
-                        onChange={(e) => handleUpdateEst(b.id, parseInt(e.target.value) || null)}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Notes</Label>
-                      <Textarea rows={2} className="text-[11px]" value={b.notes} onChange={(e) => handleUpdateNotes(b.id, e.target.value)} />
-                    </div>
-                    <div className="flex gap-1 border-t border-border pt-1">
-                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" onClick={() => handleArchive(b.id)}><ArchiveIcon className="mr-1 h-3 w-3" />Archive</Button>
-                      <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px] text-destructive" onClick={() => handleTrash(b.id)}><Trash2 className="mr-1 h-3 w-3" />Trash</Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          );
-        })}
-        {active.length === 0 && (
-          <span className="text-xs text-muted-foreground">No active blocks. Click "Add block" to start.</span>
-        )}
-      </div>
-
-      {(archived.length > 0 || trashed.length > 0) && (
-        <details className="rounded-md border border-dashed border-border p-2 text-xs text-muted-foreground">
-          <summary className="cursor-pointer">Archived & Trash ({archived.length + trashed.length})</summary>
-          <div className="mt-2 space-y-1">
+      {!singleBlock && (archived.length > 0 || trashed.length > 0) && (
+        <details className="rounded-lg px-1 text-xs text-muted-foreground">
+          <summary className="cursor-pointer py-1">Archived and trash ({archived.length + trashed.length})</summary>
+          <div className="mt-1 space-y-1">
             {archived.map((b) => (
               <div key={b.id} className="flex items-center gap-2">
                 <ArchiveIcon className="h-3 w-3" />
                 <span className="flex-1 truncate">{b.name}</span>
-                <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => handleRestore(b.id)}><ArchiveRestore className="mr-1 h-3 w-3" />Restore</Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive" onClick={() => handleTrash(b.id)}><Trash2 className="h-3 w-3" /></Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleRestore(b.id)}><ArchiveRestore className="mr-1 h-3 w-3" />Restore</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" aria-label={`Trash ${b.name}`} onClick={() => handleTrash(b.id)}><Trash2 className="h-3 w-3" /></Button>
               </div>
             ))}
             {trashed.map((b) => (
               <div key={b.id} className="flex items-center gap-2">
                 <Trash2 className="h-3 w-3" />
                 <span className="flex-1 truncate line-through">{b.name}</span>
-                <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => handleRestoreTrash(b.id)}><ArchiveRestore className="mr-1 h-3 w-3" />Restore</Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[11px] text-destructive" onClick={() => handlePurge(b.id)}>Delete forever</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleRestoreTrash(b.id)}><ArchiveRestore className="mr-1 h-3 w-3" />Restore</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => handlePurge(b.id)}>Delete forever</Button>
               </div>
             ))}
           </div>
@@ -1414,17 +1473,15 @@ function MultiBlockStructureEditor({ type, payload, setPayload, exercises, compa
 
       {/* Active block weeks editor */}
       {activeBlock ? (
-        <div className="rounded-md border border-border p-2 max-md:border-0 max-md:p-0">
-          <BlockPayloadEditor
-            key={activeBlock.id}
-            weeksData={activeBlock.weeks}
-            setWeeksData={setActiveBlockWeeks}
-            exercises={exercises}
-            compact={compact}
-            dayScheduleStatus={dayScheduleStatus}
-            onFixCalendarIssue={onFixCalendarIssue}
-          />
-        </div>
+        <BlockPayloadEditor
+          key={activeBlock.id}
+          weeksData={activeBlock.weeks}
+          setWeeksData={setActiveBlockWeeks}
+          exercises={exercises}
+          compact={compact}
+          dayScheduleStatus={dayScheduleStatus}
+          onFixCalendarIssue={onFixCalendarIssue}
+        />
       ) : (
         <Card className="p-8 text-center text-sm text-muted-foreground">
           Add a block to start building this program.
@@ -1482,29 +1539,9 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     return { days: days.length, rows: rowCount, minutes };
   }), [weeksData]);
   const fmtDur = (m: number) => { if (!m || m <= 0) return "—"; const h = Math.floor(m/60); const mm = Math.round(m%60); return h > 0 ? `${h}h ${mm}m` : `${mm}m`; };
-  const weekHeaderScrollRef = useRef<HTMLDivElement | null>(null);
-  const weekCardsScrollRef = useRef<HTMLDivElement | null>(null);
   const weekColumnWidthClass = compact
     ? "w-[88vw] max-w-[520px] sm:w-[440px] lg:w-[480px] xl:w-[520px]"
     : "w-[94vw] max-w-[720px] sm:w-[600px] lg:w-[640px] xl:w-[700px]";
-  // Track which scroller is being driven by the user so the mirrored
-  // scroller doesn't echo events back and create a feedback loop / jitter.
-  const scrollSyncSource = useRef<"header" | "cards" | null>(null);
-  const scrollSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncWeekScroll = (source: "header" | "cards") => (e: React.UIEvent<HTMLDivElement>) => {
-    // If this scroll event was caused by our programmatic mirror, ignore it.
-    if (scrollSyncSource.current && scrollSyncSource.current !== source) return;
-    const other = source === "header" ? weekCardsScrollRef.current : weekHeaderScrollRef.current;
-    if (!other) return;
-    const left = e.currentTarget.scrollLeft;
-    if (Math.abs(other.scrollLeft - left) > 1) {
-      scrollSyncSource.current = source;
-      // Use instant scroll (not smooth) to avoid drift during the sync.
-      other.scrollLeft = left;
-      if (scrollSyncTimer.current) clearTimeout(scrollSyncTimer.current);
-      scrollSyncTimer.current = setTimeout(() => { scrollSyncSource.current = null; }, 80);
-    }
-  };
   const addWeek = () => {
     const nextIdx = (weeksData[weeksData.length - 1]?.week_index ?? 0) + 1;
     setWeeksData([...weeksData, { week_index: nextIdx, days: [{ day_index: 1, title: "", subtitle: "", rows: [] }] }]);
@@ -1537,10 +1574,6 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     setWeeksData(next);
     toast.success(`Copied Week ${src.week_index} → future weeks`);
   };
-  const copyWeek1ToAll = () => {
-    if (weeksData.length < 2) return;
-    copyWeekToFuture(0);
-  };
   const copyDayToFuture = (weekIdx: number, dayIdx: number) => {
     const srcDay = weeksData[weekIdx]?.days?.[dayIdx];
     if (!srcDay) return;
@@ -1556,266 +1589,253 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
     setWeeksData(next);
     toast.success(`Copied Day ${srcDay.day_index} → future weeks`);
   };
-  return (
-    <div className="space-y-2">
-      <div className="sticky top-0 z-20 -mx-2 mb-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-2 backdrop-blur max-md:mx-0">
-        {!phone && (
-        <div className="inline-flex rounded-md border border-border p-0.5">
-          <button onClick={() => setView("block")} className={cn("inline-flex items-center gap-1 rounded px-2 py-1 text-xs", view === "block" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-            <LayoutGrid className="h-3 w-3" /> Full Block
-          </button>
-          <button onClick={() => setView("week")} className={cn("inline-flex items-center gap-1 rounded px-2 py-1 text-xs", view === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-            <CalendarRange className="h-3 w-3" /> Weekly
-          </button>
-        </div>
-        )}
-        {/* Active editing context — always visible while scrolling deep into a week */}
-        {view === "week" && weeksData[activeIdx] && (() => {
-          const aw = weeksData[activeIdx];
-          const s = weekStats[activeIdx] ?? { days: 0, rows: 0, minutes: 0 };
-          return (
-            <div className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-2 py-1 text-[11px] text-foreground">
-              <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
-                Editing · Week {aw.week_index}
-              </span>
-              <span className="text-muted-foreground">
-                {s.days}d · {s.rows} rows · Est {fmtDur(s.minutes)}
-              </span>
-              {aw.notes ? (
-                <span className="hidden md:inline max-w-[220px] truncate italic text-muted-foreground" title={aw.notes}>
-                  “{aw.notes}”
-                </span>
-              ) : null}
-            </div>
-          );
-        })()}
-        {view === "block" && weeksData.length > 1 && (
-          <Button size="sm" variant="outline" onClick={copyWeek1ToAll}>
-            <Copy className="mr-1 h-3 w-3" /> Copy Week 1 → all weeks
+  // Week notes / phase: opened from the week's ⋯, edited in place.
+  const [weekDetailsOpen, setWeekDetailsOpen] = useState(false);
+  const weekNavSlot = useContext(WeekNavSlotContext);
+  const goWeek = (i: number) => {
+    setActiveIdx(i);
+    if (view === "block") {
+      document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+    }
+  };
+  const setWeekAt = (i: number, patch: any) => {
+    const c = [...weeksData];
+    c[i] = { ...c[i], ...patch };
+    setWeeksData(c);
+  };
+  const weekMenu = (i: number, opts?: { onDetails?: () => void }) => {
+    const w = weeksData[i];
+    if (!w) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className={cn("shrink-0", phone ? "h-10 w-10" : "h-8 w-8")} aria-label={`Week ${w.week_index} options`}>
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
-        )}
-        {view === "week" && weeksData[activeIdx] && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-[11px]"
-            onClick={() => copyWeekToFuture(activeIdx)}
-            title="Copy this week's prescriptions into every later week"
-          >
-            <ArrowRight className="mr-1 h-3 w-3" /> Apply → future
-          </Button>
-        )}
-        {!phone && <BlockMaxesButton clientId={ctxClientId} blockId={ctxBlockId} />}
-        <Button size="sm" variant="ghost" className="ml-auto max-md:h-10" onClick={addWeek}>
-          <Plus className="mr-1 h-3 w-3" /> Add week
-        </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Week {w.week_index}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => opts?.onDetails?.()}>
+            <Pencil className="mr-2 h-4 w-4" /> Notes and phase
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => dupWeek(i)}>
+            <Copy className="mr-2 h-4 w-4" /> Duplicate week
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={i >= weeksData.length - 1} onSelect={() => copyWeekToFuture(i)}>
+            <ArrowRight className="mr-2 h-4 w-4" /> Copy to later weeks
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive" onSelect={() => delWeek(i)}>
+            <Trash2 className="mr-2 h-4 w-4" /> Delete week
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+  const weekNotesEditor = (i: number, onDone: () => void) => {
+    const w = weeksData[i];
+    if (!w) return null;
+    return (
+      <div className="mt-2 grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)_auto]">
+        <Select value={w.phase || "__none"} onValueChange={(v) => setWeekAt(i, { phase: v === "__none" ? null : v })}>
+          <SelectTrigger className="h-10 text-sm md:h-9" aria-label="Week phase"><SelectValue placeholder="Phase" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">No phase</SelectItem>
+            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Input
+          className="h-10 text-base md:h-9 md:text-sm"
+          placeholder="Week notes, for you only"
+          aria-label="Week notes"
+          value={w.notes ?? ""}
+          onChange={(e) => setWeekAt(i, { notes: e.target.value })}
+        />
+        <Button variant="secondary" className="h-10 md:h-9" onClick={onDone}>Done</Button>
       </div>
-
-      {view === "week" ? (
-        <>
-          <div className="-mx-2 overflow-x-auto px-2 pb-2 max-md:mx-0 max-md:px-0">
-            <div className="flex w-max items-center gap-1">
-              {weeksData.map((w: any, i: number) => (
-                <button key={i} onClick={() => setActiveIdx(i)} className={`h-8 w-[112px] shrink-0 rounded-md border px-2 py-1 text-xs max-md:h-10 max-md:w-auto max-md:min-w-[88px] max-md:text-[13px] ${activeIdx === i ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
-                  Week {w.week_index}{w.phase ? ` · ${w.phase}` : ""}
-                </button>
-              ))}
-              {weeksData[activeIdx] && (
-                <div className="ml-1 flex shrink-0 items-center gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => dupWeek(activeIdx)} title="Duplicate week"><Copy className="h-3 w-3" /></Button>
-                  <Button size="sm" variant="ghost" onClick={() => copyWeekToFuture(activeIdx)} title="Copy week → future weeks"><ArrowRight className="h-3 w-3" /></Button>
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => delWeek(activeIdx)} title="Delete week"><Trash2 className="h-3 w-3" /></Button>
-                </div>
-              )}
-            </div>
-          </div>
-          {weeksData[activeIdx] && (
-            <WeekEditor
-              week={weeksData[activeIdx]}
-              setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
-              exercises={exercises}
-              onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
-              compact={compact}
-              dayKeyPrefix={`wk${weeksData[activeIdx].week_index ?? activeIdx}`}
-              blockId={ctxBlockId}
-              blockStartDate={null}
-              blockEndDate={null}
-              onExtraDayAdded={() => { /* block-tree query invalidated inside AddExtraDayDialog */ }}
-              dayScheduleStatus={dayScheduleStatus}
-              onFixCalendarIssue={onFixCalendarIssue}
-            />
-          )}
-        </>
-      ) : (
-        <div className="space-y-3">
-          {weeksData.length > 0 && (
-            <div
-              ref={weekHeaderScrollRef}
-              onScroll={syncWeekScroll("header")}
+    );
+  };
+  // The weeks: one row in the editor's toolbar (the canvas's slot), the
+  // week you're on in neutral, + adds one, ⋯ holds the rest.
+  const weekNav = (
+    <div className="flex min-w-0 flex-1 items-center gap-1">
+      {!phone && (
+        <div role="tablist" aria-label="Layout" className="mr-1 inline-flex shrink-0 rounded-lg bg-muted p-0.5">
+          {([["week", "Week"], ["block", "Whole block"]] as const).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
               className={cn(
-                "sticky top-10 z-20 -mx-2 overflow-x-auto overscroll-x-contain border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_6%,var(--background))] px-3 py-2 shadow-sm backdrop-blur",
-                "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                "inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors",
+                view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <div className={cn("flex w-max items-stretch", compact ? "gap-2" : "gap-3")}>
-                {weeksData.map((w: any, i: number) => {
-                  const s = weekStats[i] ?? { days: 0, rows: 0, minutes: 0 };
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        setActiveIdx(i);
-                        document.getElementById(`tpl-week-${i}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
-                      }}
-                      className={cn(
-                        "workout-card-surface grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left hover:border-primary/60",
-                        weekColumnWidthClass,
-                        activeIdx === i && "border-primary bg-primary/10",
-                      )}
-                    >
-                      <span className="min-w-0 truncate text-xs font-bold uppercase tracking-wide text-primary">Week {w.week_index}</span>
-                      {w.phase && (
-                        <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                          {w.phase}
-                        </span>
-                      )}
-                      <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
-                        {s.days}d · {s.rows} rows · {fmtDur(s.minutes)}
-                      </span>
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={addWeek}
-                  className={cn("shrink-0 rounded-md border border-dashed border-primary/40 px-3 py-2 text-xs font-bold uppercase tracking-wide text-primary hover:bg-primary/10", compact ? "w-[200px]" : "w-[260px]")}
-                >
-                  Add Week
-                </button>
-              </div>
-            </div>
-          )}
-          {weeksData.length === 0 && (
-            <p className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-              No weeks yet. Click <em>Add week</em> to start.
-            </p>
-          )}
-          <div
-            ref={weekCardsScrollRef}
-            onScroll={syncWeekScroll("cards")}
+              {v === "week" ? <CalendarRange className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />} {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div
+        role="tablist"
+        aria-label="Weeks"
+        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <span className="shrink-0 px-1 text-xs text-muted-foreground">Week</span>
+        {weeksData.map((w: any, i: number) => (
+          <button
+            key={i}
+            type="button"
+            role="tab"
+            aria-selected={activeIdx === i}
+            aria-label={`Week ${w.week_index}${w.phase ? `, ${w.phase}` : ""}`}
+            title={w.phase ? `Week ${w.week_index} · ${w.phase}` : `Week ${w.week_index}`}
+            data-week-chip
+            onClick={() => goWeek(i)}
             className={cn(
-            "snap-x snap-proximity overflow-x-auto overflow-y-visible overscroll-x-contain pb-3",
-            compact ? "px-2 scroll-pl-2" : "px-3 scroll-pl-3",
-          )}>
-            <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
-              {weeksData.map((w: any, wi: number) => {
-                const s = weekStats[wi] ?? { days: 0, rows: 0, minutes: 0 };
-                return (
-                  <Card
-                    key={wi}
-                    id={`tpl-week-${wi}`}
-                    className={cn(
-                      "shrink-0 snap-start border-2 border-border p-0",
-                      weekColumnWidthClass,
-                    )}
-                    style={{ borderLeftWidth: 6, borderLeftColor: "var(--primary)" }}
-                  >
-                    <div className={cn(
-                      "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-primary/20 bg-[color-mix(in_oklab,var(--primary)_8%,var(--card))] shadow-sm sm:grid-cols-[auto_auto_minmax(120px,1fr)_auto]",
-                      compact ? "px-2 py-1" : "px-3 py-2",
-                    )}>
-                      <span className={cn("inline-flex shrink-0 items-center rounded-md bg-primary px-2 text-[10px] font-bold uppercase tracking-wide text-primary-foreground", compact ? "h-5" : "h-6 text-[11px]")}> 
-                        Week {w.week_index}
-                      </span>
-                      <span className={cn("min-w-0 truncate text-muted-foreground max-sm:col-span-2", compact ? "text-[10px]" : "text-[11px]")}> 
-                        {s.days} day{s.days === 1 ? "" : "s"} · {s.rows} row{s.rows === 1 ? "" : "s"} · Est {fmtDur(s.minutes)}
-                      </span>
-                      {/* Basic view: only the phase chip (when set). Label,
-                          notes and copy-to-future live under Advanced. */}
-                      {w.phase && !advWeeks[wi] && (
-                        <Badge variant="outline" className="shrink-0 text-[10px] max-sm:col-span-2">{w.phase}</Badge>
-                      )}
-                      <div className="col-start-2 row-start-1 flex shrink-0 gap-1 sm:col-start-auto sm:row-start-auto">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-[11px]"
-                          onClick={() => setAdvWeeks((prev) => ({ ...prev, [wi]: !prev[wi] }))}
-                          title="Advanced week options: label, notes, copy to future weeks"
-                          aria-expanded={!!advWeeks[wi]}
-                        >
-                          <Settings2 className="mr-1 h-3 w-3" /> Advanced
-                          {advWeeks[wi] ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />}
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupWeek(wi)} title="Duplicate week"><Copy className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delWeek(wi)}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </div>
-                    {advWeeks[wi] && (
-                      <div className={cn(
-                        "grid items-center gap-2 border-b border-primary/20 bg-muted/20 sm:grid-cols-[auto_minmax(0,1fr)_auto]",
-                        compact ? "px-2 py-1.5" : "px-3 py-2",
-                      )}>
-                        <Select
-                          value={w.phase || "__none"}
-                          onValueChange={(v) => { const c = [...weeksData]; c[wi] = { ...w, phase: v === "__none" ? null : v }; setWeeksData(c); }}
-                        >
-                          <SelectTrigger className={cn("w-[160px] shrink-0 text-[11px]", compact ? "h-6" : "h-7")}>
-                            <SelectValue placeholder="Phase label" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none">No phase label</SelectItem>
-                            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          className={cn("min-w-0 border-0 bg-transparent text-xs focus-visible:ring-1", compact ? "h-6" : "h-7")}
-                          placeholder="Week notes (optional) — coach reference only"
-                          value={w.notes ?? ""}
-                          onChange={(e) => { const c = [...weeksData]; c[wi] = { ...w, notes: e.target.value }; setWeeksData(c); }}
-                        />
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => copyWeekToFuture(wi)} title="Copy week → all future weeks">
-                          <Copy className="mr-1 h-3 w-3" /> Copy to future weeks
-                        </Button>
-                      </div>
-                    )}
-                    <div className={cn("bg-[color-mix(in_oklab,var(--primary)_2%,transparent)]", compact ? "p-2" : "p-3")}>
-                      <WeekEditor
-                        week={w}
-                        setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
-                        exercises={exercises}
-                        onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
-                        compact={compact}
-                        hideHeader
-                        hideVolumeSummary={!advWeeks[wi]}
-                        dayKeyPrefix={`wk${w.week_index ?? wi}`}
-                        blockId={ctxBlockId}
-                        blockStartDate={null}
-                        blockEndDate={null}
-                        onExtraDayAdded={() => {}}
-                        dayScheduleStatus={dayScheduleStatus}
-                        onFixCalendarIssue={onFixCalendarIssue}
-                      />
-                    </div>
-                  </Card>
-                );
-              })}
-              {/* Trailing add-week tile */}
-              <button
-                type="button"
-                onClick={addWeek}
-                className={cn(
-                  "flex shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-primary/40 bg-primary/5 text-primary hover:bg-primary/10",
-                  compact ? "h-[140px] w-[200px]" : "h-[200px] w-[260px]",
+              "shrink-0 rounded-lg px-2 text-sm font-semibold tabular-nums transition-colors",
+              phone ? "h-10 min-w-10" : "h-8 min-w-8",
+              activeIdx === i ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {w.week_index}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={addWeek}
+          aria-label="Add week"
+          title="Add week"
+          className={cn("inline-flex shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", phone ? "h-10 w-10" : "h-8 w-8")}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+  const fmtWeekLine = (i: number) => {
+    const s = weekStats[i] ?? { days: 0, rows: 0, minutes: 0 };
+    return `${s.days} day${s.days === 1 ? "" : "s"}${s.minutes > 0 ? ` · about ${fmtDur(s.minutes)}` : ""}`;
+  };
+  return (
+    <div className="space-y-2">
+      {weekNavSlot ? createPortal(weekNav, weekNavSlot) : (
+        <div className="sticky top-0 z-20 -mx-2 mb-2 flex items-center border-b border-border bg-background px-2 py-1 max-md:mx-0">{weekNav}</div>
+      )}
+
+      {weeksData.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
+          <p className="text-sm text-muted-foreground">No weeks yet.</p>
+          <Button variant="outline" className="mt-3 h-10" onClick={addWeek}><Plus className="mr-1.5 h-4 w-4" /> Add week</Button>
+        </div>
+      )}
+
+      {view === "week" ? (
+        weeksData[activeIdx] && (() => {
+          const aw = weeksData[activeIdx];
+          return (
+            <>
+              <div className="pl-1" data-week-summary>
+                <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <h2 className="text-base font-semibold">Week {aw.week_index}</h2>
+                    {aw.phase && <span className="text-sm text-muted-foreground">{aw.phase}</span>}
+                    <span className="text-xs text-muted-foreground">{fmtWeekLine(activeIdx)}</span>
+                  </div>
+                  {weekMenu(activeIdx, { onDetails: () => setWeekDetailsOpen(true) })}
+                </div>
+                {aw.notes && !weekDetailsOpen && (
+                  <button type="button" className="mt-0.5 block max-w-full truncate text-left text-[13px] italic text-muted-foreground hover:text-foreground" onClick={() => setWeekDetailsOpen(true)}>
+                    {aw.notes}
+                  </button>
                 )}
+                {weekDetailsOpen && weekNotesEditor(activeIdx, () => setWeekDetailsOpen(false))}
+              </div>
+              <WeekEditor
+                week={aw}
+                setWeek={(w) => { const copy = [...weeksData]; copy[activeIdx] = w; setWeeksData(copy); }}
+                exercises={exercises}
+                onCopyDayToFuture={(di) => copyDayToFuture(activeIdx, di)}
+                compact={compact}
+                layout="grid"
+                dayKeyPrefix={`wk${aw.week_index ?? activeIdx}`}
+                blockId={ctxBlockId}
+                blockStartDate={null}
+                blockEndDate={null}
+                onExtraDayAdded={() => { /* block-tree query invalidated inside AddExtraDayDialog */ }}
+                dayScheduleStatus={dayScheduleStatus}
+                onFixCalendarIssue={onFixCalendarIssue}
+              />
+            </>
+          );
+        })()
+      ) : (
+        <div
+          className={cn(
+            "snap-x snap-proximity overflow-x-auto overflow-y-visible overscroll-x-contain pb-3",
+            compact ? "scroll-pl-2" : "scroll-pl-3",
+          )}
+        >
+          <div className={cn("flex w-max items-start", compact ? "gap-2" : "gap-3")}>
+            {weeksData.map((w: any, wi: number) => (
+              <section
+                key={wi}
+                id={`tpl-week-${wi}`}
+                className={cn("shrink-0 snap-start rounded-2xl border border-border bg-muted/30", weekColumnWidthClass)}
               >
-                <Plus className="h-6 w-6" />
-                <span className="text-sm font-semibold">Add Week</span>
-              </button>
-              {/* Trailing spacer so the last week / Add Week tile can snap to the left edge */}
-              <div aria-hidden className="shrink-0 w-[80vw]" />
-            </div>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <h2 className="text-base font-semibold">Week {w.week_index}</h2>
+                      {w.phase && <span className="truncate text-sm text-muted-foreground">{w.phase}</span>}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {fmtWeekLine(wi)}
+                      {w.notes && !advWeeks[wi] ? <span className="italic"> · {w.notes}</span> : null}
+                    </div>
+                  </div>
+                  {weekMenu(wi, { onDetails: () => setAdvWeeks((prev) => ({ ...prev, [wi]: true })) })}
+                </div>
+                {advWeeks[wi] && (
+                  <div className="px-3 pb-2">
+                    {weekNotesEditor(wi, () => setAdvWeeks((prev) => ({ ...prev, [wi]: false })))}
+                  </div>
+                )}
+                <div className={compact ? "px-2 pb-2" : "px-2.5 pb-3"}>
+                  <WeekEditor
+                    week={w}
+                    setWeek={(nw) => { const c = [...weeksData]; c[wi] = nw; setWeeksData(c); }}
+                    exercises={exercises}
+                    onCopyDayToFuture={(di) => copyDayToFuture(wi, di)}
+                    compact={compact}
+                    hideVolumeSummary={!advWeeks[wi]}
+                    dayKeyPrefix={`wk${w.week_index ?? wi}`}
+                    blockId={ctxBlockId}
+                    blockStartDate={null}
+                    blockEndDate={null}
+                    onExtraDayAdded={() => {}}
+                    dayScheduleStatus={dayScheduleStatus}
+                    onFixCalendarIssue={onFixCalendarIssue}
+                  />
+                </div>
+              </section>
+            ))}
+            {/* Trailing add-week tile */}
+            <button
+              type="button"
+              onClick={addWeek}
+              className={cn(
+                "flex shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                compact ? "h-[140px] w-[200px]" : "h-[200px] w-[260px]",
+              )}
+            >
+              <Plus className="h-6 w-6" />
+              <span className="text-sm font-medium">Add week</span>
+            </button>
+            {/* Trailing spacer so the last week / Add Week tile can snap to the left edge */}
+            <div aria-hidden className="w-[80vw] shrink-0" />
           </div>
         </div>
       )}
@@ -1823,31 +1843,18 @@ export function BlockPayloadEditor({ weeksData, setWeeksData, exercises, compact
   );
 }
 
-const SCHEDULE_STATUS_BADGE_CLASS: Record<string, string> = {
-  emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  amber: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  blue: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  neutral: "",
-};
-
-function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void }) {
+function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideVolumeSummary, compact, dayKeyPrefix, blockId, blockStartDate, blockEndDate, onExtraDayAdded, dayScheduleStatus, onFixCalendarIssue, layout = "stack" }: { week: any; setWeek: (w: any) => void; exercises: any[]; onCopyDayToFuture?: (dayIdx: number) => void; hideHeader?: boolean; hideVolumeSummary?: boolean; compact?: boolean; dayKeyPrefix?: string; blockId?: string | null; blockStartDate?: string | null; blockEndDate?: string | null; onExtraDayAdded?: () => void; dayScheduleStatus?: Map<string, ProgramDayScheduleStatus>; onFixCalendarIssue?: (dayId: string) => void; layout?: "stack" | "grid" }) {
   const days = week.days || [];
-  const weeklyPurposeLabels = useMemo(() => {
-    const exerciseById = new Map<string, any>((exercises ?? []).map((exercise: any) => [exercise.id, exercise]));
-    return deriveWeeklyPurposeLabelByRowId(
-      days.map((day: any, index: number) => {
-        const scheduled = day.scheduled_date ? Date.parse(day.scheduled_date) : Number.NaN;
-        return {
-          order: Number.isFinite(scheduled) ? scheduled : day.day_index ?? day.sort_order ?? index,
-          rows: (day.rows ?? []) as any[],
-        };
-      }),
-      (row: any) => (row.exercise_id ? exerciseById.get(row.exercise_id) : null),
-    );
-  }, [days, exercises]);
-  // Per-day "Day options" toggles: Focus input and copy-to-future-weeks live
-  // behind these; a day with a saved Focus value keeps it visible.
+  const purposeLabelsByDay = useMemo(() => weekPurposeLabelsByDay(days, exercises), [days, exercises]);
+  const phone = useBuilderPhone();
+  const clip = useClip();
+  // Days that show their Focus line even before one is typed.
   const [dayOpts, setDayOpts] = useState<Record<number, boolean>>({});
+  const setDayAt = (i: number, next: any) => {
+    const copy = [...days];
+    copy[i] = next;
+    setWeek({ ...week, days: copy });
+  };
   const addDay = () => {
     const nextIdx = (days[days.length - 1]?.day_index ?? 0) + 1;
     // Do not seed `title` with a generated "Day N" string — the label is
@@ -1862,7 +1869,7 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
     // day had a coach subtitle, append " (copy)" there instead so the
     // duplicated day is easy to tell apart. Otherwise leave subtitle empty.
     copy.title = "";
-    const srcSub = (copy.subtitle ?? "").trim();
+    const srcSub = (formatDaySubtitle(copy) ?? "").trim();
     copy.subtitle = srcSub ? `${srcSub} (copy)` : "";
     // Never inherit the source's specific scheduled_date — it would otherwise
     // silently double-book a calendar slot.
@@ -1870,166 +1877,221 @@ function WeekEditor({ week, setWeek, exercises, onCopyDayToFuture, hideHeader, h
     setWeek({ ...week, days: [...days, copy] });
   };
   const delDay = (i: number) => { if (!confirm("Remove day?")) return; setWeek({ ...week, days: days.filter((_: any, j: number) => j !== i) }); };
+  const pasteInto = (i: number) => {
+    if (!clip || clip.kind !== "rows") return;
+    const d = days[i];
+    const next = [...(d.rows || []), ...JSON.parse(JSON.stringify(clip.rows))];
+    setDayAt(i, { ...d, rows: next.map((r: any, j: number) => ({ ...r, sort_order: j })) });
+  };
+  const addEmptyRow = (i: number) => {
+    const d = days[i];
+    const rows = d.rows || [];
+    setDayAt(i, {
+      ...d,
+      rows: [...rows, {
+        sort_order: rows.length,
+        // Leave sets/reps/rpe/rir empty — placeholders only. Coach fills in.
+        time_profile: "accessory_compound",
+        percentage_basis: "none",
+      }],
+    });
+  };
   return (
-    <div className="space-y-3">
-      {!hideHeader && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Input className="max-w-xs" placeholder="Week notes (optional) — coach reference only" value={week.notes ?? ""} onChange={(e) => setWeek({ ...week, notes: e.target.value })} />
-          <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
-          {blockId && week._dbId && (
-            <AddExtraDayDialog
-              weekId={week._dbId}
-              blockId={blockId}
-              existingDayCount={days.length}
-              blockStartDate={blockStartDate}
-              blockEndDate={blockEndDate}
-              onAdded={onExtraDayAdded}
-            />
-          )}
-        </div>
-      )}
-      {hideHeader && days.length === 0 && (
-        <Button size="sm" variant="outline" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
-      )}
+    <div className={cn("space-y-3", layout === "grid" && "@container")}>
       {!hideVolumeSummary && <WeeklyVolumeSummary week={week} exercises={exercises as any} weekIndex={week?.week_index} />}
       <WeekPriorityWarnings week={week} exercises={exercises as any} />
+      {days.length === 0 && (
+        <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          No days in this week yet.
+        </p>
+      )}
+      <div className={cn("grid gap-3", layout === "grid" && "@4xl:grid-cols-2 @[96rem]:grid-cols-3", compact && "gap-2")}>
       {days.map((d: any, i: number) => {
         const dayMinutes = estimateDayMinutes(d.rows || []);
         const dKey = `${dayKeyPrefix ?? `wk${week.week_index ?? 0}`}:d${d.day_index ?? i}`;
         const positional = i + 1;
         const dayLabel = formatDayLabel(d, positional);
+        const dayName = formatDaySubtitle(d) ?? "";
         // Canonical schedule status for this day (live client block editor
         // only). Reflects what the calendar ACTUALLY shows — instance dates
         // win over the legacy pl_days.scheduled_date mirror.
         const dayStatus = d._dbId ? dayScheduleStatus?.get(d._dbId) : undefined;
+        const showFocus = !!dayOpts[i] || !!d.focus?.trim();
+        const rowCount = (d.rows || []).length;
         return (
-        <Card key={i} className={cn("border-l-[3px] border-l-primary/40", compact ? "p-2" : "p-3 max-md:p-2")}>
-          <div className={cn("flex flex-col gap-2", compact ? "mb-1" : "mb-2")}>
-            <div className="flex items-start gap-3 flex-wrap">
-              {/* Derived Day label + optional coach subtitle. Reordering
-                  updates the visible number automatically. */}
-              <div className="min-w-0 flex-1">
-                <div className={cn("font-bold leading-none tracking-tight", compact ? "text-sm" : "text-lg")}>
-                  {dayLabel}
-                </div>
-                <Input
-                  className={cn("mt-1 max-w-md", compact && "h-7 text-xs")}
-                  value={d.subtitle ?? ""}
-                  placeholder="Optional — e.g. Final Heavy or Technique Day"
-                  aria-label="Workout subtitle"
-                  onChange={(e) => {
-                    const copy = [...days];
-                    copy[i] = { ...d, subtitle: e.target.value };
-                    setWeek({ ...week, days: copy });
-                  }}
-                />
+        <section
+          key={i}
+          data-builder-day
+          aria-label={`${dayLabel}${dayName ? `: ${dayName}` : ""}`}
+          className={cn("min-w-0 self-start rounded-2xl border border-border bg-card", compact && "rounded-xl")}
+        >
+          <div className={cn("flex items-start gap-1 pb-1", compact ? "px-2.5 pt-2" : "px-3 pt-2.5")}>
+            <div className="min-w-0 flex-1">
+              {/* One quiet line: which day, when, how it stands, how long. */}
+              <div className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground/70">{dayLabel}</span>
+                {/* a date belongs to a client's block (a template's days have none) */}
+                {(dayScheduleStatus || d.scheduled_date) && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <DayDateButton
+                      variant="inline"
+                      needed={!!dayStatus?.missingDate}
+                      value={dayStatus?.canonicalDate ?? d.scheduled_date ?? null}
+                      onChange={(iso) => setDayAt(i, { ...d, scheduled_date: iso })}
+                    />
+                  </>
+                )}
+                {dayStatus?.status === "completed" && (
+                  <span className="inline-flex items-center gap-0.5 font-medium text-success" data-day-status="completed">
+                    <Check className="h-3.5 w-3.5" aria-hidden /> Done
+                  </span>
+                )}
+                {dayStatus?.status === "in-progress" && (
+                  <span className="font-medium text-foreground/80" data-day-status="in-progress">In progress</span>
+                )}
+                {dayStatus?.calendarIssue && (
+                  <span className="inline-flex items-center gap-1 font-medium text-warning" title="The editor date and the calendar date disagree. The calendar is right: Fix aligns this day with it.">
+                    Calendar issue
+                    {onFixCalendarIssue && (
+                      <button type="button" className="min-h-8 rounded-md px-1 underline underline-offset-2 hover:bg-muted" onClick={() => onFixCalendarIssue(dayStatus.dayId)}>
+                        Fix
+                      </button>
+                    )}
+                  </span>
+                )}
+                {rowCount > 0 && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="tabular-nums">{durationRange(dayMinutes)}</span>
+                  </>
+                )}
               </div>
-              <DayDateButton
-                value={dayStatus?.canonicalDate ?? d.scheduled_date ?? null}
-                onChange={(iso) => {
-                  const copy = [...days];
-                  copy[i] = { ...d, scheduled_date: iso };
-                  setWeek({ ...week, days: copy });
+              {/* The workout's name, typed in place (what the athlete reads). */}
+              <input
+                value={dayName}
+                placeholder="Name this workout"
+                aria-label={`${dayLabel} name`}
+                autoComplete="off"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  // the name is the subtitle; the legacy title follows it so
+                  // screens still reading `title` show the same name
+                  setDayAt(i, { ...d, subtitle: v, title: v });
                 }}
-                compact={compact}
+                className={cn(
+                  "-mx-1.5 mt-0.5 block w-[calc(100%+0.75rem)] min-w-0 rounded-md bg-transparent px-1.5 font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground hover:bg-muted/60 focus:bg-muted",
+                  compact ? "h-8 text-sm" : "h-9 text-base",
+                )}
               />
-              {dayStatus && (
-                <span className="flex items-center gap-1">
-                  <Badge
-                    variant="outline"
-                    className={cn("text-[10px]", SCHEDULE_STATUS_BADGE_CLASS[PROGRAM_DAY_STATUS_META[dayStatus.status].tone])}
-                    title={dayStatus.calendarIssue ? "The editor date and the calendar date disagree. The calendar is right — tap Fix to align." : undefined}
-                  >
-                    {PROGRAM_DAY_STATUS_META[dayStatus.status].label}
-                  </Badge>
-                  {dayStatus.calendarIssue && onFixCalendarIssue && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 border-amber-500/40 px-2 text-[10px] text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
-                      onClick={() => onFixCalendarIssue(dayStatus.dayId)}
-                      title="Align this day's editor date with the calendar (calendar wins; history is never changed)"
-                    >
-                      Fix
-                    </Button>
-                  )}
-                </span>
-              )}
-            </div>
-            {dayStatus?.missingDate && (
-              <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
-                <AlertTriangle className="h-3 w-3" />
-                Not on the calendar — set a Training Date so the client sees this workout.
-              </p>
-            )}
-            <div className="flex items-center gap-2 flex-wrap">
-              {(dayOpts[i] || d.focus?.trim()) && (
-                <Input
-                  className={cn("max-w-xs", compact && "h-7 text-xs")}
-                  placeholder="Focus (optional) — e.g. Squat, Upper"
+              {showFocus && (
+                // wraps like text (a long focus line is never cut off), one line only
+                <AutoGrowTextarea
                   value={d.focus ?? ""}
-                  onChange={(e) => { const copy = [...days]; copy[i] = { ...d, focus: e.target.value }; setWeek({ ...week, days: copy }); }}
+                  rows={1}
+                  maxHeight={96}
+                  placeholder="Focus, e.g. Squat or Upper"
+                  aria-label={`${dayLabel} focus`}
+                  onChange={(e) => setDayAt(i, { ...d, focus: e.target.value.replace(/\s*\n+\s*/g, " ") })}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+                  className="-mx-1.5 block min-h-0 w-[calc(100%+0.75rem)] resize-none rounded-md border-0 bg-transparent px-1.5 py-1 text-[13px] leading-snug text-muted-foreground shadow-none outline-none transition-colors placeholder:text-muted-foreground/70 hover:bg-muted/60 focus:bg-muted focus:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 max-md:text-base"
                 />
               )}
-              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
-                <Clock className="h-3 w-3" /> {durationRange(dayMinutes)}
-              </span>
-              <div className="ml-auto flex gap-0.5">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                onClick={() => setDayOpts((prev) => ({ ...prev, [i]: !prev[i] }))}
-                title="More day options (focus, copy to future weeks)"
-                aria-expanded={!!dayOpts[i]}
-              >
-                <Settings2 className="h-3.5 w-3.5" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => dupDay(i)} title="Duplicate"><Copy className="h-3.5 w-3.5" /></Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => delDay(i)}><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
             </div>
-            {dayOpts[i] && onCopyDayToFuture && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => onCopyDayToFuture(i)} title="Copy this day → same day in future weeks">
-                  <ArrowRight className="mr-1 h-3 w-3" /> Copy to future weeks
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className={cn("-mr-1 shrink-0", phone ? "h-10 w-10" : "h-8 w-8")} aria-label={`${dayLabel} options`}>
+                  <MoreHorizontal className="h-5 w-5" />
                 </Button>
-              </div>
-            )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                {rowCount > 0 && (
+                  <>
+                    <DropdownMenuItem onSelect={() => { dayBus.setActive(dKey); dayBus.emit(dKey, "expand"); }}>
+                      <ChevronDown className="mr-2 h-4 w-4" /> Open every exercise
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => dayBus.emit(dKey, "collapse")}>
+                      <ChevronUp className="mr-2 h-4 w-4" /> Close every exercise
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {clip && clip.kind === "rows" && clip.rows.length > 0 && (
+                  <DropdownMenuItem onSelect={() => pasteInto(i)}>
+                    <ClipboardPaste className="mr-2 h-4 w-4" /> Paste {clip.rows.length} exercise{clip.rows.length === 1 ? "" : "s"}
+                  </DropdownMenuItem>
+                )}
+                {!phone && (
+                  <DropdownMenuItem onSelect={() => addEmptyRow(i)}>
+                    <Plus className="mr-2 h-4 w-4" /> Add an empty row
+                  </DropdownMenuItem>
+                )}
+                {!showFocus && (
+                  <DropdownMenuItem onSelect={() => setDayOpts((prev) => ({ ...prev, [i]: true }))}>
+                    <Pencil className="mr-2 h-4 w-4" /> Add a focus line
+                  </DropdownMenuItem>
+                )}
+                {onCopyDayToFuture && (
+                  <DropdownMenuItem onSelect={() => onCopyDayToFuture(i)}>
+                    <ArrowRight className="mr-2 h-4 w-4" /> Copy to later weeks
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => dupDay(i)}>
+                  <Copy className="mr-2 h-4 w-4" /> Duplicate day
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" onSelect={() => delDay(i)}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete day
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <DayEditor day={d} setDay={(nd) => { const copy = [...days]; copy[i] = nd; setWeek({ ...week, days: copy }); }} exercises={exercises} compact={compact} dayKey={dKey} weeklyPurposeLabels={weeklyPurposeLabels} />
-        </Card>
+          {dayStatus?.missingDate && (
+            <p className={cn("flex items-center gap-1.5 pb-1.5 text-xs text-warning", compact ? "px-2.5" : "px-3")}>
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Not on the calendar yet. Set a date so it shows up for them.
+            </p>
+          )}
+          <DayEditor day={d} setDay={(nd) => setDayAt(i, nd)} exercises={exercises} compact={compact} dayKey={dKey} purposeLabels={purposeLabelsByDay[i]} />
+        </section>
       )})}
-      {hideHeader && days.length > 0 && (
-        <Button size="sm" variant="ghost" onClick={addDay}><Plus className="mr-1 h-3 w-3" /> Day</Button>
-      )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" className="h-11 flex-1 border-dashed text-muted-foreground md:h-10" onClick={addDay}>
+          <Plus className="mr-1.5 h-4 w-4" /> Add day
+        </Button>
+        {blockId && week._dbId && (
+          <AddExtraDayDialog
+            weekId={week._dbId}
+            blockId={blockId}
+            existingDayCount={days.length}
+            blockStartDate={blockStartDate}
+            blockEndDate={blockEndDate}
+            onAdded={onExtraDayAdded}
+            triggerClassName="h-11 flex-1 md:h-10"
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabels }: { day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean; dayKey?: string; weeklyPurposeLabels?: Map<string, string> }) {
+function DayEditor({ day, setDay, exercises, compact, dayKey, purposeLabels: weekLabels, standalone }: {
+  day: any; setDay: (d: any) => void; exercises: any[]; compact?: boolean; dayKey?: string;
+  /** This day's labels read across its week (WeekEditor); else read from the day alone. */
+  purposeLabels?: string[];
+  /** A day template on its own: it keeps its own small toolbar (no week around it). */
+  standalone?: boolean;
+}) {
   const rows = day.rows || [];
   // Derive ordered purpose labels (Primary / Secondary / Tertiary / Quaternary
   // for competition + variation rows; Assistance for everything else). Manual
   // `purpose_label` on a row wins. Recomputes whenever rows are reordered.
   const purposeLabels = useMemo(() => {
-    if (weeklyPurposeLabels) {
-      return rows.map((row: any) => weeklyPurposeLabels.get(row.id) ?? "Assistance");
-    }
+    if (weekLabels && weekLabels.length === rows.length) return weekLabels;
     const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
     return derivePurposeLabels(rows, (r: any) => (r.exercise_id ? exById.get(r.exercise_id) : null));
-  }, [rows, exercises, weeklyPurposeLabels]);
-  // Video coverage: track which prescribed exercises have a demo video link.
-  // Custom-name rows (no exercise_id) are counted as missing so coaches can spot them.
-  const videoStats = useMemo(() => {
-    const exById = new Map<string, any>((exercises as any[]).map((e) => [e.id, e]));
-    let withV = 0;
-    for (const r of rows) {
-      const ex = r.exercise_id ? exById.get(r.exercise_id) : null;
-      if (hasExerciseVideo(ex)) withV += 1;
-    }
-    return { withV, total: rows.length, missing: rows.length - withV };
-  }, [rows, exercises]);
+  }, [rows, exercises, weekLabels]);
   // Hard requirements for assignment — surface live so the coach sees gaps
   // as they build (and we can also block assignment without confirmation).
   const dayIssues = useMemo(
@@ -2087,7 +2149,6 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
     next.splice(idx, 0, newRow);
     setDay({ ...day, rows: next.map((r: any, i: number) => ({ ...r, sort_order: i })) });
   };
-  const dayMin = useMemo(() => estimateDayMinutes(rows), [rows]);
 
   // Day focus: track which day the coach is editing. Becomes active on any
   // click / focus inside the card. Switching to a different day automatically
@@ -2143,11 +2204,11 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
       ref={containerRef}
       onMouseDownCapture={activateDay}
       onFocusCapture={activateDay}
+      data-builder-day-rows
       className={cn(
-        "relative space-y-3 rounded-lg bg-builder-canvas p-2 md:p-4 ring-1 ring-builder-card-border/40 transition-all",
-        pbDragging === "exercise" && !dragOver && "ring-2 ring-dashed ring-primary/40",
-        dragOver && "ring-4 ring-primary ring-offset-2 ring-offset-background bg-primary/10 shadow-[0_0_0_4px_hsl(var(--primary)/0.15)]",
-        isActive && "ring-2 ring-primary/60 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]",
+        "relative rounded-b-2xl transition-colors",
+        pbDragging === "exercise" && !dragOver && "outline-dashed outline-1 -outline-offset-4 outline-primary/40",
+        dragOver && "bg-primary/5 outline outline-2 -outline-offset-2 outline-primary",
       )}
       onDragOver={(e) => {
         if (Array.from(e.dataTransfer.types).includes(DND_EXERCISE)) {
@@ -2169,107 +2230,52 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
       }}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute -top-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-lg">
+        <div className="pointer-events-none absolute -top-3 left-1/2 z-20 -translate-x-1/2 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
           Drop to add to this day
         </div>
       )}
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="inline-flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock className="h-3 w-3" /> Est {durationRange(dayMin)}</span>
-          {videoStats.total > 0 && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold",
-                videoStats.missing === 0
-                  ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                  : "border-amber-400/40 bg-amber-500/10 text-amber-300",
-              )}
-              title={
-                videoStats.missing === 0
-                  ? "Every exercise in this day has a demo video"
-                  : `${videoStats.missing} exercise${videoStats.missing === 1 ? "" : "s"} missing a demo video`
-              }
-            >
-              {videoStats.missing === 0 ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}
-              Videos {videoStats.withV}/{videoStats.total}
-            </span>
-          )}
-          {isActive && (
-            <span className="inline-flex items-center rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
-              Editing{(() => {
-                const sub = formatDaySubtitle(day);
-                const label = formatDayLabel(day);
-                return ` · ${label}${sub ? ` — ${sub}` : ""}`;
-              })()}
-            </span>
-          )}
-        </span>
-        <div className="flex items-center gap-1">
+      {standalone && (
+        <div className="flex items-center justify-end gap-1 px-3 pt-2 text-xs text-muted-foreground">
           {dayKey && rows.length > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-[11px]"
-              onClick={toggleAll}
-              title={`${allExpanded ? "Collapse" : "Expand"} every card in this day (⌘/Ctrl+Shift+X)`}
-            >
-              {allExpanded
-                ? (<><ChevronUp className="mr-1 h-3 w-3" /> Collapse all</>)
-                : (<><ChevronDown className="mr-1 h-3 w-3" /> Expand all</>)}
+            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={toggleAll}>
+              {allExpanded ? (<><ChevronUp className="mr-1 h-3.5 w-3.5" /> Close every exercise</>) : (<><ChevronDown className="mr-1 h-3.5 w-3.5" /> Open every exercise</>)}
             </Button>
           )}
           {clip && clip.kind === "rows" && clip.rows.length > 0 && (
-            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={pasteFromClip} title={`Paste ${clip.rows.length} exercise${clip.rows.length === 1 ? "" : "s"}`}>
-              <ClipboardPaste className="mr-1 h-3 w-3" /> Paste ({clip.rows.length})
+            <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={pasteFromClip}>
+              <ClipboardPaste className="mr-1 h-3.5 w-3.5" /> Paste ({clip.rows.length})
             </Button>
           )}
-          {/* a phone adds from the searchable "Add exercise" under the day instead of an empty row */}
-          <Button size="sm" variant="outline" className="h-7 text-[11px] max-md:hidden" onClick={addRow}><Plus className="mr-1 h-3 w-3" /> Row</Button>
+          {!phone && <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={addRow}><Plus className="mr-1 h-3.5 w-3.5" /> Empty row</Button>}
         </div>
-      </div>
+      )}
       {dayIssues.length > 0 && rows.length > 0 && (
-        <div
-          className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200"
-          role="status"
-        >
-          <div className="flex items-start gap-2">
+        <div className={cn("mb-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning", compact ? "mx-2.5" : "mx-3")} role="status">
+          <div className="flex items-start gap-1.5">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold">
-                Missing requirement{dayIssues.length === 1 ? "" : "s"} on this day
-              </div>
-              <ul className="mt-0.5 list-disc pl-4 space-y-0.5">
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">Still needs filling in</div>
+              <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
                 {dayIssues.map((m, idx) => <li key={idx}>{m}</li>)}
               </ul>
-              <div className="mt-1 text-[10px] opacity-80">
-                Every row needs an exercise, sets, and reps before this template can be assigned without a warning.
-              </div>
             </div>
           </div>
         </div>
       )}
-      {rows.length === 0 ? (
-        phone ? (
-          <InlineAddExerciseButton
-            exercises={exercises}
-            onPick={(exId: string) => insertExercise(exId, 0)}
-            label="Add exercise"
-            prominent
-          />
-        ) : (
-        <p className="rounded-md border border-dashed border-builder-card-border p-4 text-center text-xs text-muted-foreground">
-          {dragOver ? "Release to drop here" : pbDragging === "exercise" ? "Drop the exercise anywhere in this card" : "Drag exercises from the library, or click + Row"}
+      {rows.length === 0 && !phone && (
+        <p className="mx-3 mb-2 rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+          {dragOver ? "Release to drop here" : pbDragging === "exercise" ? "Drop the exercise anywhere in this day" : "Drag exercises in from the library, or add one below"}
         </p>
-        )
-      ) : (
-        <div className="space-y-3" data-pb-day>
+      )}
+      {rows.length > 0 && (
+        <div data-pb-day>
           {rows.map((r: any, i: number) => (
             <Fragment key={i}>
-              {!phone && (
+              {!phone && i > 0 && (
               <InlineAddExerciseButton
                 exercises={exercises}
                 onPick={(exId: string) => insertExercise(exId, i)}
-                label={i === 0 ? "Add exercise at the start" : "Insert exercise here"}
+                label="Insert exercise here"
               />
               )}
             <div
@@ -2308,10 +2314,11 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
                 endPbDrag();
               }}
               className={cn(
-                "cursor-grab active:cursor-grabbing rounded-md transition-all",
-                dragRowIdx === i && "opacity-40 scale-[0.99]",
-                dropTargetIdx === i && "shadow-[0_-3px_0_0_hsl(var(--primary))]",
-                dropTargetIdx === i + 1 && "shadow-[0_3px_0_0_hsl(var(--primary))]",
+                "border-t border-border/70 transition-opacity",
+                !phone && "cursor-grab active:cursor-grabbing",
+                dragRowIdx === i && "opacity-40",
+                dropTargetIdx === i && "shadow-[inset_0_2px_0_0_var(--primary)]",
+                dropTargetIdx === i + 1 && "shadow-[inset_0_-2px_0_0_var(--primary)]",
               )}
             >
               <RowEditor
@@ -2339,14 +2346,14 @@ function DayEditor({ day, setDay, exercises, compact, dayKey, weeklyPurposeLabel
             </div>
             </Fragment>
           ))}
-          <InlineAddExerciseButton
-            exercises={exercises}
-            onPick={(exId: string) => insertExercise(exId, rows.length)}
-            label={phone ? "Add exercise" : "Add exercise at the end"}
-            prominent
-          />
         </div>
       )}
+      <InlineAddExerciseButton
+        exercises={exercises}
+        onPick={(exId: string) => insertExercise(exId, rows.length)}
+        label="Add exercise"
+        prominent
+      />
     </div>
   );
 }
@@ -2375,8 +2382,12 @@ function InlineAddExerciseButton({
       <PhoneAddExerciseButton exercises={exercises} onPick={onPick} label={label} />
     ) : null;
   }
-  return <InlineAddExercisePopover exercises={exercises} onPick={onPick} label={label} />;
+  return <InlineAddExercisePopover exercises={exercises} onPick={onPick} label={label} prominent={prominent} />;
 }
+
+/** The day's last row: "+ Add exercise", the same on a phone and a computer. */
+const ADD_EXERCISE_ROW =
+  "flex min-h-12 w-full items-center gap-2 rounded-b-2xl border-t border-border/70 px-3 text-[15px] text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground md:min-h-11 md:text-sm";
 
 function PhoneAddExerciseButton({
   exercises,
@@ -2390,14 +2401,9 @@ function PhoneAddExerciseButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        className="h-11 w-full border-dashed text-[15px]"
-        onClick={() => setOpen(true)}
-      >
-        <Plus className="mr-1.5 h-4 w-4" aria-hidden /> {label}
-      </Button>
+      <button type="button" className={ADD_EXERCISE_ROW} onClick={() => setOpen(true)} data-add-exercise>
+        <Plus className="h-4 w-4" aria-hidden /> {label}
+      </button>
       <PhoneExercisePickerSheet
         open={open}
         onOpenChange={setOpen}
@@ -2421,6 +2427,7 @@ function PhoneExercisePickerSheet({
   exercises,
   excludeId,
   onPick,
+  onCustomName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -2429,7 +2436,11 @@ function PhoneExercisePickerSheet({
   exercises: any[];
   excludeId?: string | null;
   onPick: (exercise: any) => void;
+  /** Offer "Use a custom name" (a row with no library exercise). */
+  onCustomName?: (name: string) => void;
 }) {
+  // the same sheet on a computer, from the side
+  const phone = useBuilderPhone();
   const [q, setQ] = useState("");
   const searched = useMemo(() => {
     const list = (exercises as SearchableExercise[]).filter((e) => !excludeId || e.id !== excludeId);
@@ -2443,10 +2454,21 @@ function PhoneExercisePickerSheet({
   };
   return (
     <Sheet open={open} onOpenChange={close}>
-      <SheetContent side="bottom" hideCloseButton className="flex h-[88dvh] flex-col gap-0 overflow-hidden rounded-t-2xl p-0">
+      <SheetContent
+        side={phone ? "bottom" : "right"}
+        hideCloseButton
+        className={cn("flex flex-col gap-0 overflow-hidden p-0", phone ? "h-[88dvh] rounded-t-2xl" : "w-[420px] sm:max-w-[420px]")}
+      >
         <div className="shrink-0 border-b border-border px-4 pb-3 pt-2">
-          <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
-          <SheetTitle className="text-base font-semibold">{title}</SheetTitle>
+          {phone && <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />}
+          <div className="flex items-start gap-2">
+            <SheetTitle className="min-w-0 flex-1 pt-1 text-base font-semibold">{title}</SheetTitle>
+            {!phone && (
+              <Button type="button" size="icon" variant="ghost" className="-mr-2 h-9 w-9 shrink-0" aria-label="Close" onClick={() => close(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
           <SheetDescription className={description ? "text-[13px]" : "sr-only"}>
             {description ?? "Search the exercise library"}
           </SheetDescription>
@@ -2493,6 +2515,18 @@ function PhoneExercisePickerSheet({
             </ul>
           )}
         </div>
+        {onCustomName && (
+          <div className="shrink-0 border-t border-border px-4 py-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10 w-full text-muted-foreground"
+              onClick={() => { onCustomName(q.trim()); close(false); }}
+            >
+              {q.trim() ? `Use "${q.trim()}" as a custom name` : "Use a custom name instead"}
+            </Button>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -2502,10 +2536,13 @@ function InlineAddExercisePopover({
   exercises,
   onPick,
   label,
+  prominent,
 }: {
   exercises: any[];
   onPick: (exerciseId: string) => void;
   label: string;
+  /** The day's own "+ Add exercise" row (else the slim insert line between rows). */
+  prominent?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -2557,16 +2594,18 @@ function InlineAddExercisePopover({
               onPick(drop.exerciseId);
             }
           }}
-          className={cn(
+          data-add-exercise={prominent ? "" : undefined}
+          className={prominent ? cn(ADD_EXERCISE_ROW, dropActive && "bg-primary/10 text-foreground") : cn(
             "group/insert relative -my-1.5 flex w-full items-center justify-center transition-all",
-            dropActive ? "h-10 opacity-100" : pbDragging === "exercise" ? "h-6 opacity-100" : "h-3 opacity-40 hover:opacity-100 focus:opacity-100",
+            dropActive ? "h-10 opacity-100" : pbDragging === "exercise" ? "h-6 opacity-100" : "h-3 opacity-0 hover:opacity-100 focus:opacity-100",
           )}
         >
+          {prominent ? (<><Plus className="h-4 w-4" aria-hidden /> {dropActive ? "Drop here" : label}</>) : (<>
           <span
             aria-hidden
             className={cn(
               "absolute inset-x-0 top-1/2 -translate-y-1/2 transition-all",
-              dropActive ? "h-1 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]"
+              dropActive ? "h-1 rounded-full bg-primary"
                 : pbDragging === "exercise" ? "h-0.5 bg-primary/60 rounded-full"
                 : "h-px bg-border/60 group-hover/insert:bg-primary/50",
             )}
@@ -2588,6 +2627,7 @@ function InlineAddExercisePopover({
           >
             <Plus className="h-3 w-3" />
           </span>
+          </>)}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -2595,7 +2635,7 @@ function InlineAddExercisePopover({
         align="center"
         onOpenAutoFocus={() => setTimeout(() => inputRef.current?.focus(), 0)}
       >
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="mb-1.5 text-xs font-medium text-muted-foreground">
           {label}
         </div>
         <Input
@@ -2645,137 +2685,44 @@ function InlineAddExercisePopover({
   );
 }
 
-function SwapExerciseButton({ row, setRow, exercises, className }: { row: any; setRow: (r: any) => void; exercises: any[]; className?: string }) {
-  const phone = useBuilderPhone();
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const searched = useMemo(() => {
-    const list = (exercises as SearchableExercise[]).filter((e) => e.id !== row.exercise_id);
-    return searchExercises(list, q, { limit: q.trim() ? 200 : 100 });
-  }, [exercises, q, row.exercise_id]);
-  const filtered = searched.results.map((r) => r.exercise) as any[];
-  const terms = searched.highlightTerms;
-  const pick = (ex: any) => {
-    // Preserve every existing input (sets/reps/rpe/rir/load/rest/tempo/notes…)
-    // Replace only the exercise identity.
-    setRow({ ...row, exercise_id: ex.id, exercise_name_override: ex.name });
-    setOpen(false);
-    setQ("");
-    toast.success(`Swapped to ${ex.name}`);
-  };
-  if (phone) {
-    return (
-      <>
-        <Button size="icon" variant="ghost" className={cn("h-7 w-7", className)} aria-label="Swap exercise" onClick={() => setOpen(true)}>
-          <ArrowLeftRight className="h-4 w-4" />
-        </Button>
-        <PhoneExercisePickerSheet
-          open={open}
-          onOpenChange={setOpen}
-          title={row.exercise_id || row.exercise_name_override ? "Swap exercise" : "Pick an exercise"}
-          description="Sets, reps, load, rest, tempo and notes stay as they are."
-          exercises={exercises}
-          excludeId={row.exercise_id}
-          onPick={pick}
-        />
-      </>
-    );
-  }
+/**
+ * A labelled field inside an open exercise card. Defined once at module
+ * level: made inside RowEditor it was a new component every render, so each
+ * commit (400 ms after the last key) remounted the whole card's inputs and
+ * threw the cursor out of the box being typed in.
+ */
+function RowField({ label, className, children }: { label: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-7 w-7" title="Swap exercise (keeps sets, reps, load, etc.)">
-          <ArrowLeftRight className="h-3.5 w-3.5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-72 p-2" align="end">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Swap exercise</div>
-        <Input
-          autoFocus
-          placeholder="Search exercises…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="mb-2 h-8 text-xs"
-        />
-        <div className="max-h-64 overflow-y-auto">
-          {q.trim() && !searched.hasExactMatches && filtered.length > 0 && (
-            <div className="px-2 pb-1 text-[10px] text-muted-foreground">
-              No exact matches. Showing closest results.
-            </div>
-          )}
-          {filtered.length === 0 ? (
-            <div className="px-2 py-3 text-center text-xs text-muted-foreground">No matches</div>
-          ) : (
-            <div className="flex flex-col gap-0.5">
-              {filtered.map((ex) => (
-                <button
-                  key={ex.id}
-                  type="button"
-                  onClick={() => pick(ex)}
-                  className="rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                >
-                  <HighlightedText text={ex.name} terms={terms} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <p className="mt-2 text-[10px] text-muted-foreground">
-          Sets, reps, load, rest, tempo, and notes are preserved.
-        </p>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel, dayKey, index }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string; dayKey?: string; index?: number }) {
-  const Field = ({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) => (
-    <div className={cn("flex flex-col gap-0.5 min-w-0", className)}>
-      <span className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">{label}</span>
+    <div className={cn("flex min-w-0 flex-col gap-1", className)}>
+      <span className="px-0.5 text-xs leading-none text-muted-foreground">{label}</span>
       {children}
     </div>
   );
-  // High-contrast input styling for builder rows — white fill so editable
-  // fields pop against the dark card background and never look pre-filled.
+}
+
+const TRACKING_LABEL: Record<"reps_weight" | "reps" | "time", string> = {
+  reps_weight: "Reps",
+  reps: "Reps, no weight",
+  time: "Time",
+};
+
+function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onDragStartRow, onDragEndRow, isDragging, purposeLabel, dayKey, index }: { row: any; setRow: (r: any) => void; onDelete?: () => void; exercises: any[]; compact?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; canMoveUp?: boolean; canMoveDown?: boolean; onDragStartRow?: (e: React.DragEvent) => void; onDragEndRow?: () => void; isDragging?: boolean; purposeLabel?: string; dayKey?: string; index?: number }) {
+  // A phone: every field is a 44px box with 16px text (no iOS zoom on focus),
+  // every button a 40px tap.
+  const phone = useBuilderPhone();
+  // Inputs follow the theme: a well on the card, never a white box in dark mode.
   const inputCls =
-    "bg-white text-slate-900 border-2 border-slate-300 shadow-sm " +
-    "placeholder:text-slate-400 placeholder:font-normal " +
-    "hover:border-slate-400 " +
-    "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 " +
-    "dark:bg-white dark:text-slate-900 dark:border-slate-300 dark:placeholder:text-slate-400";
+    "rounded-lg border border-input bg-background text-foreground shadow-none " +
+    "placeholder:font-normal placeholder:text-muted-foreground/60 " +
+    "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
   const exMeta = (exercises as any[]).find((e) => e.id === row.exercise_id) ?? null;
   const exName = exMeta?.name ?? row.exercise_name_override ?? "";
   const rowHasVideo = hasExerciseVideo(exMeta);
   const videoUrl: string | null = exMeta
     ? (exMeta.video_url || exMeta.youtube_url || exMeta.vimeo_url || null)
     : null;
-  const videoBadgeCls = cn(
-    "inline-flex shrink-0 items-center justify-center rounded-full border p-0.5",
-    rowHasVideo
-      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
-      : "border-amber-400/50 bg-amber-500/10 text-amber-300",
-  );
-  const VideoBadge = rowHasVideo && videoUrl ? (
-    <a
-      href={videoUrl}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className={videoBadgeCls}
-      title="Open demo video in a new tab"
-      aria-label="Open demo video"
-    >
-      <Video className="h-2.5 w-2.5" />
-    </a>
-  ) : (
-    <span
-      className={videoBadgeCls}
-      title={rowHasVideo ? "Demo video linked" : "No demo video on this exercise — add one in the library"}
-      aria-label={rowHasVideo ? "Has demo video" : "Missing demo video"}
-    >
-      {rowHasVideo ? <Video className="h-2.5 w-2.5" /> : <VideoOff className="h-2.5 w-2.5" />}
-    </span>
-  );
+  // A library exercise with no demo video: a small amber camera on its row.
+  const missingVideo = !!row.exercise_id && !!exMeta && !rowHasVideo;
   // Colour is the exercise's movement family everywhere (shared module).
   const family = resolveMovementFamily(exMeta, row.movement_family);
   const accent = exerciseAccent(exMeta, null, row.movement_family);
@@ -2785,6 +2732,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const restIsOverride = row.rest_seconds_override != null && row.rest_seconds_override !== restDefault;
   const [expanded, setExpanded] = useState(!compact);
   useEffect(() => { if (!compact) setExpanded(true); }, [compact]);
+  // Exercise type, label and family: rarely touched, folded under "More".
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   // "Collapsed" = the whole card is in summary/read-only mode (no input boxes).
   // It expands automatically when the user clicks or tabs into it, and snaps
   // back to summary when focus leaves the card.
@@ -2832,7 +2782,7 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       else { cancelCollapse(); setCollapsed(true); }
     });
   }, [dayKey]);
-  const h = compact ? "h-7" : "h-8";
+  const h = phone ? "h-11 text-base" : compact ? "h-8 text-sm" : "h-9 text-sm";
   const { clientId, blockId, index: maxesIndex, maxes, refresh } = useClientMaxesCtx();
   const [maxEditor, setMaxEditor] = useState<any>(null);
   // Derive a clear "load mode" from the existing basis field.
@@ -2905,20 +2855,80 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   };
   const multiBlockFlag = useMultiBlockBuilderFlag();
   const [blocksOpen, setBlocksOpen] = useState(false);
-  // A phone: the name gets its own line, a row's moves live in one ⋯, and
-  // every button is a 40px tap.
-  const phone = useBuilderPhone();
-  const iconBtn = phone ? "h-10 w-10" : "h-7 w-7";
+  const iconBtn = phone ? "h-10 w-10" : "h-8 w-8";
+  const openCard = () => { cancelCollapse(); setCollapsed(false); };
+  // Swap keeps every input (sets / reps / rpe / rir / load / rest / tempo /
+  // notes…) and replaces only the exercise.
+  const pickExercise = (ex: any) => {
+    setRow({ ...row, exercise_id: ex.id, exercise_name_override: ex.name });
+    toast.success(`Swapped to ${ex.name}`);
+  };
 
-  // Build a short human summary of the prescription for the collapsed view.
+  // Three explicit tracking types: reps + weight, reps only, time only.
+  // The prescription drives what the client logs — no name-based guesses.
+  const tracking: "reps_weight" | "reps" | "time" =
+    (row as any).tracking_type === "reps"
+      ? "reps"
+      : (row as any).tracking_type === "time" || (row as any).measurement_type === "time"
+        ? "time"
+        : "reps_weight";
+  const isTime = tracking === "time";
+  const setTracking = (next: "reps_weight" | "reps" | "time") => {
+    if (next === tracking) return;
+    if (next === "time") {
+      const restored = (row as any).duration_seconds_backup ?? null;
+      setRow({
+        ...row,
+        tracking_type: "time",
+        measurement_type: "time",
+        reps_text_backup: row.reps_text || (row as any).reps_text_backup || null,
+        reps_text: "",
+        duration_seconds: restored,
+        // time-only: no loaded weight
+        load_kg: null,
+        load_lb: null,
+        percentage: null,
+        percentage_basis: "none",
+        manual_override: false,
+      });
+    } else if (next === "reps") {
+      const restored = (row as any).reps_text_backup ?? "";
+      setRow({
+        ...row,
+        tracking_type: "reps",
+        measurement_type: "reps",
+        duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
+        duration_seconds: null,
+        reps_text: row.reps_text || restored,
+        // reps-only: no weight
+        load_kg: null,
+        load_lb: null,
+        percentage: null,
+        percentage_basis: "none",
+        manual_override: false,
+      });
+    } else {
+      const restored = (row as any).reps_text_backup ?? "";
+      setRow({
+        ...row,
+        tracking_type: "reps_weight",
+        measurement_type: "reps",
+        duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
+        duration_seconds: null,
+        reps_text: row.reps_text || restored,
+      });
+    }
+  };
+
+  // The prescription in one line: "3 × 8-12 · RPE 8 · tempo 3-1-1 · rest 1m 30s".
+  const amount = isTime
+    ? ((row as any).duration_seconds != null && Number((row as any).duration_seconds) > 0 ? formatDuration(Number((row as any).duration_seconds)) : null)
+    : (row.reps_text ? String(row.reps_text) : null);
+  const hasSets = row.sets != null && row.sets !== "";
   const summaryParts: string[] = [];
-  if (row.sets != null && row.sets !== "") summaryParts.push(`${row.sets} set${row.sets === 1 ? "" : "s"}`);
-  if ((row as any).measurement_type === "time") {
-    const d = (row as any).duration_seconds;
-    if (d != null && Number(d) > 0) summaryParts.push(formatDuration(Number(d)));
-  } else if (row.reps_text) {
-    summaryParts.push(`${row.reps_text} reps`);
-  }
+  if (hasSets && amount) summaryParts.push(`${row.sets} × ${amount}`);
+  else if (hasSets) summaryParts.push(`${row.sets} set${Number(row.sets) === 1 ? "" : "s"}`);
+  else if (amount) summaryParts.push(isTime ? amount : `${amount} reps`);
   if (row.rpe !== "" && row.rpe != null) summaryParts.push(`RPE ${row.rpe}`);
   if (row.rir !== "" && row.rir != null) summaryParts.push(`RIR ${row.rir}`);
   const loadSummary = (() => {
@@ -2934,26 +2944,116 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   if (loadSummary) summaryParts.push(loadSummary);
   if (row.tempo) summaryParts.push(`tempo ${row.tempo}`);
   const restSummary = `rest ${fmtRestSeconds(effectiveRest)}`;
+  const showLabel = !!purposeLabel && purposeLabel !== "Assistance";
 
   // Order number, derived from the row's current position in the day (never
   // stored): reorder or delete a row and every card renumbers automatically.
   // Hidden when no index is provided (standalone single-row view).
   const RowIndexBadge = index == null ? null : (
-    <ExerciseOrderBadge position={index + 1} family={family} />
+    <ExerciseOrderBadge position={index + 1} family={family} tone="neutral" size="sm" className="mt-0.5 h-6 min-w-6 rounded-full text-xs" />
+  );
+
+  const grip = !phone ? (
+    <span
+      draggable={!!onDragStartRow}
+      onDragStart={onDragStartRow}
+      onDragEnd={onDragEndRow}
+      onClick={(e) => e.stopPropagation()}
+      title="Drag to reorder"
+      aria-hidden
+      className="absolute left-0.5 top-2.5 cursor-grab rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-foreground active:cursor-grabbing group-hover/row:opacity-100"
+    >
+      <GripVertical className="h-4 w-4" />
+    </span>
+  ) : null;
+
+  // Everything else a row can do, in one ⋯ (phone and computer alike). It's
+  // its own: opening it or picking from it never opens the card.
+  const rowMenu = (
+    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className={cn(iconBtn, "-mr-1")} data-row-menu aria-label={`${exName || "Exercise"} options`}>
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56" data-row-menu>
+          {collapsed && (
+            <DropdownMenuItem onSelect={openCard}>
+              <Settings2 className="mr-2 h-4 w-4" /> Edit
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => setPickerOpen(true)}>
+            <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
+          </DropdownMenuItem>
+          {onMoveUp && (
+            <DropdownMenuItem disabled={canMoveUp === false} onSelect={onMoveUp}>
+              <ChevronUp className="mr-2 h-4 w-4" /> Move up
+            </DropdownMenuItem>
+          )}
+          {onMoveDown && (
+            <DropdownMenuItem disabled={canMoveDown === false} onSelect={onMoveDown}>
+              <ChevronDown className="mr-2 h-4 w-4" /> Move down
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => { copyRows([row]); toast.success("Exercise copied"); }}>
+            <ClipboardCopy className="mr-2 h-4 w-4" /> Copy
+          </DropdownMenuItem>
+          {rowHasVideo && videoUrl && (
+            <DropdownMenuItem onSelect={() => window.open(videoUrl, "_blank", "noopener,noreferrer")}>
+              <Video className="mr-2 h-4 w-4" /> Watch the demo
+            </DropdownMenuItem>
+          )}
+          {multiBlockFlag && row._dbId && (
+            <DropdownMenuItem onSelect={() => setBlocksOpen(true)}>
+              <Layers className="mr-2 h-4 w-4" /> Multi-block editor (preview)
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={resetCard}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Clear sets, reps and load
+          </DropdownMenuItem>
+          {onDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive" onSelect={onDelete}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
+  const nameBlock = (
+    <div className="min-w-0 flex-1">
+      <div className={cn("flex items-start gap-1.5", phone ? "text-[15px]" : "text-sm")}>
+        <span className="min-w-0 font-semibold leading-snug [overflow-wrap:anywhere] line-clamp-2">
+          {exName || <span className="font-normal italic text-muted-foreground">No exercise yet</span>}
+        </span>
+        {missingVideo && (
+          <VideoOff className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-label="No demo video on this exercise" />
+        )}
+      </div>
+    </div>
   );
 
   return (
     <div
       data-pb-row
-      // a row's ⋯ (phone) is its own: opening it or picking from it never
-      // opens the card (React events bubble out of the menu's portal)
-      onClickCapture={(e) => { if (collapsed && !inRowMenu(e.target)) { cancelCollapse(); setCollapsed(false); } }}
-      onFocusCapture={(e) => { if (inRowMenu(e.target)) return; cancelCollapse(); setCollapsed(false); }}
+      // a row's ⋯ is its own: opening it or picking from it never opens the
+      // card (React events bubble out of the menu's portal)
+      // (and nothing in a layer it opened, like the exercise picker, opens it)
+      onClickCapture={(e) => { if (collapsed && !inFloatingLayer(e.target)) openCard(); }}
+      onFocusCapture={(e) => { if (inFloatingLayer(e.target)) return; openCard(); }}
       onBlurCapture={(e) => {
+        if (inFloatingLayer(e.relatedTarget)) return;
         if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) scheduleCollapse();
       }}
-      onMouseLeave={() => { /* don't auto-collapse on hover-leave — only on blur */ }}
       onKeyDown={(e) => {
+        // keys inside a menu / list / sheet this card opened are theirs
+        // (Escape closes the menu, never the card under it)
+        if (inFloatingLayer(e.target)) return;
         // Quick key: Alt+R resets the currently focused card
         if (e.altKey && (e.key === "r" || e.key === "R")) {
           // Keydown bubbles up from the card's inputs — on macOS Option+R
@@ -2972,428 +3072,105 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
         }
       }}
       className={cn(
-        "relative overflow-hidden rounded-lg border border-builder-card-border bg-builder-card shadow-builder-card transition-colors hover:border-builder-card-border-strong",
-        isDragging && "opacity-50 ring-2 ring-primary",
-        collapsed ? "p-2 pl-5 cursor-pointer hover:border-primary/50" : (compact ? "p-3 pl-5 space-y-1.5" : "p-4 pl-6 space-y-2"),
+        "group/row @container/row relative transition-colors",
+        isDragging && "opacity-50",
+        collapsed
+          ? cn("cursor-pointer hover:bg-muted/40", compact ? "py-2 pl-4 pr-2" : "py-2.5 pl-4 pr-2")
+          : cn("bg-muted/40", phone ? "space-y-3 py-3 pl-4 pr-2" : "space-y-2.5 py-3 pl-4 pr-2"),
       )}
       title={collapsed ? "Click to edit" : undefined}
     >
-      <div className={`absolute left-0 top-0 h-full w-2 ${accent}`} aria-hidden />
+      {/* The movement family: one thin stripe (squat yellow, bench blue,
+          deadlift green, everything else red). */}
+      <span className={cn("absolute bottom-2 left-1.5 top-2 w-[3px] rounded-full", accent)} aria-hidden />
+      {grip}
       {collapsed ? (
-        <div className="flex items-center gap-2 min-w-0">
-          {!phone && (
-          <span
-            draggable={!!onDragStartRow}
-            onDragStart={onDragStartRow}
-            onDragEnd={onDragEndRow}
-            onClick={(e) => e.stopPropagation()}
-            title="Drag to reorder"
-            className="cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground shrink-0"
-          >
-            <GripVertical className="h-4 w-4" />
-          </span>
-          )}
+        <div className="flex min-w-0 items-start gap-2.5">
           {RowIndexBadge}
           <div className="min-w-0 flex-1">
-            <div className={cn("flex items-center gap-1.5 min-w-0", phone && "flex-wrap gap-y-1")}>
-              {purposeLabel && (
-                <span className={cn(
-                  "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide",
-                  purposeLabelBadgeClass(purposeLabel),
-                )}>{purposeLabel}</span>
-              )}
-              {(row.exercise_id || row.exercise_name_override) && VideoBadge}
-              <span className={cn("text-sm font-semibold", phone ? "order-first basis-full line-clamp-2 text-[15px] leading-snug" : "truncate")}>{exName || <span className="italic text-muted-foreground">Unnamed exercise</span>}</span>
+            {nameBlock}
+            <div className={cn("mt-0.5 leading-snug text-muted-foreground", phone ? "text-[13px]" : "text-xs")}>
+              {summaryParts.length > 0 ? summaryParts.join(" · ") : <span className="italic">No sets or reps yet</span>}
+              <span className="opacity-60"> · </span>
+              <span className="whitespace-nowrap">{restSummary}</span>
             </div>
-            <div className={cn("mt-0.5 text-muted-foreground", phone ? "line-clamp-2 text-[13px]" : "truncate text-[11px]")}>
-              {summaryParts.length > 0 ? summaryParts.join(" · ") : <span className="italic">No prescription yet — click to fill in</span>}
-              <span className="mx-1 opacity-40">·</span>
-              <span>{restSummary}</span>
-            </div>
-          </div>
-          {phone ? (
-            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" className="h-10 w-10" data-row-menu aria-label={`${exName || "Exercise"} options`}>
-                    <MoreHorizontal className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52" data-row-menu>
-                  <DropdownMenuItem onSelect={() => { cancelCollapse(); setCollapsed(false); }}>
-                    <Settings2 className="mr-2 h-4 w-4" /> Edit
-                  </DropdownMenuItem>
-                  {onMoveUp && (
-                    <DropdownMenuItem disabled={canMoveUp === false} onSelect={onMoveUp}>
-                      <ChevronUp className="mr-2 h-4 w-4" /> Move up
-                    </DropdownMenuItem>
-                  )}
-                  {onMoveDown && (
-                    <DropdownMenuItem disabled={canMoveDown === false} onSelect={onMoveDown}>
-                      <ChevronDown className="mr-2 h-4 w-4" /> Move down
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onSelect={() => { copyRows([row]); toast.success("Exercise copied"); }}>
-                    <ClipboardCopy className="mr-2 h-4 w-4" /> Copy
-                  </DropdownMenuItem>
-                  {onDelete && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onSelect={onDelete}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : (
-          <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-            {onMoveUp && (
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveUp} disabled={canMoveUp === false} title="Move up">
-                <ChevronUp className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {onMoveDown && (
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onMoveDown} disabled={canMoveDown === false} title="Move down">
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { cancelCollapse(); setCollapsed(false); }} title="Edit card">
-              <Settings2 className="h-3.5 w-3.5" />
-            </Button>
-            {onDelete && (
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete} title="Delete">
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+            {showLabel && (
+              <div className="mt-0.5 text-xs text-muted-foreground" data-purpose-label>{purposeLabelText(purposeLabel)}</div>
             )}
           </div>
-          )}
+          {rowMenu}
         </div>
       ) : (
       <>
-      {/* ---- Header row: identity (left) + actions (right; under it on a phone) ---- */}
-      <div className={cn("flex gap-2", phone ? "flex-col" : "items-start")}>
-        <Field className="min-w-0 flex-1" label="Exercise">
-        <div className="flex items-center gap-1">
-          {!phone && (
-          <span
-            draggable={!!onDragStartRow}
-            onDragStart={onDragStartRow}
-            onDragEnd={onDragEndRow}
-            title="Drag to reorder"
-            className="cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <GripVertical className="h-4 w-4" />
-          </span>
+      {/* ---- The exercise: its name, Swap, ⋯ ---- */}
+      <div className="flex min-w-0 items-start gap-2.5">
+        {RowIndexBadge}
+        <div className="min-w-0 flex-1">
+          {nameBlock}
+          {!row.exercise_id && (
+            <RowCell className={cn("mt-1.5 font-medium", h, inputCls)} placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
           )}
-          {RowIndexBadge}
-          <div className="min-w-0 flex-1">
-        {phone ? (
-          // the library is thousands of exercises: a phone picks and swaps
-          // through the searchable sheet (Swap, below), never a long dropdown
-          <div className="py-1 text-[15px] font-semibold leading-snug">
-            {exName || <span className="italic text-muted-foreground">No exercise yet: tap Swap</span>}
-          </div>
-        ) : (
-        <Select value={row.exercise_id ?? "__custom"} onValueChange={(v) => setRow({ ...row, exercise_id: v === "__custom" ? null : v })}>
-          <SelectTrigger className={cn("min-h-8 h-auto py-1 text-sm font-semibold [&>span]:line-clamp-2 [&>span]:whitespace-normal [&>span]:text-left [&>span]:leading-tight")}>
-            <SelectValue placeholder="Exercise" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__custom">— Custom name —</SelectItem>
-            {(exercises as any[]).map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        )}
-        {!row.exercise_id && (
-          <RowCell className="mt-1 h-7 text-sm font-semibold" placeholder="Custom name" value={row.exercise_name_override} onCommit={(v) => setRow({ ...row, exercise_name_override: v })} />
-        )}
-        <div className="mt-1 flex flex-wrap items-center gap-1">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide transition hover:bg-secondary",
-                    purposeLabelBadgeClass(purposeLabel),
-                  )}
-                  title={row.purpose_label ? "Manual purpose label — click to change" : "Auto purpose label — click to override"}
-                >
-                  {purposeLabel || "Auto"}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-44 p-2" align="start">
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Purpose label</div>
-                <div className="grid gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setRow({ ...row, purpose_label: null })}
-                    className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
-                      !row.purpose_label && "bg-muted/60 font-semibold")}
-                  >
-                    Auto (from position)
-                  </button>
-                  {PURPOSE_LABEL_OPTIONS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setRow({ ...row, purpose_label: opt })}
-                      className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
-                        row.purpose_label === opt && "bg-primary/10 font-semibold text-primary")}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide transition hover:bg-secondary",
-                    "border-muted-foreground/30 bg-muted text-muted-foreground",
-                  )}
-                  title={row.movement_family ? "Manual movement family — click to change" : "Auto movement family — click to override"}
-                >
-                  {(() => {
-                    const map: Record<string, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift", upper: "Upper", lower: "Lower", other: "Other" };
-                    return row.movement_family ? map[row.movement_family as string] ?? row.movement_family : "Auto Family";
-                  })()}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-44 p-2" align="start">
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Movement family</div>
-                <div className="grid gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setRow({ ...row, movement_family: null })}
-                    className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
-                      !row.movement_family && "bg-muted/60 font-semibold")}
-                  >
-                    Auto (from exercise)
-                  </button>
-                  {([
-                    ["squat", "Squat"],
-                    ["bench", "Bench"],
-                    ["deadlift", "Deadlift"],
-                    ["upper", "Upper Body"],
-                    ["lower", "Lower Body"],
-                    ["other", "Other"],
-                  ] as const).map(([val, label]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setRow({ ...row, movement_family: val })}
-                      className={cn("rounded px-2 py-1 text-left text-xs hover:bg-muted",
-                        row.movement_family === val && "bg-primary/10 font-semibold text-primary")}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          </div>
         </div>
-        </Field>
-        <div className={cn("flex shrink-0 items-center gap-0.5", phone ? "-ml-2 flex-wrap" : "pt-4")}>
-          {onMoveUp && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={iconBtn}
-              onClick={onMoveUp}
-              disabled={canMoveUp === false}
-              title="Move up"
-            >
-              <ChevronUp className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {onMoveDown && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={iconBtn}
-              onClick={onMoveDown}
-              disabled={canMoveDown === false}
-              title="Move down"
-            >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Button size="icon" variant="ghost" className={iconBtn} onClick={() => { copyRows([row]); toast.success("Exercise copied"); }} title="Copy exercise">
-            <ClipboardCopy className="h-3.5 w-3.5" />
-          </Button>
-          <SwapExerciseButton row={row} setRow={setRow} exercises={exercises} className={iconBtn} />
-          {multiBlockFlag && row._dbId && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-primary"
-              onClick={() => setBlocksOpen(true)}
-              title="Multi-block editor (preview)"
-            >
-              <Layers className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button size="icon" variant="ghost" className={iconBtn} title="Advanced settings (exercise classification)">
-                <Settings2 className="h-3.5 w-3.5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-3" align="end">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-foreground">Exercise classification</div>
-              <p className="mb-2 text-[11px] leading-snug text-foreground/80">
-                Controls automatic rest defaults, workout-duration estimates, and warm-up buffer. Inferred automatically — override only when needed.
-              </p>
-              <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
-                <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}>
-                  <SelectValue>
-                    {TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-              </Select>
-              <div className="mt-2 text-[10px] text-foreground/70">
-                Current: <span className="font-semibold text-foreground">{TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}</span>
-              </div>
-            </PopoverContent>
-          </Popover>
-          {compact && (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setExpanded((v) => !v)} title={expanded ? "Hide advanced" : "Show advanced"}>
-              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </Button>
-          )}
-          {onDelete && <Button size="icon" variant="ghost" className={cn(iconBtn, "text-destructive")} onClick={onDelete} aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>}
-          <Button
-            size="icon"
-            variant="ghost"
-            className={cn(iconBtn, phone && "hidden")}
-            onClick={resetCard}
-            title="Reset card (Alt+R)"
-            aria-label="Reset card"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn("shrink-0 gap-1.5 px-2 text-muted-foreground hover:text-foreground", phone ? "h-10" : "h-8")}
+          onClick={() => setPickerOpen(true)}
+          title="Swap exercise (keeps sets, reps, load, etc.)"
+        >
+          <ArrowLeftRight className="h-4 w-4" /> {row.exercise_id || row.exercise_name_override ? "Swap" : "Pick"}
+        </Button>
+        {rowMenu}
       </div>
-      {/* ---- Primary programming row ---- */}
-      <div className={cn("grid items-end gap-1", phone ? "grid-cols-6 gap-y-2" : "grid-cols-12")}>
-        <Field className="col-span-2" label="Sets">
-          <RowCell dataField="sets" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
-        </Field>
-        <Field className={phone ? "col-span-4" : "col-span-3"} label=" ">
-          {(() => {
-            // Three explicit tracking types: reps + weight, reps only, time only.
-            // The prescription drives what the client logs — no name-based guesses.
-            const tracking: "reps_weight" | "reps" | "time" =
-              (row as any).tracking_type === "reps"
-                ? "reps"
-                : (row as any).tracking_type === "time" || (row as any).measurement_type === "time"
-                  ? "time"
-                  : "reps_weight";
-            const isTime = tracking === "time";
-            const setTracking = (next: "reps_weight" | "reps" | "time") => {
-              if (next === tracking) return;
-              if (next === "time") {
-                const restored = (row as any).duration_seconds_backup ?? null;
-                setRow({
-                  ...row,
-                  tracking_type: "time",
-                  measurement_type: "time",
-                  reps_text_backup: row.reps_text || (row as any).reps_text_backup || null,
-                  reps_text: "",
-                  duration_seconds: restored,
-                  // time-only: no loaded weight
-                  load_kg: null,
-                  load_lb: null,
-                  percentage: null,
-                  percentage_basis: "none",
-                  manual_override: false,
-                });
-              } else if (next === "reps") {
-                const restored = (row as any).reps_text_backup ?? "";
-                setRow({
-                  ...row,
-                  tracking_type: "reps",
-                  measurement_type: "reps",
-                  duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
-                  duration_seconds: null,
-                  reps_text: row.reps_text || restored,
-                  // reps-only: no weight
-                  load_kg: null,
-                  load_lb: null,
-                  percentage: null,
-                  percentage_basis: "none",
-                  manual_override: false,
-                });
-              } else {
-                const restored = (row as any).reps_text_backup ?? "";
-                setRow({
-                  ...row,
-                  tracking_type: "reps_weight",
-                  measurement_type: "reps",
-                  duration_seconds_backup: (row as any).duration_seconds ?? (row as any).duration_seconds_backup ?? null,
-                  duration_seconds: null,
-                  reps_text: row.reps_text || restored,
-                });
-              }
-            };
-            const PillBtn = ({ value, label, title }: { value: "reps_weight" | "reps" | "time"; label: string; title: string }) => (
-              <button
-                type="button"
-                onClick={() => setTracking(value)}
-                className={cn(
-                  "px-2 py-1 transition border-l first:border-l-0 border-border/40",
-                  tracking === value
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-                title={title}
-                aria-pressed={tracking === value}
-              >{label}</button>
-            );
-            return (
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <div
-                  className="inline-flex shrink-0 self-start overflow-hidden rounded-md border border-border/40 bg-muted/30 text-[11px] font-semibold uppercase tracking-wide leading-none"
-                  role="group"
-                  aria-label="Tracking type"
-                >
-                  <PillBtn value="reps_weight" label="Reps + Wt" title="Programmed in reps with weight" />
-                  <PillBtn value="reps" label="Reps" title="Programmed in reps only (bodyweight)" />
-                  <PillBtn value="time" label="Time" title="Programmed in time" />
-                </div>
-                <div className="flex items-stretch gap-1">
-                  {isTime ? (
-                    <>
-                      <DurationInput
-                        valueSeconds={(row as any).duration_seconds ?? null}
-                        onChange={(secs: number | null) => setRow({ ...row, duration_seconds: secs })}
-                        compact
-                      />
-                      <CountdownTimerButton seconds={(row as any).duration_seconds} compact />
-                    </>
-                  ) : (
-                    <RowCell dataField="reps" className={cn("flex-1 text-sm font-semibold tabular-nums text-center", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </Field>
-        <Field className="col-span-2" label="RPE">
-          <RowCell dataField="rpe" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
-        </Field>
-        <Field className="col-span-2" label="RIR">
-          <RowCell dataField="rir" className={cn("text-sm font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
-        </Field>
-        <Field className={phone ? "col-span-2" : "col-span-3"} label={`Rest time${restIsOverride ? " *" : ""}`}>
+      {/* ---- Sets · Reps (or time) · RPE · RIR · Rest ---- */}
+      {/* six across on a narrow card (a phone, two days side by side), twelve on a wide one */}
+      <div className="grid grid-cols-6 items-end gap-2 @xl/row:grid-cols-12">
+        <RowField className="col-span-2" label="Sets">
+          <RowCell dataField="sets" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="numeric" placeholder="3" value={row.sets} onCommit={(v) => setRow({ ...row, sets: parseIntOrNull(v) })} />
+        </RowField>
+        <RowField
+          className="col-span-4 @xl/row:col-span-3"
+          label={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="-my-1 inline-flex items-center gap-0.5 rounded py-1 text-xs text-muted-foreground hover:text-foreground" aria-label={`Logged as: ${TRACKING_LABEL[tracking]}. Change`}>
+                  {TRACKING_LABEL[tracking]} <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52" data-row-menu>
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">They log</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={tracking} onValueChange={(v) => setTracking(v as any)}>
+                  <DropdownMenuRadioItem value="reps_weight">Reps and weight</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="reps">Reps only (bodyweight)</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="time">Time</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        >
+          <div className="flex items-stretch gap-1">
+            {isTime ? (
+              <>
+                <DurationInput
+                  valueSeconds={(row as any).duration_seconds ?? null}
+                  onChange={(secs: number | null) => setRow({ ...row, duration_seconds: secs })}
+                  compact
+                />
+                <CountdownTimerButton seconds={(row as any).duration_seconds} compact />
+              </>
+            ) : (
+              <RowCell dataField="reps" className={cn("flex-1 text-center font-semibold tabular-nums", h, inputCls)} placeholder="8-12" value={row.reps_text} onCommit={(v) => setRow({ ...row, reps_text: v ?? "" })} />
+            )}
+          </div>
+        </RowField>
+        <RowField className="col-span-2" label="RPE">
+          <RowCell dataField="rpe" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rpe} onCommit={(v) => setRow({ ...row, rpe: v ?? "" })} />
+        </RowField>
+        <RowField className="col-span-2" label="RIR">
+          <RowCell dataField="rir" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="decimal" placeholder="—" value={row.rir} onCommit={(v) => setRow({ ...row, rir: v ?? "" })} />
+        </RowField>
+        <RowField className="col-span-2 @xl/row:col-span-3" label={`Rest${restIsOverride ? " (set)" : ""}`}>
           {(() => {
             const REST_PRESETS: { v: number; label: string }[] = [
               { v: 30, label: "30 sec" },
@@ -3424,18 +3201,14 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
               <>
                 <Select value={selectValue} onValueChange={onChange}>
                   <SelectTrigger
-                    className={cn(
-                      "text-xs font-semibold tabular-nums px-2 [&>span]:truncate",
-                      h,
-                      inputCls,
-                      restIsOverride && "ring-1 ring-primary/40",
-                    )}
+                    className={cn("px-2 font-medium tabular-nums [&>span]:truncate", h, inputCls)}
+                    title={selectValue === "auto" ? `Auto · ${restCat} default · ${fmtRestSeconds(effectiveRest)}` : `${fmtRestSeconds(effectiveRest)} programmed`}
                   >
                     <SelectValue>
                       {selectValue === "auto"
                         ? `Auto · ${fmtRestSeconds(restDefault)}`
                         : selectValue === "custom"
-                          ? `Custom · ${fmtRestSeconds(override ?? null)}`
+                          ? `${fmtRestSeconds(override ?? null)}`
                           : fmtRestSeconds(parseInt(selectValue, 10))}
                     </SelectValue>
                   </SelectTrigger>
@@ -3450,9 +3223,9 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                 {selectValue === "custom" && (
                   <RowCell
                     dataField="rest"
-                    className={cn("mt-1 text-xs font-semibold tabular-nums text-center", h, inputCls)}
+                    className={cn("mt-1 text-center font-semibold tabular-nums", h, inputCls)}
                     inputMode="numeric"
-                    placeholder="Custom rest (seconds)"
+                    placeholder="Seconds"
                     value={override ?? ""}
                     onCommit={(v) => {
                       const n = parseIntOrNull(v);
@@ -3464,145 +3237,252 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
                     }}
                   />
                 )}
-                <span
-                  className="px-0.5 text-[10px] leading-tight text-foreground/80 truncate"
-                  title={
-                    selectValue === "auto"
-                      ? `Auto · ${restCat} default · ${fmtRestSeconds(effectiveRest)}`
-                      : `${fmtRestSeconds(effectiveRest)} programmed`
-                  }
-                >
-                  {selectValue === "auto"
-                    ? `Auto · ${restCat} · ${fmtRestSeconds(effectiveRest)}`
-                    : `${fmtRestSeconds(effectiveRest)} programmed`}
-                </span>
               </>
             );
           })()}
-        </Field>
+        </RowField>
       </div>
+      {compact && !phone && (
+        <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />} Load and tempo
+        </button>
+      )}
       {expanded && (
       <div className="grid grid-cols-12 items-start gap-2">
-        {/* ---- Suggested Load: one coherent group ---- */}
-        <div className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-9", "rounded-md border border-builder-card-border/70 bg-builder-inset p-2")}>
-          <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground leading-none">Suggested load</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={suggestedOn}
-              onClick={() => setLoadMode(suggestedOn ? "none" : "manual")}
-              className={cn(
-                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors border",
-                suggestedOn ? "bg-green-600 border-green-600" : "bg-red-500 border-red-500",
-              )}
-              title={suggestedOn ? "Click to remove suggested load" : "Click to add a suggested load"}
-            >
-              <span className={cn("inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform", suggestedOn ? "translate-x-4" : "translate-x-0.5")} />
-            </button>
+        {/* ---- Suggested load: one group ---- */}
+        <div className={cn("col-span-12 rounded-lg border border-border bg-background/60 p-2.5", loadMode === "none" ? "@xl/row:col-span-8" : "@xl/row:col-span-9")}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium">Suggested load</div>
+              {!suggestedOn && <div className="text-xs text-muted-foreground">Off. They log their own weight.</div>}
+            </div>
+            <Switch
+              checked={suggestedOn}
+              onCheckedChange={(on) => setLoadMode(on ? "manual" : "none")}
+              aria-label="Suggested load"
+              disabled={tracking !== "reps_weight" && !suggestedOn}
+            />
           </div>
-          {suggestedOn ? (
-            <div className="grid grid-cols-12 items-end gap-1">
-              <div className="col-span-3">
-                <div className="inline-flex w-full rounded-md border border-border p-0.5">
-                  <button type="button" onClick={() => setLoadMode("manual")} className={cn("flex-1 rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "manual" ? "bg-primary text-primary-foreground" : "text-foreground/80")} title="Fixed weight">Weight</button>
-                  <button type="button" onClick={() => setLoadMode("pct")} className={cn("flex-1 rounded px-1.5 py-0.5 text-[10px] font-semibold", loadMode === "pct" ? "bg-primary text-primary-foreground" : "text-foreground/80")} title="Percentage of max">%</button>
+          {suggestedOn && (
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <div className="w-full @md/row:w-auto">
+                <div className="inline-flex w-full rounded-lg bg-muted p-0.5 @md/row:w-auto" role="group" aria-label="Load as">
+                  <button type="button" aria-pressed={loadMode === "manual"} onClick={() => setLoadMode("manual")} className={cn("flex-1 whitespace-nowrap rounded-md px-2.5 text-xs font-medium", phone ? "h-9" : "h-7", loadMode === "manual" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")} title="Fixed weight">Weight</button>
+                  <button type="button" aria-pressed={loadMode === "pct"} onClick={() => setLoadMode("pct")} className={cn("flex-1 whitespace-nowrap rounded-md px-2.5 text-xs font-medium", phone ? "h-9" : "h-7", loadMode === "pct" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")} title="Percentage of max">% of max</button>
                 </div>
               </div>
               {loadMode === "pct" && (
-                <Field className="col-span-4" label="Basis">
+                <RowField className="min-w-[150px] flex-[2]" label="Of">
                   <Select value={row.percentage_basis ?? "manual"} onValueChange={(v) => setRow({ ...row, percentage_basis: v })}>
-                    <SelectTrigger className={cn("text-xs font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={cn("font-medium", h, inputCls)}><SelectValue /></SelectTrigger>
                     <SelectContent>{PERCENTAGE_BASES.filter((p) => p.value !== "none" && p.value !== "manual").map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
                   </Select>
-                </Field>
+                </RowField>
               )}
               {loadMode === "pct" && (
-                <Field className="col-span-2" label="%">
-                  <RowCell className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
-                </Field>
+                <RowField className="w-20 shrink-0" label="%">
+                  <RowCell dataField="percentage" className={cn("text-center font-semibold tabular-nums", h, inputCls)} inputMode="decimal" placeholder="75" value={row.percentage} onCommit={(v) => setRow({ ...row, percentage: parseFloatOrNull(v) })} />
+                </RowField>
               )}
-              <Field className={cn(loadMode === "pct" ? "col-span-3" : "col-span-9")} label={`Value (${rowUnit})`}>
+              <RowField className="min-w-[150px] flex-1" label={`Weight (${rowUnit})`}>
                 <div className="flex gap-1">
                   <RowCell
                     dataField="load"
-                    className={cn("text-xs font-semibold tabular-nums flex-1", h, inputCls)}
+                    className={cn("flex-1 font-semibold tabular-nums", h, inputCls)}
                     inputMode="decimal"
                     placeholder={loadMode === "pct" ? "auto" : "weight"}
                     value={rowUnit === "kg" ? row.load_kg : row.load_lb}
                     onCommit={(v) => setRow({ ...row, [rowUnit === "kg" ? "load_kg" : "load_lb"]: parseFloatOrNull(v) })}
                   />
                   <Select value={rowUnit} onValueChange={(v) => setRow({ ...row, load_unit: v })}>
-                    <SelectTrigger className={cn("w-[56px] text-[11px] font-semibold px-1.5", h, inputCls)} data-pb-field="unit"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={cn("w-[64px] px-2 font-medium", h, inputCls)} data-pb-field="unit" aria-label="Unit"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="kg">kg</SelectItem>
                       <SelectItem value="lb">lb</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </Field>
+              </RowField>
             </div>
-          ) : (
-            <p className="px-0.5 text-[11px] italic text-foreground/70">Off — client logs their own weight.</p>
           )}
         </div>
-        <Field className={cn("col-span-12", loadMode === "none" ? "md:col-span-6" : "md:col-span-3")} label="Tempo">
-          <RowCell dataField="tempo" className={cn("text-xs font-semibold tabular-nums text-center", h, inputCls)} placeholder="—" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
-          <span className="px-0.5 text-[10px] leading-tight text-foreground/70 truncate" title="Tempo notation: eccentric–pause–concentric (seconds). Example: 3-1-1 = 3s down, 1s pause, 1s up.">
-            ecc–pause–con · e.g. 3-1-1
+        <RowField className={cn("col-span-12", loadMode === "none" ? "@xl/row:col-span-4" : "@xl/row:col-span-3")} label="Tempo">
+          <RowCell dataField="tempo" className={cn("text-center font-semibold tabular-nums", h, inputCls)} placeholder="3-1-1" value={row.tempo} onCommit={(v) => setRow({ ...row, tempo: v ?? "" })} />
+          <span className="px-0.5 text-[11px] leading-tight text-muted-foreground" title="Tempo: eccentric–pause–concentric (seconds). 3-1-1 = 3s down, 1s pause, 1s up.">
+            Down, pause, up in seconds
           </span>
-        </Field>
+        </RowField>
       </div>
       )}
       {expanded && row.manual_override && (
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-600 dark:text-amber-400">
-            Manual override
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2 py-0.5 font-medium text-warning">
+            Weight set by hand
             {row.override_of_pct && <span className="text-muted-foreground">(was {row.override_of_pct}%)</span>}
           </span>
-          <button onClick={clearOverride} className="text-[10px] underline text-muted-foreground hover:text-foreground">Remove override</button>
+          <button type="button" onClick={clearOverride} className="min-h-8 px-1 text-xs text-muted-foreground underline hover:text-foreground">Use the % again</button>
         </div>
       )}
       {expanded && clientId && computed && computed.status !== "manual" && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {computed.status === "ok" && (
             <>
-            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 font-mono text-emerald-700 dark:text-emerald-400">
-              <PbCalculator className="h-3 w-3" />
+            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 tabular-nums text-foreground">
+              <PbCalculator className="h-3.5 w-3.5 text-muted-foreground" />
               {row.percentage}% {computed.baseLabel} = <strong>{computed.load} {computed.unit}</strong>
               <span className="text-muted-foreground">(of {computed.base?.toFixed(1)})</span>
             </span>
             {!row.manual_override && (
-              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={overrideCalculated} title="Replace the calculated load with a fixed manual value for this row only">
-                Override
+              <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={overrideCalculated} title="Replace the calculated load with a fixed weight for this row only">
+                Set it by hand
               </Button>
             )}
             </>
           )}
           {computed.status === "no-max" && (
             <>
-              <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-0.5 text-warning">
-                <PbAlertCircle className="h-3 w-3" /> No max set for "{exName}"
+              <span className="inline-flex items-center gap-1 text-warning">
+                <PbAlertCircle className="h-3.5 w-3.5" /> No max on file for {exName || "this exercise"}
               </span>
               <Button
-                size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                size="sm" variant="outline" className="h-8 px-2 text-xs"
                 onClick={() => setMaxEditor({
                   client_id: clientId, lift: exName, unit: "kg",
                   source: "manual", active: true, rounding_mode: "nearest", rounding_step: 2.5,
                   block_id: blockId ?? null,
                 })}
               >
-                <Plus className="mr-0.5 h-3 w-3" /> Set Max
+                <Plus className="mr-0.5 h-3.5 w-3.5" /> Set max
               </Button>
             </>
           )}
           {computed.status === "no-percentage" && (
-            <span className="text-muted-foreground">Enter a % to compute load</span>
+            <span className="text-muted-foreground">Enter a % to work out the load</span>
           )}
           {computed.status === "needs-link" && (
-            <span className="text-muted-foreground">Linked-row basis — set on the row this references</span>
+            <span className="text-muted-foreground">Linked-row basis: set it on the row this references</span>
           )}
         </div>
+      )}
+      {/* ---- More: label, movement family, exercise type ---- */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+          className="-mx-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {moreOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          More{!moreOpen && (row.purpose_label || row.movement_family) ? <span className="text-foreground/70"> · set by hand</span> : null}
+        </button>
+        {moreOpen && (
+          <div className="mt-1.5 grid gap-2 @xl/row:grid-cols-3">
+            <RowField label="Label">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn("flex items-center justify-between gap-1 px-2.5 text-left font-medium", h, inputCls)}
+                    title={row.purpose_label ? "Manual purpose label — click to change" : "Auto purpose label — click to override"}
+                  >
+                    <span className="truncate">{purposeLabelText(purposeLabel) || "Auto"}{!row.purpose_label && <span className="font-normal text-muted-foreground"> · auto</span>}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-1.5" align="start">
+                  <div className="grid gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setRow({ ...row, purpose_label: null })}
+                      className={cn("rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted", !row.purpose_label && "bg-muted font-medium")}
+                    >
+                      Auto (from position)
+                    </button>
+                    {PURPOSE_LABEL_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setRow({ ...row, purpose_label: opt })}
+                        className={cn("rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted", row.purpose_label === opt && "bg-muted font-medium")}
+                      >
+                        {purposeLabelText(opt)}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </RowField>
+            <RowField label="Movement family">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn("flex items-center justify-between gap-1 px-2.5 text-left font-medium", h, inputCls)}
+                    title={row.movement_family ? "Manual movement family — click to change" : "Auto movement family — click to override"}
+                  >
+                    <span className="truncate">
+                      {(() => {
+                        const map: Record<string, string> = { squat: "Squat", bench: "Bench", deadlift: "Deadlift", upper: "Upper body", lower: "Lower body", other: "Other" };
+                        return row.movement_family ? map[row.movement_family as string] ?? row.movement_family : <>Auto<span className="font-normal text-muted-foreground"> · from the exercise</span></>;
+                      })()}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-1.5" align="start">
+                  <div className="grid gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setRow({ ...row, movement_family: null })}
+                      className={cn("rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted", !row.movement_family && "bg-muted font-medium")}
+                    >
+                      Auto (from exercise)
+                    </button>
+                    {([
+                      ["squat", "Squat"],
+                      ["bench", "Bench"],
+                      ["deadlift", "Deadlift"],
+                      ["upper", "Upper body"],
+                      ["lower", "Lower body"],
+                      ["other", "Other"],
+                    ] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setRow({ ...row, movement_family: val })}
+                        className={cn("rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted", row.movement_family === val && "bg-muted font-medium")}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </RowField>
+            <RowField label="Exercise type (rest and timing)">
+              <Select value={row.time_profile ?? "accessory_compound"} onValueChange={(v) => setRow({ ...row, time_profile: v })}>
+                <SelectTrigger className={cn("font-medium", h, inputCls)} title="Sets the automatic rest, the workout's length and the warm-up buffer. Inferred automatically; change it only when needed.">
+                  <SelectValue>
+                    {TIME_PROFILE_LABEL[row.time_profile ?? "accessory_compound"] ?? (row.time_profile ?? "Accessory compound")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>{TIME_PROFILES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </RowField>
+          </div>
+        )}
+      </div>
+      {phone && meetsMinimum && (
+        // a phone has no "click away" to fold the card back into its row
+        <Button
+          variant="secondary"
+          className="h-11 w-full"
+          onClick={() => { (document.activeElement as HTMLElement | null)?.blur?.(); cancelCollapse(); setCollapsed(true); }}
+        >
+          Done
+        </Button>
+      )}
+      </>
       )}
       {maxEditor && (
         <MaxEditorDialog
@@ -3621,18 +3501,19 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
           exerciseName={exName || "Exercise"}
         />
       )}
-      {phone && meetsMinimum && (
-        // a phone has no "click away" to fold the card back into its row
-        <Button
-          variant="secondary"
-          className="mt-1 h-11 w-full"
-          onClick={() => { (document.activeElement as HTMLElement | null)?.blur?.(); cancelCollapse(); setCollapsed(true); }}
-        >
-          Done
-        </Button>
-      )}
-      </>
-      )}
+      <PhoneExercisePickerSheet
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title={row.exercise_id || row.exercise_name_override ? "Swap exercise" : "Pick an exercise"}
+        description="Sets, reps, load, rest, tempo and notes stay as they are."
+        exercises={exercises}
+        excludeId={row.exercise_id}
+        onPick={pickExercise}
+        onCustomName={(name) => {
+          setRow({ ...row, exercise_id: null, exercise_name_override: name || row.exercise_name_override || "" });
+          openCard();
+        }}
+      />
     </div>
   );
 }
@@ -3648,22 +3529,16 @@ function WeekPriorityWarnings({ week, exercises }: { week: any; exercises: any[]
     upper: "Upper", lower: "Lower", other: "Other",
   };
   const warnings = useMemo(() => {
-    const exById = new Map<string, any>((exercises ?? []).map((e: any) => [e.id, e]));
     const primaryByFamily = new Map<string, number>();
     const labelsByFamily = new Map<string, Set<string>>();
     const missingLabelOnCompRows: number[] = [];
-    const weeklyLabelsByRowId = deriveWeeklyPurposeLabelByRowId(
-      ((week?.days ?? []) as any[]).map((d, index) => ({
-        order: d?.day_index ?? d?.sort_order ?? index,
-        rows: (d?.rows ?? []) as any[],
-      })),
-      (row: any) => (row.exercise_id ? exById.get(row.exercise_id) : null),
-    );
-    for (const d of (week?.days ?? []) as any[]) {
+    // keyed by each row's place (builder rows carry no `id`)
+    const labelsByDay = weekPurposeLabelsByDay((week?.days ?? []) as any[], exercises ?? []);
+    ((week?.days ?? []) as any[]).forEach((d: any, di: number) => {
       const rows = (d?.rows ?? []) as any[];
-      if (!rows.length) continue;
-      rows.forEach((r: any) => {
-        const label = weeklyLabelsByRowId.get(r.id) ?? "Assistance";
+      if (!rows.length) return;
+      rows.forEach((r: any, ri: number) => {
+        const label = labelsByDay[di]?.[ri] ?? "Assistance";
         const famRaw = String(r.movement_family ?? "").toLowerCase();
         const isCompFamily = famRaw === "squat" || famRaw === "bench" || famRaw === "deadlift";
         if (label && label !== "Assistance" && famRaw) {
@@ -3679,7 +3554,7 @@ function WeekPriorityWarnings({ week, exercises }: { week: any; exercises: any[]
           missingLabelOnCompRows.push(1);
         }
       });
-    }
+    });
     const out: string[] = [];
     for (const [fam, count] of primaryByFamily) {
       if (count >= 2) {

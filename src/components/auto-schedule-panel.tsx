@@ -25,7 +25,8 @@ import { WeekScheduleView } from "@/components/week-schedule-view";
 
 const sb = supabase as any;
 
-export function AutoSchedulePanel({ blockId }: { blockId: string }) {
+/** `bare`: inside the block editor's own "Schedule" section (no card, no title of its own). */
+export function AutoSchedulePanel({ blockId, bare }: { blockId: string; bare?: boolean }) {
   const qc = useQueryClient();
   const [preview, setPreview] = useState<SchedulePreview | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -120,11 +121,13 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
   };
 
   return (
-    <Card className="border-border bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <CalendarRange className="h-4 w-4 text-primary" />
-        <h3 className="font-bold">Smart Schedule</h3>
-      </div>
+    <Card className={bare ? "space-y-3 border-0 bg-transparent p-0 shadow-none" : "border-border bg-card p-4 space-y-3"}>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <CalendarRange className="h-4 w-4 text-primary" />
+          <h3 className="font-bold">Smart Schedule</h3>
+        </div>
+      )}
 
       <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <div>
@@ -159,13 +162,13 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={openPreview} disabled={busy}>
           {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
-          Build Schedule From Availability
+          Build schedule from availability
         </Button>
         <Button size="sm" variant="outline" onClick={() => setClearOpen(true)} disabled={busy}>
-          <Trash2 className="mr-1 h-3 w-3" /> Clear Auto Schedule
+          <Trash2 className="mr-1 h-3 w-3" /> Clear auto schedule
         </Button>
         <Button size="sm" variant="outline" onClick={() => setCalendarOpen(true)}>
-          <Eye className="mr-1 h-3 w-3" /> Preview Client Calendar
+          <Eye className="mr-1 h-3 w-3" /> Preview client calendar
         </Button>
       </div>
       <p className="text-[11px] text-muted-foreground">
@@ -186,7 +189,7 @@ export function AutoSchedulePanel({ blockId }: { blockId: string }) {
       <Dialog open={clearOpen} onOpenChange={setClearOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Clear Auto Schedule</DialogTitle>
+            <DialogTitle>Clear auto schedule</DialogTitle>
             <DialogDescription>This removes scheduled dates only. Logs and completions are not touched.</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2 py-2">

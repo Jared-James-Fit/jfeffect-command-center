@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
 import { computeWeeklyVolume, type PlannedWeek, type ExerciseTag } from "@/lib/volume";
 
@@ -23,25 +21,20 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
   const maxEff = Math.max(1, ...buckets.map((b) => b.effectiveSets));
 
   return (
-    <Card className="border-primary/20 bg-primary/[0.03] p-3">
+    <Card className="rounded-2xl p-0">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 text-left"
+        aria-expanded={open}
+        aria-label={`${weekIndex ? `Week ${weekIndex} ` : ""}volume: ${v.totalRawSets} sets, ${v.totalEffectiveSets} effective`}
+        className="flex min-h-12 w-full items-center gap-2.5 px-3 py-2 text-left"
       >
-        <BarChart3 className="h-4 w-4 text-primary" />
-        <div className="flex-1">
-          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            {weekIndex ? `Week ${weekIndex} · ` : ""}Weekly volume (coach)
-          </div>
-          <div className="text-sm font-semibold">
-            {v.totalRawSets} raw sets ·{" "}
-            <span className="text-primary">{v.totalEffectiveSets} effective</span>
-            {v.untaggedRowCount > 0 && (
-              <Badge variant="outline" className="ml-2 text-[10px]">
-                {v.untaggedRowCount} untagged
-              </Badge>
-            )}
+        <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium">Volume</div>
+          <div className="truncate text-xs text-muted-foreground">
+            {v.totalRawSets} sets · {v.totalEffectiveSets} effective
+            {v.untaggedRowCount > 0 && <> · {v.untaggedRowCount} not tagged</>}
           </div>
         </div>
         {open ? (
@@ -52,19 +45,22 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
       </button>
 
       {open && (
-        <div className="mt-3 space-y-2">
-          <div className="flex gap-1">
+        <div className="space-y-2 border-t border-border px-3 pb-3 pt-2.5">
+          <div className="inline-flex rounded-lg bg-muted p-0.5" role="tablist" aria-label="Group by">
             {(["pattern", "muscle", "family"] as const).map((k) => (
-              <Button
+              <button
                 key={k}
                 type="button"
-                variant={view === k ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-2 text-[11px] capitalize"
+                role="tab"
+                aria-selected={view === k}
+                className={
+                  "h-8 rounded-md px-2.5 text-xs font-medium capitalize transition-colors " +
+                  (view === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
+                }
                 onClick={() => setView(k)}
               >
                 {k}
-              </Button>
+              </button>
             ))}
           </div>
 
@@ -81,7 +77,7 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
                       <span
                         className={
                           isUntagged
-                            ? "font-medium text-amber-600 dark:text-amber-400"
+                            ? "font-medium text-warning"
                             : "font-medium"
                         }
                       >
@@ -96,8 +92,8 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
                       <div
                         className={
                           isUntagged
-                            ? "h-full rounded-full bg-amber-500/70"
-                            : "h-full rounded-full bg-primary"
+                            ? "h-full rounded-full bg-warning/70"
+                            : "h-full rounded-full bg-foreground/70"
                         }
                         style={{ width: `${pct}%` }}
                       />
@@ -109,10 +105,10 @@ export function WeeklyVolumeSummary({ week, exercises, weekIndex }: Props) {
           )}
 
           {v.untaggedRowCount > 0 && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] p-2 text-[11px] text-amber-700 dark:text-amber-300">
-              {v.untaggedRowCount} programmed row{v.untaggedRowCount === 1 ? "" : "s"} use an
-              untagged exercise. Tag them in the Exercise Library to get accurate effective-set
-              counts.
+            <div className="rounded-lg bg-warning/10 px-2.5 py-2 text-xs text-warning">
+              {v.untaggedRowCount} row{v.untaggedRowCount === 1 ? " uses an exercise" : "s use exercises"} with no
+              muscles tagged. Tag {v.untaggedRowCount === 1 ? "it" : "them"} in the exercise library for
+              accurate effective sets.
             </div>
           )}
         </div>

@@ -14,6 +14,13 @@ interface Props {
   disabled?: boolean;
   allowClear?: boolean;
   compact?: boolean;
+  /**
+   * "inline": a quiet date in a line of text ("Wed, Nov 4", or "Set date"),
+   * for the program editor's day header. Clearing is inside the calendar.
+   */
+  variant?: "field" | "inline";
+  /** Inline only: the date is missing where it's needed (amber "Set date"). */
+  needed?: boolean;
 }
 
 /**
@@ -26,10 +33,58 @@ interface Props {
  * - Clear "Unscheduled" state with a Set date affordance.
  * - Optional Clear button when scheduling rules allow removal.
  */
-export function DayDateButton({ value, onChange, disabled, allowClear = true, compact }: Props) {
+export function DayDateButton({ value, onChange, disabled, allowClear = true, compact, variant = "field", needed }: Props) {
   const [open, setOpen] = useState(false);
   const parts = formatTrainingDate(value ?? null);
   const selected = value ? parseLocalDate(value) ?? undefined : undefined;
+
+  if (variant === "inline") {
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            disabled={disabled}
+            data-day-date
+            aria-label={selected ? `Training date ${format(selected, "EEEE, MMMM d")}. Change it` : "Set a training date"}
+            className={cn(
+              "-mx-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 text-xs transition-colors hover:bg-muted disabled:opacity-60",
+              selected ? "text-foreground/80" : needed ? "font-medium text-warning" : "text-muted-foreground",
+            )}
+          >
+            <CalendarIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {selected ? format(selected, "EEE, MMM d") : "Set date"}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-0">
+          <Calendar
+            mode="single"
+            selected={selected}
+            onSelect={(d) => {
+              if (!d) return;
+              onChange(format(d, "yyyy-MM-dd"));
+              setOpen(false);
+            }}
+            initialFocus
+            className="pointer-events-auto p-3"
+          />
+          {allowClear && selected && (
+            <div className="border-t border-border p-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-full text-muted-foreground"
+                onClick={() => { onChange(null); setOpen(false); }}
+              >
+                <X className="mr-1.5 h-4 w-4" /> Clear date
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    );
+  }
 
   return (
     <div className={cn("inline-flex items-stretch gap-1", compact ? "" : "")}>

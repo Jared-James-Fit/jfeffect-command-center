@@ -253,7 +253,9 @@ describe("coach builder: the phone layout", () => {
   });
 
   it("a row's ⋯ never opens the card under it", () => {
-    expect(editor).toContain("if (collapsed && !inRowMenu(e.target))");
-    expect(editor).toContain('<DropdownMenuContent align="end" className="w-52" data-row-menu>');
+    // nothing in a layer the card opened (its ⋯, a list, the picker) opens or folds it
+    expect(editor).toContain("if (collapsed && !inFloatingLayer(e.target)) openCard();");
+    expect(editor).toContain("if (inFloatingLayer(e.relatedTarget)) return;");
+    expect(editor).toContain('<DropdownMenuContent align="end" className="w-56" data-row-menu>');
   });
 });
