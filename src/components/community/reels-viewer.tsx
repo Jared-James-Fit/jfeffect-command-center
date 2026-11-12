@@ -22,7 +22,7 @@ import {
   reelStart,
   type ReelItem,
 } from "@/lib/reels";
-import { reelVideo, unlockReelSound } from "@/lib/reel-video-pool";
+import { reelVideo } from "@/lib/video-pool";
 import { cn } from "@/lib/utils";
 
 export type ReelStart = { postId: string; path: string | null };
@@ -34,7 +34,7 @@ export type ReelStart = { postId: string; path: string | null };
  * workout film's sets one after another, then the next post's), down for
  * the one before. A tap pauses, two taps ❤️, the speaker mutes. Only the
  * clip on screen and the one either side hold a video (three pooled
- * elements, reel-video-pool.ts), each buffered before it's swiped to.
+ * elements, video-pool.ts), each buffered before it's swiped to.
  */
 export function ReelsViewer({
   start,
@@ -382,9 +382,8 @@ function ReelPage({
   const toggleSound = () => {
     const next = !sound;
     if (next) {
-      // inside the tap: this one and the pooled ones may play sound from now on
+      // inside the tap (which also lets every pooled clip make sound, video-pool.ts)
       const v = vid.current;
-      unlockReelSound(v);
       if (v) {
         v.muted = false;
         if (v.paused && shouldPlay)

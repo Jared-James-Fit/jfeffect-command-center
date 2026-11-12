@@ -1,33 +1,47 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFullMediaUrl } from "@/lib/community.queries";
+import { preferAmbientAudio } from "@/lib/audio-session";
+import { SOUND_BLOCKED_EVENT, acquireFeedVideo, playFeedVideo, releaseFeedVideo, setSoundWanted, soundBlocked, unmuteBlocked } from "@/lib/video-pool";
 
 /*
- * Sound in the feed, Instagram's way: clips start muted, the speaker turns
- * sound on, and it stays on for every clip after it until it's turned off.
- * One setting for the visit (never saved: every open starts quiet).
+ * Sound in the feed: clips play with their sound by default. One speaker for
+ * the visit (never saved: every open starts with sound): off keeps every clip
+ * quiet until it's turned back on.
+ *   "auto" (the default): sound on, on the page's "ambient" audio, so it
+ *          follows the silent switch and plays over the person's music
+ *          instead of stopping it (Instagram's feed).
+ *   "on":   turned on with the speaker: plays through the silent switch.
+ *   "off":  muted with the speaker.
  */
-let feedSound = false;
+export type FeedSoundMode = "auto" | "on" | "off";
+let feedSoundMode: FeedSoundMode = "auto";
 const soundListeners = new Set<() => void>();
 export function setFeedSound(on: boolean) {
-  if (feedSound === on) return;
-  feedSound = on;
+  const next: FeedSoundMode = on ? "on" : "off";
+  if (feedSoundMode === next) return;
+  feedSoundMode = next;
   soundListeners.forEach((l) => l());
 }
-/** A tap on a clip in the feed (Instagram's): sound on if it was off, off if it was on. */
+/** A tap on a clip where there's no full-screen viewer: sound off if it was on, on if it was off. */
 export function toggleFeedSound() {
-  setFeedSound(!feedSound);
+  setFeedSound(feedSoundMode === "off");
 }
-export function useFeedSound(): boolean {
+// a tap anywhere gives a clip the phone held quiet its sound, unless the speaker is off
+setSoundWanted(() => feedSoundMode !== "off");
+export function useFeedSoundMode(): FeedSoundMode {
   return useSyncExternalStore(
     (l) => {
       soundListeners.add(l);
       return () => soundListeners.delete(l);
     },
-    () => feedSound,
-    () => false,
+    () => feedSoundMode,
+    () => "auto",
   );
+}
+export function useFeedSound(): boolean {
+  return useFeedSoundMode() !== "off";
 }
 
 /*
@@ -69,17 +83,22 @@ export function autoplayAllowed(): boolean {
 
 /**
  * A post's clip in the feed (and the post page): its poster first, then it
- * plays, muted and looping, while at least 60% of it is on screen, and pauses
- * the moment it isn't (or its carousel slide is swiped away, or the
- * full-screen clips cover the feed). Its link is ready with the feed page
- * (usePostMediaUrls signs clips too); the file starts loading two screens
- * away (only its header) and buffers properly within a screen, so it's
- * playing the moment it's on screen. `fit`: "contain" shows the whole clip
- * at its own shape (the feed), "cover" fills the frame, cropped to
- * `position` (CSS object-position, from its focus). The speaker button never
- * opens anything; a tap on the clip itself is the post card's (it opens the
- * full-screen clips, or toggles the sound where there are none, after the
- * double-tap window so ❤️ still works). `data-slide-path` says which clip.
+ * plays, with its sound (useFeedSoundMode) and looping, while at least 60%
+ * of it is on screen, and pauses the moment it isn't (or its carousel slide
+ * is swiped away, or the full-screen clips cover the feed). Its link is
+ * ready with the feed page (usePostMediaUrls signs clips too); within two
+ * screens it borrows one of the feed's video elements (video-pool.ts: an
+ * iPhone allows sound only on an element first played from a tap, so the
+ * elements are reused, never made per clip) and loads its header, within a
+ * screen it buffers properly, so it's playing the moment it's on screen;
+ * further away it gives the element back. A clip the phone wouldn't let make
+ * sound yet plays muted (its speaker shows it) until the next tap anywhere.
+ * `fit`: "contain" shows the whole clip at its own shape (the feed), "cover"
+ * fills the frame, cropped to `position` (CSS object-position, from its
+ * focus). The speaker button never opens anything; a tap on the clip itself
+ * is the post card's (it opens the full-screen clips, or toggles the sound
+ * where there are none, after the double-tap window so ❤️ still works).
+ * `data-slide-path` says which clip.
  */
 export function InlineVideo({
   path,
@@ -95,33 +114,46 @@ export function InlineVideo({
   fit?: "cover" | "contain";
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
-  const vid = useRef<HTMLVideoElement | null>(null);
+  const host = useRef<HTMLDivElement | null>(null);
+  // ever within two screens: its link; within two screens now: it holds an element
   const [near, setNear] = useState(false);
+  const [inRange, setInRange] = useState(false);
   const [soon, setSoon] = useState(false);
   const [visible, setVisible] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
   const [tapped, setTapped] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [el, setEl] = useState<HTMLVideoElement | null>(null);
   const [auto] = useState(autoplayAllowed);
-  const sound = useFeedSound();
+  const mode = useFeedSoundMode();
+  const sound = mode !== "off";
   const held = useFeedHeld();
   // a carousel's next clip gets its link too, so a swipe to it starts at once
   const { data: url } = useFullMediaUrl(path, near);
 
   useEffect(() => {
-    const el = wrap.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
+    const box = wrap.current;
+    if (!box || typeof IntersectionObserver === "undefined") {
       setNear(true);
+      setInRange(true);
       setVisible(true);
       return;
     }
     // two screens away: the link and the clip's header; within a screen: buffer it (and keep it)
-    const nearIo = new IntersectionObserver(([e]) => setNear((n) => n || !!e?.isIntersecting), { rootMargin: "200% 0px" });
+    const nearIo = new IntersectionObserver(
+      ([e]) => {
+        const hit = !!e?.isIntersecting;
+        setInRange(hit);
+        if (hit) setNear(true);
+      },
+      { rootMargin: "200% 0px" },
+    );
     const soonIo = new IntersectionObserver(([e]) => setSoon((n) => n || !!e?.isIntersecting), { rootMargin: "100% 0px" });
     const seeIo = new IntersectionObserver(([e]) => setVisible(!!e && e.intersectionRatio >= 0.6), { threshold: [0, 0.6, 1] });
-    nearIo.observe(el);
-    soonIo.observe(el);
-    seeIo.observe(el);
+    nearIo.observe(box);
+    soonIo.observe(box);
+    seeIo.observe(box);
     return () => {
       nearIo.disconnect();
       soonIo.disconnect();
@@ -129,53 +161,75 @@ export function InlineVideo({
     };
   }, []);
 
-  const shouldPlay = active && visible && !held && !!url && (auto || tapped) && !failed;
+  // borrow an element while it's near, give it back when it isn't
+  useLayoutEffect(() => {
+    const h = host.current;
+    if (!inRange || !url || !h) return;
+    const v = acquireFeedVideo();
+    v.className = "absolute inset-0 h-full w-full";
+    v.muted = true;
+    if (v.getAttribute("src") !== url) v.src = url;
+    h.appendChild(v);
+    setEl(v);
+    const handlers: [string, () => void][] = [
+      ["playing", () => setPlaying(true)],
+      ["pause", () => setPlaying(false)],
+      ["error", () => setFailed(true)],
+      [SOUND_BLOCKED_EVENT, () => setBlocked(soundBlocked(v))],
+    ];
+    handlers.forEach(([k, f]) => v.addEventListener(k, f));
+    return () => {
+      handlers.forEach(([k, f]) => v.removeEventListener(k, f));
+      releaseFeedVideo(v);
+      setEl(null);
+      setPlaying(false);
+      setBlocked(false);
+    };
+  }, [inRange, url]);
+
+  // its frame: whole (contain) or filled (cover, at its focus)
   useEffect(() => {
-    const v = vid.current;
-    if (!v) return;
-    if (shouldPlay) {
-      v.play().catch(() => {
-        // sound without a tap first: the phone said no, so it plays muted
-        if (!v.muted) {
-          setFeedSound(false);
-          v.muted = true;
-          void v.play().catch(() => {});
-        }
-      });
-    } else v.pause();
-  }, [shouldPlay, url]);
+    if (!el) return;
+    el.style.objectFit = fit === "contain" ? "contain" : "cover";
+    el.style.objectPosition = position && fit === "cover" ? position : "";
+  }, [el, fit, position]);
+
+  // within a screen of being seen (and the slide that's showing): load it all, so it plays at once
+  useEffect(() => {
+    if (el) el.preload = soon && active && (auto || tapped) ? "auto" : "metadata";
+  }, [el, soon, active, auto, tapped]);
+
+  // playing by itself with sound: the page's "ambient" (silent switch, over their music);
+  // turned on with the speaker: like any video (through the switch)
+  useEffect(() => {
+    if (!el) return;
+    if (mode === "on") el.removeAttribute("data-ambient-audio");
+    else el.setAttribute("data-ambient-audio", "");
+  }, [el, mode]);
+
+  const shouldPlay = active && visible && !held && !!el && (auto || tapped) && !failed;
+  useEffect(() => {
+    if (!el) return;
+    if (!shouldPlay) {
+      el.pause();
+      return;
+    }
+    if (mode === "auto") preferAmbientAudio();
+    playFeedVideo(el, sound);
+    // a speaker change while playing is handled below, never by restarting the clip
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldPlay, el]);
 
   useEffect(() => {
-    if (vid.current) vid.current.muted = !sound;
-  }, [sound]);
+    if (!el || soundBlocked(el)) return;
+    if (sound && mode === "auto") preferAmbientAudio();
+    el.muted = !sound;
+  }, [el, sound, mode]);
 
-  // iPhone only autoplays inline when muted + playsinline are on the element itself
-  const attach = useCallback((v: HTMLVideoElement | null) => {
-    vid.current = v;
-    if (!v) return;
-    v.muted = !feedSound;
-    if (!feedSound) v.setAttribute("muted", "");
-    v.setAttribute("playsinline", "");
-    v.setAttribute("webkit-playsinline", "");
-  }, []);
-
+  const soundOn = sound && !blocked;
   return (
     <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit}>
-      {url && (
-        <video
-          ref={attach}
-          src={url}
-          loop
-          playsInline
-          // within a screen of being seen (and the slide that's showing): load it all, so it plays at once
-          preload={soon && active && (auto || tapped) ? "auto" : "metadata"}
-          className={cn("absolute inset-0 h-full w-full", fit === "contain" ? "object-contain" : "object-cover")}
-          style={position && fit === "cover" ? { objectPosition: position } : undefined}
-          onPlaying={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onError={() => setFailed(true)}
-        />
-      )}
+      <div ref={host} className="absolute inset-0" />
       {poster && (
         <img
           src={poster}
@@ -209,14 +263,22 @@ export function InlineVideo({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setFeedSound(!sound);
+            // turning it on: inside the tap (so the phone allows it), and through the
+            // silent switch from now on (the attribute goes before the sound starts,
+            // so the page's media watcher sees a clip someone asked to hear)
+            if (!soundOn && el) {
+              el.removeAttribute("data-ambient-audio");
+              if (soundBlocked(el)) unmuteBlocked(el);
+              else el.muted = false;
+            }
+            setFeedSound(!soundOn);
           }}
           className="absolute bottom-2.5 right-2.5 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-90"
-          aria-label={sound ? "Mute" : "Turn sound on"}
-          aria-pressed={sound}
+          aria-label={soundOn ? "Mute" : "Turn sound on"}
+          aria-pressed={soundOn}
           data-video-sound
         >
-          {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
         </button>
       )}
     </div>

@@ -35,7 +35,6 @@ import {
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
 import { FEED_VIDEO_MAX_HEIGHT, feedAspect, focusPosition, videoAspect } from "@/lib/photo-frame";
-import { unlockReelSound } from "@/lib/reel-video-pool";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
@@ -441,8 +440,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     if (!clip) return;
     const path = clip.getAttribute("data-slide-path");
     if (onOpenReel && path) {
-      // inside the tap itself: the full-screen clips may play with sound (an iPhone asks for a tap)
-      unlockReelSound();
+      // the tap itself already let the full-screen clips make sound (video-pool.ts listens for taps)
       singleTimer.current = window.setTimeout(() => {
         singleTimer.current = null;
         onOpenReel(post, path);

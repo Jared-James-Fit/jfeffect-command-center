@@ -206,8 +206,8 @@ describe("the feed: taps like Instagram's", () => {
     expect(card).not.toContain("onKeyDown={(e) => e.key === \"Enter\" && onOpen(post)}");
     expect(card).toContain('const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");');
     expect(card).toContain("onOpenReel(post, path);");
-    // the tap itself allows the full-screen clips their sound (an iPhone asks for a tap)
-    expect(card).toContain("unlockReelSound();\n      singleTimer.current = window.setTimeout(");
+    // the tap itself allows the full-screen clips their sound (an iPhone asks for a tap): video-pool.ts listens for taps
+    expect(read("src/lib/video-pool.ts")).toContain('window.addEventListener("click", onTap, true);');
     expect(card).toContain("toggleFeedSound();");
   });
   it("a member's photo post is edge to edge with the words under it; so is every automated post; a coach's own note keeps its layout", () => {
