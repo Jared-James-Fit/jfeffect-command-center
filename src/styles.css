@@ -1254,6 +1254,30 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
   .crew-bar { transition: none; }
 }
 /* The feed builds as you scroll: each post eases in the first time it's on screen. */
+/* Crew's feed, one post per screen, swiped one at a time (TikTok's). A page is
+   the screen under Crew's bar (fixed on a phone; in the page on a computer,
+   where it scrolls away), and the window snaps to each one. The first screen (`.feed-first`) is the story rail
+   and the first post together; its height is set from where it starts. */
+:root { --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem); }
+@media (min-width: 768px) { :root { --feed-page-top: 0px; } }
+html.feed-paging { scroll-snap-type: y mandatory; }
+/* every box between the window and the posts clips sideways instead of hiding,
+   since a hidden overflow makes a box a scroll container that keeps the posts'
+   snap points from the window (body, the shell, <main>) */
+html.feed-paging,
+html.feed-paging body,
+html.feed-paging [data-shell-root],
+html.feed-paging main { overflow-x: clip; }
+.feed-page {
+  height: calc(100svh - var(--feed-page-top));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  scroll-margin-top: var(--feed-page-top);
+}
+/* a moment with nothing to show (no one to suggest) takes no screen */
+.feed-page:empty { display: none; }
+/* its snap point clamps to the very top, so a pull down there still refreshes */
+.feed-first { scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-top: 100vh; }
 .feed-item { opacity: 0; transform: translateY(14px); transition: opacity 420ms ease-out, transform 480ms cubic-bezier(.2,.8,.2,1); }
 .feed-item[data-shown] { opacity: 1; transform: none; }
 @keyframes caught-up-pop {

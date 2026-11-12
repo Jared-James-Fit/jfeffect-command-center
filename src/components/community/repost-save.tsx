@@ -35,7 +35,7 @@ const buzz = (ms: number) => {
  * taken back, with Undo. Not on your own posts, an automatic story, or a
  * post that isn't shared with the whole crew.
  */
-export function RepostButton({ post, onReposted }: { post: CommunityPost; onReposted?: () => void }) {
+export function RepostButton({ post, onReposted, stacked = false }: { post: CommunityPost; onReposted?: () => void; stacked?: boolean }) {
   const repost = useRepost();
   const [pop, setPop] = useState(0);
   // no card around it to float "Add a note…" on (a post's own page): the toast offers it
@@ -73,13 +73,16 @@ export function RepostButton({ post, onReposted }: { post: CommunityPost; onRepo
       onClick={tap}
       aria-pressed={mine}
       aria-label={`${mine ? "Reposted. Tap to undo" : "Repost to your followers"}${count ? `, ${count}` : ""}`}
-      className="flex h-11 min-w-11 shrink-0 select-none items-center justify-center gap-1 rounded-full px-2 [touch-action:manipulation] hover:bg-muted active:scale-90"
+      className={cn(
+        "flex min-w-11 shrink-0 select-none items-center justify-center rounded-full [touch-action:manipulation] hover:bg-muted active:scale-90",
+        stacked ? "min-h-11 flex-col gap-0.5 px-1 py-1" : "h-11 gap-1 px-2",
+      )}
       data-repost-button={mine ? "on" : "off"}
     >
       <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
-        <Repeat2 className={cn("h-[23px] w-[23px]", mine ? "text-emerald-500" : "text-foreground/80")} strokeWidth={mine ? 2.6 : 2} />
+        <Repeat2 className={cn(stacked ? "h-[28px] w-[28px]" : "h-[23px] w-[23px]", mine ? "text-emerald-500" : stacked ? "text-foreground" : "text-foreground/80")} strokeWidth={mine ? 2.6 : 2} />
       </span>
-      {count > 0 && <span className={cn("text-[13px] font-bold tabular-nums", mine ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{count}</span>}
+      {count > 0 && <span className={cn(stacked ? "text-[12px]" : "text-[13px]", "font-bold tabular-nums", mine ? "text-emerald-600 dark:text-emerald-400" : stacked ? "text-foreground" : "text-muted-foreground")}>{count}</span>}
     </button>
     {/* beside the button, never inside it: taps in the sheet must not reach the button */}
     {noteOpen && <RepostNoteEditor post={post} onClose={() => setNoteOpen(false)} />}
@@ -92,7 +95,7 @@ export function RepostButton({ post, onReposted }: { post: CommunityPost; onRepo
  * "Save to album"; hold opens the albums straight away. Tap a saved one to
  * unsave it (out of its albums too), with Undo that puts it back where it was.
  */
-export function SaveButton({ post }: { post: CommunityPost }) {
+export function SaveButton({ post, stacked = false }: { post: CommunityPost; stacked?: boolean }) {
   const save = useSavePost();
   const albumPosts = useAlbumPosts();
   const [picker, setPicker] = useState(false);
@@ -181,7 +184,7 @@ export function SaveButton({ post }: { post: CommunityPost }) {
         data-save-button={saved ? "on" : "off"}
       >
         <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
-          <Bookmark className={cn("h-[23px] w-[23px]", saved ? "fill-foreground text-foreground" : "text-foreground/80")} strokeWidth={2} />
+          <Bookmark className={cn(stacked ? "h-[27px] w-[27px]" : "h-[23px] w-[23px]", saved ? "fill-foreground text-foreground" : stacked ? "text-foreground" : "text-foreground/80")} strokeWidth={2} />
         </span>
       </button>
       <AlbumPickerSheet post={post} open={picker} onOpenChange={setPicker} />

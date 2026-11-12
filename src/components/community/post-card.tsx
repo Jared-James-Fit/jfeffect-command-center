@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
-import { InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
+import { CLIP_TOGGLE_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -395,9 +395,16 @@ type Props = {
   openHint?: boolean;
   /** A tap on one of its clips: open the clips full screen there (the feed's ReelsViewer). Without it, a tap toggles the sound. */
   onOpenReel?: (post: CommunityPost, path: string) => void;
+  /**
+   * "page": the post as one screen of the Crew feed, swiped one at a time
+   * (TikTok's): its picture or clip as big as the screen allows, the name and
+   * words over the bottom, ❤️ 💬 🔁 ✈️ 🔖 down the right. "card" (the
+   * default): Instagram's card, the words and buttons under the picture.
+   */
+  layout?: "card" | "page";
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card" }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
@@ -439,6 +446,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
     const path = clip.getAttribute("data-slide-path");
+    // on its own screen a clip is already full size: a tap pauses it (TikTok's)
+    if (layout === "page") {
+      singleTimer.current = window.setTimeout(() => {
+        singleTimer.current = null;
+        clip.dispatchEvent(new Event(CLIP_TOGGLE_EVENT));
+      }, 300);
+      return;
+    }
     if (onOpenReel && path) {
       // the tap itself already let the full-screen clips make sound (video-pool.ts listens for taps)
       singleTimer.current = window.setTimeout(() => {
@@ -456,6 +471,118 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     if (singleTimer.current) window.clearTimeout(singleTimer.current);
   }, []);
   const photo = isPhotoPost(post);
+
+  if (layout === "page") {
+    // a picture, a clip or an automated post's card: on black, as big as the screen allows
+    const visual = auto || !!post.media_type;
+    return (
+      <article
+        ref={articleRef}
+        data-feed-post
+        data-feed-page-post={visual ? "visual" : "words"}
+        className={cn("relative h-full w-full overflow-hidden text-foreground", visual ? "dark bg-black" : "bg-background")}
+      >
+        {/* the post itself; taps never open it (double tap ❤️, a clip's tap pauses it) */}
+        <div onClick={onHeroTap} className="absolute inset-x-0 top-0 select-none" style={{ bottom: "var(--bottom-nav-clearance)" }} data-post-hero>
+          {visual ? (
+            <FitBox ratio={auto ? 0.8 : postMediaRatio(post)}>
+              {auto ? <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} /> : <PostMedia post={post} thumbUrl={thumbUrl} page />}
+            </FitBox>
+          ) : (
+            // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
+            <div className="absolute inset-0 overflow-y-auto pb-44 pl-3 pr-16 pt-6" data-page-body>
+              <div className="flex min-h-full flex-col justify-center gap-3">
+                {isNote ? (
+                  <>
+                    <NoteBody post={post} onOpenPerson={onOpenAuthor} />
+                    <NoteExtras post={post} unit={unit} className="mx-4" />
+                  </>
+                ) : s && post.auto ? (
+                  <PulseHero post={post} stats={s} unit={unit} />
+                ) : s ? (
+                  <WorkoutHero stats={s} unit={unit} />
+                ) : post.locked_in_at ? (
+                  <LockInHero post={post} />
+                ) : (
+                  <div className="px-1 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
+                )}
+                {!isNote && s && <ViewWorkoutRow post={post} onOpen={() => onOpen(post)} hint={!!openHint} />}
+              </div>
+            </div>
+          )}
+          {doubleTapHint && burst === 0 && (
+            <div className="pointer-events-none absolute inset-x-0 top-[38%] h-14">
+              <DoubleTapHint onDone={onTipDone} />
+            </div>
+          )}
+          <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+        </div>
+        {note.sheet}
+
+        {/* bottom left: who, and the words (over a soft shade on a picture) */}
+        <div
+          className={cn("pointer-events-none absolute inset-x-0 z-[2] pt-16", visual && "bg-gradient-to-t from-black/70 via-black/30 to-transparent")}
+          style={{ bottom: "var(--bottom-nav-clearance)" }}
+          data-page-words
+        >
+          <div className="pointer-events-auto mr-16 space-y-1.5 px-3 pb-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]">
+            {note.bubble && <div data-note-over>{note.bubble}</div>}
+            <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
+            <AuthorLine
+              author={post.author}
+              sub={sub}
+              size={34}
+              onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
+              collaborators={post.collaborators}
+              onOpenPerson={onOpenAuthor}
+              trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
+            />
+            {visual && s && (
+              <button type="button" onClick={() => onOpen(post)} className="flex max-w-full items-center gap-1.5 text-left text-[13px] font-semibold" data-page-workout>
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                <span className="truncate">{workoutHeadline(s)}</span>
+                {lift?.pr && <span className="shrink-0 rounded-full bg-warning/20 px-1.5 text-[11px] font-bold text-warning">{SCOPE_WORD[lift.pr]}</span>}
+                <span className="shrink-0 text-muted-foreground">· View workout</span>
+              </button>
+            )}
+            {visual && !s && post.locked_in_at && (
+              <button type="button" onClick={() => onOpen(post)} className="flex items-center gap-2 text-left text-[13px] font-semibold">
+                Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
+              </button>
+            )}
+            {auto ? (
+              <AutoPostCaption post={post} clamp onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
+            ) : (
+              post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
+            )}
+            {(!isNote || visual) && !auto && <PostExtras post={post} />}
+            {(post.coach_reactions.length > 0 || post.coach_commented) && (
+              <div className="inline-flex max-w-full items-center rounded-full bg-primary/15 px-2.5 py-1 text-[12px] font-bold text-primary">
+                <span className="truncate">
+                  Coach {post.coach_reactions[0]?.name ?? ""}
+                  {post.coach_reactions[0] ? ` ${reactionEmoji(post.coach_reactions[0].emoji) ?? ""}` : ""}
+                  {post.coach_commented ? `${post.coach_reactions[0] ? " · " : " "}replied` : ""}
+                </span>
+              </div>
+            )}
+            <div className="-mx-3.5 [&_[data-post-views]]:mb-0">
+              <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
+            </div>
+          </div>
+        </div>
+
+        {/* down the right: ❤️ 💬 🔁 ✈️ 🔖 and the post's menu (who it's for is in the line under the name) */}
+        <div
+          className={cn("absolute right-1 z-[3] flex flex-col items-center gap-1", visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]")}
+          style={{ bottom: "calc(var(--bottom-nav-clearance) + 0.75rem)" }}
+          data-page-actions
+        >
+          <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />
+          <PostActions post={post} viewerIsStaff={viewerIsStaff} unit={unit} className="grid h-11 w-11 place-items-center rounded-full text-foreground active:scale-90 [&>svg]:h-6 [&>svg]:w-6" />
+        </div>
+      </article>
+    );
+  }
 
   return (
     // Instagram-style on a phone: edge to edge, no card frame, a hairline between
@@ -656,6 +783,7 @@ export function ReactionBar({
   onOpenAuthor,
   onReposted,
   unit,
+  column = false,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
@@ -663,6 +791,8 @@ export function ReactionBar({
   onOpenAuthor?: (a: CommunityAuthor) => void;
   /** Just reposted: the card floats "Add a note…" on the post. */
   onReposted?: () => void;
+  /** A post's own screen in the feed (TikTok's): the same buttons down the right side, each count under its icon. */
+  column?: boolean;
   /** The unit the feed painted an automated post's picture in (Share to Instagram sends that one). */
   unit?: "kg" | "lb";
 }) {
@@ -693,6 +823,58 @@ export function ReactionBar({
     const t = window.setTimeout(done, 2400);
     return () => window.clearTimeout(t);
   }, [on, done]);
+  const sheets = (
+    <>
+      <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
+      {canMessage && <MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />}
+      {shareSheet && (
+        <PostShareSheet
+          post={post}
+          open={sharing}
+          onOpenChange={setSharing}
+          // a beat after the sheet goes, so the story camera opens on a clear screen
+          onStory={canStory ? () => window.setTimeout(() => openStoryShare({ post }), 200) : undefined}
+          onMessage={canMessage ? () => window.setTimeout(() => setMessaging(true), 200) : undefined}
+          onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}
+        />
+      )}
+      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+    </>
+  );
+  const shareTap = () => (shareSheet ? setSharing(true) : setMessaging(true));
+  if (column) {
+    return (
+      <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex flex-col items-center gap-1" data-post-actions-column>
+        <ReactionButton post={post} onReact={onReact} align="right" stacked />
+        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-3/4 left-1/2" />}
+        {onOpenComments && (
+          <button
+            type="button"
+            onClick={() => onOpenComments(post)}
+            className="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[12px] font-bold tabular-nums text-foreground active:scale-90"
+            aria-label={`Comments${post.comment_count ? `, ${post.comment_count}` : ""}`}
+          >
+            <MessageCircle className="h-[28px] w-[28px]" strokeWidth={2} />
+            {post.comment_count > 0 && post.comment_count}
+          </button>
+        )}
+        <RepostButton post={post} onReposted={onReposted} stacked />
+        {(canMessage || shareSheet) && (
+          <button
+            type="button"
+            onClick={shareTap}
+            className="grid h-11 w-11 place-items-center rounded-full text-foreground active:scale-90"
+            aria-label={shareSheet ? "Share" : `Message ${post.author.name}`}
+            data-post-share
+          >
+            <Send className="h-[26px] w-[26px] -rotate-12" />
+          </button>
+        )}
+        <SaveButton post={post} stacked />
+        {sheets}
+      </div>
+    );
+  }
   return (
     <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative px-2 pb-2 pt-1.5">
       {/* Instagram's row: like, comment, repost, message ... save at the end */}
@@ -714,7 +896,7 @@ export function ReactionBar({
         {(canMessage || shareSheet) && (
           <button
             type="button"
-            onClick={() => (shareSheet ? setSharing(true) : setMessaging(true))}
+            onClick={shareTap}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground/80 hover:bg-muted hover:text-foreground"
             aria-label={shareSheet ? "Share" : `Message ${post.author.name}`}
             title={shareSheet ? "Share" : `Message ${post.author.name}`}
@@ -750,26 +932,30 @@ export function ReactionBar({
           </span>
         </button>
       )}
-      <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
-      {canMessage && <MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />}
-      {shareSheet && (
-        <PostShareSheet
-          post={post}
-          open={sharing}
-          onOpenChange={setSharing}
-          // a beat after the sheet goes, so the story camera opens on a clear screen
-          onStory={canStory ? () => window.setTimeout(() => openStoryShare({ post }), 200) : undefined}
-          onMessage={canMessage ? () => window.setTimeout(() => setMessaging(true), 200) : undefined}
-          onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}
-        />
-      )}
-      {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
+      {sheets}
     </div>
   );
 }
 
 /** Feed media: the thumbnail only. Full-size image / video loads on demand. */
-export function PostMedia({ post, thumbUrl, full = false, lead, trail, ratio: fixed }: { post: CommunityPost; thumbUrl: string | null; full?: boolean; lead?: ReactNode; trail?: ReactNode; ratio?: number }) {
+export function PostMedia({
+  post,
+  thumbUrl,
+  full = false,
+  lead,
+  trail,
+  ratio: fixed,
+  page = false,
+}: {
+  post: CommunityPost;
+  thumbUrl: string | null;
+  full?: boolean;
+  lead?: ReactNode;
+  trail?: ReactNode;
+  ratio?: number;
+  /** On a post's own screen in the feed (FitBox sizes the frame): no height cap, captions and the speaker up top. */
+  page?: boolean;
+}) {
   const slides = postSlides(post);
   const cover = slides[0] ?? null;
   // A picture: never taller than 4:5, never wider than 16:9, keeping the feed's rhythm.
@@ -782,18 +968,53 @@ export function PostMedia({ post, thumbUrl, full = false, lead, trail, ratio: fi
   // `lead` / `trail`: a slide before / after the post's own (an automated post's 4:5 card), whose shape it takes.
   // `ratio`: a fixed shape (an automated post is always 4:5, like the card that may follow its photo).
   const clipCover = !fixed && !lead && cover?.type === "video";
-  const ratio = fixed ?? (lead ? 0.8 : clipCover ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height));
-  const frame: CSSProperties = clipCover ? { aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT } : { aspectRatio: String(ratio) };
-  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} />;
+  const ratio = fixed ?? postMediaRatio(post, !!lead);
+  const frame: CSSProperties = clipCover && !page ? { aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT } : { aspectRatio: String(ratio) };
+  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} page={page} />;
   return (
     <div className={cn("relative w-full overflow-hidden", clipCover ? "bg-black" : "bg-muted")} style={frame} data-clip-frame={clipCover ? "" : undefined}>
-      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
     </div>
   );
 }
 
+/**
+ * A picture's frame as big as its box allows at its own shape (`ratio`,
+ * width / height), centred: the full width for anything wider than the box,
+ * the full height for anything taller (a 9:16 clip on a phone).
+ */
+function FitBox({ ratio, children }: { ratio: number; children: ReactNode }) {
+  return (
+    <div className="absolute inset-0 grid place-items-center" style={{ containerType: "size" }} data-fit-box>
+      <div className="relative" style={{ width: `min(100cqw, calc(100cqh * ${ratio}))`, aspectRatio: String(ratio) }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** The shape a post's pictures show at (PostMedia's): a clip cover its own (9:16 to 16:9), a picture 4:5 to 16:9, after a 4:5 card 4:5. */
+export function postMediaRatio(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media">, afterCard = false): number {
+  if (afterCard) return 0.8;
+  return post.media_type === "video" ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height);
+}
+
 /** One photo or video, filling its frame. A clip plays muted while it's on screen (InlineVideo). */
-function SlideMedia({ slide, thumbUrl, full, active = true, withDots = false }: { slide: PostSlide; thumbUrl: string | null; full: boolean; active?: boolean; withDots?: boolean }) {
+function SlideMedia({
+  slide,
+  thumbUrl,
+  full,
+  active = true,
+  withDots = false,
+  page = false,
+}: {
+  slide: PostSlide;
+  thumbUrl: string | null;
+  full: boolean;
+  active?: boolean;
+  withDots?: boolean;
+  page?: boolean;
+}) {
   const isVideo = slide.type === "video";
   const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
   const src = (full && !isVideo ? fullUrl : null) ?? thumbUrl;
@@ -804,14 +1025,14 @@ function SlideMedia({ slide, thumbUrl, full, active = true, withDots = false }: 
       {isVideo ? (
         <div data-pinch-zoom className="absolute inset-0">
           {/* whole, never cropped: the lift is all there */}
-          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" />
+          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" controls={page ? "top" : "bottom"} />
         </div>
       ) : (
         <div data-pinch-zoom className="absolute inset-0">
           {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
         </div>
       )}
-      {slide.caption && <SlideCaption caption={slide.caption} withDots={withDots} />}
+      {slide.caption && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}
     </>
   );
 }
@@ -822,13 +1043,15 @@ function SlideMedia({ slide, thumbUrl, full, active = true, withDots = false }: 
  * on a soft scrim at the bottom, clear of the sound button and the dots, and
  * never takes a tap (double-tap ❤️ and the clip's sound still work).
  */
-function SlideCaption({ caption, withDots }: { caption: { title: string; detail: string }; withDots: boolean }) {
+function SlideCaption({ caption, withDots, top = false }: { caption: { title: string; detail: string }; withDots: boolean; top?: boolean }) {
   return (
     <div
       data-slide-caption
       className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pl-3.5 pr-14 pt-12 text-white",
-        withDots ? "pb-7" : "pb-3",
+        "pointer-events-none absolute inset-x-0 pl-3.5 pr-14 text-white",
+        // on a post's own screen its words are at the bottom, so the set's sit at the top
+        top ? "top-0 bg-gradient-to-b from-black/65 via-black/25 to-transparent pb-10 pt-3" : "bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pt-12",
+        !top && (withDots ? "pb-7" : "pb-3"),
       )}
     >
       <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">{caption.title}</div>
@@ -873,7 +1096,23 @@ function FadeImg({ src, position }: { src: string; position?: string }) {
  * and the dots say where you are. Only the slide you're on and its
  * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
  */
-function PostCarousel({ slides, coverUrl, frame, full, lead, trail }: { slides: PostSlide[]; coverUrl: string | null; frame: CSSProperties; full: boolean; lead?: ReactNode; trail?: ReactNode }) {
+function PostCarousel({
+  slides,
+  coverUrl,
+  frame,
+  full,
+  lead,
+  trail,
+  page = false,
+}: {
+  slides: PostSlide[];
+  coverUrl: string | null;
+  frame: CSSProperties;
+  full: boolean;
+  lead?: ReactNode;
+  trail?: ReactNode;
+  page?: boolean;
+}) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
   const track = useRef<HTMLDivElement | null>(null);
@@ -912,7 +1151,7 @@ function PostCarousel({ slides, coverUrl, frame, full, lead, trail }: { slides: 
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
             <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
-              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots /> : <div className="h-full w-full bg-muted" />}
+              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots page={page} /> : <div className="h-full w-full bg-muted" />}
             </div>
           );
         })}

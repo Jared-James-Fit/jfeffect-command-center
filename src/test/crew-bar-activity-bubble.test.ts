@@ -91,7 +91,8 @@ describe("Crew's one bar", () => {
     expect(bar).toContain('className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40');
     expect(bar).toContain("md:relative md:inset-auto");
     expect(bar).toContain("calc(var(--app-safe-top) + ${CREW_BAR_HEIGHT})");
-    expect(screen).toContain('const barHidden = useBarHidden(ownBar && scope.kind === "feed");');
+    // the paged feed (a post per screen) keeps it put: its screens are sized to it
+    expect(screen).toContain('const barHidden = useBarHidden(ownBar && scope.kind === "feed" && !paging);');
   });
 
   it("back from a profile, Rankings or Activity lands where you were in the feed", () => {

@@ -10,7 +10,20 @@ const HOLD_MS = 380;
  * The like button: tap for ❤️ (tap again to take it back), hold for
  * 👍 ‼️ 🔥 😂. Shows your reaction once you've given one, and how many.
  */
-export function ReactionButton({ post, onReact, size = "md", align = "left" }: { post: CommunityPost; onReact: (p: CommunityPost, next: ReactionKey | null) => void; size?: "md" | "sm"; align?: "left" | "right" }) {
+export function ReactionButton({
+  post,
+  onReact,
+  size = "md",
+  align = "left",
+  stacked = false,
+}: {
+  post: CommunityPost;
+  onReact: (p: CommunityPost, next: ReactionKey | null) => void;
+  size?: "md" | "sm";
+  align?: "left" | "right";
+  /** The count under the heart (a post's own screen in the feed, TikTok's right column). */
+  stacked?: boolean;
+}) {
   const sm = size === "sm";
   const [open, setOpen] = useState(false);
   const [pop, setPop] = useState(0);
@@ -78,19 +91,19 @@ export function ReactionButton({ post, onReact, size = "md", align = "left" }: {
         aria-label={`${mine ? `You reacted ${reactionEmoji(mine) ?? ""}. Tap to remove` : "Like"}${total ? `, ${total}` : ""}. Hold for more reactions`}
         className={cn(
           "flex select-none items-center justify-center rounded-full transition-transform [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90",
-          sm ? "h-10 min-w-10 gap-1 px-2" : "h-11 min-w-11 gap-1.5 px-2.5",
+          stacked ? "min-h-11 min-w-11 flex-col gap-0.5 px-1 py-1" : sm ? "h-10 min-w-10 gap-1 px-2" : "h-11 min-w-11 gap-1.5 px-2.5",
         )}
       >
         <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
           {mine === "heart" ? (
-            <Heart className={cn(sm ? "h-[21px] w-[21px]" : "h-[26px] w-[26px]", "fill-[#ef3340] text-[#ef3340]")} strokeWidth={2} />
+            <Heart className={cn(sm ? "h-[21px] w-[21px]" : stacked ? "h-[30px] w-[30px]" : "h-[26px] w-[26px]", "fill-[#ef3340] text-[#ef3340]")} strokeWidth={2} />
           ) : mine ? (
             <span className={cn(sm ? "text-[18px]" : "text-[22px]", "leading-none")}>{reactionEmoji(mine)}</span>
           ) : (
-            <Heart className={cn(sm ? "h-[21px] w-[21px]" : "h-[26px] w-[26px]", "text-foreground/80")} strokeWidth={2} />
+            <Heart className={cn(sm ? "h-[21px] w-[21px]" : stacked ? "h-[30px] w-[30px] text-foreground" : "h-[26px] w-[26px]", !stacked && "text-foreground/80")} strokeWidth={2} />
           )}
         </span>
-        {total > 0 && <span className={cn(sm ? "text-[12px]" : "text-[14px]", "font-bold tabular-nums", mine ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
+        {total > 0 && <span className={cn(sm || stacked ? "text-[12px]" : "text-[14px]", "font-bold tabular-nums", mine || stacked ? "text-foreground" : "text-muted-foreground")}>{total}</span>}
       </button>
       {open && <ReactionPicker current={mine} align={align} onPick={(k) => choose(k === mine ? null : k)} onClose={() => setOpen(false)} />}
     </div>
