@@ -311,14 +311,27 @@ export function wantsFreeMeal(answer: string | null | undefined): boolean | null
 }
 
 /** The meal plan instruction for the High Day. Empty when the client wasn't asked. */
-export function freeMealRule(wants: boolean | null, pick: string): string {
+/** "None", "no", "n/a": an allergy / diet answer that names nothing to keep to. */
+function namesARestriction(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return !!t && !/^(none|no|nope|n\/?a|na|nothing|-|no allergies)\.?$/.test(t);
+}
+
+export function freeMealRule(wants: boolean | null, pick: string, restrictions = ""): string {
   if (wants === true) {
     const p = pick.trim();
     const theirs = p && !/whatever|craving/i.test(p) ? `${p}, ` : "";
+    // a medical or elimination diet (AIP, celiac) still holds on the free meal: no burger + fries examples that break it
+    const choice = namesARestriction(restrictions)
+      ? `Your choice: ${theirs}whatever you're craving that still fits your diet`
+      : `Your choice: ${theirs}burger + fries, steak + potatoes, pasta or whatever you're craving`;
     return [
       "Client wants a FREE MEAL on the HIGH-DAY MENU only (never on the other menus).",
       "Make it the last meal of the day, never the Pre-Workout meal, with the header exactly \"Meal X – Free Meal\".",
-      `Under it, instead of weighed foods, write one line "Your choice: ${theirs}burger + fries, steak + potatoes, pasta or whatever you're craving" and one line "Aim for about <kcal> kcal with 40+ g protein. Enjoy it, then straight back to the plan."`,
+      `Under it, instead of weighed foods, write one line "${choice}" and one line "Aim for about <kcal> kcal with 40+ g protein. Enjoy it, then straight back to the plan."`,
+      ...(namesARestriction(restrictions)
+        ? [`The free meal still keeps to their allergies and diet (${restrictions.trim().slice(0, 160)}): never name a food that breaks it.`]
+        : []),
       "The other High-Day meals stay the prepped meals of the other menus, same foods and same amounts (MEAL PREP).",
       "The free meal's budget is what's left of the High Day calories after them, usually about 25–35% of the High Day calories: give its Approximate macros as that budget (protein 40 g or more).",
     ].join(" ");

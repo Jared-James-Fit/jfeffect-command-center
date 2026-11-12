@@ -39,7 +39,7 @@ import {
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
 import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
 import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
-import { LEAN_GROCERY_LIST, planFoodStats, prepDrift, prepDriftLine, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { LEAN_GROCERY_LIST, hardToFindFoods, planFoodStats, prepDrift, prepDriftLine, type HardToFind, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 type Req = {
@@ -450,7 +450,13 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </div>
           )}
           <DayRows rows={preview.map((r) => ({ label: r.label, kcal: r.kcal, protein: r.p, carbs: r.c, fat: r.f, extra: extraFor(r) }))} />
-          {prefill && <PrepLine foods={planFoodStats(prefill.days)} drift={prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })))} />}
+          {prefill && (
+            <PrepLine
+              foods={planFoodStats(prefill.days)}
+              drift={prepDrift(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })))}
+              hardToFind={hardToFindFoods(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })), latest?.answers ?? [])}
+            />
+          )}
           {prefill && !prefill.days.length && (
             <p className="text-[13px] text-warning">The meal plan didn't read as days. Copy it and paste it into Build a plan by hand, or regenerate.</p>
           )}
@@ -748,22 +754,28 @@ function TextBlock({ title, text }: { title: string; text: string }) {
 }
 
 /** One line on how the plan shops and preps: the grocery list size, and anything weighed differently from meal to meal (prepDrift). */
-function PrepLine({ foods, drift }: { foods: PlanFoodStats; drift: PrepDrift[] }) {
+function PrepLine({ foods, drift, hardToFind = [] }: { foods: PlanFoodStats; drift: PrepDrift[]; hardToFind?: HardToFind[] }) {
   if (!foods.total) return null;
   const heavy = foods.total > LEAN_GROCERY_LIST;
   const parts = [
     `${foods.total} foods to shop for${foods.days > 1 ? `, ${foods.everyDay} every day` : ""}`,
     drift.length ? `weighed differently between meals: ${drift.slice(0, 2).map(prepDriftLine).join("; ")}${drift.length > 2 ? ` and ${drift.length - 2} more` : ""}` : "every main meal is the same container",
+    ...(hardToFind.length ? [`hard to find in stores: ${hardToFind.map((h) => h.food).join(", ")}`] : []),
   ];
+  const warn = heavy || drift.length || hardToFind.length;
   return (
     <p
       data-prep-check={drift.length ? "drift" : "same"}
-      className={cn("text-[13px]", heavy || drift.length ? "text-warning" : "text-muted-foreground")}
+      data-shelf-check={hardToFind.length ? "hard-to-find" : "staples"}
+      className={cn("text-[13px]", warn ? "text-warning" : "text-muted-foreground")}
       title={[foods.foods.join(", "), ...drift.flatMap((d) => d.odd)].join("\n")}
     >
       {parts.join(" · ")}
       {heavy ? ". A lot to shop for: Change something can share staples across the days." : ""}
       {drift.length ? " Change something (\"same portions in every meal\") or fix them in Review & edit first." : ""}
+      {hardToFind.length
+        ? ` Change something ("${hardToFind[0].kind === "carb" ? "sweet potatoes" : hardToFind[0].kind === "protein" ? "chicken" : "olive oil"} instead of ${hardToFind[0].food}") or Regenerate.`
+        : ""}
     </p>
   );
 }
