@@ -12,7 +12,7 @@ import { useViewingAsClient } from "@/lib/client-impersonation";
 import { isActiveJob, useSetVideoJobs } from "@/lib/set-videos/jobs";
 import { useSetVideosForDay } from "@/components/workout-day/set-video-cell";
 import { invalidateCommunity, useMyPostForCompletion } from "@/lib/community.queries";
-import { filmPaths, filmUpToDate, pickFilmClips } from "@/lib/workout-film";
+import { filmFile, filmPaths, filmUpToDate, pickFilmClips } from "@/lib/workout-film";
 import { postWorkoutFilmFn, type FilmPostResult } from "@/lib/workout-film.functions";
 import { useFilmAutoPost } from "@/lib/workout-film-pref";
 
@@ -58,10 +58,14 @@ export function useWorkoutFilm(completionId: string | null | undefined, dayId: s
   const state = useMemo<WorkoutFilmState>(() => {
     const sent = (videos ?? []).filter((v) => !!v.result_id && (!userId || v.uploaded_by === userId));
     const uploading = jobs.filter((j) => j.dayId === dayId && isActiveJob(j)).length;
+    // each clip as the film uses it: its 720p feed copy when it has one
     const { picked } = pickFilmClips(
-      sent.map((v) => ({ ...v, order: 0, size_bytes: v.size_bytes, duration_s: v.duration_s == null ? null : Number(v.duration_s) })),
+      sent.map((v) => {
+        const f = filmFile(v);
+        return { ...v, order: 0, src: f.path, size_bytes: f.size_bytes, duration_s: f.duration_s };
+      }),
     );
-    const wanted = completionId && userId ? picked.map((v) => filmPaths(userId, completionId, v.id, v.storage_path).path) : [];
+    const wanted = completionId && userId ? picked.map((v) => filmPaths(userId, completionId, v.id, v.src).path) : [];
     const crew = post?.visibility === "community" || post?.visibility === "followers" || post?.visibility === "close_friends";
     const filmOn = !!post && !post.auto_shared && crew && (post.film?.length ?? 0) > 0;
     return {

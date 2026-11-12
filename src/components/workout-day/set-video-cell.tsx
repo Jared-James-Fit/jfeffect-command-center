@@ -56,6 +56,12 @@ export type SetVideo = {
   message_id: string | null;
   uploaded_by: string;
   created_at: string;
+  /** Its 720p copy for Crew, when the phone made one (the workout film uses it). */
+  feed_path?: string | null;
+  feed_width?: number | null;
+  feed_height?: number | null;
+  feed_duration_s?: number | null;
+  feed_size_bytes?: number | null;
 };
 
 type FlowComponent = (typeof import("@/components/workout-day/set-video-flow"))["default"];
@@ -135,7 +141,7 @@ export function useSetVideosForDay(dayId: string, enabled: boolean) {
       const { data, error } = await (supabase as any)
         .from("pl_set_videos")
         .select(
-          "id, row_id, result_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at",
+          "id, row_id, result_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, message_id, uploaded_by, created_at, feed_path, feed_width, feed_height, feed_duration_s, feed_size_bytes",
         )
         .eq("day_id", dayId)
         .is("deleted_at", null)

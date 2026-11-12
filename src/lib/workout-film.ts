@@ -95,8 +95,59 @@ export function filmPostCaption(workoutTitle: string | null | undefined, clips: 
 /** Where a clip's copy lives in community-media (the athlete's own folder). */
 export function filmPaths(userId: string, completionId: string, setVideoId: string, sourcePath: string): { path: string; thumb: string } {
   const ext = (/\.([a-z0-9]{2,4})$/i.exec(sourcePath)?.[1] ?? "mp4").toLowerCase();
-  const base = `${userId}/film/${completionId}/${setVideoId}`;
+  // a feed copy gets its own name, so a post made from the original is seen as behind and swapped
+  const feed = /-feed\.[a-z0-9]{2,4}$/i.test(sourcePath) ? "-feed" : "";
+  const base = `${userId}/film/${completionId}/${setVideoId}${feed}`;
   return { path: `${base}.${ext}`, thumb: `${base}-poster.jpg` };
+}
+
+/** A set video as the film reads it: the clip the coach got, and its 720p copy for Crew when the phone made one. */
+export type FilmFileSource = {
+  storage_path: string;
+  width: number | null;
+  height: number | null;
+  duration_s: number | string | null;
+  size_bytes: number | string | null;
+  feed_path?: string | null;
+  feed_width?: number | null;
+  feed_height?: number | null;
+  feed_duration_s?: number | string | null;
+  feed_size_bytes?: number | string | null;
+};
+
+const num = (n: number | string | null | undefined): number | null =>
+  n == null || n === "" || !Number.isFinite(Number(n)) ? null : Number(n);
+
+/**
+ * The file a film slide is made from: the set video's feed copy (720p, made
+ * after the coach had the original) when it has one, else the original.
+ * The coach chat's clip never changes either way.
+ */
+export function filmFile(v: FilmFileSource): {
+  path: string;
+  width: number | null;
+  height: number | null;
+  duration_s: number | null;
+  size_bytes: number | null;
+  feed: boolean;
+} {
+  if (v.feed_path)
+    return {
+      path: v.feed_path,
+      width: v.feed_width ?? v.width ?? null,
+      height: v.feed_height ?? v.height ?? null,
+      duration_s: num(v.feed_duration_s) ?? num(v.duration_s),
+      size_bytes: num(v.feed_size_bytes),
+      feed: true,
+    };
+  return {
+    path: v.storage_path,
+    width: v.width ?? null,
+    height: v.height ?? null,
+    duration_s: num(v.duration_s),
+    size_bytes: num(v.size_bytes),
+    feed: false,
+  };
 }
 
 /** A path is one of the athlete's film copies (never a photo they added themselves). */
