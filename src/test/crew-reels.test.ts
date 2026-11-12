@@ -87,11 +87,11 @@ describe("a clip in the feed shows whole, at its own shape", () => {
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain('const clipCover = !fixed && !lead && cover?.type === "video";');
     expect(card).toContain(
-      "clipCover ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height)",
+      'return post.media_type === "video" ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height);',
     );
     expect(card).toContain("{ aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT }");
     expect(card).toContain(
-      '<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" />',
+      '<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" controls={page ? "top" : "bottom"} />',
     );
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('fit === "contain" ? "object-contain" : "object-cover"');
@@ -153,7 +153,7 @@ describe("full-screen clips, one per swipe", () => {
     expect(pool).toContain("reels = Array.from({ length: REEL_SLOTS }, () => {");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain(
-      "const shouldPlay = active && visible && !held && !!el && (auto || tapped) && !failed;",
+      "const shouldPlay = active && visible && !held && !userPaused && !!el && (auto || tapped) && !failed;",
     );
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("<ReelsViewer start={reel} posts={feedPosts}");

@@ -9,11 +9,13 @@ export function FeedCaption({
   caption,
   mentions,
   onOpenPerson,
+  className,
 }: {
   name: string;
   caption: string;
   mentions?: CommunityMention[] | null;
   onOpenPerson?: (a: CommunityAuthor) => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLParagraphElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -23,7 +25,7 @@ export function FeedCaption({
     if (el && !open) setLong(el.scrollHeight > el.clientHeight + 1);
   }, [caption, open]);
   return (
-    <div className="px-3.5 pt-2.5 text-[14px] leading-snug">
+    <div className={cn("px-3.5 pt-2.5 text-[14px] leading-snug", className)}>
       <p ref={ref} className={cn("whitespace-pre-line", !open && "line-clamp-3")}>
         <span className="font-bold">{name}</span> <MentionText text={caption} mentions={mentions} onOpen={onOpenPerson} />
       </p>

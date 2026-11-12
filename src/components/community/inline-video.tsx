@@ -73,6 +73,9 @@ function useFeedHeld(): boolean {
   );
 }
 
+/** Dispatched on a clip's box (`[data-inline-video]`): pause it, or play it again. */
+export const CLIP_TOGGLE_EVENT = "jf-clip-toggle";
+
 /** Autoplay is off for people who asked for less motion or less data: they tap to play. */
 export function autoplayAllowed(): boolean {
   if (typeof window === "undefined") return false;
@@ -106,12 +109,15 @@ export function InlineVideo({
   active = true,
   position,
   fit = "cover",
+  controls = "bottom",
 }: {
   path: string;
   poster: string | null;
   active?: boolean;
   position?: string;
   fit?: "cover" | "contain";
+  /** Where its speaker sits: "top" on a post's own screen in the feed (its words and buttons are at the bottom). */
+  controls?: "top" | "bottom";
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const host = useRef<HTMLDivElement | null>(null);
@@ -124,6 +130,8 @@ export function InlineVideo({
   const [failed, setFailed] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  // a tap on it paused it (on a post's own screen); scrolled away and back, it plays again
+  const [userPaused, setUserPaused] = useState(false);
   const [el, setEl] = useState<HTMLVideoElement | null>(null);
   const [auto] = useState(autoplayAllowed);
   const mode = useFeedSoundMode();
@@ -207,7 +215,19 @@ export function InlineVideo({
     else el.setAttribute("data-ambient-audio", "");
   }, [el, mode]);
 
-  const shouldPlay = active && visible && !held && !!el && (auto || tapped) && !failed;
+  // the post card asks for a pause / play with an event on this box (its tap is the card's: a double tap likes)
+  useEffect(() => {
+    const box = wrap.current;
+    if (!box) return;
+    const toggle = () => setUserPaused((p) => !p);
+    box.addEventListener(CLIP_TOGGLE_EVENT, toggle);
+    return () => box.removeEventListener(CLIP_TOGGLE_EVENT, toggle);
+  }, []);
+  useEffect(() => {
+    if (!visible || !active) setUserPaused(false);
+  }, [visible, active]);
+
+  const shouldPlay = active && visible && !held && !userPaused && !!el && (auto || tapped) && !failed;
   useEffect(() => {
     if (!el) return;
     if (!shouldPlay) {
@@ -258,6 +278,13 @@ export function InlineVideo({
           </span>
         </button>
       )}
+      {userPaused && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden data-clip-paused>
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-black/45 text-white">
+            <Play className="ml-1 h-8 w-8 fill-current" />
+          </span>
+        </div>
+      )}
       {(auto || tapped) && !failed && (
         <button
           type="button"
@@ -273,7 +300,10 @@ export function InlineVideo({
             }
             setFeedSound(!soundOn);
           }}
-          className="absolute bottom-2.5 right-2.5 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-90"
+          className={cn(
+            "absolute right-2.5 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
+            controls === "top" ? "top-12" : "bottom-2.5",
+          )}
           aria-label={soundOn ? "Mute" : "Turn sound on"}
           aria-pressed={soundOn}
           data-video-sound

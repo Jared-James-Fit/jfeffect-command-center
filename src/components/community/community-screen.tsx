@@ -254,7 +254,17 @@ export function CommunityScreen({
   // The clients' Crew draws its own bar (the shell's steps aside); the coach's Crew page has its own header and tabs.
   const ownBar = !hideTabs;
   // a coach viewing as a client: the shell's bar and the preview banner stay, so Crew's bar sits in the page
-  const barHidden = useBarHidden(ownBar && scope.kind === "feed");
+  // Crew's own feed is one post per screen, swiped one at a time (TikTok's): the window snaps
+  // to each post (html.feed-paging, styles.css), so Crew's bar stays put (pages are sized to it).
+  // The coach's Crew page keeps its working feed of cards.
+  const paging = ownBar && scope.kind === "feed";
+  useEffect(() => {
+    if (!paging) return;
+    const root = document.documentElement;
+    root.classList.add("feed-paging");
+    return () => root.classList.remove("feed-paging");
+  }, [paging]);
+  const barHidden = useBarHidden(ownBar && scope.kind === "feed" && !paging);
   // your profile is a page with a way back to the feed (on the coach's page, and now on Crew's bar too)
   const youAsPage = scope.kind === "you";
 
@@ -426,6 +436,28 @@ export function CommunityScreen({
     return () => io.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, feedPosts.length, scope.kind]);
 
+  // The first screen is the story rail and the first post: from where it starts to the bottom of the screen.
+  const firstScreen = useRef<HTMLDivElement | null>(null);
+  const hasFeedPosts = feedPosts.length > 0;
+  useLayoutEffect(() => {
+    const el = firstScreen.current;
+    if (!paging || !el) return;
+    const fit = () => {
+      const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY));
+      const h = `calc(100svh - ${top}px)`;
+      if (el.style.height !== h) el.style.height = h;
+    };
+    fit();
+    // anything above it changing size (the account switcher arriving) moves where it starts
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    ro?.observe(document.body);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [paging, hasFeedPosts]);
+
   const openAuthor = (a: CommunityAuthor) => {
     rememberFeedPlace();
     setDetailId(null);
@@ -535,7 +567,14 @@ export function CommunityScreen({
     {ownBar && !crewBar && <div aria-hidden className="md:hidden" style={{ height: "var(--app-safe-top)" }} />}
     {/* a staff login that's also a client: its My Workouts / Staff switch, under Crew's bar instead of the shell's */}
     {ownBar && <DualAccountSwitcher />}
-    <div ref={rootRef} className={cn("mx-auto w-full max-w-[560px] space-y-3 px-3 pb-12 [touch-action:pan-x_pan-y] sm:px-4", ownBar ? "pt-1.5" : "pt-3")}>
+    <div
+      ref={rootRef}
+      className={cn(
+        "mx-auto w-full max-w-[560px] [touch-action:pan-x_pan-y]",
+        paging ? "" : "space-y-3 px-3 pb-12 sm:px-4",
+        paging ? "" : ownBar ? "pt-1.5" : "pt-3",
+      )}
+    >
       {ownBar ? null : inProfile || youAsPage ? (
         <Button
           type="button"
@@ -583,6 +622,85 @@ export function CommunityScreen({
           title="Be the first one in"
           body={canShare ? "Share a session from this month. Your crew sees the work, your coach sees it too." : "When clients share a workout, it shows up here."}
           action={canShare ? <ShareWorkoutButton unit={unit} label="Share your last workout" variant="block" previewOnly={previewOnly} /> : null}
+        />
+      ) : paging ? (
+        <FeedPager
+          firstScreen={firstScreen}
+          rail={
+            <StoryRail
+              posts={posts}
+              unit={unit}
+              viewerIsStaff={viewerIsStaff}
+              onOpenPost={(id) => setDetailId(id)}
+              onOpenPerson={openAuthor}
+              onJumpTo={setJumpTo}
+              addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
+              addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
+            />
+          }
+          empty={
+            following && feedPosts.length === 0 ? (
+              <EmptyNote title="Nothing new from people you follow" body="Their posts land here. The whole crew is under All." action={<Button type="button" variant="outline" className="w-full" onClick={() => setOnly("all")}>Show all posts</Button>} />
+            ) : null
+          }
+          pages={feedPosts.flatMap((p, i) => {
+            const out: { key: string; post?: CommunityPost; node: ReactNode }[] = [];
+            // what's new to you comes first, what you'd seen carries on after (Instagram's)
+            if (i === caughtUp)
+              out.push({
+                key: "caught-up",
+                node: (
+                  <CaughtUpLine
+                    more={previewOnly ? null : (
+                      <button type="button" onClick={() => openDiscover("feed")} className="text-[13px] font-bold text-primary active:opacity-70" data-caught-up-discover>
+                        Find people to follow
+                      </button>
+                    )}
+                  />
+                ),
+              });
+            out.push({
+              key: p.id,
+              post: p,
+              node: (
+                <PostRow
+                  post={p}
+                  thumbUrl={urls?.[p.media_thumb_path ?? (p.media_type === "image" ? p.media_path ?? "" : "")] ?? null}
+                  unit={unit}
+                  viewerIsStaff={viewerIsStaff}
+                  onOpen={openPost}
+                  onOpenComments={setCommentsFor}
+                  onOpenAuthor={openAuthor}
+                  doubleTapHint={p.id === hintId}
+                  openHint={p.id === openHintId}
+                  onDoubleTap={onDoubleTap}
+                  onTipDone={onTipDone}
+                  layout="page"
+                />
+              ),
+            });
+            // people to follow right after the first post (Instagram's spot), a screen of their own
+            if (!previewOnly && !following && i === 0)
+              out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
+            if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
+              out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });
+            return out;
+          })}
+          flash={flash}
+          sentinel={sentinel}
+          loadingMore={isFetchingNextPage}
+          end={
+            !hasNextPage && feedPosts.length > 1 && caughtUp === null ? (
+              <CaughtUp
+                action={canShare ? <ShareWorkoutButton unit={unit} label="Share your session" previewOnly={previewOnly} /> : null}
+                more={previewOnly ? null : (
+                  <button type="button" onClick={() => openDiscover("feed")} className="text-[13px] font-bold text-primary active:opacity-70" data-caught-up-discover>
+                    Find people to follow
+                  </button>
+                )}
+              />
+            ) : null
+          }
         />
       ) : (
         <>
@@ -681,6 +799,70 @@ function ProfileBarTitle({ userId, fallback }: { userId: string; fallback?: stri
   return <BarTitle>{title}</BarTitle>;
 }
 
+/**
+ * Crew's feed as screens, one post each, swiped one at a time (TikTok's).
+ * The first screen is the story rail and the first post; every screen after
+ * it is one post, or one of the feed's own moments (all caught up, people to
+ * follow, an invite to share) when it has something to show (an empty one is
+ * left out: `.feed-page:empty`).
+ */
+function FeedPager({
+  firstScreen,
+  rail,
+  empty,
+  pages,
+  flash,
+  sentinel,
+  loadingMore,
+  end,
+}: {
+  firstScreen: React.RefObject<HTMLDivElement | null>;
+  rail: ReactNode;
+  empty: ReactNode;
+  pages: { key: string; post?: CommunityPost; node: ReactNode }[];
+  flash: string | null;
+  sentinel: React.RefObject<HTMLDivElement | null>;
+  loadingMore: boolean;
+  end: ReactNode;
+}) {
+  const [first, ...rest] = pages;
+  const screen = (pg: { key: string; post?: CommunityPost; node: ReactNode }, i: number, firstOne = false) =>
+    pg.post ? (
+      <FeedItem
+        key={pg.key}
+        index={i}
+        data-post-id={pg.post.id}
+        className={cn(firstOne ? "min-h-0 flex-1" : "feed-page", "transition-shadow duration-700", flash === pg.post.id && "ring-2 ring-inset ring-primary")}
+      >
+        {pg.node}
+      </FeedItem>
+    ) : (
+      <div key={pg.key} className={cn(firstOne ? "min-h-0 flex-1" : "feed-page", "flex flex-col justify-center overflow-y-auto px-3")} style={{ paddingBottom: "var(--bottom-nav-clearance)" }} data-feed-moment={pg.key}>
+        {pg.node}
+      </div>
+    );
+  return (
+    <div data-feed-pager>
+      <div ref={firstScreen} className="feed-first flex flex-col" data-feed-first>
+        <div className="shrink-0 px-3 pt-1.5 sm:px-4">{rail}</div>
+        {empty ? <div className="px-3 pt-3">{empty}</div> : first ? screen(first, 0, true) : null}
+      </div>
+      {rest.map((pg, i) => screen(pg, i + 1))}
+      {loadingMore && (
+        <div className="feed-page grid place-items-center text-muted-foreground" role="status" aria-label="Loading more posts" data-feed-more>
+          <ActivitySpinner size={28} />
+        </div>
+      )}
+      {end && (
+        <div className="feed-page flex flex-col justify-center" style={{ paddingBottom: "var(--bottom-nav-clearance)" }} data-feed-end>
+          {end}
+        </div>
+      )}
+      <div ref={sentinel} aria-hidden className="h-px" />
+    </div>
+  );
+}
+
 /** One row owns its mutation so an optimistic reaction only re-renders that card. */
 function PostRow(props: {
   post: CommunityPost;
@@ -695,6 +877,7 @@ function PostRow(props: {
   onTipDone?: () => void;
   openHint?: boolean;
   onOpenReel?: (p: CommunityPost, path: string) => void;
+  layout?: "card" | "page";
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (
