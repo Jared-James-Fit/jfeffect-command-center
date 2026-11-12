@@ -7,7 +7,7 @@ import {
   setVideoStem,
 } from "@/lib/set-videos/label";
 import { setGridTemplate } from "@/components/workout-day/set-grid";
-import { isActiveJob, jobStatusText, jobsForSet, type SetVideoJob } from "@/lib/set-videos/jobs";
+import { UNLINKED_SET_VIDEO_MS, isActiveJob, jobStatusText, jobsForSet, videoOnSet, type SetVideoJob } from "@/lib/set-videos/jobs";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -113,15 +113,50 @@ describe("set video jobs", () => {
     createdAt: 0,
     ...p,
   });
-  it("belong to one logged set, and a sent one leaves", () => {
+  it("belong to one set, and a sent one leaves", () => {
     const all = [
       job({ id: "a" }),
       job({ id: "b", resultId: "s2" }),
       job({ id: "c", rowId: "r2" }),
       job({ id: "d", state: "done" }),
     ];
-    expect(jobsForSet(all, "r1", "s1").map((j) => j.id)).toEqual(["a"]);
-    expect(jobsForSet(all, "r1", null)).toEqual([]);
+    expect(jobsForSet(all, { rowId: "r1", setIndex: 1, resultId: "s1" }).map((j) => j.id)).toEqual(["a"]);
+    // a set with no record yet only has clips filmed before it was saved
+    expect(jobsForSet(all, { rowId: "r1", setIndex: 1, resultId: null })).toEqual([]);
+  });
+  // Nov 12 2026: Jared's lateral raise had no camera until the set was logged,
+  // while people film the set first and log it after.
+  it("filmed before the set was saved: on the set by its row and number, and still once it's saved", () => {
+    const early = [job({ id: "e", resultId: null, setIndex: 2 })];
+    expect(jobsForSet(early, { rowId: "r1", setIndex: 2, resultId: null }).map((j) => j.id)).toEqual(["e"]);
+    expect(jobsForSet(early, { rowId: "r1", setIndex: 2, resultId: "s9" }).map((j) => j.id)).toEqual(["e"]);
+    expect(jobsForSet(early, { rowId: "r1", setIndex: 1, resultId: null })).toEqual([]);
+  });
+  it("a stored clip is on its own set, or an unlinked recent one on its row and number", () => {
+    const now = Date.parse("2026-11-12T20:00:00Z");
+    const at = (ms: number) => new Date(now - ms).toISOString();
+    const linked = { row_id: "r1", result_id: "s1", set_index: 1, created_at: at(60_000) };
+    expect(videoOnSet(linked, { rowId: "r1", setIndex: 1, resultId: "s1" }, now)).toBe(true);
+    expect(videoOnSet(linked, { rowId: "r1", setIndex: 1, resultId: "s2" }, now)).toBe(false);
+    // last week's set record never shows on today's unsaved set
+    expect(videoOnSet(linked, { rowId: "r1", setIndex: 1, resultId: null }, now)).toBe(false);
+    const unlinked = { row_id: "r1", result_id: null, set_index: 2, created_at: at(60_000) };
+    expect(videoOnSet(unlinked, { rowId: "r1", setIndex: 2, resultId: null }, now)).toBe(true);
+    expect(videoOnSet(unlinked, { rowId: "r1", setIndex: 2, resultId: "s5" }, now)).toBe(true);
+    expect(videoOnSet(unlinked, { rowId: "r1", setIndex: 3, resultId: null }, now)).toBe(false);
+    expect(videoOnSet({ ...unlinked, created_at: at(UNLINKED_SET_VIDEO_MS + 1) }, { rowId: "r1", setIndex: 2, resultId: null }, now)).toBe(false);
+  });
+  it("every set has the camera, logged or not, and the database ties an early clip to its set", () => {
+    const cell = read("src/components/workout-day/set-video-cell.tsx");
+    expect(cell).toContain("const canAdd = !readonly && !!clientId && !!user?.id;");
+    expect(cell).toContain("{picked && Flow && user?.id && clientId && (");
+    expect(cell).toContain('label: logged ? props.label : "",');
+    const sql = read("supabase/migrations/20270308090000_set_video_before_logging.sql");
+    expect(sql).toContain("AFTER INSERT ON public.pl_row_results");
+    expect(sql).toContain("v.result_id IS NULL");
+    expect(sql).toContain("IF v_result IS NULL THEN");
+    expect(sql).toContain("interval '18 hours'");
+    expect(UNLINKED_SET_VIDEO_MS).toBe(18 * 60 * 60 * 1000);
   });
   it("say where they are in plain words", () => {
     expect(isActiveJob(job({}))).toBe(true);
