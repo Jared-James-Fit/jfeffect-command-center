@@ -93,3 +93,16 @@ describe("the server pays the same order", () => {
     expect(hook).toMatch(/stillOwed === false \|\| \(stillOwed === null && contractedPayments > 0\)/);
   });
 });
+
+describe("the account sync never counts a subscription payment twice", () => {
+  const sync = readFileSync("src/lib/stripe-account-sync.server.ts", "utf8");
+
+  it("writes no payment from a subscription checkout (its first invoice is the payment)", () => {
+    expect(sync).toMatch(/s\.amount_total > 0 && s\.mode !== "subscription"/);
+  });
+
+  it("looks for a one-time checkout's payment under its session, payment intent and invoice first", () => {
+    expect(sync).toMatch(/existingLedgerByStripeRef\(supabase, \{\s*external: s\.id,\s*checkout: s\.id,/);
+    expect(sync).toMatch(/\["stripe_checkout_session_id", refs\.checkout\]/);
+  });
+});

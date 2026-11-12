@@ -121,10 +121,12 @@ async function findPurchaseForStripeObject(
 
 async function existingLedgerByStripeRef(
   supabase: any,
-  refs: { external?: string | null; paymentIntent?: string | null; charge?: string | null; invoice?: string | null },
+  refs: { external?: string | null; checkout?: string | null; paymentIntent?: string | null; charge?: string | null; invoice?: string | null },
 ) {
+  // Voided rows count as existing too: a payment voided by hand must not come back.
   const checks: Array<[string, string | null | undefined]> = [
     ["external_reference", refs.external],
+    ["stripe_checkout_session_id", refs.checkout],
     ["stripe_payment_intent_id", refs.paymentIntent],
     ["stripe_charge_id", refs.charge],
     ["stripe_invoice_id", refs.invoice],
@@ -309,10 +311,19 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
       }
     }
 
-    // Ledger row — idempotent on external_reference (the checkout session id).
-    if (s.amount_total && s.amount_total > 0) {
-      const { data: existing } = await supabase
-        .from("payment_ledger").select("id").eq("external_reference", s.id).maybeSingle();
+    // Ledger row. A subscription checkout's payment IS its first invoice: the invoice
+    // pass below records it under the invoice id (as the webhook does), on the package
+    // it pays, so it's never written here. Writing it here too counted the same money
+    // twice (Nov 12 2026: six sales, Marc's package 2 read $672 paid of $672 with one
+    // payment still to come). A one-time checkout is written only when no row holds it
+    // yet under its session, payment intent or invoice.
+    if (s.amount_total && s.amount_total > 0 && s.mode !== "subscription") {
+      const existing = await existingLedgerByStripeRef(supabase, {
+        external: s.id,
+        checkout: s.id,
+        paymentIntent: typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? null,
+        invoice: typeof s.invoice === "string" ? s.invoice : s.invoice?.id ?? null,
+      });
       if (!existing) {
         await supabase.from("payment_ledger").insert({
           client_id: purchase.client_id,
