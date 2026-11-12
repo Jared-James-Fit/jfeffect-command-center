@@ -12,6 +12,7 @@ import { currentRequest } from "@/lib/form-request-state";
 import { listNutritionRequestsFn } from "@/lib/nutrition-ai-plans.functions";
 import type { TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { parseFoodWeighingRules, parseMealPlan, type ParsedDay } from "@/lib/nutrition-targets/meal-plan-parse";
+import { hardToFindFoods } from "@/lib/nutrition-targets/plan-foods";
 
 export type { ParsedDay } from "@/lib/nutrition-targets/meal-plan-parse";
 
@@ -269,6 +270,8 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
   };
 
   const preview = text.trim() ? parseMealPlan(text) : [];
+  // a specialty food in a pasted plan, for the coach to see before it fills the days
+  const hardToFind = hardToFindFoods(preview.map((d) => ({ label: d.day_label, notes: d.notes })));
 
   return (
     <div className="space-y-3" data-meal-plan-paste>
@@ -304,6 +307,11 @@ export function MealPlanBulkPaste({ onApply, clientId, phase: coachPhase }: Prop
         />
       </div>
 
+      {hardToFind.length > 0 && (
+        <p className="text-[13px] text-warning" data-paste-hard-to-find>
+          Hard to find in stores: {hardToFind.map((h) => h.food).join(", ")}. Ask ChatGPT for a common food that fits their diet, or keep it if they asked for it.
+        </p>
+      )}
       {preview.length > 0 && (
         <div className="divide-y divide-border rounded-xl border border-border">
           {preview.map((d, i) => (

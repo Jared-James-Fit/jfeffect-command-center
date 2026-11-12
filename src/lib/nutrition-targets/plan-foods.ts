@@ -321,6 +321,24 @@ export function hardToFindFoods(
   return [...found.values()];
 }
 
+/**
+ * A hard-to-find food an edit brought in: in the new plan, not in the plan it
+ * changed (one the coach already kept stays theirs), and not named in what the
+ * coach asked or the client said.
+ */
+export function introducedHardToFind(
+  before: Array<{ label?: string | null; notes?: string | null }>,
+  after: Array<{ label?: string | null; notes?: string | null }>,
+  said: Array<{ value?: string | null }> = [],
+): HardToFind[] {
+  const had = new Set(hardToFindFoods(before).map((h) => foodKey(h.food)));
+  return hardToFindFoods(after, said).filter((h) => !had.has(foodKey(h.food)));
+}
+
+/** One line for any AI that suggests foods (Cleo, check-in replies): the meal plans' SHELF FIRST rule. */
+export const SHELF_FIRST_ADVICE =
+  "Any food you suggest is one a normal grocery store always has (chicken breast, lean ground beef, ground turkey, eggs, Greek yogurt, whey, canned tuna, white fish, white rice, potatoes, sweet potatoes, oats, bananas, apples, berries, frozen vegetables, olive oil, peanut butter), the most common one that fits their diet and allergies (AIP or paleo: sweet potatoes), never a specialty food like cassava, taro, plantain, specialty grains or flours, or game meat unless they named it themselves.";
+
 /** "Cooked chicken breast 150 / 165 / 180 g" for the coach and the fix prompt. */
 export function prepDriftLine(d: PrepDrift): string {
   if (d.kind === "mixed") return d.food;

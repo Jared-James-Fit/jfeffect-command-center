@@ -423,6 +423,14 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
       if (dropped.length) lines.push(`Removes: ${dropped.map((d) => d.day_label).join(", ")}.`);
       if (p.client_notes) lines.push(`Note to them: ${p.client_notes}`);
       if (p.coach_notes) lines.push(`Staff note: ${p.coach_notes}`);
+      // their meals stay on the days kept by name; numbers that move leave them to be fitted
+      const keepsMeals = p.days.filter((d: any) => String(before.get(d.day_label.toLowerCase())?.notes ?? "").trim());
+      const moved = keepsMeals.filter((d: any) => {
+        const was = before.get(d.day_label.toLowerCase());
+        return was && (was.calories !== d.calories || was.protein !== d.protein || was.carbs !== d.carbs || was.fats !== d.fats);
+      });
+      if (moved.length)
+        lines.push(`Their meals stay as written on ${moved.map((d: any) => d.day_label).join(", ")}; to fit them to the new numbers, use Change it with AI on their Current plan.`);
       lines.push(current && current.visible_to_client === false ? "Their targets are hidden from them." : `${clientLabel(c)} sees the new targets and gets a heads-up.`);
       return lines.join("\n");
     }
@@ -698,8 +706,14 @@ export async function executeProgramAction(actor: { supabase: Db; userId: string
       // Same as the targets dialog: replace the day list.
       const old = ((current?.nutrition_target_days ?? []) as any[]).map(({ id, created_at, updated_at, ...d }) => d);
       await sb.from("nutrition_target_days").delete().eq("target_id", targetId);
-      // a day kept by name keeps when the coach set it to be used
-      const { error: dErr } = await sb.from("nutrition_target_days").insert(carryPlanDayRules(old, p.days.map((d: any, i: number) => ({ target_id: targetId, sort_order: i, ...d }))));
+      // a day kept by name keeps when the coach set it to be used, and its meals and steps
+      // (Cleo sets numbers only: replacing the list used to wipe the client's meal plan)
+      const keptByName = new Map(old.map((d: any) => [String(d.day_label ?? "").trim().toLowerCase(), d]));
+      const newDays = p.days.map((d: any, i: number) => {
+        const was = keptByName.get(String(d.day_label).trim().toLowerCase());
+        return { target_id: targetId, sort_order: i, notes: was?.notes ?? null, steps: was?.steps ?? null, ...d };
+      });
+      const { error: dErr } = await sb.from("nutrition_target_days").insert(carryPlanDayRules(old, newDays));
       if (dErr) {
         if (old.length) await sb.from("nutrition_target_days").insert(old);
         throw new Error(dErr.message);

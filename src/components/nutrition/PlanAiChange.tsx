@@ -26,12 +26,14 @@ import {
   editChangesNothing,
   planAsMealPlanText,
   planAsTargetsText,
+  planDays,
   planEditChanges,
   readEditedPlan,
   type DayChange,
   type PlanEditPlan,
 } from "@/lib/nutrition-targets/plan-edit";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
+import { introducedHardToFind, type HardToFind } from "@/lib/nutrition-targets/plan-foods";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
 
@@ -161,6 +163,12 @@ export function PlanAiChange({
         nothing: editChangesNothing(plan, edited, changes),
         rulesChanged:
           (edited.foodWeighingRules ?? "").trim() !== (plan.food_weighing_rules ?? "").trim(),
+        // a specialty food the AI brought in that the coach didn't ask for (the server already sent it back once)
+        hardToFind: introducedHardToFind(
+          planDays(plan).map((d) => ({ label: d.day_label, notes: d.notes })),
+          edited.days.map((d) => ({ label: d.day_label, notes: d.notes })),
+          [{ value: edit.instructions }],
+        ),
         error: null as string | null,
       };
     } catch (e: any) {
@@ -169,6 +177,7 @@ export function PlanAiChange({
         changes: [] as DayChange[],
         nothing: false,
         rulesChanged: false,
+        hardToFind: [] as HardToFind[],
         error: String(e?.message ?? e),
       };
     }
@@ -221,6 +230,12 @@ export function PlanAiChange({
                 </p>
               )}
               <ChangeRows changes={review.changes} />
+              {review.hardToFind.length > 0 && (
+                <p className="text-[13px] text-warning" data-plan-ai-hard-to-find>
+                  Hard to find in stores: {review.hardToFind.map((h) => h.food).join(", ")}. Discard
+                  and ask for a common food instead, unless that's what you want.
+                </p>
+              )}
               {review.rulesChanged && (
                 <p className="text-[13px] text-muted-foreground">
                   The food-weighing rules change too.

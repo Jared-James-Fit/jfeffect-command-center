@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   MEAL_PLAN_PROMPT,
   mealPlanUserPrompt,
   mealPrepFixPrompt,
 } from "@/lib/nutrition-ai-prompts";
 import { freeMealRule } from "@/lib/nutrition-history";
-import { hardToFindFoods, planMenus } from "@/lib/nutrition-targets/plan-foods";
-import { withPrepFix } from "@/lib/nutrition-ai-plans.server";
+import {
+  SHELF_FIRST_ADVICE,
+  hardToFindFoods,
+  introducedHardToFind,
+  planMenus,
+} from "@/lib/nutrition-targets/plan-foods";
+import { withPrepFix, withShelfFix } from "@/lib/nutrition-ai-plans.server";
 
 /** Fionna's AIP plan as the AI first wrote it (Nov 12 2026): cassava in every container. */
 const meal = (n: number, carb: string, tag = "") =>
@@ -165,5 +171,96 @@ describe("a plan with a hard-to-find food goes back once for the staple", () => 
     );
     expect(p).toContain("every container keeps one set of grams, rule 2c");
     expect(p).toContain("then FOOD-WEIGHING RULES");
+  });
+});
+
+describe("a coach's change keeps to shelf staples too, but the coach's words win", () => {
+  const BEEF = plan("300 g cooked sweet potato");
+  const BISON = BEEF.replace(/125 g 93% lean ground beef/g, "125 g ground bison");
+
+  it("names only a hard-to-find food the change brought in, never one already on the plan or one the coach asked for", () => {
+    expect(introducedHardToFind(planMenus(BEEF), planMenus(BISON)).map((h) => h.food)).toEqual([
+      "ground bison",
+    ]);
+    // the coach kept cassava on the plan before: it's theirs
+    expect(introducedHardToFind(planMenus(CASSAVA), planMenus(CASSAVA))).toEqual([]);
+    expect(
+      introducedHardToFind(planMenus(BEEF), planMenus(BISON), [
+        { value: "use ground bison instead" },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("sends a food the AI brought in back once for the staple, and keeps the fix", async () => {
+    const prompts: string[] = [];
+    const out = await withShelfFix(
+      BEEF,
+      BISON,
+      "COACH UPDATE",
+      async (p) => (prompts.push(p), BEEF),
+      [{ value: "something other than chicken" }],
+    );
+    expect(out).toBe(BEEF);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain(
+      "- ground bison (Training Day Meal 1, Training Day Meal 2, Training Day Meal 3): use chicken breast, lean ground beef or ground turkey instead",
+    );
+  });
+
+  it("never asks when the coach named the food, and keeps the change when the fix fails", async () => {
+    let asked = 0;
+    expect(
+      await withShelfFix(BEEF, BISON, "x", async () => (asked++, BEEF), [
+        { value: "bison please" },
+      ]),
+    ).toBe(BISON);
+    expect(asked).toBe(0);
+    expect(
+      await withShelfFix(
+        BEEF,
+        BISON,
+        "x",
+        async () => {
+          throw new Error("down");
+        },
+        [],
+      ),
+    ).toBe(BISON);
+  });
+
+  it("both AI change paths run it, with the coach's words and the client's answers", () => {
+    const plans = readFileSync("src/lib/nutrition-ai-plans.server.ts", "utf8");
+    const edits = readFileSync("src/lib/nutrition-plan-edits.server.ts", "utf8");
+    expect(plans).toContain('"update_shelf"');
+    expect(plans).toContain("[...qas, { value: instructions }]");
+    expect(edits).toContain('"edit_shelf"');
+    expect(edits).toContain("[...qas, { value: row.instructions }]");
+  });
+});
+
+describe("everything else that writes or suggests food", () => {
+  it("the coach sees a hard-to-find food in a pasted plan and in an AI change before it goes out", () => {
+    expect(readFileSync("src/components/nutrition/MealPlanBulkPaste.tsx", "utf8")).toContain(
+      "data-paste-hard-to-find",
+    );
+    expect(readFileSync("src/components/nutrition/PlanAiChange.tsx", "utf8")).toContain(
+      "data-plan-ai-hard-to-find",
+    );
+  });
+
+  it("Cleo and the check-in reply drafts suggest shelf staples", () => {
+    expect(SHELF_FIRST_ADVICE).toContain("never a specialty food like cassava");
+    expect(readFileSync("src/lib/summer-context.ts", "utf8")).toContain(
+      "`- Foods: ${SHELF_FIRST_ADVICE}`",
+    );
+    expect(readFileSync("src/lib/submission-reviews.functions.ts", "utf8")).toContain(
+      "`FOODS: ${SHELF_FIRST_ADVICE}`",
+    );
+  });
+
+  it("Cleo's new numbers keep each day's meals and steps instead of wiping them, and say so", () => {
+    const cleo = readFileSync("src/lib/cleo-program.server.ts", "utf8");
+    expect(cleo).toContain("notes: was?.notes ?? null, steps: was?.steps ?? null, ...d");
+    expect(cleo).toContain("Their meals stay as written on");
   });
 });
