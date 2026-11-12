@@ -174,15 +174,16 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
     const { data: plans } = ids.length
       ? await sb.from("nutrition_ai_plans").select("*").in("submission_id", ids)
       : { data: [] };
-    const { loadClientBasics, loadQAs, loadTrainingPattern, loadCardioRows, loadTrainingDays } = await aiPlans();
+    const { loadClientBasics, loadQAs, loadTrainingPattern, loadCardioRows, loadTrainingDays, loadFoodNotesText } = await aiPlans();
     const { loadProgramContext } = await import("@/lib/program-context.server");
     const { programContextText } = await import("@/lib/program-context");
     const { currentCardioText } = await import("@/lib/nutrition-cardio-sync");
-    const [client, program, cardioRows, trainingDays] = await Promise.all([
+    const [client, program, cardioRows, trainingDays, foodNotes] = await Promise.all([
       loadClientBasics(sb, data.clientId),
       loadProgramContext(sb, data.clientId).catch(() => null),
       loadCardioRows(sb, data.clientId).catch(() => []),
       loadTrainingDays(sb, data.clientId).catch(() => [] as string[]),
+      loadFoodNotesText(sb, data.clientId),
     ]);
     const { data: assignment } = await sb
       .from("nf_assignments")
@@ -208,6 +209,8 @@ export const listNutritionRequestsFn = createServerFn({ method: "POST" })
       // The same context the AI gets, for the coach's copy-paste prompts.
       programText: programContextText(program, { readout: false }) || null,
       cardioText: currentCardioText(cardioRows, { trainingDays }) || null,
+      // Goals & Setup's restrictions and the coach's nutrition notes, as the AI reads them.
+      foodNotes,
     };
   });
 

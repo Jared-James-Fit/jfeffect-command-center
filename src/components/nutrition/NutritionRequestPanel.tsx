@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Accordion } from "@/components/ui/accordion";
-import { CardHeader, DayRows, MoreButton, Section, StatusChip, type ChipTone } from "@/components/nutrition/nutrition-ui";
+import { CardHeader, DayRows, MoreButton, PlanDaysView, Section, StatusChip, type ChipTone, type PlanViewDay } from "@/components/nutrition/nutrition-ui";
 import { NUTRITION_PHASES, PHASE_GOAL, phaseFromPlanText, phaseFromText } from "@/lib/nutrition-cardio";
 import { MEAL_PLAN_PROMPT, REVISE_MAX_CHARS, TARGETS_PROMPT, answerFor, clientBasicsLines, manualMealPlanPrompt, manualRevisePrompt, manualTargetsPrompt, nutritionSubmissionSummary, type WorkoutMealsMode } from "@/lib/nutrition-ai-prompts";
 import { lastPlanSummary, previousMealsText, previousPlanText, type PreviousPlan } from "@/lib/nutrition-history";
@@ -356,8 +356,28 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       : plan?.status === "ready" ? { tone: "attention", label: "Ready to review" }
       : { tone: "neutral", label: "Writing…" };
 
-  const extraFor = (r: (typeof preview)[number]) =>
-    [r.steps != null ? `${r.steps.toLocaleString()} steps` : null, r.noCardio ? "no cardio" : r.cardioMin ? `${r.cardioMin} min cardio` : null].filter(Boolean).join(" · ") || null;
+  // The written plan a day at a time (targets, then meals), each day against the plan they're on now.
+  const reviewDays: PlanViewDay[] = useMemo(() => {
+    const now = new Map<string, any>(
+      ((currentPlan as any)?.nutrition_target_days ?? []).map((d: any) => [dayKey(String(d.day_label ?? "")), d]),
+    );
+    return preview.map((r, k) => {
+      const d: any = prefill?.days[k] ?? null;
+      const was = published ? null : now.get(dayKey(r.label)) ?? null;
+      return {
+        label: r.label,
+        kcal: r.kcal,
+        protein: r.p,
+        carbs: r.c,
+        fat: r.f,
+        fibre: d?.fibre ?? null,
+        steps: r.steps,
+        cardio: r.noCardio ? "None" : r.cardioMin ? `${r.cardioMin} min` : null,
+        meals: d?.notes ?? null,
+        was: was ? { kcal: was.calories ?? null, protein: was.protein ?? null, carbs: was.carbs ?? null, fat: was.fats ?? null } : null,
+      };
+    });
+  }, [preview, prefill, currentPlan, published]);
 
   return (
     <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6" data-nutrition-update>
@@ -449,7 +469,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
               </ul>
             </div>
           )}
-          <DayRows rows={preview.map((r) => ({ label: r.label, kcal: r.kcal, protein: r.p, carbs: r.c, fat: r.f, extra: extraFor(r) }))} />
+          <PlanDaysView days={reviewDays} compareLabel="Their plan now" />
           {prefill && (
             <PrepLine
               foods={planFoodStats(prefill.days)}
@@ -533,6 +553,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                               phase: plan.phase,
                               workoutMeals: plan.workout_meals ?? null,
                               history: data?.trainingPattern ?? null,
+                              foodNotes: data?.foodNotes ?? null,
                             }),
                             "Change prompt",
                           )
@@ -568,7 +589,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
             </Section>
           )}
           {reviewOpen && plan?.meal_plan_text && (
-            <Section value="meals" title="Meal plan">
+            <Section value="meals" title="Meal plan as text">
               <TextBlock title="Meal plan" text={plan.meal_plan_text} />
             </Section>
           )}
@@ -634,8 +655,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         open={copyOpen}
         onOpenChange={setCopyOpen}
         items={[
-          { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null }), "Targets prompt") },
-          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyText(manualMealPlanPrompt(latest.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan)), "Meal plan prompt") },
+          { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null, foodNotes: data?.foodNotes ?? null }), "Targets prompt") },
+          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyText(manualMealPlanPrompt(latest.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan), data?.foodNotes ?? null), "Meal plan prompt") },
           { group: "Prompts to run it yourself", label: "Blank targets formula", run: () => copyText(TARGETS_PROMPT, "Targets formula") },
           { group: "Prompts to run it yourself", label: "Blank meal plan formula", run: () => copyText(MEAL_PLAN_PROMPT, "Meal plan formula") },
           { group: "Text", label: "Client answers", disabled: !submitted, run: () => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers") },

@@ -29,6 +29,7 @@ export function MacroTargetsChart({
   water,
   steps,
   extras: extrasOverride,
+  voice = "client",
   className,
 }: {
   calories?: Num;
@@ -41,6 +42,8 @@ export function MacroTargetsChart({
   steps?: Num;
   /** Replaces the default fibre / water row. */
   extras?: TargetExtra[];
+  /** Who's reading: the coach's copy says "The macros", the client's "Your macros". */
+  voice?: "client" | "coach";
   className?: string;
 }) {
   const p = toMacroNumber(protein);
@@ -161,7 +164,7 @@ export function MacroTargetsChart({
 
       {mismatch && split && (
         <p className="text-xs text-muted-foreground">
-          Your macros add up to {formatKcal(split.kcal)} kcal.
+          {voice === "coach" ? "The macros add up to" : "Your macros add up to"} {formatKcal(split.kcal)} kcal.
         </p>
       )}
     </div>

@@ -235,13 +235,16 @@ export function ClientFileNotes({
   );
 }
 
-function NoteRow({
-  note: n, onPin, onArchive, onSaved,
+/** One note: tap to read it all, ⋯ to edit, pin, copy or archive. Also the Nutrition tab's Food & diet notes. */
+export function NoteRow({
+  note: n, onPin, onArchive, onSaved, showTopic = true,
 }: {
   note: ClientFileNote;
   onPin: () => void;
   onArchive: () => void;
   onSaved: (patch: Partial<ClientFileNote>) => void;
+  /** Tag a nutrition note "Nutrition" (off where every note is one). */
+  showTopic?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -289,7 +292,9 @@ function NoteRow({
       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => long && setExpanded((v) => !v)}>
         <div className="flex items-center gap-1.5">
           {n.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Pinned" />}
-          <span className="truncate text-sm font-semibold">{heading(n)}</span>
+          {/* a note with no title is its own first line: shown whole (2 lines), never cut to one */}
+          <span className={cn("text-sm font-semibold", n.title.trim() ? "truncate" : "line-clamp-2 break-words")}>{heading(n)}</span>
+          {showTopic && n.topic === "nutrition" && <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Nutrition</span>}
           {isFresh(n.created_at) && <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground">New</span>}
         </div>
         {rest && <p className={cn("mt-0.5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground", !expanded && "line-clamp-3")}>{rest}</p>}

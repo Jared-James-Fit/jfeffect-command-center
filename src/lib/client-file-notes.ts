@@ -19,13 +19,15 @@ export type ClientFileNote = {
   quick_note_id: string | null;
   archived_at: string | null;
   archive_reason: "manual" | "quick_note_removed" | null;
+  /** 'nutrition': written on the Nutrition tab's Food & diet card; the nutrition AI follows it. */
+  topic?: "nutrition" | null;
   created_at: string;
   updated_at: string;
   updated_by: string | null;
 };
 
 const table = () => (supabase as any).from("client_file_notes");
-const COLS = "id, client_id, author_id, title, body, pinned, source, quick_note_id, archived_at, archive_reason, created_at, updated_at, updated_by";
+const COLS = "id, client_id, author_id, title, body, pinned, source, quick_note_id, archived_at, archive_reason, topic, created_at, updated_at, updated_by";
 
 export const clientFileNotesKey = (clientId: string) => ["client-file-notes", clientId] as const;
 
@@ -35,10 +37,15 @@ export async function listClientFileNotes(clientId: string): Promise<ClientFileN
   return (data ?? []) as ClientFileNote[];
 }
 
-export async function addClientFileNote(clientId: string, title: string, body: string): Promise<ClientFileNote> {
+export async function addClientFileNote(
+  clientId: string,
+  title: string,
+  body: string,
+  topic: "nutrition" | null = null,
+): Promise<ClientFileNote> {
   const { data: auth } = await supabase.auth.getUser();
   const { data, error } = await table()
-    .insert({ client_id: clientId, author_id: auth.user?.id, title: title.trim(), body: body.trim(), source: "client_file" })
+    .insert({ client_id: clientId, author_id: auth.user?.id, title: title.trim(), body: body.trim(), source: "client_file", ...(topic ? { topic } : {}) })
     .select(COLS).single();
   if (error) throw error;
   return data as ClientFileNote;

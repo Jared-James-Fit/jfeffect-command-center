@@ -77,6 +77,8 @@ const lazyDefault = <T,>(loader: () => Promise<{ [k: string]: T }>, name: string
 const ClientSessionsPanel = lazyDefault(() => import("@/components/sessions/client-sessions-panel"), "ClientSessionsPanel");
 const NutritionRequestPanel = lazyDefault(() => import("@/components/nutrition/NutritionRequestPanel"), "NutritionRequestPanel");
 const NutritionTargetsPanel = lazyDefault(() => import("@/components/nutrition-targets-panel"), "NutritionTargetsPanel");
+const FoodNotesCard = lazyDefault(() => import("@/components/nutrition/FoodNotesCard"), "FoodNotesCard");
+const NutritionProgressCard = lazyDefault(() => import("@/components/nutrition/NutritionProgressCard"), "NutritionProgressCard");
 const CardioTargetsPanel = lazyDefault(() => import("@/components/cardio-targets-panel"), "CardioTargetsPanel");
 const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-metrics-panel"), "ProgressMetricsPanel");
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
@@ -778,10 +780,17 @@ export function ClientProfileWorkspace({
           </Suspense>
         </TabsContent>
 
+        {/*
+          Nutrition: the AI update (one line unless it needs the coach), then what to
+          keep in mind (Food & diet: allergies, diet, notes) beside the plan (targets,
+          then meals), how it's going (bodyweight, check-ins, water) and cardio.
+        */}
         <TabsContent value="nutrition" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <NutritionRequestPanel clientId={id} />
-            <NutritionTargetsPanel clientId={id} />
+            <FoodNotesCard clientId={id} className="md:col-span-1 md:self-start" />
+            <NutritionTargetsPanel clientId={id} className="md:col-span-2" />
+            <NutritionProgressCard clientId={id} className="md:col-span-3" />
             <CardioTargetsPanel clientId={id} />
           </Suspense>
         </TabsContent>
