@@ -23,7 +23,8 @@ import {
 } from "@/lib/nutrition-ai-prompts";
 import { phaseFromText } from "@/lib/nutrition-cardio";
 import { hardToFindFoods, introducedHardToFind, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
-import { foodNotesForAi } from "@/lib/nutrition-targets/food-notes";
+import { foodNotes, foodNotesForAi, type FoodNotes } from "@/lib/nutrition-targets/food-notes";
+import { allergenConflicts, buildFoodHistory, foodHistoryForAi, introducedAllergens, knownRestrictions, liveAllergens, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { configuredHighWeekday } from "@/lib/client-nutrition-day";
 import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall, type CallState } from "@/lib/ai/staged-call.server";
 import { bodyweightAnswerKg, parseAiTargets, planTotalsIssues, safetyNotes, weeklyAverageKcal, withoutCoachNotes, type DayTargets } from "@/lib/nutrition-targets/nutrition-intel";
@@ -268,7 +269,7 @@ type PlanProgress = CallState & {
   kind: "plan" | "update";
   targetsPrompt?: string;
   /** What the meal plan prompt needs once the targets are in. */
-  meals?: { qas: QA[]; phase: string | null; workoutMeals: WorkoutMealsMode; history: TrainingPattern | null; previousMeals: string; foodNotes?: string | null };
+  meals?: { qas: QA[]; phase: string | null; workoutMeals: WorkoutMealsMode; history: TrainingPattern | null; previousMeals: string; foodNotes?: string | null; foodRestrictions?: string | null; foodAllergens?: string[] };
 };
 
 export async function runPlan(
@@ -307,7 +308,7 @@ export async function runPlan(
         previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
         if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
       }
-      const [coach, basics, history, program, cardioRows, trainingDays, athlete, foodNotes] = await Promise.all([
+      const [coach, basics, history, program, cardioRows, trainingDays, athlete, food] = await Promise.all([
         coachSettings(sb, sub.client_id),
         loadClientBasics(sb, sub.client_id),
         // Never let a history lookup block the plan.
@@ -319,8 +320,9 @@ export async function runPlan(
         loadTrainingDays(sb, sub.client_id).catch(() => [] as string[]),
         // Their records as Program Intelligence reads them (never blocks the plan).
         loadNutritionAthlete(sb, sub.client_id),
-        // Goals & Setup's restrictions and the coach's nutrition notes (never blocks the plan).
-        loadFoodNotesText(sb, sub.client_id),
+        // Their food on file across the whole account: allergies, diets and health said on any
+        // Nutrition Update, Goals & Setup, the coach's notes, past changes and plans (never blocks the plan).
+        loadFoodContext(sb, sub.client_id),
       ]);
       const selected = phaseOverride ?? coach.phase;
       const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -330,9 +332,9 @@ export async function runPlan(
       progress.targetsPrompt = targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays }), {
         athlete: athlete?.text ?? null,
         safety: safetyNotes(qas),
-        foodNotes,
+        foodNotes: food.text,
       });
-      progress.meals = { qas, phase, workoutMeals, history, previousMeals: previousMealsText(previous), foodNotes };
+      progress.meals = { qas, phase, workoutMeals, history, previousMeals: previousMealsText(previous), foodNotes: food.text, foodRestrictions: food.restrictions, foodAllergens: food.allergens };
       await save();
     }
 
@@ -341,7 +343,7 @@ export async function runPlan(
     const targetsText = cleanAiText(t.text);
     const mi = progress.meals;
     // The meal plan is the client's: the targets' COACH NOTES (reasoning, health flags) stay out of it.
-    const mealPrompt = mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText) ?? "", mi.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), mi.workoutMeals, mi.history, mi.previousMeals, mi.foodNotes);
+    const mealPrompt = mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText) ?? "", mi.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), mi.workoutMeals, mi.history, mi.previousMeals, mi.foodNotes, mi.foodRestrictions);
     const m = await nutritionCall(sb, progress, save, "nutrition_write", "meals", MEAL_PLAN_PROMPT, mealPrompt);
     const mealPlanText = await withPrepFix(
       cleanAiText(m.text),
@@ -352,6 +354,7 @@ export async function runPlan(
       2,
       // a food the coach's notes name is theirs to use
       mi.foodNotes ? [...mi.qas, { label: "Coach's food notes", value: mi.foodNotes }] : mi.qas,
+      mi.foodAllergens ?? [],
     );
     const modelId = `targets ${t.model} · meals ${m.model}`;
 
@@ -403,20 +406,23 @@ export async function withPrepFix(
   targets: DayTargets[] = [],
   rounds = 2,
   answers: QA[] = [],
+  /** liveAllergens(): the allergens on file across their whole account. */
+  allergens: string[] = [],
 ): Promise<string> {
   const issues = (text: string) => ({
     drift: prepDrift(planMenus(text)),
     totals: targets.length ? planTotalsIssues(text, targets) : [],
     shelf: hardToFindFoods(planMenus(text), answers),
+    allergy: allergenConflicts(planMenus(text), allergens),
   });
-  // prep and shelf staples come first: a fix that gets those right but leaves a total a little off still wins
-  const count = (x: ReturnType<typeof issues>) => x.drift.length * 3 + x.shelf.length * 3 + x.totals.length;
+  // an allergen on file comes first, then prep and shelf staples: a fix that gets those right but leaves a total a little off still wins
+  const count = (x: ReturnType<typeof issues>) => x.allergy.length * 10 + x.drift.length * 3 + x.shelf.length * 3 + x.totals.length;
   let current = draft;
   for (let round = 0; round < rounds; round++) {
     const before = issues(current);
     if (!count(before)) break;
     const fixed = cleanAiText(
-      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals, before.shelf), round).catch((e) => {
+      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals, before.shelf, before.allergy), round).catch((e) => {
         // still thinking: the run carries on next request; any other failure keeps the draft
         if (e instanceof WaitingForModel) throw e;
         return "";
@@ -425,19 +431,19 @@ export async function withPrepFix(
     if (!fixed || !revisionLooksRight("meals", current, fixed)) break;
     if (planMenus(fixed).length !== planMenus(current).length) break;
     const after = issues(fixed);
-    if (after.drift.length > before.drift.length || after.shelf.length > before.shelf.length || count(after) >= count(before)) break;
+    if (after.allergy.length > before.allergy.length || after.drift.length > before.drift.length || after.shelf.length > before.shelf.length || count(after) >= count(before)) break;
     current = fixed;
   }
   return current;
 }
 
 /**
- * A coach's change (Change something, Change it with AI) wins, but a
- * hard-to-find food the AI brought in on its own doesn't: one it added that
- * wasn't in the plan before and that neither the coach's words nor the
- * client's answers named (`introducedHardToFind`) goes back once for the
- * common staple. Kept only when it reads as the same plan with fewer of them;
- * a failed fix never costs the change. Exported for tests.
+ * A coach's change (Change something, Change it with AI) wins, but what the
+ * AI brought in on its own doesn't: a hard-to-find food or a food carrying an
+ * allergen on file that wasn't in the plan before and that neither the
+ * coach's words nor the client's answers named (`introducedHardToFind`,
+ * `introducedAllergens`) goes back once. Kept only when it reads as the same
+ * plan with fewer of them; a failed fix never costs the change. Exported for tests.
  */
 export async function withShelfFix(
   before: string,
@@ -445,19 +451,26 @@ export async function withShelfFix(
   userPrompt: string,
   ask: (prompt: string) => Promise<string>,
   said: Array<{ value?: string | null }>,
+  /** liveAllergens(): the allergens on file across their whole account. */
+  allergens: string[] = [],
 ): Promise<string> {
-  const found = (text: string) => introducedHardToFind(planMenus(before), planMenus(text), said);
+  const found = (text: string) => ({
+    shelf: introducedHardToFind(planMenus(before), planMenus(text), said),
+    allergy: introducedAllergens(planMenus(before), planMenus(text), allergens, said),
+  });
   const first = found(draft);
-  if (!first.length) return draft;
+  if (!first.shelf.length && !first.allergy.length) return draft;
   const fixed = cleanAiText(
-    await ask(mealPrepFixPrompt(userPrompt, draft, [], [], first)).catch((e) => {
+    await ask(mealPrepFixPrompt(userPrompt, draft, [], [], first.shelf, first.allergy)).catch((e) => {
       if (e instanceof WaitingForModel) throw e;
       return "";
     }),
   );
   if (!fixed || !revisionLooksRight("meals", draft, fixed)) return draft;
   if (planMenus(fixed).length !== planMenus(draft).length) return draft;
-  return found(fixed).length < first.length ? fixed : draft;
+  const after = found(fixed);
+  if (after.allergy.length > first.allergy.length) return draft;
+  return after.shelf.length + after.allergy.length < first.shelf.length + first.allergy.length ? fixed : draft;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -517,44 +530,153 @@ export async function nutritionCall(
   }
 }
 
+export type FoodContext = {
+  /** What every nutrition AI path reads: the coach's food notes and the client's whole food history. */
+  text: string | null;
+  /** Allergies and medical diets on file, for the meal plan's allergy line and the free meal. */
+  restrictions: string | null;
+  /** The allergens a plan must never hold (liveAllergens), checked in code on every written plan. */
+  allergens: string[];
+  history: FoodHistory;
+  /** What they say now (their latest Nutrition Update, Goals & Setup, the coach's notes). */
+  current: FoodNotes;
+  /** When their latest Nutrition Update was sent. */
+  latestAt: string | null;
+  unit: "lb" | "kg";
+};
+
+const EMPTY_HISTORY: FoodHistory = { allergies: [], diets: [], health: [], changes: [], preferences: [], plans: [], updates: 0 };
+
 /**
- * The athlete as Program Intelligence reads them (nutrition-athlete.ts): their whole history,
- * read once. Null when it can't be read in time; a plan is never held up by it.
+ * A client's food on file, across their whole account (food-history.ts): every
+ * Nutrition Update they sent, Goals & Setup, the coach's nutrition notes
+ * (client_file_notes, topic 'nutrition'), the coach's past AI changes, every
+ * plan with how it went, and what the coach marked as no longer applying.
+ * One read for the coach's Food & diet card and for every nutrition AI path,
+ * so they always agree. Never blocks a plan: anything unreadable is left out.
  */
-/**
- * Goals & Setup's food restrictions and dislikes and the coach's nutrition
- * notes (client_file_notes, topic 'nutrition'), as the AI reads them
- * (foodNotesForAi). Never blocks a plan: anything unreadable is left out.
- */
-export async function loadFoodNotesText(sb: any, clientId: string): Promise<string | null> {
+export async function loadFoodContext(sb: any, clientId: string, today = new Date().toISOString().slice(0, 10)): Promise<FoodContext> {
+  const ok = <T,>(r: { data: T | null; error?: unknown } | null | undefined, fallback: T): T => (r && !r.error && r.data != null ? r.data : fallback);
   try {
-    const [{ data: goals }, { data: notes }] = await Promise.all([
+    const [clientR, subsR, questionsR, goalsR, notesR, plansR, checkinsR, editsR, dismissedR] = await Promise.all([
+      sb.from("clients").select("user_id, preferred_weight_unit, committed_training_days, preferred_high_days").eq("id", clientId).maybeSingle(),
+      sb
+        .from("nf_submissions")
+        .select("id, submitted_at")
+        .eq("client_id", clientId)
+        .eq("form_id", NUTRITION_REQUEST_FORM_ID)
+        .neq("status", "in_progress")
+        .not("submitted_at", "is", null)
+        .order("submitted_at", { ascending: true })
+        .limit(200),
+      sb.from("nf_questions").select("id, label, question_type, order_index").eq("form_id", NUTRITION_REQUEST_FORM_ID).order("order_index"),
       sb
         .from("client_goals_setup")
-        .select("food_restrictions_has, food_restrictions_details, food_dislikes")
+        .select("nutrition_goal, nutrition_preference, food_restrictions_has, food_restrictions_details, food_dislikes, nutrition_challenges, cooking_skill, updated_at")
         .eq("client_id", clientId)
         .maybeSingle(),
       sb
         .from("client_file_notes")
-        .select("title, body")
+        .select("title, body, created_at, updated_at")
         .eq("client_id", clientId)
         .eq("topic", "nutrition")
         .is("archived_at", null)
         .order("pinned", { ascending: false })
         .order("updated_at", { ascending: false })
-        .limit(20),
+        .limit(50),
+      sb
+        .from("nutrition_targets")
+        .select("id, start_date, end_date, status, phase, custom_phase, nutrition_target_days(day_label, calories)")
+        .eq("client_id", clientId)
+        .order("start_date", { ascending: false })
+        .limit(100),
+      sb
+        .from("messenger_checkins")
+        .select("submitted_at, answers")
+        .eq("client_id", clientId)
+        .eq("task_type", "weekly_checkin")
+        .eq("status", "completed")
+        .order("submitted_at", { ascending: false })
+        .limit(500),
+      sb.from("nutrition_plan_edits").select("instructions, applied_at").eq("client_id", clientId).eq("status", "applied").limit(200),
+      sb.from("client_food_history_dismissals").select("kind, key, created_at").eq("client_id", clientId),
     ]);
-    return foodNotesForAi(
-      goals ?? null,
-      ((notes ?? []) as Array<{ title: string | null; body: string | null }>).map((n) =>
-        [n.title, n.body].filter((v) => String(v ?? "").trim()).join("\n"),
-      ),
-    );
+    const client = ok<any>(clientR, null);
+    const subs = ok<any[]>(subsR, []);
+    const questions = ok<any[]>(questionsR, []).filter((q) => q.question_type !== "file" && q.question_type !== "video");
+    const ids = subs.map((s) => s.id);
+
+    const answers: any[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const r = await sb.from("nf_answers").select("submission_id, question_id, value_text, value_number, value_json").in("submission_id", ids.slice(i, i + 100));
+      answers.push(...ok<any[]>(r, []));
+    }
+    const updates = subs.map((s) => {
+      const mine = new Map(answers.filter((a) => a.submission_id === s.id).map((a) => [a.question_id, a]));
+      return { at: String(s.submitted_at), answers: questions.map((q) => ({ label: q.label, value: mine.has(q.id) ? answerValue(mine.get(q.id)) : "" })) as QA[] };
+    });
+
+    // the coach's past "Change something" updates on these requests
+    const revisions = ids.length ? ok<any[]>(await sb.from("nutrition_ai_plans").select("revisions").in("submission_id", ids), []) : [];
+    const coachChanges = [
+      ...revisions.flatMap((r) => ((r.revisions ?? []) as Array<{ at: string; instructions: string }>).map((x) => ({ at: x.at, text: x.instructions }))),
+      ...ok<any[]>(editsR, []).filter((e) => e.applied_at).map((e) => ({ at: e.applied_at, text: e.instructions })),
+    ];
+
+    const weights = client?.user_id
+      ? ok<any[]>(
+          await sb
+            .from("progress_bodyweight")
+            .select("logged_date, weight_value, weight_unit")
+            .eq("user_id", client.user_id)
+            .order("logged_date", { ascending: false })
+            .limit(1500),
+          [],
+        ).map((w) => ({
+          date: String(w.logged_date),
+          kg: String(w.weight_unit ?? "").toLowerCase().startsWith("lb") ? Number(w.weight_value) / LB : Number(w.weight_value),
+        }))
+      : [];
+
+    const goals = ok<any>(goalsR, null);
+    const notes = ok<any[]>(notesR, []).map((n) => ({
+      at: String(n.updated_at ?? n.created_at),
+      text: [n.title, n.body].filter((v: unknown) => String(v ?? "").trim()).join("\n"),
+    }));
+    const unit: "lb" | "kg" = client?.preferred_weight_unit === "kg" ? "kg" : "lb";
+    const history = buildFoodHistory({
+      updates,
+      goals,
+      notes,
+      coachChanges,
+      plans: ok<any[]>(plansR, []).map((p) => ({
+        id: p.id,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        status: p.status,
+        phase: p.phase === "Custom" ? p.custom_phase : p.phase,
+        days: (p.nutrition_target_days ?? []).map((d: any) => ({ label: String(d.day_label ?? ""), calories: d.calories ?? null })),
+      })),
+      weights,
+      checkins: ok<any[]>(checkinsR, []),
+      dismissed: ok<any[]>(dismissedR, []).map((d) => ({ kind: d.kind, key: d.key, at: d.created_at })),
+      trainingDays: ((client?.committed_training_days ?? []) as string[]).filter(Boolean),
+      highWeekday: configuredHighWeekday(client?.preferred_high_days ?? null).weekday,
+      today,
+    });
+    const latest = updates[updates.length - 1] ?? null;
+    const current = foodNotes({ answers: latest?.answers ?? null, answersAt: latest?.at ?? null, goals, coachNotes: notes.map((n) => n.text) });
+    const text = [foodNotesForAi(goals, notes.map((n) => n.text)), foodHistoryForAi(history, unit)].filter(Boolean).join("\n\n") || null;
+    return { text, restrictions: knownRestrictions(history), allergens: liveAllergens(history), history, current, latestAt: latest?.at ?? null, unit };
   } catch {
-    return null;
+    return { text: null, restrictions: null, allergens: [], history: EMPTY_HISTORY, current: foodNotes({}), latestAt: null, unit: "lb" };
   }
 }
 
+/**
+ * The athlete as Program Intelligence reads them (nutrition-athlete.ts): their whole history,
+ * read once. Null when it can't be read in time; a plan is never held up by it.
+ */
 export async function loadNutritionAthlete(sb: any, clientId: string): Promise<{ text: string } | null> {
   const read = (async () => {
     const [{ loadIntelRecords }, { buildGeneratorIntel }, { nutritionAthleteText }] = await Promise.all([
@@ -710,10 +832,11 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
   };
   try {
     const { qas } = await loadQAs(sb, submissionId);
-    const [history, foodNotes] = await Promise.all([
+    const [history, food] = await Promise.all([
       loadTrainingPattern(sb, row.client_id).catch(() => null),
-      loadFoodNotesText(sb, row.client_id),
+      loadFoodContext(sb, row.client_id),
     ]);
+    const foodNotes = food.text;
     const models: string[] = [];
 
     const oldTargets = String(row.targets_text ?? "");
@@ -734,6 +857,7 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
       workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
       history,
       foodNotes,
+      foodRestrictions: food.restrictions,
     });
     const m = await nutritionCall(sb, progress, save, "nutrition_write", "update_meals", MEAL_PLAN_PROMPT, mealPrompt);
     models.push(`meals ${m.model}`);
@@ -749,6 +873,7 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
       mealPrompt,
       (prompt) => nutritionCall(sb, progress, save, "nutrition_write", "update_shelf", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
       [...qas, { value: instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])],
+      food.allergens,
     );
 
     const now = new Date().toISOString();

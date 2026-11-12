@@ -1,26 +1,32 @@
 /**
  * Client profile → Nutrition → Food & diet: what to keep in mind before
- * touching their nutrition, in one place. Allergies first (amber when there
- * are any), the diets they follow as tags, what they eat and won't, health
- * things, their goal, then how they eat day to day, and the coach's own
- * nutrition notes, which the nutrition AI follows. Read from their latest
- * Nutrition Update and Goals & Setup (`foodNotes`, food-notes.ts); the notes
- * are `client_file_notes` with topic 'nutrition', so they're in the client's
- * one notes list too.
+ * touching their nutrition, read from their whole account (`loadFoodContext`
+ * → food-history.ts, the same read every nutrition AI path uses):
+ *
+ * - Allergies, diets and health are sticky: anything they've said on any
+ *   Nutrition Update, Goals & Setup or the coach's notes stays, with when it
+ *   was said, even when a later form answers "None", until the coach marks it
+ *   as no longer applying (`client_food_history_dismissals`; Put back undoes).
+ * - Eats, Won't eat, Goal and Day to day are what they say now.
+ * - History: every plan with how it went, the food changes asked for over
+ *   time, and what they said before.
+ * - Your notes: the coach's nutrition notes (`client_file_notes`, topic
+ *   'nutrition'), which the AI follows.
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { AlertTriangle, Plus, Salad } from "lucide-react";
+import { AlertTriangle, MoreHorizontal, Plus, Salad } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Accordion } from "@/components/ui/accordion";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CardHeader, Section } from "@/components/nutrition/nutrition-ui";
 import { NoteRow } from "@/components/clients/client-file-notes";
-import { listNutritionRequestsFn } from "@/lib/nutrition-ai-plans.functions";
+import { getFoodHistoryFn } from "@/lib/nutrition-ai-plans.functions";
 import {
   addClientFileNote,
   clientFileNotesKey,
@@ -30,33 +36,23 @@ import {
   updateClientFileNote,
   type ClientFileNote,
 } from "@/lib/client-file-notes";
-import { foodNotes, type FoodGoals } from "@/lib/nutrition-targets/food-notes";
+import { foodHistoryKey, planResultLine, planSpan, saidWhen, type FoodHistory, type StickyFact } from "@/lib/nutrition-targets/food-history";
+import type { FoodNotes } from "@/lib/nutrition-targets/food-notes";
 import { cn } from "@/lib/utils";
 
-type Answered = { status: string; submitted_at: string | null; answers: Array<{ label: string; value: string }> };
-
 const shortDate = (d?: string | null) =>
-  d ? new Date(d).toLocaleDateString([], { month: "short", day: "numeric" }) : null;
+  d ? new Date(d.length === 10 ? `${d}T12:00:00Z` : d).toLocaleDateString([], { month: "short", day: "numeric", timeZone: d.length === 10 ? "UTC" : undefined }) : null;
+
+type FoodRead = { history: FoodHistory; current: FoodNotes; latestAt: string | null; unit: "lb" | "kg" };
 
 export function FoodNotesCard({ clientId, className }: { clientId: string; className?: string }) {
   const qc = useQueryClient();
-  const listFn = useServerFn(listNutritionRequestsFn);
-  // The same query as the Nutrition update card (one request for both).
-  const { data: requests, isLoading: loadingRequests } = useQuery({
-    queryKey: ["nutrition-requests", clientId],
-    queryFn: () => listFn({ data: { clientId } }),
-  });
-  const { data: goalsRow, isLoading: loadingGoals } = useQuery({
-    queryKey: ["client-goals-setup", clientId],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("client_goals_setup")
-        .select("*")
-        .eq("client_id", clientId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+  const readFn = useServerFn(getFoodHistoryFn);
+  const key = foodHistoryKey(clientId);
+  const { data, isLoading } = useQuery({
+    queryKey: key,
+    queryFn: () => readFn({ data: { clientId } }) as Promise<FoodRead>,
+    staleTime: 30_000,
   });
   const notesKey = clientFileNotesKey(clientId);
   const { data: allNotes = [] } = useQuery({
@@ -64,26 +60,18 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
     queryFn: () => listClientFileNotes(clientId),
     staleTime: 15_000,
   });
-
-  // The latest Nutrition Update they actually sent.
-  const sent = ((requests?.requests ?? []) as Answered[]).find((r) => r.status !== "in_progress" && r.answers?.length) ?? null;
-  // Another screen may hold this key with its own shape: only a row counts.
-  const goals = goalsRow && typeof goalsRow === "object" && "client_id" in goalsRow ? (goalsRow as FoodGoals) : null;
-  const notes = useMemo(
-    () => sortActive(allNotes.filter((n) => n.topic === "nutrition" && !n.archived_at)),
-    [allNotes],
-  );
-  const f = useMemo(
-    () => foodNotes({ answers: sent?.answers ?? null, answersAt: sent?.submitted_at ?? null, goals, coachNotes: notes.map((n) => [n.title, n.body].filter((s) => s.trim()).join("\n")) }),
-    [sent, goals, notes],
-  );
+  const notes = useMemo(() => sortActive(allNotes.filter((n) => n.topic === "nutrition" && !n.archived_at)), [allNotes]);
 
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const refreshFood = () => qc.invalidateQueries({ queryKey: key });
   const patchLocal = (id: string, patch: Partial<ClientFileNote>) =>
     qc.setQueryData<ClientFileNote[]>(notesKey, (old) => (old ?? []).map((n) => (n.id === id ? { ...n, ...patch } : n)));
-  const refresh = () => qc.invalidateQueries({ queryKey: notesKey });
+  const refreshNotes = () => {
+    void qc.invalidateQueries({ queryKey: notesKey });
+    void refreshFood();
+  };
 
   const save = async () => {
     if (!draft.trim()) return;
@@ -93,6 +81,7 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
       qc.setQueryData<ClientFileNote[]>(notesKey, (old) => [row, ...(old ?? [])]);
       setDraft("");
       setComposing(false);
+      void refreshFood();
       toast.success("Saved. The AI follows it on their next plan.");
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't save the note");
@@ -109,7 +98,7 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't update the note");
     } finally {
-      void refresh();
+      refreshNotes();
     }
   };
   const pin = async (n: ClientFileNote) => {
@@ -119,19 +108,48 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't update the note");
     } finally {
-      void refresh();
+      refreshNotes();
     }
   };
 
-  const loading = loadingRequests || loadingGoals;
-  const sources = [sent?.submitted_at ? `their ${shortDate(sent.submitted_at)} Nutrition Update` : null, goals ? "Goals & Setup" : null].filter(Boolean);
-  const dayToDay = [...f.routine, ...f.style];
+  /** The coach's "doesn't apply anymore" on an allergy, diet or health fact; Put back takes it off. */
+  const setDismissed = async (f: StickyFact, on: boolean) => {
+    const table = (supabase as any).from("client_food_history_dismissals");
+    const { error } = on
+      ? await table.upsert({ client_id: clientId, kind: f.kind, key: f.key, created_at: new Date().toISOString() }, { onConflict: "client_id,kind,key" })
+      : await table.delete().eq("client_id", clientId).eq("kind", f.kind).eq("key", f.key);
+    if (error) {
+      toast.error(error.message ?? "Couldn't update it");
+      return;
+    }
+    await refreshFood();
+    if (on) toast(`${f.label}: no longer applies. The AI stops planning around it.`, { action: { label: "Undo", onClick: () => void setDismissed(f, false) } });
+    else toast.success(`${f.label} is back on file`);
+  };
+
+  const h = data?.history;
+  const f = data?.current;
+  const live = (xs: StickyFact[] = []) => xs.filter((x) => !x.dismissed);
+  const removed = h ? [...h.allergies, ...h.diets, ...h.health].filter((x) => x.dismissed) : [];
+  const dayToDay = f ? [...f.routine, ...f.style] : [];
+  const sources = h
+    ? [
+        h.updates === 1
+          ? `their ${shortDate(data?.latestAt) ?? ""} Nutrition Update`.replace("  ", " ")
+          : h.updates > 1
+            ? `${h.updates} Nutrition Updates${data?.latestAt ? ` (latest ${shortDate(data.latestAt)})` : ""}`
+            : null,
+        "Goals & Setup",
+        notes.length ? "your notes" : null,
+      ].filter(Boolean)
+    : [];
+  const historyCount = h ? h.plans.length + h.changes.length + Math.max(0, h.preferences.length - 1) + removed.length : 0;
 
   return (
     <Card className={cn("space-y-4 border-border bg-card p-4 md:p-6", className)} data-food-notes>
       <CardHeader icon={Salad} title="Food & diet" />
 
-      {loading ? (
+      {isLoading || !h || !f ? (
         <div className="space-y-2">
           <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
           <div className="h-24 animate-pulse rounded-xl bg-muted" />
@@ -139,32 +157,27 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
       ) : (
         <>
           <p className="text-[13px] text-muted-foreground">
-            {sources.length ? `From ${sources.join(" and ")}.` : "Nothing on file yet. Their Nutrition Update and Goals & Setup answers show here."}
+            {h.updates || f.allergyState !== "unknown"
+              ? `Everything on file from ${sources.join(", ")}. Allergies, diets and health stay until you say they don't apply.`
+              : "Nothing on file yet. Their Nutrition Updates and Goals & Setup answers collect here."}
           </p>
 
-          {f.diet.length > 0 && (
-            <div className="flex flex-wrap gap-1.5" data-diet-tags>
-              {f.diet.map((t) => (
-                <span key={t} className="inline-flex h-7 items-center rounded-full bg-secondary px-2.5 text-[13px] font-medium text-foreground">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-
           <dl className="divide-y divide-border rounded-xl border border-border">
-            <Fact label="Allergies" attention={f.allergyState === "some"} data-allergies={f.allergyState}>
-              {f.allergyState === "some" ? (
-                <Clamp text={f.allergies.join("\n")} />
-              ) : f.allergyState === "none" ? (
-                <span className="text-muted-foreground">None</span>
+            <Fact label="Allergies" attention={live(h.allergies).length > 0} data-allergies={live(h.allergies).length ? "some" : f.allergyState}>
+              {live(h.allergies).length ? (
+                <FactList facts={live(h.allergies)} onDismiss={(x) => setDismissed(x, true)} />
               ) : (
-                <span className="text-muted-foreground">Not asked yet</span>
+                <span className="text-muted-foreground">{h.updates || f.allergyState === "none" ? "None on file" : "Not asked yet"}</span>
               )}
             </Fact>
-            {f.health.length > 0 && (
+            {live(h.diets).length > 0 && (
+              <Fact label="Diet">
+                <FactList facts={live(h.diets)} onDismiss={(x) => setDismissed(x, true)} />
+              </Fact>
+            )}
+            {live(h.health).length > 0 && (
               <Fact label="Health" attention>
-                <Clamp text={f.health.join("\n")} />
+                <FactList facts={live(h.health)} onDismiss={(x) => setDismissed(x, true)} />
               </Fact>
             )}
             {f.eats && (
@@ -180,18 +193,72 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
             )}
           </dl>
 
-          {dayToDay.length > 0 && (
+          {(dayToDay.length > 0 || historyCount > 0) && (
             <Accordion type="multiple" className="rounded-xl border border-border">
-              <Section value="day" title="Day to day" meta={mealsMeta(f.routine.find((r) => r.label === "Meals a day")?.value)}>
-                <dl className="space-y-2">
-                  {dayToDay.map((r) => (
-                    <div key={r.label} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 text-[14px]">
-                      <dt className="text-muted-foreground">{r.label}</dt>
-                      <dd className="min-w-0 break-words">{r.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </Section>
+              {dayToDay.length > 0 && (
+                <Section value="day" title="Day to day" meta={mealsMeta(f.routine.find((r) => r.label === "Meals a day")?.value)}>
+                  <dl className="space-y-2">
+                    {dayToDay.map((r) => (
+                      <div key={r.label} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 text-[14px]">
+                        <dt className="text-muted-foreground">{r.label}</dt>
+                        <dd className="min-w-0 break-words">{r.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Section>
+              )}
+              {historyCount > 0 && (
+                <Section value="history" title="History" meta={historyMeta(h)}>
+                  <div className="space-y-4" data-food-history>
+                    {h.plans.length > 0 && (
+                      <HistoryGroup title="Plans and how they went">
+                        {h.plans.map((p) => (
+                          <li key={p.id} className="py-2">
+                            <div className="text-[14px] font-medium">
+                              {planSpan(p)}
+                              {p.phase ? ` · ${p.phase}` : ""}
+                              {p.kcal ? <span className="font-normal text-muted-foreground"> · ~{p.kcal.toLocaleString("en-US")} kcal a day</span> : null}
+                            </div>
+                            <div className="text-[13px] text-muted-foreground">{planResultLine(p, data!.unit)}</div>
+                          </li>
+                        ))}
+                      </HistoryGroup>
+                    )}
+                    {h.changes.length > 0 && (
+                      <HistoryGroup title="Food changes asked for">
+                        {h.changes.map((c, i) => (
+                          <li key={`${c.at}-${i}`} className="py-2 text-[14px]">
+                            <span className="text-muted-foreground">{shortDate(c.at)} · {c.by === "coach" ? "You" : "They asked"}:</span> {c.text}
+                          </li>
+                        ))}
+                      </HistoryGroup>
+                    )}
+                    {h.preferences.length > 1 && (
+                      <HistoryGroup title="Foods they listed before">
+                        {h.preferences.slice(1).map((p, i) => (
+                          <li key={`${p.at}-${i}`} className="py-2 text-[14px]">
+                            <span className="text-muted-foreground">{shortDate(p.at)}:</span> <span className="whitespace-pre-line">{p.text}</span>
+                          </li>
+                        ))}
+                      </HistoryGroup>
+                    )}
+                    {removed.length > 0 && (
+                      <HistoryGroup title="No longer applies">
+                        {removed.map((x) => (
+                          <li key={`${x.kind}:${x.key}`} className="flex items-center justify-between gap-2 py-1.5 text-[14px]">
+                            <span className="min-w-0">
+                              {x.label} <span className="text-muted-foreground">· you, {shortDate(x.dismissed!.at)}</span>
+                            </span>
+                            <Button variant="ghost" size="sm" className="h-9 shrink-0" onClick={() => setDismissed(x, false)}>
+                              Put back
+                            </Button>
+                          </li>
+                        ))}
+                      </HistoryGroup>
+                    )}
+                  </div>
+                </Section>
+              )}
             </Accordion>
           )}
         </>
@@ -234,7 +301,7 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
                 showTopic={false}
                 onPin={() => pin(n)}
                 onArchive={() => archive(n, true)}
-                onSaved={(p) => { patchLocal(n.id, p); void refresh(); }}
+                onSaved={(p) => { patchLocal(n.id, p); refreshNotes(); }}
               />
             ))}
           </ul>
@@ -250,6 +317,66 @@ export function FoodNotesCard({ clientId, className }: { clientId: string; class
 function mealsMeta(v?: string | null): string | null {
   if (!v) return null;
   return /^\d+$/.test(v.trim()) ? `${v.trim()} meals a day` : v;
+}
+
+/** "2 plans · 1 change": what the History section holds. */
+function historyMeta(h: FoodHistory): string {
+  return [
+    h.plans.length ? `${h.plans.length} ${h.plans.length === 1 ? "plan" : "plans"}` : null,
+    h.changes.length ? `${h.changes.length} ${h.changes.length === 1 ? "change" : "changes"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Each allergy / diet / health fact on file: what it is, when and where it was said, their words, and ⋯ to say it doesn't apply. */
+function FactList({ facts, onDismiss }: { facts: StickyFact[]; onDismiss: (f: StickyFact) => void }) {
+  return (
+    <ul className="space-y-2">
+      {facts.map((x) => {
+        const said = x.mentions[0];
+        const words = said && said.text.trim().toLowerCase() !== x.label.toLowerCase() ? said.text.trim() : null;
+        return (
+          <li key={`${x.kind}:${x.key}`} className="flex items-start gap-1" data-fact={x.kind}>
+            <div className="min-w-0 flex-1">
+              <div className="break-words">{x.label}</div>
+              <div className="text-[13px] leading-5 text-muted-foreground">
+                <span className="whitespace-nowrap">{saidWhen(x)}</span> · {sourcesOf(x)}
+              </div>
+              {words ? <div className="line-clamp-2 text-[13px] leading-5 text-muted-foreground">“{words}”</div> : null}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="-mr-2 h-10 w-10 shrink-0 text-muted-foreground" aria-label={`${x.label} options`}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => onDismiss(x)}>Doesn't apply anymore</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** "Nutrition Update, Goals & Setup": where a fact was said. */
+function sourcesOf(f: StickyFact): string {
+  const seen = [...new Set(f.mentions.map((m) => m.source))];
+  // one form can say it twice (the allergy box and the foods box): count the forms
+  const n = new Set(f.mentions.filter((m) => m.source === "Nutrition Update").map((m) => m.at)).size;
+  return seen.map((s) => (s === "Nutrition Update" && n > 1 ? `${n} Nutrition Updates` : s)).join(", ");
+}
+
+function HistoryGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="text-[13px] font-medium text-muted-foreground">{title}</div>
+      <ul className="divide-y divide-border">{children}</ul>
+    </div>
+  );
 }
 
 function Fact({ label, attention, children, ...rest }: { label: string; attention?: boolean; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
