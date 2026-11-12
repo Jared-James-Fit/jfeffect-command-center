@@ -42,6 +42,7 @@ import {
   reactionTotal,
   postFiles,
   slideThumbPath,
+  postSlides,
   planDetail,
   pickLockInSession,
   seenAs,
@@ -145,14 +146,31 @@ export function useRankedFeed(enabled = true) {
 
 /** Signed URLs for one page of posts, resolved in a single storage call. */
 export function usePostMediaUrls(posts: CommunityPost[]) {
-  const paths = posts.flatMap((p) => [p.media_thumb_path ?? (p.media_type === "image" ? p.media_path : null)]);
-  const key = paths.filter(Boolean).join("|");
+  const covers = posts.map((p) => p.media_thumb_path ?? (p.media_type === "image" ? p.media_path : null));
+  // in the same round trip: every clip's file and a carousel's other thumbnails, so a
+  // clip near the screen (and a swipe to the next slide) never waits on its own request
+  const extras = posts.flatMap(postMediaExtras);
+  const key = covers.filter(Boolean).join("|");
+  const extraKey = extras.join("|");
   return useQuery({
-    queryKey: ["community-media-urls", key],
-    enabled: key.length > 0,
+    queryKey: ["community-media-urls", key, extraKey],
+    enabled: key.length > 0 || extraKey.length > 0,
     staleTime: 45 * 60 * 1000,
-    queryFn: () => signCommunityPaths(paths),
+    queryFn: () => signCommunityPaths([...covers, ...extras]),
   });
+}
+
+/** A post's files the feed signs with its page besides the cover's thumbnail: its clips and its other slides' thumbnails. */
+export function postMediaExtras(p: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media">): string[] {
+  const out: string[] = [];
+  for (const sl of postSlides(p)) {
+    if (sl.type === "video") out.push(sl.path);
+    if (sl.path !== p.media_path) {
+      const t = slideThumbPath(sl);
+      if (t) out.push(t);
+    }
+  }
+  return out;
 }
 
 /** A carousel's other slides, small: one storage call for all of them, when it scrolls into the feed. */

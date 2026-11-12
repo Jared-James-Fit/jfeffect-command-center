@@ -39,7 +39,7 @@ export const POST_ASPECT_LABEL: Record<PostAspect, string> = { portrait: "4:5", 
 export const STORY_ASPECT = 9 / 16;
 /** The profile grid's tiles (Instagram's since 2025). */
 export const GRID_ASPECT = 3 / 4;
-/** The feed's limits: never taller than 4:5, never wider than 16:9. */
+/** The feed's limits for a picture: never taller than 4:5, never wider than 16:9. */
 export const FEED_MIN_ASPECT = 0.8;
 export const FEED_MAX_ASPECT = 1.78;
 /** What's posted is this wide (Instagram's width); the height follows the shape. */
@@ -53,6 +53,20 @@ export function feedAspect(w: number | null | undefined, h: number | null | unde
   const a = (w ?? 4) / (h ?? 5);
   return clamp(finite(a, 0.8), FEED_MIN_ASPECT, FEED_MAX_ASPECT);
 }
+
+/**
+ * A clip in the feed shows whole, at its own shape (a phone's 9:16 to a
+ * 16:9), never cropped to the picture limits: the frame is as tall as the
+ * screen allows (FEED_VIDEO_MAX_HEIGHT) and the clip fits inside it.
+ * Unknown size: 4:5, the shape a clip was shown at before.
+ */
+export const VIDEO_MIN_ASPECT = STORY_ASPECT;
+export function videoAspect(w: number | null | undefined, h: number | null | undefined): number {
+  if (!w || !h || w <= 0 || h <= 0) return FEED_MIN_ASPECT;
+  return clamp(finite(w / h, FEED_MIN_ASPECT), VIDEO_MIN_ASPECT, FEED_MAX_ASPECT);
+}
+/** How tall a clip's frame gets in the feed: the screen less the post's name row, the buttons under it and the bars. */
+export const FEED_VIDEO_MAX_HEIGHT = "calc(100svh - 15rem)";
 
 /** Next shape for the crop's shape button (4:5 → 1:1 → 16:9 → 4:5). */
 export function nextAspect(a: PostAspect): PostAspect {

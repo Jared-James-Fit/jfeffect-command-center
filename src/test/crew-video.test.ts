@@ -79,7 +79,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     expect(inline).toContain("setVisible(!!e && e.intersectionRatio >= 0.6)");
     expect(inline).toContain('v.setAttribute("muted", "")');
     expect(inline).toContain("prefers-reduced-motion: reduce");
-    expect(read("src/components/community/post-card.tsx")).toContain("<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />");
+    expect(read("src/components/community/post-card.tsx")).toContain('<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" />');
     const stories = read("src/components/community/crew-stories.tsx");
     expect(stories).toContain("return <StoryClip path={post.media_path} poster={thumb} {...clip} />;");
     expect(stories).toContain("progressRef.current(Math.min(1, v.currentTime / span));");
