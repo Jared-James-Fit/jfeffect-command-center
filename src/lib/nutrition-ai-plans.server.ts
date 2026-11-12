@@ -22,7 +22,7 @@ import {
   type WorkoutMealsMode,
 } from "@/lib/nutrition-ai-prompts";
 import { phaseFromText } from "@/lib/nutrition-cardio";
-import { planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { hardToFindFoods, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { configuredHighWeekday } from "@/lib/client-nutrition-day";
 import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall, type CallState } from "@/lib/ai/staged-call.server";
 import { bodyweightAnswerKg, parseAiTargets, planTotalsIssues, safetyNotes, weeklyAverageKcal, withoutCoachNotes, type DayTargets } from "@/lib/nutrition-targets/nutrition-intel";
@@ -345,6 +345,8 @@ export async function runPlan(
       // each round its own key, so a resumed run reuses the answers it already has
       (prompt, round) => nutritionCall(sb, progress, save, "nutrition_write", round ? `fix${round + 1}` : "fix", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
       parseAiTargets(targetsText),
+      2,
+      mi.qas,
     );
     const modelId = `targets ${t.model} · meals ${m.model}`;
 
@@ -381,7 +383,9 @@ export async function runPlan(
 /**
  * A written plan is checked in code, not trusted to the model: main meals that
  * aren't one container at the same grams, or a weighed food at different
- * amounts between meals or day types (prepDrift), a menu whose
+ * amounts between meals or day types (prepDrift), a hard-to-find food the
+ * client didn't ask for (hardToFindFoods: cassava for an AIP client when
+ * sweet potatoes fit), a menu whose
  * Daily Total is off its targets or whose meals don't add up to it
  * (planTotalsIssues). One that fails gets a targeted fix (two rounds at most), each kept only when it
  * still reads as the same plan (same menus, a Daily Total) with fewer
@@ -393,16 +397,21 @@ export async function withPrepFix(
   ask: (prompt: string, round: number) => Promise<string>,
   targets: DayTargets[] = [],
   rounds = 2,
+  answers: QA[] = [],
 ): Promise<string> {
-  const issues = (text: string) => ({ drift: prepDrift(planMenus(text)), totals: targets.length ? planTotalsIssues(text, targets) : [] });
-  // prep comes first: a fix that evens out the containers but leaves a total a little off still wins
-  const count = (x: ReturnType<typeof issues>) => x.drift.length * 3 + x.totals.length;
+  const issues = (text: string) => ({
+    drift: prepDrift(planMenus(text)),
+    totals: targets.length ? planTotalsIssues(text, targets) : [],
+    shelf: hardToFindFoods(planMenus(text), answers),
+  });
+  // prep and shelf staples come first: a fix that gets those right but leaves a total a little off still wins
+  const count = (x: ReturnType<typeof issues>) => x.drift.length * 3 + x.shelf.length * 3 + x.totals.length;
   let current = draft;
   for (let round = 0; round < rounds; round++) {
     const before = issues(current);
     if (!count(before)) break;
     const fixed = cleanAiText(
-      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals), round).catch((e) => {
+      await ask(mealPrepFixPrompt(userPrompt, current, before.drift, before.totals, before.shelf), round).catch((e) => {
         // still thinking: the run carries on next request; any other failure keeps the draft
         if (e instanceof WaitingForModel) throw e;
         return "";
@@ -411,7 +420,7 @@ export async function withPrepFix(
     if (!fixed || !revisionLooksRight("meals", current, fixed)) break;
     if (planMenus(fixed).length !== planMenus(current).length) break;
     const after = issues(fixed);
-    if (after.drift.length > before.drift.length || count(after) >= count(before)) break;
+    if (after.drift.length > before.drift.length || after.shelf.length > before.shelf.length || count(after) >= count(before)) break;
     current = fixed;
   }
   return current;

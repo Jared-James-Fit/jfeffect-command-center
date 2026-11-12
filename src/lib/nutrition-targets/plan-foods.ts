@@ -223,6 +223,104 @@ export function prepDrift(
   return out;
 }
 
+/* ------------------------------------------------------------------------ */
+/* Shelf first: foods a normal grocery store always has (MEAL_PLAN_PROMPT 2d) */
+
+/**
+ * Foods a client would have to hunt for: a specialty store, a particular
+ * aisle in a big city, or online. The plan uses the most common food that
+ * fits the client's diet instead (sweet potatoes for AIP, never cassava),
+ * unless the client named the food themselves.
+ */
+export const HARD_TO_FIND_FOODS: Array<{
+  re: RegExp;
+  name: string;
+  kind: "carb" | "protein" | "fat";
+}> = [
+  { re: /\b(cassava|yuca|yucca|manioc)\b/, name: "cassava", kind: "carb" },
+  { re: /\b(taro|malanga|eddo)\b/, name: "taro", kind: "carb" },
+  { re: /\bplantain\b/, name: "plantain", kind: "carb" },
+  { re: /\bjicama\b/, name: "jicama", kind: "carb" },
+  { re: /\bbreadfruit\b/, name: "breadfruit", kind: "carb" },
+  { re: /\b(tiger ?nut)\b/, name: "tigernut", kind: "carb" },
+  { re: /\barrowroot\b/, name: "arrowroot", kind: "carb" },
+  {
+    re: /\b(teff|amaranth|millet|sorghum|fonio|farro|freekeh|kamut)\b/,
+    name: "a specialty grain",
+    kind: "carb",
+  },
+  { re: /\b(ube|purple yam)\b/, name: "purple yam", kind: "carb" },
+  {
+    re: /\b(cassava|coconut|almond|plantain|tigernut|green banana) flour\b/,
+    name: "a specialty flour",
+    kind: "carb",
+  },
+  {
+    re: /\b(bison|venison|elk|goat(?! cheese)|rabbit|ostrich|kangaroo)\b/,
+    name: "game meat",
+    kind: "protein",
+  },
+  {
+    re: /\b(liver|(?<!artichoke )heart(?! palm)|kidney(?! bean)|organ meat)\b/,
+    name: "organ meat",
+    kind: "protein",
+  },
+  {
+    re: /\b(tallow|duck fat|lard|palm shortening|coconut butter)\b/,
+    name: "a specialty fat",
+    kind: "fat",
+  },
+];
+
+/** What to use instead, by kind: the staples every store has. */
+export const SHELF_STAPLE: Record<"carb" | "protein" | "fat", string> = {
+  carb: "white rice, potatoes or sweet potatoes (whichever their diet allows, in that order)",
+  protein: "chicken breast, lean ground beef or ground turkey",
+  fat: "olive oil or avocado oil",
+};
+
+export type HardToFind = {
+  food: string;
+  name: string;
+  kind: "carb" | "protein" | "fat";
+  where: string[];
+};
+
+/**
+ * The hard-to-find foods in a plan's meals (the free meal and the swap lines
+ * never count), each with where it sits, leaving out any food the client
+ * named themselves in their answers ("I love plantain"); a diet's name
+ * ("AIP") never counts as naming one. Pure.
+ */
+export function hardToFindFoods(
+  days: Array<{ label?: string | null; notes?: string | null }>,
+  answers: Array<{ value?: string | null }> = [],
+): HardToFind[] {
+  const said = answers.map((a) => String(a.value ?? "").toLowerCase()).join(" \n ");
+  const found = new Map<string, HardToFind>();
+  for (const d of days) {
+    for (const meal of structureMealPlanDay(d.notes).meals) {
+      if (/free meal/i.test(meal.title)) continue;
+      for (const f of meal.foods) {
+        const k = foodKey(f.name);
+        const hit = HARD_TO_FIND_FOODS.find((h) => h.re.test(k));
+        if (!hit) continue;
+        const named = (k.match(hit.re) ?? [])[0];
+        if (named && said.includes(named)) continue;
+        const row = found.get(k) ?? {
+          food: f.name.trim(),
+          name: hit.name,
+          kind: hit.kind,
+          where: [],
+        };
+        row.where.push([d.label, meal.title.split(" · ")[0]].filter(Boolean).join(" "));
+        found.set(k, row);
+      }
+    }
+  }
+  return [...found.values()];
+}
+
 /** "Cooked chicken breast 150 / 165 / 180 g" for the coach and the fix prompt. */
 export function prepDriftLine(d: PrepDrift): string {
   if (d.kind === "mixed") return d.food;

@@ -6,7 +6,7 @@
 
 import type { TrainingBucket, TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib/nutrition-history";
-import { prepDriftLine, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { SHELF_STAPLE, prepDriftLine, type HardToFind, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
@@ -196,7 +196,9 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
    - Vegetables are a side, never the meal: one vegetable (broccoli, green beans, asparagus or a frozen mixed-vegetable blend counts as one) at 75–150 g a serving, in 1–2 meals a day, never in the Pre-Workout meal. A serving is never bigger than the carb food in the same meal (400 g of vegetables next to 400 g of rice is wrong), except in a fat-loss phase, where up to 200 g helps fullness. Fruit: 1 serving a day (a banana or 100–150 g berries), best before training.
    - Each meal is 2–4 foods: a protein and a carb (a low-carb day's meal can drop the carb), then a vegetable or fruit and the fat it's cooked with. The protein and carb lead; nothing minor out-weighs them.
    - Fibre is an output, not a target: report what the foods give (about 20–40 g a day comes naturally from the potatoes, fruit and vegetables). Never add foods or bigger vegetable portions to raise it.
-   - The client's answers win over every default here: drop anything in Allergies / dislikes, build around their Preferred foods (a vegetarian gets eggs, Greek yogurt, tofu, tempeh, whey or a plant protein), and follow the MEALS rule.
+   - SHELF FIRST: every food is one a normal grocery store always has on its shelves, picked from the most common up. Carbs: white rice, potatoes, sweet potatoes and fruit (bananas, apples, berries) first; oats, pasta, bagels, bread and cream of rice as the Carb defaults rule allows. Proteins: chicken breast, lean ground beef, ground turkey, eggs / egg whites, Greek yogurt, whey, canned tuna, white fish, salmon. Fats: olive oil, avocado oil, avocado, peanut butter, almonds. Vegetables: broccoli, green beans, asparagus, spinach, mixed frozen vegetables.
+   - When the client's diet or allergies rule a staple out, use the most common food that still fits it, never a specialty one: AIP, paleo, grain-free, Whole30 or no-nightshades → sweet potatoes (then bananas, apples and berries, then squash), never cassava, yuca, taro, plantain or specialty flours; gluten-free → white rice, potatoes, sweet potatoes, oats marked gluten-free; dairy-free → drop the yogurt and whey for eggs, meat or fish; vegetarian → eggs, Greek yogurt, whey, tofu; vegan → tofu, tempeh, lentils, chickpeas, a plant protein powder. A hard-to-find food (cassava, yuca, taro, plantain, jicama, teff, millet, amaranth, farro, bison, venison, tallow and the like) only when the client named that exact food in their answers; a diet's name alone never brings one in.
+   - The client's answers win over every default here: drop anything in Allergies / dislikes, build around their Preferred foods with the most common version of each (a vegetarian gets eggs, Greek yogurt, tofu, tempeh, whey or a plant protein), and follow the MEALS rule.
 3. Under each meal, list every food on its own line, amount first. Weigh only what needs a scale: "<amount> g <food>" for meat and fish, rice, potatoes, pasta, oats, vegetables, berries, Greek yogurt, oils, nut butters and nuts (cooked weight for meat, fish, rice, potatoes, pasta and vegetables; packaged weight for oats, peanut butter, oils and nuts). Foods that come in a unit are counted, never in grams: "2 slices whole wheat bread", "1 bagel", "½ bagel", "3 whole eggs", "1 scoop whey protein", "1 medium banana", "1 apple", "2 rice cakes", "1 tortilla wrap", "1 can tuna". Use whole or half units only (½, 1, 1½, 2), base their macros on a typical label (a slice of bread ~30 g, a bagel ~100 g, a large egg ~50 g, a scoop of whey ~30 g, a medium banana ~120 g) and add the size in brackets only where brands differ a lot (e.g. "1 scoop whey protein (about 30 g)", "1 bagel (about 100 g)").
 4. After each meal add a blank line, then:
    Approximate macros:
@@ -207,7 +209,7 @@ FORMAT RULES (strict — do not change headings, do not add extra commentary):
 5. End every menu with:
    Daily Total
    Approximately <P> g protein, <C> g carbohydrates, <F> g fat and <Fb> g fibre
-6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules (cooked vs packaged, bread / bagels / eggs / scoops / whole fruit are counted not weighed, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
+6. After all menus, include a FOOD-WEIGHING RULES section with the standard rules, naming only the kinds of food this plan uses (cooked vs packaged, counted foods like bread / bagels / eggs / scoops / whole fruit are counted not weighed, weigh consistently, track all calorie beverages, oils and sauces, seasonings / zero-cal sauces / zero-cal drinks allowed), then up to 3 "Swap:" lines for the plan's own foods with amounts that keep the macros, e.g. "Swap: 100 g cooked chicken breast = 130 g cooked white fish (cod, tilapia) = 105 g cooked turkey breast" and "Swap: 100 g cooked white rice = 140 g cooked potatoes or sweet potatoes = 90 g cooked pasta".
 
 Output plain text only — no markdown, no bullets, no tables. Match the formatting exactly so the app's parser can read it.`;
 
@@ -454,7 +456,11 @@ export function mealPlanUserPrompt(
     answerFor(qas, "foods or meals do you want changed"),
     hasMeals,
   );
-  const highDay = freeMealRule(wantsFreeMeal(answerFor(qas, "free meal on your high day")), answerFor(qas, "go-to free meal"));
+  const highDay = freeMealRule(
+    wantsFreeMeal(answerFor(qas, "free meal on your high day")),
+    answerFor(qas, "go-to free meal"),
+    answerFor(qas, "allerg") || answerFor(qas, "dislike"),
+  );
   const avoid = answerFor(qas, "allerg") || answerFor(qas, "dislike");
   const love = answerFor(qas, "foods you love") || answerFor(qas, "prefer") || answerFor(qas, "favourite") || answerFor(qas, "favorite");
   // No targets yet (the coach copying the prompt before pass 1 ran): leave the numbers for them to fill in.
@@ -540,8 +546,21 @@ export function quickPastePrompt(opts: {
  * wrong and where. Runs under MEAL_PLAN_PROMPT, so the format and rule 2c come
  * with it.
  */
-export function mealPrepFixPrompt(userPrompt: string, draft: string, drift: PrepDrift[], totals: string[] = []): string {
+export function mealPrepFixPrompt(
+  userPrompt: string,
+  draft: string,
+  drift: PrepDrift[],
+  totals: string[] = [],
+  hardToFind: HardToFind[] = [],
+): string {
   const fix: string[] = [];
+  if (hardToFind.length) {
+    fix.push(
+      "FIX THE FOODS: these are hard to find on a normal grocery store's shelves, and the client didn't ask for them:",
+      ...hardToFind.map((h) => `- ${h.food} (${h.where.slice(0, 3).join(", ")}): use ${SHELF_STAPLE[h.kind]} instead`),
+      "Pick the most common food that fits the client's allergies and diet (SHELF FIRST, rule 2d), use it everywhere the hard-to-find one was (every container keeps one set of grams, rule 2c), size it to the same carbs, protein or fat, and update the Swap lines and FOOD-WEIGHING RULES to match.",
+    );
+  }
   if (drift.length) {
     fix.push(
       "FIX THE MEAL PREP: these change amount between meals or day types, so the client would have to weigh them out differently on prep day:",
