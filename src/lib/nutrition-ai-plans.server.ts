@@ -23,6 +23,7 @@ import {
 } from "@/lib/nutrition-ai-prompts";
 import { phaseFromText } from "@/lib/nutrition-cardio";
 import { hardToFindFoods, introducedHardToFind, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { foodNotesForAi } from "@/lib/nutrition-targets/food-notes";
 import { configuredHighWeekday } from "@/lib/client-nutrition-day";
 import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall, type CallState } from "@/lib/ai/staged-call.server";
 import { bodyweightAnswerKg, parseAiTargets, planTotalsIssues, safetyNotes, weeklyAverageKcal, withoutCoachNotes, type DayTargets } from "@/lib/nutrition-targets/nutrition-intel";
@@ -267,7 +268,7 @@ type PlanProgress = CallState & {
   kind: "plan" | "update";
   targetsPrompt?: string;
   /** What the meal plan prompt needs once the targets are in. */
-  meals?: { qas: QA[]; phase: string | null; workoutMeals: WorkoutMealsMode; history: TrainingPattern | null; previousMeals: string };
+  meals?: { qas: QA[]; phase: string | null; workoutMeals: WorkoutMealsMode; history: TrainingPattern | null; previousMeals: string; foodNotes?: string | null };
 };
 
 export async function runPlan(
@@ -306,7 +307,7 @@ export async function runPlan(
         previous = await loadPreviousPlan(sb, sub, qas).catch(() => null);
         if (previous) await sb.from("nutrition_ai_plans").update({ previous_plan: previous }).eq("submission_id", submissionId);
       }
-      const [coach, basics, history, program, cardioRows, trainingDays, athlete] = await Promise.all([
+      const [coach, basics, history, program, cardioRows, trainingDays, athlete, foodNotes] = await Promise.all([
         coachSettings(sb, sub.client_id),
         loadClientBasics(sb, sub.client_id),
         // Never let a history lookup block the plan.
@@ -318,6 +319,8 @@ export async function runPlan(
         loadTrainingDays(sb, sub.client_id).catch(() => [] as string[]),
         // Their records as Program Intelligence reads them (never blocks the plan).
         loadNutritionAthlete(sb, sub.client_id),
+        // Goals & Setup's restrictions and the coach's nutrition notes (never blocks the plan).
+        loadFoodNotesText(sb, sub.client_id),
       ]);
       const selected = phaseOverride ?? coach.phase;
       const workoutMeals = workoutMealsOverride ?? coach.workoutMeals ?? "auto";
@@ -327,8 +330,9 @@ export async function runPlan(
       progress.targetsPrompt = targetsUserPrompt(basics, qas, selected, programContextText(program, { readout: false }), previousPlanText(previous), currentCardioText(cardioRows, { trainingDays }), {
         athlete: athlete?.text ?? null,
         safety: safetyNotes(qas),
+        foodNotes,
       });
-      progress.meals = { qas, phase, workoutMeals, history, previousMeals: previousMealsText(previous) };
+      progress.meals = { qas, phase, workoutMeals, history, previousMeals: previousMealsText(previous), foodNotes };
       await save();
     }
 
@@ -337,7 +341,7 @@ export async function runPlan(
     const targetsText = cleanAiText(t.text);
     const mi = progress.meals;
     // The meal plan is the client's: the targets' COACH NOTES (reasoning, health flags) stay out of it.
-    const mealPrompt = mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText) ?? "", mi.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), mi.workoutMeals, mi.history, mi.previousMeals);
+    const mealPrompt = mealPlanUserPrompt(mi.qas, withoutCoachNotes(targetsText) ?? "", mi.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]), mi.workoutMeals, mi.history, mi.previousMeals, mi.foodNotes);
     const m = await nutritionCall(sb, progress, save, "nutrition_write", "meals", MEAL_PLAN_PROMPT, mealPrompt);
     const mealPlanText = await withPrepFix(
       cleanAiText(m.text),
@@ -346,7 +350,8 @@ export async function runPlan(
       (prompt, round) => nutritionCall(sb, progress, save, "nutrition_write", round ? `fix${round + 1}` : "fix", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
       parseAiTargets(targetsText),
       2,
-      mi.qas,
+      // a food the coach's notes name is theirs to use
+      mi.foodNotes ? [...mi.qas, { label: "Coach's food notes", value: mi.foodNotes }] : mi.qas,
     );
     const modelId = `targets ${t.model} · meals ${m.model}`;
 
@@ -516,6 +521,40 @@ export async function nutritionCall(
  * The athlete as Program Intelligence reads them (nutrition-athlete.ts): their whole history,
  * read once. Null when it can't be read in time; a plan is never held up by it.
  */
+/**
+ * Goals & Setup's food restrictions and dislikes and the coach's nutrition
+ * notes (client_file_notes, topic 'nutrition'), as the AI reads them
+ * (foodNotesForAi). Never blocks a plan: anything unreadable is left out.
+ */
+export async function loadFoodNotesText(sb: any, clientId: string): Promise<string | null> {
+  try {
+    const [{ data: goals }, { data: notes }] = await Promise.all([
+      sb
+        .from("client_goals_setup")
+        .select("food_restrictions_has, food_restrictions_details, food_dislikes")
+        .eq("client_id", clientId)
+        .maybeSingle(),
+      sb
+        .from("client_file_notes")
+        .select("title, body")
+        .eq("client_id", clientId)
+        .eq("topic", "nutrition")
+        .is("archived_at", null)
+        .order("pinned", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(20),
+    ]);
+    return foodNotesForAi(
+      goals ?? null,
+      ((notes ?? []) as Array<{ title: string | null; body: string | null }>).map((n) =>
+        [n.title, n.body].filter((v) => String(v ?? "").trim()).join("\n"),
+      ),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function loadNutritionAthlete(sb: any, clientId: string): Promise<{ text: string } | null> {
   const read = (async () => {
     const [{ loadIntelRecords }, { buildGeneratorIntel }, { nutritionAthleteText }] = await Promise.all([
@@ -671,7 +710,10 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
   };
   try {
     const { qas } = await loadQAs(sb, submissionId);
-    const history = await loadTrainingPattern(sb, row.client_id).catch(() => null);
+    const [history, foodNotes] = await Promise.all([
+      loadTrainingPattern(sb, row.client_id).catch(() => null),
+      loadFoodNotesText(sb, row.client_id),
+    ]);
     const models: string[] = [];
 
     const oldTargets = String(row.targets_text ?? "");
@@ -691,6 +733,7 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
       phase,
       workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
       history,
+      foodNotes,
     });
     const m = await nutritionCall(sb, progress, save, "nutrition_write", "update_meals", MEAL_PLAN_PROMPT, mealPrompt);
     models.push(`meals ${m.model}`);
@@ -705,7 +748,7 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
       answered,
       mealPrompt,
       (prompt) => nutritionCall(sb, progress, save, "nutrition_write", "update_shelf", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
-      [...qas, { value: instructions }],
+      [...qas, { value: instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])],
     );
 
     const now = new Date().toISOString();

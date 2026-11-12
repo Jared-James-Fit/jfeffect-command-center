@@ -5,8 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Accordion } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ActionRow, CardHeader, DayRows, MoreButton, Section, StatusChip, type DayRow } from "@/components/nutrition/nutrition-ui";
-import { Apple, Plus, Pencil, Trash2, Copy, Droplet, ShoppingCart, BellRing, Send, ChevronRight, RotateCcw, History } from "lucide-react";
+import { ActionRow, CardHeader, DayRows, MoreButton, PlanDaysView, Section, StatusChip, type DayRow, type PlanViewDay } from "@/components/nutrition/nutrition-ui";
+import { Apple, Plus, Pencil, Trash2, Copy, ShoppingCart, BellRing, Send, ChevronRight, RotateCcw, History } from "lucide-react";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { clientPlansQuery, reuseEarlierPlan } from "@/lib/nutrition-targets/plan-publish";
 import { planDate, planPeriod, planUpdatedAt, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
@@ -24,8 +24,9 @@ import { useAuth } from "@/lib/auth";
 import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
 import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
 import { PlanAiChange } from "@/components/nutrition/PlanAiChange";
+import { cn } from "@/lib/utils";
 
-export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
+export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }: { clientId: string; className?: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -153,7 +154,7 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
     : null;
 
   return (
-    <Card className="space-y-4 border-border bg-card p-4 md:col-span-3 md:p-6" data-current-plan>
+    <Card className={cn("min-w-0 space-y-4 border-border bg-card p-4 md:p-6", className)} data-current-plan>
       <CardHeader
         icon={Apple}
         title="Current plan"
@@ -209,7 +210,13 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
               </Button>
             </div>
           )}
-          <DayRows rows={dayRowsOf(plan)} />
+          {/* A day at a time: its targets (the client's ring), then its meals. */}
+          <PlanDaysView
+            days={planViewDays(plan)}
+            water={clientUserId && waterTarget ? formatWater(waterTarget.active_ml, "L") : null}
+            waterNote={waterTarget?.target_source === "auto" ? "Automatic" : null}
+            onWater={clientUserId ? () => setWaterOpen(true) : undefined}
+          />
           <PlanAiChange clientId={clientId} plan={plan} firstName={firstName} />
           {current.slice(1).map((t: any) => (
             // More than one plan running is rare (two made the same day): each is shown, newest first.
@@ -234,15 +241,6 @@ export function NutritionTargetsPanel({ clientId }: { clientId: string }) {
       )}
 
       <div className="divide-y divide-border rounded-xl border border-border">
-        {clientUserId && (
-          <ActionRow
-            icon={Droplet}
-            title="Water"
-            value={waterTarget ? `${formatWater(waterTarget.active_ml, "L")}${waterTarget.target_source === "auto" ? " · automatic" : ""}` : "—"}
-            onClick={() => setWaterOpen(true)}
-            trailing={<ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-          />
-        )}
         <ActionRow
           icon={ShoppingCart}
           title="Grocery list"
@@ -312,6 +310,23 @@ function planLine(t: any, opts: { dates?: boolean } = {}): string {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** The plan's days for the plan view: numbers, steps and meals, in the plan's order. */
+function planViewDays(t: any): PlanViewDay[] {
+  return (t.nutrition_target_days ?? [])
+    .slice()
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((day: any) => ({
+      label: day.day_label,
+      kcal: day.calories,
+      protein: day.protein,
+      carbs: day.carbs,
+      fat: day.fats,
+      fibre: day.fibre ?? null,
+      steps: day.steps ?? null,
+      meals: day.notes ?? null,
+    }));
 }
 
 function dayRowsOf(t: any): DayRow[] {

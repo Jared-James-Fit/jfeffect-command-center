@@ -232,9 +232,9 @@ describe("a coach's change keeps to shelf staples too, but the coach's words win
     const plans = readFileSync("src/lib/nutrition-ai-plans.server.ts", "utf8");
     const edits = readFileSync("src/lib/nutrition-plan-edits.server.ts", "utf8");
     expect(plans).toContain('"update_shelf"');
-    expect(plans).toContain("[...qas, { value: instructions }]");
+    expect(plans).toContain("[...qas, { value: instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])]");
     expect(edits).toContain('"edit_shelf"');
-    expect(edits).toContain("[...qas, { value: row.instructions }]");
+    expect(edits).toContain("[...qas, { value: row.instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])]");
   });
 });
 

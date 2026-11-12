@@ -273,12 +273,15 @@ export function targetsUserPrompt(
     athlete?: string | null;
     /** safetyNotes(): health things in their answers. */
     safety?: string[] | null;
+    /** foodNotesForAi(): Goals & Setup's restrictions and dislikes, the coach's nutrition notes. */
+    foodNotes?: string | null;
   } = {},
 ): string {
   return [
     `CLIENT DATA`,
     ...clientBasicsLines(client, qas),
     phase ? `COACH-SELECTED PHASE: ${phase}` : "",
+    extra.foodNotes ? extra.foodNotes : "",
     extra.athlete ? extra.athlete : "",
     program ? `TRAINING PROGRAM\n${program}` : "",
     previous ? previous : "",
@@ -297,9 +300,9 @@ export function manualTargetsPrompt(
   qas: QA[],
   phase?: string | null,
   previous?: string | null,
-  extra?: { program?: string | null; cardio?: string | null; athlete?: string | null },
+  extra?: { program?: string | null; cardio?: string | null; athlete?: string | null; foodNotes?: string | null },
 ): string {
-  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null, { athlete: extra?.athlete ?? null, safety: safetyNotes(qas) })}`;
+  return `${TARGETS_PROMPT}\n\n------------------------\n\n${targetsUserPrompt(client, qas, phase, extra?.program ?? null, previous, extra?.cardio ?? null, { athlete: extra?.athlete ?? null, safety: safetyNotes(qas), foodNotes: extra?.foodNotes ?? null })}`;
 }
 
 /**
@@ -340,8 +343,9 @@ export function manualMealPlanPrompt(
   workoutMeals?: WorkoutMealsMode | null,
   history?: TrainingPattern | null,
   currentMeals?: string | null,
+  foodNotes?: string | null,
 ): string {
-  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history, currentMeals)}`;
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history, currentMeals, foodNotes)}`;
 }
 
 /** Coach override for pre/post-workout meals (stored on the request). */
@@ -439,6 +443,8 @@ export function mealPlanUserPrompt(
   workoutMeals?: WorkoutMealsMode | null,
   history?: TrainingPattern | null,
   currentMeals?: string | null,
+  /** foodNotesForAi(): Goals & Setup's restrictions and dislikes, the coach's nutrition notes. */
+  foodNotes?: string | null,
 ): string {
   const trainTime = answerFor(qas, "time", "train");
   const placed = effectiveTrainingTime(trainTime, history);
@@ -492,6 +498,7 @@ export function mealPlanUserPrompt(
     "",
     hasTargets ? "TARGETS (land each menu's Daily Total within about ±5% of these; the one-container meal prep comes first, rule 2c):" : "",
     targetsText.trim(),
+    foodNotes?.trim() ? `\n${foodNotes.trim()}` : "",
     hasMeals ? "\nCURRENT MEALS (the plan the client is on now):" : "",
     hasMeals ? currentMeals!.trim() : "",
   ].filter((l) => l !== "").join("\n");
@@ -649,10 +656,12 @@ export function reviseMealPlanUserPrompt(opts: {
   phase?: string | null;
   workoutMeals?: WorkoutMealsMode | null;
   history?: TrainingPattern | null;
+  /** foodNotesForAi(): Goals & Setup's restrictions and dislikes, the coach's nutrition notes. */
+  foodNotes?: string | null;
 }): string {
   return [
     REVISE_MEAL_RULES,
-    mealPlanUserPrompt(opts.qas, opts.targetsText, opts.phase, opts.workoutMeals, opts.history),
+    mealPlanUserPrompt(opts.qas, opts.targetsText, opts.phase, opts.workoutMeals, opts.history, null, opts.foodNotes),
     `CURRENT MEAL PLAN:\n${opts.mealPlanText.trim()}`,
     `COACH INSTRUCTIONS:\n${opts.instructions.trim()}`,
   ].join("\n\n");
