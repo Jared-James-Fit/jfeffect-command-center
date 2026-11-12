@@ -35,7 +35,7 @@ import {
 } from "@/lib/nutrition-targets/plan-edit";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { introducedHardToFind, type HardToFind } from "@/lib/nutrition-targets/plan-foods";
-import { allergenConflictLine, allergenConflicts, foodHistoryKey, liveAllergens, type AllergenHit, type FoodHistory } from "@/lib/nutrition-targets/food-history";
+import { allergenConflictLine, allergenConflicts, foodHistoryKey, onFileRules, type AllergenHit, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
 
@@ -88,7 +88,8 @@ export function PlanAiChange({
     queryFn: () => readFood({ data: { clientId } }) as Promise<{ history: FoodHistory }>,
     staleTime: 30_000,
   });
-  const allergens = useMemo(() => (foodQ.data ? liveAllergens(foodQ.data.history) : []), [foodQ.data]);
+  const onFile = useMemo(() => (foodQ.data ? onFileRules(foodQ.data.history) : {}), [foodQ.data]);
+  const allergens = useMemo(() => Object.keys(onFile), [onFile]);
 
   const editQ = useQuery({
     queryKey: key,
@@ -251,7 +252,7 @@ export function PlanAiChange({
                 <p className="flex items-start gap-1.5 text-[13px] font-medium text-warning" data-plan-ai-allergen>
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <span>
-                    On file as an allergy: {allergenConflictLine(review.allergy)}. Discard and ask again, or check with them first.
+                    Against what's on file: {allergenConflictLine(review.allergy, onFile)}. Discard and ask again, or check with them first.
                   </span>
                 </p>
               )}

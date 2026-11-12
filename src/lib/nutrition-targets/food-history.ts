@@ -187,8 +187,9 @@ export function buildFoodHistory(input: FoodHistoryInput): FoodHistory {
     }
   };
 
-  const preferences: Mention[] = [];
-  const changes: FoodChange[] = [];
+  // kept with their full time so two forms sent minutes apart stay in order
+  const preferences: Array<Mention & { ts: string }> = [];
+  const changes: Array<FoodChange & { ts: string }> = [];
   for (const u of updates) {
     const at = day(u.at);
     const src = "Nutrition Update";
@@ -200,8 +201,8 @@ export function buildFoodHistory(input: FoodHistoryInput): FoodHistory {
     dietText(foods, at, src);
     dietText(missed, at, src);
     healthText(u.answers, at, src, missed);
-    if (foods && !isNoneAnswer(foods)) preferences.push({ at, source: src, text: foods });
-    if (swap && !isNoneAnswer(swap)) changes.push({ at, by: "client", text: swap });
+    if (foods && !isNoneAnswer(foods)) preferences.push({ at, source: src, text: foods, ts: u.at });
+    if (swap && !isNoneAnswer(swap)) changes.push({ at, by: "client", text: swap, ts: u.at });
   }
 
   const g = input.goals ?? null;
@@ -219,7 +220,7 @@ export function buildFoodHistory(input: FoodHistoryInput): FoodHistory {
   }
   for (const c of input.coachChanges ?? []) {
     const t = clean(c.text);
-    if (t) changes.push({ at: day(c.at), by: "coach", text: t });
+    if (t) changes.push({ at: day(c.at), by: "coach", text: t, ts: c.at });
   }
 
   for (const d of input.dismissed ?? []) {
@@ -235,15 +236,28 @@ export function buildFoodHistory(input: FoodHistoryInput): FoodHistory {
     allergies: byKind("allergy"),
     diets: byKind("diet"),
     health: byKind("health"),
-    changes: changes.sort((a, b) => b.at.localeCompare(a.at)),
-    preferences: preferences.sort((a, b) => b.at.localeCompare(a.at)),
+    changes: changes.sort((a, b) => b.ts.localeCompare(a.ts)).map(({ ts: _ts, ...c }) => c),
+    preferences: preferences.sort((a, b) => b.ts.localeCompare(a.ts)).map(({ ts: _ts, ...p }) => p),
     plans: planHistory(input),
     updates: updates.length,
   };
 }
 
+/** A plan that ran fewer days than this was replaced, not followed: it isn't history. */
+export const MIN_PLAN_DAYS = 3;
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b.slice(0, 10)}T00:00:00Z`) - Date.parse(`${a.slice(0, 10)}T00:00:00Z`)) / 86_400_000);
+}
+
 function planHistory(input: FoodHistoryInput): PlanHistoryRow[] {
-  const plans = (input.plans ?? []).filter((p) => p.start_date && p.days.some((d) => Number(d.calories) > 0));
+  const plans = (input.plans ?? []).filter(
+    (p) =>
+      p.start_date &&
+      p.days.some((d) => Number(d.calories) > 0) &&
+      // a plan replaced within a couple of days was a re-publish, not a plan that ran (it stays in Previous plans)
+      !(p.status === "Archived" && p.end_date && daysBetween(p.start_date, p.end_date) < MIN_PLAN_DAYS),
+  );
   const weights = input.weights ?? [];
   return plans
     .map((p) => {
@@ -357,20 +371,48 @@ export function foodHistoryForAi(h: FoodHistory, unit: "lb" | "kg" = "kg"): stri
 /* ------------------------------------------------------------------------ */
 /* A written plan against what's on file                                     */
 
-/** The allergens a plan must never hold for this client: their allergies on file, plus dairy-free / gluten-free diets. */
-export function liveAllergens(h: FoodHistory): string[] {
+/**
+ * What each diet on file rules out, as food categories the code can check.
+ * Keto, carnivore and low FODMAP are about amounts or are too fine-grained to
+ * check food by food, so they're only in the AI's FOOD HISTORY.
+ */
+export const DIET_RULES: Record<string, string[]> = {
+  AIP: ["Grains", "Gluten", "Legumes", "Peanuts", "Soy", "Corn", "Dairy", "Eggs", "Nightshades", "Tree nuts", "Seeds"],
+  Paleo: ["Grains", "Gluten", "Legumes", "Peanuts", "Soy", "Corn", "Dairy"],
+  Whole30: ["Grains", "Gluten", "Legumes", "Peanuts", "Soy", "Corn", "Dairy"],
+  Vegan: ["Meat", "Fish", "Shellfish", "Eggs", "Dairy"],
+  Vegetarian: ["Meat", "Fish", "Shellfish"],
+  Pescatarian: ["Meat"],
+  "No pork": ["Pork"],
+  Halal: ["Pork"],
+  Kosher: ["Pork", "Shellfish"],
+  "No red meat": ["Red meat"],
+  "Dairy-free": ["Dairy"],
+  "Gluten-free": ["Gluten"],
+};
+
+/**
+ * What a plan must never hold for this client, and why: every allergen on file
+ * (an allergy) and every category a diet on file rules out ("AIP"). Dismissed
+ * ones don't count.
+ */
+export function onFileRules(h: FoodHistory): Record<string, string> {
   const named = new Set(ALLERGENS.map(([a]) => a));
-  const out = new Set<string>();
-  for (const f of h.allergies) if (!f.dismissed && named.has(f.label)) out.add(f.label);
+  const why: Record<string, string> = {};
+  for (const f of h.allergies) if (!f.dismissed && named.has(f.label)) why[f.label] = "allergy";
   for (const f of h.diets) {
     if (f.dismissed) continue;
-    if (f.label === "Dairy-free") out.add("Dairy");
-    if (f.label === "Gluten-free") out.add("Gluten");
+    for (const c of DIET_RULES[f.label] ?? []) why[c] ??= f.label;
   }
-  return [...out];
+  return why;
 }
 
-/** Foods that carry an allergen without naming it (pasta is gluten, yogurt is dairy), and the versions that don't. */
+/** The categories a plan must never hold for this client (onFileRules' keys). */
+export function liveAllergens(h: FoodHistory): string[] {
+  return Object.keys(onFileRules(h));
+}
+
+/** Foods that carry a category without naming it (pasta is gluten, yogurt is dairy, rice is a grain), and the versions that don't. */
 const FOOD_ALLERGENS: Record<string, { re: RegExp; not?: RegExp }> = {
   Gluten: {
     re: /\b(bread|bagels?|pasta|spaghetti|macaroni|penne|wraps?|tortillas?|cereal|crackers?|muffins?|pancakes?|waffles?|couscous|barley|rye|bulgur|seitan|pretzels?|pitas?|naan|noodles?|english muffins?|cream of wheat)\b/,
@@ -380,10 +422,32 @@ const FOOD_ALLERGENS: Record<string, { re: RegExp; not?: RegExp }> = {
     re: /\b(yogh?urt|skyr|cottage cheese|cheese|butter|cream|kefir|ghee)\b/,
     not: /\b(peanut|almond|cashew|nut|seed|sunflower|coconut) butter\b|dairy[- ]?free|coconut (yogh?urt|cream)|non-?dairy|cream of rice/,
   },
+  Grains: {
+    re: /\b(rice|oats?|oatmeal|quinoa|cream of rice|cream of wheat|rice cakes?|barley|rye|millet|buckwheat|amaranth|sorghum|couscous|bulgur|bread|bagels?|pasta|spaghetti|macaroni|penne|noodles?|tortillas?|wraps?|cereal|granola|crackers?|muffins?|pancakes?|waffles?|pitas?|naan|popcorn|corn)\b/,
+    not: /cauliflower rice|riced cauliflower|rice paper|coconut wraps?|lettuce wraps?/,
+  },
+  Legumes: {
+    re: /\b(beans?|lentils?|chickpeas?|hummus|peas|edamame|tofu|tempeh|soy|peanuts?)\b/,
+    not: /\bgreen beans?\b|snap peas|snow peas|coffee beans?|vanilla bean/,
+  },
+  Nightshades: {
+    re: /\b(tomato(es)?|potato(es)?|bell peppers?|peppers?|eggplants?|paprika|chil(i|li|e)s?|cayenne|jalape(n|ñ)os?|salsa|ketchup|marinara)\b/,
+    not: /sweet potato(es)?|black pepper|peppercorns?|salt (and|&) pepper/,
+  },
+  Seeds: { re: /\b(chia|flax(seeds?)?|pumpkin seeds?|sunflower seeds?|hemp seeds?|sesame|tahini)\b/ },
+  Meat: {
+    re: /\b(chicken|beef|pork|turkey|lamb|bison|venison|veal|bacon|ham|sausages?|steak|jerky|pepperoni|salami|prosciutto|duck)\b/,
+    not: /plant[- ]based|meatless|vegan|veggie|beyond|impossible/,
+  },
+  Pork: {
+    re: /\b(pork|bacon|ham|prosciutto|pancetta|chorizo|pepperoni|salami|lard)\b/,
+    not: /turkey (bacon|ham|pepperoni)|chicken (ham|sausage)|beef (bacon|pepperoni|salami)/,
+  },
+  "Red meat": { re: /\b(beef|steak|pork|lamb|bison|venison|veal|goat)\b/ },
 };
 const PLANT_MILK = /\b(almond|oat|soy|coconut|rice|cashew|pea|hemp|plant)[- ]milk\b/;
 
-/** The allergens a food on a plan carries. */
+/** The categories a food on a plan carries (allergens, and what diets rule out). */
 export function foodAllergens(food: string): string[] {
   const f = food.toLowerCase();
   const out = new Set(allergensIn(f));
@@ -391,10 +455,13 @@ export function foodAllergens(food: string): string[] {
   if (out.has("Dairy") && (PLANT_MILK.test(f) || /dairy[- ]?free|non-?dairy/.test(f))) out.delete("Dairy");
   if (out.has("Gluten") && /gluten[- ]?free/.test(f)) out.delete("Gluten");
   for (const [allergen, { re, not }] of Object.entries(FOOD_ALLERGENS)) if (re.test(f) && !(not && not.test(f))) out.add(allergen);
+  // a plant milk is the plant it's made from, never dairy
+  if (PLANT_MILK.test(f)) out.delete("Dairy");
   return [...out];
 }
 
-export type AllergenHit = { allergen: string; food: string; where: string[] };
+/** A food on a plan against what's on file: its categories ("Grains", "Shellfish"), comma-joined in `allergen`. */
+export type AllergenHit = { allergen: string; food: string; where: string[]; categories?: string[] };
 
 /**
  * Foods on a written plan that carry an allergen on file: "shrimp" for a
@@ -412,22 +479,35 @@ export function allergenConflicts(
     for (const meal of structureMealPlanDay(d.notes).meals) {
       if (/free meal/i.test(meal.title)) continue;
       for (const f of meal.foods) {
-        for (const a of foodAllergens(f.name)) {
-          if (!want.has(a)) continue;
-          const k = `${a}:${f.name.trim().toLowerCase()}`;
-          const row = found.get(k) ?? { allergen: a, food: f.name.trim(), where: [] };
-          row.where.push([d.label, meal.title.split(" · ")[0]].filter(Boolean).join(" "));
-          found.set(k, row);
-        }
+        const cats = foodAllergens(f.name).filter((a) => want.has(a));
+        if (!cats.length) continue;
+        const k = f.name.trim().toLowerCase();
+        const row = found.get(k) ?? { allergen: cats.join(", "), food: f.name.trim(), where: [], categories: cats };
+        row.where.push([d.label, meal.title.split(" · ")[0]].filter(Boolean).join(" "));
+        found.set(k, row);
       }
     }
   }
   return [...found.values()];
 }
 
-/** "shrimp (shellfish), whole wheat pasta (gluten)": a coach-facing line. */
-export function allergenConflictLine(hits: AllergenHit[]): string {
-  return hits.map((h) => `${h.food} (${h.allergen.toLowerCase()})`).join(", ");
+/**
+ * "cooked shrimp (shellfish allergy), cooked white rice (grains · AIP)": a
+ * coach-facing line, each food with what it breaks and why (onFileRules).
+ */
+export function allergenConflictLine(hits: AllergenHit[], why: Record<string, string> = {}): string {
+  return hits
+    .map((h) => {
+      const cats = h.categories ?? h.allergen.split(", ");
+      const byWhy = new Map<string, string[]>();
+      for (const c of cats) {
+        const w = why[c] ?? "allergy";
+        byWhy.set(w, [...(byWhy.get(w) ?? []), c.toLowerCase()]);
+      }
+      const parts = [...byWhy.entries()].map(([w, cs]) => (w === "allergy" ? `${cs.join(", ")} allergy` : `${cs.join(", ")} · ${w}`));
+      return `${h.food} (${parts.join("; ")})`;
+    })
+    .join(", ");
 }
 
 /**

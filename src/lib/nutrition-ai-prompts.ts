@@ -575,9 +575,9 @@ export function mealPrepFixPrompt(
   const fix: string[] = [];
   if (allergens.length) {
     fix.push(
-      "FIX THE ALLERGIES: these foods carry an allergen on file for this client (their FOOD HISTORY), so they can't be on the plan:",
+      "FIX WHAT'S ON FILE: these foods carry an allergen or break a diet on file for this client (their FOOD HISTORY: allergies and diets like AIP, vegetarian or no pork), so they can't be on the plan:",
       ...allergens.map((a) => `- ${a.food} (${a.where.slice(0, 3).join(", ")}): ${a.allergen.toLowerCase()}`),
-      "Take each one out of every meal it's in and use the most common food that fits all their allergies and diet instead (SHELF FIRST, rule 2d), sized to the same protein, carbs or fat, in the same container (rule 2c); update the Swap lines and FOOD-WEIGHING RULES so none of them names it either.",
+      "Take each one out of every meal it's in and use the most common food that fits all their allergies and diets instead (SHELF FIRST, rule 2d; for AIP that's sweet potatoes, fruit or squash for carbs), sized to the same protein, carbs or fat, in the same container (rule 2c); update the Swap lines and FOOD-WEIGHING RULES so none of them names it either.",
     );
   }
   if (hardToFind.length) {

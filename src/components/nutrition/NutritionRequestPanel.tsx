@@ -42,7 +42,7 @@ import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
 import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
 import { LEAN_GROCERY_LIST, hardToFindFoods, planFoodStats, prepDrift, prepDriftLine, type HardToFind, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
-import { allergenConflictLine, allergenConflicts, foodHistoryKey, liveAllergens, type FoodHistory } from "@/lib/nutrition-targets/food-history";
+import { allergenConflictLine, allergenConflicts, foodHistoryKey, onFileRules, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 
 type Req = {
   id: string;
@@ -209,17 +209,18 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     queryFn: () => readFood({ data: { clientId } }) as Promise<{ history: FoodHistory }>,
     staleTime: 30_000,
   });
+  const onFile = useMemo(() => (foodQ.data ? onFileRules(foodQ.data.history) : {}), [foodQ.data]);
   const allergyHits = useMemo(
     () =>
-      foodQ.data && prefill?.days.length
-        ? allergenConflicts(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })), liveAllergens(foodQ.data.history))
+      prefill?.days.length
+        ? allergenConflicts(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })), Object.keys(onFile))
         : [],
-    [foodQ.data, prefill],
+    [onFile, prefill],
   );
 
   // What to look at before publishing: an allergen on file on the plan, the targets' own math, floors, health mentions, the AI's flags.
   const checks = useMemo(() => {
-    const allergy = allergyHits.length ? [`On file as an allergy: ${allergenConflictLine(allergyHits)}. Change something to swap it out.`] : [];
+    const allergy = allergyHits.length ? [`Against what's on file: ${allergenConflictLine(allergyHits, onFile)}. Change something to swap it out.`] : [];
     if (!plan?.targets_text) return allergy;
     const answers = latest?.answers ?? [];
     const out = coachChecks({
@@ -230,7 +231,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     });
     const flags = coachNotesFlags(plan.targets_text);
     return [...allergy, ...out, ...(flags ? [`AI: ${flags}`] : [])];
-  }, [plan?.targets_text, latest?.answers, data?.client?.sex, allergyHits]);
+  }, [plan?.targets_text, latest?.answers, data?.client?.sex, allergyHits, onFile]);
 
   /** Everything for this plan as one block (to paste into a doc, a chat or another AI). */
   const everything = () => {
