@@ -258,7 +258,7 @@ const SAFETY_TERMS: Array<[RegExp, string]> = [
     /\bheart (condition|disease)|cardiac|hypertension|high blood pressure\b/i,
     "heart or blood pressure condition",
   ],
-  [/\bthyroid|hashimoto\w*|graves\b/i, "thyroid condition"],
+  [/\b(hypo|hyper)?thyroid\w*|hashimoto\w*|graves\b/i, "thyroid condition"],
   [/\bcrohn\w*|colitis|celiac|coeliac|ibs\b/i, "a digestive condition"],
   [/\bpcos\b|polycystic/i, "PCOS"],
 ];

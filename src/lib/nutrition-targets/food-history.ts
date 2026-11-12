@@ -103,6 +103,13 @@ export type FoodHistoryInput = {
   weights?: WeighIn[];
   checkins?: Array<{ submitted_at: string | null; answers: Record<string, unknown> | null }>;
   dismissed?: Array<{ kind: FactKind; key: string; at: string }>;
+  /**
+   * Allergies and conditions in their health profile (client_health_items,
+   * active ones), so an allergy the coach or client added there is checked
+   * like one said on a form, and a condition that names a diet (celiac,
+   * lactose intolerance) is that diet.
+   */
+  profileItems?: Array<{ kind: string; label: string; details?: string | null; at: string; source?: string | null }>;
   trainingDays?: string[];
   highWeekday?: string | null;
   /** YYYY-MM-DD */
@@ -142,6 +149,35 @@ const BODY = /\b(condition|disease|disorder|syndrome|arthritis|surgery|injur|med
 
 const clean = (v: unknown) => String(v ?? "").replace(/\s+\n/g, "\n").trim();
 const day = (iso: string) => String(iso).slice(0, 10);
+
+/**
+ * The Nutrition Update's "Any health conditions, injuries or medications?"
+ * answer (and any answer like it): every condition, injury or medication
+ * named, one part each ("torn ACL 2019, hypothyroid, levothyroxine 100 mcg").
+ */
+export function healthAnswerOf(answers: QA[]): string {
+  return clean(answerFor(answers, "health conditions") || answerFor(answers, "medications"));
+}
+
+/** A health answer cut into the things it names: one per line, semicolon or comma (never inside brackets). */
+export function splitHealthParts(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of String(text ?? "")) {
+    if (ch === "(") depth++;
+    if (ch === ")") depth = Math.max(0, depth - 1);
+    if (depth === 0 && (ch === "\n" || ch === ";" || ch === "," || ch === "•")) {
+      parts.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  parts.push(cur);
+  return parts
+    .map((x) => x.replace(/^[\s\-*•.]+|[\s.]+$/g, "").trim())
+    .filter((x) => x.length > 1 && !isNoneAnswer(x))
+    .slice(0, 12);
+}
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /** Everything on file about a client's food, across their whole account. */
@@ -179,9 +215,20 @@ export function buildFoodHistory(input: FoodHistoryInput): FoodHistory {
   };
   const healthText = (answers: QA[], at: string, source: string, missed: string) => {
     const fromMissed = missed && !isNoneAnswer(missed) ? safetyNotes([{ label: "", value: missed }]) : [];
-    // a condition named in "anything I missed" keeps their words (the medication, the detail) as its mention
-    for (const h of safetyNotes(answers)) say("health", h.toLowerCase(), cap(h), { at, source, text: fromMissed.includes(h) ? missed : h });
-    // otherwise that answer is health only when it says something about the body, not "trains at 6"
+    const healthAnswer = healthAnswerOf(answers);
+    const parts = healthAnswer && !isNoneAnswer(healthAnswer) ? splitHealthParts(healthAnswer) : [];
+    const fromParts = new Map<string, string>();
+    for (const part of parts) for (const h of safetyNotes([{ label: "", value: part }])) if (!fromParts.has(h)) fromParts.set(h, part);
+    // a condition named in "anything I missed" or the health answer keeps their words (the medication, the detail) as its mention
+    for (const h of safetyNotes(answers)) {
+      say("health", h.toLowerCase(), cap(h), { at, source, text: fromParts.get(h) ?? (fromMissed.includes(h) ? missed : h) });
+    }
+    // every other thing the health answer names is health in their words
+    for (const part of parts) {
+      if (safetyNotes([{ label: "", value: part }]).length) continue;
+      say("health", norm(part) || part.toLowerCase(), cap(part), { at, source, text: part });
+    }
+    // otherwise "anything I missed" is health only when it says something about the body, not "trains at 6"
     if (missed && !isNoneAnswer(missed) && !fromMissed.length && BODY.test(missed)) {
       say("health", norm(missed) || missed.toLowerCase(), cap(missed), { at, source, text: missed });
     }
@@ -217,6 +264,13 @@ export function buildFoodHistory(input: FoodHistoryInput): FoodHistory {
     if (/allerg|intoleran|celiac|coeliac|anaphyla/i.test(n.text)) {
       for (const a of allergensIn(n.text)) say("allergy", a.toLowerCase(), a, { at, source: "Your note", text: n.text });
     }
+  }
+  for (const it of input.profileItems ?? []) {
+    const at = day(it.at);
+    const source = it.source === "client" ? "Their health profile" : "Health profile";
+    const text = [it.label, it.details].map((v) => clean(v)).filter(Boolean).join(": ");
+    if (it.kind === "allergy") allergyText(text, at, source);
+    else if (it.kind === "condition") dietText(text, at, source);
   }
   for (const c of input.coachChanges ?? []) {
     const t = clean(c.text);
@@ -336,16 +390,17 @@ export function knownRestrictions(h: FoodHistory): string | null {
  * file are kept to on every plan; earlier preferences lose to the latest
  * answer; past changes and how each plan went inform the next one.
  */
-export function foodHistoryForAi(h: FoodHistory, unit: "lb" | "kg" = "kg"): string | null {
+export function foodHistoryForAi(h: FoodHistory, unit: "lb" | "kg" = "kg", opts: { health?: boolean } = {}): string | null {
   const live = (fs: StickyFact[]) => fs.filter((f) => !f.dismissed);
   const fact = (f: StickyFact) => `${f.label} (said ${saidWhen(f)}${f.mentions[0] && f.mentions[0].text !== f.label ? `: "${f.mentions[0].text.replace(/\s+/g, " ").slice(0, 160)}"` : ""})`;
   const lines: string[] = [];
   if (live(h.allergies).length)
     lines.push(`- Allergies / intolerances on file (keep every plan clear of these, even when the latest form doesn't repeat them): ${live(h.allergies).map(fact).join("; ")}`);
   if (live(h.diets).length) lines.push(`- Diets on file: ${live(h.diets).map(fact).join("; ")}`);
-  if (live(h.health).length)
+  // with a HEALTH PROFILE alongside (healthProfileForAi), health is read there instead
+  if (opts.health !== false && live(h.health).length)
     lines.push(`- Health on file (plan conservatively around these and with their doctor or a registered dietitian): ${live(h.health).map(fact).join("; ")}`);
-  const removed = [...h.allergies, ...h.diets, ...h.health].filter((f) => f.dismissed);
+  const removed = [...h.allergies, ...h.diets, ...(opts.health !== false ? h.health : [])].filter((f) => f.dismissed);
   if (removed.length) lines.push(`- No longer applies (the coach checked): ${removed.map((f) => f.label).join(", ")}`);
   const earlier = h.preferences.slice(1, 4);
   if (earlier.length)

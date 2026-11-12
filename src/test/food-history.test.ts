@@ -149,7 +149,7 @@ describe("one read for the card and every AI path", () => {
     expect(server).toContain("export async function loadFoodContext(");
     expect(server).toContain('.from("client_food_history_dismissals")');
     expect(server).toContain('.from("nutrition_plan_edits").select("instructions, applied_at")');
-    expect(server).toContain("foodHistoryForAi(history, unit)");
+    expect(server).toContain("foodHistoryForAi(history, unit, { health: false })");
     expect(server).toContain("mi.foodNotes, mi.foodRestrictions)");
     expect(read("src/lib/nutrition-plan-edits.server.ts")).toContain("foodRestrictions: food.restrictions");
     const card = read("src/components/nutrition/FoodNotesCard.tsx");

@@ -558,7 +558,7 @@ describe("the targets AI reasons from the athlete, not a template", () => {
       { athlete: "ATHLETE (computed…)\nBodyweight now: cutting", safety: ["GLP-1 medication"] },
     );
     expect(p).toContain("ATHLETE (computed…)\nBodyweight now: cutting");
-    expect(p).toContain("SAFETY NOTES: their answers mention GLP-1 medication");
+    expect(p).toContain("SAFETY NOTES: their answers or health profile mention GLP-1 medication");
     expect(p.trim().endsWith("Goal: Fat loss")).toBe(true);
   });
 

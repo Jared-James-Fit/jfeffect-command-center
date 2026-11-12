@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/app-shell";
 import { PageBodySkeleton } from "@/components/route-pending";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { ClipboardList, Download, FileText, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
+import { ClipboardList, Download, FileText, Pill, Scale, ShieldAlert, Target, Utensils } from "lucide-react";
 import { NUTRITION_DISCLAIMER, NUTRITION_DISCLAIMER_TITLE } from "@/lib/nutrition-disclaimer";
 import { getCoachAssignedMealPlan } from "@/lib/nutrition-targets/member-targets.functions";
 import { clientWorkoutsQuery, PAGE_CACHE_MS, PAGE_FRESH_MS, primaryWorkouts } from "@/lib/client-workouts-query";
@@ -46,6 +46,8 @@ import { TodaysIntakeCard, LogFoodToolButton } from "@/components/nutrition/Toda
 import { CookbookToolTile } from "@/components/nutrition/CookbookSheet";
 import { NutritionToolsCard, ToolRow, ToolTile } from "@/components/nutrition/NutritionToolsCard";
 import { GroceryListEntryCard } from "@/components/nutrition/GroceryListSheet";
+import { SupplementList } from "@/components/nutrition/supplements-ui";
+import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { RecentAdherenceWidget } from "@/components/nutrition/RecentAdherenceWidget";
 import { ClientCardioSection } from "@/components/cardio/ClientCardioSection";
 
@@ -153,6 +155,8 @@ function PortalNutrition() {
 
   const [downloading, setDownloading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [suppsOpen, setSuppsOpen] = useState(false);
+  const supplements = readPlanSupplements(plan?.supplements ?? null);
   const [disclaimerOpen, setDisclaimerOpen] = useState(false);
   const weighingRules = plan?.food_weighing_rules ? String(plan.food_weighing_rules).trim() : "";
   const handleDownload = async () => {
@@ -231,10 +235,13 @@ function PortalNutrition() {
                 </div>
               )}
               {/* 3. The meal plan's own tools, right under it: weighing, then the grocery list. */}
-              {(weighingRules || clientId) && (
+              {(weighingRules || clientId || supplements.items.length > 0) && (
                 <div className="space-y-2">
                   {weighingRules && (
                     <ToolRow icon={Scale} title="How to weigh your food" onClick={() => setRulesOpen(true)} />
+                  )}
+                  {supplements.items.length > 0 && (
+                    <ToolRow icon={Pill} title="Supplements" hint={supplements.items.map((x) => x.name).join(", ")} onClick={() => setSuppsOpen(true)} />
                   )}
                   {clientId && (
                     <SectionErrorBoundary label="Grocery list">
@@ -365,6 +372,14 @@ function PortalNutrition() {
           <span className="font-semibold underline underline-offset-2">Read the disclaimer</span>
         </button>
 
+        {supplements.items.length > 0 && (
+          <NutritionInfoSheet open={suppsOpen} onOpenChange={setSuppsOpen} title="Supplements" icon={Pill}>
+            <div className="space-y-3">
+              <p className="text-[13px] text-muted-foreground">From your coach, picked for you. Food comes first: these fill the gaps.</p>
+              <SupplementList value={supplements} />
+            </div>
+          </NutritionInfoSheet>
+        )}
         {weighingRules && (
           <NutritionInfoSheet open={rulesOpen} onOpenChange={setRulesOpen} title="How to weigh your food" icon={Scale}>
             <RulesList text={weighingRules} />

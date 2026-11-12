@@ -6,6 +6,8 @@
  * answer is null and listed as missing, never guessed. Deterministic.
  */
 import { cardioPlanFromTargets, type CardioPlan } from "./cardio";
+import { healthProfileFromRecords } from "@/lib/health/health-load";
+import { entryLine, healthProfileForAi } from "@/lib/health/health-profile";
 import { daysBetween, localDate, mean, round } from "./core";
 import type { EquipmentResolution } from "./equipment";
 import { experienceLevel, setupNotes, type ExperienceLevel } from "./first-program";
@@ -74,6 +76,8 @@ export type AthleteContext = {
   cardio: CardioPlan;
   equipment: EquipmentResolution;
   injuries: { stated: string[]; painReports: Array<{ date: string | null; area: string | null; level: number | null; note: string | null }>; areas: string[] };
+  /** Their health profile as the training AI reads it (healthProfileForAi), conditions and medications, drug-tested. */
+  health?: { text: string | null; conditions: string[]; medications: string[]; drugTested: boolean | null };
   notes: { coach: string[]; client: string[]; checkins: Array<{ date: string | null; form: string | null; answers: Array<{ q: string; a: string }> }> };
   recovery: { sessionRpeAvg: number | null; ratingAvg: number | null; fatigue: Record<string, number>; sleep: Record<string, number>; checkouts: number };
   memory: { established: Array<{ statement: string; category: string | null; date: string; kind: string; confidence: string }>; proposed: number; rejected: number };
@@ -180,7 +184,10 @@ export function buildAthleteContext(x: {
 
   const durations = trainedDays.map((d) => d.durationMin).filter((n): n is number => n != null && n >= 10 && n <= 240);
   const booked = bookedSessionLength(rec.ptSessions);
+  const healthProfile = rec.health ? healthProfileFromRecords(rec.health, today) : null;
   const stated = [g?.injuries_has ? g.injuries_details || "Injury noted in Goals & Setup (no details)" : null, rec.client.injuries, rec.client.intake_injuries].filter((s): s is string => !!s?.trim()).map((s) => s.trim());
+  // injuries the coach or client recorded, or said on a form (Goals & Setup's are already in)
+  for (const e of healthProfile?.injuries ?? []) if (e.from !== "setup") stated.push(entryLine(e, { when: false }));
   const pain = x.history.recovery.painReports.filter((p) => !p.date || !firstDate || p.date >= (x.prev?.coverage.firstDate ?? firstDate) || daysBetween(p.date, today) <= 120);
   const areas = [...new Set(pain.map((p) => (p.area ?? "").toLowerCase().trim()).filter(Boolean))];
 
@@ -264,6 +271,14 @@ export function buildAthleteContext(x: {
     cardio: cardioPlanFromTargets(x.rec.cardioTargets ?? [], x.rec.cardioCompletions ?? [], x.rec.today),
     equipment: x.equipment,
     injuries: { stated, painReports: pain, areas },
+    health: healthProfile
+      ? {
+          text: healthProfileForAi(healthProfile, "training"),
+          conditions: healthProfile.conditions.map((e) => entryLine(e, { when: false })),
+          medications: healthProfile.medications.map((e) => entryLine(e, { when: false })),
+          drugTested: healthProfile.drugTested,
+        }
+      : undefined,
     notes: {
       coach: coachNotes,
       client: clientNotes,

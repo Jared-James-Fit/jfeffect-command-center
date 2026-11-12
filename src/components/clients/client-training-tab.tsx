@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   AlertTriangle, Archive, BarChart3, Trash2, BookOpen, BrainCircuit, CalendarDays, CalendarPlus, ChevronDown, ChevronRight,
-  Download, Dumbbell, Flame, FlagOff, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles, Wand2,
+  Download, Dumbbell, Flame, FlagOff, HeartPulse, History, Layers, Loader2, MoreHorizontal, Pencil, Plus, Sparkles, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -54,6 +54,8 @@ import { TrainingScheduleCard } from "@/components/training-schedule-card";
 import { useServerFn } from "@tanstack/react-start";
 import { rescheduleFromCommittedDays } from "@/lib/schedule-bulk.functions";
 import { ClientNotesCard } from "@/components/messages/client-notes-log";
+import { HealthCard, useHealthProfile } from "@/components/health/HealthCard";
+import { healthSummary } from "@/lib/health/health-profile";
 import { lazyWithRetry } from "@/lib/lazy-chunk";
 
 const ScheduleManagerShell = lazyWithRetry(() =>
@@ -691,7 +693,7 @@ function NewBlockDialog({
 
 /* ───────────────────────────── Setup ───────────────────────────── */
 
-type SetupSheet = "days" | "maxes" | "warmup" | null;
+type SetupSheet = "days" | "maxes" | "warmup" | "health" | null;
 
 function AthleteSetupCard({ clientId, client }: { clientId: string; client: ClientRow | null }) {
   const [sheet, setSheet] = useState<SetupSheet>(null);
@@ -700,6 +702,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
     queryFn: () => listClientMaxes(clientId),
     enabled: !!clientId,
   });
+  const { data: health } = useHealthProfile(clientId);
   const { data: warmup } = useQuery({
     queryKey: ["client-warmup", clientId],
     queryFn: async () =>
@@ -724,17 +727,20 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
       <SetupRow icon={<CalendarDays className="h-4 w-4" />} title="Training days" value={daysValue} empty="Not set: workouts can't be placed" onClick={() => setSheet("days")} />
       <SetupRow icon={<Dumbbell className="h-4 w-4" />} title="Maxes" value={maxesValue} empty="None yet: % loads can't be worked out" onClick={() => setSheet("maxes")} />
       <SetupRow icon={<Flame className="h-4 w-4" />} title="Warm-up" value={warmup?.warmup_protocol_id ? "Their own protocol" : "Program default"} onClick={() => setSheet("warmup")} />
+      <SetupRow icon={<HeartPulse className="h-4 w-4" />} title="Health & injuries" value={health ? healthSummary(health) : null} empty="Nothing on file" onClick={() => setSheet("health")} />
 
       <Sheet open={sheet !== null} onOpenChange={(v) => !v && setSheet(null)}>
         <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:mx-auto sm:max-w-lg">
           <SheetHeader className="mb-3 text-left">
-            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : "Warm-up"}</SheetTitle>
+            <SheetTitle>{sheet === "days" ? "Training days" : sheet === "maxes" ? "Maxes" : sheet === "health" ? "Health & injuries" : "Warm-up"}</SheetTitle>
             <SheetDescription>
               {sheet === "days"
                 ? "Their upcoming workouts move onto the days you pick."
                 : sheet === "maxes"
                   ? "1RMs and training maxes for this athlete."
-                  : "Which warm-up they get before each workout."}
+                  : sheet === "health"
+                    ? "Generate Next Program and Edit with AI train around everything here."
+                    : "Which warm-up they get before each workout."}
             </SheetDescription>
           </SheetHeader>
           <Suspense fallback={<div className="py-6 text-sm text-muted-foreground">Loading…</div>}>
@@ -750,6 +756,7 @@ function AthleteSetupCard({ clientId, client }: { clientId: string; client: Clie
             )}
             {sheet === "maxes" && <ClientMaxesPanel clientId={clientId} embedded />}
             {sheet === "warmup" && <ClientWarmupCard clientId={clientId} embedded onSaved={() => setSheet(null)} />}
+            {sheet === "health" && <HealthCard clientId={clientId} bare />}
           </Suspense>
         </SheetContent>
       </Sheet>

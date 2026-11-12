@@ -84,6 +84,7 @@ const ProgressMetricsPanel = lazyDefault(() => import("@/components/progress-met
 const ClientAnalyticsDashboard = lazyDefault(() => import("@/components/analytics/client-analytics-dashboard"), "ClientAnalyticsDashboard");
 const BasicInfoForm = lazyDefault(() => import("@/components/basic-info-form"), "BasicInfoForm");
 const ClientFileNotes = lazyDefault(() => import("@/components/clients/client-file-notes"), "ClientFileNotes");
+const HealthCard = lazyDefault(() => import("@/components/health/HealthCard"), "HealthCard");
 const ProfilePictureCapture = lazyDefault(() => import("@/components/profile-picture-capture"), "ProfilePictureCapture");
 const AgreementStatusPanel = lazyDefault(() => import("@/components/agreement-status-panel"), "AgreementStatusPanel");
 const ClientAgreementPanel = lazyDefault(() => import("@/components/coaching-agreement/client-agreement-panel"), "ClientAgreementPanel");
@@ -1940,6 +1941,10 @@ function ClientOverviewSnapshot({
       {/* The coach's notes on this client first (Quick Notes saved to them land here). */}
       <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
         <ClientFileNotes clientId={clientId} limit={3} />
+      </Suspense>
+      {/* Their health in one place: injuries, pain, conditions, medications, supplements, drug testing. */}
+      <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
+        <HealthCard clientId={clientId} />
       </Suspense>
       <ClientCalendarSyncStatus clientId={clientId} />
       {/*

@@ -45,6 +45,8 @@ function athleteSection(ctx: AthleteContext): string {
   if (e.constraints.length) lines.push(`Equipment rules:\n${list(e.constraints)}`);
   if (e.conflicts.length) lines.push(`Equipment conflicts in the records:\n${list(e.conflicts)}`);
   lines.push(`Injuries / restrictions: ${ctx.injuries.stated.join(" · ") || "none stated"}`);
+  if (ctx.health?.conditions.length) lines.push(`Health conditions (train around them, never diagnose; anything needing medical clearance goes to the coach): ${ctx.health.conditions.join(" · ")}`);
+  if (ctx.health?.medications.length) lines.push(`Medications (some change heart rate, recovery or bleeding risk; never change the program because of one without the coach): ${ctx.health.medications.join(" · ")}`);
   if (ctx.injuries.painReports.length) lines.push(`Pain reported after workouts:\n${list(ctx.injuries.painReports.map((x) => `${x.date ?? "?"}: ${x.area ?? "?"} level ${x.level ?? "?"}${x.note ? ` "${x.note}"` : ""}`))}`);
   lines.push(`Recovery (check-outs on ${ctx.recovery.checkouts} trained workouts): session RPE ${ctx.recovery.sessionRpeAvg ?? "—"}, rating ${ctx.recovery.ratingAvg ?? "—"}, fatigue ${JSON.stringify(ctx.recovery.fatigue)}, sleep ${JSON.stringify(ctx.recovery.sleep)}`);
   return lines.join("\n");
@@ -170,6 +172,7 @@ export function firstProgramText(intel: GeneratorIntel): string {
     ctx.session.ptMinutes ? `${ctx.session.ptMinutes}-min PT sessions` : ctx.session.goalsMinutes ? `${ctx.session.goalsMinutes}-min sessions` : null,
     ctx.equipment.items.length ? `equipment (${ctx.equipment.confidence})` : null,
     ctx.injuries.stated.length ? "injuries" : "no injuries stated",
+    ctx.health?.conditions.length || ctx.health?.medications.length ? "health conditions / medications" : null,
     ctx.goals.notes ? "what else they said at setup" : null,
   ].filter(Boolean) as string[];
   const maxes = intel.history.lifts.filter((l) => l.maxOnFileKg != null).map((l) => `${l.lift} ${fmtLoad(l.maxOnFileKg as number, ctx.unit)}`);

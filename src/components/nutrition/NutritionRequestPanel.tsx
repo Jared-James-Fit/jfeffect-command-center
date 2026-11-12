@@ -35,6 +35,7 @@ import {
   markNutritionPlanAppliedFn,
   reviseNutritionPlanFn,
   sendNutritionRequestFn,
+  setAiPlanSupplementsFn,
   undoNutritionRevisionFn,
 } from "@/lib/nutrition-ai-plans.functions";
 import { parseFoodWeighingRules, parseMealPlan } from "@/components/nutrition/MealPlanBulkPaste";
@@ -43,6 +44,8 @@ import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
 import { LEAN_GROCERY_LIST, hardToFindFoods, planFoodStats, prepDrift, prepDriftLine, type HardToFind, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
 import { allergenConflictLine, allergenConflicts, foodHistoryKey, onFileRules, type FoodHistory } from "@/lib/nutrition-targets/food-history";
+import { planSupplementsFrom, type SupplementAdvice, type SupplementPick } from "@/lib/nutrition-targets/supplements";
+import { AiSupplementsReview } from "@/components/nutrition/supplements-ui";
 
 type Req = {
   id: string;
@@ -66,6 +69,8 @@ type Req = {
     revise_instructions?: string | null;
     /** Coach updates already written, newest last (Undo restores the plan before the last one). */
     revisions?: Array<{ at: string; instructions: string }> | null;
+    /** The supplement advice (supplements.ts) with the coach's keep / add, published with the plan. */
+    supplements?: SupplementAdvice | null;
   };
 };
 
@@ -117,6 +122,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
   const appliedFn = useServerFn(markNutritionPlanAppliedFn);
   const reviseFn = useServerFn(reviseNutritionPlanFn);
   const undoFn = useServerFn(undoNutritionRevisionFn);
+  const setSuppsFn = useServerFn(setAiPlanSupplementsFn);
   const [change, setChange] = useState("");
   const [changing, setChanging] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -178,8 +184,10 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       phase: plan.phase ?? phaseFromPlanText(plan.meal_plan_text) ?? phaseFromText(plan.targets_text?.match(/^Goal:\s*(.+)$/m)?.[1]),
       // Daily steps + cardio sessions ride along into the editor.
       targetsText: plan.targets_text ?? null,
+      // the supplements the coach kept in the review
+      supplements: plan.supplements?.picks ? planSupplementsFrom(plan.supplements as SupplementAdvice) : null,
     };
-  }, [plan?.meal_plan_text, plan?.targets_text, plan?.phase]);
+  }, [plan?.meal_plan_text, plan?.targets_text, plan?.phase, plan?.supplements]);
   const [manualOpen, setManualOpen] = useState(false);
 
   // The plan at a glance: each day's numbers + steps + cardio, from the AI output.
@@ -322,6 +330,24 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
 
   const firstName = String((data?.client as any)?.name ?? data?.clientName ?? "").trim().split(/\s+/)[0] || "the client";
 
+  /** The coach's keep / leave out / add on the AI plan's supplements, saved on the AI plan before it's published. */
+  const [savingSupps, setSavingSupps] = useState(false);
+  const saveSupplements = async (next: { picks: SupplementPick[]; extras: SupplementPick[] }) => {
+    if (!latest) return;
+    setSavingSupps(true);
+    qc.setQueryData(key, (old: any) =>
+      old ? { ...old, requests: old.requests.map((r: any) => (r.id === latest.id && r.plan ? { ...r, plan: { ...r.plan, supplements: { ...r.plan.supplements, ...next } } } : r)) } : old,
+    );
+    try {
+      await setSuppsFn({ data: { submissionId: latest.id, picks: next.picks, extras: next.extras } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't save the supplements");
+      void qc.invalidateQueries({ queryKey: key });
+    } finally {
+      setSavingSupps(false);
+    }
+  };
+
   /** One tap: the AI plan becomes the client's plan from today; the one before it goes to Previous plans. */
   const publish = async () => {
     if (!latest || !plan?.meal_plan_text || !prefill?.days.length) return;
@@ -334,6 +360,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         days: prefill.days,
         targetsText: plan.targets_text,
         foodWeighingRules: prefill.food_weighing_rules,
+        supplements: prefill.supplements,
       });
       await appliedFn({ data: { submissionId: latest.id } }).catch(() => {});
       fireAppEvent("nutrition_targets_updated", clientId);
@@ -498,6 +525,13 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
           )}
           {prefill && !prefill.days.length && (
             <p className="text-[13px] text-warning">The meal plan didn't read as days. Copy it and paste it into Build a plan by hand, or regenerate.</p>
+          )}
+          {plan.supplements?.picks && (
+            <AiSupplementsReview
+              advice={plan.supplements as SupplementAdvice}
+              busy={savingSupps}
+              onChange={(next) => void saveSupplements(next)}
+            />
           )}
           <div className="flex flex-col gap-2 sm:flex-row">
             {/* Default: one tap updates the client's plan. The editor is there for anything to change by hand. */}

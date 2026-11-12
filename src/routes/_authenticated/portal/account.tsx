@@ -19,6 +19,7 @@ import {
   ChevronRight,
   CreditCard,
   FileSignature,
+  HeartPulse,
   Image as ImageIcon,
   KeyRound,
   Link2,
@@ -58,6 +59,7 @@ import { WearablesCard, connectableProviders, useWearableOverview } from "@/comp
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { PushNotificationCard } from "@/components/push/push-notification-card";
 import { WeightUnitCard } from "@/components/portal/weight-unit-card";
+import { MyHealthSection, myHealthSummary, useMyHealthItems } from "@/components/health/my-health-section";
 import { UserAvatar } from "@/components/user-avatar";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
@@ -74,6 +76,7 @@ type SectionId =
   | "units"
   | "notifications"
   | "coaching-agreement"
+  | "health"
   | "basic-information"
   | "profile-picture"
   | "social-media"
@@ -90,6 +93,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   notifications: "notifications",
   "coaching-agreement": "coaching-agreement",
   agreement: "coaching-agreement",
+  health: "health",
+  injuries: "health",
+  medications: "health",
   "basic-information": "basic-information",
   basic: "basic-information",
   "profile-picture": "profile-picture",
@@ -129,6 +135,9 @@ function AccountPage() {
       return data;
     },
   });
+
+  // Health & injuries: a coaching client's (their coach plans around it).
+  const { data: healthItems = [] } = useMyHealthItems(goalsOn ? client?.id : null, isImpersonating);
 
   // Fill the form once per account: a refetch (after a save, or coming back
   // to the app) must never overwrite what's being typed.
@@ -445,6 +454,20 @@ function AccountPage() {
                 title="Goals & setup"
                 summary={goalsSummary(goalsStatus)}
               />
+            )}
+
+            {/* Health & injuries: what their coach plans training, nutrition and supplements around. */}
+            {goalsOn && client && (
+              <SettingsSection
+                id="health"
+                icon={HeartPulse}
+                title="Health & injuries"
+                summary={myHealthSummary(healthItems) ? { text: myHealthSummary(healthItems)! } : { text: "Nothing on file" }}
+              >
+                <SectionErrorBoundary label="Health & injuries">
+                  <MyHealthSection clientId={client.id} preview={isImpersonating} />
+                </SectionErrorBoundary>
+              </SettingsSection>
             )}
 
             {/* Coaching Agreement: status, sign if needed, and the signed copy to view any time.

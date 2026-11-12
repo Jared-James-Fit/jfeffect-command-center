@@ -369,6 +369,8 @@ export type IntelRecords = {
   cardioCompletions?: import("./cardio").RawCardioCompletion[];
   /** Their booked PT sessions, 8 weeks back to 4 ahead: the hour they train in, when they train with the coach. */
   ptSessions?: RawPtSession[];
+  /** What their health profile is built from (health-load.ts): injuries, conditions, medications, their forms' health answers. */
+  health?: import("@/lib/health/health-load").HealthRecords | null;
   settings: IntelSettings;
   scope: IntelScope;
   /** yyyy-mm-dd "today" in the athlete's time zone. */
