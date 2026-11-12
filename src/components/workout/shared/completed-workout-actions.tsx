@@ -19,6 +19,7 @@ import {
   type ReviewInitial,
 } from "@/components/workout/shared/workout-review-editor";
 import type { WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
+import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
 
 type Props = {
   ctx: WorkoutCompletionCtx;
@@ -44,7 +45,14 @@ type Props = {
   meta?: string | null;
   /** More of the same card under the status row (the session time line). */
   children?: ReactNode;
+  /** The athlete's own finished workout: its film (set videos) shows here, to post or see in the feed. */
+  filmCompletionId?: string | null;
+  /** When it finished: a film whose review never came posts by itself after FILM_REVIEW_WAIT_MS. */
+  completedAt?: string | null;
 };
+
+/** How long a film waits for its review (where the athlete's switch is) before it posts by itself. */
+const FILM_REVIEW_WAIT_MS = 15 * 60_000;
 
 export function CompletedWorkoutActions({
   ctx,
@@ -59,6 +67,8 @@ export function CompletedWorkoutActions({
   onOpenScore,
   meta,
   children,
+  filmCompletionId,
+  completedAt,
 }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
   const hasReview = !!initialReview?.submittedAt;
@@ -111,6 +121,15 @@ export function CompletedWorkoutActions({
           </div>
         </div>
         {children}
+        {filmCompletionId && ctx.kind === "client" && (
+          <WorkoutFilmRow
+            completionId={filmCompletionId}
+            dayId={ctx.dayId}
+            // after the review (their switch is in it), or once they've clearly skipped it
+            auto={hasReview || (!!completedAt && Date.now() - Date.parse(completedAt) > FILM_REVIEW_WAIT_MS)}
+            className="border-t border-border/70 pt-2.5"
+          />
+        )}
       </Card>
       <WorkoutReviewEditor
         open={reviewOpen}

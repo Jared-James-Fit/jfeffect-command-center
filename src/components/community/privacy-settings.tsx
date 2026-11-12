@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Globe } from "lucide-react";
 import { toast } from "sonner";
+import { useEntitlement } from "@/lib/service-tier";
+import { useFilmAutoPost, useSetFilmAutoPost } from "@/lib/workout-film-client";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -96,6 +98,24 @@ export function CoachPublicRow() {
         <Globe className="h-4 w-4" />
       </span>
     </div>
+  );
+}
+
+/** Workout film: a finished workout's set videos post to Crew by themselves (coaching clients, who film sets). */
+export function PostMyFilmRow() {
+  const { isImpersonating } = useClientImpersonation();
+  const filming = useEntitlement("lift_review");
+  const autoOn = useFilmAutoPost(!isImpersonating && filming);
+  const set = useSetFilmAutoPost();
+  if (isImpersonating || !filming || autoOn === undefined) return null;
+  return (
+    <label data-film-switch className={ROW}>
+      <span className="min-w-0">
+        <span className={TITLE}>Post my film</span>
+        <span className={NOTE}>Sets you film in a workout post to Crew when you finish it, each clip with its set details. Off, they stay private and you can post them from the workout.</span>
+      </span>
+      <Switch checked={autoOn} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} aria-label="Post my film" />
+    </label>
   );
 }
 

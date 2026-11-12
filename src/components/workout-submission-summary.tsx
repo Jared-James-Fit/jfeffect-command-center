@@ -20,6 +20,7 @@ import { SCOPE_LABEL, formatLoad, formatTonnage, repRecordLabel, tonnageRecordLa
 import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 import { RecapPostFooter } from "@/components/community/recap-post";
+import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
 import { usePublicSessionTitle } from "@/lib/community.queries";
 import { SoundToggleButton } from "@/components/sound-toggle";
 
@@ -61,10 +62,12 @@ type Props = {
    * "View as client"); the legacy story Share/Save buttons remain there.
    */
   completionId?: string | null;
+  /** The workout (its set videos are its film). */
+  dayId?: string | null;
   onClose?: () => void;
 };
 
-export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, completionId, onClose }: Props) {
+export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutTitle, durationMin, workoutDate, sessionRating, sessionRpe, pain, prs, records, points, athleteName, displayUnit = "lb", cardio, completionId, dayId, onClose }: Props) {
   // Client workouts use the scope-aware server records; the legacy session PR
   // list only remains for surfaces without them (memberships).
   const usesRecords = records !== undefined;
@@ -429,7 +432,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
         >
           {completionId ? (
             // Right after training is when they're proudest: posting is one tap
-            // (with what it earns); the camera opens the full studio.
+            // (with what it earns); the camera opens the full studio. Their
+            // film (set videos) sits above it: posting by itself, or one tap.
+            <div className="w-full">
+            <WorkoutFilmRow completionId={completionId} dayId={dayId ?? null} className="mb-2.5 rounded-2xl border border-border/80 bg-card px-3 py-2.5" />
             <RecapPostFooter
               completionId={completionId}
               completedAt={workoutDate ?? null}
@@ -437,6 +443,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               onDone={() => { onOpenChange(false); onClose?.(); }}
               onStudio={(caption) => { setDraftCaption(caption); setShareMounted(true); setShareOpen(true); }}
             />
+            </div>
           ) : (
             <>
               <div className="grid w-full grid-cols-2 gap-2">

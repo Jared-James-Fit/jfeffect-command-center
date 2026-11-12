@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
+import { FilmAutoPostSwitch } from "@/components/workout/shared/workout-film";
 import { useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import {
@@ -487,6 +488,9 @@ export function WorkoutReviewEditor({
               {coached ? "Add a note for your coach" : "Add a note"}
             </button>
           )}
+
+          {/* their film: post it to Crew by itself, or keep it private (saved on the account) */}
+          {ctx.kind === "client" && !actAsClientId && <FilmAutoPostSwitch dayId={ctx.dayId} />}
 
           {isEdit && initial?.editCount != null && initial.editCount > 0 && (
             <p className="text-[11px] text-muted-foreground">
