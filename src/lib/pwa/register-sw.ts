@@ -129,6 +129,9 @@ export async function clearAllAppCaches() {
   if (typeof window === "undefined") return;
   // Signed chat-media URLs belong to the signed-in user.
   void import("@/hooks/use-chat-signed-urls").then((m) => m.clearChatSignedUrls()).catch(() => {});
+  // Crew's and photos' links too (kept on the phone for a day)
+  void import("@/lib/community-media").then((m) => m.clearCrewSignedUrls()).catch(() => {});
+  void import("@/components/user-avatar").then((m) => m.clearAvatarSignedUrls()).catch(() => {});
   // Chat videos kept on the phone belong to them too.
   void import("@/lib/chat-video-store").then((m) => m.clearChatVideos()).catch(() => {});
   try {

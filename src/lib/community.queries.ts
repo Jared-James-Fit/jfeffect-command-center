@@ -50,7 +50,7 @@ import {
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { getClientTodayItems } from "@/lib/today-dashboard.functions";
 import { cleanDayTitle, computeTodayState } from "@/lib/workout-today";
-import { pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
+import { cachedCommunityUrls, pickMedia, releasePicked, removeCommunityFiles, signCommunityPaths, uploadCommunityAvatar, uploadPicked, uploadVoiceMemo, type PickedMedia, type UploadedMedia } from "@/lib/community-media";
 import { onRealtimeRejoin, useResyncOnResume } from "@/hooks/use-resync-on-resume";
 import { feedAnchor } from "@/lib/feed-anchor";
 
@@ -156,6 +156,9 @@ export function usePostMediaUrls(posts: CommunityPost[]) {
     queryKey: ["community-media-urls", key, extraKey],
     enabled: key.length > 0 || extraKey.length > 0,
     staleTime: 45 * 60 * 1000,
+    // links already on the phone paint on the first frame (no round trip, the same addresses as last time)
+    initialData: () => cachedCommunityUrls([...covers, ...extras]),
+    initialDataUpdatedAt: () => Date.now(),
     queryFn: () => signCommunityPaths([...covers, ...extras]),
   });
 }
@@ -181,6 +184,8 @@ export function useSlideThumbUrls(slides: PostSlide[]): Record<string, string> {
     queryKey: ["community-media-urls", key],
     enabled: key.length > 0,
     staleTime: 45 * 60 * 1000,
+    initialData: () => cachedCommunityUrls(paths),
+    initialDataUpdatedAt: () => Date.now(),
     queryFn: () => signCommunityPaths(paths),
   });
   return data ?? {};
@@ -192,6 +197,8 @@ export function useFullMediaUrl(path: string | null | undefined, enabled: boolea
     queryKey: ["community-media-full", path ?? null],
     enabled: enabled && !!path,
     staleTime: 45 * 60 * 1000,
+    initialData: () => (path ? cachedCommunityUrls([path])?.[path] : undefined),
+    initialDataUpdatedAt: () => Date.now(),
     queryFn: async () => (await signCommunityPaths([path]))[path!] ?? null,
   });
 }
@@ -760,6 +767,8 @@ export function useCommentMediaUrls(comments: CommunityComment[]) {
     enabled: key.length > 0,
     staleTime: 45 * 60 * 1000,
     placeholderData: (prev) => prev,
+    initialData: () => cachedCommunityUrls(paths),
+    initialDataUpdatedAt: () => Date.now(),
     queryFn: () => signCommunityPaths(paths),
   });
 }
