@@ -101,14 +101,40 @@ export function isActiveJob(j: Pick<SetVideoJob, "state">): boolean {
   );
 }
 
-/** The jobs that belong on one set: same exercise row and the same logged set. */
-export function jobsForSet(
-  all: SetVideoJob[],
-  rowId: string,
-  resultId: string | null,
-): SetVideoJob[] {
-  if (!resultId) return [];
-  return all.filter((j) => j.rowId === rowId && j.resultId === resultId && j.state !== "done");
+/**
+ * A clip filmed before its set was saved has no set record yet (`result_id`
+ * null): it's on the set by its exercise row and set number until the database
+ * links it (`pl_row_results_link_set_videos` when the set is saved, or
+ * `set_video_attach` finding the record itself). Only recent ones count, so a
+ * repeat of the workout never shows an old unlinked clip.
+ */
+export const UNLINKED_SET_VIDEO_MS = 18 * 60 * 60 * 1000;
+
+export type SetRef = { rowId: string; setIndex: number; resultId: string | null };
+
+/** Is this stored clip on this set: its own record, or (filmed before the set was saved) its row and number. */
+export function videoOnSet(
+  v: { row_id: string | null; result_id: string | null; set_index: number; created_at: string },
+  set: SetRef,
+  now = Date.now(),
+): boolean {
+  if (v.result_id) return !!set.resultId && v.result_id === set.resultId;
+  return (
+    v.row_id === set.rowId &&
+    v.set_index === set.setIndex &&
+    now - Date.parse(v.created_at) < UNLINKED_SET_VIDEO_MS
+  );
+}
+
+/** Is this upload for this set: its record when it had one, else its row and set number. */
+export function jobOnSet(j: Pick<SetVideoJob, "rowId" | "resultId" | "setIndex">, set: SetRef): boolean {
+  if (j.rowId !== set.rowId) return false;
+  return j.resultId ? j.resultId === set.resultId : j.setIndex === set.setIndex;
+}
+
+/** The uploads on one set that haven't landed yet. */
+export function jobsForSet(all: SetVideoJob[], set: SetRef): SetVideoJob[] {
+  return all.filter((j) => j.state !== "done" && jobOnSet(j, set));
 }
 
 /** "Preparing", "Uploading 42%", "Checking", "Sending to your coach". */

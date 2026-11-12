@@ -1,8 +1,10 @@
 /**
  * A set's video, at the end of its row (a coaching client's sets only):
- *   · a quiet camera once the set is logged: one tap opens the phone's own
- *     sheet (Take Video / Photo Library / Choose File) and the clip goes in
- *     the background while they keep logging
+ *   · a quiet camera on every set, logged or not (people film the set before
+ *     they log it): one tap opens the phone's own sheet (Take Video / Photo
+ *     Library / Choose File) and the clip goes in the background while they
+ *     keep logging; one filmed before the set is saved goes on it by its row
+ *     and set number, and the database ties it to the set once it's saved
  *   · a ring with how far it's got while it's on its way
  *   · the clip's poster once it's on the set (and in the coach chat): a tap
  *     plays it, says where it is in the chat, or takes it off
@@ -30,9 +32,11 @@ import { useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import {
   dropSetVideoJob,
   isActiveJob,
+  jobOnSet,
   jobStatusText,
   jobsForSet,
   useSetVideoJobs,
+  videoOnSet,
   type SetVideoJob,
 } from "@/lib/set-videos/jobs";
 
@@ -167,7 +171,7 @@ export function useRowHasSetVideos(dayId: string, rowId: string, enabled: boolea
   return useMemo(
     () =>
       enabled &&
-      ((data ?? []).some((v) => v.row_id === rowId && v.result_id) ||
+      ((data ?? []).some((v) => v.row_id === rowId) ||
         jobs.some((j) => j.rowId === rowId && j.state !== "done")),
     [data, jobs, rowId, enabled],
   );
@@ -201,22 +205,17 @@ export function SetVideoCell(props: SetVideoCellProps) {
   const pickSeq = useRef(0);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const stored = useMemo(
-    () => (resultId ? (data ?? []).filter((v) => v.result_id === resultId) : []),
-    [data, resultId],
-  );
+  const set = useMemo(() => ({ rowId, setIndex, resultId }), [rowId, setIndex, resultId]);
+  const stored = useMemo(() => (data ?? []).filter((v) => videoOnSet(v, set)), [data, set]);
   // Just sent and not read back yet: shown from the job, so the set never flicks back to the camera.
   const videos = useMemo(() => {
-    const landed = resultId
-      ? allJobs.filter(
-          (j) =>
-            j.state === "done" &&
-            j.rowId === rowId &&
-            j.resultId === resultId &&
-            j.setVideoId &&
-            !stored.some((v) => v.id === j.setVideoId),
-        )
-      : [];
+    const landed = allJobs.filter(
+      (j) =>
+        j.state === "done" &&
+        jobOnSet(j, set) &&
+        j.setVideoId &&
+        !stored.some((v) => v.id === j.setVideoId),
+    );
     if (!landed.length) return stored;
     return [
       ...stored,
@@ -240,11 +239,12 @@ export function SetVideoCell(props: SetVideoCellProps) {
         }),
       ),
     ];
-  }, [stored, allJobs, rowId, resultId]);
-  const jobs = useMemo(() => jobsForSet(allJobs, rowId, resultId), [allJobs, rowId, resultId]);
+  }, [stored, allJobs, set]);
+  const jobs = useMemo(() => jobsForSet(allJobs, set), [allJobs, set]);
   const active = jobs.find(isActiveJob) ?? null;
   const failed = !active ? (jobs.find((j) => j.state === "failed") ?? null) : null;
-  const canAdd = !readonly && logged && !!clientId && !!resultId && !!user?.id;
+  // Every set, logged or not: the clip is filmed while the set happens, before it's logged.
+  const canAdd = !readonly && !!clientId && !!user?.id;
 
   useEffect(() => {
     if (canAdd) warmSetVideoCode();
@@ -453,7 +453,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
           }}
         />
       )}
-      {picked && Flow && user?.id && clientId && resultId && (
+      {picked && Flow && user?.id && clientId && (
         <Flow
           key={picked.key}
           file={picked.file}
@@ -466,7 +466,8 @@ export function SetVideoCell(props: SetVideoCellProps) {
             setIndex,
             exerciseName: props.exerciseName,
             dayTitle: props.dayTitle,
-            label: props.label,
+            // what the set was, only once it's logged (an unlogged set's boxes can hold its targets)
+            label: logged ? props.label : "",
           }}
           onDone={() => {
             const done = picked.key;
