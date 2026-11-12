@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion } from "@/components/ui/accordion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ActionRow, CardHeader, DayRows, MoreButton, PlanDaysView, Section, StatusChip, type DayRow, type PlanViewDay } from "@/components/nutrition/nutrition-ui";
-import { Apple, Plus, Pencil, Trash2, Copy, ShoppingCart, BellRing, Send, ChevronRight, RotateCcw, History } from "lucide-react";
+import { Apple, Plus, Pencil, Trash2, Copy, ShoppingCart, BellRing, Send, ChevronRight, RotateCcw, History, Pill } from "lucide-react";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { clientPlansQuery, reuseEarlierPlan } from "@/lib/nutrition-targets/plan-publish";
 import { planDate, planPeriod, planUpdatedAt, splitPlans, type PlanRow } from "@/lib/nutrition-targets/plan-history";
@@ -24,6 +24,8 @@ import { useAuth } from "@/lib/auth";
 import { downloadNutritionTargetsPdf } from "@/lib/nutrition-targets-pdf";
 import { GroceryListSheet } from "@/components/nutrition/GroceryListSheet";
 import { PlanAiChange } from "@/components/nutrition/PlanAiChange";
+import { SupplementList } from "@/components/nutrition/supplements-ui";
+import { readPlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { cn } from "@/lib/utils";
 
 export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }: { clientId: string; className?: string }) {
@@ -241,6 +243,22 @@ export function NutritionTargetsPanel({ clientId, className = "md:col-span-3" }:
       )}
 
       <div className="divide-y divide-border rounded-xl border border-border">
+        {plan && (
+          <Accordion type="single" collapsible>
+            <Section
+              value="supplements"
+              icon={Pill}
+              title="Supplements"
+              meta={readPlanSupplements(plan.supplements).items.length ? readPlanSupplements(plan.supplements).items.map((x) => x.name).join(", ") : "None yet"}
+            >
+              {readPlanSupplements(plan.supplements).items.length ? (
+                <SupplementList value={readPlanSupplements(plan.supplements)} />
+              ) : (
+                <p className="text-[13px] text-muted-foreground">None on this plan. Edit the plan to suggest them from their record (health, medications, diet, drug testing, budget).</p>
+              )}
+            </Section>
+          </Accordion>
+        )}
         <ActionRow
           icon={ShoppingCart}
           title="Grocery list"

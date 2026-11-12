@@ -19,6 +19,7 @@ const Input = z.object({
     "nutrition_targets_updated",
     "community_coach_recognition",
     "community_activity",
+    "health_updated",
   ]),
   /** Record id (submission / video / comment / review / community post), or client id for targets. */
   id: z.string().uuid(),
@@ -110,6 +111,15 @@ export const notifyAppEventFn = createServerFn({ method: "POST" })
         ]);
         if (!reacted && !commented) return { skipped: true };
         clientId = p.client_id;
+        break;
+      }
+      case "health_updated": {
+        // A client added or changed something in their health profile (Account → Health & injuries).
+        const { data: it } = await db.from("client_health_items").select("client_id, source").eq("id", data.id).maybeSingle();
+        if (!it || it.source !== "client" || (await clientUserId(it.client_id)) !== userId) return { skipped: true };
+        clientId = it.client_id;
+        // one push per client a day at most (the rate limit collapses a burst of edits)
+        sourceId = `${it.client_id}:${new Date().toISOString().slice(0, 10)}`;
         break;
       }
       case "nutrition_targets_updated": {

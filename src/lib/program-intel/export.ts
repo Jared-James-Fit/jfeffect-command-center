@@ -59,6 +59,8 @@ export function privacySafeRecords(rec: IntelRecords): IntelRecords {
     observations: rec.observations.map((o) => ({ ...o, statement: s(o.statement) as string, corrected_statement: s(o.corrected_statement) })),
     meets: rec.meets.map((m) => ({ ...m, meet_name: s(m.meet_name) })),
     checkins: [],
+    // health is the athlete's own private record (conditions, medications): never in the privacy-safe copy
+    health: null,
     profile: rec.profile ? { ...rec.profile, equipment_profile: rec.profile.equipment_profile ? { ...rec.profile.equipment_profile, notes: s(rec.profile.equipment_profile.notes) } : null } : rec.profile,
     unreadable: rec.unreadable,
   };

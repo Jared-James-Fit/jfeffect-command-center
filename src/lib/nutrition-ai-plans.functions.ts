@@ -311,5 +311,60 @@ export const getFoodHistoryFn = createServerFn({ method: "POST" })
     const { data: visible } = await context.supabase.from("clients").select("id").eq("id", data.clientId).maybeSingle();
     if (!visible) throw new Error("Client not found");
     const food = await (await aiPlans()).loadFoodContext(await admin(), data.clientId);
-    return { history: food.history, current: food.current, latestAt: food.latestAt, unit: food.unit };
+    return { history: food.history, current: food.current, latestAt: food.latestAt, unit: food.unit, health: food.health };
+  });
+
+/**
+ * Supplement advice from the client's record now (supplements.ts): the plan
+ * editor's "Suggest from their record", with the foods of the plan being
+ * edited (else their current plan's).
+ */
+export const suggestSupplementsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ clientId: z.string().uuid(), foods: z.string().max(60_000).nullable().optional(), kcal: z.number().min(0).max(10_000).nullable().optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    const { data: visible } = await context.supabase.from("clients").select("id").eq("id", data.clientId).maybeSingle();
+    if (!visible) throw new Error("Client not found");
+    return (await aiPlans()).supplementAdviceFor(await admin(), data.clientId, { foods: data.foods ?? null, kcal: data.kcal ?? null });
+  });
+
+const pickSchema = z.object({
+  key: z.string().max(40),
+  name: z.string().trim().min(1).max(120),
+  dose: z.string().max(300),
+  timing: z.string().max(300),
+  why: z.string().max(600).nullable().optional(),
+  note: z.string().max(1200).nullable().optional(),
+  tier: z.enum(["core", "consider", "check"]),
+  cost: z.enum(["$", "$$", "$$$"]),
+  already: z.boolean(),
+  reason: z.string().max(400),
+  foodFirst: z.string().max(400).nullable().optional(),
+});
+
+/** The coach's edit of an AI plan's supplements before publishing: which picks stay, which extras go on. */
+export const setAiPlanSupplementsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        submissionId: z.string().uuid(),
+        picks: z.array(pickSchema).max(20),
+        extras: z.array(pickSchema).max(20),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    if (!(await isStaff(context.supabase, context.userId))) throw new Error("Coach access required");
+    // staff who can see this plan through their own login
+    const { data: row } = await (context.supabase as any).from("nutrition_ai_plans").select("supplements").eq("submission_id", data.submissionId).maybeSingle();
+    if (!row) throw new Error("Plan not found");
+    const prev = (row.supplements ?? {}) as Record<string, unknown>;
+    const next = { ...prev, picks: data.picks, extras: data.extras };
+    const { error } = await (await admin()).from("nutrition_ai_plans").update({ supplements: next }).eq("submission_id", data.submissionId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });

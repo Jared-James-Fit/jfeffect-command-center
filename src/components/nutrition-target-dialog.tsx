@@ -23,7 +23,9 @@ import { phaseSourceText, suggestTargetsPhase } from "@/lib/nutrition-targets/ph
 import { NUTRITION_PHASES, NUTRITION_STRUCTURES, PHASE_GOAL, dayLabelsForStructure, TARGET_STATUSES } from "@/lib/nutrition-cardio";
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import type React from "react";
-import { CalendarDays, ClipboardPaste, FileText, Lock, MessageSquare, Plus, Settings2, Upload, X } from "lucide-react";
+import { CalendarDays, ClipboardPaste, FileText, Lock, MessageSquare, Pill, Plus, Settings2, Upload, X } from "lucide-react";
+import { readPlanSupplements, type PlanSupplements } from "@/lib/nutrition-targets/supplements";
+import { SupplementsEditor } from "@/components/nutrition/supplements-ui";
 import { todayLocalISO } from "@/lib/today";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { WorkoutMealTagger } from "@/components/nutrition/WorkoutMealTagger";
@@ -81,6 +83,8 @@ type Props = {
     phase?: string | null;
     /** The AI targets text: its daily steps + cardio sessions fill each day. */
     targetsText?: string | null;
+    /** The supplements the coach kept in the AI review. */
+    supplements?: PlanSupplements | null;
   };
   /** Called after a successful save with the new/updated target id. */
   onSaved?: (targetId: string) => void;
@@ -147,6 +151,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
           admin_notes: prefill.admin_notes ?? "",
         });
       }
+      if (prefill?.supplements) Object.assign(f, { supplements: prefill.supplements });
       setForm(f);
       setDays(prefill?.days.length
         ? prefill.days.map((d, i) => ({ ...d, sort_order: i }))
@@ -324,6 +329,7 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
       pdf_name: form.pdf_name || null,
       last_updated_at: new Date().toISOString(),
       water: plainOrNull(form.water || null),
+      supplements: supplementsOf(form).items.length || supplementsOf(form).notes.length ? supplementsOf(form) : null,
     };
     let targetId = form.id;
     if (targetId) {
@@ -592,6 +598,23 @@ export function NutritionTargetDialog({ open, onOpenChange, clientId, clients = 
                 </div>
               </div>
             </Section>
+            <Section
+              value="supplements"
+              icon={Pill}
+              title="Supplements"
+              meta={supplementsOf(form).items.length ? supplementsOf(form).items.map((x) => x.name).join(", ") : "None"}
+            >
+              <SupplementsEditor
+                clientId={form.client_id || clientId}
+                value={supplementsOf(form)}
+                onChange={(v) => set("supplements", v)}
+                foods={days.map((d) => d.notes ?? "").join("\n")}
+                kcal={(() => {
+                  const k = days.map((d) => Number(d.calories)).filter((v) => v > 0);
+                  return k.length ? Math.round(k.reduce((a, b) => a + b, 0) / k.length) : null;
+                })()}
+              />
+            </Section>
             <Section value="private" icon={Lock} title="Private notes" meta="Only staff see these">
               <Textarea rows={4} value={form.admin_notes ?? ""} onChange={(e) => set("admin_notes", e.target.value)} />
             </Section>
@@ -664,4 +687,9 @@ function DayCardio({ draft, onChange, willSync }: { draft?: CardioDraft; onChang
       )}
     </div>
   );
+}
+
+/** The plan's supplements as the editor holds them (a stored value, or nothing yet). */
+function supplementsOf(form: any): PlanSupplements {
+  return readPlanSupplements(form?.supplements ?? null);
 }

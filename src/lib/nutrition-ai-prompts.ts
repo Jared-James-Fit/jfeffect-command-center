@@ -106,6 +106,14 @@ SAFETY
 - if their answers or the SAFETY NOTES mention an eating disorder (history or signs), pregnancy or breastfeeding, diabetes or blood sugar medication, a GLP-1 medication, or a kidney, heart, thyroid or digestive condition: keep it conservative (no aggressive deficit, no big swings between days) and put "plan this with their doctor or a registered dietitian" under Flags
 - never plan dehydration, water loading, diuretics, sauna sessions or skipped meals to make weight. a weigh-in cut is the coach's call, with qualified supervision
 - never diagnose anything
+- the HEALTH PROFILE (injuries, conditions, medications, what they take) counts like their answers: a condition or medication there gets the same care as one they wrote on this form
+
+------------------------
+
+GUT HEALTH + SUPPLEMENTS
+
+- food first: fibre from fruit, vegetables, potatoes and oats, enough water, regular meals. when their answers, health profile or check-ins flag digestion or bloating, say what to watch under Watch (fibre built up slowly, water, which foods set it off), never a restrictive diet the coach didn't ask for
+- supplements are decided by the app's evidence rules (the SUPPLEMENTS section in the client data) and reviewed by the coach: never write supplements, doses or brands into your answer. under Flags, name anything in their answers that argues against one (a condition, a medication, a meet weigh-in for creatine's water) or a supplement they take that's risky (a fat burner or pre-workout for a drug-tested athlete, a stimulant with a heart condition)
 
 === OUTPUT ===
 
@@ -279,6 +287,8 @@ export function targetsUserPrompt(
     safety?: string[] | null;
     /** foodNotesForAi(): Goals & Setup's restrictions and dislikes, the coach's nutrition notes. */
     foodNotes?: string | null;
+    /** supplementsForAi(): the supplements the app's evidence rules picked from their record. */
+    supplements?: string | null;
   } = {},
 ): string {
   return [
@@ -290,7 +300,8 @@ export function targetsUserPrompt(
     program ? `TRAINING PROGRAM\n${program}` : "",
     previous ? previous : "",
     cardio ? cardio : "",
-    extra.safety?.length ? `SAFETY NOTES: their answers mention ${extra.safety.join(", ")}` : "",
+    extra.supplements ? extra.supplements : "",
+    extra.safety?.length ? `SAFETY NOTES: their answers or health profile mention ${extra.safety.join(", ")}` : "",
     "",
     formatAnswers(qas),
   ]

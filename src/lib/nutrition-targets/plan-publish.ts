@@ -5,6 +5,7 @@
  * the one before it (dated, never deleted) and moves the client's cardio with it.
  */
 import { supabase } from "@/integrations/supabase/client";
+import type { PlanSupplements } from "@/lib/nutrition-targets/supplements";
 import { PHASE_GOAL } from "@/lib/nutrition-cardio";
 import { resolveTrainingWeekdays } from "@/lib/cardio-prescription";
 import { cardioDraftsFor, parseAiCardio, planCardioSync, type CardioDraft } from "@/lib/nutrition-cardio-sync";
@@ -135,6 +136,8 @@ export async function publishAiPlan(input: {
   days: AiDay[];
   targetsText: string | null;
   foodWeighingRules: string | null;
+  /** The supplements the coach kept in the review (supplements.ts); none = the plan before keeps its own. */
+  supplements?: PlanSupplements | null;
 }): Promise<PublishResult> {
   const [current, ctx] = await Promise.all([loadCurrentPlan(input.clientId), loadCardioContext(input.clientId)]);
   const now = new Date().toISOString();
@@ -158,6 +161,8 @@ export async function publishAiPlan(input: {
     pdf_url: null,
     pdf_name: null,
     water: current?.water ?? "3.5 L",
+    // the AI plan's supplements as reviewed, else the ones they're taking on the plan before
+    supplements: input.supplements ?? current?.supplements ?? null,
     ...(current?.assigned_coach_id ? { assigned_coach_id: current.assigned_coach_id } : {}),
     last_updated_at: now,
   };

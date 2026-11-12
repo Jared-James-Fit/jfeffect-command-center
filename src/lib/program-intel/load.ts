@@ -7,6 +7,7 @@
  * `unreadable` instead of being dropped quietly.
  */
 import type { RawCardioCompletion, RawCardioTarget } from "./cardio";
+import { loadHealthRecords } from "@/lib/health/health-load";
 import { isAtHomeBackupReservedBlock } from "@/lib/at-home-backup";
 import { localDate } from "./core";
 import { answeredQuestions } from "@/lib/form-answer-text";
@@ -272,6 +273,9 @@ export async function loadIntelRecords(
     },
     null,
   );
+  // Their health profile: injuries, conditions and medications the coach or client recorded, and what
+  // their Nutrition Updates said (never blocks the read: an unreadable part is left out).
+  const health = await optional("health profile", () => loadHealthRecords(sb, clientId, { forms: true, today }), null);
   const settingsRow = await optional(
     "analytics settings",
     async () => {
@@ -425,6 +429,7 @@ export async function loadIntelRecords(
     cardioTargets,
     cardioCompletions,
     ptSessions,
+    health,
     settings: {
       e1rmFormula: settingsRow?.e1rm_formula === "brzycki" ? "brzycki" : "epley",
       workingRpeMin: Number(settingsRow?.working_set_rpe_min ?? 6) || 6,

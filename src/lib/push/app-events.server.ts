@@ -23,6 +23,7 @@ export type AppEvent =
   | "chat_reported"
   | "session_requested"
   | "lead_ready"
+  | "health_updated"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -98,6 +99,13 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `New coaching application: ${n}`,
     body: () => "Your read on them and a text to send are ready. Tap to copy it.",
     url: (_id, applicationId) => (applicationId ? `/admin/leads?id=${applicationId}` : "/admin/leads"), rateMinutes: 60,
+  },
+  // A client added or changed an injury, condition, medication or supplement in their app.
+  health_updated: {
+    to: "staff", category: "check_ins",
+    title: (n) => `${n} updated their health info`,
+    body: () => "An injury, condition, medication or supplement changed. Tap to see it.",
+    url: (id) => `/admin/clients/${id}#health`, rateMinutes: 60,
   },
   nutrition_submitted: {
     to: "staff", category: "check_ins",
