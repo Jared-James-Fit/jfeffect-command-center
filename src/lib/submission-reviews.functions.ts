@@ -22,6 +22,7 @@ import { casualize } from "@/lib/coach-voice";
 import { voicePromptForClient } from "@/lib/coach-voice.functions";
 import { PROGRAM_CONTEXT_RULES, programContextText } from "@/lib/program-context";
 import { assertAdminView } from "@/lib/permissions.server";
+import { SHELF_FIRST_ADVICE } from "@/lib/nutrition-targets/plan-foods";
 
 // ---------- Input validators -------------------------------------------------
 
@@ -589,6 +590,7 @@ export const generateSubmissionDraft = createServerFn({ method: "POST" })
         "Do NOT recommend specific programming changes. Suggestions only.",
       formCfg?.allow_recommend_nutrition === false &&
         "Do NOT recommend specific nutrition changes. Suggestions only.",
+      `FOODS: ${SHELF_FIRST_ADVICE}`,
       data.submissionInstruction &&
         `COACH'S INSTRUCTION FOR THIS GENERATION ONLY: ${data.submissionInstruction}`,
     ]

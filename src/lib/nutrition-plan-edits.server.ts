@@ -32,6 +32,7 @@ import {
   loadQAs,
   loadTrainingPattern,
   nutritionCall,
+  withShelfFix,
 } from "@/lib/nutrition-ai-plans.server";
 
 const DAY_COLUMNS =
@@ -152,6 +153,15 @@ export async function runPlanEdit(sb: any, editId: string) {
       String(row.before_meal_plan_text)
         .match(/^PHASE:\s*(.+)$/m)?.[1]
         ?.trim() ?? null;
+    const mealPrompt = reviseMealPlanUserPrompt({
+      qas,
+      targetsText,
+      mealPlanText: row.before_meal_plan_text,
+      instructions: row.instructions,
+      phase,
+      workoutMeals: null,
+      history,
+    });
     const m = await nutritionCall(
       sb,
       progress,
@@ -159,21 +169,30 @@ export async function runPlanEdit(sb: any, editId: string) {
       "nutrition_write",
       "edit_meals",
       MEAL_PLAN_PROMPT,
-      reviseMealPlanUserPrompt({
-        qas,
-        targetsText,
-        mealPlanText: row.before_meal_plan_text,
-        instructions: row.instructions,
-        phase,
-        workoutMeals: null,
-        history,
-      }),
+      mealPrompt,
     );
-    const mealPlanText = cleanAiText(m.text);
-    if (!revisionLooksRight("meals", row.before_meal_plan_text, mealPlanText))
+    const answered = cleanAiText(m.text);
+    if (!revisionLooksRight("meals", row.before_meal_plan_text, answered))
       throw new Error(
         "The AI's answer didn't come back as a meal plan. Try wording the change differently",
       );
+    // the coach's words win, but a specialty food the AI brought in on its own goes back once
+    const mealPlanText = await withShelfFix(
+      row.before_meal_plan_text,
+      answered,
+      mealPrompt,
+      (prompt) =>
+        nutritionCall(
+          sb,
+          progress,
+          save,
+          "nutrition_write",
+          "edit_shelf",
+          MEAL_PLAN_PROMPT,
+          prompt,
+        ).then((r) => r.text),
+      [...qas, { value: row.instructions }],
+    );
     const want = parseMealPlan(row.before_meal_plan_text).length;
     const got = parseMealPlan(mealPlanText).length;
     if (want !== got)

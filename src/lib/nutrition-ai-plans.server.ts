@@ -22,7 +22,7 @@ import {
   type WorkoutMealsMode,
 } from "@/lib/nutrition-ai-prompts";
 import { phaseFromText } from "@/lib/nutrition-cardio";
-import { hardToFindFoods, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
+import { hardToFindFoods, introducedHardToFind, planMenus, prepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { configuredHighWeekday } from "@/lib/client-nutrition-day";
 import { ModelsExhausted, OPENAI_CREDITS_HINT, WaitingForModel, stagedCall, type CallState } from "@/lib/ai/staged-call.server";
 import { bodyweightAnswerKg, parseAiTargets, planTotalsIssues, safetyNotes, weeklyAverageKcal, withoutCoachNotes, type DayTargets } from "@/lib/nutrition-targets/nutrition-intel";
@@ -426,6 +426,35 @@ export async function withPrepFix(
   return current;
 }
 
+/**
+ * A coach's change (Change something, Change it with AI) wins, but a
+ * hard-to-find food the AI brought in on its own doesn't: one it added that
+ * wasn't in the plan before and that neither the coach's words nor the
+ * client's answers named (`introducedHardToFind`) goes back once for the
+ * common staple. Kept only when it reads as the same plan with fewer of them;
+ * a failed fix never costs the change. Exported for tests.
+ */
+export async function withShelfFix(
+  before: string,
+  draft: string,
+  userPrompt: string,
+  ask: (prompt: string) => Promise<string>,
+  said: Array<{ value?: string | null }>,
+): Promise<string> {
+  const found = (text: string) => introducedHardToFind(planMenus(before), planMenus(text), said);
+  const first = found(draft);
+  if (!first.length) return draft;
+  const fixed = cleanAiText(
+    await ask(mealPrepFixPrompt(userPrompt, draft, [], [], first)).catch((e) => {
+      if (e instanceof WaitingForModel) throw e;
+      return "";
+    }),
+  );
+  if (!fixed || !revisionLooksRight("meals", draft, fixed)) return draft;
+  if (planMenus(fixed).length !== planMenus(draft).length) return draft;
+  return found(fixed).length < first.length ? fixed : draft;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Which model answers                                                       */
 
@@ -654,29 +683,30 @@ export async function runRevision(sb: any, submissionId: string, instructions: s
       if (revisionLooksRight("targets", oldTargets, next)) targetsText = next;
     }
     const phase = row.phase ?? phaseFromText(targetsText.match(/^Goal:\s*(.+)$/m)?.[1]);
-    const m = await nutritionCall(
-      sb,
-      progress,
-      save,
-      "nutrition_write",
-      "update_meals",
-      MEAL_PLAN_PROMPT,
-      reviseMealPlanUserPrompt({
-        qas,
-        targetsText: withoutCoachNotes(targetsText) ?? "",
-        mealPlanText: row.meal_plan_text,
-        instructions,
-        phase,
-        workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
-        history,
-      }),
-    );
+    const mealPrompt = reviseMealPlanUserPrompt({
+      qas,
+      targetsText: withoutCoachNotes(targetsText) ?? "",
+      mealPlanText: row.meal_plan_text,
+      instructions,
+      phase,
+      workoutMeals: (row.workout_meals as WorkoutMealsMode | null) ?? null,
+      history,
+    });
+    const m = await nutritionCall(sb, progress, save, "nutrition_write", "update_meals", MEAL_PLAN_PROMPT, mealPrompt);
     models.push(`meals ${m.model}`);
     const modelId = `update · ${models.join(" · ")}`;
-    const mealPlanText = cleanAiText(m.text);
-    if (!revisionLooksRight("meals", row.meal_plan_text, mealPlanText)) {
+    const answered = cleanAiText(m.text);
+    if (!revisionLooksRight("meals", row.meal_plan_text, answered)) {
       throw new Error("The AI's answer didn't come back as a meal plan. Try wording the change differently");
     }
+    // the coach's words win, but a specialty food the AI brought in on its own goes back once
+    const mealPlanText = await withShelfFix(
+      row.meal_plan_text,
+      answered,
+      mealPrompt,
+      (prompt) => nutritionCall(sb, progress, save, "nutrition_write", "update_shelf", MEAL_PLAN_PROMPT, prompt).then((r) => r.text),
+      [...qas, { value: instructions }],
+    );
 
     const now = new Date().toISOString();
     const revisions: PlanRevision[] = [
