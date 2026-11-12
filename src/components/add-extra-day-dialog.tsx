@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, CalendarPlus } from "lucide-react";
 
@@ -64,9 +65,11 @@ interface AddExtraDayDialogProps {
   /** Optional: pass block start/end dates to constrain the date picker */
   blockStartDate?: string | null;
   blockEndDate?: string | null;
+  /** The trigger's size and place where it's shown (the program editor's bottom row). */
+  triggerClassName?: string;
 }
 
-export function AddExtraDayDialog({ weekId, blockId, existingDayCount, onAdded, blockStartDate, blockEndDate }: AddExtraDayDialogProps) {
+export function AddExtraDayDialog({ weekId, blockId, existingDayCount, onAdded, blockStartDate, blockEndDate, triggerClassName }: AddExtraDayDialogProps) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState("");
   const [dayType, setDayType] = useState("regular");
@@ -119,9 +122,9 @@ export function AddExtraDayDialog({ weekId, blockId, existingDayCount, onAdded, 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs h-7 border-dashed">
-          <CalendarPlus className="h-3.5 w-3.5" />
-          Add Extra Day
+        <Button size="sm" variant="outline" className={cn("gap-1.5 border-dashed text-muted-foreground", triggerClassName ?? "h-7 text-xs")}>
+          <CalendarPlus className="h-4 w-4" />
+          Add extra day
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">

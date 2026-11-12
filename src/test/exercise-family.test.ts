@@ -109,7 +109,8 @@ describe("numbering is derived, never stored", () => {
 
   it("the builder derives the badge from the row's index in the day", () => {
     const src = read("src/route-pages/_authenticated/admin/program-library_.$templateId.tsx");
-    expect(src).toContain("<ExerciseOrderBadge position={index + 1} family={family} />");
+    // a quiet neutral number; the family's colour is the row's stripe
+    expect(src).toMatch(/<ExerciseOrderBadge position=\{index \+ 1\} family=\{family\} tone="neutral"/);
     expect(src).not.toMatch(/sort_order\s*=\s*i\s*\+\s*1[^\n]*label/);
   });
 

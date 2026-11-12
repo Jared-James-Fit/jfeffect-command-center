@@ -26,7 +26,8 @@ type Week = { id: string; week_index: number };
  * Block-level warm-up picker + per-day warm-up overrides.
  * Renders inside the block editor (or anywhere a block id is known).
  */
-export function BlockWarmupPanel({ blockId }: { blockId: string }) {
+/** `bare`: inside the block editor's own "Warm-ups" section (no card, no title of its own). */
+export function BlockWarmupPanel({ blockId, bare }: { blockId: string; bare?: boolean }) {
   const qc = useQueryClient();
 
   const { data: block } = useQuery({
@@ -115,16 +116,18 @@ export function BlockWarmupPanel({ blockId }: { blockId: string }) {
   };
 
   return (
-    <Card className="border-border bg-card p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <Flame className="h-4 w-4 text-orange-500" />
-        <h3 className="font-bold">Warm-Up Settings</h3>
-      </div>
+    <Card className={bare ? "space-y-4 border-0 bg-transparent p-0 shadow-none" : "border-border bg-card p-4 space-y-4"}>
+      {!bare && (
+        <div className="flex items-center gap-2">
+          <Flame className="h-4 w-4 text-orange-500" />
+          <h3 className="font-bold">Warm-Up Settings</h3>
+        </div>
+      )}
 
       <div className="rounded-md border border-border p-3 space-y-2">
-        <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Block-level</div>
+        <div className="text-sm font-semibold">Whole block</div>
         <WarmupPicker
-          label="Block Warm-Up Protocol"
+          label="Block warm-up"
           mode={blockMode}
           protocolId={blockProtocolId}
           onChange={({ mode, protocolId }) => {
@@ -140,7 +143,7 @@ export function BlockWarmupPanel({ blockId }: { blockId: string }) {
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Per-Day Overrides</div>
+        <div className="text-sm font-semibold">Per day</div>
         {weeks.length === 0 ? (
           <div className="text-xs text-muted-foreground">No weeks yet.</div>
         ) : (

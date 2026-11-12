@@ -1235,6 +1235,13 @@ html[data-keyboard-open="true"] .keyboard-aware-bottom-sheet {
    (Crew's bar's behaviour). While typing it steps aside: iOS pans fixed bars with the
    keyboard, and full-height chats rise to the notch then (--shell-topbar-h: 0). */
 .shell-bar { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+/* The program editor's header on a phone: fixed under the app's bar (sticky can't
+   hold while <main> clips sideways), moving up to the notch when the bar slides
+   away or the keyboard is up. */
+.builder-header-fixed { top: var(--app-top-chrome); transition: top 260ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+html:has(.shell-bar[data-hidden]) .builder-header-fixed,
+html[data-keyboard-open="true"] .builder-header-fixed { top: calc(var(--app-chrome-top) + var(--app-safe-top)); }
+@media (prefers-reduced-motion: reduce) { .builder-header-fixed { transition: none; } }
 .shell-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }
 html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Layers, Pencil } from "lucide-react";
+import { AlertTriangle, Layers } from "lucide-react";
 import { listClientBlocks, getBlockTree } from "@/lib/pl-programs";
-import { blockStatusTone, type CanonicalBlockStatus } from "@/lib/block-status";
+import { type CanonicalBlockStatus } from "@/lib/block-status";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -96,10 +96,8 @@ export function BlockSwitcher({
 
   return (
     <>
-    <div className="flex w-full items-center gap-1.5 overflow-x-auto py-1 -mx-1 px-1">
-      <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <Layers className="h-3 w-3" /> Blocks
-      </span>
+    <div className="-mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="This client's blocks">
+      <Layers className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       {(blocks as any[]).map((b) => {
         const active = b.id === currentBlockId;
         const isSwitching = switching === b.id;
@@ -114,15 +112,17 @@ export function BlockSwitcher({
             type="button"
             disabled={!!switching}
             title={`${b.name} · ${status ?? "—"} · ${dateRange}`}
+            role="tab"
+            aria-selected={active}
             onClick={(e) => handleClick(e, b.id)}
             onMouseEnter={() => handleMouseEnter(b.id)}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap transition-colors",
+              "inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-[13px] transition-colors",
               active
-                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                ? "bg-secondary font-semibold text-foreground"
                 : isSwitching
-                  ? "border-primary/50 bg-secondary opacity-70 cursor-wait"
-                  : "border-border bg-secondary/50 text-foreground hover:border-primary/50 hover:bg-secondary cursor-pointer",
+                  ? "cursor-wait text-muted-foreground opacity-70"
+                  : "cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {isSwitching ? (
@@ -136,16 +136,8 @@ export function BlockSwitcher({
             ) : (
               <>
                 <span className="max-w-[180px] truncate">{b.name}</span>
-                {active ? (
-                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide opacity-90">
-                    <Pencil className="h-2.5 w-2.5" /> Editing
-                  </span>
-                ) : (
-                  status && (
-                    <span className={cn("rounded-full border px-1 py-px text-[9px] font-semibold", blockStatusTone(status))}>
-                      {status}
-                    </span>
-                  )
+                {!active && status && (
+                  <span className="text-xs font-normal text-muted-foreground/80">{status}</span>
                 )}
                 {missingDates && (
                   <AlertTriangle

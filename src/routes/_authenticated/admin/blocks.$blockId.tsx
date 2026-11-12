@@ -3,8 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientNameLink } from "@/components/clients/client-name-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Input } from "@/components/ui/input";
-import { ArrowLeft, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarRange, Flame, Info, MessageSquare, MoreHorizontal, Save, Sparkles, User as UserIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { BuilderHeader, BuilderNotice, BuilderSection, BuilderTitleInput } from "@/components/program-editor/builder-chrome";
+import { useIsMobileNow } from "@/hooks/use-mobile";
 import { useAutosave } from "@/hooks/use-autosave";
 import { SaveStatus } from "@/components/save-status";
 import { ActionButton } from "@/components/action-button";
@@ -13,7 +16,7 @@ import {
   deleteDay, updateRow, deleteRow,
   listClientBlocks,
 } from "@/lib/pl-programs";
-import { deriveBlockStatuses, blockStatusTone } from "@/lib/block-status";
+import { deriveBlockStatuses } from "@/lib/block-status";
 import {
   buildProgramScheduleStatus,
   summarizeProgramSchedule,
@@ -25,7 +28,7 @@ import {
 } from "@/lib/scheduled-workouts.functions";
 import { toast } from "sonner";
 import { cloneBlocksForRowsFn } from "@/lib/exercise-blocks.functions";
-import type { ExerciseRef } from "@/components/program-builder";
+import { useBuilderExerciseLibrary } from "@/lib/builder-exercise-library";
 import {
   StructureCanvas,
   appendRowToFirstDay,
@@ -35,9 +38,7 @@ import { AutoSchedulePanel } from "@/components/auto-schedule-panel";
 import { BlockRoadmapPanel } from "@/components/programs/block-roadmap-panel";
 import { usePersistentUndoStack } from "@/lib/persistent-undo";
 import { useScrollRestoration } from "@/lib/scroll-restore";
-import { ClientBuilderIdentityHeader, ClientBuilderStickyChip } from "@/components/builder-identity-header";
 import { BlockSwitcher } from "@/components/block-switcher";
-import { Badge } from "@/components/ui/badge";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
 
 export const Route = createFileRoute("/_authenticated/admin/blocks/$blockId")({
@@ -438,17 +439,7 @@ function BlockEditor() {
       return data;
     },
   });
-  const { data: exercises = [] } = useQuery<ExerciseRef[]>({
-    queryKey: ["exercises-min"],
-    queryFn: async () =>
-      ((await supabase
-        .from("exercises")
-        .select("id, name, muscle_group, category, tags, equipment, exercise_category, is_competition_lift, competition_lift_type, movement_family")
-        .eq("archived", false)
-        .limit(10000)
-        .order("name")).data ?? []) as any,
-    staleTime: 5 * 60_000,
-  });
+  const { data: exercises = [] } = useBuilderExerciseLibrary();
   // Sibling blocks for this client — shared cache key with BlockSwitcher —
   // used to derive the ONE canonical active block and per-block statuses so
   // the header + pills never show a stale/conflicting "Active" badge.
@@ -465,6 +456,11 @@ function BlockEditor() {
   );
 
   const [name, setName] = useState<string>("");
+  // The header's second row: the canvas puts undo / redo / the weeks there.
+  const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
+  const phone = useIsMobileNow();
+  // "Edit" on the athlete's roadmap card lands here (#roadmap): open it.
+  const [openRoadmap] = useState(() => typeof window !== "undefined" && window.location.hash === "#roadmap");
   const [payload, setPayload] = useState<any>(null);
   const [dirty, setDirty] = useState(false);
   const originalTreeRef = useRef<any>(null);
@@ -719,6 +715,12 @@ function BlockEditor() {
     key: `block:${blockId}`,
     ready: !!tree && !!payload,
   });
+  useEffect(() => {
+    if (!openRoadmap || !tree || !payload) return;
+    const t = setTimeout(() => document.getElementById("roadmap")?.scrollIntoView({ block: "start" }), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRoadmap, !!tree, !!payload]);
 
   if (treeError) {
     return (
@@ -781,136 +783,137 @@ function BlockEditor() {
   const editingNonActive =
     !!canonicalActiveBlock && canonicalActiveBlock.id !== blockId && !!editingStatus;
 
+  const blockLabel = name || tree.block.name || "Block";
+  const missingDates = scheduleSummary.missingCount;
+  const calendarIssues = scheduleSummary.issueCount;
+
   return (
-    <div className="space-y-2 p-2 md:p-3">
-      <ClientBuilderIdentityHeader
-        clientId={clientId}
-        clientName={clientName}
-        programName={programName}
-        blockName={name || tree.block.name || "Block"}
-        blockStatus={(tree.block as any).status ?? null}
-        totalWeeks={totalWeeks}
-        unsaved={dirty}
-      />
-      {/* Canonical status context: which block is active vs which is being
-          edited, so stale DB statuses can't confuse the coach. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-        <span>
-          Current active block:{" "}
-          <span className="font-semibold text-foreground">
-            {canonicalActiveBlock?.name ?? "None active"}
-          </span>
-        </span>
-        <span aria-hidden>·</span>
-        <span className="inline-flex items-center gap-1.5">
-          Editing block:{" "}
-          <span className="font-semibold text-foreground">{name || tree.block.name || "Block"}</span>
-          {editingStatus && (
-            <Badge variant="outline" className={`text-[10px] ${blockStatusTone(editingStatus)}`}>
-              {editingStatus}
-            </Badge>
-          )}
-        </span>
-        <span aria-hidden>·</span>
-        <span className="inline-flex items-center gap-1.5">
-          Scheduled:{" "}
-          <span
-            className={`font-semibold ${
-              scheduleSummary.missingCount > 0 || scheduleSummary.issueCount > 0
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-foreground"
-            }`}
+    <div className="space-y-3 px-2 pb-8 md:px-3">
+      <BuilderHeader
+        onToolbarEl={setToolbarEl}
+        back={
+          <ClientNameLink
+            clientId={clientId}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={`Back to ${clientName}`}
+            title={`Back to ${clientName}`}
           >
-            {scheduleSummary.scheduledCount}/{scheduleSummary.totalDays}
-          </span>
-          {scheduleSummary.missingCount > 0 && (
-            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400">
-              {scheduleSummary.missingCount} missing date{scheduleSummary.missingCount === 1 ? "" : "s"}
-            </Badge>
+            <ArrowLeft className="h-5 w-5" />
+          </ClientNameLink>
+        }
+        title={
+          <BuilderTitleInput
+            value={name}
+            onChange={(v) => { setName(v); setDirty(true); }}
+            placeholder="Block name"
+            label="Block name"
+          />
+        }
+        meta={
+          <>
+            <ClientNameLink clientId={clientId} className="hover:text-foreground hover:underline">{clientName}</ClientNameLink>
+            {programName && programName !== blockLabel ? ` · ${programName}` : ""}
+            {editingStatus ? ` · ${editingStatus}` : ""}
+            {` · ${totalWeeks} week${totalWeeks === 1 ? "" : "s"}`}
+          </>
+        }
+        actions={
+          <>
+            {/* only news: saving, saved, failed, offline (an unsaved edit shows as Save) */}
+            {autosave.state !== "idle" && (
+              <SaveStatus state={autosave.state} savedAt={autosave.savedAt} compact={phone} className="max-md:px-1" />
+            )}
+            {dirty && (
+              <ActionButton
+                onAction={save}
+                loadingLabel="Saving…"
+                successLabel="Saved"
+                successToast={`Saved to ${clientName}'s Program`}
+                size="sm"
+                variant="outline"
+                className="h-9"
+              >
+                Save
+              </ActionButton>
+            )}
+            {clientId && (
+              <EditWithAiButton
+                target={{ kind: "client", clientId, focusBlockId: blockId }}
+                title={`${clientName} · ${blockLabel}`}
+                size="sm"
+                variant="ghost"
+                className="h-9 px-2.5"
+                label={phone ? "AI" : "Edit with AI"}
+                // the AI reads what's saved: save what's on screen first
+                beforeOpen={async () => {
+                  if (dirty) await save();
+                }}
+                onApplied={async () => {
+                  // rehydrate the builder from the program as it is now
+                  hydratedBlockIdRef.current = null;
+                  await refetchTree();
+                  qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
+                  qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
+                  qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
+                  invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
+                }}
+              />
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-10 w-10" aria-label="Block options">
+                  <MoreHorizontal className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild>
+                  <ClientNameLink clientId={clientId}><UserIcon className="mr-2 h-4 w-4" /> {clientName}'s profile</ClientNameLink>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <ClientNameLink clientId={clientId} tab="messages"><MessageSquare className="mr-2 h-4 w-4" /> Messages</ClientNameLink>
+                </DropdownMenuItem>
+                {!dirty && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => { void save().then(() => toast.success(`Saved to ${clientName}'s Program`)).catch((e: any) => toast.error(e?.message ?? "Couldn't save")); }}>
+                      <Save className="mr-2 h-4 w-4" /> Save now
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
+
+      {/* Only what's news: a block that isn't the one running, workouts
+          with no date, a calendar out of step. */}
+      {(editingNonActive || missingDates > 0 || calendarIssues > 0) && (
+        <div className="space-y-1">
+          {editingNonActive && (
+            <BuilderNotice icon={<Info className="h-3.5 w-3.5" />}>
+              This block isn't running yet. {clientName}'s current block is {canonicalActiveBlock!.name}. Editing here is safe.
+            </BuilderNotice>
           )}
-          {scheduleSummary.issueCount > 0 && (
-            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-400">
-              {scheduleSummary.issueCount} calendar issue{scheduleSummary.issueCount === 1 ? "" : "s"}
-            </Badge>
+          {missingDates > 0 && (
+            <BuilderNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
+              {missingDates} workout{missingDates === 1 ? " has" : "s have"} no date, so {clientName.split(" ")[0]} can't see {missingDates === 1 ? "it" : "them"} yet.
+            </BuilderNotice>
           )}
-        </span>
-      </div>
-      {editingNonActive && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-          You're editing a {String(editingStatus).toLowerCase()} block — this is not {clientName}'s active block yet.
-          The active block is "{canonicalActiveBlock!.name}". Nothing here changes what the client trains from until
-          this block is scheduled and becomes active. Editing is safe.
+          {calendarIssues > 0 && (
+            <BuilderNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
+              {calendarIssues} workout{calendarIssues === 1 ? "'s date doesn't" : "s' dates don't"} match the calendar. Fix is on the day.
+            </BuilderNotice>
+          )}
         </div>
       )}
-      <div className="sticky top-0 z-30 -mx-2 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-2 py-1.5 backdrop-blur md:-mx-3 md:px-3">
-        <ClientNameLink clientId={clientId}
-          className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          aria-label="Back to client"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-        </ClientNameLink>
-        <ClientBuilderStickyChip
-          clientId={clientId}
-          clientName={clientName}
-          blockName={name || tree.block.name || "Block"}
-        />
-        <Input
-          value={name}
-          onChange={(e) => { setName(e.target.value); setDirty(true); }}
-          className="h-7 max-w-xs text-sm font-bold bg-builder-canvas"
-          placeholder="Block name"
-        />
-        <span className="hidden md:inline text-[11px] text-muted-foreground whitespace-nowrap">
-          block · {totalWeeks}w · {totalDays}d · {totalRows} rows
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
-          {!dirty && autosave.savedAt ? (
-            <span className="hidden text-[10px] text-muted-foreground md:inline">
-              Saved to {clientName}'s Program
-            </span>
-          ) : null}
-          {clientId && (
-            <EditWithAiButton
-              target={{ kind: "client", clientId, focusBlockId: blockId }}
-              title={`${clientName} · ${name || tree.block.name || "Block"}`}
-              size="sm"
-              className="h-7 px-2 text-xs"
-              label="Edit with AI"
-              // the AI reads what's saved: save what's on screen first
-              beforeOpen={async () => {
-                if (dirty) await save();
-              }}
-              onApplied={async () => {
-                // rehydrate the builder from the program as it is now
-                hydratedBlockIdRef.current = null;
-                await refetchTree();
-                qc.invalidateQueries({ queryKey: ["pl-block-summary", blockId] });
-                qc.invalidateQueries({ queryKey: ["client-assigned-programs"] });
-                qc.invalidateQueries({ queryKey: ["block-schedule-instances", blockId] });
-                invalidateScheduleQueries(qc, { clientId: clientIdFromTree, blockId });
-              }}
-            />
-          )}
-          <ActionButton
-            onAction={save}
-            loadingLabel="Saving…"
-            successLabel="Saved"
-            successToast={`Saved to ${clientName}'s Program`}
-            icon={<Save className="h-3.5 w-3.5" />}
-            size="sm"
-            className="h-7 text-xs"
-          >
-            {dirty ? "Save now" : "Saved"}
-          </ActionButton>
-        </div>
-      </div>
+
       <BlockSwitcher
         clientId={clientId}
         currentBlockId={blockId}
         statusMap={blockStatusMap}
         hasUnsavedChanges={dirty}
-        currentBlockName={name || tree.block.name || "this block"}
+        currentBlockName={blockLabel}
         onBeforeNavigate={save}
         onDiscardUnsaved={() => {
           // Rehydrate from the last-loaded server snapshot so unsaved
@@ -941,11 +944,22 @@ function BlockEditor() {
         blockId={blockId}
         dayScheduleStatus={dayStatusMap}
         onFixCalendarIssue={fixCalendarIssue}
+        toolbarTarget={toolbarEl}
+        singleBlock
       />
 
-      <AutoSchedulePanel blockId={blockId} />
-      <BlockRoadmapPanel blockId={blockId} />
-      <BlockWarmupPanel blockId={blockId} />
+      {/* What a coach opens now and then, folded until they do. */}
+      <div className="space-y-2 pt-2">
+        <BuilderSection icon={<CalendarRange className="h-4 w-4" />} title="Schedule" hint="Training days and dates">
+          <AutoSchedulePanel blockId={blockId} bare />
+        </BuilderSection>
+        <BuilderSection id="roadmap" icon={<Sparkles className="h-4 w-4" />} title="Athlete roadmap" hint="What they read about this block" defaultOpen={openRoadmap}>
+          <BlockRoadmapPanel blockId={blockId} bare />
+        </BuilderSection>
+        <BuilderSection icon={<Flame className="h-4 w-4" />} title="Warm-ups">
+          <BlockWarmupPanel blockId={blockId} bare />
+        </BuilderSection>
+      </div>
     </div>
   );
 }
