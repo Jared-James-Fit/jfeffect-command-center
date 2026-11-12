@@ -27,9 +27,26 @@ export type SignedUrlStorage = {
 /** Most entries kept on disk; the ones expiring soonest are dropped first. */
 export const MAX_STORED_URLS = 2000;
 
+/** A cache's links kept in localStorage under its own key (a failed read starts empty). */
+export function localSignedUrlStorage(key: string): SignedUrlStorage {
+  return {
+    load() {
+      if (typeof localStorage === "undefined") return [];
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      return Array.isArray(parsed) ? (parsed as Array<[string, SignedUrlEntry]>) : [];
+    },
+    save(entries) {
+      if (typeof localStorage === "undefined") return;
+      if (entries.length) localStorage.setItem(key, JSON.stringify(entries));
+      else localStorage.removeItem(key);
+    },
+  };
+}
+
 export function createSignedUrlCache(
   sign: SignFn,
-  opts: { ttlMs?: number; now?: () => number; storage?: SignedUrlStorage } = {},
+  opts: { ttlMs?: number; now?: () => number; storage?: SignedUrlStorage; maxStored?: number } = {},
 ) {
   const ttlMs = opts.ttlMs ?? 55 * 60_000; // signed for 60 min; refresh a little early
   const now = opts.now ?? Date.now;
@@ -53,7 +70,7 @@ export function createSignedUrlCache(
       const keep = Array.from(entries.entries())
         .filter(([, e]) => fresh(e) && !e.url.startsWith("blob:"))
         .sort((a, b) => b[1].expiresAt - a[1].expiresAt)
-        .slice(0, MAX_STORED_URLS);
+        .slice(0, opts.maxStored ?? MAX_STORED_URLS);
       try { storage.save(keep); } catch { /* quota or private mode: memory only */ }
     }, 400);
   };

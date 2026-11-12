@@ -1,38 +1,68 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createSignedUrlCache, localSignedUrlStorage } from "@/lib/signed-url-cache";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AvatarImage } from "@/components/ui/avatar";
 
-// Module-level signed URL cache so list views with many avatars don't refetch.
-const cache = new Map<string, { url: string; expiresAt: number }>();
-const inflight = new Map<string, Promise<string | null>>();
-const TTL_MS = 55 * 60 * 1000; // refresh just before the 60-min signed URL expires
+/**
+ * Photos' links (the private `avatars` bucket): signed for a day and kept on
+ * the phone across launches, like Crew's (community-media.ts) and the chat's,
+ * so a reopened app shows the same addresses from the phone's cache instead of
+ * downloading every face again; and faces asked for in the same moment (the
+ * story rail, a page of posts, a chat list) are signed in one request, never
+ * one each. Refreshed an hour before they expire; cleared on sign-out.
+ */
+export const AVATAR_SIGN_SECONDS = 24 * 3600;
+export const AVATAR_URLS_STORAGE_KEY = "jf-avatar-signed-urls-v1";
+export const avatarUrlCache = createSignedUrlCache(
+  async (paths) => {
+    const { data, error } = await supabase.storage.from("avatars").createSignedUrls(paths, AVATAR_SIGN_SECONDS);
+    if (error) throw error;
+    const out: Record<string, string> = {};
+    for (const row of data ?? []) if (row?.path && row.signedUrl) out[row.path] = row.signedUrl;
+    return out;
+  },
+  { ttlMs: (AVATAR_SIGN_SECONDS - 3600) * 1000, storage: localSignedUrlStorage(AVATAR_URLS_STORAGE_KEY), maxStored: 400 },
+);
+
+/** Signed-in user changed (sign-out): forget every link, in memory and on disk. */
+export function clearAvatarSignedUrls() {
+  avatarUrlCache.clear();
+}
+
+let batch: Set<string> | null = null;
+let batchDone: Promise<void> = Promise.resolve();
+/** Faces asked for in the same moment go in one request. */
+function signWithOthers(path: string): Promise<void> {
+  if (!batch) {
+    const b = new Set<string>();
+    batch = b;
+    batchDone = new Promise<void>((r) => setTimeout(r, 0)).then(() => {
+      batch = null;
+      return avatarUrlCache.ensure([...b]);
+    });
+  }
+  batch.add(path);
+  return batchDone;
+}
+
+const isLink = (v: string) => /^https?:\/\//i.test(v) || v.startsWith("data:");
 
 async function resolveAvatarUrl(value: string | null | undefined): Promise<string | null> {
   if (!value) return null;
-  if (/^https?:\/\//i.test(value) || value.startsWith("data:")) return value;
-  const now = Date.now();
-  const hit = cache.get(value);
-  if (hit && hit.expiresAt > now) return hit.url;
-  if (inflight.has(value)) return inflight.get(value)!;
-  const p = (async () => {
-    const { data } = await supabase.storage.from("avatars").createSignedUrl(value, 60 * 60);
-    const url = data?.signedUrl ?? null;
-    if (url) cache.set(value, { url, expiresAt: now + TTL_MS });
-    inflight.delete(value);
-    return url;
-  })();
-  inflight.set(value, p);
-  return p;
+  if (isLink(value)) return value;
+  const hit = avatarUrlCache.get(value);
+  if (hit) return hit;
+  await signWithOthers(value);
+  return avatarUrlCache.get(value) ?? null;
 }
 
 /** A URL to show right away (a link as is, or a signed one still cached), else null. */
 function readyAvatarUrl(src: string | null | undefined): string | null {
   if (!src) return null;
-  if (/^https?:\/\//i.test(src) || src.startsWith("data:")) return src;
-  const hit = cache.get(src);
-  return hit && hit.expiresAt > Date.now() ? hit.url : null;
+  if (isLink(src)) return src;
+  return avatarUrlCache.get(src) ?? null;
 }
 
 /** A photo's URL to show: a path in `avatars` signed (and cached), a link as is. */
@@ -103,12 +133,7 @@ export function UserAvatar({
   className,
   expandable = true,
 }: UserAvatarProps) {
-  const [url, setUrl] = useState<string | null>(() => {
-    if (!src) return null;
-    if (/^https?:\/\//i.test(src) || src.startsWith("data:")) return src;
-    const hit = cache.get(src);
-    return hit && hit.expiresAt > Date.now() ? hit.url : null;
-  });
+  const [url, setUrl] = useState<string | null>(() => readyAvatarUrl(src));
   const [failed, setFailed] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [open, setOpen] = useState(false);

@@ -19,6 +19,7 @@
 import { compressImage } from "@/lib/image-compress";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { supabase } from "@/integrations/supabase/client";
+import { createSignedUrlCache, localSignedUrlStorage } from "@/lib/signed-url-cache";
 import { checkMediaFile } from "@/lib/community";
 import { captureVideoPoster } from "@/lib/video-poster";
 import type { VideoContext } from "@/lib/video-edit/limits";
@@ -286,42 +287,79 @@ export async function removeCommunityFiles(paths: (string | null | undefined)[])
   }
 }
 
-/* ---- signed URLs (batched + cached) --------------------------------- */
+/* ---- signed URLs (batched, kept on the phone for a day) ---------------- */
 
-const urlCache = new Map<string, { url: string; expiresAt: number }>();
-const TTL_MS = 50 * 60 * 1000;
+/**
+ * Crew's links last a day and are kept across app launches (like the chat's,
+ * use-chat-signed-urls.ts): Crew is the screen every launch opens on, and a
+ * new signed link is a new address to the phone's HTTP cache, so re-signing
+ * on every open downloaded every photo, poster and clip in the feed again,
+ * and the first post's picture waited on a signing round trip before it could
+ * even start. Refreshed an hour before they expire; cleared on sign-out.
+ */
+export const CREW_SIGN_SECONDS = 24 * 3600;
+const CREW_REUSE_MS = (CREW_SIGN_SECONDS - 3600) * 1000;
+export const CREW_URLS_STORAGE_KEY = "jf-crew-signed-urls-v1";
+/** Links kept on the phone: about a week of a busy feed (each ~400 characters). */
+const CREW_URLS_STORED = 600;
 
-/** One round trip for every uncached path on a feed page. */
+export const crewUrlCache = createSignedUrlCache(
+  async (paths) => {
+    const { data, error } = await supabase.storage.from(COMMUNITY_BUCKET).createSignedUrls(paths, CREW_SIGN_SECONDS);
+    if (error) throw error;
+    const out: Record<string, string> = {};
+    for (const row of data ?? []) if (row?.path && row.signedUrl) out[row.path] = row.signedUrl;
+    return out;
+  },
+  { ttlMs: CREW_REUSE_MS, storage: localSignedUrlStorage(CREW_URLS_STORAGE_KEY), maxStored: CREW_URLS_STORED },
+);
+
+/** Signed-in user changed (sign-out): forget every link, in memory and on disk. */
+export function clearCrewSignedUrls() {
+  crewUrlCache.clear();
+}
+
+/** A path that needs no signing: a picture shipped with the app, or a link that's already public. */
+function unsignedUrl(p: string): string | null {
+  // "app:<file>": a picture that ships with the app (public/)
+  if (p.startsWith(APP_MEDIA)) return `/${p.slice(APP_MEDIA.length)}`;
+  // a GIF from the library is already a public link
+  if (/^https:\/\//.test(p)) return p;
+  return null;
+}
+
+/**
+ * Every link for these paths already on the phone, or undefined when one is
+ * missing: what the feed paints with on its first frame (no round trip).
+ */
+export function cachedCommunityUrls(paths: (string | null | undefined)[]): Record<string, string> | undefined {
+  const out: Record<string, string> = {};
+  for (const p of new Set(paths.filter((x): x is string => !!x))) {
+    const u = unsignedUrl(p) ?? crewUrlCache.get(p);
+    if (!u) return undefined;
+    out[p] = u;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** One round trip for every path on a feed page that has no link yet. */
 export async function signCommunityPaths(paths: (string | null | undefined)[]): Promise<Record<string, string>> {
   const wanted = Array.from(new Set(paths.filter((p): p is string => !!p)));
-  const now = Date.now();
   const out: Record<string, string> = {};
-  const missing: string[] = [];
+  const toSign: string[] = [];
   for (const p of wanted) {
-    // "app:<file>": a picture that ships with the app (public/), no signing
-    if (p.startsWith(APP_MEDIA)) {
-      out[p] = `/${p.slice(APP_MEDIA.length)}`;
-      continue;
-    }
-    // a GIF from the library is already a public link
-    if (/^https:\/\//.test(p)) {
-      out[p] = p;
-      continue;
-    }
-    const hit = urlCache.get(p);
-    if (hit && hit.expiresAt > now) out[p] = hit.url;
-    else missing.push(p);
+    const u = unsignedUrl(p);
+    if (u) out[p] = u;
+    else toSign.push(p);
   }
-  if (missing.length) {
-    // a failed batch throws, so the query retries instead of caching blank photos
-    const { data, error } = await supabase.storage.from(COMMUNITY_BUCKET).createSignedUrls(missing, 60 * 60);
-    if (error) throw error;
-    for (const row of data ?? []) {
-      if (row.path && row.signedUrl) {
-        urlCache.set(row.path, { url: row.signedUrl, expiresAt: now + TTL_MS });
-        out[row.path] = row.signedUrl;
-      }
+  if (toSign.length) {
+    const need = crewUrlCache.missing(toSign);
+    if (need.length) {
+      await crewUrlCache.ensure(need);
+      // nothing came back (the batch failed): throw, so the query retries instead of caching blank photos
+      if (crewUrlCache.missing(need).length === need.length) throw new Error("Couldn't load the pictures. Pull to refresh.");
     }
+    Object.assign(out, crewUrlCache.snapshot(toSign));
   }
   return out;
 }

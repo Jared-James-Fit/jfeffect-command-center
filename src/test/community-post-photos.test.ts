@@ -64,7 +64,7 @@ describe("photos on every post, same rules as sharing a workout", () => {
     expect(read("src/components/community/post-card.tsx")).toContain("if (post.media_type) return <PostMedia post={post} thumbUrl={thumbUrl} full={full} ratio={0.8} trail=");
     expect(read("src/lib/instagram-export.ts")).toContain('if (slides.length) return { card: info, slides, cardLast: !!info && info !== "lesson" };');
     // a picture shipped with the app needs no signing and is never deleted from the bucket
-    expect(read("src/lib/community-media.ts")).toContain("if (p.startsWith(APP_MEDIA)) {");
+    expect(read("src/lib/community-media.ts")).toContain("if (p.startsWith(APP_MEDIA)) return `/${p.slice(APP_MEDIA.length)}`;");
     expect(read("src/lib/community-media.ts")).toContain("!p.startsWith(APP_MEDIA)");
     expect(read("src/components/community/post-tile.tsx")).toContain('post.kind === "note" && post.media_type && thumb ?');
     expect(read("src/components/community/community-entry.tsx")).toContain("const photo = !art && !!(post.media_type && thumb);");

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { createSignedUrlCache, type SignedUrlEntry, type SignedUrlStorage } from "@/lib/signed-url-cache";
+import { createSignedUrlCache, localSignedUrlStorage, type SignedUrlStorage } from "@/lib/signed-url-cache";
 
 const BUCKET = "message-attachments";
 
@@ -11,19 +11,7 @@ const SIGN_SECONDS = 24 * 3600;
 const REUSE_MS = (SIGN_SECONDS - 3600) * 1000;
 const STORAGE_KEY = "jf-chat-signed-urls-v1";
 
-const localStore: SignedUrlStorage = {
-  load() {
-    if (typeof localStorage === "undefined") return [];
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-    return Array.isArray(parsed) ? (parsed as Array<[string, SignedUrlEntry]>) : [];
-  },
-  save(entries) {
-    if (typeof localStorage === "undefined") return;
-    if (entries.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-    else localStorage.removeItem(STORAGE_KEY);
-  },
-};
+const localStore: SignedUrlStorage = localSignedUrlStorage(STORAGE_KEY);
 
 /** App-wide cache: shared by every thread, survives navigating between chats and relaunches. */
 export const chatUrlCache = createSignedUrlCache(async (paths) => {
