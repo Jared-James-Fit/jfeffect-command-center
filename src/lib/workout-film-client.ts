@@ -1,13 +1,12 @@
 /**
  * A finished workout's film, in the app: how many sets are on film, whether
- * some are still uploading, whether the film is in the feed, the athlete's
- * "post my film automatically" switch, and posting it (now, or by itself once
- * the clips have landed). The server builds the post (workout-film.functions.ts).
+ * some are still uploading, whether the film is in the feed, and posting it
+ * (Share to Crew now, or by itself once the clips have landed while their
+ * choice is Crew, workout-film-pref.ts). The server builds the post (workout-film.functions.ts).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { isActiveJob, useSetVideoJobs } from "@/lib/set-videos/jobs";
@@ -15,37 +14,9 @@ import { useSetVideosForDay } from "@/components/workout-day/set-video-cell";
 import { invalidateCommunity, useMyPostForCompletion } from "@/lib/community.queries";
 import { filmPaths, filmUpToDate, pickFilmClips } from "@/lib/workout-film";
 import { postWorkoutFilmFn, type FilmPostResult } from "@/lib/workout-film.functions";
+import { useFilmAutoPost } from "@/lib/workout-film-pref";
 
-const db = supabase as any;
-const AUTO_KEY = ["community-film-auto"] as const;
-
-/** Their switch: a finished workout's film posts to Crew by itself (on unless they turn it off). */
-export function useFilmAutoPost(enabled = true) {
-  const viewingAsClient = useViewingAsClient();
-  const { data } = useQuery({
-    queryKey: AUTO_KEY,
-    enabled: enabled && !viewingAsClient,
-    staleTime: 10 * 60_000,
-    queryFn: async (): Promise<boolean> => {
-      const { data: on, error } = await db.rpc("community_auto_post_film");
-      if (error) throw error;
-      return on !== false;
-    },
-  });
-  return data;
-}
-
-export function useSetFilmAutoPost() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (on: boolean) => {
-      const { error } = await db.rpc("community_set_auto_post_film", { _on: on });
-      if (error) throw error;
-    },
-    onMutate: (on) => qc.setQueryData(AUTO_KEY, on),
-    onSettled: () => qc.invalidateQueries({ queryKey: AUTO_KEY }),
-  });
-}
+export { useFilmAutoPost, useSetFilmAutoPost } from "@/lib/workout-film-pref";
 
 /** Posts already asked for in this app open (one automatic try per film state, whichever screen asks). */
 const autoTried = new Set<string>();
@@ -69,7 +40,7 @@ export type WorkoutFilmState = {
 
 /**
  * One finished workout's film. `auto` (default on): once every clip has
- * landed, posts it by itself when their switch is on; never for a coach
+ * landed, posts it by itself when their choice is Crew; never for a coach
  * viewing as the athlete.
  */
 export function useWorkoutFilm(completionId: string | null | undefined, dayId: string | null | undefined, opts: { auto?: boolean } = {}) {

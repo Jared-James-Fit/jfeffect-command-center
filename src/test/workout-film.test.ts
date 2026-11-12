@@ -82,6 +82,35 @@ describe("the film on the post", () => {
     expect(postSlides({ ...post, hide_loads: true }).map((s) => s.caption?.detail)).toEqual(["Set 1 · 5 reps", "Set 2 · 5 reps"]);
     expect(postSlides({ ...post, film: null })[0].caption).toBeUndefined();
   });
+  it("the athlete always sees their own weights on their film", () => {
+    const post = {
+      media_path: "u/film/c/1.mp4", media_thumb_path: null, media_type: "video" as const, media_width: 720, media_height: 1280, extra_media: [],
+      film: [{ path: "u/film/c/1.mp4", exercise: "Squat", set: 1, label: "140 kg × 5", label_no_load: "5 reps" }],
+      hide_loads: true,
+    };
+    expect(postSlides({ ...post, is_mine: true })[0].caption?.detail).toBe("Set 1 · 140 kg × 5");
+    expect(postSlides({ ...post, is_mine: false })[0].caption?.detail).toBe("Set 1 · 5 reps");
+  });
+});
+
+describe("who sees it: Crew or Coach only", () => {
+  const options = readFileSync("src/components/workout/shared/film-audience-options.tsx", "utf8");
+  const film = readFileSync("src/components/workout/shared/workout-film.tsx", "utf8");
+  const settings = readFileSync("src/components/community/privacy-settings.tsx", "utf8");
+  it("is one two-way choice, in the review and in Crew settings, that says the coach gets every clip either way", () => {
+    expect(options).toContain('{ key: "crew", label: "Crew", icon: Users }');
+    expect(options).toContain('{ key: "coach", label: "Coach only", icon: UserRound }');
+    expect(options).toContain("Stays in your coach chat. You can share it to Crew later from the workout.");
+    expect(film).toContain("your coach gets every clip either way");
+    expect(film).toContain('when="after your review"');
+    expect(settings).toContain("Your coach gets every clip either way, in your chat.");
+    expect(settings).toContain('from "@/components/workout/shared/film-audience-options"');
+    expect(settings).toContain('from "@/lib/workout-film-pref"');
+  });
+  it("Coach only can still go to Crew later, from the workout's card and its recap", () => {
+    expect(film).toMatch(/film\.autoOn === false && !film\.hidden\)[\s\S]*?Coach only[\s\S]*?<ShareButton/);
+    expect(film).toContain("Share to Crew");
+  });
 });
 
 describe("posting it", () => {
@@ -97,10 +126,10 @@ describe("posting it", () => {
     expect(fn).toContain('context: "workout",');
     expect(fn).toContain('.from("media_video_checks").upsert(');
   });
-  it("posts by itself only after the review (where the switch is), or once it was clearly skipped", () => {
+  it("posts by itself only after the review (where they pick), or once it was clearly skipped", () => {
     expect(card).toContain("auto={hasReview || (!!completedAt && Date.now() - Date.parse(completedAt) > FILM_REVIEW_WAIT_MS)}");
   });
-  it("the switch is on unless they turn it off, and the post carries each clip's caption", () => {
+  it("Crew unless they pick Coach only, and the post carries each clip's caption", () => {
     expect(sql).toContain("ADD COLUMN IF NOT EXISTS auto_post_film boolean NOT NULL DEFAULT true");
     expect(sql).toContain("''film'', CASE WHEN jsonb_typeof(n.film) = ''array''");
   });

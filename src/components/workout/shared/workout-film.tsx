@@ -1,23 +1,25 @@
 /**
  * A finished workout's film, on the workout's own card and its recap:
- *   🎥 3 sets on film · In the feed ✓  (View)
+ *   🎥 3 sets on film · In the feed ✓      (View)
  *   🎥 3 sets on film · 1 still uploading, posts when it's done
- *   🎥 3 sets on film · Not posted     (Post to Crew)
- * and the switch at the end of the review that decides whether it posts by
- * itself (saved on the account). Only the athlete sees any of it, never a
- * coach viewing as them, and only when the workout has a clip.
+ *   🎥 3 sets on film · Coach only          (Share to Crew)
+ * and "Who sees your film" at the end of the review: Crew (it posts by
+ * itself) or Coach only (saved on the account). Their coach gets every clip
+ * either way: each one is already its own message in the coach chat. Only
+ * the athlete sees any of this, never a coach viewing as them, and only when
+ * the workout has a clip.
  */
 import { useNavigate } from "@tanstack/react-router";
-import { Check, Clapperboard, Loader2, RefreshCw } from "lucide-react";
+import { Check, Clapperboard, Loader2, RefreshCw, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useViewingAsClient } from "@/lib/client-impersonation";
 import { useChatSignedUrl } from "@/hooks/use-chat-signed-urls";
 import { isActiveJob, useSetVideoJobs } from "@/lib/set-videos/jobs";
 import { useSetVideosForDay } from "@/components/workout-day/set-video-cell";
 import { useFilmAutoPost, useSetFilmAutoPost, useWorkoutFilm } from "@/lib/workout-film-client";
+import { FilmAudienceOptions } from "@/components/workout/shared/film-audience-options";
 
 const sets = (n: number) => `${n} ${n === 1 ? "set" : "sets"} on film`;
 
@@ -45,7 +47,7 @@ export function WorkoutFilmRow({
     status = (
       <>
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-        {film.uploading} still uploading{film.autoOn !== false && !film.hidden ? ", posts when done" : ""}
+        {film.uploading} still uploading{film.autoOn !== false && !film.hidden && !film.posted ? ", posts when done" : ""}
       </>
     );
   } else if (film.posting) {
@@ -73,9 +75,17 @@ export function WorkoutFilmRow({
       </Button>
     ) : null;
   } else if (film.postable === 0) {
-    status = "Too long for Crew (90 seconds a clip)";
-  } else if (!auto && film.autoOn !== false && !film.hidden) {
-    // their switch is on, and the review (where it lives) comes first
+    status = "Over 90 seconds, so it stays in your coach chat";
+  } else if (film.autoOn === false && !film.hidden) {
+    // their choice: Coach only (every clip is already in the coach chat)
+    status = (
+      <span className="inline-flex items-center gap-1">
+        <UserRound className="h-3 w-3" aria-hidden /> Coach only
+      </span>
+    );
+    action = <ShareButton onClick={() => void post()} />;
+  } else if (!auto && !film.hidden) {
+    // Crew, and the review (where they pick) comes first
     status = "Posts after your review";
     action = (
       <Button variant="ghost" className="h-10 shrink-0 px-3" onClick={() => void post()}>
@@ -84,16 +94,13 @@ export function WorkoutFilmRow({
     );
   } else {
     status = film.hidden ? "Hidden from Crew" : "Not posted";
-    action = (
-      <Button variant="outline" className="h-10 shrink-0 gap-1.5 px-3" onClick={() => void post()}>
-        Post to Crew
-      </Button>
-    );
+    action = <ShareButton onClick={() => void post()} />;
   }
 
   async function post() {
     const res = await film.postNow();
     if (res?.status === "posted") toast.success("Your film is in the feed 🎥");
+    else if (res?.status === "up_to_date") toast.success("It's already in the feed");
     else if (res?.status === "no_crew") toast.error("Crew isn't on for your account.");
     else if (res?.status === "no_clips") toast.error("No clips fit a Crew post yet (90 seconds a clip).");
   }
@@ -140,12 +147,20 @@ function Poster({ path, className, style }: { path: string; className?: string; 
   );
 }
 
+function ShareButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button variant="outline" className="h-10 shrink-0 px-3" onClick={onClick}>
+      Share to Crew
+    </Button>
+  );
+}
+
 /**
- * The end of the review: "Post my film to Crew", their saved switch, shown
- * only when this workout has a clip. Off, the film stays private and the
- * workout's card offers Post to Crew any time later.
+ * The end of the review: "Who sees your film", Crew or Coach only (their
+ * saved choice), shown only when this workout has a clip. Coach only, it stays
+ * in the coach chat and the workout's card offers Share to Crew any time.
  */
-export function FilmAutoPostSwitch({ dayId }: { dayId: string }) {
+export function FilmAudienceChoice({ dayId }: { dayId: string }) {
   const viewingAsClient = useViewingAsClient();
   const { data: videos } = useSetVideosForDay(dayId, !viewingAsClient);
   const jobs = useSetVideoJobs();
@@ -153,23 +168,24 @@ export function FilmAutoPostSwitch({ dayId }: { dayId: string }) {
   const set = useSetFilmAutoPost();
   const count = (videos ?? []).filter((v) => !!v.result_id).length + jobs.filter((j) => j.dayId === dayId && isActiveJob(j)).length;
   if (viewingAsClient || count === 0) return null;
-  const on = autoOn !== false;
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-3 py-3" data-film-auto-switch>
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground" aria-hidden>
-        <Clapperboard className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">Post my film to Crew</span>
-        <span className="block text-xs leading-snug text-muted-foreground">
-          {sets(count)}. {on ? "Each clip goes up with its set details." : "It stays private. You can post it later from this workout."}
+    <div className="space-y-3 rounded-xl border border-border bg-card p-3" data-film-auto-switch>
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-foreground" aria-hidden>
+          <Clapperboard className="h-4 w-4" />
         </span>
-      </span>
-      <Switch
-        checked={on}
-        onCheckedChange={(v) => set.mutate(v, { onError: () => toast.error("Couldn't save that. Try again.") })}
-        aria-label="Post my film to Crew automatically"
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Who sees your film</span>
+          <span className="block text-xs leading-snug text-muted-foreground">
+            {sets(count)} · your coach gets every clip either way
+          </span>
+        </span>
+      </div>
+      <FilmAudienceOptions
+        crew={autoOn !== false}
+        onChange={(v) => set.mutate(v, { onError: () => toast.error("Couldn't save that. Try again.") })}
+        when="after your review"
       />
-    </label>
+    </div>
   );
 }
