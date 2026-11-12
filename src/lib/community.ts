@@ -911,6 +911,8 @@ export function postSlides(
     media_focus?: MediaFocus | null;
     film?: FilmSlide[] | null;
     hide_loads?: boolean;
+    is_mine?: boolean;
+    visibility?: CommunityVisibility;
   },
 ): PostSlide[] {
   if (!post.media_path || !post.media_type) return [];
@@ -919,11 +921,13 @@ export function postSlides(
     ...(post.extra_media ?? []).filter((s) => !!s?.path),
   ];
   if (!post.film?.length) return slides;
-  // a workout film: each clip carries its own caption (weights left out on a post that hides them)
+  // a workout film: each clip carries its own caption (weights left out on a
+  // post that hides them, except for the athlete and on one sent to their coach)
+  const hideLoads = !!post.hide_loads && !post.is_mine && post.visibility !== "coach";
   const byPath = new Map(post.film.map((f) => [f.path, f]));
   return slides.map((s) => {
     const f = byPath.get(s.path);
-    return f ? { ...s, caption: filmCaption(f, !!post.hide_loads) } : s;
+    return f ? { ...s, caption: filmCaption(f, hideLoads) } : s;
   });
 }
 

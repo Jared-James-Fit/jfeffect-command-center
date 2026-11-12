@@ -3,10 +3,13 @@
  * session's one post, a clip per slide with its own caption (workout-film.ts).
  *
  *   auto: true   called by the app once the workout is done and its clips
- *                have landed; does nothing when the athlete switched it off
- *                (community_profiles.auto_post_film), took the session's post
- *                out of Crew, or it's already up to date.
- *   auto: false  "Post my film": posts (or brings back) the film now.
+ *                have landed; does nothing when the athlete picked Coach only
+ *                (community_profiles.auto_post_film = false), took the
+ *                session's post out of Crew, or it's already up to date.
+ *   auto: false  "Share to Crew": posts (or brings back) the film now.
+ *
+ * Their coach gets every clip either way: each set video is already its own
+ * message in the coach chat (set_video_attach), with its set details.
  *
  * Only the athlete (the workout's own login) can post it, never a coach
  * viewing as them. The clips are copied from their coach chat's storage into

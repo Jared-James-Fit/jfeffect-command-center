@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Globe } from "lucide-react";
 import { toast } from "sonner";
 import { useEntitlement } from "@/lib/service-tier";
-import { useFilmAutoPost, useSetFilmAutoPost } from "@/lib/workout-film-client";
+import { useFilmAutoPost, useSetFilmAutoPost } from "@/lib/workout-film-pref";
+import { FilmAudienceOptions } from "@/components/workout/shared/film-audience-options";
 import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -20,6 +21,7 @@ import { useServiceTier } from "@/lib/service-tier";
  *   birthdays, Wins), so the Crew's shared wins never go dark.
  * - A coach's account is always public: shown as a fact, not a switch.
  * - Share my workouts: a finished workout posts itself to your story.
+ * - Who sees my film: a workout's set videos post to Crew, or stay Coach only.
  */
 
 const ROW = "flex items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3";
@@ -109,13 +111,18 @@ export function PostMyFilmRow() {
   const set = useSetFilmAutoPost();
   if (isImpersonating || !filming || autoOn === undefined) return null;
   return (
-    <label data-film-switch className={ROW}>
+    <div data-film-switch className="space-y-2.5 border-b border-border/60 px-3.5 py-3">
       <span className="min-w-0">
-        <span className={TITLE}>Post my film</span>
-        <span className={NOTE}>Sets you film in a workout post to Crew when you finish it, each clip with its set details. Off, they stay private and you can post them from the workout.</span>
+        <span className={TITLE}>Who sees my film</span>
+        <span className={NOTE}>Sets you film in a workout. Your coach gets every clip either way, in your chat.</span>
       </span>
-      <Switch checked={autoOn} disabled={set.isPending} onCheckedChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })} aria-label="Post my film" />
-    </label>
+      <FilmAudienceOptions
+        crew={autoOn}
+        disabled={set.isPending}
+        onChange={(on) => set.mutate(on, { onError: () => toast.error("Couldn't save that") })}
+        when="when you finish"
+      />
+    </div>
   );
 }
 
