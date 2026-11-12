@@ -35,7 +35,7 @@ export async function paintCardFile(post: CommunityPost, card: IgCard, format: I
   return file;
 }
 
-/** True once the box is within a screen or so of being seen (and from then on). */
+/** True once the box is within two screens of being seen (and from then on), so a card is painted before it's scrolled to. */
 function useNearScreen(ref: RefObject<HTMLElement | null>, eager: boolean): boolean {
   const [near, setNear] = useState(eager);
   useEffect(() => {
@@ -50,7 +50,7 @@ function useNearScreen(ref: RefObject<HTMLElement | null>, eager: boolean): bool
           io.disconnect();
         }
       },
-      { rootMargin: "120%" },
+      { rootMargin: "200%" },
     );
     io.observe(el);
     return () => io.disconnect();

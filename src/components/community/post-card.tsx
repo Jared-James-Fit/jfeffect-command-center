@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
@@ -34,7 +34,8 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
-import { feedAspect, focusPosition } from "@/lib/photo-frame";
+import { FEED_VIDEO_MAX_HEIGHT, feedAspect, focusPosition, videoAspect } from "@/lib/photo-frame";
+import { unlockReelSound } from "@/lib/reel-video-pool";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
@@ -393,9 +394,11 @@ type Props = {
   onTipDone?: () => void;
   /** First-time demo on "View full workout" (until they open one). */
   openHint?: boolean;
+  /** A tap on one of its clips: open the clips full screen there (the feed's ReelsViewer). Without it, a tap toggles the sound. */
+  onOpenReel?: (post: CommunityPost, path: string) => void;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
@@ -418,7 +421,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
   // Instagram's taps: a tap on a picture does nothing (a post never opens from
   // its picture: "View full workout" and the comments are buttons of their own),
-  // a tap on a clip turns the sound on or off, and two quick taps give ❤️.
+  // a tap on a clip opens the clips full screen (Reels'; where there's no
+  // full-screen viewer it turns the sound on or off), and two quick taps give ❤️.
   // Already reacted? It stays as it is (a double-tap never takes one back).
   const onHeroTap = (e: React.MouseEvent) => {
     const now = Date.now();
@@ -432,13 +436,23 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       return;
     }
     lastTap.current = now;
-    // a clip: sound on / off, once it's clear this wasn't the first of two taps
-    if ((e.target as Element | null)?.closest?.("[data-inline-video]")) {
+    // a clip: full screen (or sound on / off), once it's clear this wasn't the first of two taps
+    const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
+    if (!clip) return;
+    const path = clip.getAttribute("data-slide-path");
+    if (onOpenReel && path) {
+      // inside the tap itself: the full-screen clips may play with sound (an iPhone asks for a tap)
+      unlockReelSound();
       singleTimer.current = window.setTimeout(() => {
         singleTimer.current = null;
-        toggleFeedSound();
+        onOpenReel(post, path);
       }, 300);
+      return;
     }
+    singleTimer.current = window.setTimeout(() => {
+      singleTimer.current = null;
+      toggleFeedSound();
+    }, 300);
   };
   useEffect(() => () => {
     if (singleTimer.current) window.clearTimeout(singleTimer.current);
@@ -760,16 +774,21 @@ export function ReactionBar({
 export function PostMedia({ post, thumbUrl, full = false, lead, trail, ratio: fixed }: { post: CommunityPost; thumbUrl: string | null; full?: boolean; lead?: ReactNode; trail?: ReactNode; ratio?: number }) {
   const slides = postSlides(post);
   const cover = slides[0] ?? null;
-  // Never taller than 4:5, never wider than 16:9 — keeps the feed rhythm steady.
+  // A picture: never taller than 4:5, never wider than 16:9, keeping the feed's rhythm.
   // A carousel takes its cover's shape for every slide (Instagram does too).
-  // A picture framed in the studio is already exactly its shape; a clip (or an
-  // older photo) is cropped to it, showing the part its focus says.
+  // A picture framed in the studio is already exactly its shape (an older photo is
+  // cropped to it, showing the part its focus says). A clip is never cropped: a clip
+  // cover gives the frame its own shape (9:16 to 16:9, videoAspect), as tall as the
+  // screen allows, and every clip fits whole inside its frame (black either side
+  // when it's narrower), so the whole lift is always on screen.
   // `lead` / `trail`: a slide before / after the post's own (an automated post's 4:5 card), whose shape it takes.
   // `ratio`: a fixed shape (an automated post is always 4:5, like the card that may follow its photo).
-  const ratio = fixed ?? (lead ? 0.8 : feedAspect(post.media_width, post.media_height));
-  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} ratio={ratio} full={full} lead={lead} trail={trail} />;
+  const clipCover = !fixed && !lead && cover?.type === "video";
+  const ratio = fixed ?? (lead ? 0.8 : clipCover ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height));
+  const frame: CSSProperties = clipCover ? { aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT } : { aspectRatio: String(ratio) };
+  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} />;
   return (
-    <div className="relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }}>
+    <div className={cn("relative w-full overflow-hidden", clipCover ? "bg-black" : "bg-muted")} style={frame} data-clip-frame={clipCover ? "" : undefined}>
       {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} /> : <div className="h-full w-full animate-pulse bg-muted" />}
     </div>
   );
@@ -786,7 +805,8 @@ function SlideMedia({ slide, thumbUrl, full, active = true, withDots = false }: 
     <>
       {isVideo ? (
         <div data-pinch-zoom className="absolute inset-0">
-          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} />
+          {/* whole, never cropped: the lift is all there */}
+          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" />
         </div>
       ) : (
         <div data-pinch-zoom className="absolute inset-0">
@@ -819,7 +839,13 @@ function SlideCaption({ caption, withDots }: { caption: { title: string; detail:
   );
 }
 
-/** A photo that fades in once it has loaded (cached ones show at once), over a soft shimmer. */
+/**
+ * A photo that fades in once it has loaded (cached ones show at once), over a
+ * soft shimmer. Asked for as soon as its post is in the feed, never held back
+ * by the browser's lazy loading (an iPhone starts those too late, so a photo
+ * popped in as it scrolled on): the feed is only the posts already read, and
+ * a feed photo is its small thumbnail.
+ */
 function FadeImg({ src, position }: { src: string; position?: string }) {
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement | null>(null);
@@ -833,7 +859,6 @@ function FadeImg({ src, position }: { src: string; position?: string }) {
         ref={ref}
         src={src}
         alt=""
-        loading="lazy"
         decoding="async"
         draggable={false}
         onLoad={() => setLoaded(true)}
@@ -850,7 +875,7 @@ function FadeImg({ src, position }: { src: string; position?: string }) {
  * and the dots say where you are. Only the slide you're on and its
  * neighbours load; the rest wait. Taps still reach the post (double-tap ❤️, a clip's sound).
  */
-function PostCarousel({ slides, coverUrl, ratio, full, lead, trail }: { slides: PostSlide[]; coverUrl: string | null; ratio: number; full: boolean; lead?: ReactNode; trail?: ReactNode }) {
+function PostCarousel({ slides, coverUrl, frame, full, lead, trail }: { slides: PostSlide[]; coverUrl: string | null; frame: CSSProperties; full: boolean; lead?: ReactNode; trail?: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
   const track = useRef<HTMLDivElement | null>(null);
@@ -870,7 +895,7 @@ function PostCarousel({ slides, coverUrl, ratio, full, lead, trail }: { slides: 
     if (el) el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
   };
   return (
-    <div className="group/carousel relative w-full overflow-hidden bg-muted" style={{ aspectRatio: String(ratio) }} aria-roledescription="carousel" aria-label={`${count} photos and videos`}>
+    <div className="group/carousel relative w-full overflow-hidden bg-muted" style={frame} aria-roledescription="carousel" aria-label={`${count} photos and videos`}>
       <div
         ref={track}
         onScroll={onScroll}

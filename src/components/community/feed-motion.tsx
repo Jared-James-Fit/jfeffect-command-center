@@ -8,10 +8,11 @@ import { listenChannel } from "@/lib/realtime-channel";
 import { rollFeedAnchor } from "@/lib/feed-anchor";
 
 /**
- * A post that eases in (fade + small rise) the first time it scrolls into
- * view, so the feed builds as you go instead of landing all at once. The
- * first few on screen come in one after another. Shows straight away where
- * there's no IntersectionObserver or motion is reduced.
+ * A post that eases in (fade + small rise): the first few on screen come in
+ * one after another when the feed opens; every post after them has already
+ * eased in a screen and a half below the bottom, so scrolling never waits on
+ * one (it read as slow loading). Shows straight away where there's no
+ * IntersectionObserver or motion is reduced.
  */
 export function FeedItem({ index, children, className, ...rest }: { index: number; children: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -26,8 +27,10 @@ export function FeedItem({ index, children, className, ...rest }: { index: numbe
         setShown(true);
         io.disconnect();
       },
-      // a touch before it's on screen, so it's already moving as it appears
-      { rootMargin: "0px 0px 80px 0px", threshold: 0.01 },
+      // the first screenful arrives one after another; anything further down has
+      // finished arriving (a screen and a half early) before it's scrolled to, so
+      // a fast scroll never meets a post still fading in
+      { rootMargin: "0px 0px 150% 0px", threshold: 0.01 },
     );
     io.observe(el);
     return () => io.disconnect();

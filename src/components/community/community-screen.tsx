@@ -10,6 +10,7 @@ import { attentionExit } from "@/lib/post-attention";
 import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
+import { ReelsViewer, type ReelStart } from "@/components/community/reels-viewer";
 import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
 import { PostDetailDialog } from "@/components/community/post-detail";
@@ -132,6 +133,9 @@ export function CommunityScreen({
   // someone else's profile is a page with a back arrow; yours is a tab
   const inProfile = scope.kind === "author";
   const [commentsFor, setCommentsFor] = useState<CommunityPost | null>(null);
+  // a clip tapped in the feed: the feed's clips full screen, from that one
+  const [reel, setReel] = useState<ReelStart | null>(null);
+  const openReel = useCallback((post: CommunityPost, path: string) => setReel({ postId: post.id, path }), []);
   const [detailId, setDetailId] = useState<string | null>(() => postFromHash());
   const [jumpTo, setJumpTo] = useState<string | null>(() => atFromHash());
   const [flash, setFlash] = useState<string | null>(null);
@@ -479,7 +483,7 @@ export function CommunityScreen({
         !previewOnly && (
           <>
             {/* Activity: who liked, commented, followed; what's new rises out of it in a bubble, then a dot until it's read */}
-            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !commentsFor} />
+            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !commentsFor && !reel} />
             {/* you: your own profile (posts, followers, edit), with your photo */}
             <BarButton label="Your profile" onClick={openMe} data-my-profile>
               <MyTabPhoto size={27} />
@@ -622,6 +626,7 @@ export function CommunityScreen({
               openHint={p.id === openHintId}
               onDoubleTap={onDoubleTap}
               onTipDone={onTipDone}
+              onOpenReel={openReel}
             />
             </FeedItem>
             {/* now and then, until their first post: an invite to lock in or share (after the second post) */}
@@ -655,6 +660,7 @@ export function CommunityScreen({
           )}
         </>
       )}
+      <ReelsViewer start={reel} posts={feedPosts} viewerIsStaff={viewerIsStaff} onClose={() => setReel(null)} onOpenComments={setCommentsFor} onOpenAuthor={openAuthor} />
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
@@ -688,6 +694,7 @@ function PostRow(props: {
   onDoubleTap?: () => void;
   onTipDone?: () => void;
   openHint?: boolean;
+  onOpenReel?: (p: CommunityPost, path: string) => void;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (
