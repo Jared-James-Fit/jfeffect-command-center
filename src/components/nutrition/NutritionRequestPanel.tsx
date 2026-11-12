@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { currentRequest, planMissing } from "@/lib/form-request-state";
 import {
   generateNutritionPlanFn,
+  getFoodHistoryFn,
   listNutritionRequestsFn,
   markNutritionPlanAppliedFn,
   reviseNutritionPlanFn,
@@ -41,6 +42,7 @@ import { NutritionTargetDialog } from "@/components/nutrition-target-dialog";
 import { dayKey, parseAiCardio } from "@/lib/nutrition-cardio-sync";
 import { LEAN_GROCERY_LIST, hardToFindFoods, planFoodStats, prepDrift, prepDriftLine, type HardToFind, type PlanFoodStats, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
 import { bodyweightAnswerKg, coachChecks, coachNotesFlags, parseAiTargets, safetyNotes, withoutCoachNotes } from "@/lib/nutrition-targets/nutrition-intel";
+import { allergenConflictLine, allergenConflicts, foodHistoryKey, liveAllergens, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 
 type Req = {
   id: string;
@@ -200,9 +202,25 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
     });
   }, [prefill, plan?.targets_text]);
 
-  // What to look at before publishing: the targets' own math, floors, health mentions, the AI's flags.
+  // The client's food on file (the Food & diet card's read): an allergen on the written plan is the first check.
+  const readFood = useServerFn(getFoodHistoryFn);
+  const foodQ = useQuery({
+    queryKey: foodHistoryKey(clientId),
+    queryFn: () => readFood({ data: { clientId } }) as Promise<{ history: FoodHistory }>,
+    staleTime: 30_000,
+  });
+  const allergyHits = useMemo(
+    () =>
+      foodQ.data && prefill?.days.length
+        ? allergenConflicts(prefill.days.map((d) => ({ label: d.day_label, notes: d.notes })), liveAllergens(foodQ.data.history))
+        : [],
+    [foodQ.data, prefill],
+  );
+
+  // What to look at before publishing: an allergen on file on the plan, the targets' own math, floors, health mentions, the AI's flags.
   const checks = useMemo(() => {
-    if (!plan?.targets_text) return [];
+    const allergy = allergyHits.length ? [`On file as an allergy: ${allergenConflictLine(allergyHits)}. Change something to swap it out.`] : [];
+    if (!plan?.targets_text) return allergy;
     const answers = latest?.answers ?? [];
     const out = coachChecks({
       days: parseAiTargets(plan.targets_text),
@@ -211,8 +229,8 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
       safety: safetyNotes(answers),
     });
     const flags = coachNotesFlags(plan.targets_text);
-    return flags ? [...out, `AI: ${flags}`] : out;
-  }, [plan?.targets_text, latest?.answers, data?.client?.sex]);
+    return [...allergy, ...out, ...(flags ? [`AI: ${flags}`] : [])];
+  }, [plan?.targets_text, latest?.answers, data?.client?.sex, allergyHits]);
 
   /** Everything for this plan as one block (to paste into a doc, a chat or another AI). */
   const everything = () => {
@@ -554,6 +572,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
                               workoutMeals: plan.workout_meals ?? null,
                               history: data?.trainingPattern ?? null,
                               foodNotes: data?.foodNotes ?? null,
+                              foodRestrictions: data?.foodRestrictions ?? null,
                             }),
                             "Change prompt",
                           )
@@ -656,7 +675,7 @@ export function NutritionRequestPanel({ clientId }: { clientId: string }) {
         onOpenChange={setCopyOpen}
         items={[
           { group: "Prompts to run it yourself", label: "Targets, steps and cardio prompt", hint: "with every answer and the context", disabled: !submitted, run: () => latest && copyText(manualTargetsPrompt(data?.client ?? data?.clientName ?? "Client", latest.answers, plan?.phase ?? null, previousPlanText(plan?.previous_plan), { program: data?.programText ?? null, cardio: data?.cardioText ?? null, foodNotes: data?.foodNotes ?? null }), "Targets prompt") },
-          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyText(manualMealPlanPrompt(latest.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan), data?.foodNotes ?? null), "Meal plan prompt") },
+          { group: "Prompts to run it yourself", label: "Meal plan prompt", hint: "with the AI targets", disabled: !plan?.targets_text || !latest, run: () => plan?.targets_text && latest && copyText(manualMealPlanPrompt(latest.answers, plan.targets_text, plan.phase, regenWorkoutMeals ?? plan.workout_meals ?? data?.requestedWorkoutMeals ?? null, data?.trainingPattern ?? null, previousMealsText(plan.previous_plan), data?.foodNotes ?? null, data?.foodRestrictions ?? null), "Meal plan prompt") },
           { group: "Prompts to run it yourself", label: "Blank targets formula", run: () => copyText(TARGETS_PROMPT, "Targets formula") },
           { group: "Prompts to run it yourself", label: "Blank meal plan formula", run: () => copyText(MEAL_PLAN_PROMPT, "Meal plan formula") },
           { group: "Text", label: "Client answers", disabled: !submitted, run: () => latest && copyText(nutritionSubmissionSummary({ client: data?.client ?? data?.clientName ?? "Client", qas: latest.answers, phase: plan?.phase ?? data?.requestedPhase ?? null, submittedAt: latest.submitted_at }), "Client answers") },

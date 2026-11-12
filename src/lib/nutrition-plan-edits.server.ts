@@ -29,7 +29,7 @@ import {
 } from "@/lib/nutrition-targets/plan-edit";
 import {
   STALE_RUN_MS,
-  loadFoodNotesText,
+  loadFoodContext,
   loadQAs,
   loadTrainingPattern,
   nutritionCall,
@@ -134,11 +134,12 @@ export async function runPlanEdit(sb: any, editId: string) {
     await sb.from("nutrition_plan_edits").update({ progress }).eq("id", editId);
   };
   try {
-    const [qas, history, foodNotes] = await Promise.all([
+    const [qas, history, food] = await Promise.all([
       latestAnswers(sb, row.client_id),
       loadTrainingPattern(sb, row.client_id).catch(() => null),
-      loadFoodNotesText(sb, row.client_id),
+      loadFoodContext(sb, row.client_id),
     ]);
+    const foodNotes = food.text;
     const before = String(row.before_targets_text ?? "");
     const t = await nutritionCall(
       sb,
@@ -164,6 +165,7 @@ export async function runPlanEdit(sb: any, editId: string) {
       workoutMeals: null,
       history,
       foodNotes,
+      foodRestrictions: food.restrictions,
     });
     const m = await nutritionCall(
       sb,
@@ -195,6 +197,7 @@ export async function runPlanEdit(sb: any, editId: string) {
           prompt,
         ).then((r) => r.text),
       [...qas, { value: row.instructions }, ...(foodNotes ? [{ value: foodNotes }] : [])],
+      food.allergens,
     );
     const want = parseMealPlan(row.before_meal_plan_text).length;
     const got = parseMealPlan(mealPlanText).length;

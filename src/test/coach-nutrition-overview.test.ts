@@ -109,12 +109,12 @@ describe("Food & diet: what to keep in mind, read from what's on file", () => {
 
   it("every AI path loads them: a new plan, Change something, Change it with AI and the copy prompts", () => {
     const plans = read("src/lib/nutrition-ai-plans.server.ts");
-    expect(plans).toContain("loadFoodNotesText(sb, sub.client_id)");
-    expect(plans).toContain("loadFoodNotesText(sb, row.client_id)");
+    expect(plans).toContain("loadFoodContext(sb, sub.client_id)");
+    expect(plans).toContain("loadFoodContext(sb, row.client_id)");
     expect(plans).toContain('.eq("topic", "nutrition")');
-    expect(read("src/lib/nutrition-plan-edits.server.ts")).toContain("loadFoodNotesText(sb, row.client_id)");
-    expect(read("src/lib/nutrition-ai-plans.functions.ts")).toContain("loadFoodNotesText(sb, data.clientId)");
-    expect(read("src/components/nutrition/NutritionRequestPanel.tsx").match(/foodNotes: data\?\.foodNotes|data\?\.foodNotes \?\? null\)/g)?.length).toBe(3);
+    expect(read("src/lib/nutrition-plan-edits.server.ts")).toContain("loadFoodContext(sb, row.client_id)");
+    expect(read("src/lib/nutrition-ai-plans.functions.ts")).toContain("loadFoodContext(sb, data.clientId)");
+    expect(read("src/components/nutrition/NutritionRequestPanel.tsx").match(/foodNotes: data\?\.foodNotes|data\?\.foodNotes \?\? null/g)?.length).toBe(3);
   });
 
   it("the coach's nutrition notes are notes in the one list, tagged 'nutrition', staff only", () => {

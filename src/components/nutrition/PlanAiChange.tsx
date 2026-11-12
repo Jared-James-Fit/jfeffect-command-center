@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Sparkles, Undo2 } from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   applyPlanEditFn,
   askPlanEditFn,
   discardPlanEditFn,
+  getFoodHistoryFn,
   undoPlanEditFn,
 } from "@/lib/nutrition-ai-plans.functions";
 import { REVISE_MAX_CHARS } from "@/lib/nutrition-ai-prompts";
@@ -34,6 +35,7 @@ import {
 } from "@/lib/nutrition-targets/plan-edit";
 import { invalidateGroceryList } from "@/lib/grocery-query-keys";
 import { introducedHardToFind, type HardToFind } from "@/lib/nutrition-targets/plan-foods";
+import { allergenConflictLine, allergenConflicts, foodHistoryKey, liveAllergens, type AllergenHit, type FoodHistory } from "@/lib/nutrition-targets/food-history";
 import { fireAppEvent } from "@/lib/push/app-events.functions";
 import { cn } from "@/lib/utils";
 
@@ -78,6 +80,15 @@ export function PlanAiChange({
   const discard = useServerFn(discardPlanEditFn);
   const [text, setText] = useState("");
   const key = ["nutrition-plan-edit", plan.id];
+
+  // the client's food on file (the Food & diet card's read): an allergen on the changed plan is flagged
+  const readFood = useServerFn(getFoodHistoryFn);
+  const foodQ = useQuery({
+    queryKey: foodHistoryKey(clientId),
+    queryFn: () => readFood({ data: { clientId } }) as Promise<{ history: FoodHistory }>,
+    staleTime: 30_000,
+  });
+  const allergens = useMemo(() => (foodQ.data ? liveAllergens(foodQ.data.history) : []), [foodQ.data]);
 
   const editQ = useQuery({
     queryKey: key,
@@ -169,6 +180,11 @@ export function PlanAiChange({
           edited.days.map((d) => ({ label: d.day_label, notes: d.notes })),
           [{ value: edit.instructions }],
         ),
+        // any food on the changed plan that carries an allergen on file, whoever asked for it
+        allergy: allergenConflicts(
+          edited.days.map((d) => ({ label: d.day_label, notes: d.notes })),
+          allergens,
+        ),
         error: null as string | null,
       };
     } catch (e: any) {
@@ -178,10 +194,11 @@ export function PlanAiChange({
         nothing: false,
         rulesChanged: false,
         hardToFind: [] as HardToFind[],
+        allergy: [] as AllergenHit[],
         error: String(e?.message ?? e),
       };
     }
-  }, [edit, plan]);
+  }, [edit, plan, allergens]);
 
   const working = !!edit && WORKING.has(edit.status);
   const canUndo =
@@ -230,6 +247,14 @@ export function PlanAiChange({
                 </p>
               )}
               <ChangeRows changes={review.changes} />
+              {review.allergy.length > 0 && (
+                <p className="flex items-start gap-1.5 text-[13px] font-medium text-warning" data-plan-ai-allergen>
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>
+                    On file as an allergy: {allergenConflictLine(review.allergy)}. Discard and ask again, or check with them first.
+                  </span>
+                </p>
+              )}
               {review.hardToFind.length > 0 && (
                 <p className="text-[13px] text-warning" data-plan-ai-hard-to-find>
                   Hard to find in stores: {review.hardToFind.map((h) => h.food).join(", ")}. Discard

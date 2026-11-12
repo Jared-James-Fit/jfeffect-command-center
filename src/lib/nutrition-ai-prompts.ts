@@ -7,6 +7,7 @@
 import type { TrainingBucket, TrainingPattern } from "@/lib/nutrition-targets/training-pattern";
 import { freeMealRule, mealChoiceOf, mealChoiceRule, wantsFreeMeal } from "@/lib/nutrition-history";
 import { SHELF_STAPLE, prepDriftLine, type HardToFind, type PrepDrift } from "@/lib/nutrition-targets/plan-foods";
+import type { AllergenHit } from "@/lib/nutrition-targets/food-history";
 import { safetyNotes } from "@/lib/nutrition-targets/nutrition-intel";
 
 export const NUTRITION_REQUEST_FORM_ID = "b7a1f0c2-5d3e-4c8a-9f21-6e0d4a1b2c3d";
@@ -224,6 +225,9 @@ export function formatAnswers(qas: QA[]): string {
 }
 
 /** Find an answer by keywords in its question label (case-insensitive). */
+/** An answer that says there's nothing ("None", "no", "N/A"). */
+const NONE_ANSWER = /^(none|no|nope|n\/?a|na|nothing|-+|no allergies|none that i know of)\.?$/i;
+
 export function answerFor(qas: QA[], ...keywords: string[]): string {
   const hit = qas.find((q) => keywords.every((k) => q.label.toLowerCase().includes(k.toLowerCase())));
   return hit?.value.trim() ?? "";
@@ -344,8 +348,9 @@ export function manualMealPlanPrompt(
   history?: TrainingPattern | null,
   currentMeals?: string | null,
   foodNotes?: string | null,
+  restrictions?: string | null,
 ): string {
-  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history, currentMeals, foodNotes)}`;
+  return `${MEAL_PLAN_PROMPT}\n\n${mealPlanUserPrompt(qas, targetsText, phase, workoutMeals, history, currentMeals, foodNotes, restrictions)}`;
 }
 
 /** Coach override for pre/post-workout meals (stored on the request). */
@@ -443,8 +448,10 @@ export function mealPlanUserPrompt(
   workoutMeals?: WorkoutMealsMode | null,
   history?: TrainingPattern | null,
   currentMeals?: string | null,
-  /** foodNotesForAi(): Goals & Setup's restrictions and dislikes, the coach's nutrition notes. */
+  /** foodNotesForAi() + foodHistoryForAi(): the coach's notes and the client's whole food history. */
   foodNotes?: string | null,
+  /** knownRestrictions(): allergies and medical diets on file across their history ("Shellfish, AIP"). */
+  restrictions?: string | null,
 ): string {
   const trainTime = answerFor(qas, "time", "train");
   const placed = effectiveTrainingTime(trainTime, history);
@@ -462,12 +469,16 @@ export function mealPlanUserPrompt(
     answerFor(qas, "foods or meals do you want changed"),
     hasMeals,
   );
+  // this form's answer, plus what's on file from earlier forms, Goals & Setup and the coach (a later "None" never clears an allergy)
+  const said = answerFor(qas, "allerg") || answerFor(qas, "dislike");
+  const avoid = [said && !NONE_ANSWER.test(said.trim()) ? said : "", restrictions?.trim() ? `on file: ${restrictions.trim()}` : ""]
+    .filter(Boolean)
+    .join("; ");
   const highDay = freeMealRule(
     wantsFreeMeal(answerFor(qas, "free meal on your high day")),
     answerFor(qas, "go-to free meal"),
-    answerFor(qas, "allerg") || answerFor(qas, "dislike"),
+    avoid,
   );
-  const avoid = answerFor(qas, "allerg") || answerFor(qas, "dislike");
   const love = answerFor(qas, "foods you love") || answerFor(qas, "prefer") || answerFor(qas, "favourite") || answerFor(qas, "favorite");
   // No targets yet (the coach copying the prompt before pass 1 ran): leave the numbers for them to fill in.
   const hasTargets = !!targetsText.trim();
@@ -559,8 +570,16 @@ export function mealPrepFixPrompt(
   drift: PrepDrift[],
   totals: string[] = [],
   hardToFind: HardToFind[] = [],
+  allergens: AllergenHit[] = [],
 ): string {
   const fix: string[] = [];
+  if (allergens.length) {
+    fix.push(
+      "FIX THE ALLERGIES: these foods carry an allergen on file for this client (their FOOD HISTORY), so they can't be on the plan:",
+      ...allergens.map((a) => `- ${a.food} (${a.where.slice(0, 3).join(", ")}): ${a.allergen.toLowerCase()}`),
+      "Take each one out of every meal it's in and use the most common food that fits all their allergies and diet instead (SHELF FIRST, rule 2d), sized to the same protein, carbs or fat, in the same container (rule 2c); update the Swap lines and FOOD-WEIGHING RULES so none of them names it either.",
+    );
+  }
   if (hardToFind.length) {
     fix.push(
       "FIX THE FOODS: these are hard to find on a normal grocery store's shelves, and the client didn't ask for them:",
@@ -656,12 +675,14 @@ export function reviseMealPlanUserPrompt(opts: {
   phase?: string | null;
   workoutMeals?: WorkoutMealsMode | null;
   history?: TrainingPattern | null;
-  /** foodNotesForAi(): Goals & Setup's restrictions and dislikes, the coach's nutrition notes. */
+  /** foodNotesForAi() + foodHistoryForAi(): the coach's notes and the client's whole food history. */
   foodNotes?: string | null;
+  /** knownRestrictions(): allergies and medical diets on file. */
+  foodRestrictions?: string | null;
 }): string {
   return [
     REVISE_MEAL_RULES,
-    mealPlanUserPrompt(opts.qas, opts.targetsText, opts.phase, opts.workoutMeals, opts.history, null, opts.foodNotes),
+    mealPlanUserPrompt(opts.qas, opts.targetsText, opts.phase, opts.workoutMeals, opts.history, null, opts.foodNotes, opts.foodRestrictions),
     `CURRENT MEAL PLAN:\n${opts.mealPlanText.trim()}`,
     `COACH INSTRUCTIONS:\n${opts.instructions.trim()}`,
   ].join("\n\n");
