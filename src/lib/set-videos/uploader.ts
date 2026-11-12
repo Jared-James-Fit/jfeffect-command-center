@@ -24,6 +24,15 @@
  * reaches the coach soonest). A failure from the connection retries by itself
  * (with back-off, and again the moment the app is back on screen or online);
  * a real "no" (too long, not allowed) waits for a tap.
+ *
+ *   feed copy  a clip that went as it was (an iPhone's 4K original, ~50 MB
+ *            for 30 s) gets a 720p copy for Crew once the coach has it
+ *            (feed-copy.ts): made while nothing else is sending, uploaded
+ *            next to the original, checked as a workout post's video and
+ *            recorded on the set video (set_video_feed_copy); the workout
+ *            film is made from it. Only while their film goes to Crew, and
+ *            never needed: a copy that can't be made leaves the original on
+ *            the film, and the coach's clip never changes.
  */
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +47,14 @@ import { captureVideoPoster } from "@/lib/video-poster";
 import { chatUrlCache } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { setVideoFileKey, setVideoStem } from "@/lib/set-videos/label";
+import {
+  FEED_COPY_MAX_MS,
+  FEED_COPY_TRIES,
+  feedCopyPath,
+  feedCopyPlan,
+  feedCopyWorthIt,
+  type FeedCopyPlan,
+} from "@/lib/set-videos/feed-copy";
 import {
   dropSetVideoJob,
   getSetVideoJobs,
@@ -92,6 +109,21 @@ const posterSends = new Map<string, Promise<void>>();
 const attempts = new Map<string, number>();
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let wired = false;
+
+/** A clip that went as it was, held for its Crew copy until the coach has it (this session only). */
+type FeedSource = { video: PickedVideo; plan: FeedCopyPlan; sentBytes: number };
+type FeedCopy = FeedSource & {
+  jobId: string;
+  setVideoId: string;
+  clientId: string;
+  tries: number;
+  /** Kept once made: a retry sends the same bytes (the upload resumes by path). */
+  file?: File;
+  uploaded?: boolean;
+};
+const feedSources = new Map<string, FeedSource>();
+const feedQueue: FeedCopy[] = [];
+let feedRunning: { item: FeedCopy; ctl: AbortController } | null = null;
 
 /** The extension the stored clip gets (the same rule as the chat's own videos). */
 export function videoExt(file: { type: string }): string {
@@ -166,6 +198,7 @@ function wireOnce() {
       if (j.state === "failed" && j.autoRetry && !j.needsFile)
         void retrySetVideo(j.id, { auto: true });
     }
+    pumpFeed();
   };
   window.addEventListener("online", kick);
   document.addEventListener("visibilitychange", kick);
@@ -286,7 +319,10 @@ function enqueue(id: string) {
 async function pump() {
   if (running) return;
   const next = queue.shift();
-  if (!next) return;
+  if (!next) {
+    pumpFeed();
+    return;
+  }
   running = next;
   try {
     await runJob(next);
@@ -358,6 +394,9 @@ async function runJob(id: string) {
         maxBytes: videoBudget(CONTEXT).max,
       });
       prepared = out.file;
+      // went as it was (a 4K original): a 720p copy for Crew follows once the coach has it
+      const feedPlan = feedCopyPlan(out.mode, picked.info, picked.trim, picked.canEncode);
+      if (feedPlan) feedSources.set(id, { video: picked, plan: feedPlan, sentBytes: prepared.size });
       const path = `${setVideoStem(job.clientId, id)}.${videoExt(prepared)}`;
       const mb = (n: number) => Math.round((n / 1048576) * 10) / 10;
       const transfer = {
@@ -466,6 +505,10 @@ async function runJob(id: string) {
     attempts.delete(id);
     posterSends.delete(id);
     preparedFiles.delete(id);
+    const feed = feedSources.get(id);
+    feedSources.delete(id);
+    if (feed && res.id)
+      queueFeedCopy({ ...feed, jobId: id, setVideoId: res.id, clientId: job.clientId, tries: 0 });
     set({
       state: "done",
       progress: 100,
@@ -640,6 +683,10 @@ export async function cancelSetVideo(id: string) {
   pickedVideos.delete(id);
   posterSends.delete(id);
   attempts.delete(id);
+  feedSources.delete(id);
+  const f = feedQueue.findIndex((x) => x.jobId === id);
+  if (f >= 0) feedQueue.splice(f, 1);
+  if (feedRunning?.item.jobId === id) feedRunning.ctl.abort();
   dropSetVideoJob(id);
   await outboxDelete(id);
 }
@@ -664,5 +711,127 @@ export async function resumeSetVideos(userId: string) {
       error: null,
     });
     if (r.file) enqueue(r.id);
+  }
+}
+
+/* ---- Feed copies: 720p for Crew, after the coach has the clip ---------- */
+
+function queueFeedCopy(item: FeedCopy) {
+  if (feedQueue.some((f) => f.jobId === item.jobId) || feedRunning?.item.jobId === item.jobId) return;
+  feedQueue.push(item);
+  pumpFeed();
+}
+
+/** Nothing for the coach is sending (their clips always go first). */
+function sendingIdle() {
+  return !running && queue.length === 0;
+}
+
+/** Starts the next copy while nothing else is sending and the app is on screen (a copy started keeps going). */
+function pumpFeed() {
+  if (feedRunning || !sendingIdle()) return;
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  const item = feedQueue.shift();
+  if (!item) return;
+  const ctl = new AbortController();
+  feedRunning = { item, ctl };
+  void makeFeedCopy(item, ctl.signal)
+    .catch((e) => {
+      // gave up (too slow, or the set video was removed): the original stays on the film
+      if (ctl.signal.aborted) return;
+      item.tries += 1;
+      if (item.tries < FEED_COPY_TRIES && isRetryable(e)) feedQueue.push(item);
+    })
+    .finally(() => {
+      feedRunning = null;
+      setTimeout(pumpFeed, 1_000);
+    });
+}
+
+/** Their film goes to Crew (the copy is only for the feed; Coach only needs none). */
+async function filmGoesToCrew(): Promise<boolean> {
+  try {
+    const { data, error } = await db.rpc("community_auto_post_film");
+    return error ? true : data !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function waitForIdleSending(signal: AbortSignal) {
+  while (!sendingIdle()) {
+    if (signal.aborted) throw new VideoRenderError("Cancelled.", "aborted");
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+}
+
+async function makeFeedCopy(item: FeedCopy, signal: AbortSignal) {
+  if (!item.file) {
+    if (!(await filmGoesToCrew())) return;
+    // an encode still going after FEED_COPY_MAX_MS is given up on (aborted: never retried)
+    const slow = new AbortController();
+    const stop = () => slow.abort();
+    signal.addEventListener("abort", stop);
+    const timer = setTimeout(stop, FEED_COPY_MAX_MS);
+    let out: Awaited<ReturnType<typeof renderVideo>>;
+    try {
+      out = await renderVideo(item.video.file, item.video.info, item.plan, {
+        signal: slow.signal,
+        limitSeconds: videoLimit("workout"),
+        maxBytes: videoBudget("workout").max,
+      });
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", stop);
+    }
+    if (out.mode !== "transcode" || !feedCopyWorthIt(out.file.size, item.sentBytes)) return;
+    item.file = out.file;
+  }
+  const file = item.file;
+  const path = feedCopyPath(item.clientId, item.jobId, videoExt(file));
+  if (!item.uploaded) {
+    await waitForIdleSending(signal);
+    try {
+      await uploadLiftFileToStorage({
+        file,
+        userId: item.clientId,
+        bucket: BUCKET,
+        path,
+        resume: true,
+        signal,
+      });
+    } catch (e) {
+      if (!/409|already exists|Duplicate/i.test(e instanceof Error ? e.message : String(e)))
+        throw e;
+    }
+    item.uploaded = true;
+  }
+  await verifyVideoUploadFn({
+    data: {
+      bucket: BUCKET,
+      path,
+      context: "workout",
+      client: {
+        mode: "transcode",
+        reason: "feed-copy",
+        src_s: Math.round(item.video.info.duration * 10) / 10,
+        src_mb: Math.round((item.video.info.bytes / 1048576) * 10) / 10,
+        sel_s: Math.round((item.plan.end - item.plan.start) * 10) / 10,
+        encode: true,
+        ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : undefined,
+      },
+    },
+  });
+  const { data, error } = await db.rpc("set_video_feed_copy", { _id: item.setVideoId, _path: path });
+  if (error) throw new Error(String(error.message ?? "Couldn't save the copy."));
+  // a film already in the feed takes the copy now (one posted later is made from it)
+  const completionId = (data as { completion_id?: string | null } | null)?.completion_id;
+  if (completionId) {
+    try {
+      const { postWorkoutFilmFn } = await import("@/lib/workout-film.functions");
+      await postWorkoutFilmFn({ data: { completionId, auto: true } });
+    } catch {
+      /* the next time the workout is open brings it up to date */
+    }
   }
 }

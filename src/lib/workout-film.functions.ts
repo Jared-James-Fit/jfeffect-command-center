@@ -17,11 +17,18 @@
  * changes, and each copy is recorded as checked (media_video_checks) from the
  * set video's own check, so the post's video guard passes it. A clip over a
  * workout post's 90 seconds or 50 MB stays out, and so does an eleventh.
+ *
+ * Each slide is made from the set video's 720p feed copy when the phone made
+ * one (filmFile; an iPhone's 4K original is ~5× what the feed needs), else
+ * the original. A copy that lands after the film is up swaps in on the next
+ * post (its film path differs, filmPaths), and the film files the post no
+ * longer shows are removed.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  filmFile,
   filmLabels,
   filmPaths,
   filmPostCaption,
@@ -92,7 +99,9 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
     // The workout's clips (their own, on a logged set).
     const { data: vids } = await admin
       .from("pl_set_videos")
-      .select("id, row_id, result_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, mime, created_at")
+      .select(
+        "id, row_id, result_id, set_index, exercise_name, label, storage_path, thumbnail_path, duration_s, width, height, size_bytes, mime, created_at, feed_path, feed_width, feed_height, feed_duration_s, feed_size_bytes",
+      )
       .eq("client_id", comp.client_id)
       .eq("day_id", comp.day_id)
       .eq("uploaded_by", userId)
@@ -113,8 +122,12 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
     const orderOf = new Map<string, number>(((rows ?? []) as any[]).map((r) => [r.id, Number(r.sort_order) || 0]));
     const resultOf = new Map<string, any>(((results ?? []) as any[]).map((r) => [r.id, r]));
 
+    // each clip as the film uses it: its feed copy when it has one
     const { picked, tooLong, overMax } = pickFilmClips(
-      all.map((v) => ({ ...v, order: orderOf.get(v.row_id) ?? 999, duration_s: v.duration_s == null ? null : Number(v.duration_s), size_bytes: v.size_bytes == null ? null : Number(v.size_bytes) })),
+      all.map((v) => {
+        const f = filmFile(v);
+        return { ...v, order: orderOf.get(v.row_id) ?? 999, src: f.path, width: f.width, height: f.height, duration_s: f.duration_s, size_bytes: f.size_bytes, mime: f.feed ? null : v.mime };
+      }),
     );
     const skipped = tooLong + overMax;
     if (!picked.length) return { status: "no_clips", clips: 0, skipped };
@@ -131,7 +144,7 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
       // they took it out of Crew (hid it, sent it to their coach only, archived it): it stays that way
       return { status: "hidden", postId: post.id, clips: 0, skipped };
     }
-    const wanted = picked.map((v) => filmPaths(userId, comp.id, v.id, v.storage_path).path);
+    const wanted = picked.map((v) => filmPaths(userId, comp.id, v.id, v.src).path);
     if (post && !post.auto_shared && !post.archived_at && crewVisible(post.visibility) && filmUpToDate(post.film, wanted)) {
       return { status: "up_to_date", postId: post.id, clips: wanted.length, skipped };
     }
@@ -140,8 +153,8 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
     const filmSlides: Slide[] = [];
     const film: FilmSlide[] = [];
     for (const v of picked) {
-      const { path, thumb } = filmPaths(userId, comp.id, v.id, v.storage_path);
-      if (!(await copyInto(admin, v.storage_path, path))) continue;
+      const { path, thumb } = filmPaths(userId, comp.id, v.id, v.src);
+      if (!(await copyInto(admin, v.src, path))) continue;
       const hasPoster = !!v.thumbnail_path && (await copyInto(admin, v.thumbnail_path, thumb));
       const { data: obj } = await admin.rpc("media_video_object", { _bucket: DST_BUCKET, _path: path });
       if (!obj?.id) continue;
@@ -149,7 +162,7 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
         .from("media_video_checks")
         .select("duration_s, width, height, video_codec, bytes, mime")
         .eq("bucket", SRC_BUCKET)
-        .eq("path", v.storage_path)
+        .eq("path", v.src)
         .maybeSingle();
       const { error: chkErr } = await admin.from("media_video_checks").upsert(
         {
@@ -164,7 +177,7 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
           bytes: Number(obj.bytes ?? srcCheck?.bytes ?? v.size_bytes ?? 0),
           mime: obj.mime ?? v.mime ?? null,
           context: "workout",
-          client: { mode: "film", source: v.id },
+          client: { mode: "film", source: v.id, feed: v.src !== v.storage_path },
           checked_at: new Date().toISOString(),
         },
         { onConflict: "bucket,path" },
@@ -225,6 +238,17 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
       const { error } = await admin.from("community_posts").update(fields).eq("id", post.id);
       if (error) throw new Error(error.message || "Couldn't post your film. Try again.");
       postId = post.id;
+      // this workout's film files the post no longer shows (an original a feed copy replaced, a removed clip)
+      const ours = `${userId}/film/${comp.id}/`;
+      const keep = new Set(slides.flatMap((sl) => [sl.path, sl.thumb]).filter(Boolean) as string[]);
+      const before = [
+        post.media_path ? { path: post.media_path, thumb: post.media_thumb_path } : null,
+        ...((Array.isArray(post.extra_media) ? post.extra_media : []) as Slide[]),
+      ];
+      const stale = [...new Set(before.flatMap((sl) => (sl ? [sl.path, sl.thumb] : [])))].filter(
+        (p): p is string => !!p && p.startsWith(ours) && !keep.has(p),
+      );
+      if (stale.length) await admin.storage.from(DST_BUCKET).remove(stale).catch(() => undefined);
     } else {
       const { data: last } = await admin
         .from("community_posts")
