@@ -184,11 +184,14 @@ describe("a written plan never holds an allergen on file", () => {
     ]);
     expect(allergenConflicts(days, [])).toEqual([]);
     expect(foodAllergens("almond milk")).toEqual(["Tree nuts"]);
-    expect(foodAllergens("cream of rice")).toEqual([]);
-    expect(foodAllergens("natural peanut butter")).toEqual(["Peanuts"]);
+    // a grain (for AIP / paleo), never dairy or gluten
+    expect(foodAllergens("cream of rice")).toEqual(["Grains"]);
+    expect(foodAllergens("natural peanut butter")).toEqual(["Peanuts", "Legumes"]);
     expect(foodAllergens("Greek yogurt")).toEqual(["Dairy"]);
-    expect(foodAllergens("gluten-free bread")).toEqual([]);
-    expect(foodAllergens("rice noodles")).toEqual([]);
+    expect(foodAllergens("gluten-free bread")).toEqual(["Grains"]);
+    expect(foodAllergens("rice noodles")).toEqual(["Grains"]);
+    expect(foodAllergens("cooked sweet potato")).toEqual([]);
+    expect(foodAllergens("green beans")).toEqual([]);
   });
 
   it("dairy-free and gluten-free diets count; a dismissed allergy doesn't", async () => {
@@ -206,7 +209,7 @@ describe("a written plan never holds an allergen on file", () => {
     const prompts: string[] = [];
     const out = await withPrepFix(plan("cooked shrimp", "cooked white rice"), "CLIENT", async (p) => (prompts.push(p), plan("cooked chicken breast", "cooked white rice")), [], 2, [], ["Shellfish"]);
     expect(out).toBe(plan("cooked chicken breast", "cooked white rice"));
-    expect(prompts[0]).toContain("FIX THE ALLERGIES: these foods carry an allergen on file for this client");
+    expect(prompts[0]).toContain("FIX WHAT'S ON FILE: these foods carry an allergen or break a diet on file for this client");
     expect(prompts[0]).toContain("- cooked shrimp (Training Day Meal 1): shellfish");
     // a "fix" that keeps it is thrown away
     const kept = await withPrepFix(plan("cooked shrimp", "cooked white rice"), "x", async () => plan("cooked shrimp", "cooked jasmine rice"), [], 1, [], ["Shellfish"]);
@@ -228,10 +231,70 @@ describe("a written plan never holds an allergen on file", () => {
 
   it("the coach sees it first in Check before publishing and in the AI change review", () => {
     const panel = read("src/components/nutrition/NutritionRequestPanel.tsx");
-    expect(panel).toContain("On file as an allergy: ${allergenConflictLine(allergyHits)}");
+    expect(panel).toContain("Against what's on file: ${allergenConflictLine(allergyHits, onFile)}");
     expect(panel).toContain("return [...allergy, ...out");
     expect(read("src/components/nutrition/PlanAiChange.tsx")).toContain("data-plan-ai-allergen");
     expect(read("src/lib/nutrition-ai-plans.server.ts")).toContain("mi.foodAllergens ?? []");
     expect(read("src/lib/nutrition-plan-edits.server.ts")).toContain("food.allergens,");
+  });
+});
+
+describe("diets on file are checked food by food, with the reason", () => {
+  const day = (foods: string[]) => ({
+    label: "Training Day",
+    notes: `Meal 1\n${foods.join("\n")}\n\nApproximate macros:\n40 g protein\n50 g carbohydrates\n8 g fat\n`,
+  });
+
+  it("AIP rules out grains, eggs, nightshades, dairy and legumes, never sweet potatoes, fruit or meat", async () => {
+    const { allergenConflicts, allergenConflictLine, buildFoodHistory, onFileRules } = await import("@/lib/nutrition-targets/food-history");
+    const h = buildFoodHistory({ updates: [update("2026-11-12", { allergy: "Need to be on a AIP diet (Autoimmune Protocol Diet)" })], today: "2026-11-12" });
+    const why = onFileRules(h);
+    expect(why.Grains).toBe("AIP");
+    const hits = allergenConflicts(
+      [day(["150 g cooked chicken breast", "200 g cooked white rice", "2 whole eggs", "100 g cherry tomatoes", "250 g cooked sweet potato", "1 banana", "150 g Greek yogurt"])],
+      Object.keys(why),
+    );
+    expect(hits.map((x) => x.food)).toEqual(["cooked white rice", "eggs", "cherry tomatoes", "Greek yogurt"]);
+    expect(allergenConflictLine(hits.slice(0, 1), why)).toBe("cooked white rice (grains · AIP)");
+  });
+
+  it("vegetarian, no pork and an allergy each say why", async () => {
+    const { allergenConflicts, allergenConflictLine, buildFoodHistory, onFileRules } = await import("@/lib/nutrition-targets/food-history");
+    const h = buildFoodHistory({
+      updates: [update("2026-11-01", { allergy: "Shellfish", foods: "No pork please" })],
+      today: "2026-11-12",
+    });
+    const why = onFileRules(h);
+    const hits = allergenConflicts([day(["150 g cooked shrimp", "2 slices bacon", "150 g cooked chicken breast"])], Object.keys(why));
+    expect(allergenConflictLine(hits, why)).toBe("cooked shrimp (shellfish allergy), bacon (pork · No pork)");
+    const veg = buildFoodHistory({ updates: [update("2026-11-01", { foods: "vegetarian" })], today: "2026-11-12" });
+    expect(allergenConflicts([day(["150 g cooked chicken breast", "150 g firm tofu"])], Object.keys(onFileRules(veg))).map((x) => x.food)).toEqual(["cooked chicken breast"]);
+  });
+
+  it("two forms sent minutes apart keep their order: the later one is what they say now", async () => {
+    const { buildFoodHistory } = await import("@/lib/nutrition-targets/food-history");
+    const h = buildFoodHistory({
+      updates: [
+        { at: "2026-10-19T00:10:42Z", answers: update("x", { foods: "Anything" }).answers },
+        { at: "2026-10-19T00:08:25Z", answers: update("x", { foods: "Chicken and fish beef pork", missed: "Severe bilateral shoulder arthritis affecting mobility" }).answers },
+      ],
+      today: "2026-11-12",
+    });
+    expect(h.preferences.map((p) => p.text)).toEqual(["Anything", "Chicken and fish beef pork"]);
+    expect(h.health.map((f) => f.label)).toEqual(["Severe bilateral shoulder arthritis affecting mobility"]);
+  });
+
+  it("a plan replaced within a couple of days was a re-publish, not a plan that ran", async () => {
+    const { buildFoodHistory } = await import("@/lib/nutrition-targets/food-history");
+    const h = buildFoodHistory({
+      updates: [],
+      plans: [
+        { id: "a", start_date: "2026-08-20", end_date: "2026-11-08", status: "Archived", days: [{ label: "Training Day", calories: 1600 }] },
+        { id: "b", start_date: "2026-11-09", end_date: "2026-11-09", status: "Archived", days: [{ label: "Training Day", calories: 1700 }] },
+        { id: "c", start_date: "2026-11-10", end_date: "2026-12-10", status: "Active", days: [{ label: "Training Day", calories: 1840 }] },
+      ],
+      today: "2026-11-12",
+    });
+    expect(h.plans.map((p) => p.id)).toEqual(["c", "a"]);
   });
 });
