@@ -82,7 +82,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} />");
     expect(card).toContain("width: `min(100cqw, calc(100cqh * ${ratio}))`");
     expect(card).toContain(
-      "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />",
+      "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column hidden={sheetOpen || under || holding} />",
     );
     // the whole screen, the bars floating over it; the words just above the tab bar
     expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");
@@ -95,7 +95,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
 
   it("on its own screen a clip is already full size: a tap is its sound (Instagram's), a hold pauses it, two taps ❤️", () => {
     expect(card).toContain("flashSound(toggleFeedSound());");
-    expect(card).toContain("clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: true }));");
+    expect(card).toContain("(clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain("box.addEventListener(CLIP_HOLD_EVENT, hold);");
     expect(inline).toContain("if (!visible || !active) setHoldPaused(false);");

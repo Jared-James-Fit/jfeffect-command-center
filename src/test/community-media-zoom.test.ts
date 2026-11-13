@@ -41,7 +41,7 @@ describe("community zoom: the page stays put, media zooms", () => {
     expect(hook).toContain("if (!parent || !parent.isConnected || !clone.contains(v)) continue;");
     expect(hook).toContain("z.restore();\n      z.layer.remove();");
     // a second finger is a pinch, never the hold that pauses a clip
-    expect(card).toContain("if (!e.isPrimary) return endHold();");
+    expect(read("src/components/community/clip-gestures.tsx")).toContain("if (!e.isPrimary) return end();");
   });
 
   it("feed / post / carousel media, comment photos and shared-comment media opt in", () => {

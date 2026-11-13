@@ -11,13 +11,15 @@ const popped = new Set<string>();
  * after `ref`'s element has settled on screen, then back off when the
  * animation is done (`done`). Never twice for a post in one app session.
  */
-export function useEngagementPop<T extends HTMLElement>(post: CommunityPost) {
+export function useEngagementPop<T extends HTMLElement>(post: CommunityPost, hidden = false) {
   const ref = useRef<T | null>(null);
   const [on, setOn] = useState(false);
   const engaged = isEngaged(post);
   useEffect(() => {
     const el = ref.current;
-    if (!el || !engaged || on || popped.has(post.id) || typeof IntersectionObserver === "undefined") return;
+    // `hidden`: what it rises out of isn't showing yet (the feed's first post under the stories, its sheet
+    // open, a clip held paused), so it waits, never playing where nobody can see it
+    if (!el || hidden || !engaged || on || popped.has(post.id) || typeof IntersectionObserver === "undefined") return;
     let timer: number | undefined;
     const io = new IntersectionObserver(
       ([e]) => {
@@ -38,18 +40,40 @@ export function useEngagementPop<T extends HTMLElement>(post: CommunityPost) {
       window.clearTimeout(timer);
       io.disconnect();
     };
-  }, [engaged, on, post.id]);
+  }, [engaged, on, post.id, hidden]);
   const done = useCallback(() => setOn(false), []);
   return { ref, on, done };
 }
 
-/** Its reactions drifting up and away (the feed: out of the heart; Home: out of the capsule). */
-export function ReactionsRise({ kinds, size = "md", className }: { kinds: string[]; size?: "sm" | "md"; className?: string }) {
+/** How many float up for a post with `total` reactions: at least 3, at most 6, every kind at least once. */
+export function riseCount(kinds: number, total: number): number {
+  return Math.max(kinds, Math.min(6, Math.max(3, total)));
+}
+
+/**
+ * Its reactions drifting up and away, one after another with a little sway
+ * (Instagram Live's hearts): the feed's own screen, out of the heart down
+ * the right (`lg`, rising high); the feed's cards, out of the heart; Home,
+ * out of the capsule (`sm`).
+ */
+export function ReactionsRise({ kinds, total = 0, size = "md", className }: { kinds: string[]; total?: number; size?: "sm" | "md" | "lg"; className?: string }) {
+  if (!kinds.length) return null;
+  const n = riseCount(kinds.length, total);
+  const rise = size === "lg" ? "-170px" : size === "sm" ? "-40px" : "-56px";
   return (
-    <span className={cn("pointer-events-none absolute", className)} aria-hidden>
-      {kinds.map((k, i) => (
-        <span key={k} className={cn("engage-float absolute bottom-0", size === "sm" ? "text-[14px]" : "text-[18px]")} style={{ left: `${i * 16}px`, animationDelay: `${180 + i * 160}ms` }}>
-          {k}
+    <span className={cn("pointer-events-none absolute", className)} aria-hidden data-reactions-rise={n}>
+      {Array.from({ length: n }, (_, i) => (
+        <span
+          key={i}
+          className={cn("engage-float absolute bottom-0 -translate-x-1/2", size === "sm" ? "text-[14px]" : size === "lg" ? "text-[24px]" : "text-[18px]")}
+          style={{
+            left: `${size === "lg" ? ((i * 7) % 3) * 8 - 8 : i * 16}px`,
+            animationDelay: `${160 + i * 180}ms`,
+            ["--rise-x" as string]: `${((i * 37) % 23) - 11}px`,
+            ["--rise-y" as string]: rise,
+          }}
+        >
+          {kinds[i % kinds.length]}
         </span>
       ))}
     </span>

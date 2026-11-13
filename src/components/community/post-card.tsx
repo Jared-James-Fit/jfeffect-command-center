@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy, Volume2, VolumeX } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
@@ -25,6 +25,7 @@ import {
   postTimeLabel,
   reactionEmoji,
   reactionKinds,
+  reactionTotal,
   reactorsLine,
   slideThumbPath,
   type CommunityAuthor,
@@ -52,7 +53,8 @@ import { PostScoreRow } from "@/components/community/post-score";
 import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
-import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/community/reaction-button";
+import { DoubleTapHint, ReactionBurst, ReactionButton, useBurst } from "@/components/community/reaction-button";
+import { useHoldToPause, useSoundFlash } from "@/components/community/clip-gestures";
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 import { CollaboratorsSheet } from "@/components/community/mentions";
 import { InlineFollow } from "@/components/community/follow-button";
@@ -423,23 +425,8 @@ type Props = {
   pageFirst?: boolean;
 };
 
-/** A finger held this long on a clip pauses it (Instagram's); one that moves further than HOLD_SLOP_PX first is a swipe. */
-export const HOLD_TO_PAUSE_MS = 250;
-const HOLD_SLOP_PX = 10;
-
-/** The sound, on or off, said in the middle of the clip for a moment after a tap (Instagram's). */
-function SoundFlash({ on, onDone }: { on: boolean; onDone: () => void }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[2] grid place-items-center" aria-hidden data-sound-flash={on ? "on" : "off"}>
-      <span className="jf-sound-flash grid h-16 w-16 place-items-center rounded-full bg-black/55 text-white" onAnimationEnd={onDone}>
-        {on ? <Volume2 className="h-8 w-8" /> : <VolumeX className="h-8 w-8" />}
-      </span>
-    </div>
-  );
-}
-
 function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false }: Props) {
-  const [burst, setBurst] = useState(0);
+  const [burst, fireBurst] = useBurst();
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
   const articleRef = useRef<HTMLElement | null>(null);
@@ -495,43 +482,25 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const singleTimer = useRef<number | null>(null);
   // on its own screen (Instagram's Reels): a tap on a clip turns the sound on or off and says so in the
   // middle of it, a finger held on it pauses it with the words and buttons out of the way
-  const [soundFlash, setSoundFlash] = useState<{ on: boolean; n: number } | null>(null);
-  const flashSound = (on: boolean) => setSoundFlash((f) => ({ on, n: (f?.n ?? 0) + 1 }));
-  const [holding, setHolding] = useState(false);
-  const hold = useRef<{ timer: number; x: number; y: number; clip: Element; on: boolean } | null>(null);
-  const holdEndedAt = useRef(0);
-  const endHold = () => {
-    const h = hold.current;
-    if (!h) return;
-    hold.current = null;
-    window.clearTimeout(h.timer);
-    if (!h.on) return;
-    h.clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: false }));
-    setHolding(false);
-    holdEndedAt.current = Date.now();
-  };
-  const onHeroPointerDown = (e: React.PointerEvent) => {
-    // a second finger is a pinch (the zoom), never a hold
-    if (!e.isPrimary) return endHold();
-    if (layout !== "page" || sheetOpen || (e.pointerType === "mouse" && e.button !== 0)) return;
-    const t = e.target as Element | null;
-    const clip = t?.closest?.("[data-inline-video]");
-    if (!clip || t?.closest?.("button")) return;
-    endHold();
-    const h = { timer: 0, x: e.clientX, y: e.clientY, clip, on: false };
-    h.timer = window.setTimeout(() => {
-      if (hold.current !== h) return;
-      h.on = true;
-      clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: true }));
-      setHolding(true);
-    }, HOLD_TO_PAUSE_MS);
-    hold.current = h;
-  };
-  const onHeroPointerMove = (e: React.PointerEvent) => {
-    const h = hold.current;
-    // a finger that moves is a swipe, never a hold
-    if (h && !h.on && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP_PX) endHold();
-  };
+  const [soundFlash, flashSound] = useSoundFlash();
+  // press and hold a clip (Reels'): it pauses, the words and buttons step aside, letting go plays it again.
+  // On every clip a post shows (its own screen, the coach's cards, the post's page), never with its sheet open
+  const hold = useHoldToPause<Element>(
+    (e) => {
+      if (sheetOpen) return null;
+      const t = e.target as Element | null;
+      const clip = t?.closest?.("[data-inline-video]");
+      return clip && !t?.closest?.("button") ? clip : null;
+    },
+    (clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),
+  );
+  const holding = layout === "page" && hold.holding;
+  // held, the whole screen is the clip (Reels'): Crew's bar steps aside too (styles.css, html[data-clip-held])
+  useEffect(() => {
+    if (!holding) return;
+    document.documentElement.setAttribute("data-clip-held", "");
+    return () => document.documentElement.removeAttribute("data-clip-held");
+  }, [holding]);
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
@@ -555,12 +524,13 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   const onHeroTap = (e: React.MouseEvent) => {
     const now = Date.now();
     // letting go of a held clip (it was paused): that's not a tap
-    if (now - holdEndedAt.current < 400) return;
+    if (hold.justReleased()) return;
     if (now - lastTap.current < 300) {
       if (singleTimer.current) window.clearTimeout(singleTimer.current);
       singleTimer.current = null;
       lastTap.current = 0;
-      setBurst((b) => b + 1);
+      // the ❤️ springs in where the finger was (Instagram's, TikTok's)
+      fireBurst(e);
       if (!post.my_reaction) onReact(post, REACTION.key);
       onDoubleTap?.();
       return;
@@ -612,7 +582,6 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   };
   useEffect(() => () => {
     if (singleTimer.current) window.clearTimeout(singleTimer.current);
-    if (hold.current) window.clearTimeout(hold.current.timer);
   }, []);
   const photo = isPhotoPost(post);
 
@@ -634,15 +603,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {/* the post itself; taps never open it (a clip: one tap its sound, a hold pauses it; two taps ❤️). Its sheet open: it shrinks into the space above it, still playing */}
         <div
           onClick={onHeroTap}
-          onPointerDown={onHeroPointerDown}
-          onPointerMove={onHeroPointerMove}
-          onPointerUp={endHold}
-          onPointerCancel={endHold}
-          onPointerLeave={endHold}
-          onContextMenu={(e) => {
-            // a long press on a clip is a pause, never the phone's menu
-            if (hold.current || holding) e.preventDefault();
-          }}
+          {...hold.handlers}
           className={cn(
             "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out [-webkit-touch-callout:none] motion-reduce:transition-none",
             sheetOpen && (visual ? "bg-black" : "bg-background"),
@@ -686,13 +647,13 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               </div>
             </div>
           )}
-          {doubleTapHint && burst === 0 && (
+          {doubleTapHint && burst.n === 0 && (
             <div className="pointer-events-none absolute inset-x-0 top-[38%] h-14">
               <DoubleTapHint onDone={onTipDone} />
             </div>
           )}
-          <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
-          {soundFlash && <SoundFlash key={soundFlash.n} on={soundFlash.on} onDone={() => setSoundFlash(null)} />}
+          <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+          {soundFlash}
         </div>
         {note.sheet}
 
@@ -766,7 +727,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           style={{ bottom: "var(--feed-actions-bottom)" }}
           data-page-actions
         >
-          <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />
+          <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column hidden={sheetOpen || under || holding} />
           <PostActions post={post} viewerIsStaff={viewerIsStaff} unit={unit} className="grid h-11 w-11 place-items-center rounded-full text-foreground active:scale-90 [&>svg]:h-6 [&>svg]:w-6" />
         </div>
       </article>
@@ -801,7 +762,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       {/* on words, a workout card or a coach post the repost sits above it, never over the words */}
       {note.bubble && !overPicture && <div className="px-3.5 pb-2.5" data-note-above>{note.bubble}</div>}
       {/* Hero: the photo, or the workout itself when there isn't one. Taps never open the post (see onHeroTap). */}
-      <div onClick={onHeroTap} className="relative select-none" data-post-hero>
+      <div onClick={onHeroTap} {...hold.handlers} className="relative select-none [-webkit-touch-callout:none]" data-post-hero>
         {auto ? (
           <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
         ) : isNote && !photo ? (
@@ -821,8 +782,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ) : (
           <div className="px-4 py-6 text-sm text-muted-foreground">Workout was reopened, numbers will be back once it's finished.</div>
         )}
-        {doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}
-        <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+        {doubleTapHint && burst.n === 0 && <DoubleTapHint onDone={onTipDone} />}
+        <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
         {/* on a picture: the reposter's photo and note in its bottom-left corner, Instagram's spot */}
         {note.bubble && overPicture && <div className="pointer-events-none absolute bottom-3 left-3 z-[2]" data-note-over>{note.bubble}</div>}
       </div>
@@ -973,6 +934,7 @@ export function ReactionBar({
   onReposted,
   unit,
   column = false,
+  hidden = false,
 }: {
   post: CommunityPost;
   onReact: (p: CommunityPost, next: ReactionKey | null) => void;
@@ -984,6 +946,8 @@ export function ReactionBar({
   column?: boolean;
   /** The unit the feed painted an automated post's picture in (Share to Instagram sends that one). */
   unit?: "kg" | "lb";
+  /** Out of sight for now (the feed's first post under the stories, its sheet open, a clip held paused): its reactions wait to rise. */
+  hidden?: boolean;
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
   const [sharing, setSharing] = useState<boolean | null>(null);
@@ -1001,11 +965,11 @@ export function ReactionBar({
   const faces = [...(post.reactors ?? [])].sort((a, b) => Number(!!b.is_me) - Number(!!a.is_me)).slice(0, 3);
   // People are reacting to this one: a moment after it's on screen, its
   // reactions float up out of the heart and who reacted pops (never over the post).
-  const pop = useEngagementPop<HTMLDivElement>(post);
+  const pop = useEngagementPop<HTMLDivElement>(post, hidden);
   const { on, done } = pop;
   useEffect(() => {
     if (!on) return;
-    const t = window.setTimeout(done, 2400);
+    const t = window.setTimeout(done, 3600);
     return () => window.clearTimeout(t);
   }, [on, done]);
   const sheets = (
@@ -1030,7 +994,7 @@ export function ReactionBar({
     return (
       <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex flex-col items-center gap-1" data-post-actions-column>
         <ReactionButton post={post} onReact={onReact} align="right" stacked />
-        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-3/4 left-1/2" />}
+        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} size="lg" className="bottom-3/4 left-1/2" />}
         {onOpenComments && (
           <button
             type="button"
@@ -1062,7 +1026,7 @@ export function ReactionBar({
       {/* Instagram's row: like, comment, repost, message ... save at the end */}
       <div className="relative flex items-center">
         <ReactionButton post={post} onReact={onReact} />
-        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}
+        {on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} className="bottom-1/2 left-5" />}
         {onOpenComments && (
           <button
             type="button"

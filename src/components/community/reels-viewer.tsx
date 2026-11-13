@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, Heart, MessageCircle, Play, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, Heart, MessageCircle, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ActivitySpinner } from "@/components/activity-spinner";
 import { UserAvatar } from "@/components/user-avatar";
-import { ReactionBurst } from "@/components/community/reaction-button";
+import { ReactionBurst, useBurst } from "@/components/community/reaction-button";
+import { useHoldToPause, useSoundFlash } from "@/components/community/clip-gestures";
 import { holdFeedVideos } from "@/components/community/inline-video";
 import {
   REACTION,
@@ -32,7 +33,9 @@ export type ReelStart = { postId: string; path: string | null };
  * a clip in the feed opens it here, each clip whole at its own shape on
  * black, playing with sound and looping; swipe up for the next clip (a
  * workout film's sets one after another, then the next post's), down for
- * the one before. A tap pauses, two taps ❤️, the speaker mutes. Only the
+ * the one before. Reels' gestures: a tap is its sound (on or off, said in
+ * the middle), a finger held down pauses it with everything else out of the
+ * way, two taps ❤️ where the finger was; the speaker mutes too. Only the
  * clip on screen and the one either side hold a video (three pooled
  * elements, video-pool.ts), each buffered before it's swiped to.
  */
@@ -236,9 +239,15 @@ function ReelPage({
   const [playing, setPlaying] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [failed, setFailed] = useState(false);
+  // held down (Reels'): paused until the finger lets go
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [burst, setBurst] = useState(0);
+  const [burst, fireBurst] = useBurst();
+  const [soundFlash, flashSound] = useSoundFlash();
+  const hold = useHoldToPause<true>(
+    (e) => ((e.target as Element | null)?.closest?.("button") ? null : true),
+    (_t, on) => setPaused(on),
+  );
   const lastTap = useRef(0);
   const tapTimer = useRef<number | null>(null);
 
@@ -361,25 +370,27 @@ function ReelPage({
     });
   };
 
-  // a tap pauses / plays, two quick taps ❤️ (never taking one back)
-  const onTap = () => {
+  // Reels': a tap is the sound, on or off (said in the middle), a finger held down pauses it, two quick taps ❤️
+  // where the finger was (never taking one back)
+  const onTap = (e: React.MouseEvent) => {
+    if (hold.justReleased()) return;
     const now = Date.now();
     if (now - lastTap.current < 280) {
       if (tapTimer.current) window.clearTimeout(tapTimer.current);
       tapTimer.current = null;
       lastTap.current = 0;
-      setBurst((b) => b + 1);
+      fireBurst(e);
       if (!post.my_reaction) like(true);
       return;
     }
     lastTap.current = now;
     tapTimer.current = window.setTimeout(() => {
       tapTimer.current = null;
-      setPaused((p) => !p);
+      flashSound(toggleSound());
     }, 280);
   };
 
-  const toggleSound = () => {
+  const toggleSound = (): boolean => {
     const next = !sound;
     if (next) {
       // inside the tap (which also lets every pooled clip make sound, video-pool.ts)
@@ -391,6 +402,7 @@ function ReelPage({
       }
     }
     setSound(next);
+    return next;
   };
 
   const liked = !!post.my_reaction;
@@ -410,7 +422,7 @@ function ReelPage({
       data-reel-active={active ? "" : undefined}
     >
       {/* the clip, whole, at its own shape */}
-      <div ref={host} className="absolute inset-0" onClick={onTap} data-reel-video />
+      <div ref={host} className="absolute inset-0 select-none [-webkit-touch-callout:none]" onClick={onTap} {...hold.handlers} data-reel-video />
       {poster && (
         <img
           src={poster}
@@ -422,14 +434,8 @@ function ReelPage({
           )}
         />
       )}
-      <ReactionBurst n={burst} emoji={REACTION.emoji} />
-      {active && paused && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden>
-          <span className="grid h-16 w-16 place-items-center rounded-full bg-black/45">
-            <Play className="ml-1 h-8 w-8 fill-current" />
-          </span>
-        </div>
-      )}
+      <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={REACTION.emoji} />
+      {soundFlash}
       {active && slow && !failed && (
         <div
           className="pointer-events-none absolute inset-0 grid place-items-center"
@@ -455,7 +461,11 @@ function ReelPage({
 
       {/* what it is, over a scrim at the bottom */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent pl-4 pr-20 pt-24"
+        // held down: out of the way until the finger lets go (Reels')
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent pl-4 pr-20 pt-24 transition-opacity duration-200",
+          hold.holding && "opacity-0 [&_*]:pointer-events-none",
+        )}
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
       >
         <button
@@ -501,7 +511,7 @@ function ReelPage({
 
       {/* ❤️ 💬 🔊 on the right, Reels' place */}
       <div
-        className="absolute right-1.5 flex flex-col items-center gap-3"
+        className={cn("absolute right-1.5 flex flex-col items-center gap-3 transition-opacity duration-200", hold.holding && "pointer-events-none opacity-0")}
         style={{ bottom: "calc(env(safe-area-inset-bottom) + 1.5rem)" }}
       >
         <ReelButton

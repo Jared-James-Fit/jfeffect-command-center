@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Archive, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -10,7 +9,9 @@ import { InlineFollow } from "@/components/community/follow-button";
 import { CommentThread } from "@/components/community/comments-sheet";
 import { MentionText } from "@/components/community/mentions";
 import { PostActions } from "@/components/community/post-actions";
-import { ReactionBurst, useDoubleTap } from "@/components/community/reaction-button";
+import { ReactionBurst, useBurst, useDoubleTap } from "@/components/community/reaction-button";
+import { useHoldToPause } from "@/components/community/clip-gestures";
+import { CLIP_HOLD_EVENT } from "@/components/community/inline-video";
 import {
   REACTION,
   SCOPE_WORD,
@@ -117,17 +118,30 @@ function Detail({
   const s = post.stats;
   const onReact = (_p: CommunityPost, next: ReactionKey | null) => react.mutate(next, { onError: () => toast.error("Couldn't save that reaction") });
   // Double-tap the photo / card for ❤️, same as in the feed.
-  const [burst, setBurst] = useState(0);
+  const [burst, fireBurst] = useBurst();
   const markHint = useMarkHintSeen();
   // a member's photo / clip post: the picture edge to edge, words under it (as in the feed)
   const photo = isPhotoPost(post);
   // an automated post: its picture, then its words (as in the feed)
   const auto = isAutoPost(post);
-  const onHeroTap = useDoubleTap(() => {
-    setBurst((b) => b + 1);
+  // press and hold a clip: it pauses until you let go (Reels')
+  const hold = useHoldToPause<Element>(
+    (e) => {
+      const t = e.target as Element | null;
+      const clip = t?.closest?.("[data-inline-video]");
+      return clip && !t?.closest?.("button") ? clip : null;
+    },
+    (clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),
+  );
+  const doubleTap = useDoubleTap((e) => {
+    // the ❤️ springs in where the finger was
+    fireBurst(e);
     if (!post.my_reaction) onReact(post, REACTION.key);
     markHint("double_tap");
   });
+  const onHeroTap = (e: React.MouseEvent) => {
+    if (!hold.justReleased()) doubleTap(e);
+  };
 
   const tiles = s
     ? [
@@ -160,9 +174,9 @@ function Detail({
 
       {auto ? (
         <>
-          <div className="relative select-none" onClick={onHeroTap}>
+          <div className="relative select-none [-webkit-touch-callout:none]" onClick={onHeroTap} {...hold.handlers}>
             <AutoPostHero post={post} thumbUrl={thumb} unit={unit} full />
-            <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+            <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
           </div>
           <AutoPostCaption post={post} clamp={false} onOpenPerson={onOpenAuthor} className="px-4" />
         </>
@@ -172,7 +186,7 @@ function Detail({
           <NoteExtras post={post} unit={unit} className="mx-4 mb-2 mt-2" />
         </>
       ) : post.media_type || s || post.locked_in_at ? (
-        <div className="relative select-none" onClick={onHeroTap}>
+        <div className="relative select-none [-webkit-touch-callout:none]" onClick={onHeroTap} {...hold.handlers}>
           {post.media_type ? (
             <PostMedia post={post} thumbUrl={thumb} full />
           ) : s ? (
@@ -180,7 +194,7 @@ function Detail({
           ) : (
             <div className="px-4"><div className="overflow-hidden rounded-3xl"><LockInHero post={post} size="detail" /></div></div>
           )}
-          <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+          <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
         </div>
       ) : null}
 

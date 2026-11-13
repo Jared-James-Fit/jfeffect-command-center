@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { REACTION, REACTIONS, reactionEmoji, reactionTotal, type CommunityPost, type ReactionKey } from "@/lib/community";
@@ -151,10 +151,50 @@ function ReactionPicker({ current, onPick, onClose, align = "left" }: { current:
 }
 
 /** The big reaction that pops over a post when you double-tap it. */
-export function ReactionBurst({ n, emoji }: { n: number; emoji: string }) {
+/** A double-tap's ❤️: how many so far, and where the finger was in its box (null: the middle). */
+export type Burst = { n: number; x: number | null; y: number | null };
+
+/**
+ * A double-tap's ❤️ state. `fire(e)` shows a new one where the tap landed in
+ * the element the handler sits on (the one ReactionBurst is placed in);
+ * without a tap position (a key press) it's the middle.
+ */
+export function useBurst() {
+  const [burst, setBurst] = useState<Burst>({ n: 0, x: null, y: null });
+  const fire = useCallback((e?: { clientX: number; clientY: number; currentTarget: EventTarget | null } | null) => {
+    let x: number | null = null;
+    let y: number | null = null;
+    const el = e?.currentTarget as HTMLElement | null | undefined;
+    if (e && el?.getBoundingClientRect && (e.clientX || e.clientY)) {
+      const r = el.getBoundingClientRect();
+      x = Math.round(e.clientX - r.left);
+      y = Math.round(e.clientY - r.top);
+    }
+    setBurst((b) => ({ n: b.n + 1, x, y }));
+  }, []);
+  return [burst, fire] as const;
+}
+
+/** A tilt for each ❤️, never the same twice in a row (-15° to 15°). */
+export function burstTilt(n: number): number {
+  return ((n * 47) % 31) - 15;
+}
+
+/**
+ * The ❤️ a double-tap gives (Instagram's, TikTok's): it springs in where the
+ * finger was, tilted a little, then floats up and fades. Each double-tap is
+ * a new one.
+ */
+export function ReactionBurst({ n, emoji, x = null, y = null }: { n: number; emoji: string; x?: number | null; y?: number | null }) {
   if (n <= 0) return null;
   return (
-    <span key={n} className="community-burst pointer-events-none absolute inset-0 z-10 grid place-items-center text-[88px] drop-shadow-xl" aria-hidden>
+    <span
+      key={n}
+      className="community-burst pointer-events-none absolute z-10 select-none text-[96px] leading-none drop-shadow-xl"
+      style={{ left: x ?? "50%", top: y ?? "50%", ["--burst-r" as string]: `${burstTilt(n)}deg` }}
+      aria-hidden
+      data-reaction-burst
+    >
       {emoji}
     </span>
   );
@@ -191,13 +231,13 @@ export function DoubleTapHint({ onDone }: { onDone?: () => void }) {
  * Double-tap detection for a post (no delay on single taps: those still do
  * whatever the post does). Returns a click handler.
  */
-export function useDoubleTap(onDouble: () => void, within = 280) {
+export function useDoubleTap(onDouble: (e: React.MouseEvent) => void, within = 280) {
   const last = useRef(0);
-  return () => {
+  return (e: React.MouseEvent) => {
     const now = Date.now();
     if (now - last.current < within) {
       last.current = 0;
-      onDouble();
+      onDouble(e);
       return;
     }
     last.current = now;

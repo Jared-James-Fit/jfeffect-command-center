@@ -1319,13 +1319,16 @@ describe("like: tap the heart, hold for more, double-tap the post", () => {
   it("double-tap gives ❤️ in the feed and on the post page, and never takes a reaction back", () => {
     expect(card).toContain("if (!post.my_reaction) onReact(post, REACTION.key);");
     expect(detail).toContain("if (!post.my_reaction) onReact(post, REACTION.key);");
-    expect(detail).toContain("const onHeroTap = useDoubleTap(() => {");
+    expect(detail).toContain("const doubleTap = useDoubleTap((e) => {");
+    // the ❤️ springs in where the finger was
+    expect(detail).toContain("fireBurst(e);");
+    expect(card).toContain("fireBurst(e);");
   });
   it("the double-tap demo is brief and out of the way: low pill, fades by itself, once a visit, retires after a few", () => {
     expect(screen).toContain("doubleTapHint={p.id === hintId}");
     expect(screen).toContain('hints.data && !hints.data.includes("double_tap") ? doubleTapTipKeys.find((k) => !hints.data!.includes(k))');
     expect(screen).toContain("let tipShownThisVisit = false;");
-    expect(card).toContain("{doubleTapHint && burst === 0 && <DoubleTapHint onDone={onTipDone} />}");
+    expect(card).toContain("{doubleTapHint && burst.n === 0 && <DoubleTapHint onDone={onTipDone} />}");
     expect(card).toContain("onDoubleTap?.();");
     expect(btn).toContain('className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center"');
     expect(btn).toContain('e.animationName === "community-hint-life" && onDone?.()');
