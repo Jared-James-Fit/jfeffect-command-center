@@ -38,9 +38,12 @@ describe("a post's screen is the canvas (TikTok / Reels)", () => {
     expect(screenFit(clip(1080, 1920), 0.75)).toBe("cover"); // loses exactly 25%
   });
 
-  it("a photo is never trimmed (it was framed in the editor), nor is a clip of unknown shape", () => {
+  it("a photo fills the screen only when it was framed for it (9:16); any other photo shows whole, as does a clip of unknown shape", () => {
     expect(screenFit(photo(1080, 1350), 1.2)).toBe("contain");
-    expect(screenFit(photo(1080, 1920), later)).toBe("contain");
+    expect(screenFit(photo(1080, 1350), later)).toBe("contain"); // 4:5
+    expect(screenFit(photo(1440, 1920), later)).toBe("contain"); // an older 3:4 photo: never cut
+    expect(screenFit(photo(1080, 1920), later)).toBe("cover"); // framed 9:16: a sliver off
+    expect(screenFit(photo(1080, 1920), 390 / 714)).toBe("cover");
     expect(screenFit(clip(null, null), later)).toBe("contain");
     expect(screenFit(clip(1080, 1920), null)).toBe("contain");
   });

@@ -86,13 +86,11 @@ describe("a clip in the feed shows whole, at its own shape", () => {
   it("the frame takes the clip's shape, as tall as the screen allows, and every clip fits inside it", () => {
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain('const clipCover = !fixed && !lead && cover?.type === "video";');
-    expect(card).toContain(
-      'return post.media_type === "video" ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height);',
-    );
+    // (framed in the studio: the frame's shape, in the same range)
+    expect(card).toContain("return f ? Math.min(FEED_MAX_ASPECT, Math.max(VIDEO_MIN_ASPECT, f.a)) : videoAspect(post.media_width, post.media_height);");
     expect(card).toContain("{ aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT }");
-    expect(card).toContain(
-      '<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={shrunk ? "corner" : page ? "top" : "bottom"} />',
-    );
+    expect(card).toContain("frame={clipFrame(slide.focus)}");
+    expect(card).toContain('controls={shrunk ? "corner" : page ? "top" : "bottom"}');
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('fit === "contain" ? "object-contain" : "object-cover"');
     // a crop's focus only matters where it's cropped

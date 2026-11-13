@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smile, Square, Star, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -10,7 +10,7 @@ import { useFollowState } from "@/lib/community-social";
 import { TEMPLATE_LABEL, canvasToBlob, cardLogo, ensureDisplayFont, paintShareCard, shareCardImage, type ShareCardData, type ShareFormat, type ShareTemplate } from "@/lib/workout-share-card";
 import { CaptionEditor, CaptionField, captionThumb } from "@/components/community/caption-editor";
 import { AttachButtons, AttachGifPicker, AttachPreview, usePostAttach, type PostAttachInitial } from "@/components/community/post-attach";
-import { SlideTray, useSlideTray } from "@/components/community/slide-tray";
+import { SlideTray, useSlideTray, type TrayItem } from "@/components/community/slide-tray";
 import { MAX_SLIDES, type PostSlide } from "@/lib/community";
 import { StickerLayer, drawStickers, SHARE_CARD_ID, responseCardItem, type StickerItem, type StickerRequest } from "@/components/community/sticker-layer";
 import { paintReplyBackdrop } from "@/lib/story-reply";
@@ -28,20 +28,19 @@ import { createCommunityPost, useHintsSeen, useMarkHintSeen } from "@/lib/commun
 import { useAuth } from "@/lib/auth";
 import {
   CENTRED,
-  CENTRE_FOCUS,
   POST_ASPECTS,
   POST_ASPECT_LABEL,
   STORY_ASPECT,
-  feedAspect,
-  focusPosition,
+  closestAspect,
   framingFromGuide,
+  slideAspect,
   guideBand,
   nextAspect,
   type Framing,
   type PostAspect,
 } from "@/lib/photo-frame";
 import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/photo-frame-draw";
-import { FocusFramer, PhotoFramer } from "@/components/community/photo-framer";
+import { PhotoFramer } from "@/components/community/photo-framer";
 import { CoverPicker } from "@/components/community/cover-picker";
 import { TrimmedVideo } from "@/components/video-trimmer";
 import { preloadMediaTools } from "@/lib/community-media";
@@ -221,6 +220,10 @@ export function ShareStudio({
   }, [open, kind]);
   // a post's photo: its shape and how it sits in it (baked in when it's posted)
   const [aspect, setAspect] = useState<PostAspect>("portrait");
+  // the shape was picked by hand: the first photo or clip no longer sets it
+  const aspectPicked = useRef(false);
+  // the slide being framed in the editor (a photo or clip in the strip); null: slide 1
+  const [sel, setSel] = useState<string | null>(null);
   const [framing, setFraming] = useState<Framing>(CENTRED);
   // a finger is on it: the card repaints at preview quality until it lifts
   const [framingLive, setFramingLive] = useState(false);
@@ -297,6 +300,8 @@ export function ShareStudio({
     setBusy(null);
     setKind(startAs);
     setAspect("portrait");
+    aspectPicked.current = false;
+    setSel(null);
     setFraming(CENTRED);
     setCoverFor(null);
     setLive(null);
@@ -441,18 +446,29 @@ export function ShareStudio({
   }, [barEl]);
   const fullScreen = phase === "shoot" && screenSize.w > 0 && barH > 0 && screenSize.h - screenSize.top - (screenSize.w * CARD_H) / CARD_W >= barH - 2;
   // The editor's frame is what's posted: a story's 9:16; a post's card, the
-  // feed's 4:5; a post's photo, the shape picked (4:5 / 1:1 / 16:9); a post
-  // of clips, the shape the feed shows the first one at. The camera is 9:16.
+  // feed's 4:5; any other post, the one shape every slide takes (9:16 / 4:5 /
+  // 1:1 / 16:9, Instagram's carousel rule), set from its first photo or clip
+  // until it's picked by hand. The camera is 9:16.
   const clip0 = phase === "edit" && !card && !shot ? tray.items[0] ?? null : null;
-  const frameAspect = story
-    ? STORY_ASPECT
-    : card && !cardFailed
-      ? FEED_CARD_ASPECT
-      : shot
-        ? POST_ASPECTS[aspect]
-        : clip0?.w && clip0?.h
-          ? feedAspect(clip0.w, clip0.h)
-          : FEED_CARD_ASPECT;
+  const frameAspect = story ? STORY_ASPECT : card && !cardFailed ? FEED_CARD_ASPECT : POST_ASPECTS[aspect];
+  // a post with nothing up front (no card, no photo): its first photo or clip sets the shape (one already on
+  // the post, being edited: the shape it shows at, so what's added matches it)
+  const first = !card && !shot ? tray.items[0] : undefined;
+  const firstShape = first ? (first.existing && first.slide ? slideAspect(first.slide) : first.w && first.h ? first.w / first.h : null) : null;
+  useEffect(() => {
+    if (aspectPicked.current || !firstShape) return;
+    setAspect(closestAspect(firstShape, 1));
+  }, [firstShape]);
+  // The slide being framed: the one picked in the strip, else (no card or photo up front) the first.
+  // Only a photo or clip picked now can be framed (one already on the post stays as it is).
+  const framable = (it: TrayItem | undefined | null): it is TrayItem =>
+    !!it && !it.existing && it.status !== "error" && !!it.w && !!it.h && (it.kind === "image" ? !!it.preview : !!it.video);
+  const selItem =
+    phase === "edit" && !story ? ((sel ? tray.items.find((x) => x.id === sel && framable(x)) : null) ?? (!card && !shot ? (tray.items.find(framable) ?? null) : null)) : null;
+  // the shape's button: a post's photo or slide being framed (a card is always the feed's 4:5)
+  const shapeable = phase === "edit" && !story && !(card && !cardFailed && !adding) && (!!shot || !!selItem);
+  const coverClip = selItem?.kind === "video" ? selItem : null;
+  const trimClip = story ? (clip0?.video && clip0.status !== "error" ? clip0 : null) : coverClip;
   const boxAspect = phase === "shoot" ? CARD_W / CARD_H : frameAspect;
   const box = useMemo(() => {
     const w = fullScreen ? areaSize.w : Math.min(areaSize.w, areaSize.h * boxAspect);
@@ -741,7 +757,11 @@ export function ShareStudio({
     setShot(s);
     setItems([]);
     setFraming(f);
-    setAspect("portrait");
+    // the camera's shot was framed by its 4:5 guide; a photo from the library starts at the shape closest to its own
+    const own = drawableSize(s.src as Drawable);
+    setAspect(s.live ? "portrait" : closestAspect(own.w, own.h));
+    aspectPicked.current = false;
+    setSel(null);
     setPhase("edit");
   };
   const capture = () => {
@@ -1034,8 +1054,8 @@ export function ShareStudio({
         setTimeout(onClose, 900);
         return;
       }
-      // the extras have been uploading all along; this only waits for any still going
-      const extras = await tray.ready();
+      // the extras have been uploading all along; this only waits for any still going, and frames each at the post's shape
+      const extras = await tray.ready(frameAspect);
       await post.onPost({ photo: await postPhoto(extras.length > 0), live: !!shot?.live, caption: caption.trim(), visibility, hideLoads, look: card?.look ?? "plain", extras, attach: att.save });
       tray.commit();
       // posted: the draft is done with (a lock in's key can change while it posts, so not by key)
@@ -1144,38 +1164,22 @@ export function ShareStudio({
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60" style={{ height: Math.max(0, box.h - band.y - band.h) }} aria-hidden data-post-band="bottom" />
               </>
             )}
-            {/* a plain post of clips: the first one, up front, just the part that goes (it plays, muted, while you write the caption); drag it to choose what the feed shows */}
-            {clip0?.video ? (
-              story ? (
-                // a story shows the whole picture, as the story viewer does (a lift is never cropped off)
-                <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
-              ) : (
-                // (no grid-tile outline here: a clip's tile is its cover, shown for real in Edit cover)
-                <FocusFramer size={{ w: clip0.w ?? 9, h: clip0.h ?? 16 }} frame={box} focus={clip0.focus ?? CENTRE_FOCUS} onFocus={(f) => tray.setFocus(clip0.id, f)}>
-                  <TrimmedVideo
-                    key={clip0.video}
-                    src={clip0.video}
-                    trim={clip0.trim}
-                    poster={clip0.preview ?? undefined}
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-                    style={{ objectPosition: focusPosition(clip0.focus) }}
-                    data-studio-clip
-                  />
-                </FocusFramer>
-              )
+            {/* a story's clip: the whole picture, as the story viewer shows it (a lift is never cropped off) */}
+            {story && clip0?.video ? (
+              <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
             ) : (
-              clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              !story && !selItem && clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
             )}
             {showCard && (
               <canvas
                 ref={setCardEl}
-                className="pointer-events-none absolute"
+                className={cn("pointer-events-none absolute", selItem && "invisible")}
                 style={phase === "shoot" ? { left: band.x, top: band.y, width: band.w, height: band.h } : { inset: 0, width: "100%", height: "100%" }}
                 aria-label={card ? `${TEMPLATE_LABEL[card.look]} look` : undefined}
               />
             )}
             {/* the photo, framed: drag and pinch (a card on it: two fingers, one swipes the looks). Over the card, so its grid shows; the card paints the photo itself */}
-            {phase === "edit" && shot && shotSize && (
+            {phase === "edit" && shot && shotSize && !selItem && (
               <PhotoFramer
                 src={shotUrl}
                 size={shotSize}
@@ -1190,42 +1194,71 @@ export function ShareStudio({
                 onClaim={() => (swipe.current = null)}
               />
             )}
-            {/* the post's shape (4:5 / 1:1 / 16:9), Instagram's corner button */}
-            {phase === "edit" && !story && shot && !showCard && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAspect(nextAspect(aspect));
-                  setShapeFlash((n) => n + 1);
-                }}
-                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
-                data-frame-shape={aspect}
-              >
-                {aspect === "portrait" ? <RectangleVertical className="h-4 w-4" /> : aspect === "square" ? <Square className="h-4 w-4" /> : <RectangleHorizontal className="h-4 w-4" />}
-                {POST_ASPECT_LABEL[aspect]}
-              </button>
+            {/* a photo or clip from the strip, in the post's shape: drag to place it, pinch to size it (a clip plays, muted, just the part that goes) */}
+            {selItem && (
+              <PhotoFramer
+                key={selItem.id}
+                src={selItem.kind === "image" ? selItem.preview : null}
+                video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined } : null}
+                size={{ w: selItem.w ?? 4, h: selItem.h ?? 5 }}
+                frame={box}
+                framing={selItem.framing ?? CENTRED}
+                onFraming={(f) => tray.setFraming(selItem.id, f)}
+                oneFinger
+                gridPreview
+                flash={shapeFlash}
+                onClaim={() => (swipe.current = null)}
+              />
             )}
-            {/* a clip on a post: its cover (what shows before it plays, and on your profile grid) */}
-            {phase === "edit" && !story && clip0?.video && clip0.status !== "error" && (
-              <button
-                type="button"
-                onClick={() => setCoverFor(clip0.id)}
-                className="absolute bottom-2.5 left-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                data-edit-cover
-              >
-                <Film className="h-4 w-4" /> Cover
-              </button>
+            {/* bottom left: the post's shape (9:16 / 4:5 / 1:1 / 16:9, Instagram's corner button: every slide takes it) and a clip's cover */}
+            {(shapeable || coverClip) && (
+              <div className="absolute bottom-2.5 left-2.5 z-[5] flex gap-2">
+                {shapeable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      aspectPicked.current = true;
+                      setAspect(nextAspect(aspect));
+                      setShapeFlash((n) => n + 1);
+                    }}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
+                    aria-label={`Shape ${POST_ASPECT_LABEL[aspect]}. Tap for ${POST_ASPECT_LABEL[nextAspect(aspect)]}`}
+                    data-frame-shape={aspect}
+                  >
+                    {aspect === "full" ? (
+                      <Smartphone className="h-4 w-4" />
+                    ) : aspect === "portrait" ? (
+                      <RectangleVertical className="h-4 w-4" />
+                    ) : aspect === "square" ? (
+                      <Square className="h-4 w-4" />
+                    ) : (
+                      <RectangleHorizontal className="h-4 w-4" />
+                    )}
+                    {POST_ASPECT_LABEL[aspect]}
+                  </button>
+                )}
+                {/* a clip on a post: its cover (what shows before it plays, and on your profile grid) */}
+                {coverClip && (
+                  <button
+                    type="button"
+                    onClick={() => setCoverFor(coverClip.id)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
+                    data-edit-cover
+                  >
+                    <Film className="h-4 w-4" /> Cover
+                  </button>
+                )}
+              </div>
             )}
             {/* a clip: one tap to change which part goes */}
-            {clip0?.video && clip0.status !== "error" && (
+            {trimClip && (
               <button
                 type="button"
-                onClick={() => void tray.edit(clip0.id)}
+                onClick={() => void tray.edit(trimClip.id)}
                 className="absolute bottom-2.5 right-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
                 data-studio-trim
               >
-                <Scissors className="h-4 w-4" /> Trim{clip0.seconds != null ? ` · ${formatClock(clip0.seconds)}` : ""}
+                <Scissors className="h-4 w-4" /> Trim{trimClip.seconds != null ? ` · ${formatClock(trimClip.seconds)}` : ""}
               </button>
             )}
 
@@ -1483,6 +1516,8 @@ export function ShareStudio({
                     tray={tray}
                     hasCover={!!card || !!shot}
                     cover={coverThumb}
+                    selected={selItem?.id ?? null}
+                    onSelect={setSel}
                     onCamera={() => {
                       setAdding(true);
                       setPhase("shoot");
@@ -1571,12 +1606,11 @@ export function ShareStudio({
               src={it.video}
               range={it.trim}
               size={{ w: it.w ?? 9, h: it.h ?? 16 }}
-              aspect={feedAspect(it.w, it.h)}
-              focus={it.focus ?? CENTRE_FOCUS}
+              aspect={frameAspect}
+              framing={it.framing ?? CENTRED}
               onCancel={() => setCoverFor(null)}
-              onDone={(cover, focus) => {
+              onDone={(cover) => {
                 if (cover) tray.setCover(it.id, cover);
-                tray.setFocus(it.id, focus);
                 setCoverFor(null);
                 setPosted(false);
               }}

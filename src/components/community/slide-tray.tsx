@@ -7,7 +7,9 @@ import { MAX_SLIDES, fitSlides, slideThumbPath, type PostSlide } from "@/lib/com
 import { COMMUNITY_BUCKET, pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, uploadPicked, type PickedMedia } from "@/lib/community-media";
 import { useSlideThumbUrls } from "@/lib/community.queries";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
-import type { MediaFocus } from "@/lib/photo-frame";
+import { CENTRED, clampFraming, frameFocus, type Framing } from "@/lib/photo-frame";
+import { drawableSize, framedCanvas, type Drawable } from "@/lib/photo-frame-draw";
+import { releaseCanvas } from "@/lib/canvas-memory";
 import { formatClock, videoLimit, type VideoContext } from "@/lib/video-edit/limits";
 import { looksLikeVideo } from "@/lib/video-edit/pick";
 import { useVideoTrimmer } from "@/components/video-trimmer";
@@ -34,11 +36,60 @@ export type TrayItem = {
   /** Its size (px), once it's been read. */
   w?: number;
   h?: number;
-  /** A clip: which part shows when the feed or the grid crops it (centred when unset). */
-  focus?: MediaFocus | null;
+  /** How it sits in the post's frame (drag / pinch in the studio; centred, just filling it, when unset). */
+  framing?: Framing | null;
   /** A clip: the cover frame picked for it (replaces the automatic one when it's posted). */
   cover?: Blob | null;
 };
+
+/** A thumbnail's width at a shape: 720 px on its long side, like the ones picked photos get. */
+const thumbWidth = (aspect: number) => Math.round(aspect >= 1 ? 720 : 720 * aspect);
+
+/** A picked cover (a JPEG) as something a canvas can draw. */
+function blobImage(b: Blob): Promise<{ img: HTMLImageElement; release: () => void } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(b);
+    const img = new Image();
+    img.onload = () => resolve({ img, release: () => URL.revokeObjectURL(url) });
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+const jpeg = (c: HTMLCanvasElement, name: string) =>
+  new Promise<File | null>((resolve) => c.toBlob((b) => resolve(b ? new File([b], name, { type: "image/jpeg" }) : null), "image/jpeg", 0.88));
+
+/** A framed copy as a JPEG file (the canvas is released either way). */
+async function framedFile(src: Drawable, framing: Framing, aspect: number, width: number, name: string): Promise<File | null> {
+  const c = framedCanvas(src, framing, aspect, width);
+  try {
+    return await jpeg(c, name);
+  } finally {
+    releaseCanvas(c);
+  }
+}
+
+/** A framed photo and its thumbnail: the big one cut once from the original, the small one drawn from it (one big canvas at a time). */
+async function framedPhoto(src: Drawable, framing: Framing, aspect: number): Promise<{ main: File | null; thumb: File | null }> {
+  const big = framedCanvas(src, framing, aspect, 1080);
+  try {
+    const main = await jpeg(big, "photo.jpg");
+    const small = framedCanvas(big, { z: 1, cx: 0.5, cy: 0.5 }, aspect, thumbWidth(aspect));
+    try {
+      return { main, thumb: await jpeg(small, "thumb.jpg") };
+    } finally {
+      releaseCanvas(small);
+    }
+  } finally {
+    releaseCanvas(big);
+  }
+}
+
+/** Framed two at a time (a phone holds a few big canvases, not ten), kept in order. */
+const FRAME_PARALLEL = 2;
 
 type Job = { id: string; file?: File; picked?: PickedMedia; promise: Promise<PostSlide | null>; resolve: (s: PostSlide | null) => void; ctl?: AbortController };
 
@@ -248,47 +299,104 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
     },
     [patch],
   );
-  /** Which part of a clip shows when it's cropped (the feed's 4:5, the grid's 3:4). */
-  const setFocus = useCallback((id: string, focus: MediaFocus | null) => patch(id, { focus }), [patch]);
+  /** How a slide sits in the post's frame (drag / pinch in the studio). */
+  const setFraming = useCallback((id: string, framing: Framing | null) => patch(id, { framing }), [patch]);
 
-  /** A picked cover goes up next to the clip; the automatic one it replaces is removed. */
-  const withCover = useCallback(
-    async (it: TrayItem, slide: PostSlide): Promise<PostSlide> => {
-      const focus = it.focus ?? slide.focus ?? null;
-      if (!it.cover || !user?.id) return focus ? { ...slide, focus } : slide;
-      try {
-        const up = await uploadLiftFileToStorage({ file: new File([it.cover], "cover.jpg", { type: "image/jpeg" }), userId: user.id, bucket: COMMUNITY_BUCKET });
-        if (slide.thumb && !it.existing) void removeCommunityFiles([slide.thumb]);
-        const next: PostSlide = { ...slide, thumb: up.path, ...(focus ? { focus } : {}) };
-        // posted again (a retry): don't upload it twice
-        patch(it.id, { cover: null, slide: next });
+  /**
+   * What's posted is what the studio's frame showed (Instagram's): a new photo
+   * is baked to the post's shape (1080 wide, its thumbnail too) unless it's
+   * already exactly that and untouched; a new clip goes up whole with its
+   * frame (`focus`, framedMediaStyle shows just that part everywhere) and a
+   * poster baked to it (the cover picked by hand, else its own first moment).
+   * The files it replaces go. A slide already on the post stays as it is.
+   * Anything that can't be made keeps the slide as it was uploaded.
+   */
+  const finish = useCallback(
+    async (it: TrayItem, slide: PostSlide, shape: number | null): Promise<PostSlide> => {
+      const uid = user?.id;
+      if (it.existing || !uid) return slide;
+      const picked = jobs.current.get(it.id)?.picked ?? null;
+      const box = shape ? { w: shape, h: 1 } : null;
+      const up = (file: File) => uploadLiftFileToStorage({ file, userId: uid, bucket: COMMUNITY_BUCKET }).then((r) => r.path);
+      const done = (next: PostSlide) => {
+        // posted again (a retry): nothing is made twice
+        patch(it.id, { cover: null, framing: null, slide: next });
         return next;
+      };
+      try {
+        if (it.kind === "image") {
+          const src = picked?.drawable;
+          if (!shape || !box || !src) return slide;
+          const size = drawableSize(src);
+          const f = clampFraming(it.framing ?? CENTRED, size, box);
+          // already the post's shape and untouched: as it was uploaded
+          if (Math.abs(size.w / size.h - shape) < 0.01 && f.z <= 1.001) return slide;
+          const { main, thumb: small } = await framedPhoto(src, f, shape);
+          if (!main) return slide;
+          const [path, thumb] = await Promise.all([up(main), small ? up(small).catch(() => null) : Promise.resolve(null)]);
+          void removeCommunityFiles([slide.path, slide.thumb]);
+          return done({ ...slide, path, thumb, type: "image", width: 1080, height: Math.round(1080 / shape), focus: null });
+        }
+        // a clip: its cover (picked, else its own first moment), framed like the clip
+        const own = it.cover ? await blobImage(it.cover) : null;
+        const src: Drawable | null = own?.img ?? picked?.drawable ?? null;
+        try {
+          if (!shape || !box) {
+            if (!it.cover) return slide;
+            const thumb = await up(new File([it.cover], "cover.jpg", { type: "image/jpeg" }));
+            if (slide.thumb) void removeCommunityFiles([slide.thumb]);
+            return done({ ...slide, thumb });
+          }
+          const size = it.w && it.h ? { w: it.w, h: it.h } : src ? drawableSize(src) : { w: shape, h: 1 };
+          const f = clampFraming(it.framing ?? CENTRED, size, box);
+          const focus = frameFocus(f, shape);
+          const poster = src ? await framedFile(src, f, shape, thumbWidth(shape), "poster.jpg") : null;
+          const thumb = poster ? await up(poster).catch(() => null) : null;
+          if (thumb && slide.thumb) void removeCommunityFiles([slide.thumb]);
+          return done({ ...slide, thumb: thumb ?? slide.thumb, focus });
+        } finally {
+          own?.release();
+        }
       } catch {
-        // the clip still goes up with its automatic cover
-        return focus ? { ...slide, focus } : slide;
+        // the slide still goes up as it was uploaded
+        return slide;
       }
     },
     [patch, user?.id],
   );
 
   /**
-   * Everything uploaded, in order (failed ones get one more go). Throws if
-   * something still won't go up, so nothing is posted half done.
+   * Everything uploaded, in order (failed ones get one more go), each framed
+   * at the post's shape (`shape`, w / h; null: a story's clip, as it is).
+   * Throws if something still won't go up, so nothing is posted half done.
    */
-  const ready = useCallback(async (): Promise<PostSlide[]> => {
-    for (const it of itemsRef.current) if (it.status === "error") retry(it.id);
-    // (in order; anything still being read or uploading is waited for)
-    const list = itemsRef.current;
-    const out: PostSlide[] = [];
-    let failed = 0;
-    for (const it of list) {
-      const s = it.slide ?? (await jobs.current.get(it.id)?.promise);
-      if (s) out.push(await withCover(itemsRef.current.find((x) => x.id === it.id) ?? it, s));
-      else if (!removed.current.has(it.id)) failed += 1;
-    }
-    if (failed) throw new Error(failed === 1 ? "One photo didn't upload. Tap it to try again or remove it." : `${failed} didn't upload. Tap them to try again or remove them.`);
-    return out;
-  }, [retry, withCover]);
+  const ready = useCallback(
+    async (shape: number | null = null): Promise<PostSlide[]> => {
+      for (const it of itemsRef.current) if (it.status === "error") retry(it.id);
+      // (in order; anything still being read or uploading is waited for)
+      const list = itemsRef.current;
+      const got: { it: TrayItem; slide: PostSlide }[] = [];
+      let failed = 0;
+      for (const it of list) {
+        const s = it.slide ?? (await jobs.current.get(it.id)?.promise);
+        if (s) got.push({ it: itemsRef.current.find((x) => x.id === it.id) ?? it, slide: s });
+        else if (!removed.current.has(it.id)) failed += 1;
+      }
+      if (failed) throw new Error(failed === 1 ? "One photo didn't upload. Tap it to try again or remove it." : `${failed} didn't upload. Tap them to try again or remove them.`);
+      // framed a couple at a time (each a small upload or two), kept in order
+      const out: PostSlide[] = new Array(got.length);
+      let next = 0;
+      const worker = async () => {
+        while (next < got.length) {
+          const i = next++;
+          out[i] = await finish(got[i].it, got[i].slide, shape);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(FRAME_PARALLEL, got.length) }, worker));
+      return out;
+    },
+    [retry, finish],
+  );
 
   const releaseAll = useCallback(() => {
     for (const job of jobs.current.values()) if (job.picked) releasePicked(job.picked);
@@ -327,7 +435,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
   useEffect(() => () => discardRef.current(), []);
 
   const uploading = items.filter((it) => it.status === "preparing" || it.status === "uploading").length;
-  return { items, add, remove, retry, edit, ready, commit, discard, setCover, setFocus, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
+  return { items, add, remove, retry, edit, ready, commit, discard, setCover, setFraming, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
 }
 
 /** What the strip shows for a picked photo or clip. */
@@ -348,32 +456,75 @@ export type SlideTrayState = ReturnType<typeof useSlideTray>;
  * The strip under the photo: slide 1 (what's on screen), the rest, and
  * "+ Camera" / "+ Library" to add more (up to 10).
  */
-export function SlideTray({ tray, cover, onCamera, onLibrary, hasCover = true }: { tray: SlideTrayState; cover: string | null; onCamera: () => void; onLibrary: () => void; hasCover?: boolean }) {
+export function SlideTray({
+  tray,
+  cover,
+  onCamera,
+  onLibrary,
+  hasCover = true,
+  selected = null,
+  onSelect,
+}: {
+  tray: SlideTrayState;
+  cover: string | null;
+  onCamera: () => void;
+  onLibrary: () => void;
+  hasCover?: boolean;
+  /** The slide being framed in the studio (null: slide 1). */
+  selected?: string | null;
+  /** Tap a slide to frame it (Instagram's): null is slide 1. Without it, a tap on a clip trims it. */
+  onSelect?: (id: string | null) => void;
+}) {
   const urls = useSlideThumbUrls(tray.items.filter((it) => it.existing && it.slide).map((it) => it.slide!));
   // a plain post of clips has no card or photo up front: its slides start at 1
   const first = hasCover ? 2 : 1;
   return (
     <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-no-swipe-back>
       {hasCover && (
-        <div className="relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-white/10 ring-2 ring-white" aria-label="Slide 1, on screen">
+        <button
+          type="button"
+          onClick={() => onSelect?.(null)}
+          className={cn("relative h-14 w-11 shrink-0 overflow-hidden rounded-lg bg-white/10", selected == null && "ring-2 ring-white")}
+          aria-label={selected == null ? "Slide 1, on screen" : "Slide 1: tap to frame it"}
+          aria-pressed={selected == null}
+        >
           {cover && <img src={cover} alt="" className="h-full w-full object-cover" />}
           <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-bold">1</span>
-        </div>
+        </button>
       )}
       {tray.items.map((it, i) => {
         const src = it.preview ?? (it.slide ? urls[slideThumbPath(it.slide) ?? ""] ?? null : null);
         const busy = it.status === "preparing" || it.status === "uploading";
+        // a slide picked now can be framed (a tap puts it in the frame); one already on the post stays as it is
+        const framable = !!onSelect && !it.existing && !!it.w && !!it.h && (it.kind === "image" ? !!it.preview : !!it.video);
+        const on = selected === it.id;
         return (
           <div key={it.id} className="relative h-14 w-11 shrink-0">
             <button
               type="button"
-              onClick={() => (it.status === "error" ? tray.retry(it.id) : it.video ? void tray.edit(it.id) : undefined)}
-              className="relative block h-full w-full overflow-hidden rounded-lg bg-white/10"
-              aria-label={it.status === "error" ? "Didn't upload. Tap to try again" : it.video ? `Clip ${i + first}: tap to trim` : `Slide ${i + first}`}
+              onClick={() => (it.status === "error" ? tray.retry(it.id) : framable ? onSelect?.(it.id) : it.video ? void tray.edit(it.id) : undefined)}
+              className={cn("relative block h-full w-full overflow-hidden rounded-lg bg-white/10", on && "ring-2 ring-white")}
+              aria-label={
+                it.status === "error"
+                  ? "Didn't upload. Tap to try again"
+                  : framable
+                    ? on
+                      ? `Slide ${i + first}, on screen`
+                      : `Slide ${i + first}: tap to frame it`
+                    : it.video
+                      ? `Clip ${i + first}: tap to trim`
+                      : `Slide ${i + first}`
+              }
+              aria-pressed={framable ? on : undefined}
               data-tray-item={it.kind}
             >
               {src && <img src={src} alt="" className="h-full w-full object-cover" />}
-              {it.kind === "video" && (it.video ? <Scissors className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow" /> : <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />)}
+              {it.kind === "video" &&
+                (it.video && !framable ? (
+                  <Scissors className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-white drop-shadow" />
+                ) : (
+                  <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />
+                ))}
               {it.seconds != null && !busy && it.status !== "error" && <span className="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-0.5 text-[8px] font-bold tabular-nums">{formatClock(it.seconds)}</span>}
               <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-bold">{i + first}</span>
               {busy && (

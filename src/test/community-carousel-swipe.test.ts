@@ -112,7 +112,7 @@ describe("carousel composer", () => {
   });
   it("extras upload as they're added (3 at a time); Post only waits for what's still going", () => {
     expect(tray).toMatch(/const PARALLEL = 3/);
-    expect(studio).toMatch(/const extras = await tray\.ready\(\);/);
+    expect(studio).toMatch(/const extras = await tray\.ready\(frameAspect\);/);
     expect(studio).toMatch(/tray\.commit\(\);/);
   });
   it("closing without posting throws the new uploads away", () => {

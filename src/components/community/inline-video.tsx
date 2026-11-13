@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ClipFrame } from "@/lib/photo-frame";
+import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { preferAmbientAudio } from "@/lib/audio-session";
 import { SOUND_BLOCKED_EVENT, acquireFeedVideo, playFeedVideo, releaseFeedVideo, setSoundWanted, soundBlocked, unmuteBlocked } from "@/lib/video-pool";
@@ -128,12 +130,21 @@ export function InlineVideo({
   position,
   fit = "cover",
   controls = "bottom",
+  frame = null,
+  media = null,
 }: {
   path: string;
   poster: string | null;
   active?: boolean;
   position?: string;
   fit?: "cover" | "contain";
+  /**
+   * Framed in the studio (ClipFrame): it shows as its frame, whole or filling
+   * per `fit`, just the part that was framed (ClipFrameBox); its poster is
+   * already that frame. `media` is the clip's own shape (w / h).
+   */
+  frame?: ClipFrame | null;
+  media?: number | null;
   /**
    * Where its speaker sits: "top" on a post's own screen in the feed (its words
    * and buttons are at the bottom); "corner" in the small card above a post's
@@ -217,12 +228,13 @@ export function InlineVideo({
     };
   }, [inRange, url]);
 
-  // its frame: whole (contain) or filled (cover, at its focus)
+  // its frame: whole (contain) or filled (cover, at its focus); framed in the studio, its own box is the whole clip
+  const framed = !!frame;
   useEffect(() => {
     if (!el) return;
-    el.style.objectFit = fit === "contain" ? "contain" : "cover";
-    el.style.objectPosition = position && fit === "cover" ? position : "";
-  }, [el, fit, position]);
+    el.style.objectFit = framed ? "cover" : fit === "contain" ? "contain" : "cover";
+    el.style.objectPosition = position && fit === "cover" && !framed ? position : "";
+  }, [el, fit, position, framed]);
 
   // within a screen of being seen (and the slide that's showing): load it all, so it plays at once
   useEffect(() => {
@@ -284,20 +296,44 @@ export function InlineVideo({
   const between = controls === "top" && fit === "contain";
   return (
     <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit}>
-      {/* on a post's screen a clip shown whole sits between Crew's bar and the tab bar; one that fills it runs up under Crew's bar */}
-      <div ref={host} className="absolute inset-0" style={between ? BETWEEN_BARS : undefined} />
-      {poster && (
-        <img
-          src={poster}
-          alt=""
-          draggable={false}
-          className={cn(
-            "pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200",
-            fit === "contain" ? "object-contain" : "object-cover",
-            playing ? "opacity-0" : "opacity-100",
+      {frame ? (
+        // framed in the studio: just that part, as its frame (its poster is that frame too)
+        <ClipFrameBox
+          frame={frame}
+          media={media}
+          fit={fit}
+          area={between ? BETWEEN_BARS : undefined}
+          poster={
+            poster && (
+              <img
+                src={poster}
+                alt=""
+                draggable={false}
+                className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", playing ? "opacity-0" : "opacity-100")}
+              />
+            )
+          }
+        >
+          {(style) => <div ref={host} style={style} data-clip-frame-host />}
+        </ClipFrameBox>
+      ) : (
+        <>
+          {/* on a post's screen a clip shown whole sits between Crew's bar and the tab bar; one that fills it runs up under Crew's bar */}
+          <div ref={host} className="absolute inset-0" style={between ? BETWEEN_BARS : undefined} />
+          {poster && (
+            <img
+              src={poster}
+              alt=""
+              draggable={false}
+              className={cn(
+                "pointer-events-none absolute inset-0 h-full w-full transition-opacity duration-200",
+                fit === "contain" ? "object-contain" : "object-cover",
+                playing ? "opacity-0" : "opacity-100",
+              )}
+              style={between ? POSTER_BETWEEN_BARS : position && fit === "cover" ? { objectPosition: position } : undefined}
+            />
           )}
-          style={between ? POSTER_BETWEEN_BARS : position && fit === "cover" ? { objectPosition: position } : undefined}
-        />
+        </>
       )}
       {!auto && !tapped && (
         <button
