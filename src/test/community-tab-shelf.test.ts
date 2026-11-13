@@ -62,7 +62,8 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     expect(shell).toContain('style={{ paddingBottom: "env(safe-area-inset-bottom)" }}');
     expect(shell).toContain('<div className={cn("mx-auto grid h-[var(--mobile-bar-h)] max-w-[560px]"');
     const css = read("src/styles.css");
-    expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px));");
+    // (less the iPhone home-screen app's short-layout gap, ios-bottom-gap.test.ts; 0 everywhere else)
+    expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: max(0px, calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));");
     // pages clear exactly the bar (the chats end at its top)
     expect(css).toContain("  :root { --bottom-nav-clearance: var(--mobile-bar-top); }");
     // no floating card: no side gutter, rounding, shadow, blur or fade under it

@@ -358,7 +358,25 @@ html[data-keyboard-open="true"] [data-hide-on-keyboard] {
    floating buttons (page "+" buttons, Back to Today) stack from it. */
 :root {
   --mobile-bar-h: 50px;
-  --mobile-bar-top: calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px));
+  --mobile-bar-top: max(0px, calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));
+}
+/* The iPhone home-screen app under the old transparent status bar sometimes lays
+   fixed things out a status bar short of the screen (ios-edge.ts,
+   watchIosBottomGap): what's pinned to the bottom goes back to the real bottom
+   (the tab bar, sheets, drawers, full-screen layers), and since the tab bar is
+   measured from that short edge, its room shrinks by as much, so pages, the
+   chats and Crew's posts still end right at it. Never while typing (the
+   keyboard has the bottom then). */
+:root { --ios-bottom-shift: 0px; }
+html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) { --ios-bottom-shift: var(--ios-bottom-gap, 0px); }
+html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) .fixed.bottom-0,
+html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) .fixed.inset-0,
+html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) .fixed.inset-y-0 {
+  bottom: calc(-1 * var(--ios-bottom-gap, 0px));
+}
+/* a full-screen layer that sets its own height (the studio, stories, clips) grows by the same */
+html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) .fixed.inset-0.h-\[100dvh\] {
+  height: calc(100dvh + var(--ios-bottom-gap, 0px));
 }
 html[data-keyboard-open="true"] {
   --bottom-nav-clearance: 0px;

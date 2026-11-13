@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useFeedPaging } from "@/lib/feed-paging";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
+import { watchIosBottomGap } from "@/lib/ios-edge";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
@@ -308,6 +309,8 @@ export function AppShell({
   ownTopBarOn?: readonly string[];
 }) {
   useKeyboardOpen();
+  // the iPhone home-screen app laying fixed things out a status bar short: back to the real bottom (ios-edge.ts)
+  useEffect(() => watchIosBottomGap(), []);
   useReportDemoReload();
   useExerciseLibraryRealtime();
   useExerciseAliasIndex();
