@@ -10,11 +10,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   GATEWAY_BASE,
   gatewayHeaders,
-  gcalListCalendars,
   gcalListEvents,
   workspaceCalendarConfigured,
 } from "@/lib/google-cal.server";
-import { GCAL_PT_SESSION_KEY, googleEventBlocksTime, isOrganizerCopy, type BusyItem } from "@/lib/session-conflicts";
+import { dropOwnGuestsFromSeries, eventHome, loadCoachCalendars, ownGuestDrop, type CoachCalendars } from "@/lib/gcal-own-guests.server";
+import { GCAL_PT_SESSION_KEY, googleEventBlocksTime, type BusyItem } from "@/lib/session-conflicts";
 import { DEFAULT_TZ } from "@/lib/schedule-time";
 
 type Admin = SupabaseClient<any, any, any>;
@@ -70,7 +70,8 @@ async function gapi(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, b
 
 function eventPath(calendarId: string, eventId?: string) {
   const base = `/calendars/${encodeURIComponent(calendarId)}/events`;
-  // sendUpdates=none: these events have no attendees, and the client is never emailed by Google.
+  // sendUpdates=none: the app never adds guests, and nobody is ever emailed by Google
+  // (an event the coach made in Google keeps its own guests and their invitations).
   return eventId ? `${base}/${encodeURIComponent(eventId)}?sendUpdates=none` : `${base}?sendUpdates=none`;
 }
 
@@ -144,28 +145,6 @@ async function makeCalendarResolver(admin: Admin) {
   return (coachId: string | null | undefined) => (coachId && byCoach.get(coachId)) || fallback;
 }
 
-/**
- * The calendar holding the event itself when `calendarId` only has an invitation
- * to it, and that calendar is one the coach can write to: an edit to an invitation
- * copy stays on that copy (Nicolas's sessions were imported from the coach's main
- * calendar, invited to events the JF Effect calendar organizes, so the app's
- * changes never reached the event everyone else sees). Null when this calendar is
- * the organizer, the event can't be read, or the organizer isn't the coach's.
- */
-async function organizerCalendarOf(
-  calendarId: string,
-  eventId: string,
-  writable: () => Promise<Set<string>>,
-): Promise<string | null> {
-  const r = await gapi("GET", eventPath(calendarId, eventId));
-  if (!r.ok) return null;
-  const org = r.data?.organizer;
-  if (!org?.email || isOrganizerCopy(r.data, calendarId)) return null;
-  if (!(await writable()).has(org.email)) return null;
-  const own = await gapi("GET", eventPath(org.email, eventId));
-  return own.ok ? (org.email as string) : null;
-}
-
 /** Google's "slow down" (403 rateLimitExceeded / 429): a wait, not a failure. */
 export function isRateLimit(e: unknown): boolean {
   return /rate ?limit|quota exceeded|too many requests/i.test(String((e as any)?.message ?? e));
@@ -189,6 +168,8 @@ export type GcalSyncResult = {
   updated: number;
   removed: number;
   failed: number;
+  /** Events that had the coach's own calendar as a guest (a second copy in their Google), taken off. */
+  guestsDropped?: number;
 };
 
 export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<GcalSyncResult> {
@@ -208,12 +189,12 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
       .select("id, full_name, assigned_coach_id")
       .in("id", clientIds);
     const clientById = new Map(((clients ?? []) as any[]).map((c) => [c.id, c]));
-    // The coach's calendars the app may write to, read once per run and only if needed.
-    let writableIds: Promise<Set<string>> | null = null;
-    const writable = () =>
-      (writableIds ??= gcalListCalendars()
-        .then((cals) => new Set(cals.filter((c) => c.accessRole === "owner" || c.accessRole === "writer").map((c) => c.id)))
-        .catch(() => new Set<string>()));
+    // The coach's calendars (which they can write to, which are their own), read once per run and only if needed.
+    let calendarsRead: Promise<CoachCalendars> | null = null;
+    const calendars = () =>
+      (calendarsRead ??= loadCoachCalendars(admin).catch(() => ({ writable: new Set<string>(), own: new Set<string>() })));
+    // Repeating events whose guest list held the coach's own calendar: the series is checked once, after the run.
+    const series = new Map<string, { calendarId: string; masterId: string }>();
 
     // A few at a time: fast enough for a bulk booking, gentle on the request time limit.
     // Google's per-minute write limit: once it says so, the rest of this run waits
@@ -235,14 +216,28 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
         if (action === "write") {
           let target: string = calendarId || resolveCalendar(client?.assigned_coach_id);
           const body = sessionEventBody(row, client?.full_name ?? null);
+          let patch: Record<string, unknown> = body;
           if (eventId) {
             // Write to the event itself, never an invitation copy of it: Google carries
             // the event's changes to every copy.
-            target = (await organizerCalendarOf(target, eventId, writable)) ?? target;
+            const cals = await calendars();
+            const home = await eventHome(target, eventId, cals.writable);
+            if (home) {
+              target = home.calendarId;
+              // The coach's own calendar as a guest is a second copy of the session in their
+              // Google (Nicolas's series): off the guest list in the same write. Clients stay.
+              const drop = await ownGuestDrop(admin, home, cals.own, { sessionId: row.id, sessionCalendar: row.google_calendar_id });
+              if (drop) {
+                patch = { ...body, attendees: drop.attendees };
+                const masterId = home.event.recurringEventId;
+                if (masterId) series.set(`${target}|${masterId}`, { calendarId: target, masterId });
+              }
+            }
           }
           calendarId = target;
           if (eventId) {
-            const r = await gapi("PATCH", eventPath(target, eventId), body);
+            const r = await gapi("PATCH", eventPath(target, eventId), patch);
+            if (r.ok && patch !== body) result.guestsDropped = (result.guestsDropped ?? 0) + 1;
             if (r.ok) result.updated++;
             else if (r.status === 404 || r.status === 410) {
               // Removed in Google: recreate (with a fresh Meet; the old one went with it).
@@ -269,7 +264,10 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
         } else if (action === "remove" && eventId) {
           // Off the calendar before it's over: a cancel or late cancel frees the slot. A session
           // banked or changed after it ended stays in Google as history (it's the coach's own record).
-          const r = await gapi("DELETE", eventPath(calendarId || resolveCalendar(client?.assigned_coach_id), eventId));
+          // The event itself goes (its invitations with it), never only an invitation copy of it.
+          const linked = calendarId || resolveCalendar(client?.assigned_coach_id);
+          const home = await eventHome(linked, eventId, (await calendars()).writable);
+          const r = await gapi("DELETE", eventPath(home?.calendarId ?? linked, eventId));
           if (!r.ok && r.status !== 404 && r.status !== 410) {
             throw new Error(r.data?.error?.message || `Google delete failed (${r.status})`);
           }
@@ -327,14 +325,31 @@ export async function syncPtSessionsToGoogle(admin: Admin, limit = 12): Promise<
           .eq("id", row.id);
       }
     });
+
+    // A repeating event the coach made in Google with themselves as a guest: take them off the
+    // series too, so its other repeats stop showing twice. Only when every copy on their own
+    // calendar says what the event says (gcal-own-guests.server.ts); never fails the sync.
+    for (const { calendarId, masterId } of series.values()) {
+      if (rateLimited) break;
+      try {
+        await dropOwnGuestsFromSeries(admin, calendarId, masterId, (await calendars()).own, { apply: true, instances: false });
+      } catch {
+        // The next write of one of its sessions tries again.
+      }
+    }
   }
 
   // Sessions deleted from the app.
   const { data: deletes } = await (admin as any).rpc("pt_gcal_pop_deletes", { _limit: limit });
   if (deletes?.length) {
     const resolveCalendar = await makeCalendarResolver(admin);
+    let writableIds: Promise<Set<string>> | null = null;
+    const writable = () =>
+      (writableIds ??= loadCoachCalendars(admin).then((c) => c.writable).catch(() => new Set<string>()));
     for (const d of deletes as any[]) {
-      const r = await gapi("DELETE", eventPath(d.google_calendar_id || resolveCalendar(null), d.google_event_id));
+      const linked = d.google_calendar_id || resolveCalendar(null);
+      const home = await eventHome(linked, d.google_event_id, await writable());
+      const r = await gapi("DELETE", eventPath(home?.calendarId ?? linked, d.google_event_id));
       if (r.ok || r.status === 404 || r.status === 410) {
         result.removed++;
       } else {
