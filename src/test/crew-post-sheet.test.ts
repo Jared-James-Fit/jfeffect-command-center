@@ -73,6 +73,21 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
     expect(card).toContain('(sheetOpen || under) && "pointer-events-none opacity-0"');
   });
 
+  it("above the sheet it's a rounded card at its own shape (Instagram's), the same elements so a clip keeps playing", () => {
+    const card = read("src/components/community/post-card.tsx");
+    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} />");
+    expect(card).toContain("<FitBox ratio={ratio} screen shrunk={shrunk}>");
+    expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
+    // only the boxes change: the screen until the sheet opens, then the post's own shape with room around it
+    expect(card).toContain('style={whole ? { width: "100cqw", height: "100cqh" } : { width: `min(100cqw, calc(100cqh * ${ratio}))`, height: `min(100cqh, calc(100cqw / ${ratio}))` }}');
+    expect(card).toContain('shrunk && "overflow-hidden rounded-xl [isolation:isolate] [transform:translateZ(0)]"');
+    // nothing across it: the speaker in its corner, no set caption
+    expect(card).toContain('controls={shrunk ? "corner" : page ? "top" : "bottom"}');
+    expect(card).toContain("{slide.caption && !shrunk && <SlideCaption");
+    const video = read("src/components/community/inline-video.tsx");
+    expect(video).toContain('const askTap = sound && blocked && controls !== "corner";');
+  });
+
   it("the paged feed opens it from … more and 💬; the coach's card feed keeps its comments sheet", () => {
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("onOpenComments={openCommentsSheet}\n                  onOpenCaption={openCaptionSheet}\n                  sheetOpen={sheet?.post.id === p.id}");

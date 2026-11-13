@@ -187,7 +187,7 @@ describe("feed clips play with their sound", () => {
 
   it("while the phone holds a clip's sound back, its speaker says Tap for sound", () => {
     const inline = read("src/components/community/inline-video.tsx");
-    expect(inline).toContain("const askTap = sound && blocked;");
+    expect(inline).toContain('const askTap = sound && blocked && controls !== "corner";');
     expect(inline).toContain("{askTap && <span>Tap for sound</span>}");
     expect(inline).toContain('data-sound-held={askTap ? "" : undefined}');
   });

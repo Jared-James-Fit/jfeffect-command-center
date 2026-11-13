@@ -567,16 +567,18 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           {visual ? (
             auto ? (
               // an automated post's 4:5 card: the full width, black above and below, centred between the bars
-              <FitBox ratio={0.8} page>
+              // (its sheet open: a rounded card above it, Instagram's)
+              <FitBox ratio={0.8} page shrunk={sheetOpen}>
                 <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
               </FitBox>
             ) : (
-              // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page
-              <PostMedia post={post} thumbUrl={thumbUrl} page />
+              // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page;
+              // its sheet open, a rounded card at its own shape above it (Instagram's)
+              <PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} />
             )
           ) : (
             // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
-            <div className="absolute inset-0 overflow-y-auto pl-3 pr-16" style={PAGE_BODY_ROOM} data-page-body>
+            <div className="absolute inset-0 overflow-y-auto pl-3 pr-16" style={sheetOpen ? PAGE_BODY_SHRUNK : PAGE_BODY_ROOM} data-page-body>
               <div className="flex min-h-full flex-col justify-center gap-3">
                 {isNote ? (
                   <>
@@ -1044,6 +1046,7 @@ export function PostMedia({
   trail,
   ratio: fixed,
   page = false,
+  shrunk = false,
 }: {
   post: CommunityPost;
   thumbUrl: string | null;
@@ -1057,6 +1060,13 @@ export function PostMedia({
    * (screenFit), centred; captions and the speaker up top.
    */
   page?: boolean;
+  /**
+   * On its screen with its sheet open: a rounded card at its own shape,
+   * centred in the room above the sheet (Instagram's), the speaker in its
+   * corner and no set caption over it. The same elements as the screen, so a
+   * playing clip carries on.
+   */
+  shrunk?: boolean;
 }) {
   const slides = postSlides(post);
   const cover = slides[0] ?? null;
@@ -1075,11 +1085,16 @@ export function PostMedia({
   const frame: CSSProperties = clipCover && !page ? { aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT } : { aspectRatio: String(ratio) };
   if (page) {
     const fits = slides.map((sl) => screenFit(sl, screenRatio));
-    if (slides.length > 1) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} page screenRef={screenRef} fits={fits} />;
     return (
-      <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
-        {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} /> : <div className="h-full w-full animate-pulse bg-muted" />}
-      </div>
+      <FitBox ratio={ratio} screen shrunk={shrunk}>
+        {slides.length > 1 ? (
+          <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} page screenRef={screenRef} fits={fits} shrunk={shrunk} />
+        ) : (
+          <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
+            {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} shrunk={shrunk} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          </div>
+        )}
+      </FitBox>
     );
   }
   if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} />;
@@ -1110,6 +1125,8 @@ function belowBar(el: HTMLElement): number {
 
 /** Words, a workout or a lock in on its screen: clear of Crew's bar above and the words and tab bar below. */
 const PAGE_BODY_ROOM = { paddingTop: "calc(var(--feed-bar-room) + 1.5rem)", paddingBottom: "calc(var(--feed-words-bottom) + 8rem)" } as const;
+/** Its sheet open, the words and buttons are gone: the room above the sheet is all its own. */
+const PAGE_BODY_SHRUNK = { paddingTop: "1rem", paddingBottom: "1rem" } as const;
 
 /** On a post's screen (which ends at the tab bar), a picture shown whole sits under Crew's bar, between the bars. */
 const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;
@@ -1139,11 +1156,28 @@ function useBoxRatio(active: boolean): [(el: HTMLDivElement | null) => void, num
  * A picture's frame as big as its box allows at its own shape (`ratio`,
  * width / height), centred: the full width for anything wider than the box,
  * the full height for anything taller (a 9:16 clip on a phone).
+ * `screen`: the whole box instead (a post's own screen, the media deciding
+ * how it sits, screenFit) until `shrunk`.
+ * `shrunk` (its post's sheet open): a rounded card at its own shape with room
+ * around it, centred above the sheet (Instagram's). Only the boxes change,
+ * never what's in them, so a clip playing on the screen keeps playing in the
+ * card, and the card follows the room as the sheet slides up.
  */
-function FitBox({ ratio, children, page = false }: { ratio: number; children: ReactNode; page?: boolean }) {
+function FitBox({ ratio, children, page = false, screen = false, shrunk = false }: { ratio: number; children: ReactNode; page?: boolean; screen?: boolean; shrunk?: boolean }) {
+  const whole = screen && !shrunk;
   return (
-    <div className="absolute inset-0 grid place-items-center" style={page ? { ...BETWEEN_BARS, containerType: "size" } : { containerType: "size" }} data-fit-box>
-      <div className="relative" style={{ width: `min(100cqw, calc(100cqh * ${ratio}))`, aspectRatio: String(ratio) }}>
+    <div
+      className={cn("absolute inset-0 grid place-items-center transition-[padding] duration-300 ease-out motion-reduce:transition-none", shrunk && "p-3")}
+      style={page && !screen ? { ...BETWEEN_BARS, containerType: "size" } : { containerType: "size" }}
+      data-fit-box
+      data-shrunk={shrunk ? "" : undefined}
+    >
+      <div
+        // isolate + its own layer: an iPhone clips a playing clip to the rounded corners
+        className={cn("relative transition-[border-radius] duration-300 ease-out motion-reduce:transition-none", shrunk && "overflow-hidden rounded-xl [isolation:isolate] [transform:translateZ(0)]")}
+        style={whole ? { width: "100cqw", height: "100cqh" } : { width: `min(100cqw, calc(100cqh * ${ratio}))`, height: `min(100cqh, calc(100cqw / ${ratio}))` }}
+        data-post-shape={shrunk ? "card" : undefined}
+      >
         {children}
       </div>
     </div>
@@ -1165,6 +1199,7 @@ function SlideMedia({
   withDots = false,
   page = false,
   fit = "contain",
+  shrunk = false,
 }: {
   slide: PostSlide;
   thumbUrl: string | null;
@@ -1174,6 +1209,8 @@ function SlideMedia({
   page?: boolean;
   /** On a post's screen: fill it ("cover") or show it whole, centred ("contain"), screenFit. A frame at the picture's own shape is "contain" either way. */
   fit?: "cover" | "contain";
+  /** Its post's sheet open: a small card, the speaker in its corner and no set caption over it. */
+  shrunk?: boolean;
 }) {
   const isVideo = slide.type === "video";
   const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
@@ -1185,7 +1222,7 @@ function SlideMedia({
       {isVideo ? (
         <div data-pinch-zoom className="absolute inset-0">
           {/* whole in its frame; on a post's screen it fills it when it's nearly the screen's shape (TikTok's) */}
-          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={page ? "top" : "bottom"} />
+          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={shrunk ? "corner" : page ? "top" : "bottom"} />
         </div>
       ) : (
         // on a post's screen a photo shows whole, between Crew's bar and the tab bar
@@ -1193,7 +1230,7 @@ function SlideMedia({
           {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
         </div>
       )}
-      {slide.caption && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}
+      {slide.caption && !shrunk && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}
     </>
   );
 }
@@ -1270,6 +1307,7 @@ function PostCarousel({
   page = false,
   screenRef,
   fits,
+  shrunk = false,
 }: {
   slides: PostSlide[];
   coverUrl: string | null;
@@ -1281,6 +1319,8 @@ function PostCarousel({
   page?: boolean;
   screenRef?: (el: HTMLDivElement | null) => void;
   fits?: ("cover" | "contain")[];
+  /** Its post's sheet open: a small card ("2/4" in its corner). */
+  shrunk?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
@@ -1327,7 +1367,7 @@ function PostCarousel({
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
             <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
-              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots={!page} page={page} fit={fits?.[j]} /> : <div className={cn("h-full w-full", page ? "bg-black" : "bg-muted")} />}
+              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots={!page} page={page} fit={fits?.[j]} shrunk={shrunk} /> : <div className={cn("h-full w-full", page ? "bg-black" : "bg-muted")} />}
             </div>
           );
         })}

@@ -121,8 +121,12 @@ export function InlineVideo({
   active?: boolean;
   position?: string;
   fit?: "cover" | "contain";
-  /** Where its speaker sits: "top" on a post's own screen in the feed (its words and buttons are at the bottom). */
-  controls?: "top" | "bottom";
+  /**
+   * Where its speaker sits: "top" on a post's own screen in the feed (its words
+   * and buttons are at the bottom); "corner" in the small card above a post's
+   * sheet (Instagram's: bottom right, the icon alone).
+   */
+  controls?: "top" | "bottom" | "corner";
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const host = useRef<HTMLDivElement | null>(null);
@@ -253,7 +257,7 @@ export function InlineVideo({
 
   const soundOn = sound && !blocked;
   // the phone is holding its sound back until a tap: say so, plainly (TikTok's "Tap for sound")
-  const askTap = sound && blocked;
+  const askTap = sound && blocked && controls !== "corner";
   // on a post's screen (controls up top), shown whole: between the bars
   const between = controls === "top" && fit === "contain";
   return (

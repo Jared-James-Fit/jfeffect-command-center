@@ -91,7 +91,7 @@ describe("a clip in the feed shows whole, at its own shape", () => {
     );
     expect(card).toContain("{ aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT }");
     expect(card).toContain(
-      '<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={page ? "top" : "bottom"} />',
+      '<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={shrunk ? "corner" : page ? "top" : "bottom"} />',
     );
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('fit === "contain" ? "object-contain" : "object-cover"');
