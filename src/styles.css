@@ -381,18 +381,24 @@ html[data-keyboard-open="true"] {
    --pov-banner-h), so the bars sit right under it with no notch padding of
    their own: one bar under the banner, as the client sees it, no gap. */
 :root { --app-safe-top: env(safe-area-inset-top, 0px); --app-chrome-top: 0px; }
-/* The iPhone home-screen app (ios-edge.ts): iOS blurs ~40pt under the notch over any
-   web content, fixed bars included, so the bars (and Focus) start below it there. Before
-   the View as client rule, which still wins (the banner holds the notch then). */
+/* The iPhone home-screen app (ios-edge.ts): its status bar is solid, so the page starts
+   right under the clock (env(safe-area-inset-top) is 0) and nothing moves. An app added
+   before that still draws under a transparent status bar, where iOS blurs ~40pt under the
+   notch over any web content, fixed bars included, so there (and only there: the inset is
+   more than 0) the bars (and Focus) start below the blur. Before the View as client rule,
+   which still wins (the banner holds the notch then). */
 :root { --ios-edge-room: 0px; --app-edge-room: 0px; }
 html[data-ios-web-app] {
-  --ios-edge-room: 28px;
+  --ios-edge-room: min(28px, calc(env(safe-area-inset-top, 0px) * 100));
   /* the part of --app-safe-top that's iOS's blur, not the notch (0 wherever it isn't added) */
   --app-edge-room: var(--ios-edge-room);
   --app-safe-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
   --focus-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
 }
 html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); --app-edge-room: 0px; }
+/* with a solid status bar iOS's 100vh counts the status bar too (WebKit 316008): the shell
+   fills the window's measured height instead, so a page that fits never scrolls (ios-edge.ts) */
+html[data-ios-web-app] [data-shell-root] { min-height: var(--app-vh, 100vh); }
 
 :root { --shell-topbar-h: 0px; }
 @media (max-width: 768px) {

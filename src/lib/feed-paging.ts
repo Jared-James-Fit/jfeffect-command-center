@@ -7,12 +7,33 @@ import { useSyncExternalStore } from "react";
  */
 let on = false;
 const subs = new Set<() => void>();
+/** The bar above the page while the feed is up: black, like the feed (the colour before it comes back after). */
+const FEED_THEME_COLOR = "#000000";
+let themeColorBefore: string | null = null;
 
 export function setFeedPaging(next: boolean) {
   if (typeof document !== "undefined") document.documentElement.classList.toggle("feed-paging", next);
   if (on === next) return;
   on = next;
+  paintThemeColor(next);
   subs.forEach((f) => f());
+}
+
+/** The iPhone home-screen app's solid status bar (and Android's) is black over the feed, the page's own colour elsewhere. */
+function paintThemeColor(feed: boolean) {
+  if (typeof document === "undefined") return;
+  const metas = Array.from(document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]'));
+  if (feed) {
+    themeColorBefore = metas[0]?.getAttribute("content") ?? null;
+    metas.forEach((m) => m.setAttribute("content", FEED_THEME_COLOR));
+  } else if (themeColorBefore) {
+    const before = themeColorBefore;
+    themeColorBefore = null;
+    metas.forEach((m) => {
+      // a theme switched while the feed was up has already written its own colour
+      if (m.getAttribute("content") === FEED_THEME_COLOR) m.setAttribute("content", before);
+    });
+  }
 }
 
 export function useFeedPaging(): boolean {
