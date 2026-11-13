@@ -66,7 +66,7 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
   it("the post shrinks into the space above the sheet and its words and buttons step aside", () => {
     expect(POST_SHEET_HEIGHT).toBe("62svh");
     const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain('style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}');
+    expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");
     // up to Crew's bar: under it once the post is up, over the stories on the first screen
     expect(card).toContain("setRaise(belowBar(a));");
     expect(card).toContain('document.querySelector("[data-crew-bar]")');

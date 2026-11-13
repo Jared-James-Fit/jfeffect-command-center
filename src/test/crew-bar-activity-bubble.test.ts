@@ -124,7 +124,7 @@ describe("Crew's one bar", () => {
     expect(banner).toContain('root.setAttribute("data-pov-banner-on", "");');
     const css = read("src/styles.css");
     expect(css).toContain(":root { --app-safe-top: env(safe-area-inset-top, 0px); --app-chrome-top: 0px; }");
-    expect(css).toContain("html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); }");
+    expect(css).toContain("html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); --app-edge-room: 0px; }");
     // sliding away reading down clears the banner too
     expect(css).toContain(".crew-bar[data-hidden] { transform: translateY(calc(-100% - var(--app-chrome-top))); }");
     // every other page's shell bar: no second notch under the banner

@@ -54,11 +54,24 @@ export function useFeedPaging(): boolean {
  * one showing under it). Read again only when the width changes (a rotation):
  * a browser toolbar or the keyboard changing the height must never resize
  * the screens under the finger.
+ *
+ * And how far the real screen runs past it (`--feed-gap`): on the iPhone
+ * home-screen app (iOS 26) the window reports itself the notch's height
+ * (59pt) shorter than the screen while the tab bar sits at the screen's real
+ * bottom, so a post sized from the window stopped 59pt above the tab bar with
+ * black under it. The screen is what a fixed box from top to bottom measures
+ * (the tab bar is one), and a post's bottom, words and buttons move down by
+ * the difference; the pages themselves keep the window's height, so each
+ * swipe still lands exactly on the next post.
  */
 export function watchFeedViewport(): () => void {
   const root = document.documentElement;
   let width = window.innerWidth;
-  const set = () => root.style.setProperty("--feed-vh", `${Math.round(window.innerHeight)}px`);
+  const set = () => {
+    const vh = Math.round(window.innerHeight);
+    root.style.setProperty("--feed-vh", `${vh}px`);
+    root.style.setProperty("--feed-gap", `${feedGap(fixedScreenHeight(), vh)}px`);
+  };
   set();
   const onResize = () => {
     if (window.innerWidth === width) return;
@@ -69,7 +82,27 @@ export function watchFeedViewport(): () => void {
   return () => {
     window.removeEventListener("resize", onResize);
     root.style.removeProperty("--feed-vh");
+    root.style.removeProperty("--feed-gap");
   };
+}
+
+/** The most the screen is believed to run past the window (anything more is a bad reading, ignored). */
+export const FEED_GAP_MAX = 120;
+
+/** How far the screen (`screenH`, where fixed bars sit) runs past the window (`windowH`): 0 unless it really does. */
+export function feedGap(screenH: number, windowH: number): number {
+  const gap = Math.round(screenH - windowH);
+  return gap > 0 && gap <= FEED_GAP_MAX ? gap : 0;
+}
+
+/** The height of a fixed box from the top to the bottom: where the tab bar and Crew's bar really sit. */
+function fixedScreenHeight(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none";
+  document.body.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h;
 }
 
 /** How far the stories have folded away: 0 at the very top, 1 once the first post is up whole. */
