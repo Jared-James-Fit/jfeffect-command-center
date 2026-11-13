@@ -24,9 +24,10 @@ export function setFeedSound(on: boolean) {
   feedSoundMode = next;
   soundListeners.forEach((l) => l());
 }
-/** A tap on a clip where there's no full-screen viewer: sound off if it was on, on if it was off. */
-export function toggleFeedSound() {
+/** A tap on a clip (Instagram's): sound off if it was on, on if it was off. Returns whether it's on now. */
+export function toggleFeedSound(): boolean {
   setFeedSound(feedSoundMode === "off");
+  return feedSoundMode !== "off";
 }
 // a tap anywhere gives a clip the phone held quiet its sound, unless the speaker is off
 setSoundWanted(() => feedSoundMode !== "off");
@@ -73,8 +74,11 @@ function useFeedHeld(): boolean {
   );
 }
 
-/** Dispatched on a clip's box (`[data-inline-video]`): pause it, or play it again. */
-export const CLIP_TOGGLE_EVENT = "jf-clip-toggle";
+/**
+ * Dispatched on a clip's box (`[data-inline-video]`) as a CustomEvent<boolean>:
+ * a finger held on it pauses it (true) until it lets go (false), Instagram's.
+ */
+export const CLIP_HOLD_EVENT = "jf-clip-hold";
 
 /** Autoplay is off for people who asked for less motion or less data: they tap to play. */
 export function autoplayAllowed(): boolean {
@@ -104,8 +108,10 @@ const POSTER_BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", height: "calc(10
  * `fit`: "contain" shows the whole clip at its own shape (the feed), "cover"
  * fills the frame, cropped to `position` (CSS object-position, from its
  * focus). The speaker button never opens anything; a tap on the clip itself
- * is the post card's (it opens the full-screen clips, or toggles the sound
- * where there are none, after the double-tap window so ❤️ still works).
+ * is the post card's (on a post's screen it turns the sound on or off,
+ * Instagram's, so there's no speaker there; on the coach's feed of cards it
+ * opens the full-screen clips; always after the double-tap window so ❤️
+ * still works), and a finger held on it pauses it (CLIP_HOLD_EVENT).
  * `data-slide-path` says which clip.
  */
 export function InlineVideo({
@@ -139,8 +145,8 @@ export function InlineVideo({
   const [failed, setFailed] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  // a tap on it paused it (on a post's own screen); scrolled away and back, it plays again
-  const [userPaused, setUserPaused] = useState(false);
+  // a finger held on it (on a post's own screen): paused until it lets go
+  const [holdPaused, setHoldPaused] = useState(false);
   const [el, setEl] = useState<HTMLVideoElement | null>(null);
   const [auto] = useState(autoplayAllowed);
   const mode = useFeedSoundMode();
@@ -224,19 +230,21 @@ export function InlineVideo({
     else el.setAttribute("data-ambient-audio", "");
   }, [el, mode]);
 
-  // the post card asks for a pause / play with an event on this box (its tap is the card's: a double tap likes)
+  // the post card holds it with an event on this box (its taps are the card's: one is the sound, two ❤️)
   useEffect(() => {
     const box = wrap.current;
     if (!box) return;
-    const toggle = () => setUserPaused((p) => !p);
-    box.addEventListener(CLIP_TOGGLE_EVENT, toggle);
-    return () => box.removeEventListener(CLIP_TOGGLE_EVENT, toggle);
+    const hold = (e: Event) => setHoldPaused((e as CustomEvent<boolean>).detail === true);
+    box.addEventListener(CLIP_HOLD_EVENT, hold);
+    return () => box.removeEventListener(CLIP_HOLD_EVENT, hold);
   }, []);
   useEffect(() => {
-    if (!visible || !active) setUserPaused(false);
+    if (!visible || !active) setHoldPaused(false);
   }, [visible, active]);
 
-  const shouldPlay = active && visible && !held && !userPaused && !!el && (auto || tapped) && !failed;
+  const shouldPlay = active && visible && !held && !holdPaused && !!el && (auto || tapped) && !failed;
+  const playingWanted = useRef(shouldPlay);
+  playingWanted.current = shouldPlay;
   useEffect(() => {
     if (!el) return;
     if (!shouldPlay) {
@@ -253,6 +261,13 @@ export function InlineVideo({
     if (!el || soundBlocked(el)) return;
     if (sound && mode === "auto") preferAmbientAudio();
     el.muted = !sound;
+    if (!sound) return;
+    // turned on by a tap a moment ago (after the double-tap window): should the phone stop a clip
+    // it won't let make sound yet, it plays again muted with "Tap for sound" (playFeedVideo)
+    const t = window.setTimeout(() => {
+      if (el.paused && playingWanted.current) playFeedVideo(el, true);
+    }, 0);
+    return () => window.clearTimeout(t);
   }, [el, sound, mode]);
 
   const soundOn = sound && !blocked;
@@ -292,14 +307,8 @@ export function InlineVideo({
           </span>
         </button>
       )}
-      {userPaused && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden data-clip-paused>
-          <span className="grid h-16 w-16 place-items-center rounded-full bg-black/45 text-white">
-            <Play className="ml-1 h-8 w-8 fill-current" />
-          </span>
-        </div>
-      )}
-      {(auto || tapped) && !failed && (
+      {/* on a post's screen the clip itself is the speaker (a tap, Instagram's): only "Tap for sound" shows there */}
+      {(auto || tapped) && !failed && (controls !== "top" || askTap) && (
         <button
           type="button"
           onClick={(e) => {

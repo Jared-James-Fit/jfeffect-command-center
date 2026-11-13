@@ -153,7 +153,7 @@ describe("full-screen clips, one per swipe", () => {
     expect(pool).toContain("reels = Array.from({ length: REEL_SLOTS }, () => {");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain(
-      "const shouldPlay = active && visible && !held && !userPaused && !!el && (auto || tapped) && !failed;",
+      "const shouldPlay = active && visible && !held && !holdPaused && !!el && (auto || tapped) && !failed;",
     );
     const screen = read("src/components/community/community-screen.tsx");
     expect(screen).toContain("<ReelsViewer start={reel} posts={feedPosts}");

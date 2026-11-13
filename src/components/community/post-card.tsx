@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
-import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
-import { CLIP_TOGGLE_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
+import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy, Volume2, VolumeX } from "lucide-react";
+import { CLIP_HOLD_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
 import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
@@ -424,6 +424,21 @@ type Props = {
   pageFirst?: boolean;
 };
 
+/** A finger held this long on a clip pauses it (Instagram's); one that moves further than HOLD_SLOP_PX first is a swipe. */
+export const HOLD_TO_PAUSE_MS = 250;
+const HOLD_SLOP_PX = 10;
+
+/** The sound, on or off, said in the middle of the clip for a moment after a tap (Instagram's). */
+function SoundFlash({ on, onDone }: { on: boolean; onDone: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[2] grid place-items-center" aria-hidden data-sound-flash={on ? "on" : "off"}>
+      <span className="jf-sound-flash grid h-16 w-16 place-items-center rounded-full bg-black/55 text-white" onAnimationEnd={onDone}>
+        {on ? <Volume2 className="h-8 w-8" /> : <VolumeX className="h-8 w-8" />}
+      </span>
+    </div>
+  );
+}
+
 function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
@@ -460,6 +475,43 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     setRaise(belowBar(a));
   }, [layout, sheetOpen]);
   const singleTimer = useRef<number | null>(null);
+  // on its own screen (Instagram's Reels): a tap on a clip turns the sound on or off and says so in the
+  // middle of it, a finger held on it pauses it with the words and buttons out of the way
+  const [soundFlash, setSoundFlash] = useState<{ on: boolean; n: number } | null>(null);
+  const flashSound = (on: boolean) => setSoundFlash((f) => ({ on, n: (f?.n ?? 0) + 1 }));
+  const [holding, setHolding] = useState(false);
+  const hold = useRef<{ timer: number; x: number; y: number; clip: Element; on: boolean } | null>(null);
+  const holdEndedAt = useRef(0);
+  const endHold = () => {
+    const h = hold.current;
+    if (!h) return;
+    hold.current = null;
+    window.clearTimeout(h.timer);
+    if (!h.on) return;
+    h.clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: false }));
+    setHolding(false);
+    holdEndedAt.current = Date.now();
+  };
+  const onHeroPointerDown = (e: React.PointerEvent) => {
+    if (layout !== "page" || sheetOpen || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const t = e.target as Element | null;
+    const clip = t?.closest?.("[data-inline-video]");
+    if (!clip || t?.closest?.("button")) return;
+    endHold();
+    const h = { timer: 0, x: e.clientX, y: e.clientY, clip, on: false };
+    h.timer = window.setTimeout(() => {
+      if (hold.current !== h) return;
+      h.on = true;
+      clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: true }));
+      setHolding(true);
+    }, HOLD_TO_PAUSE_MS);
+    hold.current = h;
+  };
+  const onHeroPointerMove = (e: React.PointerEvent) => {
+    const h = hold.current;
+    // a finger that moves is a swipe, never a hold
+    if (h && !h.on && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP_PX) endHold();
+  };
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
   const stats = s ? workoutStats(s, unit) : [];
@@ -476,11 +528,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
   // Instagram's taps: a tap on a picture does nothing (a post never opens from
   // its picture: "View full workout" and the comments are buttons of their own),
-  // a tap on a clip opens the clips full screen (Reels'; where there's no
-  // full-screen viewer it turns the sound on or off), and two quick taps give ❤️.
-  // Already reacted? It stays as it is (a double-tap never takes one back).
+  // a tap on a clip turns its sound on or off on a post's own screen (Reels';
+  // a finger held on it pauses it), opens the clips full screen on the coach's
+  // feed of cards (where there's no viewer it's the sound again), and two quick
+  // taps give ❤️. Already reacted? It stays as it is (a double-tap never takes one back).
   const onHeroTap = (e: React.MouseEvent) => {
     const now = Date.now();
+    // letting go of a held clip (it was paused): that's not a tap
+    if (now - holdEndedAt.current < 400) return;
     if (now - lastTap.current < 300) {
       if (singleTimer.current) window.clearTimeout(singleTimer.current);
       singleTimer.current = null;
@@ -506,15 +561,18 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
     const path = clip.getAttribute("data-slide-path");
-    // the tap that gave a clip the phone held quiet its sound is for the sound: it doesn't pause or mute it
+    // the tap that gave a clip the phone held quiet its sound is for the sound: it doesn't mute it again
     // (opening the full-screen clips still goes ahead: they play with sound too)
     const forSound = justGaveSound();
-    // on its own screen a clip is already full size: a tap pauses it (TikTok's)
+    // on its own screen a clip is already full size: a tap is its sound, on or off, said in the middle (Instagram's)
     if (layout === "page") {
-      if (forSound) return;
+      if (forSound) {
+        flashSound(true);
+        return;
+      }
       singleTimer.current = window.setTimeout(() => {
         singleTimer.current = null;
-        clip.dispatchEvent(new Event(CLIP_TOGGLE_EVENT));
+        flashSound(toggleFeedSound());
       }, 300);
       return;
     }
@@ -534,6 +592,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
   };
   useEffect(() => () => {
     if (singleTimer.current) window.clearTimeout(singleTimer.current);
+    if (hold.current) window.clearTimeout(hold.current.timer);
   }, []);
   const photo = isPhotoPost(post);
 
@@ -552,11 +611,20 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           pageFirst && "rounded-t-[18px]",
         )}
       >
-        {/* the post itself; taps never open it (double tap ❤️, a clip's tap pauses it). Its sheet open: it shrinks into the space above it, still playing */}
+        {/* the post itself; taps never open it (a clip: one tap its sound, a hold pauses it; two taps ❤️). Its sheet open: it shrinks into the space above it, still playing */}
         <div
           onClick={onHeroTap}
+          onPointerDown={onHeroPointerDown}
+          onPointerMove={onHeroPointerMove}
+          onPointerUp={endHold}
+          onPointerCancel={endHold}
+          onPointerLeave={endHold}
+          onContextMenu={(e) => {
+            // a long press on a clip is a pause, never the phone's menu
+            if (hold.current || holding) e.preventDefault();
+          }}
           className={cn(
-            "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out motion-reduce:transition-none",
+            "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out [-webkit-touch-callout:none] motion-reduce:transition-none",
             sheetOpen && (visual ? "bg-black" : "bg-background"),
           )}
           // the whole screen down to the tab bar, Crew's bar floating over its top (TikTok's); its sheet open, down to the sheet
@@ -604,6 +672,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             </div>
           )}
           <ReactionBurst n={burst} emoji={reactionEmoji(post.my_reaction) ?? REACTION.emoji} />
+          {soundFlash && <SoundFlash key={soundFlash.n} on={soundFlash.on} onDone={() => setSoundFlash(null)} />}
         </div>
         {note.sheet}
 
@@ -613,12 +682,12 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           className={cn(
             "pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200",
             visual && "bg-gradient-to-t from-black/75 via-black/35 to-transparent",
-            (sheetOpen || under) && "opacity-0",
+            (sheetOpen || under || holding) && "opacity-0",
           )}
           style={{ paddingBottom: "var(--feed-words-bottom)" }}
           data-page-words
         >
-          <div className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && "pointer-events-auto")}>
+          <div className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && !holding && "pointer-events-auto")}>
             {note.bubble && <div data-note-over>{note.bubble}</div>}
             <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
             <AuthorLine
@@ -672,7 +741,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           className={cn(
             "absolute right-1 z-[3] flex flex-col items-center gap-1 transition-opacity duration-200",
             visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]",
-            (sheetOpen || under) && "pointer-events-none opacity-0",
+            (sheetOpen || under || holding) && "pointer-events-none opacity-0",
           )}
           style={{ bottom: "var(--feed-actions-bottom)" }}
           data-page-actions
