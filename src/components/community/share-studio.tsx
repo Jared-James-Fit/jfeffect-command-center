@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNoAutoZoom } from "@/hooks/use-no-auto-zoom";
-import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, X } from "lucide-react";
+import { Camera, Check, ChevronLeft, Download, EyeOff, Film, Images, Lock, PenLine, RectangleHorizontal, RectangleVertical, RefreshCcw, Scissors, Send, Smartphone, Smile, Square, Star, Timer, Type, User, Users, Volume2, VolumeX, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -43,6 +43,7 @@ import { drawableSize, framedCanvas, lightCopy, type Drawable } from "@/lib/phot
 import { PhotoFramer } from "@/components/community/photo-framer";
 import { CoverPicker } from "@/components/community/cover-picker";
 import { TrimmedVideo } from "@/components/video-trimmer";
+import { useSoundFlash } from "@/components/community/clip-gestures";
 import { preloadMediaTools } from "@/lib/community-media";
 import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
 
@@ -228,6 +229,9 @@ export function ShareStudio({
   // a finger is on it: the card repaints at preview quality until it lifts
   const [framingLive, setFramingLive] = useState(false);
   const [shapeFlash, setShapeFlash] = useState(0);
+  // the clip on the stage plays with its sound once the speaker turned it on (a tap: the phone allows it)
+  const [hear, setHear] = useState(false);
+  const [soundFlash, flashSound] = useSoundFlash();
   // Edit cover (a clip on a post)
   const [coverFor, setCoverFor] = useState<string | null>(null);
   // Shooting another slide for the carousel (plain camera, no card on it).
@@ -1171,7 +1175,7 @@ export function ShareStudio({
             )}
             {/* a story's clip: the whole picture, as the story viewer shows it (a lift is never cropped off) */}
             {story && clip0?.video ? (
-              <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
+              <TrimmedVideo key={clip0.video} src={clip0.video} trim={clip0.trim} poster={clip0.preview ?? undefined} sound={hear && !clip0.muted} className="absolute inset-0 h-full w-full bg-black object-contain" data-studio-clip />
             ) : (
               !story && !selItem && clip0?.preview && <img src={clip0.preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
             )}
@@ -1204,7 +1208,7 @@ export function ShareStudio({
               <PhotoFramer
                 key={selItem.id}
                 src={selItem.kind === "image" ? selItem.preview : null}
-                video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined } : null}
+                video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined, sound: hear && !selItem.muted } : null}
                 size={{ w: selItem.w ?? 4, h: selItem.h ?? 5 }}
                 frame={box}
                 framing={selItem.framing ?? CENTRED}
@@ -1278,17 +1282,46 @@ export function ShareStudio({
                 )}
               </div>
             )}
-            {/* a clip: one tap to change which part goes */}
+            {/* a clip: its sound on or off (one tap, said in the middle), and one tap to change which part goes */}
             {trimClip && (
-              <button
-                type="button"
-                onClick={() => void tray.edit(trimClip.id)}
-                className="absolute bottom-2.5 right-2.5 z-[5] inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
-                data-studio-trim
-              >
-                <Scissors className="h-4 w-4" /> Trim{trimClip.seconds != null ? ` · ${formatClock(trimClip.seconds)}` : ""}
-              </button>
+              <div className="absolute bottom-2.5 right-2.5 z-[5] flex gap-2">
+                {trimClip.audio && !trimClip.existing && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const on = !!trimClip.muted;
+                      tray.setSound(trimClip.id, on);
+                      setHear(on);
+                      flashSound(on);
+                      // inside the tap, so the phone lets the stage play it with its sound
+                      const v = (e.currentTarget.closest('[role="dialog"]') ?? document).querySelector<HTMLVideoElement>("video[data-framed-clip], video[data-studio-clip]");
+                      if (v) {
+                        v.muted = !on;
+                        if (on)
+                          void v.play().catch(() => {
+                            v.muted = true;
+                          });
+                      }
+                    }}
+                    className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-95"
+                    aria-label={trimClip.muted ? "No sound. Tap to post it with sound" : "Sound on. Tap to post it with no sound"}
+                    aria-pressed={!trimClip.muted}
+                    data-studio-sound={trimClip.muted ? "off" : "on"}
+                  >
+                    {trimClip.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void tray.edit(trimClip.id)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[12px] font-bold text-white backdrop-blur active:scale-95"
+                  data-studio-trim
+                >
+                  <Scissors className="h-4 w-4" /> Trim{trimClip.seconds != null ? ` · ${formatClock(trimClip.seconds)}` : ""}
+                </button>
+              </div>
             )}
+            {soundFlash}
 
             {phase === "shoot" && status === "fallback" && (
               <div className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center", showCard && "bg-black/55 backdrop-blur-[2px]")} data-camera-fallback={oldApp ? "old-app" : camWhy ?? "other"}>

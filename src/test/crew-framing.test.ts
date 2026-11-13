@@ -183,7 +183,7 @@ describe("the studio frames what's posted", () => {
     expect(framer).toContain("Profile grid");
   });
   it("a clip gets Edit cover and is framed like a photo: drag to place it, pinch to size it", () => {
-    expect(cam).toContain('video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined } : null}');
+    expect(cam).toContain('video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined, sound: hear && !selItem.muted } : null}');
     expect(cam).toContain("data-edit-cover");
     expect(cam).toContain("<CoverPicker");
     const tray = read("src/components/community/slide-tray.tsx");

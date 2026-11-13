@@ -46,11 +46,13 @@ const MUX_OVERHEAD = 1.02;
 
 export type VideoPlan =
   | { mode: "original" }
-  | { mode: "copy"; start: number; end: number; estBytes: number }
+  | { mode: "copy"; start: number; end: number; estBytes: number; muted?: boolean }
   | {
       mode: "transcode";
       start: number;
       end: number;
+      /** Posted with no sound: the audio track is left out. */
+      muted?: boolean;
       width: number;
       height: number;
       videoBitrate: number;
@@ -135,7 +137,22 @@ export function outputSize(src: Pick<SourceInfo, "width" | "height">, longEdge: 
   return { width: even(src.width), height: even(src.height) };
 }
 
-export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean }): VideoPlan {
+/**
+ * `caps.muted`: posted with no sound. A clip with sound then never goes as it
+ * is: the audio track is left out of a copy (still a remux, ~instant) or a
+ * re-encode, and the re-encode spends the audio's bits on the picture.
+ */
+export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean }): VideoPlan {
+  const plan = planSelection(src, trim, ctx, caps);
+  if (!caps.muted || !src.hasAudio || plan.mode === "reject") return plan;
+  if (plan.mode === "original") {
+    const sel = selectionOf(src, trim);
+    return { mode: "copy", start: sel.start, end: sel.end, estBytes: copyBytes(src, trim), muted: true };
+  }
+  return { ...plan, muted: true };
+}
+
+function planSelection(src: SourceInfo, trim: VideoTrim | null | undefined, ctx: VideoContext, caps: { canEncode: boolean; muted?: boolean }): VideoPlan {
   const sel = selectionOf(src, trim);
   const len = sel.end - sel.start;
   const limit = videoLimit(ctx);
@@ -161,7 +178,7 @@ export function planVideo(src: SourceInfo, trim: VideoTrim | null | undefined, c
   }
 
   // Re-encode, sized for its budget.
-  const audio = src.hasAudio ? AUDIO_BITRATE : 0;
+  const audio = src.hasAudio && !caps.muted ? AUDIO_BITRATE : 0;
   const fitBitrate = Math.floor((budget.target * 8) / MUX_OVERHEAD / Math.max(len, 1)) - audio;
   let videoBitrate = Math.min(TARGET_VIDEO_BITRATE, fitBitrate);
   let longEdge = TARGET_LONG_EDGE;

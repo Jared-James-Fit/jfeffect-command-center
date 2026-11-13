@@ -36,7 +36,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
   it("uploads only the trimmed part, cut and shrunk on the phone, resumably, then checked by the server", () => {
     const media = read("src/lib/community-media.ts");
     expect(media).toContain("if (m.kind === \"video\") return uploadVideo(m, userId, onProgress, signal);");
-    expect(media).toContain("createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem })");
+    expect(media).toContain("createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted })");
     // one send per picked clip: a retry carries on from what's done
     expect(media).toContain("const clipSends = new WeakMap<PickedMedia,");
     const pipe = read("src/lib/video-edit/pipeline.ts");
