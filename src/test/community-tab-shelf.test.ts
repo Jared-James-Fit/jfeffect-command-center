@@ -96,11 +96,12 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     expect(shell).not.toContain("dy > 0 || dx !== 0 || scale !== 1");
   });
 
-  it("Rankings (the coach's League) is the trophy bubble right after Your story", () => {
+  it("Rankings is the trophy in Crew's bar, one tap from any post; the coach's League stays the bubble in his stories", () => {
     const rail = read("src/components/community/crew-stories.tsx");
     expect(rail).toContain("data-story-rankings");
     expect(rail).toContain("if (!groups.length && !mine && !addStory && !rankings) return null;");
-    expect(screen).toContain('? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) }');
+    expect(screen).toContain('<BarButton label="Rankings" onClick={openRankings} data-crew-rankings>');
+    expect(screen).toContain('const rankings = hideTabs ? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) } : undefined;');
     expect(screen).toContain('void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });');
     expect(screen.match(/rankings=\{rankings\}/g)?.length).toBe(2);
     // the Crew screen follows the hash, so a link to #rankings still opens it

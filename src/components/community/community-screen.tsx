@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Dumbbell, Menu, Search, SquarePlus } from "lucide-react";
+import { ArrowLeft, Dumbbell, Menu, Search, SquarePlus, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,12 +41,12 @@ import { ActivitySpinner } from "@/components/activity-spinner";
 import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
 
 /**
- * Crew opens on the feed, under one slim bar (Instagram's): + to post on the
- * left with Find athletes, the JF Effect name in the middle (with people you
- * follow, it's also the All / Following switch), Activity (the heart, with
- * its bubble) and your photo (your profile) on the right. Rankings is the
- * trophy bubble right after Your story at the top of the feed. Each of those opens
- * as a page with ‹ back, and back lands where you were in the feed.
+ * Crew opens on the feed, under one slim bar (Instagram's): + to post and the
+ * trophy (Rankings) on the left, the JF Effect name in the middle (with people
+ * you follow, it's also the All / Following switch), Activity (the heart, with
+ * its bubble; Find athletes is its search) and your photo (your profile) on the
+ * right. Each of those opens as a page with ‹ back, and back lands where you
+ * were in the feed.
  */
 type Tab = "feed" | "rankings" | "you" | "members" | "activity";
 /** A tab, or someone else's profile opened from one. */
@@ -323,16 +323,13 @@ export function CommunityScreen({
     go({ kind: "you" });
     void navigate({ to: ".", hash: "you", replace: true, resetScroll: false });
   };
-  /** The trophy bubble at the start of the stories: Rankings (the coach's Crew page: the League, its own page). */
-  const rankings = hideTabs
-    ? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) }
-    : {
-        label: "Rankings",
-        onOpen: () => {
-          go({ kind: "rankings" });
-          void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });
-        },
-      };
+  /** Rankings: the trophy in Crew's bar, one tap from any post (never a bubble among the stories, which fold away). */
+  const openRankings = () => {
+    go({ kind: "rankings" });
+    void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });
+  };
+  /** The coach's Crew page has no room in its row for it: the League is the trophy bubble at the start of its stories. */
+  const rankings = hideTabs ? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) } : undefined;
 
   // (Rankings keeps its own sideways swipe between boards, so no swipe-back there.)
   const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
@@ -522,12 +519,11 @@ export function CommunityScreen({
               )}
             />
           )}
-          {/* Find athletes: search by name or @username, people to follow (not while a coach views as a client) */}
-          {!previewOnly && (
-            <BarButton label="Find athletes" onClick={() => openDiscover("feed", true)} data-discover-open>
-              <Search className="h-[23px] w-[23px]" strokeWidth={2} />
-            </BarButton>
-          )}
+          {/* Rankings: the League and Hall of Strength, one tap from any post (Find athletes is Activity's search,
+              the people-to-follow row and the caught-up card) */}
+          <BarButton label="Rankings" onClick={openRankings} data-crew-rankings>
+            <Trophy className="h-[23px] w-[23px]" strokeWidth={2} />
+          </BarButton>
         </>
       }
       center={
