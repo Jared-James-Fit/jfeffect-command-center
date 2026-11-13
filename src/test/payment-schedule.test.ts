@@ -224,7 +224,7 @@ describe("what happens next (scenarios)", () => {
 
 describe("the server keeps payments single and auto-pay honest", () => {
   const billing = readFileSync("src/lib/billing.functions.ts", "utf8");
-  const sql = (() => { try { return readFileSync("supabase/migrations/20270314090000_billing_safeguards.sql", "utf8"); } catch { return ""; } })();
+  const sql = readFileSync("supabase/migrations/20270314100000_billing_safeguards.sql", "utf8");
 
   it("a manual payment tapped twice is recorded once", () => {
     expect(billing).toMatch(/findRecentDuplicatePayment/);
