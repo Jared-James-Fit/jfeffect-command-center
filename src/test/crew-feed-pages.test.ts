@@ -58,7 +58,9 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
 
   it("a post's screen: the picture as big as it fits on black, the name and words over the bottom, the buttons down the right", () => {
     expect(card).toContain('if (layout === "page") {');
-    expect(card).toContain("<FitBox ratio={auto ? 0.8 : postMediaRatio(post)}>");
+    // an automated post's 4:5 card fits the width; a post's own photos and clips are the screen (TikTok's)
+    expect(card).toContain("<FitBox ratio={0.8}>");
+    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page />");
     expect(card).toContain("width: `min(100cqw, calc(100cqh * ${ratio}))`");
     expect(card).toContain(
       "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />",
