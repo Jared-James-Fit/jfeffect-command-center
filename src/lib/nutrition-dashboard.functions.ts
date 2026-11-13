@@ -385,49 +385,50 @@ export const undoSupplementLog = createServerFn({ method: "POST" })
   });
 
 // =================== AI parse =====================================
+/**
+ * The AI food log: estimate a typed meal's macros. Metered with AI credits
+ * (src/lib/ai-credits): out of credits answers `{ ok: false, outOfCredits }`
+ * with where they stand, never an error; a call that fails or can't be read
+ * gives its credit back. Runs on the OpenAI key (route `meal_estimate`),
+ * never Lovable credits. It always runs as the person signed in, so a coach
+ * previewing a client never spends the client's credits.
+ */
 export const parseMealFromText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ text: z.string().trim().min(2).max(500) }).parse(d))
-  .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI is not configured");
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Lovable-API-Key": key,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You estimate the macronutrient content of a meal from a short text description. Reply with ONLY a JSON object of the form {\"name\":string,\"calories\":number,\"protein_g\":number,\"carbs_g\":number,\"fat_g\":number}. Use realistic best-guess values. No prose, no markdown.",
-          },
-          { role: "user", content: data.text },
-        ],
-      }),
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    const [{ withAiCredits, MeteredCallError }, { callModelNow }, { resolveRoute }, { MEAL_ESTIMATE_SYSTEM, parseMealEstimate }] = await Promise.all([
+      import("@/lib/ai-credits/meter.server"),
+      import("@/lib/ai/model-client.server"),
+      import("@/lib/ai/routing"),
+      import("@/lib/ai-credits/meal-estimate"),
+    ]);
+    const route = resolveRoute("meal_estimate");
+    const r = await withAiCredits(userId, "meal_estimate", async () => {
+      let lastError = "no answer";
+      for (const model of route.models) {
+        try {
+          const reply = await callModelNow(model, {
+            system: MEAL_ESTIMATE_SYSTEM,
+            prompt: data.text,
+            effort: route.effort,
+            maxOutputTokens: route.maxOutputTokens,
+            timeoutMs: 25_000,
+          });
+          const value = parseMealEstimate(reply.text, data.text);
+          if (!value) throw new MeteredCallError("The AI couldn't make sense of that, so no credit was used. Try saying it another way.", reply.model, reply.usage);
+          return { value, model: reply.model, usage: reply.usage };
+        } catch (e: any) {
+          if (e instanceof MeteredCallError) throw e;
+          lastError = e?.message ?? lastError;
+          console.error("[meal-estimate] model failed", { model, message: lastError });
+        }
+      }
+      throw new MeteredCallError(`The AI couldn't estimate that right now, so no credit was used. Try again in a minute.`);
     });
-    if (resp.status === 429) throw new Error("Rate limit hit. Try again in a moment.");
-    if (resp.status === 402) throw new Error("AI credits exhausted. Add credits in Settings → Plans & credits.");
-    if (!resp.ok) throw new Error(`AI request failed (${resp.status})`);
-    const json = await resp.json();
-    const content: string = json?.choices?.[0]?.message?.content ?? "";
-    const cleaned = content.trim().replace(/^```json|^```|```$/g, "").trim();
-    let parsed: any;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      throw new Error("Couldn't read the AI response. Try rephrasing.");
-    }
-    return {
-      name: String(parsed.name ?? data.text).slice(0, 120),
-      calories: Math.max(0, Math.round(Number(parsed.calories) || 0)),
-      protein_g: Math.max(0, Math.round(Number(parsed.protein_g) || 0)),
-      carbs_g: Math.max(0, Math.round(Number(parsed.carbs_g) || 0)),
-      fat_g: Math.max(0, Math.round(Number(parsed.fat_g) || 0)),
-    };
+    if (!r.ok) return { ok: false as const, outOfCredits: true as const, credits: r.credits };
+    return { ok: true as const, ...r.value, credits: r.credits };
   });
 
 // =================== Coach approval =====================================

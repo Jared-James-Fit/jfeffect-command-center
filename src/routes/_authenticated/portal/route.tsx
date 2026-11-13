@@ -18,6 +18,7 @@ import { WeightUnitPrompt } from "@/components/portal/weight-unit-prompt";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
 import { useWarmClientPages } from "@/lib/portal-page-queries";
 import { useCommunityActivity } from "@/lib/community.queries";
+import { AiCreditsReturn } from "@/components/ai-credits/ai-credits";
 
 const CREW_OWN_BAR = ["/portal/community"] as const;
 
@@ -56,6 +57,8 @@ function PortalLayout() {
             <LegalAcceptanceGate />
             {/* lb or kg, asked until answered (lb meanwhile). */}
             <WeightUnitPrompt />
+            {/* back from buying AI credits: add them now and say so */}
+            <AiCreditsReturn />
           </>
         )}
         {/* Previous month's League Recap — first week of each month, once. */}

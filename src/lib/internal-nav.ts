@@ -293,8 +293,8 @@ const REGISTRY: Entry[] = [
   // still found by More's search and the ⌘K palette.
   { to: "/admin/onboarding", label: "Onboarding", icon: ClipboardCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
-  { to: "/admin/settings/ai", label: "AI Models", icon: ShieldCheck, group: "Settings", searchOnly: true,
-    visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "models", "gpt", "claude", "gemini", "program generator", "generation cost", "errors"] },
+  { to: "/admin/settings/ai", label: "AI Credits & Models", icon: ShieldCheck, group: "Settings", searchOnly: true,
+    visibleTo: ["admin"], section: "Advanced", keywords: ["ai", "credits", "ai credits", "usage limits", "credit packs", "models", "gpt", "claude", "gemini", "program generator", "generation cost", "errors"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ShieldCheck, group: "Settings", searchOnly: true,
     visibleTo: ["admin"], section: "Advanced" },
   { to: "/admin/archives", label: "Archive Manager", icon: Archive, group: "Settings", searchOnly: true,
