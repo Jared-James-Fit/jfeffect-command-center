@@ -1,18 +1,22 @@
 /**
  * A set's videos, opened from its video cell (lazy): each clip plays where
  * it is, says it's in the coach chat (a tap opens the chat), saves to the
- * phone (Save to Photos), and can come off the set (and the chat with it). A
- * clip filmed in the app and never saved says so before it's removed, with
- * Save to Photos first: removing it would leave it nowhere. A clip on its
- * way shows how far it's got, with Try again / Cancel when it didn't send.
+ * phone (Save to Photos), and has one ⋯ for the rest: Move to another set
+ * (the set it really is, set-video-move.tsx) and Remove (off the set and the
+ * chat). A clip filmed in the app and never saved says so before it's
+ * removed, with Save to Photos first: removing it would leave it nowhere. A
+ * clip on its way shows how far it's got, with Try again / Cancel when it
+ * didn't send.
  */
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDownToLine, MessageCircle, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowDownToLine, ArrowRightLeft, MessageCircle, MoreHorizontal, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { SetVideoMovePicker } from "@/components/workout-day/set-video-move";
 import { ChatVideoTile } from "@/components/chat-video-tile";
 import { useChatSignedUrls } from "@/hooks/use-chat-signed-urls";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,6 +69,7 @@ export default function SetVideoSheet({
   const { urls } = useChatSignedUrls(paths);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const unsaved = useUnsavedFilmed(user?.id);
   const { save, warm } = useSaveSetVideos();
   const words = phoneSaveWords();
@@ -221,6 +226,9 @@ export default function SetVideoSheet({
           {videos.map((v) => {
             const mine = v.uploaded_by === user?.id;
             const canRemove = mine || !staff || role === "admin";
+            // the athlete, whoever sent it, their coach and admins can put it on the set it really is
+            const canMove = canRemove || staff;
+            const busyHere = confirming === v.id || moving === v.id;
             // filmed in the app on this login and never saved to the phone
             const onlyHere = mine && isUnsavedFilmed(v.id, unsaved);
             return (
@@ -253,7 +261,7 @@ export default function SetVideoSheet({
                   ) : (
                     <span className="flex-1 text-sm text-muted-foreground">On this set</span>
                   )}
-                  {v.storage_path && confirming !== v.id && (
+                  {v.storage_path && !busyHere && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -289,18 +297,60 @@ export default function SetVideoSheet({
                           </Button>
                         </div>
                       )
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-10 shrink-0 text-muted-foreground"
-                        onClick={() => setConfirming(v.id)}
-                        aria-label="Remove this video"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    ))}
+                    ) : null)}
+                  {(canMove || canRemove) && !busyHere && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-10 w-10 shrink-0 p-0 text-muted-foreground"
+                          aria-label="More for this video"
+                          data-set-video-more
+                        >
+                          <MoreHorizontal className="h-5 w-5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[13rem]">
+                        {canMove && (
+                          <DropdownMenuItem
+                            className="h-11 gap-2"
+                            onSelect={() => {
+                              setConfirming(null);
+                              setMoving(v.id);
+                            }}
+                          >
+                            <ArrowRightLeft className="h-4 w-4" /> Move to another set
+                          </DropdownMenuItem>
+                        )}
+                        {canRemove && (
+                          <DropdownMenuItem
+                            className="h-11 gap-2 text-destructive focus:text-destructive"
+                            onSelect={() => {
+                              setMoving(null);
+                              setConfirming(v.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" /> Remove
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
+                {canMove && moving === v.id && (
+                  <SetVideoMovePicker
+                    video={v}
+                    dayId={dayId}
+                    clientId={clientId}
+                    onCancel={() => setMoving(null)}
+                    onMoved={() => {
+                      setMoving(null);
+                      // it left this set: nothing else here, nothing to show
+                      if (videos.length <= 1 && !jobs.length) onOpenChange(false);
+                    }}
+                  />
+                )}
                 {canRemove && confirming === v.id && onlyHere && (
                   // filmed in the app and never saved: removing it would leave it nowhere
                   <div className="rounded-xl border border-border bg-muted/40 p-3" data-set-video-only-copy>

@@ -32,6 +32,7 @@ import {
   filmLabels,
   filmPaths,
   filmPostCaption,
+  filmSetValues,
   filmUpToDate,
   isFilmPath,
   pickFilmClips,
@@ -185,17 +186,7 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
       if (chkErr) continue;
       filmSlides.push({ path, thumb: hasPoster ? thumb : null, type: "video", width: v.width ?? null, height: v.height ?? null });
       const r = resultOf.get(v.result_id);
-      const values: FilmSetValues | null = r
-        ? {
-            load: r.entered_value != null ? Number(r.entered_value) : r.actual_load != null ? Number(r.actual_load) : null,
-            unit: (r.entered_unit ?? r.actual_load_unit) === "lb" ? "lb" : "kg",
-            reps: r.actual_reps != null ? Number(r.actual_reps) : null,
-            rpe: r.actual_rpe_num != null ? Number(r.actual_rpe_num) : r.actual_rpe != null && r.actual_rpe !== "" && Number.isFinite(Number(r.actual_rpe)) ? Number(r.actual_rpe) : null,
-            rir: r.actual_rir != null && Number.isFinite(Number(r.actual_rir)) ? Number(r.actual_rir) : null,
-            loadType: r.load_type === "bodyweight" || r.load_type === "assisted" ? r.load_type : "external",
-            durationSec: r.completed_duration_seconds != null ? Number(r.completed_duration_seconds) : null,
-          }
-        : null;
+      const values: FilmSetValues | null = r ? filmSetValues(r) : null;
       film.push({ path, exercise: v.exercise_name ?? "Set", set: Number(v.set_index) || 1, ...filmLabels(values, v.label) });
     }
     if (!filmSlides.length) throw new Error("Couldn't get your clips ready. Try again in a minute.");

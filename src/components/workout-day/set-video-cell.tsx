@@ -224,7 +224,8 @@ export function SetVideoCell(props: SetVideoCellProps) {
         j.state === "done" &&
         jobOnSet(j, set) &&
         j.setVideoId &&
-        !stored.some((v) => v.id === j.setVideoId),
+        // the day's list has it anywhere (a clip moved to another set must not stay here)
+        !(data ?? []).some((v) => v.id === j.setVideoId),
     );
     if (!landed.length) return stored;
     return [
@@ -249,7 +250,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
         }),
       ),
     ];
-  }, [stored, allJobs, set]);
+  }, [stored, data, allJobs, set]);
   const jobs = useMemo(() => jobsForSet(allJobs, set), [allJobs, set]);
   const active = jobs.find(isActiveJob) ?? null;
   const failed = !active ? (jobs.find((j) => j.state === "failed") ?? null) : null;
