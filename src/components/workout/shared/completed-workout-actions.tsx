@@ -20,6 +20,7 @@ import {
 } from "@/components/workout/shared/workout-review-editor";
 import type { WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
+import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
 
 type Props = {
   ctx: WorkoutCompletionCtx;
@@ -128,6 +129,12 @@ export function CompletedWorkoutActions({
             // after the review (their switch is in it), or once they've clearly skipped it
             auto={hasReview || (!!completedAt && Date.now() - Date.parse(completedAt) > FILM_REVIEW_WAIT_MS)}
             className="border-t border-border/70 pt-2.5"
+          />
+        )}
+        {filmCompletionId && ctx.kind === "client" && (
+          <PhoneCopyReminder
+            dayId={ctx.dayId}
+            className="rounded-none border-0 border-t border-border/70 bg-transparent px-0 pb-0 pt-2.5"
           />
         )}
       </Card>

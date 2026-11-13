@@ -21,7 +21,7 @@ function nounOf(items: SaveItem[]): string {
  */
 export function useSaveMedia() {
   const busy = useRef(false);
-  return useCallback(async (items: SaveItem[]) => {
+  return useCallback(async (items: SaveItem[], opts: { onSaved?: () => void } = {}) => {
     if (!items.length) return;
     const noun = nounOf(items);
     const offerAgain = (files: File[], id?: string | number) => {
@@ -33,6 +33,8 @@ export function useSaveMedia() {
       });
     };
     const report = (outcome: SaveOutcome, files: File[], id?: string | number) => {
+      // handed to the share sheet (Save Video) or downloaded: the caller can stop offering it
+      if (outcome === "shared" || outcome === "saved") opts.onSaved?.();
       if (outcome === "again") return offerAgain(files, id);
       if (outcome === "saved") return void toast.success(items.length > 1 ? `${items.length} files downloaded` : "Downloaded", { id });
       if (outcome === "failed") return void toast.error(`Couldn't save that ${noun}. Try again.`, { id });

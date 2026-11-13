@@ -9,6 +9,9 @@
  *   · the clip's poster once it's on the set (and in the coach chat): a tap
  *     plays it, says where it is in the chat, or takes it off
  *   · red when it didn't send (a dropped connection retries by itself)
+ * A clip filmed in the app (Take Video, never in Photos) is offered for the
+ * phone right away, on the clip and at the end of the workout
+ * (set-video-phone-copy.tsx).
  * Light on purpose: the uploader, the trimmer and the sheet load only when a
  * clip is picked or opened, so the logger doesn't carry any video code.
  *
@@ -24,6 +27,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { claimSetVideoTip, releaseSetVideoTip, setVideoTipCopy, useSetVideoTip } from "@/lib/set-videos/tip";
+import { looksFilmedInApp } from "@/lib/set-videos/phone-copy";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -207,7 +211,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
   const allJobs = useSetVideoJobs();
   const inputRef = useRef<HTMLInputElement>(null);
   /** Each pick mounts its own flow (keyed), and clears only itself when it's done. */
-  const [picked, setPicked] = useState<{ file: File; key: number } | null>(null);
+  const [picked, setPicked] = useState<{ file: File; key: number; filmedHere: boolean } | null>(null);
   const pickSeq = useRef(0);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -313,8 +317,10 @@ export function SetVideoCell(props: SetVideoCellProps) {
     inputRef.current?.click();
   };
   const onPicked = (f: File) => {
+    // straight from the camera (not in Photos): it's offered for the phone once it's on its way
+    const filmedHere = looksFilmedInApp(f);
     loadFlow().then(
-      () => setPicked({ file: f, key: ++pickSeq.current }),
+      () => setPicked({ file: f, key: ++pickSeq.current, filmedHere }),
       () => toast.error(NO_CONNECTION),
     );
   };
@@ -463,6 +469,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
         <Flow
           key={picked.key}
           file={picked.file}
+          filmedHere={picked.filmedHere}
           start={{
             userId: user.id,
             clientId,

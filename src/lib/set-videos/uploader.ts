@@ -63,6 +63,7 @@ import {
   putSetVideoJob,
   type SetVideoJob,
 } from "@/lib/set-videos/jobs";
+import { linkFilmed } from "@/lib/set-videos/phone-copy";
 import {
   outboxDelete,
   outboxForUser,
@@ -518,6 +519,8 @@ async function runJob(id: string) {
       error: null,
       autoRetry: false,
     });
+    // a clip filmed in the app and not saved to the phone yet: a reload can fetch it from storage now
+    linkFilmed(job.userId, id, res.id);
     if (!res.existed) {
       toast.success(`Set ${job.setIndex} video sent to your coach`);
       if (res.message_id) void notifyCoach(res.message_id);
