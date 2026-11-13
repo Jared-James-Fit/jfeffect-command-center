@@ -9,6 +9,7 @@ import {
   filmPostCaption,
   filmUpToDate,
   isFilmPath,
+  isOwnFilmCaption,
   pickFilmClips,
 } from "@/lib/workout-film";
 import { postSlides } from "@/lib/community";
@@ -69,6 +70,17 @@ describe("each clip's caption", () => {
     expect(filmCaptionFor("new bench PR 💪", t, 9)).toBe("new bench PR 💪");
     expect(filmCaptionFor("Leg day · 4 sets on film 🎥", t, 9)).toBe("Leg day · 4 sets on film 🎥");
     expect(readFileSync("src/lib/workout-film.functions.ts", "utf8")).toContain("const caption = filmCaptionFor(post?.caption,");
+  });
+  it("on a post's screen ours isn't said twice: the workout's own line already names it (Fionna's Nov 12 film, Nov 13 2026)", () => {
+    const names = ["Glutes + Legs", "Block 3 · Week 2"];
+    expect(isOwnFilmCaption("Glutes + Legs · 3 sets on film 🎥", names)).toBe(true);
+    expect(isOwnFilmCaption("1 set on film 🎥", names)).toBe(true);
+    // their own words, or another name, always show
+    expect(isOwnFilmCaption("hip thrust PR, felt strong today", names)).toBe(false);
+    expect(isOwnFilmCaption("Leg day · 4 sets on film 🎥", names)).toBe(false);
+    expect(isOwnFilmCaption(null, names)).toBe(false);
+    const card = readFileSync("src/components/community/post-card.tsx", "utf8");
+    expect(card).toContain("!(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) && (");
   });
 });
 

@@ -54,6 +54,9 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(css).toContain('[data-feed-page-post="visual"]:has([data-fit="cover"]) > [data-page-words] {');
     expect(card).not.toContain('visual && "bg-gradient-to-t from-black/75 via-black/35 to-transparent"');
     expect(card).toContain("data-fit={page ? fits?.[j] : undefined}");
+    // every line under a post is room its picture loses: the views and the coach's ❤️ share one (Nov 13 2026)
+    expect(card).toContain('<div className="flex min-w-0 items-center gap-2 [&_[data-post-views]]:mx-0 [&_[data-post-views]]:mb-0 [&_[data-post-views]]:shrink-0" data-page-meta>');
+    expect(card).toContain("data-page-coach>");
   });
 
   it("the words and the buttons down the right sit just above the tab bar (nothing stands over the bar any more)", () => {

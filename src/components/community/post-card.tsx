@@ -59,6 +59,7 @@ import { SharedCommentCard, openCommunityPost } from "@/components/community/sha
 import { CollaboratorsSheet } from "@/components/community/mentions";
 import { InlineFollow } from "@/components/community/follow-button";
 import { PageCaption } from "@/components/community/page-caption";
+import { isOwnFilmCaption } from "@/lib/workout-film";
 import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
 
@@ -696,26 +697,34 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               </button>
             )}
             {onOpenCaption ? (
-              // Reels': two lines and "… more"; a tap opens the whole caption with the comments under it
-              post.caption?.trim() && (auto || !isNote || visual) && <PageCaption text={post.caption} mentions={post.mentions} onOpen={() => onOpenCaption(post)} />
+              // Reels': two lines and "… more"; a tap opens the whole caption with the comments under it.
+              // Our own film caption ("Glutes + Legs · 3 sets on film") isn't repeated under the workout's line
+              post.caption?.trim() &&
+              (auto || !isNote || visual) &&
+              !(visual && s && isOwnFilmCaption(post.caption, [s.workout_name, s.workout_title])) && (
+                <PageCaption text={post.caption} mentions={post.mentions} onOpen={() => onOpenCaption(post)} />
+              )
             ) : auto ? (
               <AutoPostCaption post={post} clamp onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             ) : (
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             )}
             {(!isNote || visual) && !auto && <PostExtras post={post} />}
-            {(post.coach_reactions.length > 0 || post.coach_commented) && (
-              <div className="inline-flex max-w-full items-center rounded-full bg-primary/15 px-2.5 py-1 text-[12px] font-bold text-primary">
-                <span className="truncate">
-                  Coach {post.coach_reactions[0]?.name ?? ""}
-                  {post.coach_reactions[0] ? ` ${reactionEmoji(post.coach_reactions[0].emoji) ?? ""}` : ""}
-                  {post.coach_commented ? `${post.coach_reactions[0] ? " · " : " "}replied` : ""}
-                </span>
+            {/* one line, never two: the views, then the coach's ❤️ or reply (every line here is room the picture loses) */}
+            {((post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented) && (
+              <div className="flex min-w-0 items-center gap-2 [&_[data-post-views]]:mx-0 [&_[data-post-views]]:mb-0 [&_[data-post-views]]:shrink-0" data-page-meta>
+                <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
+                {(post.coach_reactions.length > 0 || post.coach_commented) && (
+                  <div className="inline-flex min-w-0 items-center rounded-full bg-primary/15 px-2 py-0.5 text-[12px] font-bold text-primary" data-page-coach>
+                    <span className="truncate">
+                      Coach {post.coach_reactions[0]?.name ?? ""}
+                      {post.coach_reactions[0] ? ` ${reactionEmoji(post.coach_reactions[0].emoji) ?? ""}` : ""}
+                      {post.coach_commented ? `${post.coach_reactions[0] ? " · " : " "}replied` : ""}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
-            <div className="-mx-3.5 [&_[data-post-views]]:mb-0">
-              <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
-            </div>
           </div>
         </div>
 
