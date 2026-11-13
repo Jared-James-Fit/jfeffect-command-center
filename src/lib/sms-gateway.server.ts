@@ -71,7 +71,15 @@ export function twilioConfigured(): boolean {
 /** One call to Twilio's REST API (account-scoped path, e.g. "/Messages.json"). */
 export async function twilioFetch(
   path: string,
-  init: { method?: "GET" | "POST"; form?: Record<string, string> } = {},
+  init: {
+    method?: "GET" | "POST";
+    form?: Record<string, string>;
+    /**
+     * Give up after this long. Only for reads: a send that timed out may still
+     * have gone out, and treating it as failed would free its key for a retry.
+     */
+    timeoutMs?: number;
+  } = {},
 ): Promise<{ ok: boolean; status: number; data: any }> {
   const lovableKey = process.env.LOVABLE_API_KEY;
   const twilioKey = process.env.TWILIO_API_KEY;
@@ -84,6 +92,7 @@ export async function twilioFetch(
       ...(init.form ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
     body: init.form ? new URLSearchParams(init.form).toString() : undefined,
+    signal: init.timeoutMs && !init.form ? AbortSignal.timeout(init.timeoutMs) : undefined,
   });
   const data: any = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };

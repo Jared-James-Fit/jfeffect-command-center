@@ -12,6 +12,10 @@ export const Route = createFileRoute("/api/public/hooks/sms-reminders")({
     handlers: {
       POST: async ({ request }) => {
         if (!(await authorizeWorker(request))) return new Response("Unauthorized", { status: 401 });
+        // pg_net gives this call 5 seconds and the host cancels the request when
+        // it gives up: the nudge first, then Twilio's bill (hourly) and delivery
+        // look-ups only while there's time. The next tick carries on.
+        const started = Date.now();
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const out: Record<string, unknown> = { ok: true };
         try {
@@ -22,10 +26,12 @@ export const Route = createFileRoute("/api/public/hooks/sms-reminders")({
           out.unread = { error: e?.message ?? String(e) };
         }
         try {
-          const { pollSmsStatuses, refreshTwilioUsage } = await import("@/lib/sms-status.server");
-          out.statuses = await pollSmsStatuses(supabaseAdmin);
-          const usage = await refreshTwilioUsage(supabaseAdmin);
-          out.usage = usage ? { month: usage.month, error: usage.error ?? null } : null;
+          const { pollSmsStatuses, refreshTwilioUsage, TWILIO_READ_TIMEOUT_MS } = await import("@/lib/sms-status.server");
+          if (Date.now() - started < 4_000 - TWILIO_READ_TIMEOUT_MS) {
+            const usage = await refreshTwilioUsage(supabaseAdmin);
+            out.usage = usage ? { month: usage.month, error: usage.error ?? null } : null;
+          }
+          out.statuses = await pollSmsStatuses(supabaseAdmin, 20, { deadline: started + 4_000 - TWILIO_READ_TIMEOUT_MS });
         } catch (e: any) {
           out.statuses = { error: e?.message ?? String(e) };
         }

@@ -202,3 +202,32 @@ describe("database guard contract", () => {
     expect(sql).toContain("RAISE EXCEPTION 'Admin only'");
   });
 });
+
+describe("the SMS tick fits in the cron's 5 seconds", () => {
+  it("stops starting Twilio look-ups at its deadline, and Twilio reads time out", async () => {
+    const { pollSmsStatuses, TWILIO_READ_TIMEOUT_MS } = await import("@/lib/sms-status.server");
+    const rows = [{ id: "a", twilio_sid: "SMa", status_checks: 0 }, { id: "b", twilio_sid: "SMb", status_checks: 0 }];
+    const b: any = {
+      update: () => b, eq: () => b, lt: () => b, not: () => b, gte: () => b, lte: () => b, or: () => b, order: () => b,
+      select: () => b,
+      limit: async () => ({ data: rows, error: null }),
+      then: (res: any) => Promise.resolve({ data: [], error: null }).then(res),
+    };
+    const admin = { from: () => b };
+    const past = await pollSmsStatuses(admin, 20, { deadline: Date.now() - 1 });
+    expect(past.checked).toBe(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: "delivered", price: "-0.0079", price_unit: "USD", num_segments: "1" }) });
+    const open = await pollSmsStatuses(admin, 20, { deadline: Date.now() + 60_000 });
+    expect(open).toMatchObject({ checked: 2, updated: 2 });
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(TWILIO_READ_TIMEOUT_MS).toBeLessThanOrEqual(2_500);
+  });
+
+  it("a send is never given a timeout (a timed-out send may have gone out)", async () => {
+    const { admin } = fakeAdmin(SEND);
+    await sendSms(admin, { category: "session", to: "2045551234", body: "hi" });
+    expect(fetchSpy.mock.calls[0][1].signal).toBeUndefined();
+  });
+});

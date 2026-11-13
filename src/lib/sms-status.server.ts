@@ -18,8 +18,15 @@ const FINAL = new Set(["delivered", "undelivered", "failed", "canceled", "read"]
 export const MAX_STATUS_CHECKS = 6;
 /** A claim this old that never heard back from Twilio: the outcome is unknown. */
 const STALE_CLAIM_MS = 15 * 60_000;
+/** One Twilio read gives up after this long. */
+export const TWILIO_READ_TIMEOUT_MS = 2_500;
 
-export async function pollSmsStatuses(admin: Db, limit = 40) {
+/**
+ * `deadline` (epoch ms): stop starting new lookups after it. The cron's HTTP
+ * call (pg_net) gives a hook 5 seconds and the host cancels the request when it
+ * gives up, so the tick does what fits and the next one carries on.
+ */
+export async function pollSmsStatuses(admin: Db, limit = 40, opts: { deadline?: number } = {}) {
   const result = { checked: 0, updated: 0, stale: 0, optedOut: 0, errors: 0 };
 
   // A worker that died between the claim and Twilio's answer: count it as
@@ -47,9 +54,10 @@ export async function pollSmsStatuses(admin: Db, limit = 40) {
   if (error) throw new Error(error.message);
 
   for (const r of (rows ?? []) as any[]) {
+    if (opts.deadline && Date.now() > opts.deadline) break;
     result.checked++;
     try {
-      const res = await twilioFetch(`/Messages/${encodeURIComponent(r.twilio_sid)}.json`);
+      const res = await twilioFetch(`/Messages/${encodeURIComponent(r.twilio_sid)}.json`, { timeoutMs: TWILIO_READ_TIMEOUT_MS });
       const patch: Record<string, unknown> = {
         status_checks: (r.status_checks ?? 0) + 1,
         status_checked_at: new Date().toISOString(),
@@ -103,7 +111,7 @@ function firstRecord(data: any): any | null {
  * phone number). Cached on sms_settings.twilio_usage; read at most once an hour
  * unless forced.
  */
-export async function refreshTwilioUsage(admin: Db, opts: { force?: boolean; maxAgeMinutes?: number } = {}) {
+export async function refreshTwilioUsage(admin: Db, opts: { force?: boolean; maxAgeMinutes?: number; timeoutMs?: number } = {}) {
   const { data: s } = await admin.from("sms_settings").select("id, twilio_usage").eq("singleton", true).maybeSingle();
   if (!s?.id) return null;
   const month = new Date().toISOString().slice(0, 7);
@@ -113,8 +121,8 @@ export async function refreshTwilioUsage(admin: Db, opts: { force?: boolean; max
   if (!twilioConfigured()) return prev;
 
   const [total, sms] = await Promise.all([
-    twilioFetch("/Usage/Records/ThisMonth.json?Category=totalprice").catch(() => null),
-    twilioFetch("/Usage/Records/ThisMonth.json?Category=sms").catch(() => null),
+    twilioFetch("/Usage/Records/ThisMonth.json?Category=totalprice", { timeoutMs: opts.timeoutMs ?? TWILIO_READ_TIMEOUT_MS }).catch(() => null),
+    twilioFetch("/Usage/Records/ThisMonth.json?Category=sms", { timeoutMs: opts.timeoutMs ?? TWILIO_READ_TIMEOUT_MS }).catch(() => null),
   ]);
   const tRec = total?.ok ? firstRecord(total.data) : null;
   const sRec = sms?.ok ? firstRecord(sms.data) : null;
