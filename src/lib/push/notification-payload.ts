@@ -232,11 +232,13 @@ export function buildNotificationPayload(input: {
   } else if (kind === "direct_message") {
     // A request says who and why, never what: "Dwayne replied to your post."
     // Once they're chatting it reads like any 1:1 message.
-    const atts = (input.attachments ?? []).filter(Boolean) as Array<{ kind?: string | null }>;
+    const atts = (input.attachments ?? []).filter(Boolean) as Array<{ kind?: string | null; shared?: boolean | null }>;
     const who = name ? firstName(name) : "Someone";
     if (input.request) {
       title = "Message request";
-      body = atts.some((a) => a.kind === "community_post") ? `${who} replied to your post.` : `${who} wants to send you a message.`;
+      body = atts.some((a) => a.kind === "community_post" && a.shared)
+        ? `${who} sent you a post.`
+        : atts.some((a) => a.kind === "community_post") ? `${who} replied to your post.` : `${who} wants to send you a message.`;
     } else {
       title = name ?? "New message";
       body = capitalize(messageAction(input.attachments, true)) + ".";

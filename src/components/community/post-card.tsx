@@ -44,7 +44,6 @@ import { FeedCaption } from "@/components/community/feed-caption";
 import { PostExtras } from "@/components/community/post-attach";
 import { NoteCaption, PICTURE_CAPTION_LIMITS } from "@/components/community/note-caption";
 import { PollCard } from "@/components/community/poll";
-import { MessageAuthorSheet } from "@/components/community/message-author-sheet";
 import { PostShareSheet } from "@/components/community/post-share-sheet";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
 import { PostArtImage } from "@/components/community/post-art";
@@ -968,18 +967,14 @@ export function ReactionBar({
   unit?: "kg" | "lb";
 }) {
   const [listFor, setListFor] = useState<string | null>(null);
-  const [messaging, setMessaging] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [sharing, setSharing] = useState<boolean | null>(null);
   const { role } = useAuth();
   const { isImpersonating } = useClientImpersonation();
-  // Message the person who posted (never yourself; coaches use team chat with each other).
-  const canMessage = !post.is_mine && !(post.author.is_coach && (role === "admin" || role === "coach"));
   // Add to your story: yours, or a crew-wide post (only where the story camera can open, never in View as client)
   const canStory = useStoryShareReady() && !isImpersonating && canShareToStory(post);
   // a coach can send any post out to his own Instagram (never in View as client)
   const canInstagram = (role === "admin" || role === "coach") && !isImpersonating && !post.story;
   const [ig, setIg] = useState<boolean | null>(null);
-  const shareSheet = canStory || canInstagram;
   const who = reactorsLine(post);
   // the little ❤️🔥😂 beside the names, once it's not just hearts
   const kinds = reactionKinds(post);
@@ -997,22 +992,21 @@ export function ReactionBar({
   const sheets = (
     <>
       <ReactorsSheet postId={listFor} onClose={() => setListFor(null)} onOpenAuthor={onOpenAuthor} />
-      {canMessage && <MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />}
-      {shareSheet && (
+      {/* mounted on the first ✈️, so a feed of posts doesn't carry a sheet each */}
+      {sharing !== null && (
         <PostShareSheet
           post={post}
           open={sharing}
           onOpenChange={setSharing}
           // a beat after the sheet goes, so the story camera opens on a clear screen
           onStory={canStory ? () => window.setTimeout(() => openStoryShare({ post }), 200) : undefined}
-          onMessage={canMessage ? () => window.setTimeout(() => setMessaging(true), 200) : undefined}
           onInstagram={canInstagram ? () => window.setTimeout(() => setIg(true), 200) : undefined}
         />
       )}
       {canInstagram && ig !== null && <InstagramShareSheet post={post} open={ig} onOpenChange={setIg} unit={unit} />}
     </>
   );
-  const shareTap = () => (shareSheet ? setSharing(true) : setMessaging(true));
+  const shareTap = () => setSharing(true);
   if (column) {
     return (
       <div ref={pop.ref} data-engagement-pop={on ? "" : undefined} className="relative flex flex-col items-center gap-1" data-post-actions-column>
@@ -1030,17 +1024,15 @@ export function ReactionBar({
           </button>
         )}
         <RepostButton post={post} onReposted={onReposted} stacked />
-        {(canMessage || shareSheet) && (
-          <button
-            type="button"
-            onClick={shareTap}
-            className="grid h-11 w-11 place-items-center rounded-full text-foreground active:scale-90"
-            aria-label={shareSheet ? "Share" : `Message ${post.author.name}`}
-            data-post-share
-          >
-            <Send className="h-[26px] w-[26px] -rotate-12" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={shareTap}
+          className="grid h-11 w-11 place-items-center rounded-full text-foreground active:scale-90"
+          aria-label="Share"
+          data-post-share
+        >
+          <Send className="h-[26px] w-[26px] -rotate-12" />
+        </button>
         <SaveButton post={post} stacked />
         {sheets}
       </div>
@@ -1064,18 +1056,16 @@ export function ReactionBar({
           </button>
         )}
         <RepostButton post={post} onReposted={onReposted} />
-        {(canMessage || shareSheet) && (
-          <button
-            type="button"
-            onClick={shareTap}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground/80 hover:bg-muted hover:text-foreground"
-            aria-label={shareSheet ? "Share" : `Message ${post.author.name}`}
-            title={shareSheet ? "Share" : `Message ${post.author.name}`}
-            data-post-share
-          >
-            <Send className="h-[22px] w-[22px] -rotate-12" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={shareTap}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground/80 hover:bg-muted hover:text-foreground"
+          aria-label="Share"
+          title="Share"
+          data-post-share
+        >
+          <Send className="h-[22px] w-[22px] -rotate-12" />
+        </button>
         <span className="ml-auto" />
         <SaveButton post={post} />
       </div>

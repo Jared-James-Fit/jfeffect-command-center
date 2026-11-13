@@ -3,7 +3,7 @@
  * or what was sent ("📷 Photo", "🎥 2 Videos", "🎤 Voice memo") when there are
  * none. Used where a chat shows its newest message outside the thread.
  */
-type Att = { type?: string | null; kind?: string | null; story?: boolean | null; reply?: boolean | null } | null | undefined;
+type Att = { type?: string | null; kind?: string | null; story?: boolean | null; reply?: boolean | null; shared?: boolean | null } | null | undefined;
 
 const plural = (n: number, one: string, many: string) => (n > 1 ? `${n} ${many}` : one);
 
@@ -13,7 +13,7 @@ export function messagePreviewText(body: string | null | undefined, attachments:
   const list = (Array.isArray(attachments) ? attachments : []) as Att[];
   if (!list.length) return "";
   const first = list.find(Boolean);
-  if (first?.kind === "community_post") return first.story ? "Replied to a story" : "Shared a post";
+  if (first?.kind === "community_post") return first.story ? (first.shared ? "Shared a story" : "Replied to a story") : "Shared a post";
   if (first?.kind === "form_request") return "📋 A form to fill in";
   if (first?.kind === "payment_request") return "💳 Payment request";
   if (first?.kind === "signature_request") return "✍️ Something to sign";
