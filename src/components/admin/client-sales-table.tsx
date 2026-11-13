@@ -21,7 +21,9 @@ import { toast } from "sonner";
 import { AddSaleDialog } from "@/components/clients/add-sale-dialog";
 import { TermDateEditor, downloadPurchasePdf } from "@/components/purchase-records-panel";
 import { sendPaymentLinkEmail } from "@/lib/payments.functions";
-import { getClientBillingOverview, renewSessionPackage } from "@/lib/billing.functions";
+import { renewSessionPackage } from "@/lib/billing.functions";
+import { useClientPayments } from "@/components/billing/use-client-payments";
+import { latestPackage } from "@/lib/client-owed";
 import {
   archivePurchaseRecord,
   restorePurchaseRecord,
@@ -60,7 +62,6 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const [dialog, setDialog] = useState<Open>(null);
   const sendFn = useServerFn(sendPaymentLinkEmail);
   const renewFn = useServerFn(renewSessionPackage);
-  const overviewFn = useServerFn(getClientBillingOverview);
 
   const { data: clientLite } = useQuery({
     queryKey: ["client-lite", clientId],
@@ -82,11 +83,8 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     },
   });
 
-  // Payments per sale: the same billing read as the balance card above.
-  const { data: billing } = useQuery({
-    queryKey: ["client-billing", clientId],
-    queryFn: () => overviewFn({ data: { client_id: clientId } }),
-  });
+  // Payments per sale and when what's left gets paid: the same read as the Billing overview above.
+  const { data: billing, payments: schedule } = useClientPayments(clientId);
 
   // Sessions per package (shared with the Sessions panel).
   const { data: sessionBalance = [] } = useQuery<any[]>({
@@ -108,13 +106,17 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
     });
     return visible.map((raw) => {
       const own = ledger.filter((l) => l.purchase_id === raw.id);
-      const money = saleMoney(raw, own, rate, { sessionsUsed: (sessionsBySale.get(raw.id) as any)?.used });
+      // The payments model's reading when it has one (a renewal auto-pay pays is billed, not "waiting").
+      const money = (!raw.archived_at && schedule?.money.get(raw.id)) || saleMoney(raw, own, rate, { sessionsUsed: (sessionsBySale.get(raw.id) as any)?.used });
       return { raw, money, status: saleStatus(raw, money), payments: salePayments(own) };
     });
-  }, [records, billing, archiveFilter, sessionsBySale]);
+  }, [records, billing, archiveFilter, sessionsBySale, schedule]);
+  const scheduleOf = useMemo(() => new Map((schedule?.balances ?? []).map((b) => [b.saleId, b])), [schedule]);
+  // Renew is offered on the latest package only (a renewal copies it and follows on after it).
+  const renewableId = useMemo(() => ((latestPackage((records ?? []) as any[])?.sale as any)?.id ?? null) as string | null, [records]);
 
   const invalidate = () => {
-    for (const key of [["client-purchases", clientId], ["client-billing", clientId], ["pt-balance", clientId]]) {
+    for (const key of [["client-purchases", clientId], ["client-billing", clientId], ["pt-balance", clientId], ["pt-payment-ledger", clientId], ["pt-pack-purchases", clientId]]) {
       qc.invalidateQueries({ queryKey: key });
     }
   };
@@ -122,7 +124,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const renew = async (row: Row) => {
     const { raw, money } = row;
     const total = formatMoney(withTax(Math.round(resolvePaymentDisplay(raw).contractTotal * 100), money.rate) / 100, money.currency);
-    if (!window.confirm(`Add another ${raw.sessions_purchased} sessions of "${raw.offer_name ?? "this package"}" for ${total}? Sessions trained or booked past what's paid for move onto it.`)) return;
+    if (!window.confirm(`Add the next ${raw.sessions_purchased} sessions of "${raw.offer_name ?? "this package"}" for ${total}? Nothing is charged now. Sessions trained or booked past what's paid for move onto it.`)) return;
     try { await renewFn({ data: { purchase_id: raw.id } }); toast.success("Renewal added"); invalidate(); qc.invalidateQueries({ queryKey: ["pt-pack-purchases", clientId] }); }
     catch (e: any) { toast.error(e?.message ?? "Could not add the renewal"); }
   };
@@ -137,7 +139,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   return (
     <Card className="border-border bg-card p-4 md:col-span-3 md:p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground"><ShoppingBag className="h-4 w-4" />Sales</h3>
+        <h3 className="flex items-center gap-2 text-base font-semibold"><ShoppingBag className="h-4 w-4 text-muted-foreground" />Sales</h3>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={archiveFilter} onValueChange={(v) => setArchiveFilter(v as ArchiveFilter)}>
             <SelectTrigger className="h-9 w-[125px] text-xs" aria-label="Sale archive filter"><SelectValue /></SelectTrigger>
@@ -174,6 +176,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                 badges={!raw.archived_at && <AccessBadge raw={raw} />}
                 sessions={sessionsBySale.get(raw.id)}
                 payments={payments}
+                schedule={scheduleOf.get(raw.id) ?? null}
                 notes={<SaleNotes raw={raw} waiting={money.state === "waiting"} />}
                 onRecordPayment={() => setDialog({ kind: "pay", row })}
                 onVoidPayment={(payment) => setDialog({ kind: "void", row, payment })}
@@ -185,7 +188,7 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
                     onRecordPayment={() => setDialog({ kind: "pay", row })}
                     onRefund={() => setDialog({ kind: "refund", row })}
                     onAddSessions={() => setDialog({ kind: "sessions", row })}
-                    onRenew={() => void renew(row)}
+                    onRenew={raw.id === renewableId ? () => void renew(row) : undefined}
                     onEditDates={() => setEditingDates(raw)}
                     onSetExpiry={() => setEditingExpiry(raw)}
                     onEmailLink={() => emailLink(raw.id)}
@@ -227,7 +230,7 @@ function SaleNotes({ raw, waiting }: { raw: any; waiting: boolean }) {
 
 function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessions, onRenew, onEditDates, onSetExpiry, onEmailLink, onChanged }: {
   raw: any; money: SaleMoney; clientName?: string | null;
-  onRecordPayment: () => void; onRefund: () => void; onAddSessions: () => void; onRenew: () => void;
+  onRecordPayment: () => void; onRefund: () => void; onAddSessions: () => void; onRenew?: () => void;
   onEditDates: () => void; onSetExpiry: () => void; onEmailLink: () => void; onChanged: () => void;
 }) {
   const unpaid = !["Paid", "Active Subscription"].includes(String(raw.payment_status ?? "")) && money.state !== "ended" && money.kind !== "free";
@@ -298,7 +301,7 @@ function RowMenu({ raw, money, clientName, onRecordPayment, onRefund, onAddSessi
     <DropdownMenuContent align="end" className="w-64">
       {live && money.kind !== "free" && money.state !== "ended" && <DropdownMenuItem onSelect={onRecordPayment}><Banknote className="mr-2 h-3.5 w-3.5" />Record a payment</DropdownMenuItem>}
       {live && money.paidCents > 0 && <DropdownMenuItem onSelect={onRefund}><Undo2 className="mr-2 h-3.5 w-3.5" />Record a refund</DropdownMenuItem>}
-      {live && Number(raw.sessions_purchased ?? 0) > 0 && money.kind !== "free" && <DropdownMenuItem onSelect={onRenew}><Repeat className="mr-2 h-3.5 w-3.5" />Renew: another {raw.sessions_purchased} sessions</DropdownMenuItem>}
+      {live && onRenew && Number(raw.sessions_purchased ?? 0) > 0 && money.kind !== "free" && <DropdownMenuItem onSelect={onRenew}><Repeat className="mr-2 h-3.5 w-3.5" />Renew: add the next {raw.sessions_purchased}</DropdownMenuItem>}
       {live && Number(raw.sessions_purchased ?? 0) > 0 && <DropdownMenuItem onSelect={onAddSessions}><PlusCircle className="mr-2 h-3.5 w-3.5" />Add free sessions</DropdownMenuItem>}
       {live && <DropdownMenuItem onSelect={onEditDates}><Pencil className="mr-2 h-3.5 w-3.5" />{raw.term_start_date || raw.term_end_date ? "Edit dates" : "Set dates"}</DropdownMenuItem>}
       {live && unpaid && <>

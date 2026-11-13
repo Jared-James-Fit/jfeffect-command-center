@@ -169,7 +169,7 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
   if (weekIds.length) {
     const { data: d = [] } = await sb
       .from("pl_days")
-      .select("id, week_id, title, scheduled_date, duration_estimate_min, duration_override_min, pl_weeks!inner(block_id, pl_blocks!inner(client_id))")
+      .select("id, week_id, title, scheduled_date, is_optional, duration_estimate_min, duration_override_min, pl_weeks!inner(block_id, pl_blocks!inner(client_id))")
       .in("week_id", weekIds)
       .gte("scheduled_date", windowStart.toISOString().slice(0, 10));
     scheduledDays = d as any[];
@@ -262,9 +262,10 @@ export async function getCoachIntel(opts?: { coachId?: string | null }): Promise
 
     const today = todayLocalISO();
     const mySchedDays = scheduledDays.filter((d) => d.pl_weeks?.pl_blocks?.client_id === c.id);
-    const dueDays = mySchedDays.filter((d) => (d.scheduled_date ?? "") <= today);
     const myComp = (completions as any[]).filter((cm) => cm.client_id === c.id);
     const completedSchedIds = new Set(myComp.map((cm) => cm.day_id));
+    // an optional session counts only when it was trained: skipping it is never a miss
+    const dueDays = mySchedDays.filter((d) => (d.scheduled_date ?? "") <= today && (!d.is_optional || completedSchedIds.has(d.id)));
     const completed = dueDays.filter((d) => completedSchedIds.has(d.id)).length;
     const assigned = dueDays.length;
     const missedAll: MissedDay[] = dueDays

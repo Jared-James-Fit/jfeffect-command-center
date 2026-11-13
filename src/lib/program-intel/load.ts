@@ -168,7 +168,7 @@ export async function loadIntelRecords(
     sb.from("pl_weeks").select("id, block_id, week_index, start_date, end_date, phase, notes").in("block_id", ids).eq("archived", false).is("deleted_at", null).order("week_index").range(f, t),
   );
   const days = await fetchByIds<any>(weeks.map((w) => w.id), (ids, f, t) =>
-    sb.from("pl_days").select("id, week_id, day_index, title, focus, notes, scheduled_date").in("week_id", ids).eq("archived", false).is("deleted_at", null).order("day_index").range(f, t),
+    sb.from("pl_days").select("id, week_id, day_index, title, focus, notes, scheduled_date, is_optional").in("week_id", ids).eq("archived", false).is("deleted_at", null).order("day_index").range(f, t),
   );
   const dayIds = days.map((d) => d.id);
   const rows = await fetchByIds<any>(dayIds, (ids, f, t) =>

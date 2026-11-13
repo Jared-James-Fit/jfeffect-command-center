@@ -173,7 +173,7 @@ describe("text shaping and money", () => {
   });
 
   it("maps categories onto the log's kinds (the kind check allows each)", () => {
-    const sql = readFileSync("supabase/migrations/20270314090000_sms_cost_guard.sql", "utf8");
+    const sql = readFileSync("supabase/migrations/20270316090000_sms_cost_guard.sql", "utf8");
     for (const c of ["security", "session", "manual", "test", "reminder", "payment", "automation", "staff_alert", "bulk"] as const) {
       expect(sql).toContain(`'${kindForCategory(c)}'`);
     }
@@ -181,7 +181,7 @@ describe("text shaping and money", () => {
 });
 
 describe("database guard contract", () => {
-  const sql = readFileSync("supabase/migrations/20270314090000_sms_cost_guard.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20270316090000_sms_cost_guard.sql", "utf8");
 
   it("serializes every claim and makes one key send once", () => {
     expect(sql).toContain("pg_advisory_xact_lock(hashtext('public.sms_claim'))");

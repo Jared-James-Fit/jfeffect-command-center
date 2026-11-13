@@ -218,7 +218,7 @@ describe("every place a video can be picked uses the trimmer and the pipeline", 
     expect(read("src/components/community/comments-sheet.tsx")).toContain('pickMedia(file, { context: "comment", trim: trimmer.request })');
     expect(read("src/components/community/edit-post-sheet.tsx")).toContain('videoContext: post?.completion_id ? "workout" : "post"');
     const tray = read("src/components/community/slide-tray.tsx");
-    expect(tray).toContain("const next = await retrimPicked(old, trimmer.request, videoContext);");
+    expect(tray).toContain("const next = await retrimPicked(old, to ? fixedTrim(to) : trimmer.request, videoContext);");
     expect(tray).toContain("job.ctl?.abort();");
   });
 
@@ -244,7 +244,7 @@ describe("every place a video can be picked uses the trimmer and the pipeline", 
     expect(t).toContain('aria-label="Start of clip"');
     expect(t).toContain('aria-label="End of clip"');
     expect(t).toContain("data-trim-overview");
-    expect(t).toContain("selected · {formatClock(maxLen)} max");
+    expect(t).toContain("`selected · ${formatClock(maxLen)} max`");
   });
 
   it("uploads resume, and the server re-reads each video before it can be published", () => {

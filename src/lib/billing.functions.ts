@@ -64,6 +64,10 @@ export const recordPayment = createServerFn({ method: "POST" })
       .single();
     if (prErr || !pr) throw new Error("Purchase not found");
 
+    // A double tap or a retry records it once: the same payment by hand in the last few minutes is this one.
+    const dup = await findRecentDuplicatePayment(supabase, data);
+    if (dup) return { ok: true, ledger: dup, duplicate: true, autoPay: null };
+
     const { data: inserted, error } = await supabase
       .from("payment_ledger")
       .insert({
@@ -97,8 +101,42 @@ export const recordPayment = createServerFn({ method: "POST" })
       reason: data.internal_note ?? null,
     });
 
-    return { ok: true, ledger: inserted };
+    // Paid by hand down to nothing owed: auto-pay stops at its period end, so Stripe never charges for it again.
+    const { endAutoPayIfPaidUp } = await import("@/lib/stripe-plan-payments.server");
+    const autoPay = await endAutoPayIfPaidUp(supabase, pr.client_id).catch((e: any) => ({ ended: false, error: e?.message ?? "Couldn't check auto-pay" }));
+    if (autoPay.ended) {
+      await logAudit(supabase, {
+        clientId: pr.client_id,
+        actorUserId: userId,
+        action: "auto_pay_ended_paid_up",
+        recordType: "purchase_records",
+        recordId: (autoPay as any).saleId ?? null,
+        after: { cancel_at_period_end: true, subscription: (autoPay as any).subscriptionId ?? null },
+        reason: "Nothing left owed after a payment recorded by hand",
+      });
+    }
+
+    return { ok: true, ledger: inserted, duplicate: false, autoPay };
   });
+
+/** The same payment recorded by hand on this sale in the last few minutes (a double tap or a retry). */
+async function findRecentDuplicatePayment(supabase: any, data: z.infer<typeof RecordPayment>) {
+  const since = new Date(Date.now() - 10 * 60_000).toISOString();
+  let q = supabase
+    .from("payment_ledger")
+    .select("*")
+    .eq("purchase_id", data.purchase_id)
+    .eq("txn_type", "payment")
+    .eq("source", "manual")
+    .eq("voided", false)
+    .eq("amount_minor", data.amount_minor)
+    .eq("method", data.method)
+    .gte("created_at", since)
+    .limit(1);
+  if (data.transaction_date) q = q.eq("transaction_date", data.transaction_date);
+  const { data: rows } = await q;
+  return (rows ?? [])[0] ?? null;
+}
 
 // -------- Void/reverse a previous ledger row --------
 const VoidLedger = z.object({
@@ -257,6 +295,56 @@ export const getClientBillingOverview = createServerFn({ method: "POST" })
       session_events: sessionsRes.data ?? [],
       session_balance: balanceRes.data ?? [],
     };
+  });
+
+// -------- Set payment dates on a balance collected by hand --------
+// A plan with no dates (a renewal paid by hand, a sale recorded without a
+// schedule) reads "no payment dates set" on Billing. The coach sets when the
+// first payment is due and how often after that; payment k then falls k
+// periods after the first (payment-schedule.ts), so recording a payment moves
+// the rest along. Only for sales Stripe doesn't collect: a Stripe plan's dates
+// are Stripe's. Nothing is charged.
+const SetPaymentDates = z.object({
+  purchase_id: z.string().uuid(),
+  first_payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  every: z.enum(["week", "2 weeks", "month"]).optional().nullable(),
+});
+const FREQUENCY_FOR: Record<string, string> = { week: "weekly", "2 weeks": "biweekly", month: "monthly" };
+
+export const setPaymentDates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SetPaymentDates.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data: pr, error } = await supabase
+      .from("purchase_records")
+      .select("id, client_id, first_payment_date, payment_frequency, billing_schedule_source, stripe_subscription_id, stripe_checkout_session_id, stripe_payment_link, stripe_payment_intent_id, number_of_payments")
+      .eq("id", data.purchase_id)
+      .single();
+    if (error || !pr) throw new Error("Sale not found");
+    if (pr.stripe_subscription_id || pr.stripe_checkout_session_id || pr.stripe_payment_link || pr.stripe_payment_intent_id) {
+      throw new Error("Stripe collects this sale, so its dates are Stripe's. Change them in Stripe.");
+    }
+    const plan = Number(pr.number_of_payments ?? 0) > 1;
+    if (plan && !data.every) throw new Error("Pick how often the payments come.");
+    const patch: Record<string, unknown> = {
+      first_payment_date: data.first_payment_date,
+      billing_schedule_source: "manual_dates",
+    };
+    if (plan && data.every) patch.payment_frequency = FREQUENCY_FOR[data.every];
+    const { error: uErr } = await supabase.from("purchase_records").update(patch).eq("id", pr.id);
+    if (uErr) throw new Error(uErr.message);
+    await logAudit(supabase, {
+      clientId: pr.client_id,
+      actorUserId: userId,
+      action: "payment_dates_set",
+      recordType: "purchase_records",
+      recordId: pr.id,
+      before: { first_payment_date: pr.first_payment_date, payment_frequency: pr.payment_frequency, billing_schedule_source: pr.billing_schedule_source },
+      after: patch,
+    });
+    return { ok: true };
   });
 
 // -------- Renew a session package --------

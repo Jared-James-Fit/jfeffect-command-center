@@ -2,8 +2,9 @@
  * Set videos, from the pick to the coach chat, in the background: the
  * athlete picks or films a clip on a set and goes straight back to logging.
  *
- *   pick     read the clip's header (no decoding); the trimmer opens only
- *            when it's over a coach chat's 10 minutes
+ *   pick     read the clip's header (no decoding), then a quick look in the
+ *            trimmer with the lift found for you (lift.ts: the walk to the
+ *            bar and back to the phone cut, Whole clip one tap away) and Send
  *   prepare  planVideo decides: send it as it is, cut it (a remux, ~instant),
  *            or shrink it to 720p H.264 on the phone's hardware encoder, and
  *            only when that wins on total time: a re-encode that turns out
@@ -36,7 +37,7 @@
  */
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { pickVideo, type PickedVideo, type TrimFn } from "@/lib/video-edit/pick";
+import { pickVideo, type PickedVideo, type TrimFn, type TrimOffer } from "@/lib/video-edit/pick";
 import { planVideo, selectionOf } from "@/lib/video-edit/plan";
 import { renderVideo, VideoRenderError } from "@/lib/video-edit/render";
 import { videoBudget, videoLimit } from "@/lib/video-edit/limits";
@@ -99,6 +100,8 @@ export type StartSetVideo = {
   dayTitle: string;
   label: string;
   trim?: TrimFn;
+  /** A quick look before it goes: the trimmer with the lift found for you, and Send (pick.ts, TrimOffer). */
+  offer?: TrimOffer;
 };
 
 /** A "no" that trying again won't change. */
@@ -286,7 +289,7 @@ export async function startSetVideo(
   const sentP = alreadySentQuick(input.clientId, fileKey);
   let picked: Awaited<ReturnType<typeof pickVideo>>;
   try {
-    picked = await pickVideo(input.file, CONTEXT, { trim: input.trim });
+    picked = await pickVideo(input.file, CONTEXT, { trim: input.trim, offer: input.offer });
   } catch (e) {
     dropSetVideoJob(id);
     toast.error(setVideoErrorMessage(e));

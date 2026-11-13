@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSessionPackages, dayRange, packagePayLine, sessionPlaces, sessionsNextStep, type PackageLedgerEvent, type PackageSessionRow } from "@/lib/session-packages";
+import { buildSessionPackages, dayRange, sessionPlaces, sessionsNextStep, type PackageLedgerEvent, type PackageSessionRow } from "@/lib/session-packages";
 
 let seq = 0;
 const id = () => `e${++seq}`;
@@ -118,12 +118,11 @@ describe("Marc's packages", () => {
   });
 
   it("says each package's payment in a few words", () => {
-    const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
     const [p3, p2, p1] = view.packages;
-    expect(packagePayLine(p1.money, fmt)).toEqual({ text: "Paid $840.00", tone: "done" });
-    expect(packagePayLine(p2.money, fmt)).toEqual({ text: "$168.00 owed", tone: "attention" });
+    expect(p1.money.state).toBe("paid");
+    expect(p2.money.leftCents).toBe(16800);
     expect(p2.money.plan).toEqual({ made: 3, total: 4 });
-    expect(packagePayLine(p3.money, fmt)).toEqual({ text: "$672.00 owed", tone: "attention" });
+    expect(p3.money.leftCents).toBe(67200);
     expect(p3.money.plan).toEqual({ made: 0, total: 4 });
   });
 
@@ -196,6 +195,22 @@ describe("sessions past every package", () => {
     expect(v.packages[0]).toMatchObject({ phase: "waiting", open: 0, size: 16 });
     expect(v.totals.leftToBook).toBe(0);
     expect(v.currentId).toBeNull();
+  });
+
+  it("a package past its use-by date keeps its unused sessions on record but none are available to book", () => {
+    const v = buildSessionPackages({
+      sales: [pkg("p1", { payment_status: "Paid", amount_paid_cents: 67200, amount_tax_paid_cents: 3200, purchased_at: "2026-09-01", term_start_date: "2026-09-01", term_end_date: "2026-09-28" })],
+      payments: [],
+      balance: [{ purchase_id: "p1", granted: 16, used: 12, reserved: 0, expired: 0, remaining: 4, expires_at: "2026-10-31" } as any],
+      events: [],
+      sessions: [],
+      today: "2026-11-13",
+    });
+    expect(v.packages[0]).toMatchObject({ phase: "active", done: 12, open: 4, expiresAt: "2026-10-31", termFrom: "2026-09-01", termTo: "2026-09-28" });
+    expect(v.totals.leftToBook).toBe(0);
+    // Before its date they're available.
+    const before = buildSessionPackages({ sales: [pkg("p1", { payment_status: "Paid", amount_paid_cents: 67200 })], payments: [], balance: [{ purchase_id: "p1", granted: 16, used: 12, reserved: 0, expired: 0, remaining: 4, expires_at: "2026-10-31" } as any], events: [], sessions: [], today: "2026-10-01" });
+    expect(before.totals.leftToBook).toBe(4);
   });
 });
 

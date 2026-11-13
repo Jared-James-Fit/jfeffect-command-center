@@ -911,7 +911,7 @@ export function ClientProfileWorkspace({
         <TabsContent value="sessions" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
             <div id="session-transactions" className="contents">
-              <ClientSessionsPanel clientId={id} client={form} onChangeField={set} />
+              <ClientSessionsPanel clientId={id} client={form} onChangeField={set} onOpenBilling={() => setTab("purchases")} />
             </div>
           </Suspense>
         </TabsContent>
@@ -919,7 +919,7 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
-            <ClientBillingPanel clientId={id} />
+            <ClientBillingPanel clientId={id} onOpenSessions={() => setTab("sessions")} />
             <ClientSalesTable clientId={id} />
           </Suspense>
         </TabsContent>

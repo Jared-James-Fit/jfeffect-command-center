@@ -265,7 +265,8 @@ export function buildGraph(rec: IntelRecords): Graph {
           lines.set(r.id, ls);
         }
         const status = dayStatus({ completed: !!completion?.completed_at, anyLogged, date, week: w, block: b, today: rec.today });
-        if (trainedOnly && status !== "completed" && status !== "partial") continue;
+        // an optional session (pl_days.is_optional) counts only once it's trained, like a backup
+        if ((trainedOnly || (d as any).is_optional) && status !== "completed" && status !== "partial") continue;
         days.push({
           dayId: d.id,
           weekKey: weekKey(w),

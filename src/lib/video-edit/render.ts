@@ -107,6 +107,8 @@ async function runConversion(
         trim: { start: p.start, end: p.end },
         // never lose a frame of the selection; MP4 hides the lead-in from the keyframe before it, WebM can't
         copy: { mode: "forced", boundaryPolicy: "expand", ...(webm ? { shiftTolerance: Infinity } : {}) },
+        // posted with no sound: the audio track is left out
+        ...(p.muted ? { audio: { discard: true } } : {}),
         showWarnings: false,
       });
     } else {
@@ -115,7 +117,7 @@ async function runConversion(
       const portrait = info.height > info.width;
       const scaled = Math.max(t.width, t.height) < Math.max(info.width, info.height);
       let aac = false;
-      if (info.hasAudio && info.audioCodec && info.audioCodec !== "aac") aac = await mb.canEncodeAudio("aac").catch(() => false);
+      if (!t.muted && info.hasAudio && info.audioCodec && info.audioCodec !== "aac") aac = await mb.canEncodeAudio("aac").catch(() => false);
       conv = await mb.Conversion.init({
         input,
         output,
@@ -129,17 +131,18 @@ async function runConversion(
           keyFrameInterval: 2,
         },
         // audio is copied as it is when it can be (iPhones have no AAC encoder in the browser)
-        audio: aac ? { codec: "aac", quality: new mb.Quality({ bitrate: 128_000 }) } : {},
+        audio: t.muted ? { discard: true } : aac ? { codec: "aac", quality: new mb.Quality({ bitrate: 128_000 }) } : {},
         showWarnings: false,
       });
     }
     aborted(opts.signal);
     if (!conv.isValid) throw new VideoRenderError("This video's format can't be prepared on this phone.", "invalid");
-    // Never lose the picture or the sound. An extra track we can't read is fine
-    // to leave out as long as one audio track survives (newer iPhones add a
-    // spatial-audio track next to the normal AAC one).
+    // Never lose the picture or the sound (unless it's posted with no sound).
+    // An extra track we can't read is fine to leave out as long as one audio
+    // track survives (newer iPhones add a spatial-audio track next to the
+    // normal AAC one).
     const kept = conv.utilizedTracks;
-    if (!kept.some((t) => t.type === "video") || (info.hasAudio && !kept.some((t) => t.type === "audio"))) {
+    if (!kept.some((t) => t.type === "video") || (info.hasAudio && !p.muted && !kept.some((t) => t.type === "audio"))) {
       const dropped = conv.discardedTracks.map((d) => `${d.track.type}-${d.track.codec ?? "?"}:${d.reason}`).join(",");
       throw new VideoRenderError("This video's sound or picture can't be kept on this phone.", `dropped:${dropped}`);
     }
@@ -228,11 +231,12 @@ export async function renderVideo(file: File, info: SourceInfo, plan: VideoPlan,
         }
       }
     : null;
-  const copyPlan: Extract<VideoPlan, { mode: "copy" }> = { mode: "copy", start: plan.start, end: plan.end, estBytes: fallback?.estBytes ?? 0 };
+  const copyPlan: Extract<VideoPlan, { mode: "copy" }> = { mode: "copy", start: plan.start, end: plan.end, estBytes: fallback?.estBytes ?? 0, ...(plan.muted ? { muted: true } : {}) };
   const whole = plan.start <= 0.05 && plan.end >= info.duration - 0.05;
   const sendCopy = async (why: string) => {
     opts.onProgress?.(0);
-    if (whole) return done(normalizeVideoType(file), "original", why);
+    // the whole clip goes as it is, unless its sound has to come out
+    if (whole && !plan.muted) return done(normalizeVideoType(file), "original", why);
     const out = await convertOnceMore(file, info, { mode: "copy", plan: copyPlan }, opts, null);
     return done(await checkOut(out, "copy"), "copy", why);
   };

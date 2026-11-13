@@ -1,8 +1,10 @@
 /**
  * The picked clip, handed to the background uploader. Mounted only once a
- * clip is picked (lazy), so the trimmer is here for the rare clip over a
- * coach chat's 10 minutes; everything else goes straight up. A clip filmed in
- * the app is remembered until it's saved to the phone, and offered right away
+ * clip is picked (lazy). First a quick look in the trimmer: the lift is found
+ * on the phone in a second or two and the handles glide to it (the walk to
+ * the bar, the wait and the walk back to the phone cut; Whole clip one tap
+ * away), then Send, and it goes up in the background. A clip filmed in the
+ * app is remembered until it's saved to the phone, and offered right away
  * (set-videos/phone-copy.ts).
  */
 import { useEffect, useRef } from "react";
@@ -23,7 +25,7 @@ export default function SetVideoFlow({
   file: File;
   /** Straight from the camera: not in the phone's Photos. */
   filmedHere?: boolean;
-  start: Omit<StartSetVideo, "file" | "trim">;
+  start: Omit<StartSetVideo, "file" | "trim" | "offer">;
   onDone: () => void;
 }) {
   const trimmer = useVideoTrimmer();
@@ -33,7 +35,7 @@ export default function SetVideoFlow({
     if (begun.current) return;
     begun.current = true;
     void import("@/lib/set-videos/uploader")
-      .then((m) => m.startSetVideo({ ...start, file, trim }))
+      .then((m) => m.startSetVideo({ ...start, file, trim, offer: { suggestLift: true, title: `${start.exerciseName} · Set ${start.setIndex}`, doneLabel: "Send" } }))
       .then((res) => {
         // on its way: a clip filmed here is kept for the phone until it's saved there
         if (!res.ok || !res.id || !filmedHere || !isTouchDevice()) return;

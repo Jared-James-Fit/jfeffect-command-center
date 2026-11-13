@@ -184,7 +184,24 @@ export type MemberLedgerRowIn = {
   app_members?: { full_name: string | null } | null;
 };
 
-export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRowIn[]): RevenueRow[] {
+/** An AI credit pack sold through Stripe (`ai_credit_purchases`): its own sale, with its GST. */
+export type CreditSaleRowIn = {
+  id: string;
+  credits: number;
+  amount_minor: number | string;
+  tax_minor: number | string;
+  total_minor: number | string;
+  refunded_minor: number | string | null;
+  refunded_at: string | null;
+  currency: string | null;
+  paid_at: string;
+  stripe_mode: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_checkout_session_id: string | null;
+  client_name?: string | null;
+};
+
+export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRowIn[], creditSales: CreditSaleRowIn[] = []): RevenueRow[] {
   const byId = new Map(ledger.map((r) => [r.id, r]));
   const out: RevenueRow[] = [];
 
@@ -244,6 +261,35 @@ export function normalizeRevenue(ledger: LedgerRowIn[], members: MemberLedgerRow
       stripe: m.payment_method === "stripe" || !!m.stripe_payment_intent_id,
       reference: m.stripe_payment_intent_id ?? null,
     });
+  }
+
+  for (const c of creditSales) {
+    if (c.stripe_mode === "test") continue;
+    const gross = Math.abs(Number(c.total_minor) || 0);
+    if (!gross) continue;
+    const tax = Math.min(Math.abs(Number(c.tax_minor) || 0), gross);
+    const common = {
+      method: "stripe",
+      source: "client" as const,
+      clientName: c.client_name ?? null,
+      product: `AI credits · ${Number(c.credits).toLocaleString("en-CA")}`,
+      currency: (c.currency ?? "CAD").toUpperCase(),
+      stripe: true,
+      reference: c.stripe_payment_intent_id ?? c.stripe_checkout_session_id ?? null,
+    };
+    out.push({ ...common, id: `ai-credits:${c.id}`, date: String(c.paid_at).slice(0, 10), kind: "payment", grossMinor: gross, taxMinor: tax, taxEstimated: false });
+    const refunded = Math.min(Math.abs(Number(c.refunded_minor) || 0), gross);
+    if (refunded > 0) {
+      out.push({
+        ...common,
+        id: `ai-credits-refund:${c.id}`,
+        date: String(c.refunded_at ?? c.paid_at).slice(0, 10),
+        kind: "refund",
+        grossMinor: refunded,
+        taxMinor: Math.round((refunded * tax) / gross),
+        taxEstimated: true,
+      });
+    }
   }
 
   return out.sort((a, b) => a.date.localeCompare(b.date));

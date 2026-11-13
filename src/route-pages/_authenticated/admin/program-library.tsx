@@ -51,7 +51,7 @@ import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
-  LIBRARY_SCOPES, clientsLabel, emptyLibraryCopy, inScope, matchesSearch, membershipByTemplate,
+  LIBRARY_SCOPES, clientsLabel, emptyLibraryCopy, inScope, libraryCategorySections, matchesSearch, membershipByTemplate,
   scopeCounts, toLibraryPrograms, usageByTemplate, visibleScopes,
   type LibraryProgram, type LibraryScope, type ListingRow, type UsageBlock,
 } from "@/lib/programs/library-view";
@@ -166,7 +166,7 @@ export function ProgramLibrary({
       membershipByTemplate(isAdmin ? listings : [], revisions),
       (id) => {
         const s = summarizeTemplatePayload(byId.get(id));
-        return { weeks: s.weeks, blocks: s.blocks };
+        return { weeks: s.weeks, blocks: s.blocks, optionalDays: (s as { optionalDays?: number }).optionalDays ?? 0 };
       },
     );
   }, [templates, usageRows, listings, isAdmin, byId]);
@@ -257,20 +257,32 @@ export function ProgramLibrary({
             )}
           </div>
         ) : (
-          <ul className="grid gap-2 lg:grid-cols-2">
-            {shown.map((p) => (
-              <LibraryRow
-                key={p.id}
-                program={p}
-                tpl={byId.get(p.id)}
-                isAdmin={isAdmin}
-                onPreview={() => setPreviewId(p.id)}
-                onAssign={() => setAssignTpl(byId.get(p.id))}
-                onMembership={() => setMembershipTpl(byId.get(p.id) ?? null)}
-                onChanged={invalidate}
-              />
+          <div className="space-y-5">
+            {(scope === "all" && !q.trim() ? libraryCategorySections(shown) : [{ key: "list", label: "", items: shown }]).map((section) => (
+              <section key={section.key} data-library-section={section.key}>
+                {section.label && (
+                  <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[15px] font-semibold">
+                    {section.label}
+                    <span className="text-[13px] font-normal text-muted-foreground tabular-nums">{section.items.length}</span>
+                  </h2>
+                )}
+                <ul className="grid gap-2 lg:grid-cols-2">
+                  {section.items.map((p) => (
+                    <LibraryRow
+                      key={p.id}
+                      program={p}
+                      tpl={byId.get(p.id)}
+                      isAdmin={isAdmin}
+                      onPreview={() => setPreviewId(p.id)}
+                      onAssign={() => setAssignTpl(byId.get(p.id))}
+                      onMembership={() => setMembershipTpl(byId.get(p.id) ?? null)}
+                      onChanged={invalidate}
+                    />
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 

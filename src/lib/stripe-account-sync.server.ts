@@ -18,6 +18,7 @@ import {
   invoicePaymentRecordId,
 } from "@/lib/stripe-invoice-refs";
 import { planPaymentTarget } from "@/lib/stripe-plan-payments.server";
+import { isAiCreditsObject, isCreditPackPayment, recordCreditsFromSession } from "@/lib/ai-credits/stripe.server";
 
 export type SyncEntry = {
   session_id: string;
@@ -210,6 +211,19 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
 
     if (s.metadata?.preview === "true" || s.metadata?.kind === "jf_membership") {
       entries.push({ ...base, reason: "Not a coaching purchase (preview or membership)." });
+      continue;
+    }
+    // An AI credit pack is its own sale, never a payment on a coaching sale:
+    // add its credits if the webhook missed it (once per session), and move on.
+    if (isAiCreditsObject(s)) {
+      let reason = "AI credit pack (its own sale).";
+      try {
+        const r = await recordCreditsFromSession(s);
+        if (r?.added) reason = `AI credit pack: added ${r.added} credits the webhook missed.`;
+      } catch (e: any) {
+        reason = `AI credit pack: ${e?.message ?? "couldn't add the credits"}`;
+      }
+      entries.push({ ...base, reason });
       continue;
     }
     if (s.payment_status !== "paid" && s.payment_status !== "no_payment_required") {
@@ -463,6 +477,7 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
     paymentIntentsScanned += rows.length;
     for (const pi of rows) {
       if (pi.status !== "succeeded" || !(pi.amount_received > 0)) continue;
+      if (isAiCreditsObject(pi)) continue;
       const chargeId = typeof pi.latest_charge === "string"
         ? pi.latest_charge
         : (typeof pi.charges?.data?.[0]?.id === "string" ? pi.charges.data[0].id : null);
@@ -529,6 +544,8 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
       if (!["succeeded", "pending"].includes(refund.status ?? "") || !(refund.amount > 0)) continue;
       const existing = await existingLedgerByStripeRef(supabase, { external: refund.id });
       if (existing) continue;
+      // A refunded credit pack is settled by the webhook (charge.refunded), never a coaching ledger row.
+      if (isAiCreditsObject(refund) || (await isCreditPackPayment(typeof refund.payment_intent === "string" ? refund.payment_intent : null))) continue;
 
       let original: any = null;
       if (refund.charge) {

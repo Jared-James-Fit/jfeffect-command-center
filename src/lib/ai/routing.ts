@@ -15,7 +15,7 @@
  */
 import type { Effort } from "./model-client.server";
 
-export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap";
+export type AiTask = "strategy" | "review" | "construct" | "repair" | "interpret" | "edit" | "nutrition" | "nutrition_write" | "roadmap" | "meal_estimate";
 export type Route = {
   /** Tried in order. */
   models: string[];
@@ -63,6 +63,12 @@ export const DEFAULT_ROUTES: Record<AiTask, Route> = {
   nutrition_write: { models: ["openai:gpt-5.5", "openai:gpt-5-mini"], effort: "low", maxOutputTokens: 24_000, strongOnly: false },
   /** The roadmap's words (block purpose, weekly focus): short writing, re-run on every program change. */
   roadmap: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 8_000, strongOnly: false },
+  /**
+   * A member's or client's AI food log ("2 eggs, toast and butter" → its macros): one short answer
+   * they're waiting on, metered with AI credits (src/lib/ai-credits). Answered inside the request
+   * (callModelNow), and read by code before it's shown (parseMealEstimate).
+   */
+  meal_estimate: { models: ["openai:gpt-5-mini", "openai:gpt-5.5"], effort: "low", maxOutputTokens: 2_000, strongOnly: false },
 };
 
 /**

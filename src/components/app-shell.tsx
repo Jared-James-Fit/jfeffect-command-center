@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useFeedPaging } from "@/lib/feed-paging";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
+import { watchIosBottomGap } from "@/lib/ios-edge";
 import { UserAvatar } from "@/components/user-avatar";
 import { SettingsMenu } from "@/components/settings-menu";
 import { listTemplates } from "@/lib/pl-programs";
@@ -308,6 +309,8 @@ export function AppShell({
   ownTopBarOn?: readonly string[];
 }) {
   useKeyboardOpen();
+  // the iPhone home-screen app laying fixed things out a status bar short: back to the real bottom (ios-edge.ts)
+  useEffect(() => watchIosBottomGap(), []);
   useReportDemoReload();
   useExerciseLibraryRealtime();
   useExerciseAliasIndex();
@@ -1587,7 +1590,8 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
         "fixed inset-x-0 bottom-0 z-50 border-t md:hidden",
         overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background",
       )}
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      // the home indicator's room (styles.css --mobile-bar-pad: less on the iPhone home-screen app's short layout)
+      style={{ paddingBottom: "var(--mobile-bar-pad)" }}
     >
       <div className={cn("mx-auto grid h-[var(--mobile-bar-h)] max-w-[560px]", dense ? "px-0.5" : "px-1", gridCols)}>
         {items.map((item) =>

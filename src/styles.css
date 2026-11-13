@@ -358,8 +358,19 @@ html[data-keyboard-open="true"] [data-hide-on-keyboard] {
    floating buttons (page "+" buttons, Back to Today) stack from it. */
 :root {
   --mobile-bar-h: 50px;
-  --mobile-bar-top: calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px));
+  --mobile-bar-top: calc(var(--mobile-bar-h) + var(--mobile-bar-pad));
+  /* the home indicator's room under the tabs (less what's already below a short layout, below) */
+  --mobile-bar-pad: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));
 }
+/* The safety net for the iPhone home-screen app's short layout (ios-edge.ts,
+   watchIosBottomGap): should iOS still end fixed things a status bar short of
+   the screen, nothing at all is drawn below that edge (only the page's
+   background), so nothing may move into it. The tab bar stays whole above it
+   and gives up as much of the home indicator's room as the band below already
+   covers, so it sits as low as it can; pages, the chats and Crew's posts still
+   end right at it. Never while typing (the keyboard has the bottom then). */
+:root { --ios-bottom-shift: 0px; }
+html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) { --ios-bottom-shift: var(--ios-bottom-gap, 0px); }
 html[data-keyboard-open="true"] {
   --bottom-nav-clearance: 0px;
   --composer-bottom-pad: 0.5rem;
@@ -396,9 +407,16 @@ html[data-ios-web-app] {
   --focus-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
 }
 html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); --app-edge-room: 0px; }
-/* with a solid status bar iOS's 100vh counts the status bar too (WebKit 316008): the shell
-   fills the window's measured height instead, so a page that fits never scrolls (ios-edge.ts) */
-html[data-ios-web-app] [data-shell-root] { min-height: var(--app-vh, 100vh); }
+/* How tall a page is at least, in the iPhone home-screen app (ios-edge.ts). With a solid
+   status bar iOS's 100vh counts the status bar too (WebKit 316008): the window's measured
+   height, so a page that fits never scrolls. Under the old transparent status bar (the top
+   inset is more than 0) the whole screen, 100vh: there the window measures a status bar short,
+   and iOS ends its fixed layout where the page ends, so a page that tall left everything
+   pinned to the bottom (the tab bar) riding 59pt up on every page that doesn't scroll
+   (Messages), with nothing drawn below it. */
+html[data-ios-web-app] [data-shell-root] {
+  min-height: min(100vh, calc(var(--app-vh, 100vh) + env(safe-area-inset-top, 0px) * 1000));
+}
 
 :root { --shell-topbar-h: 0px; }
 @media (max-width: 768px) {

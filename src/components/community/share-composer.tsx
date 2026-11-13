@@ -3,7 +3,7 @@ import { releaseCanvas } from "@/lib/canvas-memory";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, Copy, Download, ImagePlus, RefreshCw, Scissors, Send, Share2, Users, X } from "lucide-react";
+import { Check, Copy, Download, ImagePlus, RefreshCw, Scissors, Send, Share2, Users, Volume2, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { CAPTION_MAX, buildShareCardFields, isCrewAudience, lockInTimeLabel, pickerAudience, postPointsHint, type CommunityVisibility, postFiles } from "@/lib/community";
 import { invalidateCommunity, saveCommunityPost, useCompletionPreview, useMyPostForCompletion, usePostPointsStatus, type SavePostInput } from "@/lib/community.queries";
 import { AudiencePicker } from "@/components/community/audience-picker";
-import { pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, signCommunityPaths, type PickedMedia } from "@/lib/community-media";
+import { pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, signCommunityPaths, withSound, type PickedMedia } from "@/lib/community-media";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import { formatClock, type VideoContext } from "@/lib/video-edit/limits";
 import { useEarlyUpload } from "@/lib/use-early-upload";
@@ -443,11 +443,26 @@ export function ShareComposer({ open, onOpenChange, completionId, athleteName, w
 
         {/* Cards — swipe sideways */}
         <div ref={setStageEl} className="relative min-h-0 flex-1">
-          {/* a clip: one tap to change which part goes */}
+          {/* a clip: its sound on or off, and one tap to change which part goes */}
           {media?.kind === "video" && (
-            <button type="button" onClick={() => void retrim()} className="absolute right-3 top-2 z-10 inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-bold backdrop-blur active:scale-95" aria-label="Trim the clip" data-composer-trim>
-              <Scissors className="h-4 w-4" /> Trim{pickedSeconds(media) != null ? ` · ${formatClock(pickedSeconds(media)!)}` : ""}
-            </button>
+            <div className="absolute right-3 top-2 z-10 flex gap-2">
+              {media.video?.info.hasAudio && (
+                <button
+                  type="button"
+                  // the same clip with or without its sound: a new upload, the same preview (never released)
+                  onClick={() => setMedia((prev) => (prev ? withSound(prev, !!prev.video?.muted) ?? prev : prev))}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-black/55 backdrop-blur active:scale-95"
+                  aria-label={media.video.muted ? "No sound. Tap to post it with sound" : "Sound on. Tap to post it with no sound"}
+                  aria-pressed={!media.video.muted}
+                  data-composer-sound={media.video.muted ? "off" : "on"}
+                >
+                  {media.video.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </button>
+              )}
+              <button type="button" onClick={() => void retrim()} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[13px] font-bold backdrop-blur active:scale-95" aria-label="Trim the clip" data-composer-trim>
+                <Scissors className="h-4 w-4" /> Trim{pickedSeconds(media) != null ? ` · ${formatClock(pickedSeconds(media)!)}` : ""}
+              </button>
+            </div>
           )}
           {statsError ? (
             <div className="grid h-full place-items-center px-8 text-center text-sm text-white/70">Couldn't load this workout. Close and try again.</div>

@@ -115,9 +115,33 @@ export function membershipByTemplate(
   return out;
 }
 
+/** The JF Effect library's browse categories (navigation, never a restriction on who may use one). */
+export const LIBRARY_CATEGORIES = ["Athletes", "Men", "Women", "At Home"] as const;
+export type LibraryCategory = (typeof LIBRARY_CATEGORIES)[number];
+
+/** A JF Effect library program's category, from its tags ("JF Effect" + one category). */
+export function libraryCategoryOf(tags: string[] | null | undefined): LibraryCategory | null {
+  const t = (tags ?? []).map((x) => String(x).trim().toLowerCase());
+  if (!t.includes("jf effect")) return null;
+  return LIBRARY_CATEGORIES.find((c) => t.includes(c.toLowerCase())) ?? null;
+}
+
+const LEVEL_RANK: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2 };
+function levelRank(tags: string[] | null | undefined): number {
+  for (const tag of tags ?? []) {
+    const r = LEVEL_RANK[String(tag).trim().toLowerCase()];
+    if (r != null) return r;
+  }
+  return 3;
+}
+
 export type LibraryProgram = {
   id: string;
   name: string;
+  /** JF Effect library category (null for a coach's own / client programs) */
+  category: LibraryCategory | null;
+  /** order inside a category: level, then days a week, then name */
+  categoryOrder: number;
   archived: boolean;
   updatedAt: string;
   line: string;
@@ -146,7 +170,7 @@ export function styleLabel(style: string | null | undefined): string {
   return key ? key.charAt(0).toUpperCase() + key.slice(1) : "";
 }
 
-export type PayloadShape = { weeks?: number | null; blocks?: number | null };
+export type PayloadShape = { weeks?: number | null; blocks?: number | null; optionalDays?: number | null };
 
 /**
  * "3 blocks · 12 weeks · 4 days a week · Bodybuilding": what the program is, in
@@ -162,8 +186,10 @@ export function programLine(
   if (blocks > 1) parts.push(`${blocks} blocks`);
   const weeks = shape.weeks && shape.weeks > 0 ? shape.weeks : t.weeks ?? null;
   if (weeks && weeks > 0) parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
-  const days = t.days_per_week ?? null;
-  if (days && days > 0) parts.push(`${days} day${days === 1 ? "" : "s"} a week`);
+  // an optional session (Elite Powerlifting's recovery day) is said apart from the core days
+  const optional = weeks && weeks > 0 && shape.optionalDays ? Math.round(shape.optionalDays / weeks) : 0;
+  const days = t.days_per_week != null ? t.days_per_week - optional : null;
+  if (days && days > 0) parts.push(`${days} day${days === 1 ? "" : "s"} a week${optional > 0 ? ` + ${optional} optional` : ""}`);
   const style = styleLabel(t.training_style);
   if (style) parts.push(style);
   return parts.join(" · ");
@@ -186,6 +212,8 @@ export function toLibraryPrograms(
       return {
         id: t.id,
         name,
+        category: libraryCategoryOf(t.tags),
+        categoryOrder: levelRank(t.tags) * 10 + (t.days_per_week ?? 0),
         archived: !!t.archived,
         updatedAt: t.updated_at ?? "",
         line: programLine(t, shapeOf(t.id)),
@@ -251,4 +279,24 @@ export function emptyLibraryCopy(scope: LibraryScope, searching: boolean): { tit
   if (scope === "clients") return { title: "No client is on a library program", body: "Assign one from its ⋯." };
   if (scope === "archived") return { title: "Nothing archived", body: "" };
   return { title: "No programs yet", body: "Tap New program to build your first one." };
+}
+
+export type LibrarySection = { key: string; label: string; items: LibraryProgram[] };
+
+/**
+ * The All view without a search: the JF Effect programs by category (Athletes,
+ * Men, Women, At Home: beginner → advanced), then every other program, newest
+ * first. A list with no JF Effect programs is one plain section (no heading).
+ */
+export function libraryCategorySections(programs: LibraryProgram[]): LibrarySection[] {
+  const sections: LibrarySection[] = [];
+  for (const c of LIBRARY_CATEGORIES) {
+    const items = programs
+      .filter((p) => p.category === c)
+      .sort((a, b) => a.categoryOrder - b.categoryOrder || a.name.localeCompare(b.name));
+    if (items.length) sections.push({ key: c, label: c, items });
+  }
+  const rest = programs.filter((p) => !p.category);
+  if (rest.length) sections.push({ key: "other", label: sections.length ? "Your other programs" : "", items: rest });
+  return sections;
 }
