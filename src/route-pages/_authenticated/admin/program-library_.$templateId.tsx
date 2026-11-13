@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EditWithAiButton } from "@/components/program-ai/edit-with-ai";
-import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Dumbbell, X, MoreHorizontal, Smartphone, Search, Plus, Trash2, Save, Clock, Copy, LayoutGrid, CalendarRange, ArrowRight, ZoomIn, ZoomOut, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Rows3, ChevronDown, ChevronUp, Settings2, Undo2, Redo2, ClipboardCopy, ClipboardPaste, Expand, RotateCcw, ArrowLeftRight, Video, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTemplate, updateTemplate, summarizeTemplatePayload, TIME_PROFILES,
@@ -82,6 +82,8 @@ import {
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArchiveRestore, Archive as ArchiveIcon, Pencil } from "lucide-react";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
+import { MembershipListingSheet } from "@/components/programs/membership-listing-sheet";
+import { useAuth } from "@/lib/auth";
 import { AddExtraDayDialog } from "@/components/add-extra-day-dialog";
 import { getRouteApi as __getRouteApi } from "@tanstack/react-router";
 const Route = __getRouteApi("/_authenticated/admin/program-library_/$templateId");
@@ -539,6 +541,9 @@ export function TemplateEditor() {
   const { templateId } = Route.useParams();
   const search = useSearch({ strict: false }) as { block?: string };
   const qc = useQueryClient();
+  const { role } = useAuth();
+  const isAdminViewer = role === "admin";
+  const [membershipOpen, setMembershipOpen] = useState(false);
 
   const { data: tpl, isLoading } = useQuery({
     queryKey: ["pl-template", templateId],
@@ -735,6 +740,11 @@ export function TemplateEditor() {
       onToolbarEl={settingsOpen ? undefined : setToolbarEl}
       settingsOpen={settingsOpen}
       onToggleSettings={() => setSettingsOpen((v) => !v)}
+      onMembership={isAdminViewer ? async () => {
+        // members get what's saved: save what's on screen first
+        if (dirty || autosave.hasPending()) await save();
+        setMembershipOpen(true);
+      } : undefined}
       aiTool={["block", "full_prep", "program"].includes(type) ? (
         <EditWithAiButton
           target={{ kind: "template", templateId }}
@@ -845,14 +855,32 @@ export function TemplateEditor() {
             toolbarTarget={toolbarEl}
           />
       )}
+      {isAdminViewer && (
+        <MembershipListingSheet
+          template={{
+            id: templateId,
+            name: meta.name || tpl.name,
+            description: meta.description ?? (tpl as any).description ?? null,
+            training_style: meta.training_style ?? tpl.training_style ?? null,
+            training_focus: meta.training_focus || tpl.training_focus || null,
+            goal: (tpl as any).goal ?? null,
+            est_duration_min: meta.est_duration_min || tpl.est_duration_min || null,
+            payload_revision: (tpl as any).payload_revision ?? null,
+          }}
+          open={membershipOpen}
+          onOpenChange={setMembershipOpen}
+        />
+      )}
     </EditorChrome>
   );
 }
 
-function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, aiTool, children, onRename, onToolbarEl, settingsOpen, onToggleSettings }: {
+function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusTemplate, aiTool, children, onRename, onToolbarEl, settingsOpen, onToggleSettings, onMembership }: {
   meta: any; summary: any; typeLabel: string;
   autosave: any; save: () => Promise<void>; dirty: boolean;
   statusTemplate?: any;
+  /** admins: put this program in the membership app, or update / take it out */
+  onMembership?: () => void;
   /** Edit with AI (block and program templates). */
   aiTool?: React.ReactNode;
   children: React.ReactNode;
@@ -881,7 +909,7 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
         meta={
           <span className="inline-flex items-center gap-1.5">
             <span className="truncate">{kind} template · {summary.weeks} week{summary.weeks === 1 ? "" : "s"} · {summary.days} day{summary.days === 1 ? "" : "s"}</span>
-            {statusTemplate && <ProgramStatusBadge template={statusTemplate} />}
+            {statusTemplate && <ProgramStatusBadge template={statusTemplate} quiet />}
           </span>
         }
         actions={
@@ -915,6 +943,11 @@ function EditorChrome({ meta, summary, typeLabel, autosave, save, dirty, statusT
                   {settingsOpen ? <Rows3 className="mr-2 h-4 w-4" /> : <Settings2 className="mr-2 h-4 w-4" />}
                   {settingsOpen ? "Back to the program" : "Template settings"}
                 </DropdownMenuItem>
+                {onMembership && (
+                  <DropdownMenuItem onSelect={onMembership} data-builder-membership>
+                    <Smartphone className="mr-2 h-4 w-4" /> Membership app
+                  </DropdownMenuItem>
+                )}
                 {!dirty && (
                   <DropdownMenuItem onSelect={() => { void save().then(() => toast.success("Template saved")).catch((e: any) => toast.error(e?.message ?? "Couldn't save")); }}>
                     <Save className="mr-2 h-4 w-4" /> Save now

@@ -9,11 +9,13 @@ const macroCalculator = readFileSync("src/components/nutrition/MacroCalculatorDi
 const memberTargets = readFileSync("src/lib/nutrition-targets/member-targets.functions.ts", "utf8");
 
 describe("membership experience", () => {
-  it("organizes Membership App programs by an explicit tag instead of title markers", () => {
-    expect(programLibrary).toContain('const MEMBERSHIP_PROGRAM_TAG = "membership-app"');
-    expect(programLibrary).toContain("Membership App");
-    expect(programLibrary).toContain('chip.kind === "membership"');
-    expect(membershipLibraryFns).toContain("ensureMembershipProgramTag");
+  it("membership programs are the one library's Membership app view, read from their listing, never a tag", () => {
+    expect(programLibrary).toContain("membershipByTemplate(");
+    expect(programLibrary).toContain("MembershipListingSheet");
+    expect(programLibrary).not.toContain("MEMBERSHIP_PROGRAM_TAG");
+    expect(membershipLibraryFns).not.toContain("ensureMembershipProgramTag");
+    // a listing whose program is gone is never offered to members
+    expect(membershipLibraryFns).toContain('.not("source_template_id", "is", null)');
   });
 
   it("keeps support as a message-style conversation", () => {

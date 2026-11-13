@@ -4,21 +4,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
-import { PageHeader } from "@/components/app-shell";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { validateTemplatePayload, type DayIssue } from "@/lib/pl-template-validation";
 import {
-  Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon,
-  ArchiveRestore, Trash2, Clock, Calendar, Layers, MoreVertical, Search, Users, AlertTriangle, Share2, Inbox, Settings2,
-  CheckCircle2, CircleDot, X as XIcon, ArrowUpDown,
+  Plus, BookOpen, UserPlus, Eye, Pencil, Copy, Archive as ArchiveIcon, ArchiveRestore, Trash2,
+  MoreHorizontal, Search, Users, AlertTriangle, Smartphone, Settings2, X as XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { runJob } from "@/lib/progress-jobs";
@@ -26,8 +26,7 @@ import {
   listTemplates, createTemplate, applyTemplateToClient, duplicateTemplate, updateTemplate,
   setTemplateArchived, deleteTemplate, summarizeTemplatePayload,
   getTemplateWeeks, computeEndDateFromStart,
-  listTemplateAssignments,
-  type TemplateType, type TrainingStyle, type TemplatePlacement,
+  type TrainingStyle, type TemplatePlacement,
 } from "@/lib/pl-programs";
 import { BLOCK_PHASE_OPTIONS, normalizeTemplatePayload, getActiveTemplateBlocks } from "@/lib/pl-template-blocks";
 import { AvailabilityGuardDialog } from "@/components/program-planner/AvailabilityGuardDialog";
@@ -42,910 +41,550 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShareProgramSheet } from "@/components/programs/share-program-sheet";
-import { DestinationBadges } from "@/components/programs/destination-badges";
 import { ProgramStatusBadge } from "@/components/programs/program-status-badge";
-import { MembershipLibraryBadge } from "@/components/programs/membership-library-badge";
-import { listShares, summarizeShares, type TemplateShare } from "@/lib/programs/sharing";
+import { MembershipListingSheet, type MembershipTemplate } from "@/components/programs/membership-listing-sheet";
+import { unpublishLibraryListing } from "@/lib/membership-library.functions";
 import { listClientMaxes, upsertClientMax, type ClientMaxRow } from "@/lib/pl-maxes";
 import { notifyMissingMaxesFn } from "@/lib/missing-maxes.functions";
 import { todayLocalISO } from "@/lib/today";
-import { LibrarySection } from "@/components/library-section";
-import { groupTemplates } from "@/lib/library-grouping";
 import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
+import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+import {
+  LIBRARY_SCOPES, clientsLabel, emptyLibraryCopy, inScope, matchesSearch, membershipByTemplate,
+  scopeCounts, toLibraryPrograms, usageByTemplate, visibleScopes,
+  type LibraryProgram, type LibraryScope, type ListingRow, type UsageBlock,
+} from "@/lib/programs/library-view";
 
-// Quick-pick weight class tags (admin-only). Free-form tags still supported in the input.
-const WEIGHT_CLASS_TAGS: string[] = [
-  "47kg", "52kg", "57kg", "59kg", "63kg", "66kg", "69kg", "74kg",
-  "76kg", "83kg", "84kg", "84kg+", "93kg", "105kg", "120kg", "120kg+",
-];
-
-const MEMBERSHIP_PROGRAM_TAG = "membership-app";
-
-function hasMembershipProgramTag(tags: unknown): boolean {
-  return Array.isArray(tags) && tags.some((tag) =>
-    ["membership-app", "membership", "member-program"].includes(String(tag).trim().toLowerCase()),
-  );
-}
-
-function ProgramAudiencePicker({
-  value, onChange,
-}: { value: string; onChange: (next: string) => void }) {
-  const active = hasMembershipProgramTag(tagListFromString(value));
-  return (
-    <div className="space-y-1">
-      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-        Program audience
-      </Label>
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          onClick={() => onChange(tagsStringWithToggle(value, MEMBERSHIP_PROGRAM_TAG))}
-          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-            active
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-border text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Membership App
-        </button>
-        <span className="self-center text-[11px] text-muted-foreground">
-          Use this instead of putting a marker in the program title.
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function tagListFromString(s: string): string[] {
-  return s.split(",").map((x) => x.trim()).filter(Boolean);
-}
-function tagsStringWithToggle(s: string, tag: string): string {
-  const list = tagListFromString(s);
-  const i = list.findIndex((t) => t.toLowerCase() === tag.toLowerCase());
-  if (i >= 0) list.splice(i, 1); else list.push(tag);
-  return list.join(", ");
-}
-
-function WeightClassPicker({
-  value, onChange,
-}: { value: string; onChange: (next: string) => void }) {
-  const active = new Set(tagListFromString(value).map((t) => t.toLowerCase()));
-  return (
-    <div className="space-y-1">
-      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-        Weight class quick-pick
-      </Label>
-      <div className="flex flex-wrap gap-1">
-        {WEIGHT_CLASS_TAGS.map((t) => {
-          const on = active.has(t.toLowerCase());
-          return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onChange(tagsStringWithToggle(value, t))}
-              className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                on
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function WeightClassFilter({
-  value, onChange,
-}: { value: string | null; onChange: (next: string | null) => void }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Weight class:</span>
-      <button
-        onClick={() => onChange(null)}
-        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-          value === null
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        All
-      </button>
-      {WEIGHT_CLASS_TAGS.map((t) => {
-        const on = value === t;
-        return (
-          <button
-            key={t}
-            onClick={() => onChange(on ? null : t)}
-            className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-              on
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
+/**
+ * Old addresses (/admin/program-library) land on Programming → Programs;
+ * `?new=1` (the palette's Create Program) opens New program there.
+ */
 export function ProgramLibraryRedirect() {
   const navigate = useNavigate();
   useEffect(() => {
-    navigate({ to: "/admin/programming", search: { tab: "programs" } as any, replace: true });
+    const isNew = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1";
+    navigate({ to: "/admin/programming", search: { tab: "programs", ...(isNew ? { new: 1 } : {}) } as any, replace: true });
   }, [navigate]);
   return null;
 }
 
-const TEMPLATE_TYPES: { v: TemplateType; label: string }[] = [
-  { v: "full_prep", label: "Full Prep" },
-  { v: "block", label: "Block" },
-  { v: "week", label: "Week" },
-  { v: "day", label: "Day" },
-  { v: "exercise_row", label: "Exercise Row" },
-];
 const STYLES: { v: TrainingStyle; label: string }[] = [
   { v: "powerlifting", label: "Powerlifting" },
   { v: "bodybuilding", label: "Bodybuilding" },
   { v: "strength", label: "Strength" },
-  { v: "lifestyle", label: "Lifestyle" },
-  { v: "hybrid", label: "Hybrid" },
-  { v: "rehab", label: "Rehab / Pivot" },
+  { v: "hybrid", label: "Powerbuilding / hybrid" },
+  { v: "lifestyle", label: "General fitness" },
   { v: "conditioning", label: "Conditioning" },
-  { v: "custom", label: "Custom" },
+  { v: "rehab", label: "Rehab / pivot" },
+  { v: "custom", label: "Other" },
 ];
 
-const TYPE_LABEL: Record<string, string> = Object.fromEntries(TEMPLATE_TYPES.map((t) => [t.v, t.label]));
-const STYLE_LABEL: Record<string, string> = Object.fromEntries(STYLES.map((s) => [s.v, s.label]));
+/** Every client block made from a library program, read whole (the usage line on each row). */
+async function loadLibraryUsage(): Promise<UsageBlock[]> {
+  const out: UsageBlock[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await (supabase as any)
+      .from("pl_blocks")
+      .select("id, source_template_id, client_id, end_date, archived, clients:clients(first_name, full_name, archived, status)")
+      .not("source_template_id", "is", null)
+      .eq("archived", false)
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    for (const b of (data ?? []) as any[]) {
+      out.push({
+        source_template_id: b.source_template_id,
+        client_id: b.client_id,
+        end_date: b.end_date,
+        archived: b.archived,
+        client_name: b.clients?.first_name || b.clients?.full_name || null,
+        client_archived: !!b.clients?.archived,
+        client_status: b.clients?.status ?? null,
+      });
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
 
-type FilterChip =
-  | { kind: "all" }
-  | { kind: "membership" }
-  | { kind: "type"; v: TemplateType }
-  | { kind: "style"; v: TrainingStyle }
-  | { kind: "archived" }
-  | { kind: "status"; v: "ready" | "incomplete" };
-
-type SortKey = "updated_desc" | "updated_asc" | "name_asc" | "name_desc";
-type PubFilter = "any" | "draft" | "published";
-type LocFilter = "any" | "gym" | "home";
-type DaysFilter = "any" | "1-2" | "3-4" | "5-6" | "7";
-type ExpFilter = "any" | "beginner" | "intermediate" | "advanced";
+async function loadListings(): Promise<ListingRow[]> {
+  const { data, error } = await (supabase as any)
+    .from("member_plans")
+    .select("id, source_template_id, status, membership_status, last_published_version")
+    .not("source_template_id", "is", null);
+  if (error) throw error;
+  return (data ?? []) as ListingRow[];
+}
 
 export function ProgramLibrary({
-  embedded = false,
+  embedded: _embedded = false,
   initialAudience = "all",
+  openNew = false,
 }: {
   embedded?: boolean;
   initialAudience?: "all" | "membership";
+  /** opens New program on arrival (the palette's Create Program) */
+  openNew?: boolean;
 } = {}) {
   const qc = useQueryClient();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [q, setQ] = useState("");
-  const [chip, setChip] = useState<FilterChip>(
-    initialAudience === "membership" ? { kind: "membership" } : { kind: "all" },
-  );
-  const [weightClass, setWeightClass] = useState<string | null>(null);
-  const [openNew, setOpenNew] = useState(false);
+  const [scope, setScope] = useState<LibraryScope>(initialAudience === "membership" ? "membership" : "all");
+  const [newOpen, setNewOpen] = useState(openNew);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [assignTpl, setAssignTpl] = useState<any | null>(null);
-  const [shareTpl, setShareTpl] = useState<any | null>(null);
-  const [sort, setSort] = useState<SortKey>("updated_desc");
-  const [pubFilter, setPubFilter] = useState<PubFilter>("any");
-  const [locFilter, setLocFilter] = useState<LocFilter>("any");
-  const [daysFilter, setDaysFilter] = useState<DaysFilter>("any");
-  const [expFilter, setExpFilter] = useState<ExpFilter>("any");
-  const [showFilters, setShowFilters] = useState(false);
+  const [membershipTpl, setMembershipTpl] = useState<MembershipTemplate | null>(null);
 
-  const showArchived = chip.kind === "archived";
-  const type = chip.kind === "type" ? chip.v : ("all" as const);
-  const style = chip.kind === "style" ? chip.v : ("all" as const);
+  useEffect(() => { if (openNew) setNewOpen(true); }, [openNew]);
+  useEffect(() => { setScope(initialAudience === "membership" ? "membership" : "all"); }, [initialAudience]);
 
   const { data: templates = [], isLoading } = useQuery({
-    queryKey: ["pl-templates", q, type, style, showArchived],
-    queryFn: () =>
-      listTemplates({
-        q,
-        type,
-        style,
-        ...(showArchived ? { includeArchived: true, onlyArchived: true } : {}),
-      } as any),
+    queryKey: ["pl-templates", "library"],
+    queryFn: () => listTemplates({ includeArchived: true } as any),
+  });
+  const { data: usageRows = [] } = useQuery({
+    queryKey: ["admin-library-usage"],
+    queryFn: loadLibraryUsage,
+    staleTime: 60_000,
+  });
+  const { data: listings = [] } = useQuery({
+    queryKey: ["admin-library-membership"],
+    queryFn: loadListings,
+    enabled: isAdmin,
+    staleTime: 30_000,
   });
 
-  const filteredTemplates = useMemo(() => {
-    let rows = templates as any[];
-    if (weightClass) {
-      const wc = weightClass.toLowerCase();
-      rows = rows.filter((t) =>
-        (t.tags ?? []).some((tag: string) => String(tag).toLowerCase() === wc),
-      );
-    }
-    if (chip.kind === "membership") {
-      rows = rows.filter((t) => hasMembershipProgramTag(t.tags));
-    }
-    if (chip.kind === "status") {
-      const wantReady = chip.v === "ready";
-      rows = rows.filter((t) => {
-        const issues = validateTemplatePayload(t);
-        return wantReady ? issues.length === 0 : issues.length > 0;
-      });
-    }
-    if (pubFilter !== "any") {
-      rows = rows.filter((t) => {
-        const s = String(t.status ?? "Draft").toLowerCase();
-        return pubFilter === "published" ? s === "published" : s !== "published";
-      });
-    }
-    if (locFilter !== "any") {
-      rows = rows.filter((t) => {
-        const tags = (t.tags ?? []).map((x: string) => String(x).toLowerCase());
-        const nm = String(t.name ?? "").toLowerCase();
-        const isHome = tags.some((x: string) => /home|bodyweight|no equipment|no-equipment/.test(x)) || /at home|at-home/.test(nm);
-        return locFilter === "home" ? isHome : !isHome;
-      });
-    }
-    if (daysFilter !== "any") {
-      rows = rows.filter((t) => {
-        const d = Number(t.days_per_week ?? 0);
-        if (!d) return false;
-        if (daysFilter === "1-2") return d <= 2;
-        if (daysFilter === "3-4") return d >= 3 && d <= 4;
-        if (daysFilter === "5-6") return d >= 5 && d <= 6;
-        if (daysFilter === "7") return d >= 7;
-        return true;
-      });
-    }
-    if (expFilter !== "any") {
-      rows = rows.filter((t) => {
-        const tags = (t.tags ?? []).map((x: string) => String(x).toLowerCase());
-        return tags.includes(expFilter) || String((t as any).difficulty ?? "").toLowerCase() === expFilter;
-      });
-    }
-    rows = [...rows].sort((a, b) => {
-      if (sort === "name_asc") return String(a.name ?? "").localeCompare(String(b.name ?? ""));
-      if (sort === "name_desc") return String(b.name ?? "").localeCompare(String(a.name ?? ""));
-      if (sort === "updated_asc") return String(a.updated_at ?? "").localeCompare(String(b.updated_at ?? ""));
-      return String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? ""));
-    });
-    return rows;
-  }, [templates, weightClass, chip, pubFilter, locFilter, daysFilter, expFilter, sort]);
+  const byId = useMemo(() => new Map((templates as any[]).map((t) => [t.id as string, t])), [templates]);
+  const programs = useMemo(() => {
+    const revisions = new Map((templates as any[]).map((t) => [t.id as string, (t.payload_revision ?? null) as number | null]));
+    return toLibraryPrograms(
+      templates as any[],
+      usageByTemplate(usageRows, todayLocalISO()),
+      membershipByTemplate(isAdmin ? listings : [], revisions),
+      (id) => {
+        const s = summarizeTemplatePayload(byId.get(id));
+        return { weeks: s.weeks, blocks: s.blocks };
+      },
+    );
+  }, [templates, usageRows, listings, isAdmin, byId]);
 
-  const activeFilterCount =
-    (weightClass ? 1 : 0) +
-    (pubFilter !== "any" ? 1 : 0) +
-    (locFilter !== "any" ? 1 : 0) +
-    (daysFilter !== "any" ? 1 : 0) +
-    (expFilter !== "any" ? 1 : 0);
+  const counts = useMemo(() => scopeCounts(programs), [programs]);
+  const chips = visibleScopes(counts, scope, isAdmin);
+  const shown = programs.filter((p) => inScope(p, scope) && matchesSearch(p, q));
+  const empty = emptyLibraryCopy(scope, q.trim().length > 0);
 
-  const clearFilters = () => {
-    setQ("");
-    setChip({ kind: "all" });
-    setWeightClass(null);
-    setPubFilter("any");
-    setLocFilter("any");
-    setDaysFilter("any");
-    setExpFilter("any");
-    setSort("updated_desc");
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["pl-templates"] });
+    qc.invalidateQueries({ queryKey: ["admin-library-membership"] });
   };
-
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["pl-templates"] });
 
   return (
     <>
-      {!embedded && <PageHeader
-        title="Program Library"
-        subtitle="Reusable preps, blocks, weeks, days, and exercise rows"
-      />}
-      <div className="p-6 md:p-8 space-y-4">
-        {/* Search + New */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative max-w-sm flex-1">
-            <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="mx-auto w-full max-w-5xl space-y-3 p-3 sm:p-4 md:p-6" data-program-library>
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search templates…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              className="pl-8"
+              placeholder="Search programs"
+              className="h-11 pl-9 pr-9 text-base"
+              aria-label="Search programs"
             />
+            {q && (
+              <button
+                type="button"
+                onClick={() => setQ("")}
+                className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <ArrowUpDown className="h-3.5 w-3.5" />
-            <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-              <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="updated_desc">Recently updated</SelectItem>
-                <SelectItem value="updated_asc">Oldest updated</SelectItem>
-                <SelectItem value="name_asc">Name A→Z</SelectItem>
-                <SelectItem value="name_desc">Name Z→A</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            variant={showFilters ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowFilters((s) => !s)}
-          >
-            <Settings2 className="mr-1 h-3.5 w-3.5" />
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-          </Button>
-          {(activeFilterCount > 0 || q || chip.kind !== "all") && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <XIcon className="mr-1 h-3.5 w-3.5" /> Clear
-            </Button>
-          )}
-          <Button onClick={() => setOpenNew(true)} className="ml-auto">
-            <Plus className="mr-2 h-4 w-4" /> New Template
-          </Button>
-          <Button variant="outline" asChild>
-            <Link to="/admin/program-submissions">
-              <Inbox className="mr-2 h-4 w-4" /> Submissions
-            </Link>
+          <Button className="h-11 shrink-0 px-3.5" onClick={() => setNewOpen(true)} data-new-program>
+            <Plus className="mr-1 h-4 w-4" />
+            New<span className="max-sm:hidden">&nbsp;program</span>
           </Button>
         </div>
 
-        {/* Filter chips */}
-        <FilterChips chip={chip} setChip={setChip} />
-        <WeightClassFilter value={weightClass} onChange={setWeightClass} />
-
-        {showFilters && (
-          <Card className="grid gap-3 p-3 md:grid-cols-4">
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</Label>
-              <Select value={pubFilter} onValueChange={(v) => setPubFilter(v as PubFilter)}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any status</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Location</Label>
-              <Select value={locFilter} onValueChange={(v) => setLocFilter(v as LocFilter)}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Gym or home</SelectItem>
-                  <SelectItem value="gym">Gym</SelectItem>
-                  <SelectItem value="home">At home</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Days / week</Label>
-              <Select value={daysFilter} onValueChange={(v) => setDaysFilter(v as DaysFilter)}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any</SelectItem>
-                  <SelectItem value="1-2">1–2 days</SelectItem>
-                  <SelectItem value="3-4">3–4 days</SelectItem>
-                  <SelectItem value="5-6">5–6 days</SelectItem>
-                  <SelectItem value="7">7 days</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Experience</Label>
-              <Select value={expFilter} onValueChange={(v) => setExpFilter(v as ExpFilter)}>
-                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any level</SelectItem>
-                  <SelectItem value="beginner">Beginner</SelectItem>
-                  <SelectItem value="intermediate">Intermediate</SelectItem>
-                  <SelectItem value="advanced">Advanced</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </Card>
-        )}
-
-        <div className="text-xs text-muted-foreground">
-          {isLoading ? "Loading…" : `${filteredTemplates.length} result${filteredTemplates.length === 1 ? "" : "s"}`}
+        <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 sm:mx-0 sm:px-0" role="tablist" aria-label="Show">
+          {chips.map((key) => {
+            const label = LIBRARY_SCOPES.find((s) => s.key === key)!.label;
+            const on = scope === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setScope(key)}
+                data-library-scope={key}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition",
+                  on ? "bg-foreground text-background" : "bg-secondary text-foreground hover:bg-secondary/80",
+                )}
+              >
+                {label}
+                <span className={cn("tabular-nums", on ? "text-background/70" : "text-muted-foreground")}>{counts[key]}</span>
+              </button>
+            );
+          })}
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : filteredTemplates.length === 0 ? (
-          <Card className="p-12 text-center">
-            <BookOpen className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              {weightClass
-                ? `No templates tagged ${weightClass}.`
-                : showArchived
-                  ? "No archived templates."
-                  : "No templates yet. Create your first reusable program."}
-            </p>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {groupTemplates(filteredTemplates as any[])
-              .filter((s) => s.items.length > 0)
-              .map((s, i) => (
-                <LibrarySection
-                  key={s.id}
-                  label={s.label}
-                  description={s.description}
-                  count={s.items.length}
-                  defaultOpen={i < 3 && s.items.length > 0}
-                >
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {s.items.map((t: any) => (
-                      <TemplateCard
-                        key={t.id}
-                        tpl={t}
-                        onPreview={() => setPreviewId(t.id)}
-                        onAssign={() => setAssignTpl(t)}
-                        onShare={() => setShareTpl(t)}
-                        onChanged={invalidate}
-                      />
-                    ))}
-                  </div>
-                </LibrarySection>
-              ))}
+          <ul className="space-y-2" aria-hidden>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <li key={i} className="h-[76px] animate-pulse rounded-2xl bg-muted" />
+            ))}
+          </ul>
+        ) : shown.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center" data-library-empty>
+            {scope === "membership" ? (
+              <Smartphone className="mx-auto h-8 w-8 text-muted-foreground" />
+            ) : (
+              <BookOpen className="mx-auto h-8 w-8 text-muted-foreground" />
+            )}
+            <div className="mt-3 text-[15px] font-semibold">{empty.title}</div>
+            {empty.body && <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{empty.body}</p>}
+            {scope === "all" && !q && (
+              <Button className="mt-4" onClick={() => setNewOpen(true)}>
+                <Plus className="mr-1.5 h-4 w-4" /> New program
+              </Button>
+            )}
           </div>
+        ) : (
+          <ul className="grid gap-2 lg:grid-cols-2">
+            {shown.map((p) => (
+              <LibraryRow
+                key={p.id}
+                program={p}
+                tpl={byId.get(p.id)}
+                isAdmin={isAdmin}
+                onPreview={() => setPreviewId(p.id)}
+                onAssign={() => setAssignTpl(byId.get(p.id))}
+                onMembership={() => setMembershipTpl(byId.get(p.id) ?? null)}
+                onChanged={invalidate}
+              />
+            ))}
+          </ul>
         )}
       </div>
 
-      <NewTemplateDialog open={openNew} onOpenChange={setOpenNew} onCreated={invalidate} />
+      <NewProgramDialog open={newOpen} onOpenChange={setNewOpen} onCreated={invalidate} />
       <PreviewDialog templateId={previewId} onClose={() => setPreviewId(null)} onAssign={(tpl) => { setPreviewId(null); setAssignTpl(tpl); }} />
       <AssignDialog template={assignTpl} onClose={() => setAssignTpl(null)} />
-      <ShareProgramSheet
-        template={shareTpl}
-        open={!!shareTpl}
-        onOpenChange={(v) => !v && setShareTpl(null)}
-        viewerRole="admin"
-      />
+      {isAdmin && (
+        <MembershipListingSheet
+          template={membershipTpl}
+          open={!!membershipTpl}
+          onOpenChange={(v) => { if (!v) setMembershipTpl(null); }}
+        />
+      )}
     </>
   );
 }
 
-function FilterChips({ chip, setChip }: { chip: FilterChip; setChip: (c: FilterChip) => void }) {
-  const Chip = ({ active, onClick, children }: any) => (
-    <button
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-        active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      <Chip active={chip.kind === "all"} onClick={() => setChip({ kind: "all" })}>All</Chip>
-      <Chip active={chip.kind === "membership"} onClick={() => setChip({ kind: "membership" })}>Membership App</Chip>
-      <span className="mx-1 text-muted-foreground">·</span>
-      {TEMPLATE_TYPES.map((t) => (
-        <Chip key={t.v} active={chip.kind === "type" && chip.v === t.v} onClick={() => setChip({ kind: "type", v: t.v })}>
-          {t.label}
-        </Chip>
-      ))}
-      <span className="mx-1 text-muted-foreground">·</span>
-      {STYLES.map((s) => (
-        <Chip key={s.v} active={chip.kind === "style" && chip.v === s.v} onClick={() => setChip({ kind: "style", v: s.v })}>
-          {s.label}
-        </Chip>
-      ))}
-      <span className="mx-1 text-muted-foreground">·</span>
-      <Chip active={chip.kind === "status" && chip.v === "ready"} onClick={() => setChip({ kind: "status", v: "ready" })}>Ready</Chip>
-      <Chip active={chip.kind === "status" && chip.v === "incomplete"} onClick={() => setChip({ kind: "status", v: "incomplete" })}>Incomplete</Chip>
-      <span className="mx-1 text-muted-foreground">·</span>
-      <Chip active={chip.kind === "archived"} onClick={() => setChip({ kind: "archived" })}>Archived</Chip>
-    </div>
-  );
-}
+const CHIP = "inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium";
 
-function TemplateCard({ tpl, onPreview, onAssign, onShare, onChanged }: { tpl: any; onPreview: () => void; onAssign: () => void; onShare: () => void; onChanged: () => void }) {
-  const summary = useMemo(() => summarizeTemplatePayload(tpl), [tpl]);
-  const updated = tpl.updated_at ? new Date(tpl.updated_at).toLocaleDateString() : "—";
-  const { data: assignments = [] } = useQuery({
-    queryKey: ["pl-template-assignments", tpl.id],
-    queryFn: () => listTemplateAssignments(tpl.id),
-  });
-  const { data: shares = [] } = useQuery({
-    queryKey: ["pl-template-shares", tpl.id],
-    queryFn: () => listShares(tpl.id),
-  });
-  const shareSummary = useMemo(
-    () => summarizeShares(tpl, shares as TemplateShare[]),
-    [tpl, shares],
-  );
-  const activeAssignments = (assignments as any[]).filter((a) => !a.archived);
-  const uniqueClients = Array.from(new Map(activeAssignments.map((a: any) => [a.clientId, a])).values()) as any[];
+function LibraryRow({
+  program: p, tpl, isAdmin, onPreview, onAssign, onMembership, onChanged,
+}: {
+  program: LibraryProgram;
+  tpl: any;
+  isAdmin: boolean;
+  onPreview: () => void;
+  onAssign: () => void;
+  onMembership: () => void;
+  onChanged: () => void;
+}) {
+  const showMembership = isAdmin && p.membership.kind !== "off";
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="break-words text-base font-bold leading-tight">{tpl.name}</div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">Updated {updated}</div>
-        </div>
-        <RowMenu tpl={tpl} onChanged={onChanged} />
+    <li className="rounded-2xl border border-border bg-card" data-library-row={p.id}>
+      <div className="flex items-start gap-1 py-3 pl-3.5 pr-1.5 sm:pl-4">
+        <Link
+          to="/admin/program-library/$templateId"
+          params={{ templateId: p.id }}
+          className="min-w-0 flex-1 py-0.5"
+        >
+          <div className="line-clamp-2 text-[15px] font-semibold leading-snug">{p.name}</div>
+          {p.line && <div className="mt-0.5 text-[13px] text-muted-foreground">{p.line}</div>}
+        </Link>
+        <RowMenu
+          program={p}
+          tpl={tpl}
+          isAdmin={isAdmin}
+          onPreview={onPreview}
+          onAssign={onAssign}
+          onMembership={onMembership}
+          onChanged={onChanged}
+        />
       </div>
-
-      <DestinationBadges summary={shareSummary} ownerRole={tpl.owner_role} compact />
-
-      <ProgramStatusBadge template={tpl} />
-
-      <MembershipLibraryBadge summary={shareSummary} />
-
-      <div className="flex flex-wrap gap-1 text-[10px]">
-        <Badge variant="outline">{TYPE_LABEL[tpl.template_type] ?? tpl.template_type}</Badge>
-        <Badge variant="secondary">{STYLE_LABEL[tpl.training_style] ?? tpl.training_style}</Badge>
-        {hasMembershipProgramTag(tpl.tags) && (
-          <Badge className="border-primary/30 bg-primary/10 text-primary" variant="outline">Membership App</Badge>
+      <div className="-mt-1 flex flex-wrap gap-1.5 px-3.5 pb-3 empty:hidden sm:px-4">
+        {p.clients.length > 0 && (
+          <span className={cn(CHIP, "bg-secondary text-foreground")} data-library-clients title={p.clients.map((c) => c.name).join(", ")}>
+            <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{clientsLabel(p.clients)}</span>
+          </span>
         )}
-        {tpl.training_focus && <Badge variant="outline">{tpl.training_focus}</Badge>}
-        {tpl.status && tpl.status !== "Draft" && <Badge variant="outline">{tpl.status}</Badge>}
-        {tpl.archived && <Badge variant="destructive">Archived</Badge>}
-        {(tpl.tags || []).map((tag: string) => (
-          <Badge key={tag} variant="outline" className="bg-muted/30">{tag}</Badge>
-        ))}
+        {showMembership && p.membership.kind === "live" && (
+          <span className={cn(CHIP, "bg-secondary text-foreground")} data-library-membership="live">
+            <Smartphone className="h-3.5 w-3.5 text-muted-foreground" /> Membership app
+          </span>
+        )}
+        {showMembership && p.membership.kind === "behind" && (
+          <button type="button" onClick={onMembership} className={cn(CHIP, "bg-warning/10 text-warning")} data-library-membership="behind">
+            <Smartphone className="h-3.5 w-3.5" /> Members have an older version
+          </button>
+        )}
+        {p.archived && <span className={cn(CHIP, "bg-secondary text-muted-foreground")}>Archived</span>}
+        {tpl && !p.archived && <ProgramStatusBadge template={tpl} quiet />}
       </div>
-
-      <div className="grid grid-cols-4 gap-2 rounded-md border border-border bg-secondary/30 px-2 py-2 text-center text-[10px]">
-        <Stat label="Weeks" value={tpl.weeks ?? summary.weeks ?? "—"} icon={<Calendar className="h-3 w-3" />} />
-        <Stat label="Days/wk" value={tpl.days_per_week ?? "—"} icon={<Layers className="h-3 w-3" />} />
-        <Stat label="Duration" value={tpl.est_duration_min ? `${tpl.est_duration_min}m` : "—"} icon={<Clock className="h-3 w-3" />} />
-        <Stat label="Rows" value={summary.rows} icon={<BookOpen className="h-3 w-3" />} />
-      </div>
-
-      {tpl.description && (
-        <p className="line-clamp-2 text-xs text-foreground/80">{tpl.description}</p>
-      )}
-      {tpl.notes && <p className="line-clamp-2 text-xs text-muted-foreground italic">{tpl.notes}</p>}
-
-      <AssignedToPanel templateId={tpl.id} clients={uniqueClients} />
-
-      <div className="mt-auto flex flex-wrap gap-2 pt-1">
-        <Button size="sm" variant="outline" className="flex-1" onClick={onPreview}>
-          <Eye className="mr-1 h-3 w-3" /> Preview
-        </Button>
-        <Button size="sm" variant="outline" className="flex-1" asChild>
-          <Link to="/admin/program-library/$templateId" params={{ templateId: tpl.id }}>
-            <Pencil className="mr-1 h-3 w-3" /> Edit
-          </Link>
-        </Button>
-        <Button size="sm" variant="outline" className="flex-1" onClick={onShare}>
-          <Share2 className="mr-1 h-3 w-3" /> Share
-        </Button>
-        <Button size="sm" className="flex-1" onClick={onAssign}>
-          <UserPlus className="mr-1 h-3 w-3" /> Assign
-        </Button>
-        <Button size="sm" variant="secondary" className="flex-1" asChild>
-          <Link to="/admin/program-assign" search={{ templateId: tpl.id }}>
-            Plan
-          </Link>
-        </Button>
-      </div>
-    </Card>
+    </li>
   );
 }
 
-function AssignedToPanel({ templateId: _templateId, clients }: { templateId: string; clients: any[] }) {
-  const [open, setOpen] = useState(false);
-  if (clients.length === 0) {
-    return (
-      <div className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-2 py-1.5 text-[11px] text-muted-foreground">
-        <Users className="h-3 w-3" /> Not assigned to anyone yet
-      </div>
-    );
-  }
-  const shown = open ? clients : clients.slice(0, 3);
-  return (
-    <div className="rounded-md border border-border bg-secondary/20 px-2 py-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-      >
-        <span className="flex items-center gap-1.5"><Users className="h-3 w-3" /> Assigned to {clients.length}</span>
-        <span className="text-[10px]">{open ? "Hide" : clients.length > 3 ? "Show all" : "Show"}</span>
-      </button>
-      <ul className="mt-1 space-y-0.5">
-        {shown.map((c) => (
-          <li key={c.clientId}>
-            <Link
-              to="/admin/client-programs/$clientId"
-              params={{ clientId: c.clientId }}
-              className="flex items-center justify-between rounded px-1 py-0.5 text-[11px] hover:bg-secondary/60"
-            >
-              <span className="truncate font-medium">{c.clientName ?? "Unknown client"}</span>
-              <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
-                {c.endDate ? `ends ${c.endDate}` : c.kind === "prep" ? "Prep" : "Block"}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+function RowMenu({
+  program: p, tpl, isAdmin, onPreview, onAssign, onMembership, onChanged,
+}: {
+  program: LibraryProgram;
+  tpl: any;
+  isAdmin: boolean;
+  onPreview: () => void;
+  onAssign: () => void;
+  onMembership: () => void;
+  onChanged: () => void;
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const unpublish = useServerFn(unpublishLibraryListing);
+  const listed = isAdmin && p.membership.kind !== "off" && !!p.membership.planId;
 
-function Stat({ label, value, icon }: { label: string; value: any; icon?: any }) {
-  return (
-    <div>
-      <div className="flex items-center justify-center gap-1 text-muted-foreground">{icon}<span>{label}</span></div>
-      <div className="font-bold text-foreground">{value}</div>
-    </div>
-  );
-}
-
-function RowMenu({ tpl, onChanged }: { tpl: any; onChanged: () => void }) {
-  const [editOpen, setEditOpen] = useState(false);
   const run = async (fn: () => Promise<any>, ok: string) => {
-    try { await fn(); toast.success(ok); onChanged(); } catch (e: any) { toast.error(e.message); }
+    try { await fn(); toast.success(ok); onChanged(); } catch (e: any) { toast.error(e?.message ?? "Something went wrong"); }
   };
-  const isPublished = String(tpl.status ?? "Draft") === "Published";
+  // a program that's archived or deleted can't be started by members: take it out first
+  const leaveMembership = async () => {
+    if (listed && p.membership.planId) await unpublish({ data: { planId: p.membership.planId, reason: null } });
+  };
+
   return (
     <>
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem onClick={() => setEditOpen(true)}>
-          <Settings2 className="mr-2 h-3.5 w-3.5" /> Edit details
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => {
-            const next = window.prompt("Rename template", tpl.name ?? "");
-            if (next == null) return;
-            const name = next.trim();
-            if (!name || name === tpl.name) return;
-            run(() => updateTemplate(tpl.id, { name }), "Renamed");
-          }}
-        >
-          <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => run(() => duplicateTemplate(tpl.id), "Duplicated")}>
-          <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
-        </DropdownMenuItem>
-        {isPublished ? (
-          <DropdownMenuItem onClick={() => run(() => updateTemplate(tpl.id, { status: "Draft" }), "Unpublished")}>
-            <CircleDot className="mr-2 h-3.5 w-3.5" /> Unpublish
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" aria-label={`Options for ${p.name}`}>
+            <MoreHorizontal className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          {!p.archived && (
+            <DropdownMenuItem onSelect={onAssign}>
+              <UserPlus className="mr-2 h-4 w-4" /> Assign to a client
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem asChild>
+            <Link to="/admin/program-library/$templateId" params={{ templateId: p.id }}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit program
+            </Link>
           </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem onClick={() => run(() => updateTemplate(tpl.id, { status: "Published" }), "Published")}>
-            <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Publish
+          <DropdownMenuItem onSelect={onPreview}>
+            <Eye className="mr-2 h-4 w-4" /> Preview
           </DropdownMenuItem>
-        )}
-        {tpl.archived ? (
-          <DropdownMenuItem onClick={() => run(() => setTemplateArchived(tpl.id, false), "Restored")}>
-            <ArchiveRestore className="mr-2 h-3.5 w-3.5" /> Restore
+          {isAdmin && !p.archived && (
+            <DropdownMenuItem onSelect={onMembership} data-menu-membership>
+              <Smartphone className="mr-2 h-4 w-4" />
+              {p.membership.kind === "off" ? "Add to membership app" : "Membership app…"}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setDetailsOpen(true)}>
+            <Settings2 className="mr-2 h-4 w-4" /> Name and details
           </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem onClick={() => run(() => setTemplateArchived(tpl.id, true), "Archived")}>
-            <ArchiveIcon className="mr-2 h-3.5 w-3.5" /> Archive
+          <DropdownMenuItem onSelect={() => run(() => duplicateTemplate(p.id), "Copied")}>
+            <Copy className="mr-2 h-4 w-4" /> Make a copy
           </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onClick={() => {
-            if (!confirm(`Delete "${tpl.name}"? This cannot be undone.`)) return;
-            run(() => deleteTemplate(tpl.id), "Deleted");
-          }}
-        >
-          <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    <EditTemplateDetailsDialog
-      templateId={tpl.id}
-      open={editOpen}
-      onOpenChange={setEditOpen}
-      onSaved={onChanged}
-    />
+          {p.archived ? (
+            <DropdownMenuItem onSelect={() => run(() => setTemplateArchived(p.id, false), "Restored")}>
+              <ArchiveRestore className="mr-2 h-4 w-4" /> Restore
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              onSelect={() => run(async () => { await leaveMembership(); await setTemplateArchived(p.id, true); }, listed ? "Archived and taken out of the membership app" : "Archived")}
+            >
+              <ArchiveIcon className="mr-2 h-4 w-4" /> Archive
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setConfirmDelete(true)}>
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <EditTemplateDetailsDialog templateId={p.id} open={detailsOpen} onOpenChange={setDetailsOpen} onSaved={onChanged} />
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {p.name}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>It comes out of your library for good.</p>
+                {p.clients.length > 0 && (
+                  <p>
+                    {p.clients.length === 1
+                      ? `${clientsLabel(p.clients)} keeps their own copy of it, with every workout logged.`
+                      : `${clientsLabel(p.clients)} keep their own copies of it, with every workout logged.`}
+                  </p>
+                )}
+                {listed && <p>It also comes out of the membership app.</p>}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => run(async () => { await leaveMembership(); await deleteTemplate(p.id); }, "Deleted")}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-// ------- New Template dialog -------
-function NewTemplateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
+// ------- New program dialog -------
+const DAY_CHOICES = [1, 2, 3, 4, 5, 6, 7];
+const BLOCK_CHOICES = [1, 2, 3, 4];
+
+function NewProgramDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    name: "", template_type: "block" as TemplateType, training_style: "powerlifting" as TrainingStyle,
-    training_focus: "", weeks: 4, days_per_week: 4, description: "", notes: "", tags: "",
-    blocks: 1,
-    blockFocuses: [""] as string[],
-  });
-  // Keep per-block focus array length in sync with the blocks count.
-  const blockCount = Math.max(1, form.blocks || 1);
-  const blockFocuses = form.blockFocuses.length === blockCount
-    ? form.blockFocuses
-    : Array.from({ length: blockCount }, (_, i) => form.blockFocuses[i] ?? "");
-  const setBlockFocus = (i: number, v: string) => {
-    const next = [...blockFocuses];
-    next[i] = v;
-    setForm({ ...form, blockFocuses: next });
-  };
-  const seedPayload = () => {
-    const buildWeeksData = () =>
-      Array.from({ length: Math.max(1, form.weeks) }, (_, i) => ({
+  const blank = { name: "", training_style: "bodybuilding" as TrainingStyle, days: 4, blocks: 1, weeks: "12", description: "" };
+  const [form, setForm] = useState(blank);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) setForm(blank); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const weeks = Math.max(1, Math.min(52, Number.parseInt(form.weeks, 10) || 0));
+  const multi = form.blocks > 1;
+
+  const create = async () => {
+    const name = form.name.trim();
+    if (!name) { toast.error("Give the program a name"); return; }
+    if (!Number.parseInt(form.weeks, 10)) { toast.error("How many weeks?"); return; }
+    setBusy(true);
+    try {
+      const weekList = () => Array.from({ length: weeks }, (_, i) => ({
         week_index: i + 1,
-        days: Array.from({ length: Math.max(1, form.days_per_week) }, (_, j) => ({ day_index: j + 1, title: `Day ${j + 1}`, rows: [] })),
+        days: Array.from({ length: form.days }, (_, j) => ({ day_index: j + 1, title: `Day ${j + 1}`, rows: [] })),
       }));
-    const effectiveType: TemplateType =
-      form.template_type === "block" && (form.blocks || 1) > 1 ? "full_prep" : form.template_type;
-    switch (effectiveType) {
-      case "full_prep": {
-        const count = Math.max(1, form.blocks || 1);
-        const blocks_data = Array.from({ length: count }, (_, i) => ({
-          name: `Block ${i + 1}`,
-          weeks: Math.max(1, form.weeks),
-          days_per_week: Math.max(1, form.days_per_week),
-          training_focus: (blockFocuses[i] || form.training_focus || "").trim() || null,
-          weeks_data: buildWeeksData(),
-        }));
-        return { prep: { event_name: null, event_date: null }, blocks_data };
-      }
-      case "block": {
-        return { weeks_data: buildWeeksData() };
-      }
-      case "week":
-        return { days: Array.from({ length: Math.max(1, form.days_per_week) }, (_, j) => ({ day_index: j + 1, title: `Day ${j + 1}`, rows: [] })) };
-      case "day":
-        return { day_index: 1, title: "Day 1", rows: [] };
-      case "exercise_row":
-        return { sets: 3, reps_text: "8-12", time_profile: "accessory_compound" };
+      const payload = multi
+        ? {
+            prep: { event_name: null, event_date: null },
+            blocks_data: Array.from({ length: form.blocks }, (_, i) => ({
+              name: `Block ${i + 1}`, weeks, days_per_week: form.days, training_focus: null, weeks_data: weekList(),
+            })),
+          }
+        : { weeks_data: weekList() };
+      const tpl = await createTemplate({
+        name,
+        template_type: multi ? "full_prep" : "block",
+        training_style: form.training_style,
+        weeks,
+        days_per_week: form.days,
+        description: form.description.trim() || undefined,
+        payload,
+      });
+      onCreated();
+      onOpenChange(false);
+      navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't create it");
+    } finally {
+      setBusy(false);
     }
   };
+
+  const pill = (on: boolean) => cn(
+    "h-10 min-w-10 rounded-lg px-3 text-sm font-medium transition",
+    on ? "bg-foreground text-background" : "bg-secondary text-foreground hover:bg-secondary/80",
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
+      <DialogContent className="max-h-[90dvh] max-w-md overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New Program Template</DialogTitle>
+          <DialogTitle>New program</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>Template type</Label>
-            <div className="mt-1 grid grid-cols-5 gap-1">
-              {TEMPLATE_TYPES.map((t) => (
-                <button
-                  key={t.v}
-                  type="button"
-                  onClick={() => setForm({ ...form, template_type: t.v })}
-                  className={`rounded-md border px-2 py-2 text-[11px] ${
-                    form.template_type === t.v ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {t.label}
-                </button>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="np-name">Name</Label>
+            <Input
+              id="np-name"
+              autoFocus
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Upper / Lower Hypertrophy"
+              className="h-11 text-base"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Style</Label>
+            <Select value={form.training_style} onValueChange={(v) => setForm({ ...form, training_style: v as TrainingStyle })}>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>{STYLES.map((s) => <SelectItem key={s.v} value={s.v}>{s.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Days a week</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {DAY_CHOICES.map((d) => (
+                <button key={d} type="button" className={pill(form.days === d)} aria-pressed={form.days === d} onClick={() => setForm({ ...form, days: d })}>{d}</button>
               ))}
             </div>
           </div>
-          <div>
-            <Label>Name</Label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. 4 Week Volume Block" />
+          <div className="space-y-1.5">
+            <Label>Blocks</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {BLOCK_CHOICES.map((b) => (
+                <button key={b} type="button" className={pill(form.blocks === b)} aria-pressed={form.blocks === b} onClick={() => setForm({ ...form, blocks: b })}>{b}</button>
+              ))}
+            </div>
+            <p className="text-[13px] text-muted-foreground">One block for a single phase. More to split it into phases, like 3 blocks of 4 weeks.</p>
           </div>
-          <div>
-            <Label>Description <span className="font-normal text-muted-foreground">(optional)</span></Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="np-weeks">{multi ? "Weeks in each block" : "Weeks"}</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="np-weeks"
+                inputMode="numeric"
+                value={form.weeks}
+                onChange={(e) => setForm({ ...form, weeks: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })}
+                className="h-11 w-24 text-base"
+              />
+              {multi && Number.parseInt(form.weeks, 10) > 0 && (
+                <span className="text-sm text-muted-foreground">{weeks * form.blocks} weeks in all</span>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="np-desc">What it's for <span className="font-normal text-muted-foreground">(optional)</span></Label>
             <Textarea
+              id="np-desc"
+              rows={3}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3}
-              placeholder="Briefly explain what this program is designed for and who it is best suited to."
+              placeholder="Who it suits and what it builds."
+              className="text-base"
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Saved on the template so coaches see what this {form.template_type === "exercise_row" ? "exercise row" : form.template_type === "full_prep" ? "full prep" : form.template_type} is for. Separate from internal Notes.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Style</Label>
-              <Select value={form.training_style} onValueChange={(v) => setForm({ ...form, training_style: v as TrainingStyle })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{STYLES.map((s) => <SelectItem key={s.v} value={s.v}>{s.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Focus</Label>
-              <Select
-                value={form.training_focus || "__none"}
-                onValueChange={(v) => setForm({ ...form, training_focus: v === "__none" ? "" : v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Optional focus" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">— None —</SelectItem>
-                  {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          {(form.template_type === "block" || form.template_type === "full_prep") && (
-            <>
-              <div>
-                <Label>Blocks</Label>
-                <Input
-                  type="number" inputMode="numeric" min={1}
-                  value={form.blocks}
-                  onChange={(e) => setForm({ ...form, blocks: Math.max(1, parseInt(e.target.value) || 1) })}
-                />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {form.template_type === "full_prep"
-                    ? "Seeds this many blocks (each with the weeks & days set below). You can add, rename, duplicate, or remove blocks in the editor afterwards."
-                    : (form.blocks || 1) > 1
-                      ? "More than 1 block — this will be saved as a Full Prep template containing this many blocks."
-                      : "Single block. Increase to seed multiple blocks (auto-converts to a Full Prep)."}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><Label>{(form.template_type === "full_prep" || (form.blocks || 1) > 1) ? "Weeks/block" : "Weeks"}</Label><Input type="number" inputMode="numeric" value={form.weeks} onChange={(e) => setForm({ ...form, weeks: parseInt(e.target.value) || 0 })} /></div>
-                <div><Label>Days/week</Label><Input type="number" inputMode="numeric" value={form.days_per_week} onChange={(e) => setForm({ ...form, days_per_week: parseInt(e.target.value) || 0 })} /></div>
-              </div>
-              {(form.template_type === "full_prep" || (form.blocks || 1) > 1) && (
-                <div className="space-y-1">
-                  <Label>Per-block focus</Label>
-                  <p className="text-[11px] text-muted-foreground">Label each block (e.g. Volume/Accumulation, Strength, Peak). Optional — you can edit later.</p>
-                  <div className="space-y-1">
-                    {blockFocuses.map((v, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="w-16 shrink-0 text-[11px] text-muted-foreground">Block {i + 1}</span>
-                        <Select
-                          value={v || "__none"}
-                          onValueChange={(val) => setBlockFocus(i, val === "__none" ? "" : val)}
-                        >
-                          <SelectTrigger className="flex-1">
-                            <SelectValue placeholder={form.training_focus || "Pick a focus"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none">— None —</SelectItem>
-                            {BLOCK_PHASE_OPTIONS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          <div>
-            <Label>Tags (comma-separated)</Label>
-            <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
-          </div>
-          <ProgramAudiencePicker value={form.tags} onChange={(next) => setForm({ ...form, tags: next })} />
-          <WeightClassPicker
-            value={form.tags}
-            onChange={(next) => setForm({ ...form, tags: next })}
-          />
-          <div>
-            <Label>Notes</Label>
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            onClick={async () => {
-              if (!form.name) return toast.error("Name required");
-              try {
-                const tags = form.tags.split(",").map((s) => s.trim()).filter(Boolean);
-                const tpl = await createTemplate({
-                  name: form.name,
-                  template_type:
-                    form.template_type === "block" && (form.blocks || 1) > 1
-                      ? "full_prep"
-                      : form.template_type,
-                  training_style: form.training_style,
-                  training_focus: form.training_focus || undefined,
-                  weeks: form.weeks || undefined, days_per_week: form.days_per_week || undefined,
-                  tags, notes: form.notes || undefined,
-                  description: form.description.trim() || undefined,
-                  payload: seedPayload(),
-                });
-                toast.success("Template created — opening editor");
-                onCreated();
-                onOpenChange(false);
-                navigate({ to: "/admin/program-library/$templateId", params: { templateId: tpl.id } });
-              } catch (e: any) { toast.error(e.message); }
-            }}
-          >Create & edit</Button>
+          <Button className="h-11 w-full sm:w-auto" onClick={create} disabled={busy} data-create-program>{busy ? "Creating…" : "Create and build it"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1016,10 +655,9 @@ function EditTemplateDetailsDialog({
         description: form.description.trim() || null,
         training_style: form.training_style,
         training_focus: form.training_focus || null,
-        tags: form.tags.split(",").map((s) => s.trim()).filter(Boolean),
         notes: form.notes.trim() || null,
       });
-      toast.success("Template details saved");
+      toast.success("Saved");
       onSaved();
       onOpenChange(false);
     } catch (e: any) {
@@ -1033,7 +671,7 @@ function EditTemplateDetailsDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!saving) onOpenChange(v); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit template details</DialogTitle>
+          <DialogTitle>Name and details</DialogTitle>
         </DialogHeader>
         {!form ? (
           <p className="text-sm text-muted-foreground">{isFetching ? "Loading…" : "Template not found."}</p>
@@ -1077,14 +715,6 @@ function EditTemplateDetailsDialog({
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Tags (comma-separated)</Label>
-              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="meet-prep, taper, accessories" />
-            </div>
-            <WeightClassPicker
-              value={form.tags}
-              onChange={(next) => setForm({ ...form, tags: next })}
-            />
             <div>
               <Label>Notes <span className="font-normal text-muted-foreground">(internal — never shown to clients/members)</span></Label>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />

@@ -211,9 +211,9 @@ export const globalSearchFn = createServerFn({ method: "GET" })
       hits.push({
         kind: "member_plan",
         id: p.id,
-        label: p.name || "Member Plan",
+        label: p.name || "Membership program",
         sub: m?.snippet ?? p.description ?? p.training_style ?? null,
-        to: `/admin/member-plans/${p.id}`,
+        to: "/admin/programming?tab=programs&audience=membership",
         matchedField: m?.field ?? null,
       });
     }

@@ -15,11 +15,10 @@ describe("membership UX organization", () => {
     expect(membershipLeaf).toContain('backTo="/admin/membership"');
   });
 
-  it("organizes membership programs with a real tag instead of a title marker", () => {
-    expect(programLibrary).toContain('MEMBERSHIP_PROGRAM_TAG = "membership-app"');
-    expect(programLibrary).toContain("Membership App");
-    expect(programLibrary).toContain('chip.kind === "membership"');
+  it("membership programs open as the program library's Membership app view, not a second library", () => {
+    expect(programLibrary).toContain('initialAudience === "membership" ? "membership" : "all"');
     expect(programming).toContain('audience === "membership"');
+    expect(programming).not.toContain('value: "browse"');
   });
 
   it("renders member support as a message-style conversation", () => {

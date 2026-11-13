@@ -39,7 +39,6 @@ describe("nothing typed is lost between the screen and the database", () => {
   });
   it("forms fill once per record, notes save to their own review, failed profile writes show", () => {
     expect(read("src/routes/_authenticated/portal/account.tsx")).toContain("if (!client || hydratedIdRef.current === client.id) return;");
-    expect(read("src/routes/_authenticated/admin/member-plans.$planId.tsx")).toContain("if (!plan || hydratedPlanRef.current === planId) return;");
     expect(read("src/components/forms/reviews-tab.tsx")).toContain("useEffect(() => flushNotes, [reviewId, flushNotes]);");
     expect(read("src/components/account-profile-settings.tsx")).toContain("if (error) throw error;");
     for (const f of ["src/routes/_authenticated/admin/blocks.$blockId.tsx", "src/route-pages/_authenticated/admin/program-library_.$templateId.tsx"]) {
