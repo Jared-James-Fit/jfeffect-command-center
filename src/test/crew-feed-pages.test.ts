@@ -78,8 +78,8 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
   it("a post's screen: the picture as big as it fits on black, the name and words over the bottom, the buttons down the right", () => {
     expect(card).toContain('if (layout === "page") {');
     // an automated post's 4:5 card fits the width; a post's own photos and clips are the screen (TikTok's)
-    expect(card).toContain("<FitBox ratio={0.8} page>");
-    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page />");
+    expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
+    expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page shrunk={sheetOpen} />");
     expect(card).toContain("width: `min(100cqw, calc(100cqh * ${ratio}))`");
     expect(card).toContain(
       "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />",
@@ -100,7 +100,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(inline).toContain("if (!visible || !active) setUserPaused(false);");
     // its set's caption and speaker sit at the top, clear of the words and buttons
     expect(card).toContain(
-      "<SlideCaption caption={slide.caption} withDots={withDots} top={page} />",
+      "{slide.caption && !shrunk && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}",
     );
     expect(inline).toContain('controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5"');
   });

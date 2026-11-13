@@ -23,7 +23,7 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");
     // a picture shown whole sits between the bars; a clip that fills the screen runs under both
     expect(card).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;');
-    expect(card).toContain("<FitBox ratio={0.8} page>");
+    expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('const between = controls === "top" && fit === "contain";');
     // what sits at the top of a post (the set's caption, "2/4", the speaker) moves down under the bar
