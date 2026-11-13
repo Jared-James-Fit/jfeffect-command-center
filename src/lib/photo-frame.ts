@@ -1,16 +1,19 @@
 /**
  * Framing a photo or clip inside the shape it's posted at, Instagram's way.
  *
- * The feed shows a post at its own shape between 4:5 (tallest) and 16:9
- * (widest); the profile grid shows every post as a 3:4 tile cut from the
- * middle of it; a story is 9:16. So a post is framed before it goes up:
+ * A post has one shape for every slide (Instagram's carousel rule): 9:16
+ * (the Crew feed's full screen), 4:5, 1:1 or 16:9. The profile grid shows
+ * every post as a 3:4 tile cut from the middle of it; a story is 9:16. So
+ * every slide is framed before it goes up (drag to move it, pinch to zoom,
+ * never smaller than the frame):
  *
- *   photo  drag to move it, pinch to zoom (never smaller than the frame),
- *          and the frame is baked into the file that's posted, so the feed,
- *          the grid and the post page all show exactly what was framed.
- *   clip   a video can't be re-cut on the phone, so it's posted whole with a
- *          `focus` (which part shows when the feed or grid crops it, as CSS
- *          object-position) and a cover frame picked from the clip.
+ *   photo  the frame is baked into the file that's posted, so the feed, the
+ *          grid and the post page all show exactly what was framed.
+ *   clip   a video can't be re-cut on the phone, so it goes up whole with its
+ *          frame (`ClipFrame`, kept in the slide's `focus`): the shape, the
+ *          zoom and the middle of what shows. Every screen that plays it
+ *          shows just that part (framedMediaStyle), and its poster is baked
+ *          to the frame like a photo.
  *
  * Everything here is plain math on sizes (no DOM), so it's tested on its own.
  */
@@ -25,18 +28,32 @@ export type Point = { x: number; y: number };
  */
 export type Framing = { z: number; cx: number; cy: number };
 
-/** Which part of a cropped clip or photo shows (CSS object-position, 0..1 each way). */
-export type MediaFocus = { x: number; y: number };
+/**
+ * Which part of a cropped clip or photo shows. Without `a` it's the older
+ * focus: CSS object-position, 0..1 each way. With `a` it's a clip framed in
+ * the studio (ClipFrame): shown at the shape `a` (w / h), zoomed `z` over just
+ * filling it, centred on (x, y) as shares of the clip's width / height.
+ */
+export type MediaFocus = { x: number; y: number; z?: number; a?: number };
+/** A clip's frame from the studio: what every screen shows of it. */
+export type ClipFrame = { a: number; z: number; x: number; y: number };
 
 export const CENTRED: Framing = { z: 1, cx: 0.5, cy: 0.5 };
 export const MAX_ZOOM = 5;
 
-/** The shapes a post can be (width / height). */
-export const POST_ASPECTS = { portrait: 4 / 5, square: 1, landscape: 16 / 9 } as const;
+/** The shapes a post can be (width / height): 9:16 fills a phone's screen in the Crew feed. */
+export const POST_ASPECTS = { full: 9 / 16, portrait: 4 / 5, square: 1, landscape: 16 / 9 } as const;
 export type PostAspect = keyof typeof POST_ASPECTS;
-export const POST_ASPECT_ORDER: PostAspect[] = ["portrait", "square", "landscape"];
-export const POST_ASPECT_LABEL: Record<PostAspect, string> = { portrait: "4:5", square: "1:1", landscape: "16:9" };
+export const POST_ASPECT_ORDER: PostAspect[] = ["full", "portrait", "square", "landscape"];
+export const POST_ASPECT_LABEL: Record<PostAspect, string> = { full: "9:16", portrait: "4:5", square: "1:1", landscape: "16:9" };
 export const STORY_ASPECT = 9 / 16;
+/**
+ * Where a full-screen (9:16) post is covered on its screen in the Crew feed,
+ * as shares of the frame (the studio's safe-zone guide, TikTok's): Crew's bar
+ * over its top, the name and caption over its bottom, the buttons down the
+ * right from about halfway down.
+ */
+export const SCREEN_ZONES = { top: 0.11, bottom: 0.17, right: 0.14, buttonsTop: 0.5 } as const;
 /** The profile grid's tiles (Instagram's since 2025). */
 export const GRID_ASPECT = 3 / 4;
 /** The feed's limits for a picture: never taller than 4:5, never wider than 16:9. */
@@ -87,19 +104,52 @@ export const SCREEN_FILL_MAX_TRIM = 0.25;
  * framedCanvas), an unknown shape, or a clip that would lose more than that.
  */
 export function screenFit(
-  slide: { type: "image" | "video"; width: number | null | undefined; height: number | null | undefined },
+  slide: { type: "image" | "video"; width: number | null | undefined; height: number | null | undefined; focus?: MediaFocus | null },
   screenRatio: number | null | undefined,
 ): "cover" | "contain" {
-  if (slide.type !== "video" || !slide.width || !slide.height || !screenRatio || !(screenRatio > 0)) return "contain";
-  const media = slide.width / slide.height;
-  if (!Number.isFinite(media) || media <= 0) return "contain";
+  if (!screenRatio || !(screenRatio > 0)) return "contain";
+  const media = slideAspect(slide);
+  if (!media || !Number.isFinite(media) || media <= 0) return "contain";
   const trim = media < screenRatio ? 1 - media / screenRatio : 1 - screenRatio / media;
-  return trim <= SCREEN_FILL_MAX_TRIM ? "cover" : "contain";
+  // a photo or a clip framed in the studio only fills the screen when it was framed for it (9:16): what was
+  // framed is never cut by more than a sliver; an unframed clip may lose up to a quarter (TikTok's)
+  const framedByHand = slide.type === "image" || !!clipFrame(slide.focus);
+  return trim <= (framedByHand ? PHOTO_FILL_MAX_TRIM : SCREEN_FILL_MAX_TRIM) ? "cover" : "contain";
 }
 
-/** Next shape for the crop's shape button (4:5 → 1:1 → 16:9 → 4:5). */
+/**
+ * A photo, or a clip framed in the studio, fills a post's screen only when
+ * it's the screen's own shape (framed 9:16): it loses a sliver on a tall
+ * phone and ~10% on the shortest; anything else (4:5, 1:1, an older photo)
+ * shows whole.
+ */
+export const PHOTO_FILL_MAX_TRIM = 0.12;
+
+/** The shape a slide shows at (w / h): a framed clip's frame, else its own. Null when unknown. */
+export function slideAspect(slide: { width: number | null | undefined; height: number | null | undefined; focus?: MediaFocus | null }): number | null {
+  const f = clipFrame(slide.focus);
+  if (f) return f.a;
+  if (!slide.width || !slide.height || !(slide.width > 0) || !(slide.height > 0)) return null;
+  return slide.width / slide.height;
+}
+
+/** Next shape for the crop's shape button (9:16 → 4:5 → 1:1 → 16:9 → 9:16). */
 export function nextAspect(a: PostAspect): PostAspect {
   return POST_ASPECT_ORDER[(POST_ASPECT_ORDER.indexOf(a) + 1) % POST_ASPECT_ORDER.length];
+}
+
+/**
+ * The shape a post starts at from its first photo or clip: the closest of the
+ * four to its own (a phone's 9:16 clip or screenshot stays full screen, an
+ * iPhone photo's 3:4 is 4:5, a landscape one 16:9), so nothing is cut that
+ * doesn't need to be. Unknown: 4:5.
+ */
+export function closestAspect(w: number | null | undefined, h: number | null | undefined): PostAspect {
+  if (!w || !h || !(w > 0) || !(h > 0)) return "portrait";
+  const own = Math.log(w / h);
+  let best: PostAspect = "portrait";
+  for (const k of POST_ASPECT_ORDER) if (Math.abs(Math.log(POST_ASPECTS[k]) - own) < Math.abs(Math.log(POST_ASPECTS[best]) - own)) best = k;
+  return best;
 }
 
 /** What's posted for a shape: 1080 wide. */
@@ -215,41 +265,57 @@ export function gridWindow(aspect: number): { x: number; y: number; w: number; h
 
 export const CENTRE_FOCUS: MediaFocus = { x: 0.5, y: 0.5 };
 
-/** A stored focus, checked (anything odd → centred). */
+/** A clip frame's shapes: a story's 9:16 to 16:9 (community_media_focus keeps the same range). */
+export const FRAME_MIN_ASPECT = 0.5;
+export const FRAME_MAX_ASPECT = 1.8;
+
+/** A stored focus, checked (anything odd → centred). A clip's frame keeps its shape and zoom. */
 export function cleanFocus(f: unknown): MediaFocus | null {
   if (!f || typeof f !== "object") return null;
   const x = Number((f as { x?: unknown }).x);
   const y = Number((f as { y?: unknown }).y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { x: clamp(x, 0, 1), y: clamp(y, 0, 1) };
+  const out: MediaFocus = { x: clamp(x, 0, 1), y: clamp(y, 0, 1) };
+  const a = Number((f as { a?: unknown }).a);
+  if (Number.isFinite(a) && a >= FRAME_MIN_ASPECT && a <= FRAME_MAX_ASPECT) {
+    const z = Number((f as { z?: unknown }).z);
+    out.a = a;
+    out.z = Number.isFinite(z) ? clamp(z, 1, MAX_ZOOM) : 1;
+  }
+  return out;
 }
 
-/** CSS object-position for a focus ("50% 30%"); undefined when centred or unset (the default). */
+/** A slide's frame from the studio (a clip framed at its post's shape); null for anything else. */
+export function clipFrame(f: MediaFocus | null | undefined): ClipFrame | null {
+  const c = cleanFocus(f);
+  return c?.a ? { a: c.a, z: c.z ?? 1, x: c.x, y: c.y } : null;
+}
+
+/** What's stored for a clip framed in the studio (its slide's focus). */
+export function frameFocus(framing: Framing, aspect: number): MediaFocus {
+  const r = (v: number) => Math.round(v * 10000) / 10000;
+  return { x: r(framing.cx), y: r(framing.cy), z: r(framing.z), a: r(aspect) };
+}
+
+/**
+ * Where the clip sits inside a box at its frame's shape, as shares of that
+ * box (CSS width / height / left / top in %): the box shows exactly what the
+ * studio's frame showed, whatever its size. `media` is the clip's own shape
+ * (w / h); unknown, the frame's (it just fills the box).
+ */
+export function framedMediaStyle(frame: ClipFrame, media: number | null | undefined): { width: string; height: string; left: string; top: string } {
+  const m = media && Number.isFinite(media) && media > 0 ? media : frame.a;
+  const img = { w: m, h: 1 };
+  const box = { w: frame.a, h: 1 };
+  const f = clampFraming({ z: frame.z, cx: frame.x, cy: frame.y }, img, box);
+  const p = placement(f, img, box);
+  const pct = (v: number) => `${Math.round(v * 100000) / 1000}%`;
+  return { width: pct(p.w / box.w), height: pct(p.h / box.h), left: pct(p.x / box.w), top: pct(p.y / box.h) };
+}
+
+/** CSS object-position for a focus ("50% 30%"); undefined when centred or unset (the default), and for a framed clip (its poster is already its frame). */
 export function focusPosition(f: MediaFocus | null | undefined): string | undefined {
   const c = cleanFocus(f);
-  if (!c || (Math.abs(c.x - 0.5) < 0.005 && Math.abs(c.y - 0.5) < 0.005)) return undefined;
+  if (!c || c.a || (Math.abs(c.x - 0.5) < 0.005 && Math.abs(c.y - 0.5) < 0.005)) return undefined;
   return `${Math.round(c.x * 1000) / 10}% ${Math.round(c.y * 1000) / 10}%`;
-}
-
-/** How far a cropped (object-cover) picture overflows its frame each way, in frame px. */
-export function coverOverflow(media: Size, frame: Size): Size {
-  const s = coverScale(media, frame);
-  return { w: Math.max(0, media.w * s - frame.w), h: Math.max(0, media.h * s - frame.h) };
-}
-
-/** Drag a cropped picture by (dx, dy) px: it follows the finger (object-position moves the other way). */
-export function panFocus(f: MediaFocus, dx: number, dy: number, media: Size, frame: Size): MediaFocus {
-  const o = coverOverflow(media, frame);
-  return {
-    x: o.w > 0.5 ? clamp(f.x - dx / o.w, 0, 1) : f.x,
-    y: o.h > 0.5 ? clamp(f.y - dy / o.h, 0, 1) : f.y,
-  };
-}
-
-/** Within `px` of centre on an axis it can move along: snap there (and say so). */
-export function snapFocus(f: MediaFocus, media: Size, frame: Size, px = 8): { focus: MediaFocus; v: boolean; h: boolean } {
-  const o = coverOverflow(media, frame);
-  const v = o.w > 0.5 && Math.abs(f.x - 0.5) * o.w <= px;
-  const h = o.h > 0.5 && Math.abs(f.y - 0.5) * o.h <= px;
-  return { focus: { x: v ? 0.5 : f.x, y: h ? 0.5 : f.y }, v, h };
 }

@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { TrimmedVideo } from "@/components/video-trimmer";
+import type { VideoTrim } from "@/lib/video-edit/plan";
 import {
+  POST_ASPECTS,
+  SCREEN_ZONES,
   clampFraming,
   gridWindow,
-  panFocus,
   panFraming,
   pinchFraming,
   placement,
-  snapFocus,
   snapToCentre,
-  focusPosition,
   type Framing,
-  type MediaFocus,
   type Point,
   type Size,
 } from "@/lib/photo-frame";
@@ -154,8 +154,19 @@ export function FrameGuides({ active, snapV, snapH, aspect, gridPreview }: { act
   const line = "absolute bg-white/60 shadow-[0_0_1px_rgba(0,0,0,0.6)]";
   // only worth drawing when the tile actually leaves something out
   const showWin = gridPreview && (win.w < 0.995 || win.h < 0.995);
+  // a full-screen post (9:16): where Crew's bar, the caption and the buttons sit over it in the feed (TikTok's safe zone)
+  const screen = gridPreview && Math.abs(aspect - POST_ASPECTS.full) < 0.01;
   return (
     <div className={cn("pointer-events-none absolute inset-0 transition-opacity duration-200", active ? "opacity-100" : "opacity-0")} aria-hidden data-frame-guides={active ? "on" : "off"}>
+      {screen && (
+        <div className="absolute inset-0" data-screen-zones>
+          <div className="absolute inset-x-0 top-0 bg-black/35" style={{ height: `${SCREEN_ZONES.top * 100}%` }} />
+          <div className="absolute inset-x-0 bottom-0 bg-black/35" style={{ height: `${SCREEN_ZONES.bottom * 100}%` }}>
+            <span className="absolute left-2 top-1 text-[10px] font-semibold text-white/80">Caption</span>
+          </div>
+          <div className="absolute right-0 bg-black/35" style={{ width: `${SCREEN_ZONES.right * 100}%`, top: `${SCREEN_ZONES.buttonsTop * 100}%`, bottom: `${SCREEN_ZONES.bottom * 100}%` }} />
+        </div>
+      )}
       <div className={cn(line, "inset-y-0 left-1/3 w-px")} />
       <div className={cn(line, "inset-y-0 left-2/3 w-px")} />
       <div className={cn(line, "inset-x-0 top-1/3 h-px")} />
@@ -176,13 +187,15 @@ export function FrameGuides({ active, snapV, snapH, aspect, gridPreview }: { act
 }
 
 /**
- * A photo in its post's frame: drag it, pinch it, never smaller than the
- * frame. `framing` is the parent's (it's what gets baked into the post).
- * With a card on top (`showImage` off) it still takes the gestures and the
- * card repaints from `framing`.
+ * A photo or clip in its post's frame: drag it, pinch it, never smaller than
+ * the frame. `framing` is the parent's (what gets baked into a photo, or a
+ * clip's frame). With a card on top (`showImage` off) it still takes the
+ * gestures and the card repaints from `framing`. `video`: a clip, playing
+ * (muted, its selection looping) where the photo would be.
  */
 export function PhotoFramer({
   src,
+  video,
   size,
   frame,
   framing,
@@ -195,6 +208,7 @@ export function PhotoFramer({
   onClaim,
 }: {
   src: string | null;
+  video?: { src: string; trim?: VideoTrim | null; poster?: string } | null;
   /** The photo's own size (px). */
   size: Size;
   /** The frame on screen (px). */
@@ -267,80 +281,30 @@ export function PhotoFramer({
   const p = placement(f, size, frame);
   return (
     <div className="absolute inset-0 touch-none select-none overflow-hidden" {...g} data-photo-framer>
-      {showImage && src && (
-        <img
-          src={src}
-          alt=""
-          draggable={false}
-          className="pointer-events-none absolute left-0 top-0 max-w-none select-none"
+      {showImage && video ? (
+        <TrimmedVideo
+          key={video.src}
+          src={video.src}
+          trim={video.trim}
+          poster={video.poster}
+          className="pointer-events-none absolute left-0 top-0 max-w-none select-none object-fill"
           style={{ width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
-          data-framed-photo
+          data-framed-clip
         />
+      ) : (
+        showImage &&
+        src && (
+          <img
+            src={src}
+            alt=""
+            draggable={false}
+            className="pointer-events-none absolute left-0 top-0 max-w-none select-none"
+            style={{ width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
+            data-framed-photo
+          />
+        )
       )}
       <FrameGuides active={active || flashing} snapV={snap.v} snapH={snap.h} aspect={frame.w / (frame.h || 1)} gridPreview={gridPreview} />
-    </div>
-  );
-}
-
-/**
- * A clip (or any picture that's posted whole) in a frame that crops it:
- * drag to choose which part shows (its focus). `children` is the picture
- * itself; it gets the focus as its object-position from the parent.
- */
-export function FocusFramer({
-  size,
-  frame,
-  focus,
-  onFocus,
-  gridPreview = false,
-  children,
-}: {
-  size: Size;
-  frame: Size;
-  focus: MediaFocus;
-  onFocus: (f: MediaFocus) => void;
-  gridPreview?: boolean;
-  children: ReactNode;
-}) {
-  const [active, setActive] = useState(false);
-  const [snap, setSnap] = useState({ v: false, h: false });
-  const raw = useRef(focus);
-  const live = useRef(focus);
-  live.current = focus;
-  const last = useRef<Point | null>(null);
-  const move = (dx: number, dy: number) => {
-    raw.current = panFocus(raw.current, dx, dy, size, frame);
-    const s = snapFocus(raw.current, size, frame);
-    if ((s.v && !snap.v) || (s.h && !snap.h)) buzz();
-    if (s.v !== snap.v || s.h !== snap.h) setSnap({ v: s.v, h: s.h });
-    onFocus(s.focus);
-  };
-  const g = useFrameGestures({
-    enabled: frame.w > 0 && size.w > 0,
-    oneFinger: true,
-    onStart: () => {
-      raw.current = live.current;
-      setActive(true);
-    },
-    onEnd: () => {
-      setActive(false);
-      setSnap({ v: false, h: false });
-      last.current = null;
-    },
-    onPan: move,
-    onPinchStart: () => {
-      last.current = null;
-    },
-    // two fingers just move it (a clip can't be zoomed)
-    onPinch: (_m0, _d0, m) => {
-      if (last.current) move(m.x - last.current.x, m.y - last.current.y);
-      last.current = m;
-    },
-  });
-  return (
-    <div className="absolute inset-0 touch-none select-none overflow-hidden" {...g} data-focus-framer data-focus={focusPosition(focus) ?? "50% 50%"}>
-      {children}
-      <FrameGuides active={active} snapV={snap.v} snapH={snap.h} aspect={frame.w / (frame.h || 1)} gridPreview={gridPreview} />
     </div>
   );
 }

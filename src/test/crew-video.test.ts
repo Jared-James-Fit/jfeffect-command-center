@@ -80,7 +80,7 @@ describe("Crew video: pick it or film it, it's up while you write the caption", 
     // inline on an iPhone: the pooled elements carry playsinline themselves
     expect(read("src/lib/video-pool.ts")).toContain('v.setAttribute("playsinline", "");');
     expect(inline).toContain("prefers-reduced-motion: reduce");
-    expect(read("src/components/community/post-card.tsx")).toContain('<InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={shrunk ? "corner" : page ? "top" : "bottom"} />');
+    expect(read("src/components/community/post-card.tsx")).toContain('controls={shrunk ? "corner" : page ? "top" : "bottom"}');
     const stories = read("src/components/community/crew-stories.tsx");
     expect(stories).toContain("return <StoryClip path={post.media_path} poster={thumb} {...clip} />;");
     expect(stories).toContain("progressRef.current(Math.min(1, v.currentTime / span));");

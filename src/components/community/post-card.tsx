@@ -36,7 +36,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
-import { FEED_VIDEO_MAX_HEIGHT, feedAspect, focusPosition, screenFit, videoAspect } from "@/lib/photo-frame";
+import { FEED_MAX_ASPECT, FEED_VIDEO_MAX_HEIGHT, VIDEO_MIN_ASPECT, clipFrame, feedAspect, focusPosition, screenFit, videoAspect, type MediaFocus } from "@/lib/photo-frame";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
@@ -1243,10 +1243,18 @@ function FitBox({ ratio, children, page = false, screen = false, shrunk = false 
   );
 }
 
-/** The shape a post's pictures show at (PostMedia's): a clip cover its own (9:16 to 16:9), a picture 4:5 to 16:9, after a 4:5 card 4:5. */
-export function postMediaRatio(post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media">, afterCard = false): number {
+/**
+ * The shape a post's pictures show at (PostMedia's): a clip cover its own (9:16 to 16:9), or the frame it
+ * was framed at in the studio; a picture 4:5 to 16:9; after a 4:5 card 4:5.
+ */
+export function postMediaRatio(
+  post: Pick<CommunityPost, "media_path" | "media_thumb_path" | "media_type" | "media_width" | "media_height" | "extra_media"> & { media_focus?: MediaFocus | null },
+  afterCard = false,
+): number {
   if (afterCard) return 0.8;
-  return post.media_type === "video" ? videoAspect(post.media_width, post.media_height) : feedAspect(post.media_width, post.media_height);
+  if (post.media_type !== "video") return feedAspect(post.media_width, post.media_height);
+  const f = clipFrame(post.media_focus);
+  return f ? Math.min(FEED_MAX_ASPECT, Math.max(VIDEO_MIN_ASPECT, f.a)) : videoAspect(post.media_width, post.media_height);
 }
 
 /** One photo or video, filling its frame. A clip plays muted while it's on screen (InlineVideo). */
@@ -1281,7 +1289,16 @@ function SlideMedia({
       {isVideo ? (
         <div data-pinch-zoom className="absolute inset-0">
           {/* whole in its frame; on a post's screen it fills it when it's nearly the screen's shape (TikTok's) */}
-          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={shrunk ? "corner" : page ? "top" : "bottom"} />
+          <InlineVideo
+            path={slide.path}
+            poster={thumbUrl}
+            active={active}
+            position={position}
+            fit={fit}
+            controls={shrunk ? "corner" : page ? "top" : "bottom"}
+            frame={clipFrame(slide.focus)}
+            media={slide.width && slide.height ? slide.width / slide.height : null}
+          />
         </div>
       ) : (
         // on a post's screen a photo shows whole, between Crew's bar and the tab bar

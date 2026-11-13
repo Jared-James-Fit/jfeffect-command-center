@@ -14,11 +14,9 @@ import {
   guideBand,
   nextAspect,
   outputSize,
-  panFocus,
   panFraming,
   pinchFraming,
   placement,
-  snapFocus,
   snapToCentre,
   visibleShare,
 } from "@/lib/photo-frame";
@@ -99,10 +97,11 @@ describe("framing a photo in its post's shape", () => {
     expect(visibleShare(shot, band, f.z).w).toBeCloseTo(390 / ((1440 * 693) / 1920), 6);
     expect(f.cx).toBe(0.5);
   });
-  it("the shape button goes 4:5 → 1:1 → 16:9 → 4:5", () => {
+  it("the shape button goes 9:16 → 4:5 → 1:1 → 16:9 → 9:16 (9:16 fills a phone's screen in the Crew feed)", () => {
+    expect(nextAspect("full")).toBe("portrait");
     expect(nextAspect("portrait")).toBe("square");
     expect(nextAspect("square")).toBe("landscape");
-    expect(nextAspect("landscape")).toBe("portrait");
+    expect(nextAspect("landscape")).toBe("full");
   });
 });
 
@@ -121,15 +120,9 @@ describe("the feed's shapes and the profile grid", () => {
     expect(tall.w).toBe(1);
     expect(tall.h).toBeCloseTo(0.75, 6);
   });
-  it("a clip's focus: drag it, centred snaps, CSS object-position, junk is ignored", () => {
-    const clip = { w: 1080, h: 1920 };
-    const frame = { w: 390, h: 487.5 };
-    // the clip overflows the 4:5 frame vertically only
-    const down = panFocus({ x: 0.5, y: 0.5 }, 0, 40, clip, frame);
-    expect(down.x).toBe(0.5);
-    expect(down.y).toBeLessThan(0.5);
-    expect(snapFocus({ x: 0.5, y: 0.505 }, clip, frame).h).toBe(true);
+  it("an older focus is CSS object-position; a clip framed in the studio isn't (its poster is its frame); junk is ignored", () => {
     expect(focusPosition({ x: 0.5, y: 0.25 })).toBe("50% 25%");
+    expect(focusPosition({ x: 0.5, y: 0.25, z: 1.4, a: 0.5625 })).toBeUndefined();
     expect(focusPosition({ x: 0.5, y: 0.5 })).toBeUndefined();
     expect(focusPosition(null)).toBeUndefined();
     expect(cleanFocus({ x: "a", y: 1 })).toBeNull();
@@ -189,13 +182,13 @@ describe("the studio frames what's posted", () => {
     expect(framer).toContain("top-2/3");
     expect(framer).toContain("Profile grid");
   });
-  it("a clip gets Edit cover and a draggable framing", () => {
-    expect(cam).toContain("<FocusFramer");
+  it("a clip gets Edit cover and is framed like a photo: drag to place it, pinch to size it", () => {
+    expect(cam).toContain('video={selItem.kind === "video" && selItem.video ? { src: selItem.video, trim: selItem.trim, poster: selItem.preview ?? undefined } : null}');
     expect(cam).toContain("data-edit-cover");
     expect(cam).toContain("<CoverPicker");
     const tray = read("src/components/community/slide-tray.tsx");
     expect(tray).toContain("const setCover = useCallback(");
-    expect(tray).toContain("if (slide.thumb && !it.existing) void removeCommunityFiles([slide.thumb]);");
+    expect(tray).toContain("if (thumb && slide.thumb) void removeCommunityFiles([slide.thumb]);");
   });
 });
 

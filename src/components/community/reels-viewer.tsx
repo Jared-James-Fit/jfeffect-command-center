@@ -24,6 +24,8 @@ import {
   type ReelItem,
 } from "@/lib/reels";
 import { reelVideo } from "@/lib/video-pool";
+import { clipFrame } from "@/lib/photo-frame";
+import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { cn } from "@/lib/utils";
 
 export type ReelStart = { postId: string; path: string | null };
@@ -230,6 +232,10 @@ function ReelPage({
   const thumbs = useSlideThumbUrls(thumbPath ? [item.slide] : []);
   const poster = thumbPath ? (thumbs[thumbPath] ?? null) : null;
   const { data: url } = useFullMediaUrl(item.slide.path, loaded);
+  // framed in the studio: shown as its frame, whole on black (its poster is that frame)
+  const frame = clipFrame(item.slide.focus);
+  const framed = !!frame;
+  const media = item.slide.width && item.slide.height ? item.slide.width / item.slide.height : null;
   const react = useReact(post, viewerIsStaff);
   const host = useRef<HTMLDivElement | null>(null);
   const vid = useRef<HTMLVideoElement | null>(null);
@@ -257,7 +263,7 @@ function ReelPage({
     const el = host.current;
     if (!el) return;
     const v = reelVideo(slot);
-    v.className = "absolute inset-0 h-full w-full object-contain";
+    v.className = framed ? "absolute inset-0 h-full w-full object-cover" : "absolute inset-0 h-full w-full object-contain";
     el.appendChild(v);
     vid.current = v;
     setAttached(v);
@@ -283,7 +289,7 @@ function ReelPage({
       setAttached(null);
       setPlaying(false);
     };
-  }, [loaded, slot]);
+  }, [loaded, slot, framed]);
 
   // its clip
   useEffect(() => {
@@ -421,18 +427,43 @@ function ReelPage({
       data-reel={item.key}
       data-reel-active={active ? "" : undefined}
     >
-      {/* the clip, whole, at its own shape */}
-      <div ref={host} className="absolute inset-0 select-none [-webkit-touch-callout:none]" onClick={onTap} {...hold.handlers} data-reel-video />
-      {poster && (
-        <img
-          src={poster}
-          alt=""
-          draggable={false}
-          className={cn(
-            "pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
-            playing ? "opacity-0" : "opacity-100",
+      {frame ? (
+        // framed in the studio: just that part, whole on black
+        <div className="absolute inset-0 select-none [-webkit-touch-callout:none]" onClick={onTap} {...hold.handlers} data-reel-video>
+          <ClipFrameBox
+            frame={frame}
+            media={media}
+            fit="contain"
+            poster={
+              poster && (
+                <img
+                  src={poster}
+                  alt=""
+                  draggable={false}
+                  className={cn("pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-200", playing ? "opacity-0" : "opacity-100")}
+                />
+              )
+            }
+          >
+            {(style) => <div ref={host} style={style} />}
+          </ClipFrameBox>
+        </div>
+      ) : (
+        <>
+          {/* the clip, whole, at its own shape */}
+          <div ref={host} className="absolute inset-0 select-none [-webkit-touch-callout:none]" onClick={onTap} {...hold.handlers} data-reel-video />
+          {poster && (
+            <img
+              src={poster}
+              alt=""
+              draggable={false}
+              className={cn(
+                "pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
+                playing ? "opacity-0" : "opacity-100",
+              )}
+            />
           )}
-        />
+        </>
       )}
       <ReactionBurst n={burst.n} x={burst.x} y={burst.y} emoji={REACTION.emoji} />
       {soundFlash}

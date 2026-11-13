@@ -3,8 +3,8 @@ import { Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { releaseCanvas } from "@/lib/canvas-memory";
 import { fitWithin } from "@/lib/video-poster";
-import { GRID_ASPECT, focusPosition, type MediaFocus, type Size } from "@/lib/photo-frame";
-import { FocusFramer } from "@/components/community/photo-framer";
+import { GRID_ASPECT, clampFraming, placement, type Framing, type Size } from "@/lib/photo-frame";
+import { framedCanvas } from "@/lib/photo-frame-draw";
 
 /** A frame of a playing / seeked video in the page, as a JPEG (≤ `max` px long side). Null when the phone won't hand it over. */
 function grabFrame(v: HTMLVideoElement, max: number): Promise<Blob | null> {
@@ -36,18 +36,42 @@ function grabFrame(v: HTMLVideoElement, max: number): Promise<Blob | null> {
   });
 }
 
+/** The grid tile's still: the frame as it's framed, small (its middle 3:4 shows). */
+function grabFramed(v: HTMLVideoElement, framing: Framing, aspect: number, width: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    if (!v.videoWidth || !v.videoHeight) return resolve(null);
+    let c: HTMLCanvasElement | null = null;
+    try {
+      c = framedCanvas(v, framing, aspect, width);
+      const done = c;
+      c.toBlob(
+        (b) => {
+          releaseCanvas(done);
+          resolve(b);
+        },
+        "image/jpeg",
+        0.8,
+      );
+    } catch {
+      releaseCanvas(c);
+      resolve(null);
+    }
+  });
+}
+
 /**
  * Edit cover, Instagram's way, for a clip on a post: slide through the clip
  * to the frame you want as its cover (what the feed shows before it plays,
- * and its tile on your profile grid), drag to choose which part shows where
- * the feed crops it, and see the grid tile as it'll look. Done hands back
- * that frame as a JPEG and the framing.
+ * and its tile on your profile grid), seen as the post's frame shows it
+ * (where it sits and how big is the studio's: drag and pinch there), with
+ * the grid tile as it'll look. Done hands back that moment as a JPEG, the
+ * whole picture: it's framed like the clip when the post goes up.
  */
 export function CoverPicker({
   src,
   size,
   aspect,
-  focus: initialFocus,
+  framing,
   range,
   onCancel,
   onDone,
@@ -56,19 +80,19 @@ export function CoverPicker({
   src: string;
   /** Its size (px). */
   size: Size;
-  /** The shape the feed shows it at. */
+  /** The post's shape. */
   aspect: number;
-  focus: MediaFocus;
+  /** How it sits in that shape (the studio's frame). */
+  framing: Framing;
   /** The part of the clip that's posted (trimmed): the cover comes from inside it. */
   range?: { start: number; end: number } | null;
   onCancel: () => void;
-  onDone: (cover: Blob | null, focus: MediaFocus) => void;
+  onDone: (cover: Blob | null) => void;
 }) {
   const vid = useRef<HTMLVideoElement | null>(null);
   const [duration, setDuration] = useState(0);
   const from = range?.start ?? 0;
   const [t, setT] = useState(from);
-  const [focus, setFocus] = useState(initialFocus);
   const [tile, setTile] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [area, setArea] = useState<HTMLDivElement | null>(null);
@@ -89,7 +113,7 @@ export function CoverPicker({
   const refreshTile = () => {
     const v = vid.current;
     if (!v) return;
-    void grabFrame(v, 360).then((b) => {
+    void grabFramed(v, framing, aspect, 240).then((b) => {
       if (!b) return;
       if (tileUrl.current) URL.revokeObjectURL(tileUrl.current);
       tileUrl.current = URL.createObjectURL(b);
@@ -154,10 +178,11 @@ export function CoverPicker({
     const b = await grabFrame(v, 1080);
     setBusy(false);
     if (!b) toast.message("Couldn't grab that frame on this phone", { description: "The clip keeps its first frame as its cover." });
-    onDone(b, focus);
+    onDone(b);
   };
 
-  const position = focusPosition(focus);
+  const f = clampFraming(framing, size, frame);
+  const p = placement(f, size, frame);
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-black text-white" data-cover-picker>
       <div className="flex shrink-0 items-center gap-2 px-3 pb-2" style={{ paddingTop: "max(env(safe-area-inset-top), 0.75rem)" }}>
@@ -171,29 +196,28 @@ export function CoverPicker({
       </div>
       <div ref={setArea} className="flex min-h-0 flex-1 items-center justify-center px-4">
         <div className="relative overflow-hidden rounded-2xl bg-zinc-900" style={{ width: frame.w, height: frame.h }}>
-          {/* (the grid tile is shown for real below, not outlined here: a clip's tile shows more of its height than the feed does) */}
-          <FocusFramer size={size} frame={frame} focus={focus} onFocus={setFocus}>
-            <video
-              ref={attach}
-              src={src}
-              muted
-              playsInline
-              preload="auto"
-              onLoadedMetadata={onMeta}
-              onSeeked={onSeeked}
-              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-              style={position ? { objectPosition: position } : undefined}
-            />
-          </FocusFramer>
+          {/* the clip as the post's frame shows it (the grid tile is shown for real below) */}
+          <video
+            ref={attach}
+            src={src}
+            muted
+            playsInline
+            preload="auto"
+            onLoadedMetadata={onMeta}
+            onSeeked={onSeeked}
+            className="pointer-events-none absolute left-0 top-0 max-w-none object-fill"
+            style={{ width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
+            data-cover-clip
+          />
         </div>
       </div>
       <div className="shrink-0 space-y-3 px-5 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}>
         <div className="flex items-center gap-3">
           {/* the grid tile, as your profile will show it */}
           <div className="relative shrink-0 overflow-hidden rounded-md bg-white/10 ring-1 ring-white/30" style={{ width: 48, height: 48 / GRID_ASPECT }} aria-label="Your profile grid's tile" data-cover-tile>
-            {tile && <img src={tile} alt="" className="h-full w-full object-cover" style={position ? { objectPosition: position } : undefined} />}
+            {tile && <img src={tile} alt="" className="h-full w-full object-cover" />}
           </div>
-          <p className="min-w-0 text-[12px] leading-snug text-white/70">Slide to pick the frame people see before it plays and on your profile. Drag the clip to choose what shows.</p>
+          <p className="min-w-0 text-[12px] leading-snug text-white/70">Slide to pick the frame people see before it plays and on your profile.</p>
         </div>
         <input
           type="range"
