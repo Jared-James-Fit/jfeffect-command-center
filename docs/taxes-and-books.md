@@ -10,7 +10,7 @@ owner.
 
 | What | Source |
 |---|---|
-| Sales and GST/HST collected | `payment_ledger` (payments, deposits, refunds; voided, test-mode, credit and reversal rows are skipped) plus paid rows in `member_payment_ledger` |
+| Sales and GST/HST collected | `payment_ledger` (payments, deposits, refunds; voided, test-mode, credit and reversal rows are skipped) plus paid rows in `member_payment_ledger` and AI credit packs (`ai_credit_purchases`, with their GST; a refund counts back out) |
 | Expenses and ITCs | `business_expenses` (receipts, manual entries, monthly Stripe fees) |
 | Tax already paid | `business_tax_payments` |
 | Province, GST number, filing frequency, other income | `business_tax_settings` (one row) |

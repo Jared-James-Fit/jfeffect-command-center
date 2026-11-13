@@ -33,6 +33,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Sparkles, Pill, Flame, Beef, Wheat, Droplet, Clock } from "lucide-react";
+import { AiCreditsChip, AiCreditsSheet, AI_CREDITS_KEY, useAiCredits, useSetCreditState } from "@/components/ai-credits/ai-credits";
+import { canAfford } from "@/lib/ai-credits/packs";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -280,12 +282,34 @@ function LogFoodSheet({
   const [manual, setManual] = useState({ name: "", calories: "", protein_g: "", carbs_g: "", fat_g: "" });
   const [aiText, setAiText] = useState("");
   const [aiResult, setAiResult] = useState<null | { name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }>(null);
+  // AI credits: the count beside the AI log, and the sheet that opens from it or when they're out.
+  const credits = useAiCredits(open);
+  const setCreditState = useSetCreditState();
+  const qc = useQueryClient();
+  const [creditsSheet, setCreditsSheet] = useState<null | "info" | "out">(null);
 
   const parseM = useMutation({
     mutationFn: () => parse({ data: { text: aiText } }),
-    onSuccess: (r) => setAiResult(r),
-    onError: (e: any) => toast.error(e?.message ?? "AI parse failed"),
+    onSuccess: (r) => {
+      setCreditState(r.credits);
+      if (!r.ok) {
+        setCreditsSheet("out");
+        return;
+      }
+      setAiResult({ name: r.name, calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, fat_g: r.fat_g });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "The AI couldn't estimate that. No credit was used.");
+      void qc.invalidateQueries({ queryKey: [AI_CREDITS_KEY] });
+    },
   });
+  const estimate = () => {
+    if (credits.data && !canAfford(credits.data, "meal_estimate")) {
+      setCreditsSheet("out");
+      return;
+    }
+    parseM.mutate();
+  };
 
   function buildLoggedAt() {
     if (defaultDate === todayISO()) return undefined;
@@ -426,14 +450,18 @@ function LogFoodSheet({
 
           <TabsContent value="ai" className="mt-4 space-y-3">
             <div>
-              <Label>Describe what you ate</Label>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <Label htmlFor="ai-meal-text">Describe what you ate</Label>
+                <AiCreditsChip state={credits.data} onClick={() => setCreditsSheet("info")} />
+              </div>
               <Input
+                id="ai-meal-text"
                 value={aiText}
                 onChange={(e) => setAiText(e.target.value)}
                 placeholder="2 eggs, toast and butter"
               />
             </div>
-            <Button onClick={() => parseM.mutate()} disabled={parseM.isPending || !aiText.trim()} className="w-full">
+            <Button onClick={estimate} disabled={parseM.isPending || !aiText.trim()} className="w-full">
               <Sparkles className="h-4 w-4 mr-1" />
               {parseM.isPending ? "Estimating…" : "Estimate macros"}
             </Button>
@@ -457,6 +485,12 @@ function LogFoodSheet({
             )}
           </TabsContent>
         </Tabs>
+        <AiCreditsSheet
+          open={creditsSheet !== null}
+          onOpenChange={(o) => !o && setCreditsSheet(null)}
+          out={creditsSheet === "out"}
+          feature="meal_estimate"
+        />
       </SheetContent>
     </Sheet>
   );

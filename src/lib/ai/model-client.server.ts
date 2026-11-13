@@ -231,14 +231,38 @@ export async function callModel(ref: string, r: ModelRequest): Promise<ModelRepl
 }
 
 /**
+ * A short call answered inside this request (no background mode, nothing
+ * stored on OpenAI's side): quick interactive tasks a person is waiting on,
+ * like estimating a meal's macros. Long or slow work uses `callModel`.
+ */
+export async function callModelNow(ref: string, r: ModelRequest): Promise<ModelReply> {
+  const t0 = Date.now();
+  const m = parseModelRef(ref);
+  const timeoutMs = r.timeoutMs ?? 30_000;
+  let out: Omit<ModelReply, "model" | "ms">;
+  if (m.via === "openai") {
+    const j = await post(`${OPENAI}/responses`, openaiHeaders(), { ...openaiBody(m.id, r, false), store: false }, timeoutMs);
+    if (j?.status && j.status !== "completed") {
+      throw new Error(`${ref}: ${j.status}${j?.incomplete_details?.reason ? ` (${j.incomplete_details.reason})` : ""}`);
+    }
+    out = { text: responseText(j), usage: responseUsage(j) };
+  } else if (m.family === "anthropic") out = await gatewayMessages(m.id, { ...r, timeoutMs });
+  else out = await gatewayChat(m.id, { ...r, timeoutMs });
+  return { ...out, model: ref, ms: Date.now() - t0 };
+}
+
+/**
  * Published list prices, US$ per million tokens (input, output), for the admin
  * panel's cost estimate: only rates with a source (Nov 2026: GPT-6 Astra from
- * OpenAI's rate card as reported, Claude Opus 5.5 from Anthropic's model docs).
+ * OpenAI's rate card as reported, GPT-5 mini from OpenAI's price list, Claude Opus 5.5 from
+ * Anthropic's model docs).
  * Any other model shows its tokens without a price rather than a guess. Gateway
  * calls bill in Lovable credits.
  */
 export const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
   "gpt-6-astra": { input: 10, output: 50 },
+  // OpenAI's price list for GPT-5 mini (Aug 2025): the AI credits' cost per use is measured with it.
+  "gpt-5-mini": { input: 0.25, output: 2 },
   "claude-opus-5-5": { input: 4, output: 20 },
   "claude-sonnet-5": { input: 2, output: 10 },
 };

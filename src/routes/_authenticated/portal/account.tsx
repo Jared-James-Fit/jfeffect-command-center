@@ -28,11 +28,14 @@ import {
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Target,
   Trash2,
   User,
   Watch,
 } from "lucide-react";
+import { AiCreditsPanel, useAiCredits } from "@/components/ai-credits/ai-credits";
+import { chipLabel } from "@/lib/ai-credits/packs";
 import { isBasicInfoComplete } from "@/lib/basic-info";
 import { isNative } from "@/platform";
 import { healthStoreProvider } from "@/platform/health";
@@ -84,6 +87,7 @@ type SectionId =
   | "password"
   | "legal"
   | "billing"
+  | "ai-credits"
   | "delete-account";
 
 const SECTION_ALIASES: Record<string, SectionId> = {
@@ -108,6 +112,9 @@ const SECTION_ALIASES: Record<string, SectionId> = {
   "legal-safety": "legal",
   privacy: "legal",
   billing: "billing",
+  "ai-credits": "ai-credits",
+  credits: "ai-credits",
+  ai: "ai-credits",
   "delete-account": "delete-account",
 };
 
@@ -125,6 +132,7 @@ function AccountPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState<any>(null);
   const [open, setOpen] = useState<string[]>([]);
+  const aiCredits = useAiCredits();
 
   const { data: client } = useQuery({
     queryKey: ["my-client-account", portalUserId],
@@ -560,6 +568,20 @@ function AccountPage() {
               <SettingsSection id="legal" icon={ShieldCheck} title="Privacy & legal">
                 <SectionErrorBoundary label="Legal & Safety">
                   <ClientLegalSafety bare />
+                </SectionErrorBoundary>
+              </SettingsSection>
+            )}
+
+            {/* ── AI credits: the month's free ones and any bought (never for staff, who are unlimited) ── */}
+            {aiCredits.data && !aiCredits.data.unlimited && (
+              <SettingsSection
+                id="ai-credits"
+                icon={Sparkles}
+                title="AI credits"
+                summary={{ text: chipLabel(aiCredits.data) ?? "", warn: (aiCredits.data.left ?? 0) <= 0 }}
+              >
+                <SectionErrorBoundary label="AI credits">
+                  <AiCreditsPanel state={aiCredits.data} />
                 </SectionErrorBoundary>
               </SettingsSection>
             )}

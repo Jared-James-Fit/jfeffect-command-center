@@ -16,6 +16,7 @@ import {
 } from "@/lib/stripe-invoice-refs";
 import { matchPurchase, type MatchResult } from "@/lib/stripe-purchase-match";
 import { resolveInstallmentPlan } from "@/lib/installment-plan";
+import { isAiCreditsObject, recordCreditsFromSession, reverseCreditsForCharge } from "@/lib/ai-credits/stripe.server";
 
 // Verify Stripe signature using Web Crypto (HMAC-SHA256).
 // Header format: t=timestamp,v1=sig,v1=sig...
@@ -518,6 +519,13 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // handling, same idempotency guard.
             case "checkout.session.async_payment_succeeded":
             case "checkout.session.completed": {
+              // An AI credit pack is its own sale (ai_credit_purchases), never
+              // a payment on a coaching sale: add its credits once and stop.
+              if (isAiCreditsObject(obj)) {
+                const r = await recordCreditsFromSession(obj);
+                console.info("[stripe-webhook] AI credits", { session: obj.id, added: r?.added ?? 0, pending: r?.pending ?? false, duplicate: r?.duplicate ?? false });
+                break;
+              }
               // Capture promo/discount usage for EVERY completed checkout
               // (JF Membership, coaching, one-time, member upgrade, future).
               await captureCheckoutPromo(supabase, obj, event.id);
@@ -1256,6 +1264,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── One-time payment intent succeeded ───────────────────────────
             case "payment_intent.succeeded": {
+              // A credit pack's payment: its checkout session adds the credits.
+              if (isAiCreditsObject(obj)) break;
               const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.id });
               if (purchase) {
                 const charge =
@@ -1338,6 +1348,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             // ── Payment intent failed ────────────────────────────────────────
             // Delayed-settlement checkout failure (ACH return, etc.)
             case "checkout.session.async_payment_failed": {
+              if (isAiCreditsObject(obj)) break;
               const purchase = await resolvePurchase(supabase, obj, {
                 stripe_checkout_session_id: obj.id,
                 stripe_customer_id: obj.customer ?? undefined,
@@ -1353,6 +1364,7 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
             }
 
             case "payment_intent.payment_failed": {
+              if (isAiCreditsObject(obj)) break;
               const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.id });
               if (purchase) {
                 await supabase.from("purchase_records").update({
@@ -1366,6 +1378,8 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
 
             // ── Refund ───────────────────────────────────────────────────────
             case "charge.refunded": {
+              // A refunded credit pack takes back the credits it paid for that are still unused.
+              if (await reverseCreditsForCharge(obj)) break;
               const purchase = await resolvePurchase(supabase, obj, { stripe_payment_intent_id: obj.payment_intent });
               if (purchase) {
                 await supabase.from("purchase_records").update({

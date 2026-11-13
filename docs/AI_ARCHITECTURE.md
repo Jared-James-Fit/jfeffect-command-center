@@ -33,6 +33,7 @@ never hit the gateway's 524 or hold a request open).
 | `nutrition` (Nutrition Update targets, strong only) | GPT-6 Astra, GPT-5.5 | medium |
 | `nutrition_write` (meal plans, their fix, coach updates) | GPT-5.5, GPT-5-mini | low |
 | `roadmap` (block purpose, weekly focus) | GPT-5-mini, GPT-5.5 | low |
+| `meal_estimate` (a member's or client's AI food log, metered by AI credits) | GPT-5-mini, GPT-5.5 | low |
 
 - `strategy`, `review`, `interpret`, `nutrition` are **strong only**: every model on the route is
   top tier. If none answers, the run stops with a message that says so. A coaching decision is
@@ -147,3 +148,14 @@ measured: the OpenAI credits ran out mid-run. Flash builds; GPT-5.5 is its fallb
 **Costs and limits seen**: the benchmark used about $22 of OpenAI credit (25 Astra calls)
 and Lovable AI credit for the gateway runs, and both accounts ran out during it; a run whose
 models are all out of credit stops with a message naming which account to top up.
+
+## AI credits (members and clients)
+
+AI that a member or client triggers is metered (`src/lib/ai-credits/`, 20270313090000_ai_credits.sql):
+a monthly free allowance by tier (member 30, coaching client 300, staff unlimited; admins change
+them on Settings → AI credits & models) and packs bought through Stripe on the web. The credits are
+taken before the call and given back if it fails (`withAiCredits`); every use keeps its model,
+tokens and estimated cost, so the admin card compares the real AI cost against pack sales. Today
+the only metered feature is the AI food log (`meal_estimate`, 1 credit, GPT-5 mini answered inside
+the request with `callModelNow`). A new member-facing AI feature gets a cost in `ai_credit_cost` and
+`FEATURE_COSTS` and goes through `withAiCredits`.

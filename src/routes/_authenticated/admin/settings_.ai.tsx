@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { aiCheckNowFn, aiStatusFn } from "@/lib/ai/ai-status.functions";
+import { AiCreditsAdminCard } from "@/components/ai-credits/ai-credits-admin";
 
 export const Route = createFileRoute("/_authenticated/admin/settings_/ai")({ component: AiSettingsPage });
 
@@ -21,6 +22,7 @@ const TASK_LABEL: Record<string, string> = {
   nutrition: "Nutrition targets (coaching decisions)",
   nutrition_write: "Writing meal plans and plan updates",
   roadmap: "Roadmap words (block purpose, weekly focus)",
+  meal_estimate: "AI food log (members and clients, metered by AI credits)",
 };
 
 /** Admin only: which models run the coaching AI, whether they're reachable, and how the calls have gone. Nothing here changes a program. */
@@ -50,8 +52,9 @@ function AiSettingsPage() {
   };
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <PageHeader title="AI models" />
+      <PageHeader title="AI credits & models" />
       <p className="text-[13px] text-muted-foreground">Which models write and review programs, nutrition plans and roadmap words. Every default runs on the OpenAI key, never Lovable credits. Coaching decisions only ever go to the top tier; if none answers, the run stops and says so. This page only reports: nothing here changes a program.</p>
+      <AiCreditsAdminCard />
       {q.isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : q.error ? (
