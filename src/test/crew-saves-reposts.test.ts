@@ -144,10 +144,30 @@ describe("the database: private saves, albums, reposts", () => {
     expect(sql).toContain("INSERT INTO public.community_saves (user_id, post_id) VALUES (v_me, v_id) ON CONFLICT DO NOTHING;");
   });
 
-  it("only crew-wide posts can be reposted: never yours, never an automatic story", () => {
-    expect(sql).toContain("THEN 'That''s already on your profile'");
+  it("someone else's post reposts only when it's crew-wide, never an automatic story", () => {
     expect(sql).toContain("WHEN coalesce(p.auto_shared, false) THEN 'Automatic workout stories can''t be reposted'");
     expect(sql).toContain("WHEN p.visibility <> 'community' THEN 'Only posts shared with the whole crew can be reposted'");
+  });
+
+  it("your own posts repost too (Nov 13 2026): anything you shared with the crew, never a story or an automatic one", () => {
+    const own = read("supabase/migrations/20270311090000_repost_your_own_posts.sql");
+    // the refusal that said "already on your profile" is gone
+    expect(own).not.toContain("already on your profile");
+    // stories and automatic workout stories are refused before anything about whose it is
+    const body = own.slice(own.indexOf("RETURNS text"), own.indexOf("$$;"));
+    expect(body.indexOf("WHEN coalesce(p.auto_shared, false)")).toBeLessThan(body.indexOf("WHEN p.author_user_id IN (_viewer"));
+    expect(body.indexOf("WHEN p.story_only THEN 'Stories can''t be reposted'")).toBeLessThan(body.indexOf("WHEN p.author_user_id IN (_viewer"));
+    // yours or a collab you're on: crew-wide, or a private account's crew posts ('followers'); never Close Friends / coach / private
+    expect(body).toContain("OR public.community_main_account(_viewer) = ANY (public.community_post_collab_ids(p.id))");
+    expect(body).toContain("THEN CASE WHEN p.visibility IN ('community', 'followers') THEN NULL");
+    expect(body).toContain("ELSE 'Only posts shared with the crew can be reposted' END");
+    // still only callable inside the RPCs
+    expect(own).toContain("REVOKE ALL ON FUNCTION public.community_repost_refusal(uuid, uuid) FROM PUBLIC, anon, authenticated;");
+    // its Activity's 🔁 count never counts your own repost (the people list never had you)
+    expect(own).toContain("'reposts', (SELECT count(*) FROM rp WHERE public.community_main_account(rp.user_id) IS DISTINCT FROM v_me),");
+    expect(own).toContain("RAISE EXCEPTION 'community_post_activity: anchor not found';");
+    // the button follows can_repost, so it shows on your own posts once the server says so
+    expect(showRepostButton({ can_repost: true, my_repost: null })).toBe(true);
   });
 
   it("in the feed a post moves up to its latest repost you may see: private accounts only for followers, never across a block", () => {
