@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_TOGGLE_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
@@ -56,6 +56,8 @@ import { DoubleTapHint, ReactionBurst, ReactionButton } from "@/components/commu
 import { SharedCommentCard, openCommunityPost } from "@/components/community/shared-comment";
 import { CollaboratorsSheet } from "@/components/community/mentions";
 import { InlineFollow } from "@/components/community/follow-button";
+import { PageCaption } from "@/components/community/page-caption";
+import { POST_SHEET_HEIGHT } from "@/lib/post-sheet";
 import { RepostButton, RepostedHeader, SaveButton, useRepostNote } from "@/components/community/repost-save";
 
 /** "● Training now" — a lock-in whose session is still open (and recent). */
@@ -131,11 +133,18 @@ export function AutoPostHero({ post, thumbUrl, unit, full = false }: { post: Com
  * anything else on it. The Recap's "work on this week" stays in the app (it's never
  * on the picture that can go public).
  */
-export function AutoPostCaption({ post, clamp, onOpenPerson, className }: { post: CommunityPost; clamp: boolean; onOpenPerson?: (a: CommunityAuthor) => void; className?: string }) {
+export function AutoPostCaption({ post, clamp, onOpenPerson, className, named = true }: {
+  post: CommunityPost;
+  clamp: boolean;
+  onOpenPerson?: (a: CommunityAuthor) => void;
+  className?: string;
+  /** The name in bold before the words (Instagram's caption); off where the author's row is right above (the feed's post sheet). */
+  named?: boolean;
+}) {
   const improve = isRecapStats(post.series_data) ? post.series_data.improve : null;
   return (
     <div className={cn("px-3.5 pt-3", className)} data-auto-caption>
-      {post.caption?.trim() && <NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} lead={post.author.name} limits={PICTURE_CAPTION_LIMITS} />}
+      {post.caption?.trim() && <NoteCaption text={post.caption} mentions={post.mentions} onOpenPerson={onOpenPerson} clamp={clamp} lead={named ? post.author.name : null} limits={PICTURE_CAPTION_LIMITS} />}
       {improve && (
         <div className="mt-2.5 flex items-start gap-2.5 rounded-2xl bg-muted/60 px-3 py-2.5" data-recap-improve>
           <Target className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
@@ -402,14 +411,30 @@ type Props = {
    * default): Instagram's card, the words and buttons under the picture.
    */
   layout?: "card" | "page";
+  /**
+   * "page" only: a tap on the words opens the post's sheet (PostSheet: the
+   * whole caption with the comments under it, Reels'); the words show as a
+   * two-line preview with "… more" (PageCaption).
+   */
+  onOpenCaption?: (post: CommunityPost) => void;
+  /** "page" only: this post's sheet is open, so the post shrinks into the space above it and its words and buttons step aside. */
+  sheetOpen?: boolean;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card" }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
   const articleRef = useRef<HTMLElement | null>(null);
   usePostViewTracker(articleRef, post);
+  // its sheet open: the shrunk post also takes the room above it up to Crew's bar (the story rail on the first screen)
+  const [raise, setRaise] = useState(0);
+  useLayoutEffect(() => {
+    const a = articleRef.current;
+    if (layout !== "page" || !sheetOpen || !a) return setRaise(0);
+    const bar = document.querySelector("[data-crew-bar]")?.getBoundingClientRect().bottom ?? 0;
+    setRaise(Math.max(0, Math.round(a.getBoundingClientRect().top - Math.max(0, bar))));
+  }, [layout, sheetOpen]);
   const singleTimer = useRef<number | null>(null);
   const s = post.stats;
   const lift = s ? featuredLift(s) : null;
@@ -480,10 +505,19 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ref={articleRef}
         data-feed-post
         data-feed-page-post={visual ? "visual" : "words"}
-        className={cn("relative h-full w-full overflow-hidden text-foreground", visual ? "dark bg-black" : "bg-background")}
+        className={cn("relative h-full w-full text-foreground", raise > 0 ? "z-[1] overflow-visible" : "overflow-hidden", visual ? "dark bg-black" : "bg-background")}
       >
-        {/* the post itself; taps never open it (double tap ❤️, a clip's tap pauses it) */}
-        <div onClick={onHeroTap} className="absolute inset-x-0 top-0 select-none" style={{ bottom: "var(--bottom-nav-clearance)" }} data-post-hero>
+        {/* the post itself; taps never open it (double tap ❤️, a clip's tap pauses it). Its sheet open: it shrinks into the space above it, still playing */}
+        <div
+          onClick={onHeroTap}
+          className={cn(
+            "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out motion-reduce:transition-none",
+            sheetOpen && (visual ? "bg-black" : "bg-background"),
+          )}
+          style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--bottom-nav-clearance)" }}
+          data-post-hero
+          data-sheet-open={sheetOpen ? "" : undefined}
+        >
           {visual ? (
             <FitBox ratio={auto ? 0.8 : postMediaRatio(post)}>
               {auto ? <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} /> : <PostMedia post={post} thumbUrl={thumbUrl} page />}
@@ -521,11 +555,15 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
         {/* bottom left: who, and the words (over a soft shade on a picture) */}
         <div
-          className={cn("pointer-events-none absolute inset-x-0 z-[2] pt-16", visual && "bg-gradient-to-t from-black/70 via-black/30 to-transparent")}
+          className={cn(
+            "pointer-events-none absolute inset-x-0 z-[2] pt-16 transition-opacity duration-200",
+            visual && "bg-gradient-to-t from-black/70 via-black/30 to-transparent",
+            sheetOpen && "opacity-0",
+          )}
           style={{ bottom: "var(--bottom-nav-clearance)" }}
           data-page-words
         >
-          <div className="pointer-events-auto mr-16 space-y-1.5 px-3 pb-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]">
+          <div className={cn("mr-16 space-y-1.5 px-3 pb-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && "pointer-events-auto")}>
             {note.bubble && <div data-note-over>{note.bubble}</div>}
             <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
             <AuthorLine
@@ -550,7 +588,10 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                 Locked in {isTrainingNow(post) ? <TrainingNowPill /> : <span className="text-muted-foreground">{lockInTimeLabel(post.locked_in_at)}</span>}
               </button>
             )}
-            {auto ? (
+            {onOpenCaption ? (
+              // Reels': two lines and "… more"; a tap opens the whole caption with the comments under it
+              post.caption?.trim() && (auto || !isNote || visual) && <PageCaption text={post.caption} mentions={post.mentions} onOpen={() => onOpenCaption(post)} />
+            ) : auto ? (
               <AutoPostCaption post={post} clamp onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             ) : (
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
@@ -573,7 +614,11 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
 
         {/* down the right: ❤️ 💬 🔁 ✈️ 🔖 and the post's menu (who it's for is in the line under the name) */}
         <div
-          className={cn("absolute right-1 z-[3] flex flex-col items-center gap-1", visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]")}
+          className={cn(
+            "absolute right-1 z-[3] flex flex-col items-center gap-1 transition-opacity duration-200",
+            visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]",
+            sheetOpen && "pointer-events-none opacity-0",
+          )}
           style={{ bottom: "calc(var(--bottom-nav-clearance) + 0.75rem)" }}
           data-page-actions
         >

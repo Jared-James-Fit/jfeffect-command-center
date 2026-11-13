@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Send, Share2, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -85,8 +85,18 @@ type ReplyTarget = { id: string; threadId: string; name: string; mine: boolean }
 /**
  * Comment list + composer. Comments and likes sync live; hold any comment for
  * its options. `inline` renders without its own scroll area (post detail).
+ * `header` sits above the comments in the same scroll (the feed's post sheet:
+ * the full caption, then the comments), and `startAtComments` opens it
+ * scrolled to the comments with the caption above them.
  */
-export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAuthor }: { post: CommunityPost; viewerIsStaff: boolean; inline?: boolean; onOpenAuthor?: (a: CommunityAuthor) => void }) {
+export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAuthor, header, startAtComments = false }: {
+  post: CommunityPost;
+  viewerIsStaff: boolean;
+  inline?: boolean;
+  onOpenAuthor?: (a: CommunityAuthor) => void;
+  header?: ReactNode;
+  startAtComments?: boolean;
+}) {
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
@@ -111,6 +121,16 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const commentsStart = useRef<HTMLDivElement | null>(null);
+  // opened from 💬: the comments at the top, the caption a scroll up
+  useLayoutEffect(() => {
+    const box = scrollRef.current;
+    const mark = commentsStart.current;
+    if (startAtComments && header && box && mark) box.scrollTop = mark.offsetTop;
+    // only as it opens: never pulled back while someone reads
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const pickedRef = useRef<PickedMedia | null>(null);
   pickedRef.current = picked;
 
@@ -252,7 +272,13 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
 
   return (
     <>
-      <div className={inline ? "space-y-1 px-4 py-3" : "min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-4 py-3"}>
+      <div
+        ref={scrollRef}
+        className={inline ? "space-y-1 px-4 py-3" : "relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-4 py-3"}
+        data-sheet-scroll={inline ? undefined : ""}
+      >
+        {header}
+        <div ref={commentsStart} aria-hidden className="h-0" />
         {list.isLoading ? (
           <CommentSkeleton />
         ) : list.isError && comments.length === 0 ? (

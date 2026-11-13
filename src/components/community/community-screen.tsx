@@ -10,6 +10,7 @@ import { attentionExit } from "@/lib/post-attention";
 import { PostCard } from "@/components/community/post-card";
 import { doubleTapTipKeys } from "@/components/community/reaction-button";
 import { CommentsSheet } from "@/components/community/comments-sheet";
+import { PostSheet, type PostSheetAt } from "@/components/community/post-sheet";
 import { ReelsViewer, type ReelStart } from "@/components/community/reels-viewer";
 import { OPEN_POST_EVENT } from "@/components/community/shared-comment";
 import { OPEN_PERSON_EVENT } from "@/lib/community-notifications";
@@ -265,6 +266,15 @@ export function CommunityScreen({
     return () => root.classList.remove("feed-paging");
   }, [paging]);
   const barHidden = useBarHidden(ownBar && scope.kind === "feed" && !paging);
+  // on the paged feed a post's words and comments open in one sheet (Reels'): "… more" at the caption, 💬 at the comments
+  const [sheet, setSheet] = useState<{ post: CommunityPost; at: PostSheetAt } | null>(null);
+  const openCaptionSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "caption" }), []);
+  const openCommentsSheet = useCallback((p: CommunityPost) => setSheet({ post: p, at: "comments" }), []);
+  useEffect(() => {
+    if (!paging) setSheet(null);
+  }, [paging]);
+  // the post as the feed has it now (a like or a comment count moves with it)
+  const sheetPost = sheet ? feedPosts.find((p) => p.id === sheet.post.id) ?? sheet.post : null;
   // your profile is a page with a way back to the feed (on the coach's page, and now on Crew's bar too)
   const youAsPage = scope.kind === "you";
 
@@ -515,7 +525,7 @@ export function CommunityScreen({
         !previewOnly && (
           <>
             {/* Activity: who liked, commented, followed; what's new rises out of it in a bubble, then a dot until it's read */}
-            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !commentsFor && !reel} />
+            <ActivityHeart onOpen={() => go({ kind: "activity" })} canPreview={!barHidden && !detailId && !commentsFor && !reel && !sheet} />
             {/* you: your own profile (posts, followers, edit), with your photo */}
             <BarButton label="Your profile" onClick={openMe} data-my-profile>
               <MyTabPhoto size={27} />
@@ -669,7 +679,9 @@ export function CommunityScreen({
                   unit={unit}
                   viewerIsStaff={viewerIsStaff}
                   onOpen={openPost}
-                  onOpenComments={setCommentsFor}
+                  onOpenComments={openCommentsSheet}
+                  onOpenCaption={openCaptionSheet}
+                  sheetOpen={sheet?.post.id === p.id}
                   onOpenAuthor={openAuthor}
                   doubleTapHint={p.id === hintId}
                   openHint={p.id === openHintId}
@@ -780,6 +792,7 @@ export function CommunityScreen({
       )}
       <ReelsViewer start={reel} posts={feedPosts} viewerIsStaff={viewerIsStaff} onClose={() => setReel(null)} onOpenComments={setCommentsFor} onOpenAuthor={openAuthor} />
       <CommentsSheet post={commentsFor} viewerIsStaff={viewerIsStaff} onClose={() => setCommentsFor(null)} onOpenAuthor={openAuthor} />
+      {paging && <PostSheet post={sheetPost} at={sheet?.at ?? "caption"} viewerIsStaff={viewerIsStaff} onClose={() => setSheet(null)} onOpenAuthor={openAuthor} />}
       {/* answering a question response on your story (never while viewing as a client) */}
       {!previewOnly && <StoryReplyHost unit={unit} />}
       <PostDetailDialog postId={detailId} unit={unit} viewerIsStaff={viewerIsStaff} onClose={closeDetail} onOpenAuthor={openAuthor} />
@@ -878,6 +891,8 @@ function PostRow(props: {
   openHint?: boolean;
   onOpenReel?: (p: CommunityPost, path: string) => void;
   layout?: "card" | "page";
+  onOpenCaption?: (p: CommunityPost) => void;
+  sheetOpen?: boolean;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (

@@ -302,7 +302,7 @@ describe("in the app", () => {
     expect(detail).toContain(
       '<AutoPostCaption post={post} clamp={false} onOpenPerson={onOpenAuthor} className="px-4" />',
     );
-    expect(card).toContain("lead={post.author.name} limits={PICTURE_CAPTION_LIMITS}");
+    expect(card).toContain("lead={named ? post.author.name : null} limits={PICTURE_CAPTION_LIMITS}");
     expect(PICTURE_CAPTION_LIMITS).toEqual({ all: 4, cut: 3, min: 1 });
     // what's only for the crew (the Recap's "work on this week") stays in the app, under the words
     expect(card).toContain(
