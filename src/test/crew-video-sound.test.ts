@@ -132,6 +132,66 @@ describe("feed clips play with their sound", () => {
     expect(v.muted).toBe(true);
   });
 
+  it("a swipe the phone doesn't count leaves the held clip playing muted, and swipes stop asking for the visit", async () => {
+    const pool = await import("@/lib/video-pool");
+    const v = pool.acquireFeedVideo() as unknown as FakeVideo;
+    pool.playFeedVideo(v as unknown as HTMLVideoElement, true);
+    await flush();
+    expect(pool.swipeGivesSound()).toBe(null);
+    pool.unlockVideoSound(null, true); // a swipe's end, no gesture
+    await flush();
+    await flush();
+    expect(v.muted).toBe(true);
+    expect(v.paused).toBe(false);
+    expect(pool.soundBlocked(v as unknown as HTMLVideoElement)).toBe(true);
+    expect(pool.swipeGivesSound()).toBe(false);
+    // and it wasn't a tap for sound: the clip's own tap still pauses it
+    expect(pool.justGaveSound()).toBe(false);
+    // the listener asks swipes only until the phone says no
+    expect(read("src/lib/video-pool.ts")).toContain("else if (start && t && swipeUnlocks !== false) unlockVideoSound(null, true);");
+  });
+
+  it("a swipe the phone does count gives the held clip its sound and every pooled element its sound after", async () => {
+    const pool = await import("@/lib/video-pool");
+    const v = pool.acquireFeedVideo() as unknown as FakeVideo;
+    pool.playFeedVideo(v as unknown as HTMLVideoElement, true);
+    await flush();
+    gesture = true;
+    pool.unlockVideoSound(null, true);
+    gesture = false;
+    await flush();
+    expect(v.muted).toBe(false);
+    expect(pool.soundBlocked(v as unknown as HTMLVideoElement)).toBe(false);
+    expect(pool.swipeGivesSound()).toBe(true);
+    const next = pool.acquireFeedVideo() as unknown as FakeVideo;
+    pool.playFeedVideo(next as unknown as HTMLVideoElement, true);
+    await flush();
+    expect(next.muted).toBe(false);
+  });
+
+  it("the tap that gives a held clip its sound is only for the sound: it doesn't pause or mute the clip", async () => {
+    const pool = await import("@/lib/video-pool");
+    const v = pool.acquireFeedVideo() as unknown as FakeVideo;
+    pool.playFeedVideo(v as unknown as HTMLVideoElement, true);
+    await flush();
+    gesture = true;
+    pool.unlockVideoSound();
+    gesture = false;
+    expect(pool.justGaveSound()).toBe(true);
+    expect(pool.justGaveSound(Date.now() + 1000)).toBe(false);
+    const card = read("src/components/community/post-card.tsx");
+    expect(card).toContain("const forSound = justGaveSound();");
+    expect(card).toContain("if (layout === \"page\") {\n      if (forSound) return;");
+    expect(card).toContain("    if (forSound) return;\n    singleTimer.current = window.setTimeout(() => {\n      singleTimer.current = null;\n      toggleFeedSound();");
+  });
+
+  it("while the phone holds a clip's sound back, its speaker says Tap for sound", () => {
+    const inline = read("src/components/community/inline-video.tsx");
+    expect(inline).toContain("const askTap = sound && blocked;");
+    expect(inline).toContain("{askTap && <span>Tap for sound</span>}");
+    expect(inline).toContain('data-sound-held={askTap ? "" : undefined}');
+  });
+
   it("on by default, Instagram's way: follows the silent switch and plays over their music unless turned on by hand", () => {
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('let feedSoundMode: FeedSoundMode = "auto";');

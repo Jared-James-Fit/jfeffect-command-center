@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties,
 import { LiveDot } from "@/components/live-indicator";
 import { BadgeCheck, CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Dumbbell, Flame, Lock, MessageCircle, Pin, Send, Star, Target, Trophy } from "lucide-react";
 import { CLIP_TOGGLE_EVENT, InlineVideo, toggleFeedSound } from "@/components/community/inline-video";
+import { justGaveSound } from "@/lib/video-pool";
 import { UserAvatar } from "@/components/user-avatar";
 import { WIN_STYLE } from "@/components/community/pulse-style";
 import { cn } from "@/lib/utils";
@@ -505,8 +506,12 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
     const path = clip.getAttribute("data-slide-path");
+    // the tap that gave a clip the phone held quiet its sound is for the sound: it doesn't pause or mute it
+    // (opening the full-screen clips still goes ahead: they play with sound too)
+    const forSound = justGaveSound();
     // on its own screen a clip is already full size: a tap pauses it (TikTok's)
     if (layout === "page") {
+      if (forSound) return;
       singleTimer.current = window.setTimeout(() => {
         singleTimer.current = null;
         clip.dispatchEvent(new Event(CLIP_TOGGLE_EVENT));
@@ -521,6 +526,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       }, 300);
       return;
     }
+    if (forSound) return;
     singleTimer.current = window.setTimeout(() => {
       singleTimer.current = null;
       toggleFeedSound();

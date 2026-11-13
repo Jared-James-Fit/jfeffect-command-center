@@ -6,11 +6,14 @@
  *
  * Why: clips play with sound by default, and an iPhone (Safari and the
  * home-screen app) lets a video make sound only once that element was first
- * played from a tap; a swipe or a scroll isn't one. A new element per clip
- * would go quiet on every clip. Every real tap anywhere (`click`, a `touchend`
- * that didn't move, a key) allows every pooled element sound from then on
- * (`unlockVideoSound`), and a feed clip that had to start muted gets its
- * sound on that same tap. The installed app (Capacitor) never asks, so
+ * played from a tap. A new element per clip would go quiet on every clip.
+ * Every real tap anywhere (`click`, a `touchend` that didn't move, a key)
+ * allows every pooled element sound from then on (`unlockVideoSound`), and a
+ * feed clip that had to start muted gets its sound on that same tap (and the
+ * tap does nothing else to it, `justGaveSound`). A swipe's end tries too, in
+ * case the phone counts it, until the first time it says no
+ * (`swipeUnlocks`), so a feed you only swipe through gets its sound the
+ * moment the phone allows it. The installed app (Capacitor) never asks, so
  * there clips have sound from the first one.
  */
 import { REEL_SLOTS } from "@/lib/reels";
@@ -129,12 +132,43 @@ export function playFeedVideo(v: HTMLVideoElement, sound: boolean) {
   );
 }
 
-/** Inside a tap: give a blocked feed clip its sound (its own speaker). */
-export function unmuteBlocked(v: HTMLVideoElement) {
+/**
+ * Inside a tap: give a blocked feed clip its sound (its own speaker). Should
+ * the phone still say no (a swipe it didn't count), it goes back to playing
+ * muted and blocked, and `refused` hears it.
+ */
+export function unmuteBlocked(v: HTMLVideoElement, refused?: () => void) {
   v.muted = false;
   setBlocked(v, false);
-  unlocked.add(v);
-  if (v.paused) void (v.play() as Promise<void> | undefined)?.catch?.(() => undefined);
+  const p = v.play() as Promise<void> | undefined;
+  p?.then?.(
+    () => unlocked.add(v),
+    (e: unknown) => {
+      if (!isNotAllowed(e)) return;
+      v.muted = true;
+      setBlocked(v, true);
+      void (v.play() as Promise<void> | undefined)?.catch?.(() => undefined);
+      refused?.();
+    },
+  );
+}
+
+/** When a tap last gave a held-back clip its sound: that tap is for the sound, not a pause or a mute. */
+let soundGivenAt = 0;
+/** True for the tap that just gave a clip the phone held quiet its sound (its click comes right after). */
+export function justGaveSound(now = Date.now()): boolean {
+  return now - soundGivenAt < 600;
+}
+
+/**
+ * Whether a swipe's end counts as a tap for sound on this phone: unknown until
+ * one is tried, false (for the visit) the first time the phone says no, so a
+ * phone that doesn't count them is asked once, never on every swipe.
+ */
+let swipeUnlocks: boolean | null = null;
+/** What the phone said to a swipe so far (null: not asked yet). */
+export function swipeGivesSound(): boolean | null {
+  return swipeUnlocks;
 }
 
 /** Whether a tap may give blocked feed clips their sound (the feed's speaker isn't off). */
@@ -148,13 +182,19 @@ export function setSoundWanted(fn: () => boolean) {
  * on. A blocked feed clip gets its sound now (unless the tap was on its own
  * speaker, `skip`, which decides for itself).
  */
-export function unlockVideoSound(skip?: Element | null) {
+export function unlockVideoSound(skip?: Element | null, swipe = false) {
   if (typeof document === "undefined") return;
   ensure();
+  const refused = () => {
+    if (swipe) swipeUnlocks = false;
+  };
   for (const v of known) {
     if (blocked.has(v)) {
       if (skip && skip.contains(v)) continue;
-      if (soundWanted()) unmuteBlocked(v);
+      if (soundWanted()) {
+        if (!swipe) soundGivenAt = Date.now();
+        unmuteBlocked(v, refused);
+      }
       continue;
     }
     if (unlocked.has(v) || !v.paused) continue;
@@ -164,9 +204,13 @@ export function unlockVideoSound(skip?: Element | null) {
       const p = v.play() as Promise<void> | undefined;
       // refused: it wasn't a tap the phone counts, so it's tried again on the next one
       p?.then?.(
-        () => unlocked.add(v),
+        () => {
+          unlocked.add(v);
+          if (swipe) swipeUnlocks = true;
+        },
         (e: unknown) => {
           if (!isNotAllowed(e)) unlocked.add(v);
+          else refused();
         },
       );
     } catch {
@@ -189,7 +233,7 @@ function installUnlock() {
         : null,
     );
   };
-  // a touch that scrolled isn't a tap: only one that stayed put counts
+  // a touch that stayed put is a tap; one that moved (a swipe) is tried too, until the phone says no
   let start: { x: number; y: number } | null = null;
   window.addEventListener(
     "touchstart",
@@ -204,6 +248,7 @@ function installUnlock() {
     (e) => {
       const t = e.changedTouches[0];
       if (start && t && Math.hypot(t.clientX - start.x, t.clientY - start.y) < 10) onTap(e);
+      else if (start && t && swipeUnlocks !== false) unlockVideoSound(null, true);
       start = null;
     },
     { capture: true, passive: true },
@@ -224,6 +269,8 @@ export function resetVideoPool() {
   known.clear();
   blocked.clear();
   feedFree.length = 0;
+  soundGivenAt = 0;
+  swipeUnlocks = null;
   reels = null;
   feed = null;
 }
