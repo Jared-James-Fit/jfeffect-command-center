@@ -1323,9 +1323,17 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
   :root { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-bottom: 0.75rem; --feed-actions-bottom: 0.75rem; }
 }
 /* a post's words (who, the caption, views) take the bottom of its screen: a picture or a card shown
-   whole sits in the room above them, never under them (TikTok's); --page-words-top is where they start,
-   measured from the post's bottom (PostCard), the hero ends at the tab bar (--feed-nav-room), 8px between */
-[data-feed-page-post] { --feed-words-room: calc(var(--page-words-top, var(--feed-words-bottom)) - var(--feed-nav-room) + 8px); }
+   whole sits in the room above them, never under them (TikTok's). --page-words-h is their own height
+   (PostCard); they sit --feed-words-bottom up from the post's bottom and the hero ends at the tab bar
+   (--feed-nav-room), both moving with --feed-gap together, so the room is right however the screen reads; 8px between */
+[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) - var(--feed-nav-room) + 8px); }
+/* the first post under the stories (TikTok's Friends): its picture sits right under them, not a bar's
+   height lower (the bar only covers that room once the post is up), so a picture shown whole shows whole
+   above the tab bar; it eases down to its place as the post comes up (--first-under, useStoriesMotion).
+   A clip that fills its screen already starts at the post's top */
+[data-first-under] [data-post-hero]:not(:has([data-fit="cover"])) {
+  transform: translate3d(0, calc(var(--first-under, 0) * min(0px, 8px - var(--feed-bar-room))), 0);
+}
 /* a clip held down (Reels'): the whole screen is the clip, Crew's bar steps aside until the finger lets go */
 html[data-clip-held] .crew-bar { opacity: 0; pointer-events: none; }
 /* the words' soft shade only over a clip that fills its screen; under a picture shown whole they sit on black */

@@ -1053,6 +1053,17 @@ function useStoriesMotion(
         card.style.borderTopLeftRadius = r;
         card.style.borderTopRightRadius = r;
       }
+      // under the stories its picture sits right under them, not a bar's height lower (that room is the
+      // bar's once it's up), so a picture shown whole shows whole above the tab bar; it eases down to its
+      // place as the post comes up (styles.css, --first-under: 1 under the stories, 0 up)
+      const u = reduce ? 0 : 1 - ease(p);
+      if (u > 0) {
+        first.style.setProperty("--first-under", u.toFixed(3));
+        first.setAttribute("data-first-under", "");
+      } else {
+        first.style.removeProperty("--first-under");
+        first.removeAttribute("data-first-under");
+      }
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(apply);
@@ -1088,6 +1099,8 @@ function useStoriesMotion(
         card.style.borderTopLeftRadius = "";
         card.style.borderTopRightRadius = "";
       }
+      first.style.removeProperty("--first-under");
+      first.removeAttribute("data-first-under");
     };
   }, [pager, rail, fold, firstKey]);
 }
