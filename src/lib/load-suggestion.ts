@@ -39,14 +39,21 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      recent sessions were heavier). It is monotonic in effort: the same
 //      warm-up rated harder never suggests more than it would rated a normal 7.
 //      Once a working set is logged today, that set takes over.
-//   9. LIVE ACROSS CARDS: a lift's other cards today (back-offs, a paused or
-//      tempo variation after the top set) start from their own history, then
-//      move by how today's sets of that lift compared with what history
-//      predicted ("today ran +3%"): the top set is the day's readiness test.
-//      Same exercise trusts it 80%, a variation of the family 50%, capped at
-//      ±8%, and it replaces the predicted readiness from the last review (real
-//      sets beat a forecast). A lift with no history of its own starts from
-//      today's earlier sets of the same exercise instead.
+//   9. LIVE ACROSS CARDS: a back-off of the same exercise on its own card
+//      (top set on one card, back-offs on the next) is worked out from today's
+//      sets of that exercise, exactly as if they were on its own card (note 5):
+//      495 lb × 4 @ 10 → 4 @ 6 ≈ 445. History keeps its 25% only to bring the
+//      number DOWN, never up (backing off is the safe side, and a back-off
+//      after a grind must never come out at the top set's weight). A variation
+//      of the family (paused, tempo) starts from its own history and moves by
+//      how today's sets of the lift compared with what history predicted
+//      ("today ran +3%"), trusted 50% and capped at ±8%; it replaces the
+//      predicted readiness from the last review (real sets beat a forecast).
+//      Was history × a capped day factor for the same exercise too, which never
+//      saw a hard top set when recent sets were rated easy (Nov 13 2026: a
+//      deadlift top set of 495 × 4 rated 7, 8, 9 or 10 all gave 2 × 4 @ 6 at
+//      485, because 495 × 3 @ 5 the week before read as "495 for 4 at anything
+//      heavy").
 //  10. EFFORT IS MONOTONIC: the same weight × reps rated easier never lowers a
 //      suggestion and rated harder never raises it. Every rated set counts;
 //      a set claims at most MAX_EASIER_CREDIT RPE "easier than the target",
@@ -294,7 +301,7 @@ export interface LoadModel {
   warmup: { e1rm: number; load: number; reps: number; trust: number } | null;
   /** Today's read from this lift's other cards, applied to a cold suggestion (1 = as usual). */
   dayFactor: number | null;
-  /** True when "today" is this exercise's earlier sets on another card (no history of its own). */
+  /** True when "today" includes this exercise's earlier sets on another card (a back-off after its top set). */
   carried: boolean;
   /** Cold suggestion from thin history (one recent session): wider range, labelled as early. */
   early: boolean;
@@ -323,7 +330,7 @@ export function buildLoadModel(input: {
   bodyweightKg?: number | null;
   /** How today's other cards of this lift ran vs history (see dayFactorFrom). Cold suggestions only. */
   dayFactor?: number | null;
-  /** Earlier sets of this exercise today on other cards — used only when this card has no history. */
+  /** This exercise's earlier sets today on the cards before this one: a back-off reads them as its own (note 9). */
   carryToday?: SetSample[];
   now?: Date;
 }): LoadModel {
@@ -362,9 +369,15 @@ export function buildLoadModel(input: {
   const historyEarly = !historyReady && sessions.length > 0 && sessions.some((x) => x.rated) &&
     (now - sessions[0].at) / DAY_MS <= EARLY_MAX_DAYS;
 
+  // A back-off of the same exercise on its own card reads today's earlier sets
+  // of it (the top set it follows) as its own, ahead of its own sets (header
+  // note 9), whatever its history: they're the best read of today there is.
+  const carry = (input.carryToday ?? []).filter((s) => s.rpe != null && setE1rm(s) != null);
+  const carried = carry.length > 0;
   // Today's real sets of this lift (other cards) replace the forecast from
-  // the last review: both describe today, and the sets are evidence.
-  const dayFactor = input.dayFactor && Number.isFinite(input.dayFactor) && input.dayFactor > 0 && input.today.length === 0
+  // the last review: both describe today, and the sets are evidence. Not on
+  // top of carried sets: they're the same evidence.
+  const dayFactor = !carried && input.dayFactor && Number.isFinite(input.dayFactor) && input.dayFactor > 0 && input.today.length === 0
     ? input.dayFactor
     : null;
   let staleDays: number | null = null;
@@ -387,10 +400,10 @@ export function buildLoadModel(input: {
   );
 
   // ── Today: sets already done on this row (need a logged RPE to calibrate) ──
-  // A brand-new lift's back-off borrows the top set it follows (same exercise).
-  const carried = input.today.length === 0 && !historyReady && (input.carryToday?.length ?? 0) > 0;
+  // A back-off's carried sets come first (done first), then its own: weighed
+  // by order, its own sets lead once they're in.
   const today: ModelSample[] = [];
-  (carried ? input.carryToday! : input.today).forEach((s, i) => {
+  [...carry, ...input.today].forEach((s, i) => {
     // Every rated set calibrates (trust only weighs it — a cut-off here made an
     // easier rating drop the set and fall back to older history).
     const est = setE1rm(s);
@@ -406,7 +419,7 @@ export function buildLoadModel(input: {
     unit, historySessions: sessions.length, staleDays, warmup, bodyweightScale: bodyweightScaleMean,
     early: historyEarly && today.length === 0,
     dayFactor: historyReady && today.length === 0 ? dayFactor : null,
-    carried: carried && today.length > 0,
+    carried,
   };
   if (today.length > 0) {
     return {
@@ -531,7 +544,12 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   // Spread floors are calibrated on real logs so the range is honest (most
   // sets land inside it) rather than falsely precise.
   let out: { load: number; spread: number } | null = null;
-  if (t && h) out = { load: 0.75 * t.load + 0.25 * h.load, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
+  if (t && h) {
+    const blend = 0.75 * t.load + 0.25 * h.load;
+    // A back-off read from the top set it follows: history may only bring it
+    // down (header note 9).
+    out = { load: model.carried ? Math.min(t.load, blend) : blend, spread: clamp(h.spread / 2, TODAY_SPREAD, 0.05) };
+  }
   else if (t) out = { load: t.load, spread: TODAY_SPREAD };
   else if (h) {
     const spread = clamp(h.spread / 2, HISTORY_SPREAD, 0.07);
