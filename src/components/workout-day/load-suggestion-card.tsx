@@ -67,7 +67,9 @@ export function LoadSuggestionCard({
           ? `your recent sessions, eased back after ${Math.round(model.staleDays / 7)} weeks off`
           : `your last ${Math.min(model.historySessions, 8)} sessions`
       : model.carried
-        ? "your earlier sets of this lift today (no history of this card yet)"
+        ? model.source === "blend"
+          ? `today's ${fromName ?? "earlier"} sets, checked against your recent sessions`
+          : `today's ${fromName ?? "earlier"} sets (no history of this lift yet)`
         : model.source === "blend"
           ? "the sets you've logged today, checked against your recent sessions"
           : "the sets you've logged today";
