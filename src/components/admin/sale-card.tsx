@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/payment-display";
 import type { PaymentRow, SaleMoney } from "@/lib/sale-money";
+import type { SaleSchedule } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
 
 /** "Oct 30" this year, "Oct 30, 2025" otherwise. */
@@ -33,9 +34,9 @@ const perText = (per: string | null) => (per === "2 weeks" ? "every 2 weeks" : p
 function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className={cn("truncate text-[15px] font-bold tabular-nums leading-tight tracking-tight sm:text-base", tone)}>{value}</dd>
-      {sub && <dd className="text-[11px] leading-tight text-muted-foreground">{sub}</dd>}
+      <dt className="text-[12px] text-muted-foreground">{label}</dt>
+      <dd className={cn("truncate text-[15px] font-semibold tabular-nums leading-tight sm:text-base", tone)}>{value}</dd>
+      {sub && <dd className="text-[12px] leading-tight text-muted-foreground">{sub}</dd>}
     </div>
   );
 }
@@ -46,12 +47,17 @@ function short(cents: number, currency: string): string {
   return new Intl.NumberFormat("en-CA", { style: "currency", currency, minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }).format(cents / 100);
 }
 
-/** The third number: what's left, or what happens next. */
-function third(m: SaleMoney, money: (c: number) => string, endedLabel: string): { label: string; value: ReactNode; sub?: ReactNode; tone?: string } {
+/**
+ * The third number: what's left, or what happens next. A balance on schedule
+ * is plain (a plan isn't a debt); only one that's overdue or failed is red.
+ */
+function third(m: SaleMoney, money: (c: number) => string, endedLabel: string, schedule?: SaleSchedule | null): { label: string; value: ReactNode; sub?: ReactNode; tone?: string } {
   switch (m.state) {
     case "left": {
-      const n = m.plan ? m.plan.total - m.plan.made : 0;
-      return { label: "Left", value: money(m.leftCents), tone: "text-destructive", sub: n > 0 ? `${n} payment${n === 1 ? "" : "s"} left` : "Still to pay" };
+      const late = schedule?.installments.some((i) => i.state === "overdue" || i.state === "failed");
+      const n = schedule?.installments.length || (m.plan ? m.plan.total - m.plan.made : 0);
+      const sub = schedule && schedule.how === "none" ? "No payment dates" : n > 0 ? `${n} payment${n === 1 ? "" : "s"} left` : "Still to pay";
+      return { label: "Left", value: money(m.leftCents), tone: late ? "text-destructive" : undefined, sub };
     }
     case "past_due": return { label: "Left", value: money(m.leftCents || m.priceCents), tone: "text-destructive", sub: "Payment failed" };
     case "waiting": return { label: "Left", value: money(m.leftCents), tone: "text-warning", sub: "Nothing paid yet" };
@@ -63,9 +69,23 @@ function third(m: SaleMoney, money: (c: number) => string, endedLabel: string): 
   }
 }
 
+/** "Nov 27" or "Nov 27 – Jan 8". */
+const span = (a: string, b: string) => (a === b ? shortDay(a) : `${shortDay(a)} – ${shortDay(b)}`);
+
 /** The next thing that happens with this sale, in a sentence. */
-function nextSentence(m: SaleMoney, money: (c: number) => string, viaStripe: boolean): string | null {
+function nextSentence(m: SaleMoney, money: (c: number) => string, viaStripe: boolean, schedule?: SaleSchedule | null): string | null {
   const when = shortDay(m.next?.date);
+  // The payment schedule knows the real dates (auto-pay paying it, or dates the coach set).
+  if (schedule && (m.state === "left" || m.state === "past_due")) {
+    const list = schedule.installments;
+    if (schedule.how === "none") return "No payment dates are set for what's left. Set them, send a link or record a payment.";
+    const late = list.filter((i) => i.state === "overdue" || i.state === "failed");
+    if (late.length) return `${late.length === 1 ? "1 payment is" : `${late.length} payments are`} overdue (${money(late.reduce((t, i) => t + i.cents, 0))}).`;
+    const first = list[0];
+    const by = schedule.how === "auto_pay" ? " by auto-pay" : schedule.how === "stripe" ? ", charged automatically" : ", collected by you";
+    if (list.length === 1) return `${money(first.cents)} due ${first.state === "due_today" ? "today" : `on ${shortDay(first.date)}`}${by}.`;
+    return `${list.length} payments of ${money(first.cents)}, ${span(first.date, list[list.length - 1].date)}${by}.`;
+  }
   if (m.state === "left" && m.next) {
     const which = m.plan ? ` (${ordinal(m.plan.made + 1)} of ${m.plan.total})` : "";
     return `Next payment: ${m.next.cents != null ? money(m.next.cents) : ""}${when ? ` on ${when}` : ""}${which}${viaStripe ? ", charged automatically" : ""}.`;
@@ -91,18 +111,20 @@ export type SaleCardProps = {
   menu?: ReactNode;
   /** Links the name to the sale page. */
   linkName?: boolean;
+  /** When what's left gets paid (payment-schedule.ts), when the caller has it. */
+  schedule?: SaleSchedule | null;
   paymentsOpen?: boolean;
   onRecordPayment?: () => void;
   onVoidPayment?: (p: PaymentRow) => void;
 };
 
-export function SaleCard({ raw, money: m, status, badges, sessions, payments, notes, menu, linkName = true, paymentsOpen = false, onRecordPayment, onVoidPayment }: SaleCardProps) {
+export function SaleCard({ raw, money: m, status, badges, sessions, payments, notes, menu, linkName = true, schedule, paymentsOpen = false, onRecordPayment, onVoidPayment }: SaleCardProps) {
   const [open, setOpen] = useState(paymentsOpen);
   const money = (c: number) => formatMoney(c / 100, m.currency);
   const viaStripe = !!raw.stripe_subscription_id;
   const big = (c: number) => short(c, m.currency);
-  const t = third(m, big, status.label);
-  const sentence = nextSentence(m, money, viaStripe);
+  const t = third(m, big, status.label, schedule);
+  const sentence = nextSentence(m, money, viaStripe, schedule);
   const start = shortDay(raw.term_start_date);
   const end = shortDay(raw.term_end_date);
   const bought = shortDay(raw.purchased_at);
@@ -176,6 +198,9 @@ export function SaleCard({ raw, money: m, status, badges, sessions, payments, no
                     <div className={cn("font-medium", p.voided && "line-through")}>{shortDay(p.date) ?? "No date"}</div>
                     <div className="truncate text-xs text-muted-foreground">
                       {p.voided ? "Voided" : p.kind === "refund" ? "Refund" : p.method ?? "Payment"}
+                      {p.receiptUrl && !p.voided && (
+                        <> · <a href={p.receiptUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">Receipt</a></>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
