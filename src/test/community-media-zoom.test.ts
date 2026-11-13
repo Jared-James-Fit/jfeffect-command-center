@@ -26,8 +26,22 @@ describe("community zoom: the page stays put, media zooms", () => {
     expect(hook).toMatch(/scale\(\$\{s\}\)/);
     expect(hook).toMatch(/const MAX_SCALE = 4;/);
     expect(hook).toMatch(/z\.clone\.style\.transform = "none";/);
-    // a video that's playing keeps its own controls
-    expect(hook).toMatch(/if \(playing && !playing\.paused\) return false;/);
+    // a playing clip zooms too (Instagram's): nothing turns a playing video away
+    expect(hook).not.toMatch(/playing\.paused/);
+  });
+
+  it("a clip zooms while it plays: its own video is moved into the zoom (never copied) and put back in its place", () => {
+    // moved out before the copy, so the copy never holds a second, empty player
+    expect(hook).toContain('parent.setAttribute("data-pinch-video-slot", String(i));\n    v.remove();');
+    expect(hook).toContain("const clone = el.cloneNode(true) as HTMLElement;");
+    // into the copy right after it's in the page, in the same moment, so it never stops playing
+    expect(hook).toContain("mount(clone);\n  for (const { v, i, parent } of videos) {");
+    expect(hook).toContain("if (slot) slot.appendChild(v);");
+    // back before the copy goes, unless its clip let go of it meanwhile
+    expect(hook).toContain("if (!parent || !parent.isConnected || !clone.contains(v)) continue;");
+    expect(hook).toContain("z.restore();\n      z.layer.remove();");
+    // a second finger is a pinch, never the hold that pauses a clip
+    expect(card).toContain("if (!e.isPrimary) return endHold();");
   });
 
   it("feed / post / carousel media, comment photos and shared-comment media opt in", () => {

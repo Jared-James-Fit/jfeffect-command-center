@@ -16,7 +16,9 @@ const MAX_SHADE = 0.75;
  * is off. Nothing else on the screen ever moves.
  *
  * One manager for the whole screen while `active` (sheets and dialogs it
- * opens included). A video that's playing is left alone (its own controls).
+ * opens included). A clip zooms while it plays, Instagram's: its own video
+ * element is lifted with it (moved, never copied, so it keeps playing with its
+ * sound) and goes back in its place when the picture settles (`liftVideos`).
  * Nested users are counted (a post opened over Crew, the coach's Crew page
  * around its feed): one set of listeners, so a pinch never lifts two copies.
  */
@@ -60,6 +62,43 @@ export function panView(view: ZoomView, p0: Pt, p: Pt): ZoomView {
   return { s: view.s, x: view.x + p.x - p0.x, y: view.y + p.y - p0.y };
 }
 
+/**
+ * Copies `el` for the zoom with its video elements moved into the copy, not
+ * copied: a copied video would be a new, empty player (black, silent, a second
+ * download), while the moved one keeps playing with its sound. `mount` puts the
+ * copy in the page; the videos go in after, in the same task, so a browser never
+ * sees them leave the page (one taken out and not put back pauses). `restore`
+ * moves each back where it was, unless its clip let go of it meanwhile.
+ */
+export function liftVideos(el: HTMLElement, mount: (copy: HTMLElement) => void): { clone: HTMLElement; restore: () => void } {
+  const videos = Array.from(el.querySelectorAll("video")).map((v, i) => ({ v, i, parent: v.parentElement, next: v.nextSibling }));
+  const slots: HTMLElement[] = [];
+  for (const { v, i, parent } of videos) {
+    if (!parent) continue;
+    parent.setAttribute("data-pinch-video-slot", String(i));
+    v.remove();
+    slots.push(parent);
+  }
+  const clone = el.cloneNode(true) as HTMLElement;
+  // the originals keep their place (the slot attribute only marks the copy's)
+  for (const p of slots) p.removeAttribute("data-pinch-video-slot");
+  mount(clone);
+  for (const { v, i, parent } of videos) {
+    const slot = clone.querySelector(`[data-pinch-video-slot="${i}"]`);
+    if (slot) slot.appendChild(v);
+    else if (parent) parent.appendChild(v);
+  }
+  for (const s of Array.from(clone.querySelectorAll("[data-pinch-video-slot]"))) s.removeAttribute("data-pinch-video-slot");
+  const restore = () => {
+    for (const { v, parent, next } of videos) {
+      // let go of meanwhile (its clip scrolled away): it's the pool's again, never put back
+      if (!parent || !parent.isConnected || !clone.contains(v)) continue;
+      parent.insertBefore(v, next && next.parentNode === parent ? next : null);
+    }
+  };
+  return { clone, restore };
+}
+
 /** The listeners, once for the whole page; returns their removal. */
 function install(): () => void {
   let zoom: {
@@ -68,6 +107,8 @@ function install(): () => void {
     layer: HTMLDivElement;
     shade: HTMLDivElement;
     clone: HTMLElement;
+    /** Its playing video elements, lifted into the copy; put back with `restore`. */
+    restore: () => void;
     view: ZoomView;
     // what the fingers on it now started from (a new one each time a finger lands or lifts)
     from: { view: ZoomView; ids: number[]; d0: number; m0: Pt; p0: Pt };
@@ -104,8 +145,6 @@ function install(): () => void {
   const begin = (e: TouchEvent): boolean => {
     const el = zoomable(e.touches[0]) ?? zoomable(e.touches[1]);
     if (!el) return false;
-    const playing = el.querySelector("video");
-    if (playing && !playing.paused) return false;
     if (settling) {
       window.clearTimeout(settling.timer);
       settling.done();
@@ -119,16 +158,17 @@ function install(): () => void {
     layer.style.cssText = "position:fixed;inset:0;z-index:2147483000;pointer-events:none;";
     const shade = document.createElement("div");
     shade.style.cssText = "position:absolute;inset:0;background:#000;opacity:0;";
-    // what's on screen right now (the photo, or a video's still), lifted out of the page
-    const clone = el.cloneNode(true) as HTMLElement;
-    clone.removeAttribute("data-pinch-zoom");
-    clone.style.cssText += `;position:absolute;inset:auto;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;` +
-      "transform-origin:0 0;will-change:transform;overflow:hidden;";
-    layer.append(shade, clone);
-    document.body.append(layer);
+    // what's on screen right now, lifted out of the page: the photo copied, a clip's own video moved in
+    const { clone, restore } = liftVideos(el, (c) => {
+      c.removeAttribute("data-pinch-zoom");
+      c.style.cssText += `;position:absolute;inset:auto;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;` +
+        "transform-origin:0 0;will-change:transform;overflow:hidden;";
+      layer.append(shade, c);
+      document.body.append(layer);
+    });
     el.style.visibility = "hidden";
     const view = { x: 0, y: 0, s: 1 };
-    zoom = { el, origin: { x: rect.left, y: rect.top }, layer, shade, clone, view, from: { view, ids: [], d0: 1, m0: { x: 0, y: 0 }, p0: { x: 0, y: 0 } } };
+    zoom = { el, origin: { x: rect.left, y: rect.top }, layer, shade, clone, restore, view, from: { view, ids: [], d0: 1, m0: { x: 0, y: 0 }, p0: { x: 0, y: 0 } } };
     rebase(e.touches);
     return true;
   };
@@ -138,6 +178,8 @@ function install(): () => void {
     zoom = null;
     if (!z) return;
     const done = () => {
+      // its video back in its place first, in the same moment, so it never stops playing
+      z.restore();
       z.layer.remove();
       z.el.style.visibility = "";
     };

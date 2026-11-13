@@ -493,7 +493,9 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     holdEndedAt.current = Date.now();
   };
   const onHeroPointerDown = (e: React.PointerEvent) => {
-    if (layout !== "page" || sheetOpen || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+    // a second finger is a pinch (the zoom), never a hold
+    if (!e.isPrimary) return endHold();
+    if (layout !== "page" || sheetOpen || (e.pointerType === "mouse" && e.button !== 0)) return;
     const t = e.target as Element | null;
     const clip = t?.closest?.("[data-inline-video]");
     if (!clip || t?.closest?.("button")) return;
