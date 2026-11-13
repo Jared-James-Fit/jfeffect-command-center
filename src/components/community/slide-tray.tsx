@@ -11,7 +11,8 @@ import { CENTRED, clampFraming, frameFocus, type Framing } from "@/lib/photo-fra
 import { drawableSize, framedCanvas, type Drawable } from "@/lib/photo-frame-draw";
 import { releaseCanvas } from "@/lib/canvas-memory";
 import { formatClock, videoLimit, type VideoContext } from "@/lib/video-edit/limits";
-import { looksLikeVideo } from "@/lib/video-edit/pick";
+import type { VideoTrim } from "@/lib/video-edit/plan";
+import { fixedTrim, looksLikeVideo } from "@/lib/video-edit/pick";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 
 /** Uploads at once. Three keeps a phone connection busy without starving any one file. */
@@ -40,6 +41,10 @@ export type TrayItem = {
   framing?: Framing | null;
   /** A clip: the cover frame picked for it (replaces the automatic one when it's posted). */
   cover?: Blob | null;
+  /** A clip: where the lift is (lift.ts, found in the background; null: no clear lift, unset: still looking). */
+  lift?: VideoTrim | null;
+  /** Trimmed to the lift with one tap: the part that went before (null: all of it), so Whole clip puts it back. */
+  liftBefore?: VideoTrim | null;
 };
 
 /** A thumbnail's width at a shape: 720 px on its long side, like the ones picked photos get. */
@@ -189,6 +194,19 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
     [pump],
   );
 
+  /** Where the lift is in a clip just added: found on the phone in the background, offered on its slide. */
+  const findLiftFor = useCallback(
+    (id: string, file: File) => {
+      void import("@/lib/video-edit/lift")
+        .then((m) => m.findLift(file))
+        .catch(() => null)
+        .then((lift) => {
+          if (!removed.current.has(id)) patch(id, { lift: lift ?? null });
+        });
+    },
+    [patch],
+  );
+
   /** Add photos / videos (in the order given), up to 10 on the post and 3 videos. */
   const add = useCallback(
     async (files: File[]) => {
@@ -218,18 +236,23 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
         }
         patch(f.id, itemFields(res.media));
         enqueue(f.id, res.media);
+        if (res.media.video) findLiftFor(f.id, res.media.file);
       }
     },
-    [coverCount, enqueue, patch, videoContext, trimmer.request],
+    [coverCount, enqueue, patch, videoContext, trimmer.request, findLiftFor],
   );
 
-  /** Change which part of a clip goes: its upload restarts with the new selection. */
+  /**
+   * Change which part of a clip goes: its upload restarts with the new
+   * selection. `to`: that part straight away (the lift, the whole clip),
+   * else the trimmer opens on it.
+   */
   const edit = useCallback(
-    async (id: string) => {
+    async (id: string, to?: VideoTrim) => {
       const job = jobs.current.get(id);
       const old = job?.picked;
       if (!job || !old?.video || removed.current.has(id)) return;
-      const next = await retrimPicked(old, trimmer.request, videoContext);
+      const next = await retrimPicked(old, to ? fixedTrim(to) : trimmer.request, videoContext);
       if (!next || removed.current.has(id)) {
         if (next) releasePicked(next);
         return;
@@ -245,12 +268,34 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
       queue.current = queue.current.filter((q) => q !== id);
       const fresh = defer(id, next);
       void fresh.promise.then(waiting);
-      // (a cover frame picked from the old selection gives way to the new one's first moment)
-      patch(id, { ...itemFields(next), cover: null, slide: null, status: "preparing", progress: 0 });
+      // (a cover frame picked from the old selection gives way to the new one's first moment;
+      // trimmed by hand, Whole clip no longer has a "before" to go back to)
+      patch(id, { ...itemFields(next), cover: null, slide: null, status: "preparing", progress: 0, ...(to ? {} : { liftBefore: undefined }) });
       queue.current.push(id);
       pump();
     },
     [patch, pump, trimmer.request, videoContext],
+  );
+
+  /** One tap: just the lift goes (its upload restarts with it); Whole clip puts back what went before. */
+  const trimToLift = useCallback(
+    (id: string) => {
+      const it = itemsRef.current.find((x) => x.id === id);
+      if (!it?.lift) return;
+      patch(id, { liftBefore: it.trim ?? null });
+      void edit(id, it.lift);
+    },
+    [edit, patch],
+  );
+  const undoLift = useCallback(
+    (id: string) => {
+      const it = itemsRef.current.find((x) => x.id === id);
+      if (!it || it.liftBefore === undefined) return;
+      const before = it.liftBefore;
+      patch(id, { liftBefore: undefined });
+      void edit(id, before ?? { start: 0, end: Number.MAX_SAFE_INTEGER });
+    },
+    [edit, patch],
   );
 
   // Somewhere stricter now (a post turned into a story): a clip that runs over its new limit opens the trimmer.
@@ -435,7 +480,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
   useEffect(() => () => discardRef.current(), []);
 
   const uploading = items.filter((it) => it.status === "preparing" || it.status === "uploading").length;
-  return { items, add, remove, retry, edit, ready, commit, discard, setCover, setFraming, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
+  return { items, add, remove, retry, edit, trimToLift, undoLift, ready, commit, discard, setCover, setFraming, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
 }
 
 /** What the strip shows for a picked photo or clip. */
