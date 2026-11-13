@@ -12,7 +12,9 @@ export type WorkoutStatus =
   | "completed_today"
   | "completed_on_scheduled"
   | "completed_different_day"
-  | "missed";
+  | "missed"
+  /** an optional session (pl_days.is_optional) whose day passed untouched: never a miss */
+  | "optional_skipped";
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -97,6 +99,10 @@ export function getWorkoutStatus(item: WorkoutItem, now: Date = new Date()): {
     return { status: "today", label: "Today", tone: todayTone, scheduled, completedAt };
   }
   if (scheduled < today) {
+    // An optional session (e.g. a recovery day) the athlete skipped is a choice, not a miss.
+    if (item.day?.is_optional) {
+      return { status: "optional_skipped", label: "Optional · skipped", tone: neutralTone, scheduled, completedAt };
+    }
     return { status: "missed", label: `Missed ${format(scheduled, "EEE")}`, tone: missedTone, scheduled, completedAt };
   }
   return {
