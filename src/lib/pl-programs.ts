@@ -93,6 +93,8 @@ export interface RowForEstimate {
   rest_seconds?: number | null;
   time_profile?: TimeProfile | null;
   estimated_seconds_override?: number | null;
+  /** a back-off / drop row (`top_set`, `prev_set`) carries on the lift above it */
+  percentage_basis?: string | null;
 }
 
 export function profileDefaults(profile: TimeProfile | null | undefined) {
@@ -108,7 +110,11 @@ export function estimateRowSeconds(row: RowForEstimate): number {
   const rest = row.rest_seconds ?? prof.defaultRest;
   const workPerSet = prof.value === "main_lift" ? 60 : prof.value === "warmup_mobility" ? 0 : 45;
   const transitions = 180; // setup between exercises
-  return prof.warmupBuffer + sets * (workPerSet + rest) + transitions;
+  // A back-off row's load is a % of the set right above it: the same lift carrying on,
+  // already warm and set up, so it adds only its own sets (a powerlifting day of three
+  // top singles with back-offs read 130–160 min with a warm-up counted per row).
+  const carriesOn = row.percentage_basis === "top_set" || row.percentage_basis === "prev_set";
+  return (carriesOn ? 0 : prof.warmupBuffer + transitions) + sets * (workPerSet + rest);
 }
 
 /** Whole-day minutes: sum rows + 10 min general warm-up; round to nearest 5. */
@@ -1485,14 +1491,30 @@ export async function deleteTemplate(id: string) {
 }
 
 /** Count weeks/days/rows in a template payload for summary display. */
+/**
+ * What a template holds: blocks, weeks, workouts (`days`, optional ones
+ * included and also counted on their own) and exercise rows. A full prep and a
+ * v2 multi-block template (a "block" or "program" whose weeks live in
+ * `blocks_data`, the builder's own format) are counted across their live
+ * blocks; before, a v2 one read as 0 weeks and 0 days.
+ */
 export function summarizeTemplatePayload(tpl: any) {
   const p = tpl?.payload || {};
-  if (tpl?.template_type === "full_prep") {
-    const blocks = p.blocks_data || [];
-    const weeks = blocks.reduce((s: number, b: any) => s + (b.weeks_data?.length || 0), 0);
-    const days = blocks.reduce((s: number, b: any) => s + (b.weeks_data || []).reduce((ss: number, w: any) => ss + (w.days?.length || 0), 0), 0);
-    const rows = blocks.reduce((s: number, b: any) => s + (b.weeks_data || []).reduce((ss: number, w: any) => ss + (w.days || []).reduce((sss: number, d: any) => sss + (d.rows?.length || 0), 0), 0), 0);
-    return { blocks: blocks.length, weeks, days, rows };
+  const multi = tpl?.template_type === "full_prep"
+    || ((tpl?.template_type === "block" || tpl?.template_type === "program")
+      && Array.isArray(p.blocks_data) && p.blocks_data.length > 0);
+  if (multi) {
+    const blocks = (p.blocks_data || []).filter((b: any) => b && !b.archived && !b.deleted);
+    let weeks = 0, days = 0, rows = 0, optionalDays = 0;
+    for (const b of blocks) for (const w of b.weeks_data || []) {
+      weeks++;
+      for (const d of w.days || []) {
+        days++;
+        if (d?.is_optional) optionalDays++;
+        rows += d?.rows?.length || 0;
+      }
+    }
+    return { blocks: blocks.length, weeks, days, rows, optionalDays };
   }
   if (tpl?.template_type === "block") {
     const wd = p.weeks_data || [];

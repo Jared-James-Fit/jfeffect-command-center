@@ -2967,8 +2967,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   const loadSummary = (() => {
     if (loadMode === "none") return null;
     if (loadMode === "pct" && row.percentage != null && row.percentage !== "") {
-      const basisLabel = (PERCENTAGE_BASES.find((p) => p.value === row.percentage_basis)?.label) ?? "%";
-      return `${row.percentage}% ${basisLabel}`;
+      // "90% of Top Set", never "90% % of Top Set (linked row)"
+      const basisLabel = (PERCENTAGE_BASES.find((p) => p.value === row.percentage_basis)?.label) ?? "";
+      const words = basisLabel.replace(/^%\s*/, "").replace(/\s*\(linked row\)$/, "");
+      return `${row.percentage}%${words ? ` ${words}` : ""}`;
     }
     const val = rowUnit === "kg" ? row.load_kg : row.load_lb;
     if (val != null && val !== "") return `${val} ${rowUnit}`;

@@ -170,7 +170,7 @@ export function styleLabel(style: string | null | undefined): string {
   return key ? key.charAt(0).toUpperCase() + key.slice(1) : "";
 }
 
-export type PayloadShape = { weeks?: number | null; blocks?: number | null };
+export type PayloadShape = { weeks?: number | null; blocks?: number | null; optionalDays?: number | null };
 
 /**
  * "3 blocks · 12 weeks · 4 days a week · Bodybuilding": what the program is, in
@@ -186,8 +186,10 @@ export function programLine(
   if (blocks > 1) parts.push(`${blocks} blocks`);
   const weeks = shape.weeks && shape.weeks > 0 ? shape.weeks : t.weeks ?? null;
   if (weeks && weeks > 0) parts.push(`${weeks} week${weeks === 1 ? "" : "s"}`);
-  const days = t.days_per_week ?? null;
-  if (days && days > 0) parts.push(`${days} day${days === 1 ? "" : "s"} a week`);
+  // an optional session (Elite Powerlifting's recovery day) is said apart from the core days
+  const optional = weeks && weeks > 0 && shape.optionalDays ? Math.round(shape.optionalDays / weeks) : 0;
+  const days = t.days_per_week != null ? t.days_per_week - optional : null;
+  if (days && days > 0) parts.push(`${days} day${days === 1 ? "" : "s"} a week${optional > 0 ? ` + ${optional} optional` : ""}`);
   const style = styleLabel(t.training_style);
   if (style) parts.push(style);
   return parts.join(" · ");
