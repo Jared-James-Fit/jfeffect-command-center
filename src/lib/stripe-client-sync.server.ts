@@ -1,5 +1,6 @@
 // Server-only: one client's Stripe, read beside the app's own sales and
 // payment rows. Read-only against Stripe and the app.
+import { subscriptionNextCharge } from "@/lib/stripe-next-charge";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripeKeyForMode, stripeFetch, type StripeMode } from "@/lib/stripe.server";
 import { invoicePaymentIntentId, invoiceSubscriptionId } from "@/lib/stripe-invoice-refs";
@@ -65,9 +66,7 @@ export async function refreshSubscriptions(db: Admin, mode: StripeMode): Promise
       const sub: any = await stripeFetch(`/subscriptions/${s.stripe_subscription_id}`, { apiKey });
       out.checked += 1;
       const status = sub?.status ?? null;
-      const periodEnd = sub?.current_period_end ?? sub?.items?.data?.[0]?.current_period_end ?? null;
-      const live = status === "active" || status === "trialing";
-      const next = live && !sub?.cancel_at_period_end && periodEnd ? new Date(periodEnd * 1000).toISOString().slice(0, 10) : null;
+      const next = subscriptionNextCharge(sub, s.next_billing_date);
       const patch = {
         stripe_subscription_status: status,
         next_billing_date: next,

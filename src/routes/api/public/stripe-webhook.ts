@@ -1,3 +1,4 @@
+import { subscriptionNextCharge } from "@/lib/stripe-next-charge";
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { stripeFetch, getStripeKeyForMode, resolveInvoicePaymentRefs, type StripeMode } from "@/lib/stripe.server";
@@ -749,10 +750,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                   // client/admin surfaces don't re-query Stripe.
                   stripe_subscription_status: obj.status ?? null,
                   cancel_at_period_end: !!obj.cancel_at_period_end,
-                  next_billing_date:
-                    obj.current_period_end && (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
-                      ? new Date(obj.current_period_end * 1000).toISOString().split("T")[0]
-                      : null,
+                  // Stripe's next charge (the period sits on the item since API 2025-03-31; a renewal
+                  // invoiced but not yet charged keeps today's date): subscriptionNextCharge.
+                  next_billing_date: subscriptionNextCharge(obj, purchase.next_billing_date),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);
@@ -820,10 +820,9 @@ export const Route = createFileRoute("/api/public/stripe-webhook")({
                     : {}),
                   stripe_subscription_status: obj.status ?? null,
                   cancel_at_period_end: !!obj.cancel_at_period_end,
-                  next_billing_date:
-                    obj.current_period_end && (obj.status === "active" || obj.status === "trialing") && !obj.cancel_at_period_end
-                      ? new Date(obj.current_period_end * 1000).toISOString().split("T")[0]
-                      : null,
+                  // Stripe's next charge (the period sits on the item since API 2025-03-31; a renewal
+                  // invoiced but not yet charged keeps today's date): subscriptionNextCharge.
+                  next_billing_date: subscriptionNextCharge(obj, purchase.next_billing_date),
                   last_payment_update_source: "stripe_webhook",
                   last_payment_update_at: now,
                 }).eq("id", purchase.id);

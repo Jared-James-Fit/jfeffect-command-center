@@ -9,6 +9,7 @@
  * stripe-sync hook. A subscription payment for a session package goes to the
  * package it pays (planPaymentTarget), the same rule as the webhook.
  */
+import { subscriptionNextCharge } from "@/lib/stripe-next-charge";
 import { stripeFetch, getStripeKeyForMode, latestChargeForPaymentIntent, type StripeMode } from "@/lib/stripe.server";
 import {
   invoiceSubscriptionId,
@@ -302,10 +303,7 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
         patch.is_recurring = true;
         patch.stripe_subscription_status = sub?.status ?? null;
         patch.cancel_at_period_end = !!sub?.cancel_at_period_end;
-        patch.next_billing_date =
-          sub?.cancel_at_period_end || !sub?.current_period_end
-            ? null
-            : new Date(sub.current_period_end * 1000).toISOString();
+        patch.next_billing_date = subscriptionNextCharge(sub, purchase.next_billing_date);
       } catch (e: any) {
         entries.push({ ...base, purchase_id: purchase.id, client_id: purchase.client_id, action: "skipped", reason: `Subscription lookup failed: ${e?.message ?? "unknown"}` });
         continue;
@@ -315,7 +313,7 @@ export async function runStripeAccountSync(supabase: any, data: { mode: "test" |
     const unchanged =
       purchase.payment_status === patch.payment_status &&
       purchase.stripe_checkout_session_id === patch.stripe_checkout_session_id &&
-      String(purchase.next_billing_date ?? "") === String(patch.next_billing_date ?? "");
+      String(purchase.next_billing_date ?? "").slice(0, 10) === String(patch.next_billing_date ?? "").slice(0, 10);
 
     if (!unchanged) {
       const { error: upErr } = await supabase.from("purchase_records").update(patch).eq("id", purchase.id);

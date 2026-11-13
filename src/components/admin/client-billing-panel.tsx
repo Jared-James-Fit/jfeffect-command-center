@@ -30,6 +30,8 @@ import { formatMoney } from "@/lib/payment-display";
 import { billingPeriod, salePayments, type PaymentRow } from "@/lib/sale-money";
 import { addPeriod } from "@/lib/session-packages";
 import { saleLabels, type ClientPayments, type Installment, type PackageAccount, type SaleSchedule } from "@/lib/payment-schedule";
+import type { PayingNow } from "@/lib/package-status";
+import { BarLegend, CoverageBar, PaymentBar, PaymentStatusText, RoleTag, SessionBar, TrainingStatusText } from "@/components/billing/package-visuals";
 import { cn } from "@/lib/utils";
 
 /** "Fri Nov 13" (the year only when it isn't this year). */
@@ -155,6 +157,12 @@ function RecordButton({ balances, onPick }: { balances: SaleSchedule[]; onPick: 
 /**
  * The overview itself. Pure view over the payments model, so it can be
  * checked with fixture data (Marc's real records are the reference).
+ *
+ * In order of weight: what's outstanding (big), then the three numbers that
+ * need a decision (training delivered and not paid for, due now, overdue),
+ * then everything later in one quiet line; then the package(s) the money is
+ * going to now; then every package as a timeline, each with its sessions
+ * and its payments as two bars.
  */
 export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSessions, onRecord, onSetDates, onRenew }: {
   p: ClientPayments;
@@ -171,51 +179,54 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSe
   const history = useMemo(() => salePayments(ledger), [ledger]);
   const needsDates = p.balances.filter((b) => b.how === "none");
   const ended = p.recurring.filter((r) => r.state === "cancelling");
+  const accountOf = new Map(p.packages.map((x) => [x.saleId, x]));
+  const dueAuto = p.upcoming.some((i) => (i.state === "due_today" || i.state === "unconfirmed") && i.auto);
 
   return (
     <>
       <section className="space-y-3 rounded-xl border border-border p-3 sm:p-4" data-billing-totals>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[13px] text-muted-foreground">Outstanding</div>
-            <div className={cn("text-2xl font-semibold tabular-nums", p.overdueCents > 0 && "text-destructive")} data-outstanding>{money(p.outstandingCents)}</div>
-            <div className="text-[12px] text-muted-foreground">{p.outstandingCents > 0 ? (p.taxIncluded ? "Tax included" : "Before tax (no tax paid on file yet)") : "Nothing left to pay"}</div>
-          </div>
-          <div className="shrink-0 text-right">
-            <div className="text-[13px] text-muted-foreground">Paid so far</div>
-            <div className="text-[15px] font-semibold tabular-nums" data-paid>{money(p.paidCents)}</div>
-          </div>
+        <div>
+          <div className="text-[13px] text-muted-foreground">Outstanding balance</div>
+          <div className={cn("text-[28px] font-semibold leading-tight tabular-nums", p.overdueCents > 0 && "text-destructive")} data-outstanding>{money(p.outstandingCents)}</div>
+          <div className="text-[12px] text-muted-foreground">{p.outstandingCents > 0 ? (p.taxIncluded ? "Tax included" : "Before tax (no tax paid on file yet)") : "Nothing left to pay"}</div>
         </div>
 
-        {p.unpaidDeliveredCents > 0 && (
-          <div className="flex items-start justify-between gap-3 border-t border-border pt-3" data-unpaid-delivered>
-            <div className="min-w-0">
-              <div className="text-[14px] font-medium">Unpaid training delivered</div>
-              <div className="text-[12px] text-muted-foreground">
-                Completed sessions not yet covered by payments{p.notBilledDeliveredCents > 0 ? `, incl. ${money(p.notBilledDeliveredCents)} not billed yet` : ""}
-              </div>
-            </div>
-            <div className="shrink-0 text-[15px] font-semibold tabular-nums">{money(p.unpaidDeliveredCents)}</div>
-          </div>
-        )}
+        <dl className="grid grid-cols-[1.35fr_1fr_1fr] divide-x divide-border overflow-hidden rounded-lg border border-border" data-billing-key>
+          <Key
+            label="Unpaid training delivered"
+            value={money(p.unpaidDeliveredCents)}
+            swatch={p.unpaidDeliveredCents > 0 ? "unpaid" : null}
+            muted={p.unpaidDeliveredCents === 0}
+            data-unpaid-delivered={p.unpaidDeliveredCents}
+          />
+          <Key
+            label="Due now"
+            sub={p.dueNowCents > 0 ? (dueAuto ? "auto-pay" : "to collect") : null}
+            value={money(p.dueNowCents)}
+            tone={p.dueNowCents > 0 && !dueAuto ? "attention" : undefined}
+            muted={p.dueNowCents === 0}
+            data-split="Due now"
+          />
+          <Key
+            label="Overdue"
+            sub={p.overdueCents > 0 ? `${p.overdue.length} payment${p.overdue.length === 1 ? "" : "s"}` : null}
+            value={money(p.overdueCents)}
+            tone={p.overdueCents > 0 ? "error" : undefined}
+            muted={p.overdueCents === 0}
+            data-split="Overdue"
+          />
+        </dl>
 
-        {p.outstandingCents > 0 && (
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-billing-split>
-            <Split label="Overdue" cents={p.overdueCents} money={money} tone={p.overdueCents > 0 ? "error" : "muted"} />
-            <Split label="Due now" cents={p.dueNowCents} money={money} tone={p.dueNowCents > 0 && !(p.next?.auto) ? "attention" : "muted"} />
-            <Split label="Future installments" cents={p.scheduledCents} money={money} tone="muted" />
-            <Split label="No dates yet" cents={p.unscheduledCents} money={money} tone={p.unscheduledCents > 0 ? "attention" : "muted"} />
-          </dl>
-        )}
-
-        {p.next && (
-          <p className="text-[14px]" data-next-payment>
-            <span className="text-muted-foreground">Next payment </span>
-            <span className="font-medium tabular-nums">{money(p.next.cents)}</span>
-            <span className="text-muted-foreground"> · {p.next.state === "due_today" ? "today" : p.next.state === "unconfirmed" ? `${payDay(p.next.date)}, not confirmed by Stripe yet` : payDay(p.next.date)}</span>
-            <span className="text-muted-foreground"> · {p.next.recurring ? "subscription" : p.next.auto ? "auto-pay" : "collected by you"} · {p.next.label}</span>
-          </p>
-        )}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted-foreground" data-billing-secondary>
+          <span data-split="Future installments">Future installments <span className="font-medium tabular-nums text-foreground">{money(p.scheduledCents)}</span></span>
+          {p.unscheduledCents > 0 && (
+            <span className="text-warning" data-split="No dates yet">No dates yet <span className="font-medium tabular-nums">{money(p.unscheduledCents)}</span></span>
+          )}
+          <span>Paid so far <span className="font-medium tabular-nums text-foreground" data-paid>{money(p.paidCents)}</span></span>
+          {p.notBilledDeliveredCents > 0 && (
+            <span className="text-warning">{money(p.notBilledDeliveredCents)} of training not billed yet</span>
+          )}
+        </div>
 
         <AutoPayLine p={p} money={money} />
       </section>
@@ -231,6 +242,21 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSe
           {p.overdue.some((i) => i.state === "failed") && (
             <p className="text-[13px] text-muted-foreground">Stripe couldn't charge the card and retries on its own. If it keeps failing, ask them to update their card, or record what they pay you directly.</p>
           )}
+        </section>
+      )}
+
+      {p.payingNow.length > 0 && (
+        <section className="space-y-2" data-paying-off>
+          <h4 className="text-[15px] font-semibold">Currently paying off</h4>
+          {p.payingNow.map((x) => (
+            <PayingCard
+              key={x.saleId}
+              x={x}
+              account={accountOf.get(x.saleId) ?? null}
+              balance={p.balances.find((b) => b.saleId === x.saleId) ?? null}
+              money={money}
+            />
+          ))}
         </section>
       )}
 
@@ -269,8 +295,6 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSe
         </section>
       ) : null}
 
-      {p.upcoming.length > 0 && <Upcoming items={p.upcoming} money={money} isAdmin={isAdmin} onRecord={onRecord} />}
-
       {p.packages.length > 0 && (
         <PackageHistory
           packages={p.packages}
@@ -281,6 +305,12 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSe
           onRecord={onRecord}
           onSetDates={onSetDates}
         />
+      )}
+
+      {p.upcoming.length > 0 && (
+        <Folder title="All upcoming payments" summary={`${p.upcoming.length}`} data-billing-upcoming>
+          <Upcoming items={p.upcoming} money={money} isAdmin={isAdmin} onRecord={onRecord} />
+        </Folder>
       )}
 
       {p.waiting.length > 0 && (
@@ -310,19 +340,103 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSe
   );
 }
 
+/** One of the three numbers that need a decision. */
+function Key({ label, sub, value, tone, muted, swatch, ...rest }: {
+  label: string;
+  sub?: string | null;
+  value: string;
+  tone?: "attention" | "error";
+  muted?: boolean;
+  /** Ties the number to the bars' colour for it. */
+  swatch?: "unpaid" | null;
+} & Record<`data-${string}`, unknown>) {
+  return (
+    <div className="flex min-w-0 flex-col-reverse justify-end px-2.5 py-2" {...rest}>
+      {/* The number first (so the three line up whatever their labels), then what it is. */}
+      <dt className="text-[12px] leading-tight text-muted-foreground">
+        {swatch === "unpaid" && <span aria-hidden className="mr-1.5 inline-block h-2 w-2 rounded-full bg-warning align-middle" />}
+        {label}
+        {sub && <span className="block">{sub}</span>}
+      </dt>
+      <dd className={cn("text-[16px] font-semibold tabular-nums", tone === "error" && "text-destructive", tone === "attention" && "text-warning", muted && "text-muted-foreground")}>{value}</dd>
+    </div>
+  );
+}
+
+/* ---------------- Paying now ---------------- */
+
+/** "today", "Fri Nov 27", "failed Fri Nov 13", "overdue since Fri Nov 13". */
+function whenDue(i: Installment): string {
+  if (i.state === "failed") return `failed ${payDay(i.date)}`;
+  if (i.state === "overdue") return `overdue since ${payDay(i.date)}`;
+  if (i.state === "due_today") return "today";
+  if (i.state === "unconfirmed") return `${payDay(i.date)}, not confirmed by Stripe yet`;
+  return payDay(i.date);
+}
+
+/**
+ * A package the money is going to now: its period, total, paid, left, the
+ * payment bar, the next payment and its status, and (for auto-pay) the
+ * packages queued behind it.
+ */
+function PayingCard({ x, account, balance, money }: {
+  x: PayingNow<Installment>;
+  account: PackageAccount | null;
+  balance: SaleSchedule | null;
+  money: (c: number) => string;
+}) {
+  const total = account?.totalCents ?? balance?.money.priceCents ?? 0;
+  const paid = account?.paidCents ?? balance?.money.paidCents ?? 0;
+  const left = account?.balanceCents ?? balance?.money.leftCents ?? 0;
+  const when = account ? period(account.from, account.to) : null;
+  const status = account?.payment ?? (x.next.state === "failed" ? "failed" : x.next.state === "overdue" ? "overdue" : x.next.state === "due_today" || x.next.state === "unconfirmed" ? "due" : paid > 0 ? "partial" : "scheduled");
+  const by = x.how === "auto_pay" ? "auto-pay" : x.how === "stripe" ? "Stripe" : "collected by you";
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-3" data-paying-package={account?.number ?? x.label}>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <div className="text-[16px] font-semibold leading-tight">{x.label}</div>
+          {when && <div className="whitespace-nowrap text-[13px] text-muted-foreground">Training {when}</div>}
+        </div>
+        <PaymentStatusText status={status} auto={x.next.auto} className="shrink-0" />
+      </div>
+      <div className="flex items-baseline justify-between gap-2 text-[13px] tabular-nums text-muted-foreground">
+        <span><span className="font-semibold text-foreground">{money(paid)}</span> of {money(total)} paid</span>
+        <span><span className="font-semibold text-foreground">{money(left)}</span> left</span>
+      </div>
+      <PaymentBar paidCents={paid} totalCents={total} />
+      <p className="text-[13px]" data-paying-next>
+        <span className="text-muted-foreground">Next </span>
+        <span className="font-semibold tabular-nums">{money(x.next.cents)}</span>
+        <span className={cn(x.next.state === "failed" || x.next.state === "overdue" ? "text-destructive" : "text-muted-foreground")}> {whenDue(x.next)}</span>
+        <span className="text-muted-foreground"> · {by}{x.next.nth && x.next.of ? ` · payment ${x.next.nth} of ${x.next.of}` : ""}</span>
+      </p>
+      {x.then.length > 0 && (
+        <p className="text-[13px] text-muted-foreground" data-paying-then>
+          Then {x.then.map((t) => `${t.label} from ${payDay(t.first)}`).join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Packages ---------------- */
 
-/** "Oct 5 – Nov 1" */
+/** "Oct 5 – Nov 1", "Nov 2 – 29" in one month. */
 function period(a: string | null, b: string | null): string | null {
-  const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
-  if (a && b) return `${fmt(a)} – ${fmt(b)}`;
+  const d = (iso: string) => new Date(`${iso}T00:00:00`);
+  const fmt = (iso: string) => d(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+  if (a && b) {
+    const sameMonth = d(a).getMonth() === d(b).getMonth() && d(a).getFullYear() === d(b).getFullYear();
+    return sameMonth ? `${fmt(a)} – ${d(b).getDate()}` : `${fmt(a)} – ${fmt(b)}`;
+  }
   return a ? `from ${fmt(a)}` : b ? `to ${fmt(b)}` : null;
 }
 
 /** "16/16 completed", or "7 completed · 9 booked · 0 available". */
 export function packageSessionsLine(x: PackageAccount): string {
   const s = x.sessions;
-  if (s.completed >= s.purchased && s.booked === 0) return `${s.completed}/${s.purchased} completed`;
+  if (s.completed >= s.purchased && s.booked === 0 && s.available === 0) return `${s.completed}/${s.purchased} completed`;
   const parts = [`${s.completed} completed`, `${s.booked} booked`, `${s.available} available`];
   if (s.expired) parts.push(`${s.expired} expired`);
   return parts.join(" · ");
@@ -345,13 +459,12 @@ function planLine(x: PackageAccount, money: (c: number) => string): string {
 
 /** Finished and settled: nothing left to train or to pay. */
 const settled = (x: PackageAccount) =>
-  x.balanceCents === 0 && x.unpaidDeliveredCents === 0 && x.sessions.booked === 0 && x.sessions.available === 0 && x.state !== "past_due";
+  x.balanceCents === 0 && x.unpaidDeliveredCents === 0 && x.sessions.booked === 0 && x.sessions.available === 0 && x.state !== "past_due" && x.state !== "waiting";
 
 /**
  * Every package in order, Package 1 first, each with its training and its
- * money side by side. Settled ones fold into one line; the ones with money
- * left or sessions to go are cards, the ones that need something first in
- * their own order.
+ * money as two bars. Settled ones fold into one line; the others are cards,
+ * the one being trained now and the one being paid now tagged as such.
  */
 function PackageHistory({ packages, ledger, money, isAdmin, onOpenSessions, onRecord, onSetDates }: {
   packages: PackageAccount[];
@@ -365,6 +478,9 @@ function PackageHistory({ packages, ledger, money, isAdmin, onOpenSessions, onRe
   const done = packages.filter(settled);
   const live = packages.filter((x) => !settled(x));
   const doneLabel = done.length === 1 ? done[0].label : `Packages ${done.map((x) => x.number).join(", ")}`;
+  const card = (x: PackageAccount) => (
+    <PackageCard key={x.saleId} x={x} ledger={ledger} money={money} isAdmin={isAdmin} onOpenSessions={onOpenSessions} onRecord={onRecord} onSetDates={onSetDates} />
+  );
   return (
     <section className="space-y-2" data-billing-packages>
       <h4 className="text-[15px] font-semibold">
@@ -372,14 +488,10 @@ function PackageHistory({ packages, ledger, money, isAdmin, onOpenSessions, onRe
       </h4>
       {done.length > 0 && (
         <Folder title={`${doneLabel} · paid in full`} summary={done.length > 1 ? `${done.length}` : undefined} data-billing-packages-settled>
-          {done.map((x) => (
-            <PackageCard key={x.saleId} x={x} ledger={ledger} money={money} isAdmin={isAdmin} onOpenSessions={onOpenSessions} onRecord={onRecord} onSetDates={onSetDates} />
-          ))}
+          {done.map(card)}
         </Folder>
       )}
-      {live.map((x) => (
-        <PackageCard key={x.saleId} x={x} ledger={ledger} money={money} isAdmin={isAdmin} onOpenSessions={onOpenSessions} onRecord={onRecord} onSetDates={onSetDates} />
-      ))}
+      {live.map(card)}
     </section>
   );
 }
@@ -394,45 +506,89 @@ function PackageCard({ x, ledger, money, isAdmin, onOpenSessions, onRecord, onSe
   onSetDates: (saleId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const late = x.schedule?.installments.some((i) => i.state === "overdue" || i.state === "failed");
-  const chip = x.state === "past_due" ? { text: "Payment failed", tone: "error" as const }
-    : late ? { text: "Overdue", tone: "error" as const }
-    : x.state === "paid" ? { text: "Paid", tone: "done" as const }
-    : null;
   const payments = useMemo(() => salePayments(ledger.filter((l: any) => l.purchase_id === x.saleId)), [ledger, x.saleId]);
   const when = period(x.from, x.to);
+  const auto = x.schedule?.how === "auto_pay" || x.schedule?.how === "stripe";
+  const s = x.sessions;
+  const cov = x.coverage;
+  const owing = x.balanceCents > 0 && x.state !== "waiting";
   return (
     <div className="overflow-hidden rounded-xl border border-border" data-billing-package={x.number}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full space-y-1 p-3 text-left">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full space-y-2 p-3 text-left">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 text-[15px] font-semibold">
-            {x.label}{when ? <span className="font-normal text-muted-foreground"> · {when}</span> : null}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[15px] font-semibold">
+              {x.label}{when ? <span className="font-normal text-muted-foreground"> · {when}</span> : null}
+            </span>
+            {x.trainingNow && <RoleTag role="training" />}
+            {x.payingNow && <RoleTag role="paying" />}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {chip && <StatusChip tone={chip.tone}>{chip.text}</StatusChip>}
-            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          <ChevronDown className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {/* The one being trained says so in its tag; its status adds only that it's fully booked. */}
+          {!x.trainingNow ? <TrainingStatusText status={x.training} />
+            : s.available === 0 && s.booked > 0 ? <TrainingStatusText status="fully_booked" /> : null}
+          <PaymentStatusText status={x.payment} auto={auto} />
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-baseline justify-between gap-2 text-[13px]">
+            <span className="shrink-0 text-muted-foreground">Sessions</span>
+            <span className="min-w-0 text-right tabular-nums">{packageSessionsLine(x)}</span>
           </div>
+          {cov ? <CoverageBar cells={cov.cells} /> : <SessionBar completed={s.completed} booked={s.booked} available={s.available} expired={s.expired} />}
         </div>
-        <div className="text-[13px] tabular-nums">{packageSessionsLine(x)}</div>
-        <div className="text-[13px] tabular-nums text-muted-foreground">
-          Total {money(x.totalCents)} · Paid {money(x.paidCents)} · Balance {money(x.balanceCents)}
+
+        <div className="space-y-1">
+          <div className="flex items-baseline justify-between gap-2 text-[13px]">
+            <span className="text-muted-foreground">Payments</span>
+            <span className="tabular-nums">{money(x.paidCents)} of {money(x.totalCents)} paid</span>
+          </div>
+          <PaymentBar paidCents={x.paidCents} totalCents={x.totalCents} />
         </div>
-        {x.unpaidDeliveredCents > 0 && (
-          <div className="text-[13px] tabular-nums" data-package-unpaid-delivered>
-            <span className="text-muted-foreground">Unpaid delivered </span>
-            <span className="font-semibold">{money(x.unpaidDeliveredCents)}</span>
+
+        {(owing || x.unpaidDeliveredCents > 0) && (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px] tabular-nums">
+            <span>Balance <span className="font-semibold">{money(x.balanceCents)}</span></span>
+            {x.unpaidDeliveredCents > 0 && (
+              <span className="text-warning" data-package-unpaid-delivered>{money(x.unpaidDeliveredCents)} delivered, not paid for</span>
+            )}
           </div>
         )}
-        <div className={cn("text-[13px]", x.schedule?.how === "none" ? "text-warning" : "text-muted-foreground")}>{planLine(x, money)}</div>
       </button>
+
       {open && (
         <div className="space-y-3 border-t border-border px-3 pb-3 pt-2">
+          {cov && (
+            <div className="space-y-1.5" data-package-coverage>
+              <BarLegend
+                items={[
+                  ...(cov.covered > 0 ? [{ swatch: "done" as const, text: `${cov.covered} paid for` }] : []),
+                  ...(cov.unpaid + (cov.partCents > 0 ? 1 : 0) > 0 ? [{ swatch: "unpaid" as const, text: `${cov.unpaid + (cov.partCents > 0 ? 1 : 0)} delivered, not paid for` }] : []),
+                  ...(s.booked > 0 ? [{ swatch: "booked" as const, text: `${s.booked} booked` }] : []),
+                  ...(s.available > 0 ? [{ swatch: "open" as const, text: `${s.available} available` }] : []),
+                  ...(s.expired > 0 ? [{ swatch: "expired" as const, text: `${s.expired} expired` }] : []),
+                ]}
+              />
+              {cov.partCents > 0 && (
+                <p className="text-[12px] text-muted-foreground">One session is part paid for ({money(cov.partCents)} of {money(cov.perSessionCents)}).</p>
+              )}
+              {cov.aheadCents > 0 && (
+                <p className="text-[12px] text-muted-foreground">{money(cov.aheadCents)} paid ahead of the training delivered.</p>
+              )}
+              <p className="text-[12px] text-muted-foreground">
+                Payments go on the package, not a session. This spreads them over its {s.purchased} sessions ({money(cov.perSessionCents)} each) to show how much of the training is paid for.
+              </p>
+            </div>
+          )}
           <p className="text-[13px] text-muted-foreground" data-package-origin>
             {x.renewedFrom
               ? `Renewed from ${x.renewedFrom.number ? `Package ${x.renewedFrom.number}` : "the package before"}${x.boughtOn ? ` on ${payDay(x.boughtOn)}` : ""}`
               : x.boughtOn ? `Bought ${payDay(x.boughtOn)}` : "Bought"}
             {` · ${x.name}`}
           </p>
+          <p className={cn("text-[13px]", x.schedule?.how === "none" ? "text-warning" : "text-muted-foreground")}>{planLine(x, money)}</p>
           {x.schedule && x.schedule.installments.length > 0 && (
             <div>
               <div className="text-[13px] font-medium">Payments still to come</div>
@@ -458,17 +614,6 @@ function PackageCard({ x, ledger, money, isAdmin, onOpenSessions, onRecord, onSe
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Split({ label, cents, money, tone }: { label: string; cents: number; money: (c: number) => string; tone: "error" | "attention" | "muted" }) {
-  return (
-    <div className="rounded-lg bg-muted/50 px-3 py-2" data-split={label}>
-      <dt className="text-[12px] text-muted-foreground">{label}</dt>
-      <dd className={cn("text-[15px] font-semibold tabular-nums", tone === "error" && "text-destructive", tone === "attention" && "text-warning", tone === "muted" && cents === 0 && "text-muted-foreground")}>
-        {money(cents)}
-      </dd>
     </div>
   );
 }
@@ -545,28 +690,17 @@ function InstallmentRow({ i, money, action, inPackage }: { i: Installment; money
 }
 
 function Upcoming({ items, money, isAdmin, onRecord }: { items: Installment[]; money: (c: number) => string; isAdmin: boolean; onRecord: (saleId: string) => void }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, 3);
   return (
-    <section className="space-y-1" data-billing-upcoming>
-      <h4 className="text-[15px] font-semibold">Upcoming payments <span className="font-normal text-muted-foreground">· {items.length}</span></h4>
-      <ul className="divide-y divide-border">
-        {shown.map((i) => (
-          <InstallmentRow
-            key={i.key}
-            i={i}
-            money={money}
-            action={isAdmin && !i.auto && (i.state === "due_today" || i.state === "unconfirmed") ? <Button size="sm" variant="outline" className="h-9" onClick={() => onRecord(i.saleId)}>Record</Button> : null}
-          />
-        ))}
-      </ul>
-      {items.length > 3 && (
-        <button type="button" onClick={() => setAll((v) => !v)} className="flex min-h-10 w-full items-center justify-center gap-1 text-[13px] text-muted-foreground">
-          {all ? "Show fewer" : `Show all ${items.length}`}
-          <ChevronDown className={cn("h-4 w-4 transition-transform", all && "rotate-180")} />
-        </button>
-      )}
-    </section>
+    <ul className="divide-y divide-border">
+      {items.map((i) => (
+        <InstallmentRow
+          key={i.key}
+          i={i}
+          money={money}
+          action={isAdmin && !i.auto && (i.state === "due_today" || i.state === "unconfirmed") ? <Button size="sm" variant="outline" className="h-9" onClick={() => onRecord(i.saleId)}>Record</Button> : null}
+        />
+      ))}
+    </ul>
   );
 }
 
