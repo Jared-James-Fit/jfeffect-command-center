@@ -3,6 +3,7 @@ import { wallTimeToUtc, localDateISO, addDaysISO, fmtWallClock, overlaps, addMin
 import {
   buildSessionChangeSms,
   buildSessionReminderSms,
+  changeTextDecision,
   gsmSafe,
   isLastMinute,
   reminderDecision,
@@ -95,10 +96,30 @@ describe("reminder text", () => {
       link: "jfeffect.com/portal/calendar",
       now: at("2026-10-11", "18:00"),
     });
+    // The friendliest wording was 171 characters (2 billed segments); the
+    // reminder now always fits one.
     expect(body).toBe(
-      "Hi Marc, this is Jared James Coaching. Reminder: 1:1 Training tomorrow (Mon Oct 12) at 11:00 AM, 800 Vaughan Ave Unit 404. Need to change it? jfeffect.com/portal/calendar",
+      "Hi Marc, Jared James Coaching here. Reminder: 1:1 Training tomorrow (Mon Oct 12) at 11:00 AM, 800 Vaughan Ave Unit 404. Change it: jfeffect.com/portal/calendar",
     );
+    expect(body.length).toBeLessThanOrEqual(160);
     expect(body).toMatch(/^[\x20-\x7E]+$/);
+  });
+
+  it("always fits one segment, however long the name, coach or place", () => {
+    const body = buildSessionReminderSms({
+      firstName: "Maximilian-Alexander",
+      brand: "JF Effect",
+      coach: "Jared",
+      title: "1:1 Strength & Conditioning Session Extra",
+      startsAt: at("2026-10-12", "11:00"),
+      tz: TZ,
+      location: "800 Vaughan Ave Unit 404 Rear Entrance Building B, Selkirk",
+      link: "jfeffect.com/portal/calendar",
+      now: at("2026-10-11", "18:00"),
+    });
+    expect(body.length).toBeLessThanOrEqual(160);
+    expect(body).toContain("jfeffect.com/portal/calendar");
+    expect(body).toContain("Jared from JF Effect");
   });
 
   it("change texts name the new time or the cancellation", () => {
@@ -118,6 +139,30 @@ describe("reminder text", () => {
     const now = at("2026-10-12", "09:00");
     expect(isLastMinute(at("2026-10-13", "11:00"), now)).toBe(true);
     expect(isLastMinute(at("2026-10-20", "11:00"), now)).toBe(false);
+  });
+
+  it("texts a change only when the chat message's push may not reach them in time", () => {
+    const now = at("2026-10-12", "09:00");
+    // No push: inside 48 hours is texted.
+    expect(changeTextDecision({ startsAt: at("2026-10-13", "16:00"), now, pushReachable: false })).toEqual({ text: true });
+    // With push: 31 hours out the chat push is enough...
+    expect(changeTextDecision({ startsAt: at("2026-10-13", "16:00"), now, pushReachable: true })).toEqual({ text: false, reason: "push_reaches_them" });
+    // ...but the same day is still texted (a missed push means a wasted trip).
+    expect(changeTextDecision({ startsAt: at("2026-10-12", "17:00"), now, pushReachable: true })).toEqual({ text: true });
+    // Moving today's session to next week is urgent: the old time counts.
+    expect(changeTextDecision({ startsAt: at("2026-10-20", "11:00"), previousStartsAt: at("2026-10-12", "17:00"), now, pushReachable: true })).toEqual({ text: true });
+    // A time the client asked for is never texted to someone push reaches.
+    expect(changeTextDecision({ startsAt: at("2026-10-12", "17:00"), now, pushReachable: true, clientAsked: true })).toEqual({ text: false, reason: "push_reaches_them" });
+    expect(changeTextDecision({ startsAt: at("2026-10-12", "17:00"), now, pushReachable: false, clientAsked: true })).toEqual({ text: true });
+    // Far off: nothing.
+    expect(changeTextDecision({ startsAt: at("2026-10-20", "11:00"), now, pushReachable: false })).toEqual({ text: false, reason: "not_last_minute" });
+  });
+
+  it("change texts fit one segment too", () => {
+    const base = { firstName: "Maximilian", brand: "JF Effect", coach: "Jared", title: "1:1 Training", tz: TZ, link: "jfeffect.com/portal/calendar" };
+    const moved = buildSessionChangeSms({ ...base, kind: "moved", startsAt: at("2026-11-14", "06:30"), location: "800 Vaughan Ave Unit 404, Selkirk" });
+    expect(moved.length).toBeLessThanOrEqual(160);
+    expect(moved).toContain("Sat Nov 14 at 6:30 AM");
   });
 });
 

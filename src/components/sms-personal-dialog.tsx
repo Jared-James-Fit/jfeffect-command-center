@@ -14,6 +14,7 @@ import { sendBulkSms } from "@/lib/sms.functions";
 import { toast } from "sonner";
 import { Search, Send, Users, AlertTriangle } from "lucide-react";
 import { renderSmsTemplate as render, resolveCoachName, withAssignedCoach } from "@/lib/sms-identity";
+import { bulkCostLine } from "@/lib/sms-policy";
 
 export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const send = useServerFn(sendBulkSms);
@@ -24,8 +25,8 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
   const [busy, setBusy] = useState(false);
 
   const { data: settings } = useQuery({
-    queryKey: ["sms-settings"],
-    queryFn: async () => (await supabase.from("sms_settings").select("brand_name,default_coach_name,from_phone,enabled").eq("singleton", true).maybeSingle()).data,
+    queryKey: ["sms-settings", "bulk-dialog"],
+    queryFn: async () => (await supabase.from("sms_settings").select("brand_name,default_coach_name,from_phone,enabled,price_per_segment_usd,usd_to_cad").eq("singleton", true).maybeSingle()).data,
     enabled: open,
   });
 
@@ -70,7 +71,8 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
     if (sendable.length === 0) return toast.error("No selected clients can receive SMS");
     setBusy(true);
     try {
-      const r: any = await send({ data: { client_ids: sendable.map((c: any) => c.id), body: body.trim(), kind: "manual" } });
+      // One person is a personal text; several is a bulk send (stops at the SMS budget).
+      const r: any = await send({ data: { client_ids: sendable.map((c: any) => c.id), body: body.trim(), kind: sendable.length === 1 ? "manual" : "bulk" } });
       toast.success(`Sent ${r.sent} · skipped ${r.skipped} · failed ${r.failed}`);
       close();
     } catch (e: any) { toast.error(e?.message ?? "Failed to send"); }
@@ -155,6 +157,7 @@ export function SmsPersonalDialog({ open, onOpenChange }: { open: boolean; onOpe
           <div className="space-y-3">
             <div className="rounded border border-border p-4">
               <div className="flex items-center gap-2 font-semibold"><Users className="h-4 w-4" />You are about to send this SMS to {sendable.length} client{sendable.length === 1 ? "" : "s"}.</div>
+              <div className="mt-1 text-xs text-muted-foreground">{bulkCostLine(sendable.length, previewText || body, settings)}</div>
               <div className="mt-3 text-xs text-muted-foreground">Sample preview:</div>
               {previewClient && (
                 <div className="mt-1 rounded bg-secondary/40 p-3 text-sm">

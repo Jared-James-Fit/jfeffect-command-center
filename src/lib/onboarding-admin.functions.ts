@@ -1,43 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { assignedCoachOf, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
-
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
+import { assignedCoachOf, resolveCoachName } from "@/lib/sms-identity";
+import { normalizePhone } from "@/lib/sms-policy";
 
 async function assertAdmin(ctx: any) {
   const { data: isAdmin } = await ctx.supabase
     .rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
   if (!isAdmin) throw new Error("Admin required");
-}
-
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
-}
-
-async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
-  if (!twilioKey) throw new Error("TWILIO_API_KEY missing — connect Twilio in Integrations");
-  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
-  });
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `Twilio error (${res.status})`);
-  return { sid: data.sid as string };
 }
 
 function originFromEnv(): string {
@@ -108,30 +78,21 @@ export const sendSetupReminder = createServerFn({ method: "POST" })
             }
             const coach = resolveCoachName(coachRow, settings.default_coach_name);
             const body = `${first}, finish setting up your ${brand} app: ${origin}/install${coach ? ` — ${coach}` : ""}`;
-            try {
-              const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-              await supabaseAdmin.from("sms_log").insert({
-                app_member_id: member.id,
-                to_phone: toPhone,
-                body,
-                kind: "manual",
-                status: "sent",
-                twilio_sid: sid,
-                sender_user_id: context.userId,
-              });
-              smsResult = { sent: true, sid };
+            const { sendSms } = await import("@/lib/sms-gateway.server");
+            const r = await sendSms(supabaseAdmin, {
+              category: "manual",
+              to: toPhone,
+              body,
+              // One setup nudge a day: a double tap never texts twice.
+              key: `member_setup_sms:${member.id}:${new Date().toISOString().slice(0, 10)}`,
+              memberId: member.id,
+              senderUserId: context.userId,
+            });
+            if (r.status === "sent") {
+              smsResult = { sent: true, sid: r.sid };
               anySent = true;
-            } catch (e: any) {
-              await supabaseAdmin.from("sms_log").insert({
-                app_member_id: member.id,
-                to_phone: toPhone,
-                body,
-                kind: "manual",
-                status: "failed",
-                error: e?.message ?? String(e),
-                sender_user_id: context.userId,
-              });
-              smsResult = { sent: false, reason: "failed", error: e?.message ?? String(e) };
+            } else {
+              smsResult = { sent: false, reason: r.status === "failed" ? "failed" : r.reason, error: r.status === "failed" ? r.error : undefined };
             }
           }
         }

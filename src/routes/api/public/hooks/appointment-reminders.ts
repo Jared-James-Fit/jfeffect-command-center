@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { withLinkHeadsUp } from "@/lib/sms-identity";
 
 /**
  * The schedule tick (pg_cron, every 5 minutes): appointment reminders, PT
@@ -22,9 +21,9 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
           .lte("scheduled_for", now)
           .limit(100);
 
-        const { data: smsSettings } = await supabaseAdmin.from("sms_settings").select("*").eq("singleton", true).maybeSingle();
-        const fromPhone = smsSettings?.from_phone;
-        const enabled = smsSettings?.enabled !== false;
+        const { data: smsSettings } = await supabaseAdmin.from("sms_settings").select("enabled, from_phone").eq("singleton", true).maybeSingle();
+        const enabled = smsSettings?.enabled !== false && !!smsSettings?.from_phone;
+        const { sendSms } = await import("@/lib/sms-gateway.server");
 
         let sent = 0, failed = 0, skipped = 0;
         for (const r of due ?? []) {
@@ -32,26 +31,33 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
           // Never text a reminder for an appointment that has already started
           // (e.g. reminders that came due while this job was down).
           const alreadyStarted = appt?.starts_at && new Date(appt.starts_at).getTime() <= Date.now();
-          if (!appt || alreadyStarted || appt.status === "Cancelled" || !appt.sms_reminders_enabled || !enabled || !fromPhone) {
-            await supabaseAdmin.from("appointment_reminders").update({ status: "skipped" }).eq("id", r.id);
+          if (!appt || alreadyStarted || appt.status === "Cancelled" || !appt.sms_reminders_enabled || !enabled) {
+            await supabaseAdmin.from("appointment_reminders").update({ status: "skipped" }).eq("id", r.id).eq("status", "pending");
             skipped++; continue;
           }
           const toPhoneRaw = r.audience === "attendee"
             ? (appt.client?.phone || appt.external_phone)
             : appt.host_coach?.phone;
-          const toPhone = normalizePhone(toPhoneRaw);
-          if (!toPhone) {
-            await supabaseAdmin.from("appointment_reminders").update({ status: "skipped" }).eq("id", r.id);
-            skipped++; continue;
-          }
-          const body = buildBody(appt, r.audience);
-          try {
-            await sendSms(toPhone, fromPhone, body);
+          // The key holds across overlapping runs: one text per reminder row.
+          const res = await sendSms(supabaseAdmin, {
+            category: r.audience === "attendee" ? "session" : "staff_alert",
+            kind: "session",
+            to: toPhoneRaw,
+            body: buildBody(appt, r.audience),
+            key: `appointment_reminder:${r.id}`,
+            maxAttempts: 1,
+            clientId: r.audience === "attendee" ? appt.client?.id ?? null : null,
+          });
+          if (res.status === "skipped" && res.reason === "duplicate") continue; // the other run owns it
+          if (res.status === "sent") {
             await supabaseAdmin.from("appointment_reminders").update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
             sent++;
-          } catch (e: any) {
-            await supabaseAdmin.from("appointment_reminders").update({ status: "failed", error: String(e?.message ?? e) }).eq("id", r.id);
+          } else if (res.status === "failed") {
+            await supabaseAdmin.from("appointment_reminders").update({ status: "failed", error: res.error }).eq("id", r.id);
             failed++;
+          } else {
+            await supabaseAdmin.from("appointment_reminders").update({ status: "skipped", error: res.reason }).eq("id", r.id);
+            skipped++;
           }
         }
         // The same 5-minute tick runs the PT session side of the schedule:
@@ -77,16 +83,6 @@ export const Route = createFileRoute("/api/public/hooks/appointment-reminders")(
   },
 });
 
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
-}
-
 function buildBody(appt: any, audience: "attendee" | "host"): string {
   const when = new Date(appt.starts_at).toLocaleString("en-US", {
     timeZone: appt.timezone || "America/New_York",
@@ -101,25 +97,6 @@ function buildBody(appt: any, audience: "attendee" | "host"): string {
     return lines.join(" ");
   }
   return `Reminder: You have a ${appt.appointment_type} with ${clientName} on ${when}.`;
-}
-
-async function sendSms(to: string, from: string, body: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey || !twilioKey) throw new Error("Twilio not configured");
-  const res = await fetch("https://connector-gateway.lovable.dev/twilio/Messages.json", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: to, From: from, Body: withLinkHeadsUp(body) }).toString(),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Twilio ${res.status}: ${t.slice(0, 200)}`);
-  }
 }
 
 /** Shared hook auth: worker secret (env) or the Vault-held cron secret. */

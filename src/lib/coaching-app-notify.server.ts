@@ -2,15 +2,14 @@
  * Server-only helper: notify configured admin recipients when a new
  * coaching application is submitted or a coaching call is booked.
  *
- * Reuses the existing Twilio gateway integration. Honors recipient
- * `paused` and `priority_only` flags. Idempotency is enforced by
- * dedupe-keying each send in sms_log.automation_trigger.
+ * Texts go through the one sender (sms-gateway.server.ts) as staff alerts:
+ * idempotent per event and recipient (the sender's key), counted against the
+ * SMS budget. Honors recipient `paused` and `priority_only` flags.
  *
  * Email recipients are recorded in communication_log as `queued` —
  * a follow-up wires Lovable Emails templates for actual dispatch.
  */
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
 function b64url(s: string) {
   return Buffer.from(s, "utf8").toString("base64")
@@ -53,32 +52,10 @@ async function sendEmailViaProvider(supabaseAdmin: any, to: string, subject: str
   throw new Error(`Provider ${settings.provider} not supported`);
 }
 
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
-}
-
-async function sendTwilioSms(to: string, from: string, body: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey || !twilioKey) throw new Error("Twilio not configured");
-  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: to, From: from, Body: body }).toString(),
-  });
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `Twilio error (${res.status})`);
-  return { sid: data.sid as string };
+/** A staff alert text through the one sender; never throws. */
+async function sendStaffAlertSms(supabaseAdmin: any, to: string | null | undefined, body: string, key: string) {
+  const { sendSms } = await import("@/lib/sms-gateway.server");
+  return sendSms(supabaseAdmin, { category: "staff_alert", to, body, key, maxAttempts: 2 });
 }
 
 type NotifyContext = {
@@ -110,27 +87,9 @@ export async function notifyCoachingAppRecipients(supabaseAdmin: any, ctx: Notif
 
   for (const r of matched) {
     if (r[wantSms] && smsSettings?.enabled && smsSettings?.from_phone) {
-      const toPhone = normalizePhone(r.phone);
-      if (!toPhone) { smsSkipped++; continue; }
-      const dedupeKey = `${ctx.kind}:${ctx.event_key}:${r.id}`;
-      const { data: existing } = await supabaseAdmin
-        .from("sms_log").select("id")
-        .eq("automation_trigger", dedupeKey).limit(1).maybeSingle();
-      if (existing) { smsSkipped++; continue; }
-      try {
-        const { sid } = await sendTwilioSms(toPhone, smsSettings.from_phone, ctx.smsBody);
-        await supabaseAdmin.from("sms_log").insert({
-          to_phone: toPhone, body: ctx.smsBody, kind: "admin_alert",
-          automation_trigger: dedupeKey, status: "sent", twilio_sid: sid,
-        });
-        smsSent++;
-      } catch (e: any) {
-        await supabaseAdmin.from("sms_log").insert({
-          to_phone: toPhone, body: ctx.smsBody, kind: "admin_alert",
-          automation_trigger: dedupeKey, status: "failed",
-          error: e?.message ?? String(e),
-        });
-      }
+      const res = await sendStaffAlertSms(supabaseAdmin, r.phone, ctx.smsBody, `${ctx.kind}:${ctx.event_key}:${r.id}`);
+      if (res.status === "sent") smsSent++;
+      else smsSkipped++;
     }
     if (r[wantEmail] && r.email) {
       const dedupeKey = `${ctx.kind}:${ctx.event_key}:email:${r.id}`;
@@ -162,9 +121,11 @@ export async function notifyCoachingAppRecipients(supabaseAdmin: any, ctx: Notif
   return { recipients_matched: matched.length, sms_sent: smsSent, sms_skipped: smsSkipped, email_queued: emailQueued };
 }
 
-/** Internal: send one Twilio SMS without going through the recipient loop. Used by send-test. */
-export async function sendOneTwilioSms(to: string, from: string, body: string) {
-  return sendTwilioSms(to, from, body);
+/** Internal: one test text to a recipient (Settings → coaching-app recipients → Send test). */
+export async function sendOneTestSms(supabaseAdmin: any, to: string, body: string) {
+  const { sendSms, requireSent } = await import("@/lib/sms-gateway.server");
+  const r = requireSent(await sendSms(supabaseAdmin, { category: "test", to, body }));
+  return { sid: r.sid };
 }
 
 /** Send a confirmation email to the applicant. Idempotent via communication_log.source. */
@@ -245,46 +206,15 @@ export async function notifyNewApplicationFixedRecipients(
   const { emails, sms } = applicationAlertRecipients();
   const result = { sms_sent: 0, sms_skipped: 0, sms_failed: 0, email_sent: 0, email_skipped: 0, email_failed: 0 };
 
-  let fromPhone: string | null = null;
-  try {
-    const { data: smsSettings } = await supabaseAdmin
-      .from("sms_settings").select("enabled, from_phone").eq("singleton", true).maybeSingle();
-    if (smsSettings?.enabled) fromPhone = smsSettings.from_phone ?? null;
-  } catch (e) {
-    console.warn("[application-alert] sms settings read failed", e);
-  }
-
   for (const to of sms) {
-    const dedupeKey = `application_alert:${ctx.event_key}:sms:${to}`;
     try {
-      const { data: existing } = await supabaseAdmin
-        .from("sms_log").select("id").eq("automation_trigger", dedupeKey).limit(1).maybeSingle();
-      if (existing) { result.sms_skipped++; continue; }
-      if (!fromPhone) {
-        result.sms_skipped++;
-        try {
-          await supabaseAdmin.from("sms_log").insert({
-            to_phone: to, body: ctx.smsBody, kind: "admin_alert",
-            automation_trigger: dedupeKey, status: "failed", error: "SMS disabled or no from_phone",
-          });
-        } catch { /* logging is best-effort */ }
-        continue;
-      }
-      const { sid } = await sendTwilioSms(to, fromPhone, ctx.smsBody);
-      await supabaseAdmin.from("sms_log").insert({
-        to_phone: to, body: ctx.smsBody, kind: "admin_alert",
-        automation_trigger: dedupeKey, status: "sent", twilio_sid: sid,
-      });
-      result.sms_sent++;
+      const res = await sendStaffAlertSms(supabaseAdmin, to, ctx.smsBody, `application_alert:${ctx.event_key}:sms:${to}`);
+      if (res.status === "sent") result.sms_sent++;
+      else if (res.status === "failed") { result.sms_failed++; console.warn("[application-alert] sms failed", res.error); }
+      else result.sms_skipped++;
     } catch (e: any) {
       result.sms_failed++;
-      console.warn("[application-alert] sms failed", to, e?.message ?? e);
-      try {
-        await supabaseAdmin.from("sms_log").insert({
-          to_phone: to, body: ctx.smsBody, kind: "admin_alert",
-          automation_trigger: dedupeKey, status: "failed", error: e?.message ?? String(e),
-        });
-      } catch { /* logging is best-effort */ }
+      console.warn("[application-alert] sms failed", e?.message ?? e);
     }
   }
 

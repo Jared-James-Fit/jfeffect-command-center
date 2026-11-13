@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireAutomationTrigger } from "@/lib/sms-trigger.server";
 
+// The real send goes through the one sender; here it reports a failed send
+// (as Twilio would be unreachable), so every "would send" path is observable.
+vi.mock("@/lib/sms-gateway.server", () => ({
+  sendSms: vi.fn(async () => ({ status: "failed", error: "blocked in tests", segments: 1 })),
+}));
+
 /**
  * Builds an in-memory supabaseAdmin mock that lets each test set:
  *  - notification mode + allowlist

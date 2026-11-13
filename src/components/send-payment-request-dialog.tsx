@@ -23,7 +23,9 @@ export function SendPaymentRequestDialog({
   hasPhone?: boolean;
   hasLink?: boolean;
 }) {
-  const [tab, setTab] = useState<"sms" | "dm" | "group">("sms");
+  // The chat card is free, tracks the payment and pushes the client; a text costs
+  // money and is the fallback for someone who isn't in the app.
+  const [tab, setTab] = useState<"sms" | "dm" | "group">("dm");
   const [note, setNote] = useState("");
   const [groupId, setGroupId] = useState<string>("");
   const [busy, setBusy] = useState(false);
@@ -95,14 +97,15 @@ export function SendPaymentRequestDialog({
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
           <TabsList className={`grid w-full ${viewOnly ? "grid-cols-2" : "grid-cols-3"}`}>
+            <TabsTrigger value="dm"><Send className="mr-1 h-3 w-3" />Chat</TabsTrigger>
             <TabsTrigger value="sms"><MessageSquare className="mr-1 h-3 w-3" />SMS</TabsTrigger>
-            <TabsTrigger value="dm"><Send className="mr-1 h-3 w-3" />DM</TabsTrigger>
             {!viewOnly && <TabsTrigger value="group"><Users className="mr-1 h-3 w-3" />Group</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="sms" className="space-y-2 pt-3 text-sm">
             <p className="text-muted-foreground">
-              Texts the Stripe payment link directly to the client's phone using your Twilio number.
+              Texts the payment link to the client's phone (costs about 2 cents). Use it when they aren't
+              opening the app; the chat card is free and shows when it's paid.
             </p>
             {!hasPhone && (
               <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs">

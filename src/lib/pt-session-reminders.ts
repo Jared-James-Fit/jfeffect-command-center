@@ -16,6 +16,7 @@
  * - the client turned texts off, has no phone, or the session is hidden.
  */
 import { smsSender } from "@/lib/sms-identity";
+import { fitOneSegment } from "@/lib/sms-policy";
 import { addDaysISO, fmtClock, fmtDayLabel, localDateISO, localHour, wallTimeToUtc } from "@/lib/schedule-time";
 
 export const REMINDER_LOCAL_TIME = "18:00";
@@ -112,17 +113,28 @@ export type ReminderTextInput = {
   now: Date;
 };
 
+/**
+ * One SMS segment (160 plain characters), always: the friendliest wording that
+ * fits, else a tighter one. A reminder that tips into a second segment costs
+ * double (every evening-before text until Nov 13 2026 was 165-178 characters).
+ */
 export function buildSessionReminderSms(i: ReminderTextInput): string {
-  const name = (i.firstName ?? "").trim() || "there";
-  const brand = smsSender(i.coach, i.brand);
+  const name = gsmSafe((i.firstName ?? "").trim()) || "there";
+  const brand = gsmSafe(smsSender(i.coach, i.brand));
   const word = relativeDayWord(i.startsAt, i.now, i.tz);
   const day = fmtDayLabel(i.startsAt, i.tz);
   const when = word ? `${word} (${day})` : `on ${day}`;
-  const where = shortLocation(i.location);
-  const body =
-    `Hi ${name}, this is ${brand}. Reminder: ${sessionName(i.title)} ${when} at ${fmtClock(i.startsAt, i.tz)}` +
-    `${where ? `, ${where}` : ""}. Need to change it? ${i.link}`;
-  return gsmSafe(body);
+  const time = fmtClock(i.startsAt, i.tz);
+  const where = gsmSafe(shortLocation(i.location));
+  const at = where ? `, ${where}` : "";
+  const title = gsmSafe(sessionName(i.title));
+  return fitOneSegment([
+    `Hi ${name}, this is ${brand}. Reminder: ${title} ${when} at ${time}${at}. Need to change it? ${i.link}`,
+    `Hi ${name}, ${brand} here. Reminder: ${title} ${when} at ${time}${at}. Change it: ${i.link}`,
+    `${brand}: reminder, ${title} ${when} at ${time}${at}. Change it: ${i.link}`,
+    `${brand}: ${title} ${when} at ${time}. Change it: ${i.link}`,
+    `${brand}: ${title} ${day} ${time}. ${i.link}`,
+  ]);
 }
 
 export type ChangeTextInput = {
@@ -139,20 +151,55 @@ export type ChangeTextInput = {
 };
 
 export function buildSessionChangeSms(i: ChangeTextInput): string {
-  const name = (i.firstName ?? "").trim() || "there";
-  const brand = smsSender(i.coach, i.brand);
+  const name = gsmSafe((i.firstName ?? "").trim()) || "there";
+  const brand = gsmSafe(smsSender(i.coach, i.brand));
   const when = `${fmtDayLabel(i.startsAt, i.tz)} at ${fmtClock(i.startsAt, i.tz)}`;
+  const title = gsmSafe(sessionName(i.title));
   if (i.kind === "cancelled") {
-    return gsmSafe(`Hi ${name}, this is ${brand}. Your ${sessionName(i.title)} on ${when} is cancelled. Your schedule: ${i.link}`);
+    return fitOneSegment([
+      `Hi ${name}, this is ${brand}. Your ${title} on ${when} is cancelled. Your schedule: ${i.link}`,
+      `Hi ${name}, ${brand} here. Your ${title} on ${when} is cancelled. ${i.link}`,
+      `${brand}: your ${title} on ${when} is cancelled. ${i.link}`,
+    ]);
   }
-  const where = shortLocation(i.location);
-  return gsmSafe(
-    `Hi ${name}, this is ${brand}. Your ${sessionName(i.title)} moved to ${when}${where ? `, ${where}` : ""}. Your schedule: ${i.link}`,
-  );
+  const where = gsmSafe(shortLocation(i.location));
+  const at = where ? `, ${where}` : "";
+  return fitOneSegment([
+    `Hi ${name}, this is ${brand}. Your ${title} moved to ${when}${at}. Your schedule: ${i.link}`,
+    `Hi ${name}, ${brand} here. Your ${title} moved to ${when}${at}. ${i.link}`,
+    `${brand}: your ${title} moved to ${when}${at}. ${i.link}`,
+    `${brand}: your ${title} moved to ${when}. ${i.link}`,
+  ]);
 }
 
 /** Whether a change to a session starting at `startsAt` is close enough to text about. */
-export function isLastMinute(startsAt: Date, now: Date): boolean {
+export function isLastMinute(startsAt: Date, now: Date, windowMs: number = LAST_MINUTE_CHANGE_MS): boolean {
   const diff = startsAt.getTime() - now.getTime();
-  return diff > -60 * 60 * 1000 && diff <= LAST_MINUTE_CHANGE_MS;
+  return diff > -60 * 60 * 1000 && diff <= windowMs;
+}
+
+/** Someone the app can reach by push gets the chat message's push; a text is for the next day only. */
+export const PUSH_REACHABLE_CHANGE_MS = 24 * 60 * 60 * 1000;
+
+export type ChangeTextDecision = { text: true } | { text: false; reason: "not_last_minute" | "push_reaches_them" };
+
+/**
+ * Whether a moved or cancelled session is worth a text on top of the chat
+ * message (which already pushes). Without push: within 48 hours. With push:
+ * within 24 hours (a missed push then means a wasted trip). A change the client
+ * asked for themselves (an approved request) is never texted to someone push
+ * reaches: they're in the app waiting for the answer.
+ */
+export function changeTextDecision(o: {
+  startsAt: Date;
+  previousStartsAt?: Date | null;
+  now: Date;
+  pushReachable: boolean;
+  clientAsked?: boolean;
+}): ChangeTextDecision {
+  if (o.clientAsked && o.pushReachable) return { text: false, reason: "push_reaches_them" };
+  const windowMs = o.pushReachable ? PUSH_REACHABLE_CHANGE_MS : LAST_MINUTE_CHANGE_MS;
+  const urgent = isLastMinute(o.startsAt, o.now, windowMs) || (!!o.previousStartsAt && isLastMinute(o.previousStartsAt, o.now, windowMs));
+  if (urgent) return { text: true };
+  return { text: false, reason: o.pushReachable && (isLastMinute(o.startsAt, o.now) || (!!o.previousStartsAt && isLastMinute(o.previousStartsAt, o.now))) ? "push_reaches_them" : "not_last_minute" };
 }

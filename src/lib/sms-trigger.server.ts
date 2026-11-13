@@ -8,9 +8,16 @@
  * Safe to import from server routes and server functions only.
  */
 
-import { assignedCoachOf, coachById, renderSmsTemplate, resolveCoachName, withLinkHeadsUp } from "@/lib/sms-identity";
+import { assignedCoachOf, coachById, renderSmsTemplate, resolveCoachName } from "@/lib/sms-identity";
+import { normalizePhone } from "@/lib/sms-policy";
+import type { SmsCategory } from "@/lib/sms-policy";
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
+/** Texts that carry a setup link or warn of an account change are account security. */
+const SECURITY_TRIGGERS = new Set(["account_created", "subscription_purchased", "email_change_requested"]);
+
+function categoryForTrigger(trigger: string): SmsCategory {
+  return SECURITY_TRIGGERS.has(trigger) ? "security" : "automation";
+}
 
 /**
  * Triggers governed by the membership notification safety mode.
@@ -66,35 +73,7 @@ async function recordAttempt(supabaseAdmin: any, row: Record<string, any>) {
   }
 }
 
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
-}
-
 const renderTemplate = renderSmsTemplate;
-
-async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey || !twilioKey) throw new Error("Twilio not configured");
-  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
-  });
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `Twilio error (${res.status})`);
-  return { sid: data.sid as string };
-}
 
 export type AutomationContext = {
   /** trigger event key (matches sms_automations.trigger_type) */
@@ -107,6 +86,11 @@ export type AutomationContext = {
   phone?: string | null;
   /** template variables — merged with auto-resolved {first_name},{full_name},{coach},{brand},{setup_link} */
   vars?: Record<string, string>;
+  /**
+   * The event this fires for (e.g. a Stripe event id). The same event never
+   * texts twice; without one, an automation texts a person at most once a day.
+   */
+  eventKey?: string | null;
 };
 
 /**
@@ -244,31 +228,26 @@ export async function fireAutomationTrigger(supabaseAdmin: any, ctx: AutomationC
         // live mode: fall through to actual send
       }
 
-      try {
-        const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-        const { data: logRow } = await supabaseAdmin
-          .from("sms_log")
-          .insert({ ...logBase, status: "sent", twilio_sid: sid })
-          .select("id").maybeSingle();
-        if (gated) await recordAttempt(supabaseAdmin, {
-          ...attemptBase,
-          decision: "sent",
-          reason: safety?.mode === "allowlist" ? "allowlisted" : "live_mode",
-          sms_log_id: logRow?.id ?? null,
-        });
-        fired++;
-      } catch (e: any) {
-        const { data: logRow } = await supabaseAdmin
-          .from("sms_log")
-          .insert({ ...logBase, status: "failed", error: e?.message ?? String(e) })
-          .select("id").maybeSingle();
-        if (gated) await recordAttempt(supabaseAdmin, {
-          ...attemptBase,
-          decision: "failed",
-          reason: e?.message ?? String(e),
-          sms_log_id: logRow?.id ?? null,
-        });
-      }
+      const { sendSms } = await import("@/lib/sms-gateway.server");
+      const who = ctx.memberId ?? ctx.clientId ?? toPhone;
+      const r = await sendSms(supabaseAdmin, {
+        category: categoryForTrigger(ctx.trigger),
+        kind: "automation",
+        to: toPhone,
+        body,
+        key: `automation:${auto.id}:${who}:${ctx.eventKey ?? new Date().toISOString().slice(0, 10)}`,
+        clientId: ctx.clientId ?? null,
+        memberId: ctx.memberId ?? null,
+        automationId: auto.id,
+        automationTrigger: ctx.trigger,
+      });
+      if (gated) await recordAttempt(supabaseAdmin, {
+        ...attemptBase,
+        decision: r.status === "sent" ? "sent" : r.status === "failed" ? "failed" : "suppressed",
+        reason: r.status === "sent" ? (safety?.mode === "allowlist" ? "allowlisted" : "live_mode") : r.status === "failed" ? r.error : r.reason,
+        sms_log_id: r.id ?? null,
+      });
+      if (r.status === "sent") fired++;
     }
     return { fired };
   } catch (e: any) {

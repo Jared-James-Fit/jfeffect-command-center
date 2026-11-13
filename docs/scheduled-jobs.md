@@ -30,9 +30,22 @@ are broken). If 3+ scheduled calls failed, or 2+ cron runs errored, in the last 
 "Scheduled jobs failing" alert in Admin > Support Alerts (nav badge), refreshes it while the problem
 lasts, and auto-resolves it with a note after a clean hour.
 
-## Unread-message texts (sms-reminders)
-Looks back ~72h (longest step + 1 day), one anchor message and at most one text per client per 24h,
-only 9am-8pm client time, payment messages excluded.
+## Unread-message nudges and SMS bookkeeping (sms-reminders)
+Push first: a coach message unread for the step's delay gets a free push; only someone the push
+didn't reach gets the text, and only for a message the coach wrote (automated prompts stop at the
+push). Looks back ~72h (longest step + 1 day), one anchor message and at most one nudge per client
+per 24h, only 9am-8pm client time, payment messages excluded
+(`src/lib/sms-unread-reminders.server.ts`). The same tick reads back what Twilio did with recent
+texts (status, price, STOP opt-outs; `src/lib/sms-status.server.ts`, 6 checks a text at most) and,
+at most hourly, the month's real Twilio bill into `sms_settings.twilio_usage`.
+
+## Every text: one sender, one guard
+All SMS goes through `src/lib/sms-gateway.server.ts`, which calls `public.sms_claim` before Twilio
+(switches, opt-out, +1 only, idempotency key, retries, per-client daily cap, the monthly budget and
+its 2x hard cap). Settings → SMS → Cost this month shows the ledger. To see what was stopped:
+
+    select blocked_reason, count(*) from sms_log
+     where created_at >= sms_month_start(now()) and blocked_reason is not null group by 1;
 
 ## Session texts (appointment-reminders, PT part)
 One text per session at 6 PM the evening before, in the session's time zone
@@ -40,8 +53,10 @@ One text per session at 6 PM the evening before, in the session's time zone
 6 PM mark, if it's under 2 hours away, outside 9 AM-9 PM local, or the client opted out.
 `pt_sessions.reminder_24h_sent_at` is claimed before sending, so a session is never texted
 twice; moving a session clears it. Logged in `sms_log` with `kind = 'session'`, which the
-unread-message texts ignore. A coach can also text a last-minute move or cancel (within
-48 hours) from the session sheet.
+unread-message texts ignore. Every reminder fits one SMS segment (`fitOneSegment`). A move or
+cancel from the session sheet is texted only when the chat message's push may not reach them in
+time (`changeTextDecision`: within 48 hours without push, 24 hours with it; never for a time the
+client asked for when push reaches them).
 
 ## Google Calendar sync (appointment-reminders, PT part)
 Any insert or edit of a PT session sets `pt_sessions.gcal_dirty` (trigger

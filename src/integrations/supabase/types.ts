@@ -21808,6 +21808,19 @@ export type Database = {
           status: string
           to_phone: string
           twilio_sid: string | null
+          blocked_reason: string | null
+          category: string | null
+          error_code: number | null
+          est_cost_usd: number | null
+          idempotency_base: string | null
+          idempotency_key: string | null
+          price_unit: string | null
+          price_usd: number | null
+          segments: number | null
+          sent_at: string | null
+          status_checked_at: string | null
+          status_checks: number
+          twilio_status: string | null
         }
         Insert: {
           app_member_id?: string | null
@@ -21826,6 +21839,19 @@ export type Database = {
           status?: string
           to_phone: string
           twilio_sid?: string | null
+          blocked_reason?: string | null
+          category?: string | null
+          error_code?: number | null
+          est_cost_usd?: number | null
+          idempotency_base?: string | null
+          idempotency_key?: string | null
+          price_unit?: string | null
+          price_usd?: number | null
+          segments?: number | null
+          sent_at?: string | null
+          status_checked_at?: string | null
+          status_checks?: number
+          twilio_status?: string | null
         }
         Update: {
           app_member_id?: string | null
@@ -21844,6 +21870,19 @@ export type Database = {
           status?: string
           to_phone?: string
           twilio_sid?: string | null
+          blocked_reason?: string | null
+          category?: string | null
+          error_code?: number | null
+          est_cost_usd?: number | null
+          idempotency_base?: string | null
+          idempotency_key?: string | null
+          price_unit?: string | null
+          price_usd?: number | null
+          segments?: number | null
+          sent_at?: string | null
+          status_checked_at?: string | null
+          status_checks?: number
+          twilio_status?: string | null
         }
         Relationships: [
           {
@@ -21904,6 +21943,15 @@ export type Database = {
           singleton: boolean
           updated_at: string
           updated_by: string | null
+          allowed_prefixes: string[]
+          budget_alerts: Json
+          client_daily_cap: number
+          monthly_budget_cad: number
+          number_fee_usd: number
+          price_per_segment_usd: number
+          security_texts_enabled: boolean
+          twilio_usage: Json | null
+          usd_to_cad: number
         }
         Insert: {
           admin_notify_phone?: string | null
@@ -21918,6 +21966,15 @@ export type Database = {
           singleton?: boolean
           updated_at?: string
           updated_by?: string | null
+          allowed_prefixes?: string[]
+          budget_alerts?: Json
+          client_daily_cap?: number
+          monthly_budget_cad?: number
+          number_fee_usd?: number
+          price_per_segment_usd?: number
+          security_texts_enabled?: boolean
+          twilio_usage?: Json | null
+          usd_to_cad?: number
         }
         Update: {
           admin_notify_phone?: string | null
@@ -21932,6 +21989,15 @@ export type Database = {
           singleton?: boolean
           updated_at?: string
           updated_by?: string | null
+          allowed_prefixes?: string[]
+          budget_alerts?: Json
+          client_daily_cap?: number
+          monthly_budget_cad?: number
+          number_fee_usd?: number
+          price_per_segment_usd?: number
+          security_texts_enabled?: boolean
+          twilio_usage?: Json | null
+          usd_to_cad?: number
         }
         Relationships: []
       }
@@ -23585,6 +23651,34 @@ export type Database = {
       }
     }
     Functions: {
+      sms_claim: {
+        Args: {
+          _automation_id?: string
+          _automation_trigger?: string
+          _body: string
+          _category: string
+          _client_id?: string
+          _key?: string
+          _kind: string
+          _max_attempts?: number
+          _member_id?: string
+          _message_id?: string
+          _pt_session_id?: string
+          _reminder_step?: number
+          _segments: number
+          _sender_user_id?: string
+          _to: string
+        }
+        Returns: Json
+      }
+      sms_cost_summary: { Args: never; Returns: Json }
+      sms_finish: {
+        Args: { _error?: string; _error_code?: number; _id: string; _sid: string }
+        Returns: undefined
+      }
+      sms_month_spend_usd: { Args: never; Returns: number }
+      sms_month_start: { Args: { _at: string }; Returns: string }
+      sms_segment_count: { Args: { _body: string }; Returns: number }
       _pt_outstanding_reservation: {
         Args: { _pt_session_id: string }
         Returns: {
