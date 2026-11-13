@@ -32,11 +32,24 @@ describe("calendar rows are ordered by when they happen", () => {
 });
 
 describe("the Google sync writes to the event, never an invitation copy", () => {
-  it("looks up the organizer's calendar before an update", () => {
+  it("looks up the organizer's calendar before an update or a delete", () => {
     const src = readFileSync("src/lib/pt-session-gcal.server.ts", "utf8");
-    expect(src).toContain("target = (await organizerCalendarOf(target, eventId, writable)) ?? target;");
-    expect(src).toContain("if (!org?.email || isOrganizerCopy(r.data, calendarId)) return null;");
-    expect(src).toMatch(/c\.accessRole === "owner" \|\| c\.accessRole === "writer"/);
+    expect(src).toContain("const home = await eventHome(target, eventId, cals.writable);");
+    expect(src).toContain("target = home.calendarId;");
+    expect(src).toContain('const r = await gapi("DELETE", eventPath(home?.calendarId ?? linked, eventId));');
+    const lookup = readFileSync("src/lib/gcal-own-guests.server.ts", "utf8");
+    expect(lookup).toContain("if (isOrganizerCopy(r.data, calendarId)) return { calendarId, event: r.data, organizer: true };");
+    expect(lookup).toContain("if (org && writable.has(org)) {");
+    expect(lookup).toMatch(/c\.accessRole === "owner" \|\| c\.accessRole === "writer"/);
+  });
+
+  it("never adds a guest or emails anyone: only the coach's own calendar ever comes off a guest list", () => {
+    const src = readFileSync("src/lib/pt-session-gcal.server.ts", "utf8");
+    expect(src).toContain("patch = { ...body, attendees: drop.attendees };");
+    expect(src).not.toMatch(/sendUpdates=(all|externalOnly)/);
+    expect(readFileSync("src/lib/gcal-own-guests.server.ts", "utf8")).not.toMatch(/sendUpdates=(all|externalOnly)/);
+    // A new session's event is made with no guests at all.
+    expect(src).not.toMatch(/attendees:\s*\[/);
   });
 });
 
