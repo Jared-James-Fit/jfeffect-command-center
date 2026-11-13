@@ -28,6 +28,7 @@ import { OPEN_ACTIVITY_EVENT } from "@/lib/crew-activity";
 import { BarBack, BarButton, BarTitle, CrewBar, CrewBrand, useBarHidden } from "@/components/community/crew-header";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
+import { bubbleFold, ease, FIRST_POST_RADIUS, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { caughtUpAt, inFeed, inFollowingFeed, storiesNeedMore, uniquePosts, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
@@ -256,14 +257,18 @@ export function CommunityScreen({
   const ownBar = !hideTabs;
   // a coach viewing as a client: the shell's bar and the preview banner stay, so Crew's bar sits in the page
   // Crew's own feed is one post per screen, swiped one at a time (TikTok's): the window snaps
-  // to each post (html.feed-paging, styles.css), so Crew's bar stays put (pages are sized to it).
-  // The coach's Crew page keeps its working feed of cards.
+  // to each post (html.feed-paging, styles.css), every post the whole screen with Crew's bar
+  // floating over its top (it stays put) and the tab bar over its bottom; screens are the
+  // window's measured height (--feed-vh). The coach's Crew page keeps its working feed of cards.
   const paging = ownBar && scope.kind === "feed";
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!paging) return;
-    const root = document.documentElement;
-    root.classList.add("feed-paging");
-    return () => root.classList.remove("feed-paging");
+    setFeedPaging(true);
+    const unwatch = watchFeedViewport();
+    return () => {
+      unwatch();
+      setFeedPaging(false);
+    };
   }, [paging]);
   const barHidden = useBarHidden(ownBar && scope.kind === "feed" && !paging);
   // on the paged feed a post's words and comments open in one sheet (Reels'): "… more" at the caption, 💬 at the comments
@@ -459,7 +464,7 @@ export function CommunityScreen({
     }
     const fit = () => {
       const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY));
-      const h = `calc(100svh - ${top}px)`;
+      const h = `calc(var(--feed-vh, 100svh) - ${top}px)`;
       if (el.style.height !== h) el.style.height = h;
     };
     fit();
@@ -492,7 +497,7 @@ export function CommunityScreen({
     <CrewBar
       label="Crew"
       hidden={barHidden}
-     
+      overlay={paging}
       left={
         <>
           {/* + : the camera and everything you can post (post, meal, lock in, workout, write), Instagram's spot */}
@@ -856,18 +861,22 @@ function FeedPager({
         {pg.node}
       </FeedItem>
     ) : (
-      <div key={pg.key} className="feed-page flex flex-col justify-center overflow-y-auto px-3" style={{ paddingBottom: "var(--bottom-nav-clearance)" }} data-feed-moment={pg.key}>
+      <div key={pg.key} className="feed-page flex flex-col justify-center overflow-y-auto px-3" style={SCREEN_ROOM} data-feed-moment={pg.key}>
         {pg.node}
       </div>
     );
   const pager = useRef<HTMLDivElement | null>(null);
-  useStoriesSwipe(pager, firstScreen, pages[0]?.post ? pages[0].key : null);
+  const fold = useRef<HTMLDivElement | null>(null);
+  const firstKey = pages[0]?.post ? pages[0].key : null;
+  useStoriesSwipe(pager, firstScreen, firstKey);
+  useStoriesMotion(pager, firstScreen, fold, firstKey);
   return (
-    <div ref={pager} data-feed-pager>
+    // always dark, whatever the theme (TikTok's, Reels'): the posts are on black and Crew's bar floats over them
+    <div ref={pager} className="dark bg-black text-foreground" data-feed-pager>
       {/* the stories on top of the first post, full size and running off the bottom (TikTok's Friends):
           a swipe or a tap brings the post up whole, and the very top brings the stories back */}
       <div ref={firstScreen} className="feed-first flex flex-col" data-feed-first>
-        <div className="shrink-0 px-3 pb-2 pt-1.5 sm:px-4">{rail}</div>
+        <div ref={fold} className="shrink-0 px-3 pb-2 pt-1.5 sm:px-4" data-stories-fold>{rail}</div>
         {empty && <div className="px-3 pt-3">{empty}</div>}
       </div>
       {pages.map((pg, i) => screen(pg, i))}
@@ -877,7 +886,7 @@ function FeedPager({
         </div>
       )}
       {end && (
-        <div className="feed-page flex flex-col justify-center" style={{ paddingBottom: "var(--bottom-nav-clearance)" }} data-feed-end>
+        <div className="feed-page flex flex-col justify-center" style={SCREEN_ROOM} data-feed-end>
           {end}
         </div>
       )}
@@ -899,8 +908,7 @@ function useStoriesSwipe(pager: React.RefObject<HTMLDivElement | null>, rail: Re
     const top = rail.current;
     const first = pager.current?.querySelector<HTMLElement>("[data-feed-first-post]");
     if (!top || !first || !firstKey) return;
-    // where the first post sits up whole: its top under Crew's bar (its own snap point)
-    const target = () => Math.round(first.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(first).scrollMarginTop) || 0));
+    const target = () => firstPostUp(first);
     let x0 = 0;
     let y0 = 0;
     let y = 0;
@@ -956,6 +964,128 @@ function useStoriesSwipe(pager: React.RefObject<HTMLDivElement | null>, rail: Re
     };
   }, [pager, rail, firstKey]);
 }
+
+/**
+ * Where the window is when the first post is up whole: its top under the
+ * status bar, Crew's bar over it (its own snap point). Read from where it's
+ * laid out, not where it's drawn: a post easing in is still nudged down.
+ */
+function firstPostUp(first: HTMLElement): number {
+  const css = getComputedStyle(first);
+  const nudge = css.transform && css.transform !== "none" ? new DOMMatrixReadOnly(css.transform).m42 : 0;
+  return Math.round(first.getBoundingClientRect().top - nudge + window.scrollY - (parseFloat(css.scrollMarginTop) || 0));
+}
+
+/**
+ * The stories fold away as the first post comes up, and back in on the way
+ * down, tied to the scroll so they move exactly with the finger (TikTok's
+ * Friends): the row sinks a little slower than the page so the post slides up
+ * over it, each bubble shrinks up toward the bar and fades, right to left (so
+ * they come back left to right, the way you read them), and the first post's
+ * rounded top squares off as it fills the screen. Only styles, written once a
+ * frame while the top of the feed is moving; reduced motion keeps the fade.
+ */
+function useStoriesMotion(
+  pager: React.RefObject<HTMLDivElement | null>,
+  rail: React.RefObject<HTMLDivElement | null>,
+  fold: React.RefObject<HTMLDivElement | null>,
+  firstKey: string | null,
+) {
+  useEffect(() => {
+    const top = rail.current;
+    const row = fold.current;
+    const first = pager.current?.querySelector<HTMLElement>("[data-feed-first-post]");
+    const card = first?.querySelector<HTMLElement>("[data-feed-post]") ?? null;
+    if (!top || !row || !first || !firstKey) return;
+    const reduce = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    let end = 1;
+    let bubbles: { el: HTMLElement; across: number }[] = [];
+    let dirty = true;
+    let last = -1;
+    let frame = 0;
+    const clear = (els: HTMLElement[]) => {
+      for (const el of els) {
+        el.style.opacity = "";
+        el.style.transform = "";
+        el.style.transformOrigin = "";
+      }
+    };
+    // where the post comes up, and where each bubble sits across the row (read only when something moved)
+    const measure = () => {
+      end = Math.max(1, firstPostUp(first));
+      const strip = row.querySelector<HTMLElement>("[data-story-rail]");
+      const box = strip?.getBoundingClientRect();
+      const els = strip ? Array.from(strip.children as HTMLCollectionOf<HTMLElement>) : [];
+      clear(bubbles.map((b) => b.el).filter((el) => !els.includes(el)));
+      bubbles = els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, across: box && box.width > 0 ? (r.left + r.width / 2 - box.left) / box.width : 0 };
+      });
+    };
+    const apply = () => {
+      frame = 0;
+      if (dirty) {
+        dirty = false;
+        measure();
+        last = -1;
+      }
+      const p = storiesProgress(window.scrollY, end);
+      if (p === last) return;
+      last = p;
+      // the row sinks at 40% of the page's speed, so the post rises over it
+      row.style.transform = p <= 0 || reduce ? "" : `translate3d(0, ${(p * end * 0.4).toFixed(1)}px, 0)`;
+      for (const b of bubbles) {
+        const q = ease(bubbleFold(p, b.across));
+        b.el.style.opacity = q > 0 ? (1 - q).toFixed(3) : "";
+        b.el.style.transform = q > 0 && !reduce ? `translate3d(0, ${(-10 * q).toFixed(1)}px, 0) scale(${(1 - 0.22 * q).toFixed(3)})` : "";
+        b.el.style.transformOrigin = q > 0 ? "50% 0%" : "";
+      }
+      if (card) {
+        const r = `${(FIRST_POST_RADIUS * (1 - ease(p))).toFixed(1)}px`;
+        card.style.borderTopLeftRadius = r;
+        card.style.borderTopRightRadius = r;
+      }
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
+    const onScroll = () => {
+      // further down the feed with the stories already folded: nothing to do
+      if (last === 1 && window.scrollY >= end) return;
+      schedule();
+    };
+    const remeasure = () => {
+      dirty = true;
+      schedule();
+    };
+    apply();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", remeasure);
+    // the stories arriving (or one more) change the row and where the post comes up; a sideways scroll moves the wave
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(remeasure) : null;
+    ro?.observe(top);
+    const mo = typeof MutationObserver !== "undefined" ? new MutationObserver(remeasure) : null;
+    mo?.observe(row, { childList: true, subtree: true });
+    row.addEventListener("scroll", remeasure, { passive: true, capture: true });
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", remeasure);
+      row.removeEventListener("scroll", remeasure, { capture: true });
+      ro?.disconnect();
+      mo?.disconnect();
+      row.style.transform = "";
+      clear(bubbles.map((b) => b.el));
+      if (card) {
+        card.style.borderTopLeftRadius = "";
+        card.style.borderTopRightRadius = "";
+      }
+    };
+  }, [pager, rail, fold, firstKey]);
+}
+
+/** A feed moment's screen (all caught up, people to follow…): clear of Crew's bar above and the tab bar below. */
+const SCREEN_ROOM = { paddingTop: "var(--feed-bar-room)", paddingBottom: "var(--bottom-nav-clearance)" } as const;
 
 /** One row owns its mutation so an optimistic reaction only re-renders that card. */
 function PostRow(props: {

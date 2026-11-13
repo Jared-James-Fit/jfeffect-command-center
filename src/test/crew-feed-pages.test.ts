@@ -12,7 +12,8 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
 
   it("the clients' Crew pages its feed; the coach's Crew page keeps its working cards", () => {
     expect(screen).toContain('const paging = ownBar && scope.kind === "feed";');
-    expect(screen).toContain('root.classList.add("feed-paging");');
+    expect(screen).toContain("setFeedPaging(true);");
+    expect(read("src/lib/feed-paging.ts")).toContain('document.documentElement.classList.toggle("feed-paging", next);');
     expect(screen).toContain('layout="page"');
     // Crew's bar stays put while paging: the screens are sized to it
     expect(screen).toContain('useBarHidden(ownBar && scope.kind === "feed" && !paging)');
@@ -21,18 +22,17 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
   it("the window snaps to each screen, one per swipe, and nothing between it and the posts traps the snapping", () => {
     expect(css).toContain("html.feed-paging { scroll-snap-type: y mandatory; }");
     expect(css).toMatch(
-      /\.feed-page \{\s*height: calc\(100svh - var\(--feed-page-top\)\);\s*scroll-snap-align: start;\s*scroll-snap-stop: always;/,
+      /\.feed-page \{\s*height: calc\(var\(--feed-vh, 100svh\) - var\(--feed-page-top\)\);\s*scroll-snap-align: start;\s*scroll-snap-stop: always;/,
     );
     // a hidden overflow makes a box a scroll container that keeps the snap points from the window
     expect(css).toContain("html.feed-paging main { overflow-x: clip; }");
     expect(css).toContain("html.feed-paging body,");
     expect(css).toContain("html.feed-paging [data-shell-root],");
     expect(read("src/components/app-shell.tsx")).toContain("data-shell-root>");
-    // under Crew's bar on a phone; on a computer the bar scrolls away
-    expect(css).toContain(
-      "--feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem);",
-    );
-    expect(css).toContain("@media (min-width: 768px) { :root { --feed-page-top: 0px; } }");
+    // the whole screen under the status bar on a phone, Crew's bar floating over it; on a computer the bar scrolls away
+    expect(css).toContain("  --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top));");
+    expect(css).toContain(":root { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px;");
+    expect(screen).toContain("overlay={paging}");
   });
 
   it("the stories sit over a full-size first post (TikTok's Friends); the very top is their own snap point (a pull there still refreshes)", () => {
@@ -46,11 +46,11 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(screen).toContain("{pages.map((pg, i) => screen(pg, i))}");
     expect(screen).toContain('data-feed-first-post={i === 0 ? "" : undefined}');
     expect(screen).toContain('if (hasFeedPosts) {\n      el.style.height = "";');
-    expect(screen).toContain("const h = `calc(100svh - ${top}px)`;");
+    expect(screen).toContain("const h = `calc(var(--feed-vh, 100svh) - ${top}px)`;");
   });
 
   it("from the stories, one swipe up brings the first post up whole, never past it; a pull, a sideways swipe or a tap stay theirs", () => {
-    expect(screen).toContain("useStoriesSwipe(pager, firstScreen, pages[0]?.post ? pages[0].key : null);");
+    expect(screen).toContain("useStoriesSwipe(pager, firstScreen, firstKey);");
     expect(screen).toContain("if (e.touches.length !== 1 || window.scrollY >= target() - 1) return;");
     expect(screen).toContain("if (dy > 0 || Math.abs(dx) > Math.abs(dy)) {");
     expect(screen).toContain('if (state === "mine" && y0 - y >= 10) {');
@@ -59,7 +59,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     // a tap on it comes up whole too; once up, a tap pauses a clip as before
     expect(card).toContain('window.scrollBy({ top: below, behavior: "smooth" });');
     // its words and buttons wait until it's up, its top corners rounded like a card coming up
-    expect(card).toContain("setUnder(belowTopBar(articleRef.current) > 4);");
+    expect(card).toContain("setUnder(belowSnap(articleRef.current) > 4);");
     expect(card).toContain('(sheetOpen || under) && "pointer-events-none opacity-0",');
     expect(card).toContain('pageFirst && "rounded-t-[18px]",');
   });
@@ -78,16 +78,19 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
   it("a post's screen: the picture as big as it fits on black, the name and words over the bottom, the buttons down the right", () => {
     expect(card).toContain('if (layout === "page") {');
     // an automated post's 4:5 card fits the width; a post's own photos and clips are the screen (TikTok's)
-    expect(card).toContain("<FitBox ratio={0.8}>");
+    expect(card).toContain("<FitBox ratio={0.8} page>");
     expect(card).toContain("<PostMedia post={post} thumbUrl={thumbUrl} page />");
     expect(card).toContain("width: `min(100cqw, calc(100cqh * ${ratio}))`");
     expect(card).toContain(
       "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />",
     );
-    // above the floating tab bar
-    expect(card).toContain('style={{ bottom: "var(--bottom-nav-clearance)" }}');
-    // pictures sit on black whatever the theme; words, workouts and lock ins follow the theme
+    // the whole screen, the bars floating over it; the words just above the tab bar
+    expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : 0 }}");
+    expect(card).toContain('style={{ paddingBottom: "var(--feed-words-bottom)" }}');
+    expect(card).toContain('style={{ bottom: "var(--feed-actions-bottom)" }}');
+    // pictures sit on black; the whole paged feed is dark whatever the theme
     expect(card).toContain('visual ? "dark bg-black" : "bg-background"');
+    expect(screen).toContain('<div ref={pager} className="dark bg-black text-foreground" data-feed-pager>');
   });
 
   it("on its own screen a clip is already full size: a tap pauses it, two taps ❤️", () => {
@@ -99,7 +102,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(card).toContain(
       "<SlideCaption caption={slide.caption} withDots={withDots} top={page} />",
     );
-    expect(inline).toContain('controls === "top" ? "top-12" : "bottom-2.5"');
+    expect(inline).toContain('controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5"');
   });
 
   it("a picture's shape on its screen is the feed's own: a clip its own (9:16 to 16:9), a photo 4:5 to 16:9", () => {

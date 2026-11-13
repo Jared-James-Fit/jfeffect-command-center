@@ -97,7 +97,7 @@ describe("a clip in the feed shows whole, at its own shape", () => {
     expect(inline).toContain('fit === "contain" ? "object-contain" : "object-cover"');
     // a crop's focus only matters where it's cropped
     expect(inline).toContain(
-      'style={position && fit === "cover" ? { objectPosition: position } : undefined}',
+      'style={between ? POSTER_BETWEEN_BARS : position && fit === "cover" ? { objectPosition: position } : undefined}',
     );
   });
 });

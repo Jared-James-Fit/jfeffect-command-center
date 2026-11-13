@@ -21,8 +21,16 @@ describe("a post's screen is the canvas (TikTok / Reels)", () => {
     expect(screenFit(clip(1920, 1080), later)).toBe("contain"); // 16:9
     expect(screenFit(clip(1080, 1080), later)).toBe("contain"); // square
     expect(screenFit(clip(1080, 1350), later)).toBe("contain"); // 4:5
-    // a clip exactly the screen's shape is already whole
-    expect(screenFit(clip(390, 657), later)).toBe("contain");
+    // a clip exactly the screen's shape fills it, nothing cut
+    expect(screenFit(clip(390, 657), later)).toBe("cover");
+  });
+
+  it("on a tall phone's whole screen a 9:16 clip fills it, a little off its sides (TikTok's); a 3:4 one shows whole", () => {
+    const whole = 390 / 844; // ~0.46: the screen under the status bar, the bars floating over it
+    expect(screenFit(clip(1080, 1920), whole)).toBe("cover"); // ~18% of its sides
+    expect(screenFit(clip(1080, 1920), 430 / 842)).toBe("cover"); // a Pro Max home-screen app
+    expect(screenFit(clip(1080, 1440), whole)).toBe("contain"); // 3:4 would lose 38%
+    expect(screenFit(clip(1080, 1350), whole)).toBe("contain");
   });
 
   it("never trims more than a quarter: a tall clip on a short screen shows whole", () => {
