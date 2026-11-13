@@ -34,18 +34,25 @@ describe("the iPhone home-screen app laying fixed things out a status bar short"
   });
 });
 
-describe("what's pinned to the bottom goes back down, and the tab bar's room shrinks by as much", () => {
+describe("the bottom on the old installs: pages reach the screen's end, and nothing moves into a band iOS doesn't draw", () => {
   const css = read("styles.css");
-  it("moves bottom-pinned and full-screen layers to the real bottom, never while typing", () => {
-    expect(css).toContain('html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) .fixed.bottom-0');
-    expect(css).toContain('html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) .fixed.inset-0,');
-    expect(css).toContain("bottom: calc(-1 * var(--ios-bottom-gap, 0px));");
-    expect(css).toContain(".fixed.inset-0.h-\\[100dvh\\]");
-    expect(css).toContain("height: calc(100dvh + var(--ios-bottom-gap, 0px));");
+  it("makes every page at least the whole screen tall under a transparent status bar (the root cause)", () => {
+    // the measured window only with a solid status bar; the whole screen (100vh) when the top inset is more than 0
+    expect(css).toContain("min-height: min(100vh, calc(var(--app-vh, 100vh) + env(safe-area-inset-top, 0px) * 1000));");
+    expect(css).not.toContain("html[data-ios-web-app] [data-shell-root] { min-height: var(--app-vh, 100vh); }");
   });
 
-  it("measures the tab bar's room from the short edge, so pages, chats and Crew still end at the bar", () => {
-    expect(css).toContain("--mobile-bar-top: max(0px, calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));");
+  it("never moves anything below the short edge (iOS draws only the background there: it cut the tab bar's labels off)", () => {
+    expect(css).not.toContain(".fixed.bottom-0,");
+    expect(css).not.toContain("bottom: calc(-1 * var(--ios-bottom-gap");
+    expect(css).not.toContain("height: calc(100dvh + var(--ios-bottom-gap");
+  });
+
+  it("tucks the tab bar instead: it gives up as much of the home indicator's room as the band covers, never while typing", () => {
+    expect(css).toContain("--mobile-bar-pad: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));");
+    expect(css).toContain("--mobile-bar-top: calc(var(--mobile-bar-h) + var(--mobile-bar-pad));");
+    expect(css).toContain('html[data-ios-bottom-gap]:not([data-keyboard-open="true"]) { --ios-bottom-shift: var(--ios-bottom-gap, 0px); }');
+    expect(read("components/app-shell.tsx")).toContain('style={{ paddingBottom: "var(--mobile-bar-pad)" }}');
     expect(css).toContain("--feed-nav-room: max(0px, calc(var(--mobile-bar-top) - var(--feed-gap, 0px)));");
   });
 

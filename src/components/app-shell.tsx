@@ -1590,7 +1590,8 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
         "fixed inset-x-0 bottom-0 z-50 border-t md:hidden",
         overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background",
       )}
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      // the home indicator's room (styles.css --mobile-bar-pad: less on the iPhone home-screen app's short layout)
+      style={{ paddingBottom: "var(--mobile-bar-pad)" }}
     >
       <div className={cn("mx-auto grid h-[var(--mobile-bar-h)] max-w-[560px]", dense ? "px-0.5" : "px-1", gridCols)}>
         {items.map((item) =>

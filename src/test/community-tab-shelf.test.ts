@@ -59,11 +59,13 @@ describe("the tab bar: TikTok's / Instagram's", () => {
 
   it("edge to edge and flush with the bottom: a 50px row over the home indicator's room, opaque, a hairline on top", () => {
     expect(shell).toContain('"fixed inset-x-0 bottom-0 z-50 border-t md:hidden"');
-    expect(shell).toContain('style={{ paddingBottom: "env(safe-area-inset-bottom)" }}');
+    // the home indicator's room: env(safe-area-inset-bottom), less a short layout's band (styles.css)
+    expect(shell).toContain('style={{ paddingBottom: "var(--mobile-bar-pad)" }}');
+    expect(read("src/styles.css")).toContain("--mobile-bar-pad: max(0px, calc(env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));");
     expect(shell).toContain('<div className={cn("mx-auto grid h-[var(--mobile-bar-h)] max-w-[560px]"');
     const css = read("src/styles.css");
     // (less the iPhone home-screen app's short-layout gap, ios-bottom-gap.test.ts; 0 everywhere else)
-    expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: max(0px, calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px) - var(--ios-bottom-shift, 0px)));");
+    expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: calc(var(--mobile-bar-h) + var(--mobile-bar-pad));");
     // pages clear exactly the bar (the chats end at its top)
     expect(css).toContain("  :root { --bottom-nav-clearance: var(--mobile-bar-top); }");
     // no floating card: no side gutter, rounding, shadow, blur or fade under it

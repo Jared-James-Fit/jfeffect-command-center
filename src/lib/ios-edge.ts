@@ -23,7 +23,8 @@
  * Marked before the first paint (an inline <head> script), so nothing moves. It
  * also measures the window's height (`--app-vh`): with a solid status bar iOS's
  * 100vh counts the status bar too (WebKit 316008), which would leave every page
- * scrollable by that much.
+ * scrollable by that much, so the shell is that tall there (and only there:
+ * under a transparent status bar it's the whole screen, below).
  */
 export const IOS_EDGE_ROOM = "28px";
 
@@ -31,21 +32,22 @@ export const IOS_WEB_APP_BOOT_SCRIPT =
   '(function(){try{if(window.navigator.standalone===true){var r=document.documentElement;r.setAttribute("data-ios-web-app","");var w=window.innerWidth,s=function(){r.style.setProperty("--app-vh",window.innerHeight+"px")};s();window.addEventListener("resize",function(){if(window.innerWidth!==w){w=window.innerWidth;s()}})}}catch(e){}})();';
 
 /**
- * The bottom, on the same old installs: iOS sometimes lays the page's fixed
- * things out a status bar short of the screen (the coach's iPhone, Nov 2026:
- * the fixed area ended at 793pt of an 852pt screen), so everything pinned to
- * the bottom (the tab bar, sheets, the studio's buttons) rode 59pt up with a
- * band of page background under it. The web view still covers the whole
- * screen (that band is the page's own colour, painted by the web view), so the
- * gap is read here and what's pinned to the bottom goes back down by it
- * (`--ios-bottom-gap` + `data-ios-bottom-gap` on <html>, styles.css), and the
- * tab bar's room (`--mobile-bar-top`) shrinks by the same, so pages, the chats
- * and Crew's posts still end right at the bar. iOS flips between that and the
- * normal layout on its own (at a launch, coming back to the app), so a
- * persistent fixed probe is watched and the gap follows at once. Never with a
- * solid status bar (the page starts under the clock and its bottom is the
- * screen's), in another browser, on a tablet, on its side, or by more than
- * about the status bar's height.
+ * The bottom, on the same old installs: iOS ends its fixed layout where the
+ * page ends, and draws nothing below it (only the page's background). Under
+ * a transparent status bar the window measures a status bar short (793pt of
+ * an 852pt screen), so a page only as tall as the window took the tab bar
+ * 59pt up on every page that doesn't scroll (the Messages pages, Nov 2026).
+ * The shell is at least the whole screen tall there (styles.css,
+ * `[data-shell-root]`), which is the fix. Should iOS still end fixed things
+ * short, this is the safety net: the gap is read here (`--ios-bottom-gap` +
+ * `data-ios-bottom-gap` on <html>) and the tab bar, which must stay above
+ * that edge (moving it into the band cut its labels off), gives up as much of
+ * the home indicator's room as the band already covers (`--mobile-bar-pad`),
+ * so it sits as low as it can and `--mobile-bar-top` still says where it
+ * starts. iOS flips layouts on its own, so a persistent fixed probe is watched
+ * and the gap follows at once. Never with a solid status bar (the page starts
+ * under the clock and its bottom is the screen's), in another browser, on a
+ * tablet, on its side, or by more than about the status bar's height.
  */
 export type BottomGapReading = {
   /** `navigator.standalone`: the iPhone home-screen app. */
