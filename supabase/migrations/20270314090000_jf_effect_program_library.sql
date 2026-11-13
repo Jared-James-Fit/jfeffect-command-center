@@ -29,15 +29,15 @@ SELECT v.id, v.name, v.category, v.muscle_group, v.primary_muscle_group, v.equip
   ('6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d01'::uuid, 'Prone W Raise', 'Back', 'Upper Back, Rear Delts', 'Upper Back', 'Bodyweight', 'Lie face down, elbows bent into a W
 Squeeze the shoulder blades back and down
 Lift the arms an inch or two, hold 1 second
-Keep the neck long and the lower back quiet', 'pull'),
+Keep the neck long and the lower back quiet', 'horizontal_pull'),
   ('6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d02'::uuid, 'Prone Y-T-W Raise', 'Back', 'Upper Back, Rear Delts', 'Upper Back', 'Bodyweight', 'Lie face down, thumbs up
 Raise the arms in a Y, then a T, then a W
 Lead with the shoulder blades, not the lower back
-Slow reps, 1-second hold at the top', 'pull'),
+Slow reps, 1-second hold at the top', 'horizontal_pull'),
   ('6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d03'::uuid, 'Prone Reverse Snow Angel', 'Back', 'Upper Back, Rear Delts', 'Upper Back', 'Bodyweight', 'Lie face down, arms by your sides, palms down
 Lift the arms off the floor and sweep them overhead
 Sweep back down without touching the floor
-Keep the chest down and the neck long', 'pull'),
+Keep the chest down and the neck long', 'horizontal_pull'),
   ('6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d04'::uuid, 'Split Squat', 'Legs', 'Quads, Glutes', 'Quads', 'Bodyweight', 'Long stance, both feet pointing forward
 Drop the back knee straight down
 Front knee travels forward over the toes
@@ -45,7 +45,7 @@ Push through the whole front foot to stand', 'squat'),
   ('6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d05'::uuid, 'Single-Leg Calf Raise', 'Legs', 'Calves', 'Calves', 'Bodyweight', 'Stand on one foot, lightly touch a wall for balance
 Rise as high as you can and pause
 Lower slowly all the way down
-Keep the knee straight but not locked', 'calves'),
+Keep the knee straight but not locked', 'other'),
   ('6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d06'::uuid, 'Single-Leg Glute Bridge', 'Legs', 'Glutes, Hamstrings', 'Glutes', 'Bodyweight', 'One heel planted close to the hips, other knee pulled in
 Drive through the heel and lift the hips level
 Squeeze the glute and hold 1 second at the top

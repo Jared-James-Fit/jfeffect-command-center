@@ -43,7 +43,7 @@ export const NEW_EXERCISES = {
     primary_muscle_group: "Upper Back",
     equipment: "Bodyweight",
     cues: "Lie face down, elbows bent into a W\nSqueeze the shoulder blades back and down\nLift the arms an inch or two, hold 1 second\nKeep the neck long and the lower back quiet",
-    pattern: "pull",
+    pattern: "horizontal_pull",
   },
   proneYTW: {
     id: "6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d02",
@@ -53,7 +53,7 @@ export const NEW_EXERCISES = {
     primary_muscle_group: "Upper Back",
     equipment: "Bodyweight",
     cues: "Lie face down, thumbs up\nRaise the arms in a Y, then a T, then a W\nLead with the shoulder blades, not the lower back\nSlow reps, 1-second hold at the top",
-    pattern: "pull",
+    pattern: "horizontal_pull",
   },
   proneSnowAngel: {
     id: "6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d03",
@@ -63,7 +63,7 @@ export const NEW_EXERCISES = {
     primary_muscle_group: "Upper Back",
     equipment: "Bodyweight",
     cues: "Lie face down, arms by your sides, palms down\nLift the arms off the floor and sweep them overhead\nSweep back down without touching the floor\nKeep the chest down and the neck long",
-    pattern: "pull",
+    pattern: "horizontal_pull",
   },
   splitSquat: {
     id: "6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d04",
@@ -83,7 +83,7 @@ export const NEW_EXERCISES = {
     primary_muscle_group: "Calves",
     equipment: "Bodyweight",
     cues: "Stand on one foot, lightly touch a wall for balance\nRise as high as you can and pause\nLower slowly all the way down\nKeep the knee straight but not locked",
-    pattern: "calves",
+    pattern: "other",
   },
   singleLegBridge: {
     id: "6a1d2f0e-3b0c-5c4e-9f11-0a7e1c2b3d06",
