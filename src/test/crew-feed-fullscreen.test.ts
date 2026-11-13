@@ -21,8 +21,8 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(css).toContain("  --feed-nav-room: max(0px, calc(var(--mobile-bar-top) - var(--feed-gap, 0px)));");
     // the post itself runs from under the status bar down to the tab bar (opaque, TikTok's)
     expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");
-    // a picture shown whole sits between the bars; a clip that fills the screen runs under both
-    expect(card).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;');
+    // a picture shown whole sits between Crew's bar and the post's words; a clip that fills the screen runs under both
+    expect(card).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room)", bottom: "var(--feed-words-room, 0px)" } as const;');
     expect(card).toContain("<FitBox ratio={0.8} page shrunk={sheetOpen}>");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('const between = controls === "top" && fit === "contain";');
@@ -30,7 +30,25 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(card).toContain('style={top ? { paddingTop: "calc(var(--feed-bar-room, 0px) + 0.75rem)" } : undefined}');
     expect(card).toContain('page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5"');
     // a post with its sheet open has nothing floating over it
-    expect(css).toContain("[data-sheet-open] { --feed-bar-room: 0px; --feed-nav-room: 0px; }");
+    expect(css).toContain("[data-sheet-open] { --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-room: 0px; }");
+  });
+
+  it("a picture or card shown whole sits above the post's words, never under them (TikTok's); only a clip that fills the screen runs under them (Nov 13 2026)", () => {
+    // where the words start, measured from the post's bottom and kept up to date
+    expect(card).toContain("const top = a.getBoundingClientRect().bottom - w.getBoundingClientRect().top;");
+    expect(card).toContain('if (top > 0) a.style.setProperty("--page-words-top", `${Math.round(top)}px`);');
+    expect(card).toContain("<div ref={wordsRef} className=");
+    // the room they take: from the hero's bottom (the tab bar) to the words' top, and 8px
+    expect(css).toContain("[data-feed-page-post] { --feed-words-room: calc(var(--page-words-top, var(--feed-words-bottom)) - var(--feed-nav-room) + 8px); }");
+    // photos, cards and clips shown whole all sit in it
+    const inline = read("src/components/community/inline-video.tsx");
+    expect(inline).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", bottom: "var(--feed-words-room, 0px)" } as const;');
+    expect(inline).toContain('height: "calc(100% - var(--feed-bar-room, 0px) - var(--feed-words-room, 0px))",');
+    expect(card).toContain('style={page && !screen ? { ...BETWEEN_BARS, containerType: "size" } : { containerType: "size" }}');
+    // the shade under the words only over a clip that fills its screen (a carousel's slides say how they sit)
+    expect(css).toContain('[data-feed-page-post="visual"]:has([data-fit="cover"]) > [data-page-words] {');
+    expect(card).not.toContain('visual && "bg-gradient-to-t from-black/75 via-black/35 to-transparent"');
+    expect(card).toContain("data-fit={page ? fits?.[j] : undefined}");
   });
 
   it("the words and the buttons down the right sit just above the tab bar (nothing stands over the bar any more)", () => {

@@ -1309,8 +1309,16 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
 @media (min-width: 768px) {
   :root { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-bottom: 0.75rem; --feed-actions-bottom: 0.75rem; }
 }
+/* a post's words (who, the caption, views) take the bottom of its screen: a picture or a card shown
+   whole sits in the room above them, never under them (TikTok's); --page-words-top is where they start,
+   measured from the post's bottom (PostCard), the hero ends at the tab bar (--feed-nav-room), 8px between */
+[data-feed-page-post] { --feed-words-room: calc(var(--page-words-top, var(--feed-words-bottom)) - var(--feed-nav-room) + 8px); }
+/* the words' soft shade only over a clip that fills its screen; under a picture shown whole they sit on black */
+[data-feed-page-post="visual"]:has([data-fit="cover"]) > [data-page-words] {
+  background-image: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0.35), transparent);
+}
 /* a post with its sheet open has shrunk under the bar and above the sheet: nothing floats over it */
-[data-sheet-open] { --feed-bar-room: 0px; --feed-nav-room: 0px; }
+[data-sheet-open] { --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-room: 0px; }
 html.feed-paging { scroll-snap-type: y mandatory; }
 /* every box between the window and the posts clips sideways instead of hiding,
    since a hidden overflow makes a box a scroll container that keeps the posts'
