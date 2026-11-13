@@ -226,6 +226,17 @@ describe("the library and the AI read the programs", () => {
 });
 
 describe("JF Effect library installer (jf-library-install hook)", () => {
+  it("the six new exercises use values the exercises table's checks allow", () => {
+    // exercises_primary_movement_pattern_check / exercises_primary_muscle_group_check (production)
+    const patterns = ["squat", "bench", "deadlift", "horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull", "knee_extension", "hip_hinge", "hamstring_curl", "glutes", "arms", "delts", "core", "conditioning", "rehab", "other"];
+    const muscles = ["Chest", "Lats", "Upper Back", "Traps", "Front Delts", "Side Delts", "Rear Delts", "Biceps", "Triceps", "Forearms", "Quads", "Hamstrings", "Glutes", "Adductors", "Calves", "Abs/Core", "Lower Back", "Other"];
+    for (const e of Object.values(NEW_EXERCISES)) {
+      expect(patterns).toContain(e.pattern);
+      expect(muscles).toContain(e.primary_muscle_group);
+    }
+  });
+
+
   /** a tiny in-memory stand-in for the service-role client: just the calls the installer makes */
   function fakeAdmin(seed: { exercises?: any[]; templates?: any[] } = {}) {
     const db: Record<string, any[]> = {
