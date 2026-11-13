@@ -2,7 +2,7 @@ import { useAuth } from "@/lib/auth";
 import { StaffLeagueTab } from "@/components/community/staff-league-board";
 
 /**
- * The coach's League, its own page behind the trophy on Crew's button: the
+ * The coach's League, its own page behind the trophy bubble at the start of Crew's stories (and in More): the
  * crew goal, this month's standings, the Hall of Strength and the tools to run
  * them (a view-only login sees the boards without the tools). Crew keeps the
  * feed, the posts and their insights.

@@ -50,8 +50,6 @@ describe("tabs: re-tap goes to the top and refreshes, pull down refreshes (Insta
     expect(shell).toContain("if (!hash) e.preventDefault();");
     // pull only on a tab's own page; the refresher sits first in the page, under the top bar
     expect(shell).toContain("pull={barItems.some((i) => i.to === pathname)}");
-    // Crew's trophy, tapped on Rankings, does the same
-    expect(shell).toContain("if (onRetap) onRetap(shortcut.to);");
   });
 
   it("one spinner everywhere: Instagram's ticks, also at the end of the feed while more loads", () => {

@@ -62,10 +62,9 @@ describe("the coach's community, in one place", () => {
     expect(hubTabCounts({ ...base, to_reply: replies, waiting_props: 2 }).feed).toBe(3);
     expect(hubTabCounts({ ...base, lessons_review: 2, birthday_review: 1 }).posts).toBe(3);
   });
-  it("the League is its own page behind the trophy on Crew's button", () => {
+  it("the League is its own page behind the trophy bubble at the start of Crew's stories", () => {
     const nav = read("src/lib/internal-nav.ts");
-    expect(nav).toContain('shortcut: { to: "/admin/league", hash: "", label: "League", icon: Trophy } },');
-    expect(read("src/components/app-shell.tsx")).toContain("hash={shortcut.hash || undefined}");
+    expect(read("src/components/community/community-screen.tsx")).toContain('? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) }');
     expect(read("src/components/community/admin-league-page.tsx")).toContain("<StaffLeagueTab tools={!viewOnly} />");
     // findable in the sidebar and the search
     expect(nav).toContain('{ to: "/admin/league", label: "League", icon: Trophy, group: "Crew",');

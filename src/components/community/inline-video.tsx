@@ -84,10 +84,10 @@ export function autoplayAllowed(): boolean {
   return !conn?.saveData;
 }
 
-/** On a post's screen, a clip shown whole sits between Crew's bar and the tab bar (what floats over the screen). */
-const BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", bottom: "var(--feed-nav-room, 0px)" } as const;
+/** On a post's screen (which ends at the tab bar), a clip shown whole sits under Crew's bar, between the bars; one that fills it runs up under Crew's bar. */
+const BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)" } as const;
 /** Its poster the same (an image only stretches between top and bottom with a height of its own). */
-const POSTER_BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", height: "calc(100% - var(--feed-bar-room, 0px) - var(--feed-nav-room, 0px))" } as const;
+const POSTER_BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", height: "calc(100% - var(--feed-bar-room, 0px))" } as const;
 
 /**
  * A post's clip in the feed (and the post page): its poster first, then it
@@ -256,7 +256,7 @@ export function InlineVideo({
   const between = controls === "top" && fit === "contain";
   return (
     <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit}>
-      {/* on a post's screen a clip shown whole sits between Crew's bar and the tab bar; one that fills it runs under both */}
+      {/* on a post's screen a clip shown whole sits between Crew's bar and the tab bar; one that fills it runs up under Crew's bar */}
       <div ref={host} className="absolute inset-0" style={between ? BETWEEN_BARS : undefined} />
       {poster && (
         <img

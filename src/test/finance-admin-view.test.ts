@@ -239,7 +239,6 @@ describe("the finance phone bar: Home, Money, Crew (raised), Clients, Tasks", ()
     const { FINANCE_BAR, STAFF_BAR } = await import("@/lib/internal-nav");
     expect(FINANCE_BAR.map((i) => i.label)).toEqual(["Home", "Money", "Crew", "Clients", "Tasks"]);
     expect(FINANCE_BAR.map((i) => i.to)).toEqual(["/admin/finance", "/admin/finance/books", "/admin/community", "/admin/clients", "/admin/tasks"]);
-    expect(FINANCE_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["Crew"]);
     for (const label of ["Crew", "Clients", "Tasks"]) {
       expect(FINANCE_BAR.find((i) => i.label === label)).toBe(STAFF_BAR.find((i) => i.label === label));
     }

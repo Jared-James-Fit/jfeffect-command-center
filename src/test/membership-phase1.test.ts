@@ -37,7 +37,6 @@ describe("one athlete record, the service tier decides the coach's layer", () =>
     expect(paths).toEqual(expect.arrayContaining(["/portal", "/portal/workouts", "/portal/programs", "/portal/community", "/portal/support", "/portal/membership", "/portal/nutrition-targets"]));
     expect(paths.some((p) => isCoachingOnlyPath(p))).toBe(false);
     expect(selfServeBottomNav.map((i) => i.to)).toEqual(["/portal", "/portal/workouts", "/portal/community", "/portal/nutrition-targets", "/portal/support"]);
-    expect(selfServeBottomNav.find((i) => i.to === "/portal/community")?.featured).toBe(true);
   });
 });
 

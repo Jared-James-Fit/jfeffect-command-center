@@ -12,14 +12,14 @@ const screen = read("src/components/community/community-screen.tsx");
 const crew = read("src/components/community/crew-list.tsx");
 
 describe("the centre tab is Crew: the feed and the rankings in one place", () => {
-  it("the raised button says Crew (trophy kept), and the menu finds it by any name", () => {
-    const centre = clientBottomNav.find((i) => i.featured);
+  it("the centre tab says Crew, and the menu finds it by any name", () => {
+    const centre = clientBottomNav[2];
     expect(centre).toMatchObject({ to: "/portal/community", label: "Crew" });
     const menu = clientNav.find((i) => i.to === "/portal/community");
     expect(menu?.label).toBe("Crew");
     expect(menu?.keywords).toEqual(expect.arrayContaining(["league", "leaderboard", "rankings", "community", "feed", "crew", "members"]));
   });
-  it("one bar, no Feed · Rankings · You toggle: Rankings is the trophy on Crew's button, Activity the heart, you your photo", () => {
+  it("one bar, no Feed · Rankings · You toggle: Rankings is the trophy bubble in the stories, Activity the heart, you your photo", () => {
     expect(screen).not.toContain('aria-label="Crew view"');
     expect(screen).toContain("<RankingsHub />");
     expect(screen).toContain('<CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />');

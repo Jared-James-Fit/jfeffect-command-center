@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Eye, Heart, Play, Plus, Send, Sticker as StickerIcon, VolumeX, X } from "lucide-react";
+import { Check, ChevronRight, Eye, Heart, Play, Plus, Send, Sticker as StickerIcon, Trophy, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { UserAvatar } from "@/components/user-avatar";
@@ -44,7 +44,7 @@ const TURN_MS = 320;
  * automatic-sharing switch on your profile and who-sees-it on every post
  * apply exactly as in the feed.
  */
-export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson, onJumpTo, addStory, addYours }: {
+export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson, onJumpTo, addStory, addYours, rankings }: {
   posts: CommunityPost[];
   unit: "kg" | "lb";
   viewerIsStaff: boolean;
@@ -61,6 +61,13 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
   addStory?: (trigger: (begin: () => void) => React.ReactNode) => React.ReactNode;
   /** The end card's "add yours" (when they have nothing in the stories themselves). */
   addYours?: React.ReactNode;
+  /**
+   * The crew's rankings, right after Your story: a trophy bubble (the League's
+   * way in, where the tab bar's trophy used to be; Instagram keeps its own
+   * extras, Notes and Live, in this row). "Rankings" for athletes, "League"
+   * on the coach's Crew page.
+   */
+  rankings?: { label: string; onOpen: () => void };
 }) {
   const [seenNow, setSeenNow] = useState<Set<string>>(() => new Set());
   const { data: follows } = useFollowState();
@@ -80,7 +87,7 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
   const viewer = usePortalUserId();
   const { data: me } = useCommunityProfile(addStory && !mine ? (viewer ?? null) : null);
   // a quiet day with nothing to add either: no row at all
-  if (!groups.length && !mine && !addStory) return null;
+  if (!groups.length && !mine && !addStory && !rankings) return null;
   /** i = a person's bubble; -1 = yours. */
   const watch = (i: number) => {
     frozen.current = [...(mine ? [mine] : []), ...groups];
@@ -125,6 +132,19 @@ export function StoryRail({ posts, unit, viewerIsStaff, onOpenPost, onOpenPerson
               <PrTag prs={mine.prs} />
             </span>
             <span className="w-full truncate text-center text-[11px] font-bold">Your story</span>
+          </button>
+        )}
+        {rankings && (
+          <button type="button" onClick={rankings.onOpen} className="flex w-[64px] shrink-0 flex-col items-center gap-1 active:scale-95" aria-label={rankings.label} data-story-rankings>
+            {/* a thin neutral ring (never a story's ring), the trophy in the records' amber */}
+            <span className="relative grid h-[64px] w-[64px] place-items-center rounded-full bg-border p-[2.5px]">
+              <span className="grid h-full w-full place-items-center rounded-full bg-background p-[2px]">
+                <span className="grid h-full w-full place-items-center rounded-full bg-muted text-warning">
+                  <Trophy className="h-[26px] w-[26px]" strokeWidth={2} />
+                </span>
+              </span>
+            </span>
+            <span className="w-full truncate text-center text-[11px] font-medium">{rankings.label}</span>
           </button>
         )}
         {groups.map((g, i) => (

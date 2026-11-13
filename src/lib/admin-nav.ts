@@ -28,17 +28,15 @@ export const clientNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings, keywords: ["account","settings","agreement","coaching agreement","contract","signed","password","units","notifications","privacy"] },
 ];
 
-// Mobile bottom-tab nav for the client portal: five destinations, Crew as the
-// raised centre (trophy) button: Feed · Rankings inside, with a ring and a
-// count when there are new posts. "More" opens from the top bar instead (AppShell `moreInHeader`).
-// Messages sits right after Crew (the coach is one thumb-reach away) and
-// Nutrition takes the far right.
+// Mobile bottom-tab nav for the client portal: five equal tabs (TikTok's /
+// Instagram's), Crew in the middle with a count when there are new posts
+// (Rankings is the trophy bubble at the start of Crew's stories). "More" opens
+// from the top bar instead (AppShell `moreInHeader`). Messages sits right after
+// Crew (the coach is one thumb-reach away) and Nutrition takes the far right.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,
-    // the satellite on Crew's button: straight to Rankings (the League)
-    shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },
+  { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
 ];
@@ -63,12 +61,11 @@ export const selfServeNav: NavItem[] = [
   { to: "/portal/account", label: "Account Settings", icon: Settings },
 ];
 
-// Members' bottom tabs: Crew stays the raised centre; Support takes Messages' place.
+// Members' bottom tabs: Crew in the middle; Support takes Messages' place.
 export const selfServeBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
   { to: "/portal/workouts", label: "Workouts", icon: Activity },
-  { to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,
-    shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },
+  { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/support", label: "Support", icon: HelpCircle },
 ];

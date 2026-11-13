@@ -68,16 +68,8 @@ export interface NavItem {
    * row and its badge counts on the row. One menu entry per page.
    */
   searchOnly?: boolean;
-  /** The bar's raised centre button (the client portal's Community). */
-  featured?: boolean;
   /** More pages (and their sub-pages) that light this bar tab, e.g. Money on Payments. */
   activeOn?: string[];
-  /**
-   * A small satellite button on the raised centre button that opens one view
-   * of its page directly (Crew's League: `to` + `hash`). Lit while the URL
-   * hash starts with `hash`; the centre button stays quiet then.
-   */
-  shortcut?: { to: string; hash: string; label: string; icon: React.ComponentType<{ className?: string }> };
 }
 
 /** The children a row lists in its flyout / submenu (never the search-only ones). */
@@ -1556,19 +1548,20 @@ function TabletFlyoutRow({
 }
 
 /**
- * The bar's gap from the bottom edge (--mobile-bar-bottom in styles.css). The
- * home indicator needs ~13pt, not the full 34pt safe area, so the bar sits low
- * (~22pt on Face ID iPhones) instead of floating mid-air; 10px with no inset.
+ * The phone's tab bar (hidden from md up), TikTok's and Instagram's: edge to
+ * edge and flush with the bottom, one row of equal tabs (--mobile-bar-h, 50px:
+ * a 24px icon over a 10px label) over the home indicator's room
+ * (env(safe-area-inset-bottom)), opaque with a hairline on top. Its top edge
+ * from the bottom of the screen is --mobile-bar-top, what pages and floating
+ * buttons clear. Over Crew's paged feed it's black whatever the theme, like
+ * TikTok's over its videos.
  */
-const BAR_BOTTOM = "var(--mobile-bar-bottom)";
-
-/** The floating mobile tab bar (hidden from md up). */
 export function MobileBottomBar({ items, pathname, search, hash = "", navBadges, onNavigate, onRetap, moreOpen, onOpenMore }: {
   /** Already resolved to the visible slots (resolveVisibleBarItems). */
   items: NavItem[];
   pathname: string;
   search?: Record<string, unknown>;
-  /** Router hash, without "#": lights a centre-button shortcut (Crew's League). */
+  /** Router hash, without "#": a tab tapped while its page shows a #view (Crew's #rankings) goes back to the page itself. */
   hash?: string;
   navBadges: Record<string, { count?: number; dot?: boolean }>;
   onNavigate: (to: string) => void;
@@ -1577,43 +1570,26 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
   moreOpen: boolean;
   onOpenMore: () => void;
 }) {
-  // A raised centre button pokes out of the bar, so the bar can't clip.
-  const raised = items.some((i) => i.featured);
-  // over Crew's paged feed the bar is dark whatever the theme, like the posts under it (TikTok's)
   const overFeed = useFeedPaging();
   const cols = items.length;
   const gridCols =
     cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
-  // At 320px five columns give ~60px per slot — tighten padding so
-  // labels stay on one line and nothing clips.
+  // At 320px five columns give ~64px per slot: labels stay on one line.
   const dense = cols >= 5;
   // A plain tab stays lit on its sub-pages (a client's page keeps
   // Clients lit); the deepest matching tab wins, and top-level homes
   // like /admin only light up on themselves.
   const prefixTo = barPrefixMatch(items, pathname);
   return (
-    <>
-      {/* Fades the page out under the bar, so content never shows as a hard
-          strip below it. Tagged like the bar so it hides / pins with it. */}
-      <div
-        aria-hidden
-        data-mobile-bottom-nav
-        className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background via-background/85 to-transparent md:hidden", overFeed && "dark")}
-        style={{ height: `calc(${BAR_BOTTOM} + 44px)` }}
-      />
-      <nav
-        data-mobile-bottom-nav
-        className={cn(
-          // Same 16px gutter as the page, so its edges line up with the cards;
-          // max-w keeps five tabs grouped on wide phones / small tablets.
-          "fixed inset-x-4 z-50 mx-auto grid max-w-md rounded-2xl border border-border bg-card/95 py-1 backdrop-blur supports-[backdrop-filter]:bg-card/80 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.55)] md:hidden",
-          raised ? "overflow-visible" : "overflow-hidden",
-          dense ? "px-0.5" : "px-1",
-          gridCols,
-          overFeed && "dark text-foreground",
-        )}
-        style={{ bottom: BAR_BOTTOM }}
-      >
+    <nav
+      data-mobile-bottom-nav
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 border-t md:hidden",
+        overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background",
+      )}
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className={cn("mx-auto grid h-[var(--mobile-bar-h)] max-w-[560px]", dense ? "px-0.5" : "px-1", gridCols)}>
         {items.map((item) =>
           item.to === MORE_BAR_TO ? (
             <MoreNavSlot key="more" dense={dense} active={moreOpen} onOpenMore={onOpenMore} />
@@ -1632,37 +1608,33 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
             />
           ),
         )}
-      </nav>
-    </>
+      </div>
+    </nav>
   );
 }
 
 // Every bar slot shares one box, so icons and labels sit on the same lines
-// whichever tab is active (the underline is absolute and adds no height).
+// whichever tab is active. The whole column is the tap, the icon dips on press.
 const BAR_SLOT =
-  "relative flex min-h-[60px] flex-col items-center justify-center gap-1 px-0.5 py-1.5 font-medium transition-colors touch-manipulation select-none";
-const BAR_ICON_BOX = "relative grid h-6 place-items-center";
-const BAR_ICON = "h-[22px] w-[22px]";
+  "group/slot relative flex h-full min-w-0 flex-col items-center justify-center gap-[3px] px-0.5 transition-colors touch-manipulation select-none";
+const BAR_ICON_BOX = "relative grid h-6 w-6 place-items-center transition-transform duration-150 group-active/slot:scale-90";
+/** 24px, a little heavier when it's the tab you're on (TikTok's / Instagram's bolder active icon). */
+const barIcon = (active?: boolean) => cn("h-6 w-6", active ? "stroke-[2.3]" : "stroke-[1.8]");
 const barLabel = (dense?: boolean, active?: boolean) =>
   // leading after the size: tailwind-merge drops a line-height that comes before a font size.
-  // A whole 12px line keeps every slot (and the raised disc) on whole pixels.
-  cn("w-full px-0.5 text-center tracking-tight", dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active && "font-semibold");
-
-function BarActiveMark() {
-  return <span aria-hidden className="absolute bottom-0.5 left-1/2 h-[3px] w-4 -translate-x-1/2 rounded-full bg-primary" />;
-}
+  cn("w-full truncate text-center tracking-tight", dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active ? "font-semibold" : "font-medium");
 
 function BottomNavBadge({ badge }: { badge?: { count?: number; dot?: boolean } }) {
   if (!badge) return null;
   if (badge.count != null && badge.count > 0) {
     return (
-      <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+      <span className="absolute -right-2 -top-1.5 grid h-[16px] min-w-[16px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-background">
         {badge.count > 9 ? "9+" : badge.count}
       </span>
     );
   }
   if (badge.dot) {
-    return <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card" />;
+    return <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />;
   }
   return null;
 }
@@ -1698,7 +1670,7 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           aria-label="Search keywords"
         >
           <div className={BAR_ICON_BOX}>
-            <Icon className={BAR_ICON} />
+            <Icon className={barIcon()} />
           </div>
           <span className={barLabel(dense)}>{item.label}</span>
         </button>
@@ -1714,7 +1686,7 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           aria-label="Open Client POV picker"
         >
           <div className={BAR_ICON_BOX}>
-            <Icon className={BAR_ICON} />
+            <Icon className={barIcon()} />
           </div>
           <span className={barLabel(dense)}>{item.label}</span>
         </button>
@@ -1739,17 +1711,9 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
         (search?.tab === tabAlias.tab ||
           // No tab in URL → workspace falls back to "messages" by default.
           (typeof search?.tab === "undefined" && tabAlias.tab === "messages")));
-    // The centre button's satellite (the coach's League page, the clients'
-    // Rankings). While its view is open it is the one lit, and the centre
-    // button goes quiet: one "you're here".
-    const shortcut = item.featured ? item.shortcut : undefined;
-    const shortcutOn = !!shortcut && pathname === shortcut.to && hash.startsWith(shortcut.hash);
-    const lit = active && !shortcutOn;
-    const link = (
+    return (
       <Link
         to={item.to}
-        // with a satellite, the hash tells them apart (Link ignores it by default)
-        activeOptions={shortcut ? { includeHash: true } : undefined}
         onClick={(e) => {
           // Tapping the tab you're already on goes back to the top and refreshes
           // the page, like every app with a feed. With nothing in the URL to clear
@@ -1779,99 +1743,16 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           onNavigate(item.to);
         }}
         style={{ WebkitTapHighlightColor: "transparent" }}
-        className={cn(
-          BAR_SLOT,
-          item.featured && "group/tab",
-          lit ? "text-primary" : "text-muted-foreground hover:text-foreground",
-        )}
-        aria-current={lit ? "page" : undefined}
-        aria-label={item.featured && badge?.count ? `${item.label}, ${badge.count} new` : undefined}
+        className={cn(BAR_SLOT, active ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+        aria-current={active ? "page" : undefined}
+        aria-label={badge?.count ? `${item.label}, ${badge.count} new` : undefined}
       >
-        {item.featured ? (
-          // Raised centre button (Crew): a Cleo-style disc in the bar. It sits
-          // on the same icon line as the other tabs, so its label lines up.
-          // Away from Crew it's a quiet raised disc; on Crew it fills with the
-          // brand gradient (red means "you're here", never just "important").
-          // A gradient ring means there's something new, like a story.
-          // 50px disc + 3px cut-out ring = an even 56px, so centring it never
-          // lands on a half pixel (iOS rounds those differently frame to frame).
-          <div className={cn(BAR_ICON_BOX, "w-full")}>
-            <span
-              data-featured-tab
-              data-new={badge?.count ? "" : undefined}
-              className={cn(
-                "absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[3px]",
-                "transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-active/tab:scale-[0.92]",
-                badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card",
-              )}
-            >
-              <span
-                className={cn(
-                  "relative grid h-[50px] w-[50px] place-items-center rounded-full",
-                  lit
-                    ? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring inset-ring-white/15 shadow-[0_10px_24px_-8px_color-mix(in_oklab,var(--primary)_75%,transparent)]"
-                    : "bg-gradient-to-b from-secondary to-card text-foreground inset-ring inset-ring-foreground/10 shadow-[0_8px_20px_-8px_rgba(0,0,0,0.55)]",
-                )}
-              >
-                <Icon className={cn("h-[26px] w-[26px]", lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none")} />
-                <BottomNavBadge badge={badge} />
-              </span>
-            </span>
-          </div>
-        ) : (
-          <div className={BAR_ICON_BOX}>
-            <Icon className={BAR_ICON} />
-            <BottomNavBadge badge={badge} />
-          </div>
-        )}
-        <span className={barLabel(dense, active || item.featured)}>{item.label}</span>
-        {active && !item.featured && <BarActiveMark />}
+        <div className={BAR_ICON_BOX}>
+          <Icon className={barIcon(active)} />
+          <BottomNavBadge badge={badge} />
+        </div>
+        <span className={barLabel(dense, active)}>{item.label}</span>
       </Link>
-    );
-    if (!shortcut) return link;
-    const ShortcutIcon = shortcut.icon;
-    return (
-      <div className="relative">
-        {link}
-        {/* League satellite, docked on the disc's top-left shoulder (the
-            new-post count keeps the top-right). Its 3px card ring matches the
-            disc's cut-out ring, so the two read as one piece rather than a
-            bubble floating above the bar. Its own link, not inside Crew's, so
-            the two taps never mix; the extra tap area (44px) grows up and left
-            only, away from the disc. The trophy stays gold in every state: on
-            Rankings/League the satellite lights gold (Crew lights red), so
-            each button has its own "you're here". */}
-        <Link
-          to={shortcut.to}
-          hash={shortcut.hash || undefined}
-          activeOptions={{ includeHash: true }}
-          onClick={(e) => {
-            // already there: back to the top and refresh, like any tab
-            if (shortcutOn) {
-              e.preventDefault();
-              if (onRetap) onRetap(shortcut.to);
-              else try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-            }
-          }}
-          data-featured-shortcut
-          aria-label={shortcut.label}
-          title={shortcut.label}
-          aria-current={shortcutOn ? "page" : undefined}
-          style={{ WebkitTapHighlightColor: "transparent" }}
-          className={cn(
-            // Centre sits 24px left and 24px up from the disc's centre (on its
-            // 45° shoulder), overlapping the rim instead of hovering above it.
-            "absolute left-[calc(50%-38px)] top-[-33px] z-10 grid h-7 w-7 place-items-center rounded-full ring-[3px] ring-card",
-            "transition-[transform,background-color,box-shadow] duration-200 ease-out active:scale-90 motion-reduce:transition-none select-none touch-manipulation [-webkit-touch-callout:none]",
-            "after:absolute after:-left-4 after:-top-4 after:bottom-1/2 after:right-1/2 after:content-['']",
-            shortcutOn
-              ? "bg-[color-mix(in_oklab,var(--color-amber-500)_22%,var(--card))] text-amber-500 inset-ring inset-ring-amber-500/60 shadow-[0_6px_16px_-6px_color-mix(in_oklab,var(--color-amber-500)_75%,transparent)]"
-              : "bg-card text-amber-500 inset-ring inset-ring-foreground/10 shadow-[0_4px_10px_-3px_rgba(0,0,0,0.5)]",
-          )}
-        >
-          <ShortcutIcon className={cn("h-3.5 w-3.5 stroke-[2.5]", shortcutOn && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none")} />
-        </Link>
-      </div>
     );
   }
 
@@ -1910,7 +1791,7 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
           aria-label={item.label}
         >
           <div className={BAR_ICON_BOX}>
-            <Icon className={BAR_ICON} />
+            <Icon className={barIcon(childActive)} />
             <BottomNavBadge badge={badge} />
             {/* multi-option indicator dots */}
             <span className="pointer-events-none absolute -top-1 left-1/2 flex -translate-x-1/2 gap-[2px]">
@@ -1920,7 +1801,6 @@ function BottomNavSlot({ item, pathname, search, hash = "", navBadges, onNavigat
             </span>
           </div>
           <span className={barLabel(dense, childActive)}>{item.label}</span>
-          {childActive && <BarActiveMark />}
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -2025,7 +1905,7 @@ function MoreNavSlot({ active, onOpenMore, dense }: { active: boolean; onOpenMor
       aria-label="More"
     >
       <div className={BAR_ICON_BOX}>
-        <MoreHorizontal className={BAR_ICON} />
+        <MoreHorizontal className={barIcon(active)} />
       </div>
       <span className={barLabel(dense, active)}>More</span>
     </button>
