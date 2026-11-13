@@ -5,6 +5,7 @@ import {
   filmCaption,
   filmLabels,
   filmPaths,
+  filmCaptionFor,
   filmPostCaption,
   filmUpToDate,
   isFilmPath,
@@ -56,6 +57,18 @@ describe("each clip's caption", () => {
   it("the post's caption when they haven't written one", () => {
     expect(filmPostCaption("Lower A (Squat Focus)", 3)).toBe("Lower A (Squat Focus) · 3 sets on film 🎥");
     expect(filmPostCaption(null, 1)).toBe("1 set on film 🎥");
+  });
+  it("ours keeps up with the clips on the post; theirs is never touched", () => {
+    const t = "Thursday — Secondary Squat + Primary Bench";
+    // Jared's Nov 12 film: 4 clips at first, 9 once the big ones had their 720p copies
+    expect(filmCaptionFor(`${t} · 4 sets on film 🎥`, t, 9)).toBe(`${t} · 9 sets on film 🎥`);
+    expect(filmCaptionFor("1 set on film 🎥", null, 3)).toBe("3 sets on film 🎥");
+    expect(filmCaptionFor("", t, 2)).toBe(`${t} · 2 sets on film 🎥`);
+    expect(filmCaptionFor(null, null, 1)).toBe("1 set on film 🎥");
+    // their own words stay, even when they mention the film
+    expect(filmCaptionFor("new bench PR 💪", t, 9)).toBe("new bench PR 💪");
+    expect(filmCaptionFor("Leg day · 4 sets on film 🎥", t, 9)).toBe("Leg day · 4 sets on film 🎥");
+    expect(readFileSync("src/lib/workout-film.functions.ts", "utf8")).toContain("const caption = filmCaptionFor(post?.caption,");
   });
 });
 

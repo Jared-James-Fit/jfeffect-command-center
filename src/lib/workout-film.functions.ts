@@ -31,7 +31,7 @@ import {
   filmFile,
   filmLabels,
   filmPaths,
-  filmPostCaption,
+  filmCaptionFor,
   filmSetValues,
   filmUpToDate,
   isFilmPath,
@@ -204,7 +204,7 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
     const onPost = new Set(slides.map((s) => s.path));
     const filmOnPost = film.filter((f) => onPost.has(f.path));
     const title = (day?.subtitle ?? "").trim() || (day?.title ?? "").trim() || null;
-    const caption = (post?.caption ?? "").trim() || filmPostCaption(/^day\s*\d+$/i.test(title ?? "") ? null : title, filmOnPost.length);
+    const caption = filmCaptionFor(post?.caption, /^day\s*\d+$/i.test(title ?? "") ? null : title, filmOnPost.length);
     // where it goes: where they put it, else the crew (a private account's
     // trigger keeps it to their followers)
     const visibility = post && !post.auto_shared && crewVisible(post.visibility) ? post.visibility : "community";

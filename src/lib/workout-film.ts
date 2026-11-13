@@ -119,6 +119,20 @@ export function filmPostCaption(workoutTitle: string | null | undefined, clips: 
   return title ? `${title} · ${sets}` : sets;
 }
 
+/**
+ * A film post's caption: their own words when they wrote some, else ours,
+ * kept to the count on the post as clips are added (a clip that landed later,
+ * or one that only fit once its 720p copy was made, never leaves the caption
+ * saying fewer sets than the post shows).
+ */
+export function filmCaptionFor(current: string | null | undefined, workoutTitle: string | null | undefined, clips: number): string {
+  const now = (current ?? "").trim();
+  const ours = filmPostCaption(workoutTitle, clips);
+  if (!now) return ours;
+  const m = /^(?:(.*) · )?\d+ sets? on film 🎥$/u.exec(now);
+  return m && (m[1] ?? "").trim() === (workoutTitle ?? "").trim() ? ours : now;
+}
+
 /** Where a clip's copy lives in community-media (the athlete's own folder). */
 export function filmPaths(userId: string, completionId: string, setVideoId: string, sourcePath: string): { path: string; thumb: string } {
   const ext = (/\.([a-z0-9]{2,4})$/i.exec(sourcePath)?.[1] ?? "mp4").toLowerCase();
