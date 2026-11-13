@@ -1,8 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-// "Membership Library" is the publish/manage surface for member-facing programs.
-// The detailed admin UI lives at /admin/member-plans; this route forwards there so
-// the new sidebar entry and any external references resolve.
+// The membership app's programs are the one program library with its
+// Membership app chip picked; this address forwards there.
 export const Route = createFileRoute("/_authenticated/admin/membership-library")({
-  beforeLoad: () => { throw redirect({ to: "/admin/member-plans" }); },
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/programming", search: { tab: "programs", audience: "membership" } as any, replace: true });
+  },
 });

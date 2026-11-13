@@ -111,17 +111,6 @@ async function syncSharedTemplatesToLibrary(supabaseAdmin: any) {
   await supabaseAdmin.from("member_plans").insert(rows as any);
 }
 
-const MEMBERSHIP_PROGRAM_TAG = "membership-app";
-
-async function ensureMembershipProgramTag(supabaseAdmin: any, templateId: string, currentTags?: unknown) {
-  const tags = Array.isArray(currentTags) ? currentTags.map((x) => String(x)) : [];
-  if (tags.some((x) => x.toLowerCase() === MEMBERSHIP_PROGRAM_TAG)) return;
-  await supabaseAdmin
-    .from("pl_templates")
-    .update({ tags: [...tags, MEMBERSHIP_PROGRAM_TAG] })
-    .eq("id", templateId);
-}
-
 /* ---------- Admin: linked listing for a program template ---------- */
 
 export const getLinkedLibraryPlan = createServerFn({ method: "POST" })
@@ -160,6 +149,8 @@ const ListingMetadata = z.object({
   allow_pdf_download: z.boolean().default(true),
   notify_on_publish: z.boolean().default(false),
   change_notes: z.string().max(2000).nullable().optional(),
+  /** pinned to the top of members' library */
+  featured: z.boolean().optional(),
 });
 
 export const upsertLibraryListing = createServerFn({ method: "POST" })
@@ -175,7 +166,6 @@ export const upsertLibraryListing = createServerFn({ method: "POST" })
     const { data: t, error: te } = await supabaseAdmin
       .from("pl_templates").select("*").eq("id", data.templateId).maybeSingle();
     if (te || !t) throw new Error("Template not found");
-    await ensureMembershipProgramTag(supabaseAdmin, data.templateId, (t as any).tags);
     const payload: any = (t as any).payload ?? { weeks_data: [] };
     const weeks = (t as any).weeks ?? (payload?.weeks_data?.length ?? 4);
     const days  = (t as any).days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
@@ -222,16 +212,11 @@ export const publishLibraryListing = createServerFn({ method: "POST" })
     let templateRevision: number | null = (plan as any).last_published_version ?? null;
     if ((plan as any).source_template_id) {
       const { data: t } = await supabaseAdmin
-        .from("pl_templates").select("payload,payload_revision,weeks,days_per_week,tags")
+        .from("pl_templates").select("payload,payload_revision,weeks,days_per_week")
         .eq("id", (plan as any).source_template_id).maybeSingle();
       if (t) {
         nextPayload = (t as any).payload ?? nextPayload;
         templateRevision = (t as any).payload_revision ?? templateRevision;
-        await ensureMembershipProgramTag(
-          supabaseAdmin,
-          (plan as any).source_template_id,
-          (t as any).tags,
-        );
       }
     }
     const nextVersion = ((plan as any).published_version ?? 0) + 1;
@@ -403,7 +388,9 @@ export const listMembershipLibrary = createServerFn({ method: "GET" })
           "id, name, public_title, description, cover_image_url, training_style, difficulty, goal, weeks, days_per_week, workouts_total, est_minutes_per_workout, equipment_needed, tags, required_access_level, audience_mode, allow_full_program, allow_pdf_download, featured, status, membership_status",
         )
         .eq("status", "Published")
-        .eq("membership_status", "live"),
+        .eq("membership_status", "live")
+        // a listing whose program was deleted can't be started: never show it
+        .not("source_template_id", "is", null),
       supabaseAdmin
         .from("member_access")
         .select("access_level_key")

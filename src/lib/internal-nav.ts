@@ -137,7 +137,7 @@ const REGISTRY: Entry[] = [
     keywords: ["submissions", "check-ins", "check-in reviews", "requests", "form builder", "applications", "agreements"] },
   { to: "/admin/programming", label: "Programs", icon: BookOpen, group: "Coaching",
     visibleTo: COACHING_STAFF,
-    keywords: ["programming", "program library", "templates", "exercises", "cardio", "warm-ups", "recipes"] },
+    keywords: ["programming", "program library", "templates", "membership programs", "exercises", "cardio", "warm-ups", "recipes"] },
   { to: "/admin/check-in-reviews", label: "Check-In Reviews", icon: ClipboardCheck, group: "Coaching", searchOnly: true,
     visibleTo: COACHING_STAFF, keywords: ["weekly check in", "submissions", "reviews"] },
   { to: "/admin/training-intelligence", label: "Training Intel", icon: Activity, group: "Coaching", searchOnly: true,
@@ -209,10 +209,10 @@ const REGISTRY: Entry[] = [
     keywords: ["failed payments", "expired trials", "expired access", "incomplete setup", "missing profile", "membership alerts"] },
   { to: "/admin/membership/billing", label: "Subscriptions", icon: CreditCard, group: "Membership",
     visibleTo: ["admin"], keywords: ["subscriptions", "billing", "renewals", "membership payments"] },
-  { to: "/admin/member-plans", label: "Plan Library", icon: Library, group: "Membership",
-    visibleTo: ["admin"], keywords: ["plans", "pricing", "membership content"] },
-  { to: "/admin/membership/programs", label: "Membership Programs", icon: BookOpen, group: "Membership",
-    visibleTo: ["admin"] },
+  // Members' programs are the one program library (Coaching → Programs) with
+  // its Membership app chip picked; this address lands there.
+  { to: "/admin/member-plans", label: "Membership Programs", icon: BookOpen, group: "Membership", searchOnly: true,
+    visibleTo: ["admin"], keywords: ["plan library", "membership library", "member plans", "membership content"] },
   { to: "/admin/membership/sms-email", label: "SMS & Email", icon: MessageCircle, group: "Membership",
     visibleTo: ["admin"] },
   // Members write in on Messages → Support.

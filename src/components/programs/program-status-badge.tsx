@@ -16,10 +16,13 @@ export function ProgramStatusBadge({
   template,
   size = "sm",
   className = "",
+  quiet = false,
 }: {
   template: any;
   size?: "sm" | "md";
   className?: string;
+  /** only news: nothing when it's ready, "N to fix" when it isn't (the library and the builder) */
+  quiet?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const issues = useMemo<DayIssue[]>(
@@ -31,6 +34,7 @@ export function ProgramStatusBadge({
 
   const pad = size === "md" ? "px-2.5 py-1 text-xs" : "px-2 py-0.5 text-[10px]";
 
+  if (ready && quiet) return null;
   if (ready) {
     return (
       <span
@@ -48,10 +52,13 @@ export function ProgramStatusBadge({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 dark:text-amber-400 ${pad} ${className}`}
+          className={quiet
+            ? `inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-[12px] font-medium text-warning hover:bg-warning/20 ${className}`
+            : `inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/10 font-medium text-amber-700 hover:bg-amber-500/20 dark:text-amber-400 ${pad} ${className}`}
+          data-program-needs-work={quiet ? issueCount : undefined}
         >
           <AlertTriangle className="h-3 w-3" />
-          {issueCount} {issueCount === 1 ? "issue" : "issues"} — incomplete
+          {quiet ? `${issueCount} to fix` : `${issueCount} ${issueCount === 1 ? "issue" : "issues"} — incomplete`}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(22rem,90vw)] p-0">
