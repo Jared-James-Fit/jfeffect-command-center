@@ -70,7 +70,7 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
     // up to Crew's bar: under it once the post is up, over the stories on the first screen
     expect(card).toContain("setRaise(belowBar(a));");
     expect(card).toContain('document.querySelector("[data-crew-bar]")');
-    expect(card).toContain('(sheetOpen || under) && "pointer-events-none opacity-0"');
+    expect(card).toContain('(sheetOpen || under || holding) && "pointer-events-none opacity-0"');
   });
 
   it("above the sheet it's a rounded card at its own shape (Instagram's), the same elements so a clip keeps playing", () => {

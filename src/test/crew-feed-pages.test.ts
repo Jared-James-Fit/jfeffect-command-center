@@ -56,11 +56,11 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(screen).toContain('if (state === "mine" && y0 - y >= 10) {');
     expect(screen).toContain('el.addEventListener("touchmove", move, { passive: false });');
     const card = read("src/components/community/post-card.tsx");
-    // a tap on it comes up whole too; once up, a tap pauses a clip as before
+    // a tap on it comes up whole too; once up, a tap is a clip's sound as on every screen
     expect(card).toContain('window.scrollBy({ top: below, behavior: "smooth" });');
     // its words and buttons wait until it's up, its top corners rounded like a card coming up
     expect(card).toContain("setUnder(belowSnap(articleRef.current) > 4);");
-    expect(card).toContain('(sheetOpen || under) && "pointer-events-none opacity-0",');
+    expect(card).toContain('(sheetOpen || under || holding) && "pointer-events-none opacity-0",');
     expect(card).toContain('pageFirst && "rounded-t-[18px]",');
   });
 
@@ -93,11 +93,12 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(screen).toContain('<div ref={pager} className="dark bg-black text-foreground" data-feed-pager>');
   });
 
-  it("on its own screen a clip is already full size: a tap pauses it, two taps ❤️", () => {
-    expect(card).toContain("clip.dispatchEvent(new Event(CLIP_TOGGLE_EVENT));");
+  it("on its own screen a clip is already full size: a tap is its sound (Instagram's), a hold pauses it, two taps ❤️", () => {
+    expect(card).toContain("flashSound(toggleFeedSound());");
+    expect(card).toContain("clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: true }));");
     const inline = read("src/components/community/inline-video.tsx");
-    expect(inline).toContain("box.addEventListener(CLIP_TOGGLE_EVENT, toggle);");
-    expect(inline).toContain("if (!visible || !active) setUserPaused(false);");
+    expect(inline).toContain("box.addEventListener(CLIP_HOLD_EVENT, hold);");
+    expect(inline).toContain("if (!visible || !active) setHoldPaused(false);");
     // its set's caption and speaker sit at the top, clear of the words and buttons
     expect(card).toContain(
       "{slide.caption && !shrunk && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}",

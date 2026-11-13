@@ -181,7 +181,8 @@ describe("feed clips play with their sound", () => {
     expect(pool.justGaveSound(Date.now() + 1000)).toBe(false);
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain("const forSound = justGaveSound();");
-    expect(card).toContain("if (layout === \"page\") {\n      if (forSound) return;");
+    // on a post's screen it says so in the middle (sound on) and never mutes it again
+    expect(card).toContain("if (layout === \"page\") {\n      if (forSound) {\n        flashSound(true);\n        return;\n      }");
     expect(card).toContain("    if (forSound) return;\n    singleTimer.current = window.setTimeout(() => {\n      singleTimer.current = null;\n      toggleFeedSound();");
   });
 
@@ -201,5 +202,42 @@ describe("feed clips play with their sound", () => {
     const session = read("src/lib/audio-session.ts");
     expect(session).toContain('if (el.hasAttribute?.("data-ambient-audio")) return;');
     expect(session).toContain("export function preferAmbientAudio() {");
+  });
+});
+
+describe("on a post's screen a clip's sound is a tap, Instagram's Reels", () => {
+  const card = read("src/components/community/post-card.tsx");
+  const inline = read("src/components/community/inline-video.tsx");
+
+  it("one tap turns the sound off or on after the double-tap window and says which in the middle; two taps ❤️", () => {
+    expect(card).toContain("flashSound(toggleFeedSound());");
+    expect(card).toContain("{soundFlash && <SoundFlash key={soundFlash.n} on={soundFlash.on} onDone={() => setSoundFlash(null)} />}");
+    expect(card).toContain('{on ? <Volume2 className="h-8 w-8" /> : <VolumeX className="h-8 w-8" />}');
+    // the second of two quick taps cancels the first's sound change and likes instead
+    expect(card).toContain("if (now - lastTap.current < 300) {\n      if (singleTimer.current) window.clearTimeout(singleTimer.current);");
+    expect(inline).toContain("export function toggleFeedSound(): boolean {");
+    expect(read("src/styles.css")).toContain(".jf-sound-flash { animation: jf-sound-flash 900ms ease-out both; }");
+  });
+
+  it("the clip is the speaker there: no speaker button, only Tap for sound while the phone holds it", () => {
+    expect(inline).toContain('{(auto || tapped) && !failed && (controls !== "top" || askTap) && (');
+  });
+
+  it("turned back on by a tap a moment later: a clip the phone stops for it plays again muted with Tap for sound", () => {
+    expect(inline).toContain("if (el.paused && playingWanted.current) playFeedVideo(el, true);");
+  });
+
+  it("a finger held on a clip pauses it with the words and buttons out of the way; letting go plays it, and isn't a tap", () => {
+    expect(card).toContain("export const HOLD_TO_PAUSE_MS = 250;");
+    expect(card).toContain("clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: true }));");
+    expect(card).toContain("h.clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: false }));");
+    expect(card).toContain("if (now - holdEndedAt.current < 400) return;");
+    // a finger that moves is a swipe, never a hold; a scroll cancels it
+    expect(card).toContain("if (h && !h.on && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP_PX) endHold();");
+    expect(card).toContain("onPointerCancel={endHold}");
+    expect(card).toContain('(sheetOpen || under || holding) && "opacity-0",');
+    // never the phone's long-press menu
+    expect(card).toContain("[-webkit-touch-callout:none]");
+    expect(inline).toContain("const shouldPlay = active && visible && !held && !holdPaused && !!el && (auto || tapped) && !failed;");
   });
 });
