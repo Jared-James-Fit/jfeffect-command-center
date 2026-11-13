@@ -119,6 +119,9 @@ export function filmPostCaption(workoutTitle: string | null | undefined, clips: 
   return title ? `${title} · ${sets}` : sets;
 }
 
+/** Our caption's shape: "Lower A (Squat Focus) · 3 sets on film 🎥", or just the count. */
+const FILM_CAPTION = /^(?:(.*) · )?\d+ sets? on film 🎥$/u;
+
 /**
  * A film post's caption: their own words when they wrote some, else ours,
  * kept to the count on the post as clips are added (a clip that landed later,
@@ -129,8 +132,21 @@ export function filmCaptionFor(current: string | null | undefined, workoutTitle:
   const now = (current ?? "").trim();
   const ours = filmPostCaption(workoutTitle, clips);
   if (!now) return ours;
-  const m = /^(?:(.*) · )?\d+ sets? on film 🎥$/u.exec(now);
+  const m = FILM_CAPTION.exec(now);
   return m && (m[1] ?? "").trim() === (workoutTitle ?? "").trim() ? ours : now;
+}
+
+/**
+ * Whether a post's caption is still the one we wrote for its film (the
+ * workout and the count), not their own words: on a post's screen the
+ * workout's own line already names it, so saying it twice only takes room
+ * from the picture.
+ */
+export function isOwnFilmCaption(caption: string | null | undefined, workoutTitles: readonly (string | null | undefined)[]): boolean {
+  const m = FILM_CAPTION.exec((caption ?? "").trim());
+  if (!m) return false;
+  const named = (m[1] ?? "").trim();
+  return !named || workoutTitles.some((t) => (t ?? "").trim() === named);
 }
 
 /** Where a clip's copy lives in community-media (the athlete's own folder). */
