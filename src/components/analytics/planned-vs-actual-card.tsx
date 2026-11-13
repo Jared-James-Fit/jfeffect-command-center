@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/error-message";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,7 +100,7 @@ export function PlannedVsActualCard({
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           Unable to load this comparison right now
-          {error instanceof Error && error.message ? `: ${error.message}` : "."}
+          {errorMessage(error) ? `: ${errorMessage(error)}` : "."}
         </p>
         <button
           type="button"
