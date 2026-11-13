@@ -127,7 +127,7 @@ describe("feed that builds as you scroll", () => {
     expect(screen).toMatch(/\)\}\s*<FeedItem index=\{i\}/);
     expect(screen).toMatch(/\{isFetchingNextPage && \(\s*<div[^>]*data-feed-more>\s*<ActivitySpinner size=\{24\} \/>/);
     expect(screen).toMatch(/<CaughtUp\s/);
-    expect(card).toMatch(/className="media-fade relative h-full w-full object-cover"/);
+    expect(card).toContain('className={cn("media-fade relative h-full w-full", whole ? "object-contain" : "object-cover")}');
   });
   it("new posts from others: a pill when you're down the feed, slide in at the top", () => {
     expect(motion).toMatch(/if \(!row\?\.id \|\| row\.author_user_id === mine\.current\) return;/);

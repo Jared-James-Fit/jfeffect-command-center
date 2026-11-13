@@ -34,7 +34,7 @@ import {
   type WorkoutWin,
 } from "@/lib/community";
 import { useFullMediaUrl, useSlideThumbUrls } from "@/lib/community.queries";
-import { FEED_VIDEO_MAX_HEIGHT, feedAspect, focusPosition, videoAspect } from "@/lib/photo-frame";
+import { FEED_VIDEO_MAX_HEIGHT, feedAspect, focusPosition, screenFit, videoAspect } from "@/lib/photo-frame";
 import { ReactorsSheet } from "@/components/community/reactors-sheet";
 import { ReactionsRise, useEngagementPop } from "@/components/community/engagement-pop";
 import { PostViewsRow, usePostViewTracker } from "@/components/community/post-views";
@@ -519,9 +519,15 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           data-sheet-open={sheetOpen ? "" : undefined}
         >
           {visual ? (
-            <FitBox ratio={auto ? 0.8 : postMediaRatio(post)}>
-              {auto ? <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} /> : <PostMedia post={post} thumbUrl={thumbUrl} page />}
-            </FitBox>
+            auto ? (
+              // an automated post's 4:5 card: the full width, black above and below, centred
+              <FitBox ratio={0.8}>
+                <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
+              </FitBox>
+            ) : (
+              // its own photos and clips: the screen is the canvas (TikTok's), PostMedia page
+              <PostMedia post={post} thumbUrl={thumbUrl} page />
+            )
           ) : (
             // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
             <div className="absolute inset-0 overflow-y-auto pb-44 pl-3 pr-16 pt-6" data-page-body>
@@ -998,11 +1004,16 @@ export function PostMedia({
   lead?: ReactNode;
   trail?: ReactNode;
   ratio?: number;
-  /** On a post's own screen in the feed (FitBox sizes the frame): no height cap, captions and the speaker up top. */
+  /**
+   * On a post's own screen in the feed: the screen is the canvas (TikTok's).
+   * Each slide fills it or sits whole across it with black above and below
+   * (screenFit), centred; captions and the speaker up top.
+   */
   page?: boolean;
 }) {
   const slides = postSlides(post);
   const cover = slides[0] ?? null;
+  const [screenRef, screenRatio] = useBoxRatio(page);
   // A picture: never taller than 4:5, never wider than 16:9, keeping the feed's rhythm.
   // A carousel takes its cover's shape for every slide (Instagram does too).
   // A picture framed in the studio is already exactly its shape (an older photo is
@@ -1015,12 +1026,42 @@ export function PostMedia({
   const clipCover = !fixed && !lead && cover?.type === "video";
   const ratio = fixed ?? postMediaRatio(post, !!lead);
   const frame: CSSProperties = clipCover && !page ? { aspectRatio: String(ratio), maxHeight: FEED_VIDEO_MAX_HEIGHT } : { aspectRatio: String(ratio) };
-  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} page={page} />;
+  if (page) {
+    const fits = slides.map((sl) => screenFit(sl, screenRatio));
+    if (slides.length > 1) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} page screenRef={screenRef} fits={fits} />;
+    return (
+      <div ref={screenRef} className="absolute inset-0 overflow-hidden bg-black" data-screen-canvas data-fit={fits[0]}>
+        {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page fit={fits[0]} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+      </div>
+    );
+  }
+  if (slides.length > 1 || lead || trail) return <PostCarousel slides={slides} coverUrl={thumbUrl} frame={frame} full={full} lead={lead} trail={trail} />;
   return (
     <div className={cn("relative w-full overflow-hidden", clipCover ? "bg-black" : "bg-muted")} style={frame} data-clip-frame={clipCover ? "" : undefined}>
       {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
     </div>
   );
+}
+
+/**
+ * A box's shape (width / height, to 3 places so a sub-pixel change never
+ * re-renders), read before it paints and kept up to date (a post's sheet
+ * opening shrinks its screen). Only while `active`.
+ */
+function useBoxRatio(active: boolean): [(el: HTMLDivElement | null) => void, number | null] {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const [ratio, setRatio] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!active || !el) return;
+    const read = (w: number, h: number) => setRatio(w > 0 && h > 0 ? Math.round((w / h) * 1000) / 1000 : null);
+    const r = el.getBoundingClientRect();
+    read(r.width, r.height);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => read(e.contentRect.width, e.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active, el]);
+  return [setEl, active ? ratio : null];
 }
 
 /**
@@ -1052,6 +1093,7 @@ function SlideMedia({
   active = true,
   withDots = false,
   page = false,
+  fit = "contain",
 }: {
   slide: PostSlide;
   thumbUrl: string | null;
@@ -1059,6 +1101,8 @@ function SlideMedia({
   active?: boolean;
   withDots?: boolean;
   page?: boolean;
+  /** On a post's screen: fill it ("cover") or show it whole, centred ("contain"), screenFit. A frame at the picture's own shape is "contain" either way. */
+  fit?: "cover" | "contain";
 }) {
   const isVideo = slide.type === "video";
   const { data: fullUrl } = useFullMediaUrl(slide.path, full && active && !isVideo);
@@ -1069,12 +1113,12 @@ function SlideMedia({
     <>
       {isVideo ? (
         <div data-pinch-zoom className="absolute inset-0">
-          {/* whole, never cropped: the lift is all there */}
-          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit="contain" controls={page ? "top" : "bottom"} />
+          {/* whole in its frame; on a post's screen it fills it when it's nearly the screen's shape (TikTok's) */}
+          <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={page ? "top" : "bottom"} />
         </div>
       ) : (
         <div data-pinch-zoom className="absolute inset-0">
-          {src ? <FadeImg src={src} position={position} /> : <div className="h-full w-full animate-pulse bg-muted" />}
+          {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
         </div>
       )}
       {slide.caption && <SlideCaption caption={slide.caption} withDots={withDots} top={page} />}
@@ -1112,7 +1156,7 @@ function SlideCaption({ caption, withDots, top = false }: { caption: { title: st
  * popped in as it scrolled on): the feed is only the posts already read, and
  * a feed photo is its small thumbnail.
  */
-function FadeImg({ src, position }: { src: string; position?: string }) {
+function FadeImg({ src, position, whole = false }: { src: string; position?: string; whole?: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -1129,8 +1173,9 @@ function FadeImg({ src, position }: { src: string; position?: string }) {
         draggable={false}
         onLoad={() => setLoaded(true)}
         data-loaded={loaded ? "" : undefined}
-        className="media-fade relative h-full w-full object-cover"
-        style={position ? { objectPosition: position } : undefined}
+        // on a post's screen a photo shows whole, centred (black above and below); a frame at its own shape fills either way
+        className={cn("media-fade relative h-full w-full", whole ? "object-contain" : "object-cover")}
+        style={position && !whole ? { objectPosition: position } : undefined}
       />
     </>
   );
@@ -1149,6 +1194,8 @@ function PostCarousel({
   lead,
   trail,
   page = false,
+  screenRef,
+  fits,
 }: {
   slides: PostSlide[];
   coverUrl: string | null;
@@ -1156,7 +1203,10 @@ function PostCarousel({
   full: boolean;
   lead?: ReactNode;
   trail?: ReactNode;
+  /** On a post's screen: the carousel is the screen (each slide filling it or whole on black, `fits`), "2/4" says where you are. */
   page?: boolean;
+  screenRef?: (el: HTMLDivElement | null) => void;
+  fits?: ("cover" | "contain")[];
 }) {
   const [index, setIndex] = useState(0);
   const [seen, setSeen] = useState(1);
@@ -1177,7 +1227,14 @@ function PostCarousel({
     if (el) el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
   };
   return (
-    <div className="group/carousel relative w-full overflow-hidden bg-muted" style={frame} aria-roledescription="carousel" aria-label={`${count} photos and videos`}>
+    <div
+      ref={page ? screenRef : undefined}
+      className={cn("group/carousel overflow-hidden", page ? "absolute inset-0 bg-black" : "relative w-full bg-muted")}
+      style={page ? undefined : frame}
+      aria-roledescription="carousel"
+      aria-label={`${count} photos and videos`}
+      data-screen-canvas={page ? "" : undefined}
+    >
       <div
         ref={track}
         onScroll={onScroll}
@@ -1196,7 +1253,7 @@ function PostCarousel({
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
             <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
-              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots page={page} /> : <div className="h-full w-full bg-muted" />}
+              {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots={!page} page={page} fit={fits?.[j]} /> : <div className={cn("h-full w-full", page ? "bg-black" : "bg-muted")} />}
             </div>
           );
         })}
@@ -1210,11 +1267,14 @@ function PostCarousel({
       <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur">
         {index + 1}/{count}
       </span>
-      <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1" aria-hidden>
-        {Array.from({ length: count }, (_, i) => (
-          <span key={i} className={cn("h-1.5 rounded-full transition-all", i === index ? "w-4 bg-white" : "w-1.5 bg-white/55")} />
-        ))}
-      </div>
+      {/* the dots; on a post's screen its words and buttons sit at the bottom, so "2/4" up top says it */}
+      {!page && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1" aria-hidden>
+          {Array.from({ length: count }, (_, i) => (
+            <span key={i} className={cn("h-1.5 rounded-full transition-all", i === index ? "w-4 bg-white" : "w-1.5 bg-white/55")} />
+          ))}
+        </div>
+      )}
       {/* mouse users get arrows (touch swipes) */}
       {index > 0 && (
         <button type="button" onClick={(e) => { e.stopPropagation(); go(-1); }} className="absolute left-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-black shadow [@media(hover:hover)]:group-hover/carousel:grid" aria-label="Previous">

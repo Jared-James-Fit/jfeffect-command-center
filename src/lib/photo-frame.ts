@@ -68,6 +68,31 @@ export function videoAspect(w: number | null | undefined, h: number | null | und
 /** How tall a clip's frame gets in the feed: the screen less the post's name row, the buttons under it and the bars. */
 export const FEED_VIDEO_MAX_HEIGHT = "calc(100svh - 15rem)";
 
+/**
+ * On a post's own screen of the Crew feed the screen is the canvas (TikTok /
+ * Reels): a clip taller than the screen's shape fills it, centred, its top
+ * and bottom trimmed evenly, but never more than this share of the clip.
+ */
+export const SCREEN_FILL_MAX_TRIM = 0.25;
+
+/**
+ * How one slide sits on a post's screen (`screenRatio` = the screen's width /
+ * height): "cover" fills it (a clip at least as tall as the screen's shape,
+ * within SCREEN_FILL_MAX_TRIM), "contain" shows it whole, centred: the full
+ * width with black above and below for anything wider, which is every photo
+ * (a photo is never trimmed: it was framed in the editor, framedCanvas), an
+ * unknown shape, or a clip that would lose more than that.
+ */
+export function screenFit(
+  slide: { type: "image" | "video"; width: number | null | undefined; height: number | null | undefined },
+  screenRatio: number | null | undefined,
+): "cover" | "contain" {
+  if (slide.type !== "video" || !slide.width || !slide.height || !screenRatio || !(screenRatio > 0)) return "contain";
+  const media = slide.width / slide.height;
+  if (!Number.isFinite(media) || media <= 0 || media >= screenRatio) return "contain";
+  return 1 - media / screenRatio <= SCREEN_FILL_MAX_TRIM ? "cover" : "contain";
+}
+
 /** Next shape for the crop's shape button (4:5 → 1:1 → 16:9 → 4:5). */
 export function nextAspect(a: PostAspect): PostAspect {
   return POST_ASPECT_ORDER[(POST_ASPECT_ORDER.indexOf(a) + 1) % POST_ASPECT_ORDER.length];
