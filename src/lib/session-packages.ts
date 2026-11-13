@@ -53,6 +53,8 @@ export type PackageSale = MoneySale & {
   installment_amount?: number | string | null;
   payment_frequency?: string | null;
   offer_snapshot?: { source?: string | null } | null;
+  /** Its number in the client's account (stored once, never changes). */
+  package_number?: number | null;
 };
 
 /** Where one session's credit sits: on a package (or none), used or held. */
@@ -305,7 +307,7 @@ export function buildSessionPackages(input: {
     const days = sessions.map((x) => x.session_date);
     return {
       id: s.id,
-      number: i + 1,
+      number: n(s.package_number) || i + 1,
       name: s.offer_name ?? "Session package",
       size,
       done,

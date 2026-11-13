@@ -240,3 +240,152 @@ describe("the server keeps payments single and auto-pay honest", () => {
     expect(sql).toMatch(/GREATEST/);
   });
 });
+
+describe("unpaid training delivered (one method: a package's price spread over its sessions)", () => {
+  // Marc on Nov 13 2026 as the database has him: package 4 has 7 completed and 9 booked.
+  const now = [
+    { purchase_id: "p1", granted: 16, used: 16, reserved: 0, remaining: 0, expired: 0 },
+    { purchase_id: "p2", granted: 16, used: 16, reserved: 0, remaining: 0, expired: 0 },
+    { purchase_id: "p3", granted: 16, used: 16, reserved: 0, remaining: 0, expired: 0 },
+    { purchase_id: "p4", granted: 16, used: 7, reserved: 9, remaining: 0, expired: 0 },
+  ] as any[];
+  const numbered = marc.map((s, i) => ({ ...s, package_number: i + 1, renewed_from_id: i >= 2 ? marc[i - 1].id : null }));
+  const p = buildClientPayments({ sales: numbered, ledger: marcLedger, balance: now, events: [], today: TODAY });
+  const pk = (id: string) => p.packages.find((x) => x.saleId === id)!;
+
+  it("Marc: $168 + $672 + $294 = $1,134 delivered and unpaid, inside the $1,512 outstanding", () => {
+    expect(pk("p1")).toMatchObject({ number: 1, totalCents: 84000, paidCents: 84000, balanceCents: 0, deliveredCents: 84000, unpaidDeliveredCents: 0 });
+    expect(pk("p2")).toMatchObject({ number: 2, totalCents: 67200, paidCents: 50400, balanceCents: 16800, deliveredCents: 67200, unpaidDeliveredCents: 16800 });
+    expect(pk("p3")).toMatchObject({ number: 3, totalCents: 67200, paidCents: 0, balanceCents: 67200, deliveredCents: 67200, unpaidDeliveredCents: 67200 });
+    expect(pk("p4")).toMatchObject({ number: 4, totalCents: 67200, paidCents: 0, balanceCents: 67200, deliveredCents: 29400, unpaidDeliveredCents: 29400 });
+    expect(p.unpaidDeliveredCents).toBe(113400);
+    expect(p.outstandingCents).toBe(151200);
+    expect(p.unpaidDeliveredCents).toBeLessThanOrEqual(p.outstandingCents);
+  });
+
+  it("each package keeps its own sessions and renewal link, numbered 1 → 4", () => {
+    expect(p.packages.map((x) => x.label)).toEqual(["Package 1", "Package 2", "Package 3", "Package 4"]);
+    expect(pk("p4").sessions).toEqual({ purchased: 16, completed: 7, booked: 9, available: 0, expired: 0 });
+    expect(pk("p3").renewedFrom).toEqual({ saleId: "p2", number: 2 });
+    expect(pk("p4").renewedFrom).toEqual({ saleId: "p3", number: 3 });
+    expect(pk("p2").renewedFrom).toBeNull();
+    expect(pk("p4").schedule?.how).toBe("auto_pay");
+  });
+
+  it("once tonight's $168 lands, package 2 has nothing unpaid and the total drops to $966", () => {
+    const sales = numbered.map((s) => (s.id === "p2" ? { ...s, amount_paid_cents: 67200, amount_tax_paid_cents: 3200, next_billing_date: "2026-11-27" } : s));
+    const after = buildClientPayments({ sales, ledger: [...marcLedger, pay("p2", "2026-11-13", 16800, 800)], balance: now, events: [], today: TODAY });
+    expect(after.packages.find((x) => x.saleId === "p2")?.unpaidDeliveredCents).toBe(0);
+    expect(after.unpaidDeliveredCents).toBe(96600);
+  });
+
+  // A paid, taxed sale on file tells the model the client's tax rate (5% here), as for any real client.
+  const taxed = { id: "z", offer_name: "Coaching", currency: "CAD", sessions_purchased: 0, payment_status: "Paid", contract_value_cents: 1000, amount_paid_cents: 1050, amount_tax_paid_cents: 50 } as any;
+  const one = (overrides: Record<string, unknown>, used: number, ledger: MoneyLedgerRow[]) => {
+    const sale = { ...base, id: "x", payment_status: "Partially Paid", term_start_date: "2026-10-01", ...overrides } as any;
+    const balance = [{ purchase_id: "x", granted: 16, used, reserved: 0, remaining: 16 - used, expired: 0 }] as any[];
+    return buildClientPayments({ sales: [taxed, sale], ledger, balance, events: [], today: TODAY }).packages[0];
+  };
+  const paid = (cents: number) => [pay("x", "2026-10-01", cents, Math.round(cents / 21)), pay("z", "2026-01-01", 1050, 50)];
+
+  it("the spec's own examples: 16 done with $504 paid, 16 done with none, 7 done with none", () => {
+    expect(one({ amount_paid_cents: 50400, amount_tax_paid_cents: 2400 }, 16, paid(50400)).unpaidDeliveredCents).toBe(16800);
+    expect(one({ amount_paid_cents: 0, payment_status: "Unpaid" }, 16, [pay("z", "2026-01-01", 1050, 50)]).unpaidDeliveredCents).toBe(67200);
+    expect(one({ amount_paid_cents: 0, payment_status: "Unpaid" }, 7, [pay("z", "2026-01-01", 1050, 50)]).unpaidDeliveredCents).toBe(29400);
+  });
+
+  it("paid ahead of the training: nothing unpaid", () => {
+    const a = one({ amount_paid_cents: 50400, amount_tax_paid_cents: 2400 }, 4, paid(50400));
+    expect(a.deliveredCents).toBe(16800);
+    expect(a.unpaidDeliveredCents).toBe(0);
+    expect(a.balanceCents).toBe(16800);
+  });
+
+  it("fully paid with sessions left: nothing unpaid, nothing owed", () => {
+    const a = one({ amount_paid_cents: 67200, amount_tax_paid_cents: 3200, payment_status: "Paid" }, 5, paid(67200));
+    expect(a).toMatchObject({ state: "paid", balanceCents: 0, unpaidDeliveredCents: 0 });
+    expect(a.sessions.available).toBe(11);
+  });
+
+  it("a refund counts against what was paid, never twice", () => {
+    const ledger = [...paid(67200), { purchase_id: "x", txn_type: "refund", amount_minor: 16800, tax_minor: 800, transaction_date: "2026-10-20" } as MoneyLedgerRow];
+    const a = one({ amount_paid_cents: 50400, amount_tax_paid_cents: 2400 }, 16, ledger);
+    expect(a.paidCents).toBe(50400);
+    expect(a.unpaidDeliveredCents).toBe(16800);
+  });
+
+  it("free sessions added on top never push the value past the price", () => {
+    const sale = { ...base, id: "x", payment_status: "Unpaid", term_start_date: "2026-10-01", amount_paid_cents: 0 } as any;
+    const balance = [{ purchase_id: "x", granted: 18, used: 18, reserved: 0, remaining: 0, expired: 0 }] as any[];
+    const a = buildClientPayments({ sales: [taxed, sale], ledger: [pay("z", "2026-01-01", 1050, 50)], balance, events: [], today: TODAY }).packages[0];
+    expect(a.deliveredCents).toBe(67200);
+    expect(a.unpaidDeliveredCents).toBe(67200);
+  });
+
+  it("with no tax paid on file yet it reads before tax (never a guessed rate)", () => {
+    const sale = { ...base, id: "x", payment_status: "Unpaid", amount_paid_cents: 0 } as any;
+    const balance = [{ purchase_id: "x", granted: 16, used: 16, reserved: 0, remaining: 0, expired: 0 }] as any[];
+    const q = buildClientPayments({ sales: [sale], ledger: [], balance, events: [], today: TODAY });
+    expect(q.taxIncluded).toBe(false);
+    expect(q.packages[0].unpaidDeliveredCents).toBe(64000);
+  });
+
+  it("cancelled sessions use nothing, so they deliver nothing (the ledger's used count leaves them out)", () => {
+    // 10 booked, 3 of them cancelled and banked: 7 used.
+    expect(one({ amount_paid_cents: 0, payment_status: "Unpaid" }, 7, [pay("z", "2026-01-01", 1050, 50)]).deliveredCents).toBe(29400);
+  });
+
+  it("a package past its use-by date shows no sessions available", () => {
+    const sale = { ...base, id: "x", payment_status: "Paid", amount_paid_cents: 67200, amount_tax_paid_cents: 3200 } as any;
+    const balance = [{ purchase_id: "x", granted: 16, used: 12, reserved: 0, remaining: 4, expired: 0, expires_at: "2026-10-31" }] as any[];
+    const a = buildClientPayments({ sales: [sale], ledger: paid(67200), balance, events: [], today: TODAY }).packages[0];
+    expect(a.sessions).toMatchObject({ completed: 12, available: 0 });
+  });
+
+  it("training past every package that isn't billed yet is counted, at the next package's per-session price", () => {
+    const events = [
+      { id: "u1", purchase_id: null, event_type: "used", session_count: -1, effective_date: "2026-11-10" },
+      { id: "u2", purchase_id: null, event_type: "used", session_count: -1, effective_date: "2026-11-12" },
+    ];
+    const balance = [{ purchase_id: "p1", granted: 16, used: 16, reserved: 0, remaining: 0, expired: 0, transferred: 0 }];
+    const q = buildClientPayments({ sales: [marc[0]], ledger: marcLedger.filter((l) => l.purchase_id === "p1"), balance: balance as any, events: events as any, today: TODAY });
+    // The next package is package 1 again: $800 + 5% = $840 for 16, so 2 sessions = $105.
+    expect(q.notBilledDeliveredCents).toBe(10500);
+    expect(q.unpaidDeliveredCents).toBe(10500);
+    expect(q.outstandingCents).toBe(0);
+  });
+
+  it("a stored package number stays, whatever is sold around it", () => {
+    const sales = [
+      { ...marc[0], package_number: 1 },
+      { ...marc[1], package_number: 2 },
+      // Sold later but dated earlier: it takes the next number, never shuffles the others.
+      { ...marc[2], id: "late", term_start_date: "2026-07-01", package_number: null },
+    ] as any[];
+    expect([...saleLabels(sales).entries()].filter(([id]) => id !== "late").map(([, l]) => l)).toEqual(["Package 1", "Package 2"]);
+    expect(saleLabels(sales).get("late")).toBe("Package 3");
+  });
+});
+
+describe("package identity in the database", () => {
+  const sql = readFileSync("supabase/migrations/20270315090000_package_identity.sql", "utf8");
+
+  it("numbers each client's packages once, in running order, unique, and the next one on insert", () => {
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS package_number integer/);
+    expect(sql).toMatch(/row_number\(\) OVER \(\s*PARTITION BY client_id/);
+    expect(sql).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS purchase_records_client_package_number/);
+    expect(sql).toMatch(/pg_advisory_xact_lock/);
+    expect(sql).toMatch(/BEFORE INSERT OR UPDATE OF sessions_purchased/);
+  });
+
+  it("links renewals from the record they carry, never a guess, and renew_session_package sets the link", () => {
+    expect(sql).toMatch(/Renewal of the package bought \(\[A-Z\]/);
+    expect(sql).toMatch(/m\.hits = 1/);
+    expect(sql).toMatch(/admin_notes, renewed_from_id/);
+  });
+
+  it("writes only the two new columns", () => {
+    const updates = sql.match(/UPDATE public\.purchase_records p\s+SET (\w+)/g) ?? [];
+    expect(updates.map((u) => u.split("SET ")[1])).toEqual(["package_number", "renewed_from_id"]);
+  });
+});
