@@ -468,6 +468,11 @@ export function ShareStudio({
   // the shape's button: a post's photo or slide being framed (a card is always the feed's 4:5)
   const shapeable = phase === "edit" && !story && !(card && !cardFailed && !adding) && (!!shot || !!selItem);
   const coverClip = selItem?.kind === "video" ? selItem : null;
+  // the clip goes as just its lift: cut with the chip (held to the post's limit, so maybe a moment shorter), or in the trimmer
+  const liftOn =
+    !!coverClip?.lift &&
+    (coverClip.liftBefore !== undefined ||
+      (!!coverClip.trim && Math.abs(coverClip.trim.start - coverClip.lift.start) < 0.06 && Math.abs(coverClip.trim.end - coverClip.lift.end) < 0.06));
   const trimClip = story ? (clip0?.video && clip0.status !== "error" ? clip0 : null) : coverClip;
   const boxAspect = phase === "shoot" ? CARD_W / CARD_H : frameAspect;
   const box = useMemo(() => {
@@ -1246,6 +1251,29 @@ export function ShareStudio({
                     data-edit-cover
                   >
                     <Film className="h-4 w-4" /> Cover
+                  </button>
+                )}
+              </div>
+            )}
+            {/* a clip in a post: the lift, found on the phone, one tap away (and the whole clip one tap back) */}
+            {coverClip?.lift && !coverClip.existing && !(liftOn && coverClip.liftBefore === undefined) && (
+              <div className="absolute inset-x-0 top-2.5 z-[5] flex justify-center px-14" data-studio-lift={liftOn ? "on" : "off"}>
+                {liftOn ? (
+                  <span className="jf-arrive inline-flex h-9 items-center gap-1 rounded-full bg-black/55 pl-3 pr-1 text-[12px] font-bold text-white backdrop-blur">
+                    <Scissors className="h-4 w-4" />
+                    <span className="ml-0.5">Trimmed to the lift</span>
+                    <button type="button" onClick={() => tray.undoLift(coverClip.id)} className="ml-1 h-7 rounded-full bg-white/20 px-2.5 text-[12px] font-bold active:scale-95" data-studio-whole>
+                      Whole clip
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => tray.trimToLift(coverClip.id)}
+                    className="jf-arrive inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-[12px] font-bold text-black active:scale-95"
+                    data-studio-trim-lift
+                  >
+                    <Scissors className="h-4 w-4" /> Trim to the lift · {formatClock(coverClip.lift.end - coverClip.lift.start)}
                   </button>
                 )}
               </div>

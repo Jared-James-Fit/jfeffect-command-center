@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Check, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
+import { Check, Pause, Play, Scissors, Volume2, VolumeX, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { VIDEO_LIMITS, formatClock, videoLimit } from "@/lib/video-edit/limits";
@@ -48,6 +48,9 @@ export function useVideoTrimmer() {
 
 const TILE_H = 48;
 const HANDLE_W = 16;
+/** How long the handles take to glide to the lift (or back to the whole clip). */
+export const LIFT_GLIDE_MS = 380;
+const sameSel = (a: VideoTrim, b: VideoTrim) => Math.abs(a.start - b.start) < 0.06 && Math.abs(a.end - b.end) < 0.06;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 type Drag = {
@@ -145,6 +148,71 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
     v.muted = !v.muted;
     setMuted(v.muted);
     if (v.paused) play();
+  };
+
+  /* ---- the lift: found in the background, glided to ------------------ */
+  // a handle moved by hand before it was found: it's offered, never moved to
+  const touched = useRef(false);
+  const [lift, setLift] = useState<VideoTrim | "finding" | "none" | null>(req.suggest ? "finding" : null);
+  const glide = useRef(0);
+  const moveTo = useCallback(
+    (to: VideoTrim) => {
+      const target = normalizeSelection(to, maxLen, duration);
+      const from = selRef.current;
+      cancelAnimationFrame(glide.current);
+      // the strip shows where it's going
+      const v = viewAround(target, span, duration);
+      viewRef.current = v;
+      setViewStart(v);
+      const land = () => {
+        selRef.current = target;
+        setSel(target);
+        seek(target.start);
+        play();
+        void snapNow(target).then((n) => n.start !== target.start && seek(n.start));
+      };
+      const reduce = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (reduce || sameSel(from, target)) return land();
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const k = Math.min(1, (now - t0) / LIFT_GLIDE_MS);
+        const e = 1 - Math.pow(1 - k, 3);
+        const s2 = { start: from.start + (target.start - from.start) * e, end: from.end + (target.end - from.end) * e };
+        selRef.current = s2;
+        setSel(s2);
+        if (k < 1) glide.current = requestAnimationFrame(step);
+        else land();
+      };
+      glide.current = requestAnimationFrame(step);
+    },
+    [maxLen, duration, span, seek, play, snapNow],
+  );
+  useEffect(() => {
+    const find = req.suggest;
+    if (!find) return;
+    let alive = true;
+    // a first look glides there by itself; a clip opened again (its selection already chosen) only offers it
+    const auto = !req.initial;
+    void find().then(
+      (found) => {
+        if (!alive) return;
+        if (!found) return setLift("none");
+        const n = normalizeSelection(found, maxLen, duration);
+        setLift(n);
+        if (auto && !touched.current) moveTo(n);
+      },
+      () => alive && setLift("none"),
+    );
+    return () => {
+      alive = false;
+      cancelAnimationFrame(glide.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onLift = typeof lift === "object" && lift !== null && sameSel(sel, lift);
+  const wholeClip = () => {
+    touched.current = true;
+    moveTo({ start: 0, end: duration });
   };
 
   // loop inside the selection, and move the playhead (straight on the element, no re-render)
@@ -273,6 +341,8 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
 
   const onStripDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!stripW || (e.pointerType === "mouse" && e.button !== 0)) return;
+    touched.current = true;
+    cancelAnimationFrame(glide.current);
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const xs = toX(sel.start);
@@ -364,6 +434,7 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
     const d = e.key === "ArrowLeft" || e.key === "ArrowDown" ? -stepS : e.key === "ArrowRight" || e.key === "ArrowUp" ? stepS : 0;
     if (!d) return;
     e.preventDefault();
+    touched.current = true;
     const next = which === "start" ? setStart(sel, sel.start + d, maxLen, duration) : setEnd(sel, sel.end + d, maxLen, duration);
     setSel(next);
     selRef.current = next;
@@ -373,7 +444,9 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
   };
 
   const len = sel.end - sel.start;
-  const atMax = len >= maxLen - 0.05;
+  // the whole clip fits: there's no limit to warn about, just how much of it goes
+  const fits = maxLen >= duration - 0.05;
+  const atMax = !fits && len >= maxLen - 0.05;
   const done = async () => {
     const s = await snapNow(selRef.current);
     onDone({ start: round2(s.start), end: round2(Math.min(duration, s.end)) });
@@ -383,7 +456,11 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
   const xe = toX(sel.end);
   const note = !canEncode && maxLen < Math.min(limit, duration) - 0.5
     ? `This phone can't shrink video, so up to ${formatClock(maxLen)} of this one can go.`
-    : `${VIDEO_LIMITS[context].label} can be up to ${formatClock(limit)}. Drag the ends to pick the part you want.`;
+    : onLift
+      ? "Cut to the lift, from stepping up to the bar to racking it. Drag the ends to change it."
+      : fits
+        ? "Drag the ends to pick the part you want."
+        : `${VIDEO_LIMITS[context].label} can be up to ${formatClock(limit)}. Drag the ends to pick the part you want.`;
   const snapNote = snapStart ? " This phone can only cut this clip at certain frames, so the start may move back a moment." : "";
 
   return (
@@ -408,10 +485,10 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
           <button type="button" onClick={() => onDone(null)} className="grid h-11 w-11 place-items-center rounded-full bg-white/10 active:scale-95" aria-label="Cancel">
             <X className="h-6 w-6" />
           </button>
-          <div className="min-w-0 flex-1 text-center text-[15px] font-bold">{step && step.count > 1 ? `Clip ${step.index} of ${step.count}` : "Trim"}</div>
+          <div className="min-w-0 flex-1 truncate text-center text-[15px] font-bold">{step && step.count > 1 ? `Clip ${step.index} of ${step.count}` : (req.title ?? "Trim")}</div>
           <button type="button" onClick={() => void done()} className="inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-4 text-[15px] font-bold text-black active:scale-95" data-trim-done>
             {last ? <Check className="h-4 w-4" strokeWidth={3} /> : null}
-            {last ? "Done" : "Next"}
+            {last ? (req.doneLabel ?? "Done") : "Next"}
           </button>
         </div>
 
@@ -453,6 +530,38 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
               <Play className="ml-1 h-8 w-8 fill-white text-white" />
             </span>
           )}
+          {/* the lift: being found, found (with the whole clip one tap away), or offered again */}
+          {lift !== null && lift !== "none" && (
+            <div className="absolute bottom-3 left-3 right-16 flex" onClick={(e) => e.stopPropagation()} data-trim-lift={lift === "finding" ? "finding" : onLift ? "on" : "off"}>
+              {lift === "finding" ? (
+                <span className="inline-flex h-10 items-center gap-2 rounded-full bg-black/50 px-3.5 text-[13px] font-semibold text-white/85 backdrop-blur">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                  Finding the lift…
+                </span>
+              ) : onLift ? (
+                <span className="jf-arrive inline-flex h-10 items-center gap-1 rounded-full bg-black/50 pl-3.5 pr-1 text-[13px] font-semibold backdrop-blur">
+                  <Scissors className="h-4 w-4" />
+                  <span className="ml-1">Trimmed to the lift</span>
+                  <button type="button" onClick={wholeClip} className="ml-1 h-8 rounded-full bg-white/15 px-3 text-[12px] font-bold active:scale-95" data-trim-whole>
+                    Whole clip
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    touched.current = true;
+                    moveTo(lift);
+                  }}
+                  className="jf-arrive inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-[13px] font-bold text-black active:scale-95"
+                  data-trim-to-lift
+                >
+                  <Scissors className="h-4 w-4" />
+                  Trim to the lift
+                </button>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -470,7 +579,7 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
         <div className="shrink-0 px-4 pt-3" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}>
           <div className="mb-2.5 flex items-baseline justify-center gap-1.5" aria-live="polite">
             <span className={cn("text-[17px] font-bold tabular-nums", atMax && "text-amber-300")} data-trim-length>{formatClock(len)}</span>
-            <span className="text-[13px] font-semibold text-white/55 tabular-nums">selected · {formatClock(maxLen)} max</span>
+            <span className="text-[13px] font-semibold text-white/55 tabular-nums">{fits ? `of ${formatClock(duration)}` : `selected · ${formatClock(maxLen)} max`}</span>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -571,6 +680,8 @@ export function VideoTrimmer({ req, onDone }: { req: TrimRequest; onDone: (v: Vi
                 ref={overRef}
                 className="relative h-8 touch-none select-none overflow-hidden rounded-md bg-white/10"
                 onPointerDown={(e) => {
+                  touched.current = true;
+                  cancelAnimationFrame(glide.current);
                   overDrag.current = e.pointerId;
                   e.currentTarget.setPointerCapture(e.pointerId);
                   videoRef.current?.pause();
