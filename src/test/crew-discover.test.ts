@@ -113,9 +113,12 @@ describe("privacy in the database", () => {
 });
 
 describe("follow from anywhere", () => {
-  it("finds people from the Crew's top bar (and Activity)", () => {
+  it("finds people from Activity (its search), the people-to-follow row and the caught-up card; the bar's spot is Rankings'", () => {
     const screen = read("src/components/community/community-screen.tsx");
-    expect(screen).toContain('<BarButton label="Find athletes" onClick={() => openDiscover("feed", true)} data-discover-open>');
+    expect(screen).not.toContain("data-discover-open");
+    expect(screen).toContain('<BarButton label="Find people" onClick={() => openDiscover("activity", true)}>');
+    expect(screen).toContain('onSeeAll={() => openDiscover("feed")}');
+    expect(screen).toContain('data-caught-up-discover');
     expect(screen).toContain('onFindPeople={() => openDiscover("activity", true)}');
     expect(screen).toContain("window.addEventListener(OPEN_DISCOVER_EVENT, open);");
     // the coach's Crew page keeps one row (+, tabs, heart, photo): Find athletes is in the feed's suggestions and caught-up card
