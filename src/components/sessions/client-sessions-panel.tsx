@@ -14,14 +14,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
-  CalendarDays, CalendarPlus, CalendarRange, Check, CheckCircle2, ChevronDown, ChevronRight, MessageSquare, Plus, Repeat,
-  Settings2, SlidersHorizontal, StickyNote, Ticket,
+  CalendarDays, CalendarPlus, CalendarRange, Check, ChevronDown, ChevronRight, ExternalLink, MessageSquare, Pencil, Plus, Repeat,
+  Settings2, SlidersHorizontal, StickyNote, Ticket, Wallet,
 } from "lucide-react";
 import { GoogleImportDialog } from "@/components/sessions/google-import-dialog";
 import { PrebookDialog } from "@/components/sessions/prebook-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SellSessionsDialog } from "@/components/sell-sessions-dialog";
 import { CardHeader, MoreButton, StatusChip, type ChipTone } from "@/components/nutrition/nutrition-ui";
+import { TermDateEditor } from "@/components/purchase-records-panel";
+import { useClientPayments } from "@/components/billing/use-client-payments";
 import { adjustSessionCredits } from "@/lib/session-credit-packages.functions";
 import { renewSessionPackage } from "@/lib/billing.functions";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
@@ -39,10 +41,10 @@ import { clientTaxRate } from "@/lib/client-billing-summary";
 import { withTax } from "@/lib/sale-money";
 import { formatMoney } from "@/lib/payment-display";
 import { fetchAllPages } from "@/lib/supabase-paginate";
+import { billingStatusLine, type AutoPayStatus, type ClientPayments } from "@/lib/payment-schedule";
 import {
   buildSessionPackages,
   dayRange,
-  packagePayLine,
   sessionsNextStep,
   type NextPackage,
   type PackageLedgerEvent,
@@ -50,7 +52,6 @@ import {
   type PackageView,
   type SessionPackages,
   type SessionsNextStep,
-  type AutoPay,
 } from "@/lib/session-packages";
 import { cn } from "@/lib/utils";
 
@@ -59,11 +60,11 @@ const plural = (n: number, w = "session") => `${n} ${w}${n === 1 ? "" : "s"}`;
 const money = (cents: number, currency = "CAD") => formatMoney(cents / 100, currency);
 
 /**
- * A client's Sessions tab: what they owe and have paid, how many are done,
- * booked and left, the one thing to do next, and their packages, each with the
- * very sessions on it (Marc's next 16 shows the 5 he's already trained or
- * booked on it before it's even added). Renewing adds the next package as owed,
- * nothing charged now; Book ahead fills it on their usual days.
+ * A client's Sessions tab: training, not money. How many are completed,
+ * booked and still available, the next session, the package they're on now
+ * (its sessions one tap away), anything to do next (book what's left, renew
+ * once they've trained past it), and earlier packages folded away. Money is
+ * one line that opens Billing, where every amount and date lives.
  *
  * One term everywhere: SESSIONS (never "credits").
  */
@@ -71,10 +72,13 @@ export function ClientSessionsPanel({
   clientId,
   client,
   onChangeField,
+  onOpenBilling,
 }: {
   clientId: string;
   client: any;
   onChangeField?: (field: string, value: any) => void;
+  /** Opens the client's Billing tab. */
+  onOpenBilling?: () => void;
 }) {
   const qc = useQueryClient();
   const { role } = useAuth();
@@ -85,6 +89,7 @@ export function ClientSessionsPanel({
   const [importOpen, setImportOpen] = useState(false);
   const [prebookOpen, setPrebookOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
+  const [datesOf, setDatesOf] = useState<any>(null);
   const [editing, setEditing] = useState<any>(null);
   const [acting, setActing] = useState<any>(null);
   const first = client?.first_name || String(client?.full_name ?? "").split(" ")[0] || "client";
@@ -113,7 +118,7 @@ export function ClientSessionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const { data: sessions = [] } = useQuery<any[]>({
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery<any[]>({
     queryKey: ["pt-sessions", clientId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -138,7 +143,7 @@ export function ClientSessionsPanel({
     },
   });
 
-  // Every column the money reading needs (its own key: other screens load a few columns under ["pt-pack-purchases", id]).
+  // Every column the package reading needs (its own key: other screens load a few columns under ["pt-pack-purchases", id]).
   const { data: purchases = [] } = useQuery<any[]>({
     queryKey: ["pt-pack-purchases", clientId, "full"],
     queryFn: async () => {
@@ -179,6 +184,9 @@ export function ClientSessionsPanel({
     },
   });
 
+  // Money, read the way Billing reads it: one line here.
+  const billing = useClientPayments(clientId);
+
   const today = deviceTodayISO();
   const model = useMemo(
     () => buildSessionPackages({ sales: purchases, payments, balance, events, sessions, today }),
@@ -194,7 +202,7 @@ export function ClientSessionsPanel({
     mutationFn: () => renewFn({ data: { purchase_id: (pkg!.sale as any).id } }),
     onSuccess: () => {
       const after = model.next[0]?.open ?? pkg?.size ?? 0;
-      toast.success(`${first}'s next ${pkg?.size} added`, { description: "It's owed on Billing until it's paid. Nothing was charged." });
+      toast.success(`${first}'s next ${pkg?.size} added`, { description: "It's on Billing until it's paid. Nothing was charged." });
       invalidateAll();
       setRenewOpen(false);
       if (bookAfterRenew && after > 0) setPrebookOpen(true);
@@ -207,9 +215,9 @@ export function ClientSessionsPanel({
       <DropdownMenuTrigger asChild>
         <MoreButton label="Session tools" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuItem onSelect={() => setPrebookOpen(true)}><CalendarRange className="mr-2 h-4 w-4" />Book ahead on their usual days</DropdownMenuItem>
-        {pkg && <DropdownMenuItem onSelect={() => setRenewOpen(true)}><Repeat className="mr-2 h-4 w-4" />Renew: next {pkg.size} · pay later</DropdownMenuItem>}
+        {pkg && <DropdownMenuItem onSelect={() => setRenewOpen(true)}><Repeat className="mr-2 h-4 w-4" />Renew: add the next {pkg.size}</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => setAddOpen(true)}><Ticket className="mr-2 h-4 w-4" />Sell a new package</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setAdjustOpen(true)}><SlidersHorizontal className="mr-2 h-4 w-4" />Add or remove sessions</DropdownMenuItem>
@@ -217,6 +225,8 @@ export function ClientSessionsPanel({
       </DropdownMenuContent>
     </DropdownMenu>
   ) : null;
+
+  const loading = sessionsLoading && sessions.length === 0;
 
   return (
     <>
@@ -236,21 +246,33 @@ export function ClientSessionsPanel({
 
         <ChangeRequestsCard clientId={clientId} onEdit={(s) => { setEditing(sessions.find((x) => x.id === s.id) ?? s); setBookOpen(true); }} />
 
-        <SessionsTrackerBody
-          model={model}
-          sessions={sessions}
-          today={today}
-          coachNotes={coachNotes}
-          first={first}
-          isAdmin={isAdmin}
-          renewSize={pkg?.size ?? null}
-          renewEachCents={renewEachCents}
-          manual={manual}
-          onRenew={() => setRenewOpen(true)}
-          onBookAhead={() => setPrebookOpen(true)}
-          onSell={() => setAddOpen(true)}
-          onOpenSession={setActing}
-        />
+        {loading ? (
+          <div className="space-y-3" aria-busy="true">
+            <div className="h-28 animate-pulse rounded-xl bg-muted" />
+            <div className="h-36 animate-pulse rounded-xl bg-muted" />
+          </div>
+        ) : (
+          <SessionsTrackerBody
+            model={model}
+            sessions={sessions}
+            today={today}
+            coachNotes={coachNotes}
+            first={first}
+            isAdmin={isAdmin}
+            renewSize={pkg?.size ?? null}
+            renewEachCents={renewEachCents}
+            renewFromId={(pkg?.sale as any)?.id ?? null}
+            manual={manual}
+            payments={billing.payments}
+            onOpenBilling={onOpenBilling}
+            onRenew={() => setRenewOpen(true)}
+            onBookAhead={() => setPrebookOpen(true)}
+            onSell={() => setAddOpen(true)}
+            onAdjust={() => setAdjustOpen(true)}
+            onEditDates={(id) => setDatesOf(purchases.find((p) => p.id === id) ?? null)}
+            onOpenSession={setActing}
+          />
+        )}
       </Card>
 
       <SessionSettings client={client} onChangeField={onChangeField} />
@@ -265,6 +287,7 @@ export function ClientSessionsPanel({
       />
       <SellSessionsDialog open={addOpen} onOpenChange={setAddOpen} clientId={clientId} />
       <AdjustSessionsDialog open={adjustOpen} onOpenChange={setAdjustOpen} clientId={clientId} onDone={invalidateAll} />
+      {datesOf && <TermDateEditor purchase={datesOf} clientId={clientId} onClose={() => { setDatesOf(null); invalidateAll(); }} />}
       {isAdmin && <GoogleImportDialog open={importOpen} onOpenChange={setImportOpen} clientId={clientId} clientName={client?.full_name} onDone={invalidateAll} />}
       {isAdmin && <PrebookDialog open={prebookOpen} onOpenChange={setPrebookOpen} clientId={clientId} clientName={client?.full_name} onDone={invalidateAll} />}
       {isAdmin && pkg && (
@@ -278,6 +301,7 @@ export function ClientSessionsPanel({
           payments={Number((pkg.sale as any).number_of_payments ?? 0)}
           next={model.next[0] ?? null}
           leftNow={model.totals.leftToBook}
+          autoPay={billing.payments?.autoPay ?? null}
           bookAfter={bookAfterRenew}
           onBookAfter={setBookAfterRenew}
           pending={renew.isPending}
@@ -289,13 +313,14 @@ export function ClientSessionsPanel({
 }
 
 /**
- * Everything under the Sessions header: the summary, the one next step, the
- * packages with their sessions, and what isn't on a package. Pure view over the
- * package model (session-packages.ts), so it can be checked with fixture data.
+ * Everything under the Sessions header: the overview, what to do next, the
+ * package they're on, what's coming up, and history folded away. Pure view
+ * over the package model (session-packages.ts) and the payments model's one
+ * line (payment-schedule.ts), so it can be checked with fixture data.
  */
 export function SessionsTrackerBody({
-  model, sessions, today, coachNotes, first, isAdmin, renewSize, renewEachCents, manual,
-  onRenew, onBookAhead, onSell, onOpenSession,
+  model, sessions, today, coachNotes, first, isAdmin, renewSize, renewEachCents, renewFromId, manual, payments,
+  onOpenBilling, onRenew, onBookAhead, onSell, onAdjust, onEditDates, onOpenSession,
 }: {
   model: SessionPackages;
   sessions: any[];
@@ -306,10 +331,16 @@ export function SessionsTrackerBody({
   /** Sessions in the package a renewal copies (null: nothing priced to renew). */
   renewSize: number | null;
   renewEachCents: number | null;
+  /** The package a renewal copies (only its card offers Renew). */
+  renewFromId?: string | null;
   manual: PackageLedgerEvent[];
+  payments?: ClientPayments | null;
+  onOpenBilling?: () => void;
   onRenew: () => void;
   onBookAhead: () => void;
   onSell: () => void;
+  onAdjust?: () => void;
+  onEditDates?: (saleId: string) => void;
   onOpenSession: (s: any) => void;
 }) {
   const step = sessionsNextStep(model, renewSize != null, renewSize);
@@ -330,12 +361,10 @@ export function SessionsTrackerBody({
   const others = sessions.filter((s) => !placed.has(s.id));
 
   const lastNumber = model.packages.reduce((m, p) => Math.max(m, p.number), 0);
-  const [showEarlier, setShowEarlier] = useState(false);
-  const current = model.packages.find((p) => p.id === model.currentId) ?? null;
-  // Newest first; past the latest two, packages that are trained and paid in full fold away.
-  const settled = (p: PackageView, i: number) => i >= 2 && p.phase === "finished" && p.money.state === "paid";
-  const shown = showEarlier ? model.packages : model.packages.filter((p, i) => !settled(p, i));
-  const folded = model.packages.filter(settled).length;
+  // The package they're on: the one new bookings draw on, else the newest one.
+  const current = model.packages.find((p) => p.id === model.currentId) ?? (model.next.length ? null : model.packages[0] ?? null);
+  const history = model.packages.filter((p) => p.id !== current?.id && !(p.phase === "waiting" && p.number > (current?.number ?? 0)));
+  const waitingAfter = model.packages.filter((p) => p.id !== current?.id && p.phase === "waiting" && p.number > (current?.number ?? 0));
 
   const openSession = (s: PackageSessionRow) => onOpenSession(sessionById.get(s.id) ?? s);
   const sessionRow = (s: PackageSessionRow) => {
@@ -345,16 +374,15 @@ export function SessionsTrackerBody({
 
   return (
     <>
-      <Summary
-        owedCents={model.totals.owedCents}
-        paidCents={model.totals.paidCents}
-        taxIncluded={model.totals.taxIncluded}
+      <Overview
         done={model.totals.done}
         booked={upcoming.length + needsReview.length}
-        left={model.totals.leftToBook}
+        available={model.totals.leftToBook}
         nextUp={upcoming[0] ?? null}
         needsReview={needsReview.length}
-        autoPay={model.autoPay}
+        payments={payments ?? null}
+        onOpenNext={upcoming[0] ? () => onOpenSession(upcoming[0]) : undefined}
+        onOpenBilling={onOpenBilling}
       />
 
       <NextStep
@@ -370,26 +398,39 @@ export function SessionsTrackerBody({
         unpriced={model.unpriced}
       />
 
-      {model.packages.length > 0 && (
-        <section className="space-y-2" aria-label="Packages">
-          <h4 className="text-[15px] font-semibold">Packages</h4>
-          {model.next.slice(1).map((n, i) => (
-            <PendingPackage key={`next-${i}`} next={n} number={lastNumber + 2 + i} renderSession={sessionRow} />
-          ))}
-          {shown.map((p) => (
-            <PackageCard key={p.id} p={p} current={p.id === current?.id} autoPay={model.autoPay} renderSession={sessionRow} />
-          ))}
-          {folded > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowEarlier((v) => !v)}
-              className="flex min-h-10 w-full items-center justify-center gap-1 rounded-lg text-[13px] text-muted-foreground hover:bg-muted/40"
-            >
-              {showEarlier ? "Hide earlier packages" : `Earlier packages (${folded}) · paid in full`}
-              <ChevronDown className={cn("h-4 w-4 transition-transform", showEarlier && "rotate-180")} />
-            </button>
-          )}
-        </section>
+      {current && (
+        <CurrentPackage
+          p={current}
+          today={today}
+          isAdmin={isAdmin}
+          canRenew={renewFromId === current.id && step.kind !== "renew"}
+          renderSession={sessionRow}
+          overviewNextId={upcoming[0]?.id ?? null}
+          onRenew={onRenew}
+          onBookAhead={onBookAhead}
+          onAdjust={onAdjust}
+          onEditDates={onEditDates}
+          onOpenBilling={onOpenBilling}
+        />
+      )}
+
+      {model.next.slice(1).map((n, i) => (
+        <PendingPackage key={`next-${i}`} next={n} number={lastNumber + 2 + i} renderSession={sessionRow} />
+      ))}
+      {waitingAfter.map((p) => (
+        <PackageRow key={p.id} p={p} renderSession={sessionRow} />
+      ))}
+
+      {upcoming.length > 0 && (
+        <Folder title="Upcoming sessions" summary={`${upcoming.length}`} data-upcoming>
+          <ul className="divide-y divide-border rounded-lg border border-border">{upcoming.map((s) => sessionRow(s))}</ul>
+        </Folder>
+      )}
+
+      {history.length > 0 && (
+        <Folder title="Earlier packages" summary={`${history.length}`} data-history>
+          {history.map((p) => <PackageRow key={p.id} p={p} renderSession={sessionRow} />)}
+        </Folder>
       )}
 
       {(model.free.length > 0 || others.length > 0 || manual.length > 0) && (
@@ -399,72 +440,70 @@ export function SessionsTrackerBody({
   );
 }
 
-/* ---------------- Summary ---------------- */
+/* ---------------- Overview ---------------- */
 
 /** "Nov 27" */
 const monthDay = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 
-/** What Stripe's auto-pay does from here, in one line. */
-function autoPayLine(a: AutoPay | null, owedCents: number): { text: string; tone: "muted" | "attention" } | null {
-  if (!a) return owedCents > 0 ? { text: "No auto-pay: nothing in Stripe collects this.", tone: "attention" } : null;
-  const each = `${money(a.eachCents)}${a.per ? ` every ${a.per}` : ""}`;
-  if (a.ending) return { text: `Auto-pay ${each} ends${a.next ? ` ${shortDay(a.next)}` : ""}.`, tone: owedCents > 0 ? "attention" : "muted" };
-  const parts = [`Auto-pay ${each}`];
-  if (a.next) parts.push(`next ${shortDay(a.next)}`);
-  if (a.paidUpOn) parts.push(`paid up ${shortDay(a.paidUpOn)}`);
-  return { text: parts.join(" · "), tone: "muted" };
-}
+const TONE_TEXT: Record<ChipTone, string> = {
+  neutral: "text-muted-foreground",
+  done: "text-success",
+  attention: "text-warning",
+  error: "text-destructive",
+};
 
-function Summary({ owedCents, paidCents, taxIncluded, done, booked, left, nextUp, needsReview, autoPay }: {
-  owedCents: number; paidCents: number; taxIncluded: boolean;
-  done: number; booked: number; left: number;
-  nextUp: any | null; needsReview: number; autoPay: AutoPay | null;
+function Overview({ done, booked, available, nextUp, needsReview, payments, onOpenNext, onOpenBilling }: {
+  done: number; booked: number; available: number;
+  nextUp: any | null; needsReview: number;
+  payments: ClientPayments | null;
+  onOpenNext?: () => void;
+  onOpenBilling?: () => void;
 }) {
-  const auto = autoPayLine(autoPay, owedCents);
+  const bill = payments ? billingStatusLine(payments, (c) => money(c, payments.currency), monthDay) : null;
   return (
-    <div className="space-y-3 rounded-xl border border-border p-3 sm:p-4" data-sessions-summary>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {owedCents > 0 ? (
-            <>
-              <div className="text-[13px] text-muted-foreground">Owes on sessions</div>
-              <div className="text-2xl font-semibold tabular-nums text-warning">{money(owedCents)}</div>
-              <div className="text-[12px] text-muted-foreground">{taxIncluded ? "Tax included" : "Before tax"}</div>
-            </>
-          ) : (
-            <div className="flex items-center gap-1.5 py-1 text-xl font-semibold text-success">
-              <CheckCircle2 className="h-5 w-5" /> Paid up
-            </div>
-          )}
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="text-[13px] text-muted-foreground">Paid so far</div>
-          <div className="text-[15px] font-semibold tabular-nums">{money(paidCents)}</div>
-        </div>
-      </div>
-      <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-border text-center">
-        {([["Done", done], ["Booked", booked], ["Left to book", left]] as const).map(([label, value], i) => (
-          <div key={label} className={cn("px-2 py-2", i > 0 && "border-l border-border")}>
-            <dd className="text-lg font-semibold tabular-nums">{value}</dd>
-            <dt className="text-[12px] text-muted-foreground">{label}</dt>
+    <div className="space-y-3 rounded-xl border border-border p-3 sm:p-4" data-sessions-overview>
+      <dl className="grid grid-cols-3 text-center">
+        {([["Completed", done], ["Booked", booked], ["Available", available]] as const).map(([label, value], i) => (
+          <div key={label} className={cn("px-1", i > 0 && "border-l border-border")}>
+            <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
+            <dt className="text-[13px] text-muted-foreground">{label}</dt>
           </div>
         ))}
       </dl>
-      {auto && (
-        <p className={cn("text-[13px]", auto.tone === "attention" ? "text-warning" : "text-muted-foreground")} data-auto-pay>
-          {auto.text}
-        </p>
-      )}
-      {nextUp && (
-        <p className="text-[13px] text-muted-foreground">
-          Next session <span className="font-medium text-foreground">{whenLabel(nextUp.session_date, String(nextUp.start_time).slice(0, 5))}</span>
-        </p>
+      {nextUp ? (
+        <button
+          type="button"
+          onClick={onOpenNext}
+          className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 text-left"
+          data-next-session
+        >
+          <span className="min-w-0 text-[14px]">
+            <span className="text-muted-foreground">Next session </span>
+            <span className="font-medium">{whenLabel(nextUp.session_date, String(nextUp.start_time).slice(0, 5))}</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      ) : (
+        <p className="text-[13px] text-muted-foreground">Nothing booked yet.</p>
       )}
       {needsReview > 0 && (
         <p className="text-[13px] text-warning">
           {needsReview === 1 ? "1 past session is" : `${needsReview} past sessions are`} waiting on you (a change request kept it open). Tap it below to pick what happened.
         </p>
+      )}
+      {bill && (
+        <button
+          type="button"
+          onClick={onOpenBilling}
+          disabled={!onOpenBilling}
+          className="flex min-h-10 w-full items-center gap-2 border-t border-border pt-2 text-left text-[13px]"
+          data-billing-line={bill.tone}
+        >
+          <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className={cn("min-w-0 flex-1", TONE_TEXT[bill.tone])}>{bill.text}</span>
+          {onOpenBilling && <span className="flex shrink-0 items-center text-muted-foreground">Billing<ChevronRight className="h-4 w-4" /></span>}
+        </button>
       )}
     </div>
   );
@@ -472,6 +511,7 @@ function Summary({ owedCents, paidCents, taxIncluded, done, booked, left, nextUp
 
 /* ---------------- The one next step ---------------- */
 
+/** Only when there's something to do: renew once they've trained past it, book what's left, or sell a first package. */
 function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents, onRenew, onBookAhead, onSell, unpriced }: {
   step: SessionsNextStep;
   first: string;
@@ -494,14 +534,14 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
         lead={
           <p className="text-[13px] text-muted-foreground">
             {n.done > 0
-              ? `${first} trained ${n.done} past the last package, so the next ${n.size} has started. Renew to bill it: nothing is charged now.`
-              : `${plural(n.booked)} booked past the last package go on the next ${n.size}, owed once the first is trained.`}
+              ? `${first} trained ${plural(n.done)} past the last package, so these are on the next one. Renew to add it; nothing is charged now.`
+              : `${plural(n.booked)} booked past the last package. They need the next package once the first is trained.`}
           </p>
         }
         actions={isAdmin ? (
           <>
             <Button className="h-11 w-full sm:w-auto" onClick={onRenew}>
-              <Repeat className="mr-2 h-4 w-4" /> Renew {n.size} · pay later
+              <Repeat className="mr-2 h-4 w-4" /> Renew: add the next {n.size}
             </Button>
             {n.open > 0 && (
               <Button variant="outline" className="h-11 w-full sm:w-auto" onClick={onBookAhead}>
@@ -514,7 +554,7 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
     );
   }
 
-  let text: ReactNode;
+  let text: ReactNode = null;
   let action: ReactNode = null;
   let tone: "neutral" | "attention" = "neutral";
   switch (step.kind) {
@@ -524,33 +564,26 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
       action = isAdmin && <Button className="h-11 w-full sm:w-auto" onClick={onSell}><Ticket className="mr-2 h-4 w-4" /> Sell a package</Button>;
       break;
     case "book":
-      text = `${plural(step.left)} left to book${step.packageNumber ? ` on package ${step.packageNumber}` : ""}. Book them on ${first}'s usual days in one go.`;
-      action = isAdmin && <Button className="h-11 w-full sm:w-auto" onClick={onBookAhead}><CalendarRange className="mr-2 h-4 w-4" /> Book the {step.left} left</Button>;
-      break;
-    case "all_booked":
-      text = `Every session on the package is booked${step.through ? `, through ${shortDay(step.through)}` : ""}.`;
-      action = isAdmin && step.canRenew && (
-        <Button variant="outline" className="h-11 w-full sm:w-auto" onClick={onRenew}><Repeat className="mr-2 h-4 w-4" /> Renew early · pay later</Button>
-      );
+      text = `${plural(step.left)} available to book${step.packageNumber ? ` on package ${step.packageNumber}` : ""}.`;
+      action = isAdmin && <Button className="h-11 w-full sm:w-auto" onClick={onBookAhead}><CalendarRange className="mr-2 h-4 w-4" /> Book the {step.left} on {first}'s usual days</Button>;
       break;
     case "waiting_payment":
-      text = `${step.name} starts once it's paid. Its sessions aren't on the books yet.`;
+      text = `${step.name} starts once it's paid. Its sessions aren't available yet.`;
       break;
     case "renew_all_used":
       tone = "attention";
-      text = `Every session is trained. Renew ${first}'s next ${step.size}${renewPriceCents ? ` (${money(renewPriceCents)})` : ""} and book them ahead; nothing is charged now.`;
-      action = isAdmin && (
-        <>
-          <Button className="h-11 w-full sm:w-auto" onClick={onRenew}><Repeat className="mr-2 h-4 w-4" /> Renew {step.size} · pay later</Button>
-          <Button variant="outline" className="h-11 w-full sm:w-auto" onClick={onBookAhead}><CalendarRange className="mr-2 h-4 w-4" /> Book ahead</Button>
-        </>
-      );
+      text = `Every session is completed. Renew ${first}'s next ${step.size}${renewPriceCents ? ` (${money(renewPriceCents)})` : ""} to keep booking; nothing is charged now.`;
+      action = isAdmin && <Button className="h-11 w-full sm:w-auto" onClick={onRenew}><Repeat className="mr-2 h-4 w-4" /> Renew: add the next {step.size}</Button>;
       break;
     case "sell_first":
       text = `No session package yet. Sell ${first} one, or book a session and charge for it.`;
       action = isAdmin && <Button className="h-11 w-full sm:w-auto" onClick={onSell}><Ticket className="mr-2 h-4 w-4" /> Sell a package</Button>;
       break;
+    case "all_booked":
+      // Nothing to do: the package card says it's all booked, and Renew is in its menu.
+      return null;
   }
+  if (!text) return null;
   return (
     <div className={cn("space-y-3 rounded-xl border p-3", tone === "attention" ? "border-warning/40" : "border-border")} data-next-step={step.kind}>
       <p className="text-[14px]">{text}</p>
@@ -562,13 +595,13 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
 
 /* ---------------- Packages ---------------- */
 
-/** One cell per session: done (solid), booked (grey), still to book (empty). */
+/** One cell per session: completed (solid), booked (grey), available (empty). */
 export function SlotBar({ size, done, booked }: { size: number; done: number; booked: number }) {
   const cells = Math.max(size, done + booked, 1);
   return (
     <div
       role="img"
-      aria-label={`${done} done, ${booked} booked, ${Math.max(0, cells - done - booked)} to book`}
+      aria-label={`${done} completed, ${booked} booked, ${Math.max(0, cells - done - booked)} available`}
       className="grid gap-[3px]"
       style={{ gridTemplateColumns: `repeat(${Math.min(cells, 16)}, minmax(0, 1fr))` }}
     >
@@ -579,67 +612,123 @@ export function SlotBar({ size, done, booked }: { size: number; done: number; bo
   );
 }
 
-function countLine(p: { size: number; done: number; booked: number; open: number }, phase?: PackageView["phase"]): string {
-  if (phase === "waiting") return `${p.size} sessions · start once it's paid`;
-  if (phase === "finished" || (p.open === 0 && p.booked === 0)) return `${p.done} of ${p.size} done`;
-  const parts = [`${p.done} done`];
-  if (p.booked) parts.push(`${p.booked} booked`);
-  if (p.open) parts.push(`${p.open} to book`);
+/** "7 completed · 9 booked · 0 available" */
+export function countLine(p: { size: number; done: number; booked: number; open: number; expired?: number }, phase?: PackageView["phase"]): string {
+  if (phase === "waiting") return `${p.size} sessions · available once it's paid`;
+  const parts = [`${p.done} completed`, `${p.booked} booked`, `${p.open} available`];
+  if (p.expired) parts.push(`${p.expired} expired`);
   return parts.join(" · ");
 }
 
-function PackageCard({ p, current, autoPay, renderSession }: { p: PackageView; current: boolean; autoPay: AutoPay | null; renderSession: (s: PackageSessionRow) => ReactNode }) {
-  const [open, setOpen] = useState(current);
-  const cover = autoPay?.covers.get(p.id) ?? null;
-  const pay = packagePayLine(p.money, (c) => money(c, p.money.currency), { cover, day: monthDay });
-  const when = dayRange(p.from, p.to);
-  const plan = p.money.plan;
+/** The package's period: its own term, else when its sessions ran. */
+const periodOf = (p: PackageView) => dayRange(p.termFrom ?? p.from, p.termTo ?? p.to);
+
+/** The package they're on now, compact: what it is, where it's at, the next session, and its sessions one tap away. */
+function CurrentPackage({ p, today, isAdmin, canRenew, renderSession, overviewNextId, onRenew, onBookAhead, onAdjust, onEditDates, onOpenBilling }: {
+  p: PackageView;
+  today: string;
+  isAdmin: boolean;
+  canRenew: boolean;
+  renderSession: (s: PackageSessionRow) => ReactNode;
+  /** The next session the overview already shows (never said twice). */
+  overviewNextId?: string | null;
+  onRenew: () => void;
+  onBookAhead: () => void;
+  onAdjust?: () => void;
+  onEditDates?: (saleId: string) => void;
+  onOpenBilling?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const next = p.sessions.find((s) => s.status === "Scheduled" && s.session_date >= today) ?? null;
+  const lastBooked = [...p.sessions].reverse().find((s) => s.status === "Scheduled")?.session_date ?? null;
+  const period = periodOf(p);
+  return (
+    <section className="space-y-3 rounded-xl border border-border p-3 sm:p-4" aria-label="Current package" data-current-package={p.number}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[13px] text-muted-foreground">{p.phase === "finished" ? "Last package" : "Current package"} · Package {p.number}</div>
+          <div className="line-clamp-2 text-[15px] font-semibold">{p.name}</div>
+          {period && <div className="text-[13px] text-muted-foreground">{period}</div>}
+        </div>
+        {isAdmin && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-10 shrink-0 px-3">Manage<ChevronDown className="ml-1 h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {p.open > 0 && <DropdownMenuItem onSelect={onBookAhead}><CalendarRange className="mr-2 h-4 w-4" />Book the {p.open} available</DropdownMenuItem>}
+              {canRenew && <DropdownMenuItem onSelect={onRenew}><Repeat className="mr-2 h-4 w-4" />Renew: add the next {p.size}</DropdownMenuItem>}
+              {onAdjust && <DropdownMenuItem onSelect={onAdjust}><SlidersHorizontal className="mr-2 h-4 w-4" />Add or remove sessions</DropdownMenuItem>}
+              {onEditDates && <DropdownMenuItem onSelect={() => onEditDates(p.id)}><Pencil className="mr-2 h-4 w-4" />Edit its dates</DropdownMenuItem>}
+              <DropdownMenuSeparator />
+              {onOpenBilling && <DropdownMenuItem onSelect={onOpenBilling}><Wallet className="mr-2 h-4 w-4" />Payments on Billing</DropdownMenuItem>}
+              <DropdownMenuItem asChild>
+                <Link to="/admin/purchases/$id" params={{ id: p.id }}><ExternalLink className="mr-2 h-4 w-4" />Open the sale</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="text-[14px] tabular-nums">{countLine(p, p.phase)}</div>
+        <SlotBar size={p.size} done={p.done} booked={p.booked} />
+      </div>
+
+      {next && next.id !== overviewNextId ? (
+        <p className="text-[13px] text-muted-foreground">
+          Next session <span className="font-medium text-foreground">{whenLabel(next.session_date, String(next.start_time).slice(0, 5))}</span>
+        </p>
+      ) : p.phase === "active" && p.open === 0 && lastBooked ? (
+        <p className="text-[13px] text-muted-foreground">Every session is booked, through {shortDay(lastBooked)}.</p>
+      ) : null}
+      {p.expiresAt && p.phase === "active" && p.open > 0 && (
+        <p className={cn("text-[13px]", p.expiresAt < today ? "text-warning" : "text-muted-foreground")}>
+          {p.expiresAt < today ? `Expired ${shortDay(p.expiresAt)}: its ${plural(p.open)} can't be booked` : `Use by ${shortDay(p.expiresAt)}`}
+        </p>
+      )}
+
+      {p.sessions.length > 0 && (
+        <div>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+            className="flex min-h-10 w-full items-center justify-between rounded-lg text-[14px] font-medium"
+          >
+            {open ? "Hide sessions" : `View sessions (${p.sessions.length})`}
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </button>
+          {open && <ul className="mt-1 divide-y divide-border rounded-lg border border-border">{p.sessions.map(renderSession)}</ul>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** An earlier (or waiting) package, one line until it's opened. */
+function PackageRow({ p, renderSession }: { p: PackageView; renderSession: (s: PackageSessionRow) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const period = periodOf(p);
+  const summary = p.phase === "waiting"
+    ? `${p.size} sessions · available once it's paid`
+    : `${p.done} of ${p.size} completed${p.expired ? ` · ${p.expired} expired` : ""}${p.booked ? ` · ${p.booked} booked` : ""}`;
   return (
     <div className="overflow-hidden rounded-xl border border-border" data-package={p.number}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full space-y-1.5 p-3 text-left transition-colors hover:bg-muted/30">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="whitespace-nowrap text-[15px] font-semibold">Package {p.number}</span>
-            {current && <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-medium text-background">Now</span>}
-          </div>
-          {pay.text && <StatusChip tone={pay.tone as ChipTone}>{pay.text}</StatusChip>}
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left">
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px] font-medium">Package {p.number}{period ? <span className="font-normal text-muted-foreground"> · {period}</span> : null}</div>
+          <div className="text-[13px] text-muted-foreground">{summary}</div>
         </div>
-        <div className="text-[13px] text-muted-foreground">
-          {when ? `${when} · ` : ""}{countLine(p, p.phase)}
-        </div>
-        <SlotBar size={p.size} done={p.done} booked={p.booked} />
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="space-y-3 border-t border-border px-3 pb-3 pt-2">
-          <div className="space-y-0.5 text-[13px] text-muted-foreground">
-            <div className="font-medium text-foreground">{p.name}</div>
-            {p.money.priceNote && <div>{p.money.state === "paid" ? `${money(p.money.priceCents)} (${p.money.priceNote})` : `${p.money.priceNote}${plan ? ` · ${plan.total} payments` : ""}`}</div>}
-            {plan && (
-              <div>
-                {plan.made} of {plan.total} payments made
-                {p.money.next?.cents
-                  ? p.money.next.date
-                    ? ` · next ${money(p.money.next.cents)} on ${shortDay(p.money.next.date)}`
-                    : ` · ${money(p.money.next.cents)} each`
-                  : ""}
-              </div>
-            )}
-            {cover && cover.payments > 0 && autoPay && (
-              <div data-auto-pay-cover>
-                Auto-pay: {cover.payments === 1 ? `1 payment of ${money(autoPay.eachCents)}` : `${cover.payments} payments of ${money(autoPay.eachCents)}`}
-                {cover.first && cover.last ? (cover.first === cover.last ? ` on ${shortDay(cover.first)}` : `, ${shortDay(cover.first)} – ${shortDay(cover.last)}`) : ""}
-              </div>
-            )}
-            {p.expired > 0 && <div>{plural(p.expired)} expired unused</div>}
-            {p.expiresAt && p.phase === "active" && <div>Use by {shortDay(p.expiresAt)}</div>}
-            <Link to="/admin/purchases/$id" params={{ id: p.id }} className="inline-flex min-h-10 items-center gap-1 font-medium text-foreground hover:underline">
-              Payments and receipts <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
+        <div className="space-y-2 border-t border-border px-3 pb-3 pt-2">
+          <div className="text-[13px] text-muted-foreground">{p.name}</div>
           {p.sessions.length > 0 ? (
             <ul className="divide-y divide-border rounded-lg border border-border">{p.sessions.map(renderSession)}</ul>
           ) : (
-            <p className="text-[13px] text-muted-foreground">No sessions on it yet.</p>
+            <p className="text-[13px] text-muted-foreground">No sessions on it.</p>
           )}
         </div>
       )}
@@ -647,7 +736,7 @@ function PackageCard({ p, current, autoPay, renderSession }: { p: PackageView; c
   );
 }
 
-/** The next package before it's added: the sessions already on it, and its price. */
+/** The next package before it's added: the sessions already on it. */
 function PendingPackage({ next, number, renderSession, lead, actions }: {
   next: NextPackage;
   number: number;
@@ -655,26 +744,50 @@ function PendingPackage({ next, number, renderSession, lead, actions }: {
   lead?: ReactNode;
   actions?: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const when = dayRange(next.sessions[0]?.session_date ?? null, next.sessions[next.sessions.length - 1]?.session_date ?? null);
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-dashed", next.owed ? "border-warning/60" : "border-border")} data-package-next={number}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full space-y-1.5 p-3 text-left transition-colors hover:bg-muted/30">
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 text-[15px] font-semibold">Package {number} · next {next.size}</span>
-          <StatusChip tone={next.owed ? "attention" : "neutral"}>{next.owed ? `${money(next.eachCents)} owed` : "Not added yet"}</StatusChip>
+    <section className={cn("space-y-3 rounded-xl border border-dashed p-3", next.owed ? "border-warning/60" : "border-border")} data-package-next={number}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold">Package {number} · next {next.size}</div>
+          <div className="text-[13px] text-muted-foreground">{when ? `${when} · ` : ""}not added yet</div>
         </div>
-        <div className="text-[13px] text-muted-foreground">
-          {when ? `${when} · ` : ""}{countLine(next)}{next.owed ? " · not added yet" : ""}
-        </div>
-        <SlotBar size={next.size} done={next.done} booked={next.booked} />
-      </button>
-      <div className="space-y-3 px-3 pb-3">
-        {lead}
-        {open && next.sessions.length > 0 && <ul className="divide-y divide-border rounded-lg border border-border">{next.sessions.map(renderSession)}</ul>}
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+        <StatusChip tone={next.owed ? "attention" : "neutral"}>{next.owed ? "Needs renewing" : "Not added yet"}</StatusChip>
       </div>
-    </div>
+      <div className="space-y-1.5">
+        <div className="text-[14px] tabular-nums">{countLine(next)}</div>
+        <SlotBar size={next.size} done={next.done} booked={next.booked} />
+      </div>
+      {lead}
+      {next.sessions.length > 0 && (
+        <div>
+          <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex min-h-10 w-full items-center justify-between text-[14px] font-medium">
+            {open ? "Hide sessions" : `View sessions (${next.sessions.length})`}
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </button>
+          {open && <ul className="mt-1 divide-y divide-border rounded-lg border border-border">{next.sessions.map(renderSession)}</ul>}
+        </div>
+      )}
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    </section>
+  );
+}
+
+/** A folded section: a title row that opens in place. */
+function Folder({ title, summary, children, ...rest }: { title: string; summary?: string; children: ReactNode } & Record<`data-${string}`, unknown>) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-xl border border-border" {...rest}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left">
+        <span className="text-[15px] font-medium">{title}</span>
+        <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
+          {summary}
+          <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+        </span>
+      </button>
+      {open && <div className="space-y-2 border-t border-border p-3">{children}</div>}
+    </section>
   );
 }
 
@@ -790,7 +903,14 @@ function OtherSessions({ free, others, manual, renderSession }: {
 
 /* ---------------- Renew ---------------- */
 
-function RenewDialog({ open, onOpenChange, first, name, size, priceCents, payments, next, leftNow, bookAfter, onBookAfter, pending, onConfirm }: {
+/**
+ * Renewing adds the client's next package (a copy of their latest: same
+ * sessions, price and plan), nothing charged. Sessions left on the package
+ * they're on stay there and are booked first; sessions already trained or
+ * booked past it move onto the new one. Only one untouched package at a time
+ * (renew_session_package refuses a second).
+ */
+function RenewDialog({ open, onOpenChange, first, name, size, priceCents, payments, next, leftNow, autoPay, bookAfter, onBookAfter, pending, onConfirm }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   first: string;
@@ -800,6 +920,7 @@ function RenewDialog({ open, onOpenChange, first, name, size, priceCents, paymen
   payments: number;
   next: NextPackage | null;
   leftNow: number;
+  autoPay: AutoPayStatus | null;
   bookAfter: boolean;
   onBookAfter: (v: boolean) => void;
   pending: boolean;
@@ -807,12 +928,15 @@ function RenewDialog({ open, onOpenChange, first, name, size, priceCents, paymen
 }) {
   const moving = next ? next.sessions.length : 0;
   const toBook = next ? next.open : size;
+  const howPaid = autoPay?.state === "on"
+    ? `Auto-pay (${money(autoPay.cents)}${autoPay.per ? ` every ${autoPay.per}` : ""}) pays it after what's owed before it.`
+    : `It shows on Billing with no payment dates until you set them, send a link or record a payment.`;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Renew {first}'s sessions?</DialogTitle>
-          <DialogDescription>Adds the next package now, paid later.</DialogDescription>
+          <DialogTitle>Add {first}'s next {size}?</DialogTitle>
+          <DialogDescription>Nothing is charged now.</DialogDescription>
         </DialogHeader>
         <ul className="space-y-2 text-[14px]">
           <li className="rounded-lg border border-border p-3">
@@ -821,14 +945,14 @@ function RenewDialog({ open, onOpenChange, first, name, size, priceCents, paymen
               {name}{payments > 1 ? `, in ${payments} payments of ${money(Math.round(priceCents / payments))} + tax like the last one` : ""}.
             </div>
           </li>
-          <li className="text-[13px] text-muted-foreground">Nothing is charged now. It shows as owed on Billing until {first} pays, and you can record a payment or send a link from there.</li>
+          <li className="text-[13px] text-muted-foreground">{howPaid}</li>
           {moving > 0 && (
             <li className="text-[13px] text-muted-foreground">
               The {plural(moving)} since {shortDay(next!.sessions[0].session_date)} move onto it, leaving {toBook} to book.
             </li>
           )}
           {!next && leftNow > 0 && (
-            <li className="text-[13px] text-muted-foreground">{first} still has {plural(leftNow)} left; new bookings use those first.</li>
+            <li className="text-[13px] text-muted-foreground">The {plural(leftNow)} {first} still has stay on their package and are booked first.</li>
           )}
         </ul>
         {toBook > 0 && (
@@ -839,7 +963,7 @@ function RenewDialog({ open, onOpenChange, first, name, size, priceCents, paymen
         )}
         <DialogFooter className="gap-2">
           <Button variant="outline" className="h-11" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button className="h-11" disabled={pending} onClick={onConfirm}>{pending ? "Renewing…" : "Renew · pay later"}</Button>
+          <Button className="h-11" disabled={pending} onClick={onConfirm}>{pending ? "Adding…" : `Add the next ${size}`}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

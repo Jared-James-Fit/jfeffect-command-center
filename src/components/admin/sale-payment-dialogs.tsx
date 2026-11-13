@@ -84,7 +84,15 @@ export function RecordPaymentDialog({ sale, money, open, onOpenChange, onDone }:
       purchase_id: sale.id, method, amount_minor: cents, tax_minor: tax, currency,
       transaction_date: date, external_reference: note.trim() || undefined,
     } }),
-    onSuccess: () => { toast.success(`${formatMoney(cents / 100, currency)} recorded`); onOpenChange(false); onDone(); },
+    onSuccess: (res: any) => {
+      const amount = formatMoney(cents / 100, currency);
+      if (res?.duplicate) toast.message(`${amount} was already recorded`, { description: "The same payment came in a moment ago, so it wasn't added twice." });
+      else if (res?.autoPay?.ended) toast.success(`${amount} recorded`, { description: "Nothing is owed now, so auto-pay stops at the end of this period. Nothing was charged." });
+      else if (res?.autoPay?.error) toast.warning(`${amount} recorded`, { description: `Nothing is owed now, but auto-pay couldn't be stopped in Stripe: ${res.autoPay.error}` });
+      else toast.success(`${amount} recorded`);
+      onOpenChange(false);
+      onDone();
+    },
     onError: (e: any) => toast.error(e?.message ?? "Could not record the payment"),
   });
 

@@ -30,6 +30,9 @@ export type MoneyLedgerRow = {
   transaction_date?: string | null;
   voided?: boolean | null;
   source?: string | null;
+  receipt_url?: string | null;
+  hosted_invoice_url?: string | null;
+  invoice_pdf_url?: string | null;
 };
 
 export type SaleKind = "one_time" | "plan" | "subscription" | "free";
@@ -107,15 +110,16 @@ function money(cents: number, currency: string): string {
 /**
  * `sessionsUsed`: sessions already trained on this sale. A package the client
  * is training on is owed even before its first payment (a renewal they're
- * financing), so it's never "waiting".
+ * financing), so it's never "waiting". `billed`: owed even with nothing paid
+ * or trained (a renewal their auto-pay is set to pay).
  */
 export function saleMoney(
   sale: MoneySale,
   ledger: MoneyLedgerRow[] = [],
   clientRate: number | null = null,
-  opts: { sessionsUsed?: number | null } = {},
+  opts: { sessionsUsed?: number | null; billed?: boolean } = {},
 ): SaleMoney {
-  const inUse = Number(opts.sessionsUsed ?? 0) > 0;
+  const inUse = Number(opts.sessionsUsed ?? 0) > 0 || !!opts.billed;
   const d = resolvePaymentDisplay(sale);
   const currency = d.currency;
   const status = String(sale.payment_status ?? "").trim().toLowerCase();
@@ -221,6 +225,10 @@ export type PaymentRow = {
    * corrected in Stripe (a refund there comes back on its own).
    */
   canVoid: boolean;
+  /** Stripe's receipt or invoice, when there is one. */
+  receiptUrl: string | null;
+  /** The sale it was paid on. */
+  saleId: string | null;
 };
 
 /** A sale's money in and out, newest first, without the bookkeeping rows. */
@@ -238,6 +246,8 @@ export function salePayments(ledger: MoneyLedgerRow[]): PaymentRow[] {
         method: methodLabel(l.method ?? null),
         voided: !!l.voided,
         canVoid: !l.voided && !refund && l.source === "manual",
+        receiptUrl: l.receipt_url ?? l.hosted_invoice_url ?? l.invoice_pdf_url ?? null,
+        saleId: l.purchase_id ?? null,
       };
     })
     .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));

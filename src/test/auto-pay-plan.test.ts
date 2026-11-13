@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { addPeriod, autoPayPlan, packagePayLine, type PackageSale } from "@/lib/session-packages";
+import { addPeriod, autoPayPlan, type PackageSale } from "@/lib/session-packages";
 import { saleMoney, type MoneyLedgerRow } from "@/lib/sale-money";
 
 // Marc Asugui on Nov 11 2026: package 1 paid ($840), package 2 on a Stripe
@@ -29,8 +29,6 @@ const ledger: MoneyLedgerRow[] = [
 ];
 const rate = 0.05;
 const views = sales.map((s) => ({ id: s.id, money: saleMoney(s, ledger.filter((l) => l.purchase_id === s.id), rate, { sessionsUsed: 16 }) }));
-const fmt = (c: number) => `$${(c / 100).toFixed(2)}`;
-const md = (iso: string) => iso.slice(5);
 
 describe("auto-pay pays the packages in order", () => {
   it("projects $168 every 2 weeks over packages 2, 3 and 4, oldest owed first", () => {
@@ -41,16 +39,6 @@ describe("auto-pay pays the packages in order", () => {
     expect(a.covers.get("p3")).toEqual({ payments: 4, first: "2026-11-27", last: "2027-01-08" });
     expect(a.covers.get("p4")).toEqual({ payments: 4, first: "2027-01-22", last: "2027-03-05" });
     expect(a.paidUpOn).toBe("2027-03-05");
-  });
-
-  it("says when auto-pay collects it instead of calling it owed", () => {
-    const a = autoPayPlan(sales, views, rate)!;
-    const line = (id: string) => packagePayLine(views.find((v) => v.id === id)!.money, fmt, { cover: a.covers.get(id), day: md });
-    expect(line("p1")).toEqual({ text: "Paid $840.00", tone: "done" });
-    expect(line("p2")).toEqual({ text: "$168.00 · auto-pay 11-13", tone: "neutral" });
-    expect(line("p3")).toEqual({ text: "$672.00 · auto-pay 11-27 – 01-08", tone: "neutral" });
-    // Without auto-pay it's owed.
-    expect(packagePayLine(views[2].money, fmt)).toEqual({ text: "$672.00 owed", tone: "attention" });
   });
 
   it("never pays a package that pays for itself, nor one sold before the plan", () => {

@@ -109,6 +109,9 @@ export type PackageView = {
   /** First and last session on it, else its term. */
   from: string | null;
   to: string | null;
+  /** The package's own term (its period), when it has one. */
+  termFrom: string | null;
+  termTo: string | null;
   /**
    * waiting: nothing granted yet (sessions start once it's paid); active: has
    * sessions to train; finished: every session trained (or expired).
@@ -148,8 +151,6 @@ export type SessionPackages = {
   unpriced: PackageSessionRow[];
   /** Covered by sessions given free (Adjust / Add free sessions), not by a package. */
   free: PackageSessionRow[];
-  /** The Stripe auto-pay paying their packages, when there is one. */
-  autoPay: AutoPay | null;
   totals: {
     done: number;
     booked: number;
@@ -314,6 +315,8 @@ export function buildSessionPackages(input: {
       sessions,
       from: days[0] ?? s.term_start_date ?? null,
       to: days[days.length - 1] ?? s.term_end_date ?? null,
+      termFrom: s.term_start_date ?? null,
+      termTo: s.term_end_date ?? null,
       phase,
       money,
       expiresAt: (b?.expires_at ?? s.package_expiry_date ?? null)?.slice(0, 10) ?? null,
@@ -368,7 +371,6 @@ export function buildSessionPackages(input: {
     next,
     unpriced,
     free,
-    autoPay: autoPayPlan(sales, views, rate),
     totals: {
       done,
       booked,
@@ -392,43 +394,6 @@ export function dayRange(from: string | null, to: string | null, thisYear = new 
   const b = fmt(to);
   if (a && b) return a === b ? a : `${a} – ${b}`;
   return a ?? b;
-}
-
-/** A package's payment, in a few words, and how loud to say it. */
-export function packagePayLine(
-  m: SaleMoney,
-  fmt: (cents: number) => string,
-  /** Auto-pay's payments still to come on this package, and how to say a day. */
-  auto?: { cover: { payments: number; first: string | null; last: string | null } | null | undefined; day: (iso: string) => string },
-): { text: string; tone: "done" | "attention" | "error" | "neutral" } {
-  const cover = auto?.cover;
-  switch (m.state) {
-    case "paid":
-      return { text: `Paid ${fmt(m.paidCents)}`, tone: "done" };
-    case "free":
-      return { text: "Free", tone: "neutral" };
-    case "past_due":
-      return { text: `Payment failed · ${fmt(m.leftCents)} owed`, tone: "error" };
-    case "left":
-      // Auto-pay will collect it: say when, not that it's owed.
-      if (cover && cover.payments > 0) {
-        const when = cover.first && cover.last
-          ? cover.first === cover.last ? auto!.day(cover.first) : `${auto!.day(cover.first)} – ${auto!.day(cover.last)}`
-          : null;
-        return { text: `${fmt(m.leftCents)} · auto-pay${when ? ` ${when}` : ""}`, tone: "neutral" };
-      }
-      return { text: `${fmt(m.leftCents)} owed`, tone: "attention" };
-    case "waiting":
-      return { text: `Payment link out · ${fmt(m.leftCents)}`, tone: "neutral" };
-    case "renews":
-      return { text: m.paidCents > 0 ? `Paying ${fmt(m.priceCents)}${m.per ? ` every ${m.per}` : ""}` : "Subscription", tone: "neutral" };
-    case "cancelling":
-      return { text: "Subscription ending", tone: "neutral" };
-    case "ended":
-      return { text: "Cancelled", tone: "neutral" };
-    default:
-      return { text: "", tone: "neutral" };
-  }
 }
 
 /** The one thing to do next on a client's sessions (the Sessions tab's one red button). */
