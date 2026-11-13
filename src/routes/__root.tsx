@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { THEME_BOOT_SCRIPT, useThemeSync } from "@/lib/theme";
+import { THEME_BOOT_SCRIPT, THEME_COLOR_SCRIPT, useThemeSync } from "@/lib/theme";
 import { IOS_WEB_APP_BOOT_SCRIPT } from "@/lib/ios-edge";
 import { installShakeUndoGuard } from "@/lib/shake-undo-guard";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -242,11 +242,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "JF Effect" },
       { name: "description", content: "JF Effect — personal training in Selkirk, MB and online fitness coaching for Selkirk, Winnipeg, and beyond. Strength, fat loss, muscle building, and powerlifting coaching by Jared James Fit." },
       { name: "author", content: "Jared James Fit | JF Effect" },
-      { name: "theme-color", content: "#0a0a0a" },
+      // the page's own colour (THEME_COLOR); THEME_COLOR_SCRIPT sets the dark one before the first frame
+      { name: "theme-color", content: "#f6f7f8" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-title", content: "JF Effect" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      // solid: the home-screen app starts right under the clock, with nothing under the status bar for iOS to blur (ios-edge.ts)
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "geo.region", content: "CA-MB" },
       { name: "geo.placename", content: "Selkirk, Manitoba" },
       { name: "geo.position", content: "50.1436;-96.8839" },
@@ -363,6 +365,8 @@ function RootShell({ children }: { children: ReactNode }) {
         {/* The iPhone home-screen app: top bars start below iOS's own blur (ios-edge.ts). */}
         <script dangerouslySetInnerHTML={{ __html: IOS_WEB_APP_BOOT_SCRIPT }} />
         <HeadContent />
+        {/* The status bar takes the theme's colour from the first frame (the tags above exist now). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_COLOR_SCRIPT }} />
       </head>
       <body>
         {/* iOS 26 blurs whatever web content sits under the status bar (its

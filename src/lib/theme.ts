@@ -22,7 +22,12 @@ export const THEME_CHANGE_EVENT = "jf-theme-change";
 export const THEMED_PATH_RE = /^\/(portal|admin|coach|m|media|notifications|finance|challenges|athletes)(\/|$)/;
 
 /** Browser chrome / PWA status bar colour (light keeps the original brand value). */
-export const THEME_COLOR: Record<Theme, string> = { light: "#0a0a0a", dark: "#111114" };
+/**
+ * The colour of the bar above the page (the iPhone home-screen app's solid status
+ * bar, Android's): each theme's own page background (--background), so the status
+ * bar and the app read as one surface. Crew's paged feed sets black while it's open.
+ */
+export const THEME_COLOR: Record<Theme, string> = { light: "#f6f7f8", dark: "#0d0d0f" };
 
 export function readStoredTheme(): Theme {
   try {
@@ -109,3 +114,10 @@ export function useThemeSync(pathname: string) {
 
 /** Inline boot script — must mirror applyTheme(). Runs before first paint. */
 export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)})==="dark"&&${THEMED_PATH_RE.toString()}.test(location.pathname)?"dark":"light";var r=document.documentElement;if(t==="dark")r.classList.add("dark");r.style.colorScheme=t;var c=${JSON.stringify(THEME_COLOR)}[t];var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++)m[i].setAttribute("content",c);}catch(e){}})();`;
+
+/**
+ * Right after the head's tags (THEME_BOOT_SCRIPT runs before they exist): the
+ * bar above the page takes the theme already applied, from the very first
+ * frame (the iPhone home-screen app's solid status bar reads it at launch).
+ */
+export const THEME_COLOR_SCRIPT = `(function(){try{var c=document.documentElement.classList.contains("dark")?${JSON.stringify(THEME_COLOR.dark)}:${JSON.stringify(THEME_COLOR.light)};var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++)m[i].setAttribute("content",c);}catch(e){}})();`;
