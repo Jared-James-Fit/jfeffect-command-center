@@ -10,6 +10,7 @@ import {
   shouldPersistQuery,
 } from "@/lib/query-persister";
 import { Toaster } from "sonner";
+import { PortraitOnly } from "@/components/portrait-only";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { saveLastRoute } from "@/lib/route-persistence";
 import { ClientImpersonationProvider } from "@/lib/client-impersonation";
@@ -411,6 +412,8 @@ function RootComponent() {
             <PwaUpdateToast />
             {/* Single global media viewer — portalled above every overlay. */}
             <MediaViewerRoot />
+            {/* A phone held on its side where the browser can't lock it upright: turn it back (portrait-only.ts) */}
+            <PortraitOnly />
           </MediaViewerProvider>
       </ClientImpersonationProvider>
     </AuthProvider>

@@ -30,7 +30,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(css).toContain("html.feed-paging [data-shell-root],");
     expect(read("src/components/app-shell.tsx")).toContain("data-shell-root>");
     // the whole screen under the status bar on a phone, Crew's bar floating over it; on a computer the bar scrolls away
-    expect(css).toContain("  --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top));");
+    expect(css).toContain("  --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) - var(--app-edge-room));");
     expect(css).toContain(":root { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px;");
     expect(screen).toContain("overlay={paging}");
   });

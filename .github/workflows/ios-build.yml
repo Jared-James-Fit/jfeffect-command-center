@@ -199,6 +199,25 @@ jobs:
           print("✅ Purpose strings set: " + ", ".join(strings))
           PYEOF
 
+      # ── Portrait only on iPhone (TikTok's, Instagram's) ──────────────────────
+      # `cap add ios` regenerates Info.plist every build, so it's set here every
+      # build. iPads keep every orientation (their own key, left as it is).
+      - name: Keep the iPhone app upright
+        run: |
+          python3 << 'PYEOF'
+          import plistlib
+          info = "ios/App/App/Info.plist"
+          with open(info, "rb") as f:
+              pl = plistlib.load(f)
+          pl["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationPortrait"]
+          with open(info, "wb") as f:
+              plistlib.dump(pl, f)
+          with open(info, "rb") as f:
+              check = plistlib.load(f)
+          assert check["UISupportedInterfaceOrientations"] == ["UIInterfaceOrientationPortrait"], "orientation not set"
+          print("✅ iPhone: portrait only; iPad:", check.get("UISupportedInterfaceOrientations~ipad"))
+          PYEOF
+
       # The web app can tell which iPhone build it's running in (e.g. to say
       # "update the app" when a build is too old for the camera): Capacitor
       # appends this to the web view's user agent. The App plugin isn't linked.

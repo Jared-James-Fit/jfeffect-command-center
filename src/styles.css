@@ -384,13 +384,15 @@ html[data-keyboard-open="true"] {
 /* The iPhone home-screen app (ios-edge.ts): iOS blurs ~40pt under the notch over any
    web content, fixed bars included, so the bars (and Focus) start below it there. Before
    the View as client rule, which still wins (the banner holds the notch then). */
-:root { --ios-edge-room: 0px; }
+:root { --ios-edge-room: 0px; --app-edge-room: 0px; }
 html[data-ios-web-app] {
   --ios-edge-room: 28px;
+  /* the part of --app-safe-top that's iOS's blur, not the notch (0 wherever it isn't added) */
+  --app-edge-room: var(--ios-edge-room);
   --app-safe-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
   --focus-top: calc(env(safe-area-inset-top, 0px) + var(--ios-edge-room));
 }
-html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); }
+html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); --app-edge-room: 0px; }
 
 :root { --shell-topbar-h: 0px; }
 @media (max-width: 768px) {
@@ -1269,9 +1271,11 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
    posts, the stories and the empty note fill the screen (its height set from where
    it starts). The paged feed is always dark, whatever the theme (TikTok's, Reels'). */
 :root {
-  --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top));
-  /* what covers a post's screen: Crew's bar floats over its top, the tab bar takes its bottom (a post ends at it) */
-  --feed-bar-room: 3rem;
+  /* a post starts right under the status bar: on the iPhone home-screen app it runs up through the band
+     the bars leave for iOS's blur (a picture there can blur; Crew's icons stay below it) */
+  --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) - var(--app-edge-room));
+  /* what covers a post's screen: Crew's bar floats over its top (with that band), the tab bar takes its bottom (a post ends at it) */
+  --feed-bar-room: calc(3rem + var(--app-edge-room));
   --feed-nav-room: var(--mobile-bar-top);
   /* a post's words and its buttons down the right sit just above the tab bar, TikTok's */
   --feed-words-bottom: calc(var(--mobile-bar-top) + 12px);
@@ -1310,11 +1314,12 @@ html.feed-paging main { overflow-x: clip; }
     inset: 0 0 -28px 0;
     z-index: -1;
     pointer-events: none;
+    /* the notch solid black; from there (iOS's blur band on the home-screen app included) a shade over the post */
     background: linear-gradient(
       to bottom,
       #000 0,
-      #000 var(--app-safe-top),
-      rgb(0 0 0 / 0.45) var(--app-safe-top),
+      #000 calc(var(--app-safe-top) - var(--app-edge-room)),
+      rgb(0 0 0 / 0.5) calc(var(--app-safe-top) - var(--app-edge-room)),
       rgb(0 0 0 / 0) 100%
     );
   }

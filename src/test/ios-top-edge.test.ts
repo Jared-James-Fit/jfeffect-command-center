@@ -35,7 +35,7 @@ describe("iOS 26 status-bar strip", () => {
   it("over the paged feed the bar is see-through (the posts run up under it), its notch solid black and the status bar black too", () => {
     const css = read("src/styles.css");
     expect(css).toContain(".crew-bar[data-overlay] { background-color: transparent; }");
-    expect(css).toContain("      #000 var(--app-safe-top),\n      rgb(0 0 0 / 0.45) var(--app-safe-top),");
+    expect(css).toContain("      #000 calc(var(--app-safe-top) - var(--app-edge-room)),\n      rgb(0 0 0 / 0.5) calc(var(--app-safe-top) - var(--app-edge-room)),");
     // iOS reads the strip's colour for the status bar: black over the feed, never the light theme's white
     expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
     expect(css).not.toMatch(/\.crew-bar\[data-overlay\][^}]*backdrop-filter/);
@@ -76,5 +76,46 @@ describe("the native iPhone app", () => {
     expect(ci).toContain("if #available(iOS 26.0, *), let scrollView = (window?.rootViewController as? CAPBridgeViewController)?.webView?.scrollView {");
     expect(ci).toContain("scrollView.topEdgeEffect.isHidden = true");
     expect(ci).toContain("scrollView.bottomEdgeEffect.isHidden = true");
+  });
+});
+
+describe("Crew's feed uses the band under the clock (TikTok's)", () => {
+  const css = read("src/styles.css");
+  it("a post starts right under the status bar; the band the bars leave for iOS's blur shows the post, Crew's icons stay below it", () => {
+    // the edge room in effect: the home-screen app's 28px, none in View as client (the banner holds the notch) or elsewhere
+    expect(css).toContain(":root { --ios-edge-room: 0px; --app-edge-room: 0px; }");
+    expect(css).toContain("  --app-edge-room: var(--ios-edge-room);");
+    expect(css).toContain("html[data-pov-banner-on] { --app-safe-top: 0px; --app-chrome-top: var(--pov-banner-h, 0px); --app-edge-room: 0px; }");
+    expect(css).toContain("  --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) - var(--app-edge-room));");
+    // what sits at a post's top moves down past the band and the bar's row
+    expect(css).toContain("  --feed-bar-room: calc(3rem + var(--app-edge-room));");
+  });
+});
+
+describe("phones stay upright (TikTok's, Instagram's)", () => {
+  it("the installed iPhone app is portrait only (iPads keep every orientation)", () => {
+    const wf = read(".github/workflows/ios-build.yml");
+    expect(wf).toContain('pl["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationPortrait"]');
+    expect(wf).not.toContain('pl["UISupportedInterfaceOrientations~ipad"]');
+    expect(read("public/manifest.json")).toContain('"orientation": "portrait-primary"');
+  });
+
+  it("where the browser can't lock it, a phone on its side gets one screen asking to turn it back", async () => {
+    const { phoneOnItsSide } = await import("@/lib/portrait-only");
+    const phone = { screenW: 430, screenH: 932, coarse: true };
+    expect(phoneOnItsSide({ ...phone, type: "landscape-primary" })).toBe(true);
+    expect(phoneOnItsSide({ ...phone, type: "portrait-primary" })).toBe(false);
+    // older iPhones: window.orientation
+    expect(phoneOnItsSide({ ...phone, angle: 90 })).toBe(true);
+    expect(phoneOnItsSide({ ...phone, angle: -90 })).toBe(true);
+    expect(phoneOnItsSide({ ...phone, angle: 0 })).toBe(false);
+    // tablets and computers turn freely; nothing known, nothing shown
+    expect(phoneOnItsSide({ screenW: 744, screenH: 1133, coarse: true, type: "landscape-primary" })).toBe(false);
+    expect(phoneOnItsSide({ screenW: 390, screenH: 844, coarse: false, type: "landscape-primary" })).toBe(false);
+    expect(phoneOnItsSide({ ...phone })).toBe(false);
+    // read from the device, never the viewport's shape (a keyboard makes an upright phone's viewport wide)
+    const lib = read("src/lib/portrait-only.ts");
+    expect(lib).not.toContain("innerWidth");
+    expect(read("src/routes/__root.tsx")).toContain("<PortraitOnly />");
   });
 });
