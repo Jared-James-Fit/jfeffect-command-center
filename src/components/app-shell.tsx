@@ -7,6 +7,7 @@ import {
   ChevronsDownUp, ChevronsUpDown, BookOpen, Users, UserCog, IdCard, Pin, PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFeedPaging } from "@/lib/feed-paging";
 import { useClientNavBadges, markNavSeen } from "@/hooks/use-client-nav-badges";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import { UserAvatar } from "@/components/user-avatar";
@@ -1578,6 +1579,8 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
 }) {
   // A raised centre button pokes out of the bar, so the bar can't clip.
   const raised = items.some((i) => i.featured);
+  // over Crew's paged feed the bar is dark whatever the theme, like the posts under it (TikTok's)
+  const overFeed = useFeedPaging();
   const cols = items.length;
   const gridCols =
     cols === 5 ? "grid-cols-5" : cols === 4 ? "grid-cols-4" : cols === 3 ? "grid-cols-3" : "grid-cols-2";
@@ -1595,7 +1598,7 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
       <div
         aria-hidden
         data-mobile-bottom-nav
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background via-background/85 to-transparent md:hidden"
+        className={cn("pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background via-background/85 to-transparent md:hidden", overFeed && "dark")}
         style={{ height: `calc(${BAR_BOTTOM} + 44px)` }}
       />
       <nav
@@ -1607,6 +1610,7 @@ export function MobileBottomBar({ items, pathname, search, hash = "", navBadges,
           raised ? "overflow-visible" : "overflow-hidden",
           dense ? "px-0.5" : "px-1",
           gridCols,
+          overFeed && "dark text-foreground",
         )}
         style={{ bottom: BAR_BOTTOM }}
       >

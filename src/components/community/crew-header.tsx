@@ -53,12 +53,18 @@ export function useBarHidden(enabled: boolean): boolean {
  * while you read down; on wider screens it sits at the top of the column. A
  * coach viewing as a client gets the very same bar, under the preview banner
  * (--app-chrome-top), so there's still one bar.
+ *
+ * `overlay`: over the paged feed's posts (TikTok's): on a phone it's
+ * see-through with a soft shade under its icons and the notch kept solid
+ * black (styles.css, `.crew-bar[data-overlay]`), so every post runs up under
+ * it; always dark, like the feed under it.
  */
-export function CrewBar({ left, center, right, hidden = false, label }: {
+export function CrewBar({ left, center, right, hidden = false, overlay = false, label }: {
   left?: ReactNode;
   center?: ReactNode;
   right?: ReactNode;
   hidden?: boolean;
+  overlay?: boolean;
   label: string;
 }) {
   return (
@@ -67,7 +73,9 @@ export function CrewBar({ left, center, right, hidden = false, label }: {
         aria-label={label}
         data-crew-bar
         data-hidden={hidden ? "" : undefined}
-        className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background md:relative md:inset-auto"
+        data-overlay={overlay ? "" : undefined}
+        // over the paged feed it's dark whatever the theme, like the posts under it
+        className={cn("crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background md:relative md:inset-auto", overlay && "dark text-foreground")}
         style={{ paddingTop: "var(--app-safe-top)" }}
       >
         <div className="relative mx-auto flex w-full max-w-[560px] items-center justify-between px-1.5" style={{ height: CREW_BAR_HEIGHT }}>

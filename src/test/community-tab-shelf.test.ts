@@ -86,7 +86,7 @@ describe("client tab bar: Crew in the centre", () => {
     // same 16px gutter as the page's px-4
     expect(shell).toContain('"fixed inset-x-4 z-50 mx-auto grid max-w-md');
     // the fade is tagged like the bar, so keyboard / workout focus / pinch-zoom hide and pin it too
-    expect(shell).toMatch(/aria-hidden\s+data-mobile-bottom-nav\s+className="pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background/);
+    expect(shell).toMatch(/aria-hidden\s+data-mobile-bottom-nav\s+className=\{cn\("pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background/);
   });
 
   it("holds still while scrolling: only pinned to the visual viewport when zoomed or the keyboard is up", () => {

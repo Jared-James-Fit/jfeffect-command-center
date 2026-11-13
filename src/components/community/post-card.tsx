@@ -437,7 +437,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     let raf = 0;
     const check = () => {
       raf = 0;
-      setUnder(belowTopBar(articleRef.current) > 4);
+      setUnder(belowSnap(articleRef.current) > 4);
     };
     const later = () => {
       if (!raf) raf = requestAnimationFrame(check);
@@ -451,12 +451,12 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       window.removeEventListener("resize", later);
     };
   }, [layout, pageFirst]);
-  // its sheet open: the shrunk post also takes the room above it up to Crew's bar (the story rail on the first screen)
+  // its sheet open: the shrunk post sits right under Crew's bar (over the story rail on the first screen)
   const [raise, setRaise] = useState(0);
   useLayoutEffect(() => {
     const a = articleRef.current;
     if (layout !== "page" || !sheetOpen || !a) return setRaise(0);
-    setRaise(belowTopBar(a));
+    setRaise(belowBar(a));
   }, [layout, sheetOpen]);
   const singleTimer = useRef<number | null>(null);
   const s = post.stats;
@@ -492,7 +492,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     lastTap.current = now;
     // on its own screen, a post still partly under the stories comes up whole on a tap (TikTok's Friends)
     if (layout === "page") {
-      const below = belowTopBar(articleRef.current);
+      const below = belowSnap(articleRef.current);
       if (below > 4) {
         singleTimer.current = window.setTimeout(() => {
           singleTimer.current = null;
@@ -553,14 +553,15 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out motion-reduce:transition-none",
             sheetOpen && (visual ? "bg-black" : "bg-background"),
           )}
-          style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--bottom-nav-clearance)" }}
+          // the whole screen, Crew's bar and the tab bar floating over it (TikTok's)
+          style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : 0 }}
           data-post-hero
           data-sheet-open={sheetOpen ? "" : undefined}
         >
           {visual ? (
             auto ? (
-              // an automated post's 4:5 card: the full width, black above and below, centred
-              <FitBox ratio={0.8}>
+              // an automated post's 4:5 card: the full width, black above and below, centred between the bars
+              <FitBox ratio={0.8} page>
                 <AutoPostHero post={post} thumbUrl={thumbUrl} unit={unit} />
               </FitBox>
             ) : (
@@ -569,7 +570,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             )
           ) : (
             // words, a workout, a lock in: centred, clear of the words and buttons around it (it scrolls when it's long)
-            <div className="absolute inset-0 overflow-y-auto pb-44 pl-3 pr-16 pt-6" data-page-body>
+            <div className="absolute inset-0 overflow-y-auto pl-3 pr-16" style={PAGE_BODY_ROOM} data-page-body>
               <div className="flex min-h-full flex-col justify-center gap-3">
                 {isNote ? (
                   <>
@@ -599,16 +600,17 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {note.sheet}
 
         {/* bottom left: who, and the words (over a soft shade on a picture) */}
+        {/* low on the screen, just above the tab bar (TikTok's), its shade running down under the bar */}
         <div
           className={cn(
-            "pointer-events-none absolute inset-x-0 z-[2] pt-16 transition-opacity duration-200",
-            visual && "bg-gradient-to-t from-black/70 via-black/30 to-transparent",
+            "pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200",
+            visual && "bg-gradient-to-t from-black/75 via-black/35 to-transparent",
             (sheetOpen || under) && "opacity-0",
           )}
-          style={{ bottom: "var(--bottom-nav-clearance)" }}
+          style={{ paddingBottom: "var(--feed-words-bottom)" }}
           data-page-words
         >
-          <div className={cn("mr-16 space-y-1.5 px-3 pb-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && "pointer-events-auto")}>
+          <div className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && "pointer-events-auto")}>
             {note.bubble && <div data-note-over>{note.bubble}</div>}
             <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
             <AuthorLine
@@ -664,7 +666,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]",
             (sheetOpen || under) && "pointer-events-none opacity-0",
           )}
-          style={{ bottom: "calc(var(--bottom-nav-clearance) + 0.75rem)" }}
+          style={{ bottom: "var(--feed-actions-bottom)" }}
           data-page-actions
         >
           <ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />
@@ -1082,12 +1084,29 @@ export function PostMedia({
   );
 }
 
-/** How far a post's screen still sits below Crew's bar (the stories above the first post), in px; 0 once it's up whole. */
-function belowTopBar(el: HTMLElement | null): number {
-  if (!el) return 0;
-  const bar = document.querySelector("[data-crew-bar]")?.getBoundingClientRect().bottom ?? 0;
-  return Math.max(0, Math.round(el.getBoundingClientRect().top - Math.max(0, bar)));
+/** Where a post's screen snaps, from the top of the window: just under the status bar on a phone (Crew's bar floats over it). */
+function snapLine(el: HTMLElement | null): number {
+  const page = el?.closest<HTMLElement>(".feed-page") ?? el;
+  return page ? parseFloat(getComputedStyle(page).scrollMarginTop) || 0 : 0;
 }
+
+/** How far a post's screen still sits below where it snaps (the stories above the first post), in px; 0 once it's up whole. */
+function belowSnap(el: HTMLElement | null): number {
+  if (!el) return 0;
+  return Math.max(0, Math.round(el.getBoundingClientRect().top - snapLine(el)));
+}
+
+/** How far a post's screen starts below Crew's bar: negative once it's up (the bar floats over its top). */
+function belowBar(el: HTMLElement): number {
+  const bar = document.querySelector("[data-crew-bar]")?.getBoundingClientRect().bottom ?? 0;
+  return Math.round(el.getBoundingClientRect().top - Math.max(0, bar));
+}
+
+/** Words, a workout or a lock in on its screen: clear of Crew's bar above and the words and tab bar below. */
+const PAGE_BODY_ROOM = { paddingTop: "calc(var(--feed-bar-room) + 1.5rem)", paddingBottom: "calc(var(--feed-words-bottom) + 8rem)" } as const;
+
+/** On a post's screen, a picture shown whole sits between Crew's bar and the tab bar (what floats over the screen). */
+const BETWEEN_BARS = { top: "var(--feed-bar-room)", bottom: "var(--feed-nav-room)" } as const;
 
 /**
  * A box's shape (width / height, to 3 places so a sub-pixel change never
@@ -1115,9 +1134,9 @@ function useBoxRatio(active: boolean): [(el: HTMLDivElement | null) => void, num
  * width / height), centred: the full width for anything wider than the box,
  * the full height for anything taller (a 9:16 clip on a phone).
  */
-function FitBox({ ratio, children }: { ratio: number; children: ReactNode }) {
+function FitBox({ ratio, children, page = false }: { ratio: number; children: ReactNode; page?: boolean }) {
   return (
-    <div className="absolute inset-0 grid place-items-center" style={{ containerType: "size" }} data-fit-box>
+    <div className="absolute inset-0 grid place-items-center" style={page ? { ...BETWEEN_BARS, containerType: "size" } : { containerType: "size" }} data-fit-box>
       <div className="relative" style={{ width: `min(100cqw, calc(100cqh * ${ratio}))`, aspectRatio: String(ratio) }}>
         {children}
       </div>
@@ -1163,7 +1182,8 @@ function SlideMedia({
           <InlineVideo path={slide.path} poster={thumbUrl} active={active} position={position} fit={fit} controls={page ? "top" : "bottom"} />
         </div>
       ) : (
-        <div data-pinch-zoom className="absolute inset-0">
+        // on a post's screen a photo shows whole, between Crew's bar and the tab bar
+        <div data-pinch-zoom className="absolute inset-0" style={page ? BETWEEN_BARS : undefined}>
           {src ? <FadeImg src={src} position={position} whole={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
         </div>
       )}
@@ -1185,9 +1205,11 @@ function SlideCaption({ caption, withDots, top = false }: { caption: { title: st
       className={cn(
         "pointer-events-none absolute inset-x-0 pl-3.5 pr-14 text-white",
         // on a post's own screen its words are at the bottom, so the set's sit at the top
-        top ? "top-0 bg-gradient-to-b from-black/65 via-black/25 to-transparent pb-10 pt-3" : "bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pt-12",
+        top ? "top-0 bg-gradient-to-b from-black/65 via-black/25 to-transparent pb-10" : "bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pt-12",
         !top && (withDots ? "pb-7" : "pb-3"),
       )}
+      // on a post's screen, under Crew's bar
+      style={top ? { paddingTop: "calc(var(--feed-bar-room, 0px) + 0.75rem)" } : undefined}
     >
       <div className="truncate text-[15px] font-semibold leading-tight [text-shadow:0_1px_2px_rgb(0_0_0/0.45)]">{caption.title}</div>
       <div className="mt-0.5 truncate text-[13px] tabular-nums text-white/85">{caption.detail}</div>
@@ -1310,7 +1332,7 @@ function PostCarousel({
           </div>
         )}
       </div>
-      <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur">
+      <span className={cn("pointer-events-none absolute right-2.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white backdrop-blur", page ? "top-[calc(var(--feed-bar-room)+0.625rem)]" : "top-2.5")}>
         {index + 1}/{count}
       </span>
       {/* the dots; on a post's screen its words and buttons sit at the bottom, so "2/4" up top says it */}

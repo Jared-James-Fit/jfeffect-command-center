@@ -28,8 +28,17 @@ describe("iOS 26 status-bar strip", () => {
 
   it("the Crew bar is opaque with no backdrop blur (Safari reads a blur as several colours)", () => {
     const bar = read("src/components/community/crew-header.tsx");
-    expect(bar).toContain('className="crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background md:relative md:inset-auto"');
+    expect(bar).toContain('className={cn("crew-bar fixed inset-x-0 top-[var(--app-chrome-top)] z-40 bg-background md:relative md:inset-auto", overlay && "dark text-foreground")}');
     expect(bar).not.toContain("backdrop-blur-xl");
+  });
+
+  it("over the paged feed the bar is see-through (the posts run up under it), its notch solid black and the status bar black too", () => {
+    const css = read("src/styles.css");
+    expect(css).toContain(".crew-bar[data-overlay] { background-color: transparent; }");
+    expect(css).toContain("      #000 var(--app-safe-top),\n      rgb(0 0 0 / 0.45) var(--app-safe-top),");
+    // iOS reads the strip's colour for the status bar: black over the feed, never the light theme's white
+    expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
+    expect(css).not.toMatch(/\.crew-bar\[data-overlay\][^}]*backdrop-filter/);
   });
 });
 

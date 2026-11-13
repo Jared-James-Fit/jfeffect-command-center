@@ -84,6 +84,11 @@ export function autoplayAllowed(): boolean {
   return !conn?.saveData;
 }
 
+/** On a post's screen, a clip shown whole sits between Crew's bar and the tab bar (what floats over the screen). */
+const BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", bottom: "var(--feed-nav-room, 0px)" } as const;
+/** Its poster the same (an image only stretches between top and bottom with a height of its own). */
+const POSTER_BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", height: "calc(100% - var(--feed-bar-room, 0px) - var(--feed-nav-room, 0px))" } as const;
+
 /**
  * A post's clip in the feed (and the post page): its poster first, then it
  * plays, with its sound (useFeedSoundMode) and looping, while at least 60%
@@ -247,9 +252,12 @@ export function InlineVideo({
   }, [el, sound, mode]);
 
   const soundOn = sound && !blocked;
+  // on a post's screen (controls up top), shown whole: between the bars
+  const between = controls === "top" && fit === "contain";
   return (
     <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit}>
-      <div ref={host} className="absolute inset-0" />
+      {/* on a post's screen a clip shown whole sits between Crew's bar and the tab bar; one that fills it runs under both */}
+      <div ref={host} className="absolute inset-0" style={between ? BETWEEN_BARS : undefined} />
       {poster && (
         <img
           src={poster}
@@ -260,7 +268,7 @@ export function InlineVideo({
             fit === "contain" ? "object-contain" : "object-cover",
             playing ? "opacity-0" : "opacity-100",
           )}
-          style={position && fit === "cover" ? { objectPosition: position } : undefined}
+          style={between ? POSTER_BETWEEN_BARS : position && fit === "cover" ? { objectPosition: position } : undefined}
         />
       )}
       {!auto && !tapped && (
@@ -302,7 +310,7 @@ export function InlineVideo({
           }}
           className={cn(
             "absolute right-2.5 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
-            controls === "top" ? "top-12" : "bottom-2.5",
+            controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5",
           )}
           aria-label={soundOn ? "Mute" : "Turn sound on"}
           aria-pressed={soundOn}
