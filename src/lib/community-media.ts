@@ -143,6 +143,17 @@ export async function retrimPicked(m: PickedMedia, trim: TrimFn, context: VideoC
   return clipMedia(m.file, { ...next, context });
 }
 
+/**
+ * The same picked clip posted with or without its sound. A new PickedMedia
+ * (so it gets its own upload) that shares the old one's preview and poster:
+ * the caller drops the old one without releasing it, and nothing on screen
+ * reloads. Null when it's already that way.
+ */
+export function withSound(m: PickedMedia, sound: boolean): PickedMedia | null {
+  if (!m.video || !m.video.info.hasAudio || !m.video.muted === sound) return null;
+  return { ...m, video: { ...m.video, muted: !sound } };
+}
+
 /** Seconds a picked clip will run once trimmed. */
 export function pickedSeconds(m: PickedMedia | null | undefined): number | null {
   const v = m?.video;
@@ -209,7 +220,7 @@ async function uploadVideo(m: PickedMedia, userId: string, onProgress?: (pct: nu
   let entry = clipSends.get(m);
   if (!entry || entry.userId !== userId) {
     const stem = `${userId}/${Date.now()}-${crypto.randomUUID()}`;
-    entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem }), poster: null };
+    entry = { userId, stem, send: createVideoSend({ file: m.file, info: v.info, canEncode: v.canEncode, trim: v.trim, context: v.context, bucket: COMMUNITY_BUCKET, userId, stem, muted: v.muted }), poster: null };
     clipSends.set(m, entry);
   }
   const e = entry;

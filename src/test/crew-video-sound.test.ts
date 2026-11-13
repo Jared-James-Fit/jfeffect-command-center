@@ -182,13 +182,14 @@ describe("feed clips play with their sound", () => {
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain("const forSound = justGaveSound();");
     // on a post's screen it says so in the middle (sound on) and never mutes it again
-    expect(card).toContain("if (layout === \"page\") {\n      if (forSound) {\n        flashSound(true);\n        return;\n      }");
+    expect(card).toContain("if (layout === \"page\") {\n      // a clip with no sound: the tap says so and leaves the feed's sound as it was\n      if (clip.hasAttribute(\"data-silent\")) {");
+    expect(card).toContain("      if (forSound) {\n        flashSound(true);\n        return;\n      }");
     expect(card).toContain("    if (forSound) return;\n    singleTimer.current = window.setTimeout(() => {\n      singleTimer.current = null;\n      toggleFeedSound();");
   });
 
   it("while the phone holds a clip's sound back, its speaker says Tap for sound", () => {
     const inline = read("src/components/community/inline-video.tsx");
-    expect(inline).toContain('const askTap = sound && blocked && controls !== "corner";');
+    expect(inline).toContain('const askTap = sound && blocked && !silent && controls !== "corner";');
     expect(inline).toContain("{askTap && <span>Tap for sound</span>}");
     expect(inline).toContain('data-sound-held={askTap ? "" : undefined}');
   });
@@ -222,7 +223,7 @@ describe("on a post's screen a clip's sound is a tap, Instagram's Reels", () => 
   });
 
   it("the clip is the speaker there: no speaker button, only Tap for sound while the phone holds it", () => {
-    expect(inline).toContain('{(auto || tapped) && !failed && (controls !== "top" || askTap) && (');
+    expect(inline).toContain('{(auto || tapped) && !failed && !silent && (controls !== "top" || askTap) && (');
   });
 
   it("turned back on by a tap a moment later: a clip the phone stops for it plays again muted with Tap for sound", () => {

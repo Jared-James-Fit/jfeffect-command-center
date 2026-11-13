@@ -15,6 +15,8 @@ export type PickedVideo = {
   canEncode: boolean;
   /** The part to publish; null = all of it. */
   trim: VideoTrim | null;
+  /** Posted with no sound (the audio track is left out when it's prepared). */
+  muted?: boolean;
 };
 
 export type TrimRequest = {

@@ -559,6 +559,14 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
     const forSound = justGaveSound();
     // on its own screen a clip is already full size: a tap is its sound, on or off, said in the middle (Instagram's)
     if (layout === "page") {
+      // a clip with no sound: the tap says so and leaves the feed's sound as it was
+      if (clip.hasAttribute("data-silent")) {
+        singleTimer.current = window.setTimeout(() => {
+          singleTimer.current = null;
+          flashSound(false);
+        }, 300);
+        return;
+      }
       if (forSound) {
         flashSound(true);
         return;

@@ -191,7 +191,7 @@ export function FrameGuides({ active, snapV, snapH, aspect, gridPreview }: { act
  * the frame. `framing` is the parent's (what gets baked into a photo, or a
  * clip's frame). With a card on top (`showImage` off) it still takes the
  * gestures and the card repaints from `framing`. `video`: a clip, playing
- * (muted, its selection looping) where the photo would be.
+ * (its selection looping, muted unless `sound`) where the photo would be.
  */
 export function PhotoFramer({
   src,
@@ -208,7 +208,7 @@ export function PhotoFramer({
   onClaim,
 }: {
   src: string | null;
-  video?: { src: string; trim?: VideoTrim | null; poster?: string } | null;
+  video?: { src: string; trim?: VideoTrim | null; poster?: string; sound?: boolean } | null;
   /** The photo's own size (px). */
   size: Size;
   /** The frame on screen (px). */
@@ -287,6 +287,7 @@ export function PhotoFramer({
           src={video.src}
           trim={video.trim}
           poster={video.poster}
+          sound={!!video.sound}
           className="pointer-events-none absolute left-0 top-0 max-w-none select-none object-fill"
           style={{ width: p.w, height: p.h, transform: `translate3d(${p.x}px, ${p.y}px, 0)` }}
           data-framed-clip

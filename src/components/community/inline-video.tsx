@@ -6,6 +6,7 @@ import { ClipFrameBox } from "@/components/community/clip-frame-box";
 import { useFullMediaUrl } from "@/lib/community.queries";
 import { preferAmbientAudio } from "@/lib/audio-session";
 import { SOUND_BLOCKED_EVENT, acquireFeedVideo, playFeedVideo, releaseFeedVideo, setSoundWanted, soundBlocked, unmuteBlocked } from "@/lib/video-pool";
+import { clipIsSilent, type SilentProbe } from "@/lib/video-silent";
 
 /*
  * Sound in the feed: clips play with their sound by default. One speaker for
@@ -163,6 +164,8 @@ export function InlineVideo({
   const [failed, setFailed] = useState(false);
   const [tapped, setTapped] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  // no sound track (posted with no sound): no speaker, no "Tap for sound"
+  const [silent, setSilent] = useState(false);
   // a finger held on it (on a post's own screen): paused until it lets go
   const [holdPaused, setHoldPaused] = useState(false);
   const [el, setEl] = useState<HTMLVideoElement | null>(null);
@@ -212,19 +215,27 @@ export function InlineVideo({
     if (v.getAttribute("src") !== url) v.src = url;
     h.appendChild(v);
     setEl(v);
+    const readSound = () => {
+      const s = clipIsSilent(v as unknown as SilentProbe);
+      if (s != null) setSilent(s);
+    };
     const handlers: [string, () => void][] = [
       ["playing", () => setPlaying(true)],
       ["pause", () => setPlaying(false)],
       ["error", () => setFailed(true)],
       [SOUND_BLOCKED_EVENT, () => setBlocked(soundBlocked(v))],
+      ["loadedmetadata", readSound],
+      ["timeupdate", readSound],
     ];
     handlers.forEach(([k, f]) => v.addEventListener(k, f));
+    readSound();
     return () => {
       handlers.forEach(([k, f]) => v.removeEventListener(k, f));
       releaseFeedVideo(v);
       setEl(null);
       setPlaying(false);
       setBlocked(false);
+      setSilent(false);
     };
   }, [inRange, url]);
 
@@ -291,11 +302,11 @@ export function InlineVideo({
 
   const soundOn = sound && !blocked;
   // the phone is holding its sound back until a tap: say so, plainly (TikTok's "Tap for sound")
-  const askTap = sound && blocked && controls !== "corner";
+  const askTap = sound && blocked && !silent && controls !== "corner";
   // on a post's screen (controls up top), shown whole: between the bars
   const between = controls === "top" && fit === "contain";
   return (
-    <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit}>
+    <div ref={wrap} className="absolute inset-0 bg-black" data-inline-video={playing ? "playing" : "poster"} data-slide-path={path} data-fit={fit} data-silent={silent ? "" : undefined}>
       {frame ? (
         // framed in the studio: just that part, as its frame (its poster is that frame too)
         <ClipFrameBox
@@ -351,7 +362,7 @@ export function InlineVideo({
         </button>
       )}
       {/* on a post's screen the clip itself is the speaker (a tap, Instagram's): only "Tap for sound" shows there */}
-      {(auto || tapped) && !failed && (controls !== "top" || askTap) && (
+      {(auto || tapped) && !failed && !silent && (controls !== "top" || askTap) && (
         <button
           type="button"
           onClick={(e) => {

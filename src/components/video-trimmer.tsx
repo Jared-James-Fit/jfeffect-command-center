@@ -732,13 +732,33 @@ function formatTenths(t: number) {
 }
 
 /**
- * A picked clip playing just its selection, muted, round and round (the
- * studio's stage while you write the caption): what you see is what goes.
+ * A picked clip playing just its selection, round and round (the studio's
+ * stage while you write the caption): what you see is what goes. Muted
+ * unless `sound` (the studio's speaker turned it on with a tap); a phone that
+ * won't play it with sound plays it muted.
  */
-export function TrimmedVideo({ src, trim, poster, className, style, ...rest }: { src: string; trim: VideoTrim | null | undefined; poster?: string; className?: string; style?: React.CSSProperties } & Record<`data-${string}`, string | boolean | undefined>) {
+export function TrimmedVideo({
+  src,
+  trim,
+  poster,
+  className,
+  style,
+  sound = false,
+  ...rest
+}: { src: string; trim: VideoTrim | null | undefined; poster?: string; className?: string; style?: React.CSSProperties; sound?: boolean } & Record<`data-${string}`, string | boolean | undefined>) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const start = trim?.start ?? 0;
   const end = trim?.end ?? null;
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || v.muted === !sound) return;
+    v.muted = !sound;
+    if (sound)
+      void v.play().catch(() => {
+        v.muted = true;
+        void v.play().catch(() => {});
+      });
+  }, [sound]);
   useEffect(() => {
     const v = ref.current;
     if (!v) return;

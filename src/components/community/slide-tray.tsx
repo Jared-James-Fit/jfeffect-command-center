@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, Camera, Images, Play, Scissors, X } from "lucide-react";
+import { AlertCircle, Camera, Images, Play, Scissors, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { MAX_SLIDES, fitSlides, slideThumbPath, type PostSlide } from "@/lib/community";
-import { COMMUNITY_BUCKET, pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, uploadPicked, type PickedMedia } from "@/lib/community-media";
+import { COMMUNITY_BUCKET, pickMedia, pickedSeconds, releasePicked, removeCommunityFiles, retrimPicked, uploadPicked, withSound, type PickedMedia } from "@/lib/community-media";
 import { useSlideThumbUrls } from "@/lib/community.queries";
 import { uploadLiftFileToStorage } from "@/lib/lift-video-storage-upload";
 import { CENTRED, clampFraming, frameFocus, type Framing } from "@/lib/photo-frame";
@@ -45,6 +45,10 @@ export type TrayItem = {
   lift?: VideoTrim | null;
   /** Trimmed to the lift with one tap: the part that went before (null: all of it), so Whole clip puts it back. */
   liftBefore?: VideoTrim | null;
+  /** A clip with a sound track (only those can be posted without one). */
+  audio?: boolean;
+  /** A clip posted with no sound. */
+  muted?: boolean;
 };
 
 /** A thumbnail's width at a shape: 720 px on its long side, like the ones picked photos get. */
@@ -277,6 +281,32 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
     [patch, pump, trimmer.request, videoContext],
   );
 
+  /**
+   * A clip with or without its sound: only its upload changes (the audio track
+   * left out, a remux), never what's on screen: the same preview, cover,
+   * framing and trim, nothing reloads.
+   */
+  const setSound = useCallback(
+    (id: string, on: boolean) => {
+      const job = jobs.current.get(id);
+      const old = job?.picked;
+      const next = old ? withSound(old, on) : null;
+      if (!job || !next || removed.current.has(id)) return;
+      job.ctl?.abort();
+      const it = itemsRef.current.find((x) => x.id === id);
+      if (it?.slide && !it.existing) void removeCommunityFiles([it.slide.path, it.slide.thumb]);
+      // the old one's preview and poster are the new one's now: dropped, never released
+      const waiting = job.resolve;
+      queue.current = queue.current.filter((q) => q !== id);
+      const fresh = defer(id, next);
+      void fresh.promise.then(waiting);
+      patch(id, { muted: !on, slide: null, status: "preparing", progress: 0 });
+      queue.current.push(id);
+      pump();
+    },
+    [patch, pump],
+  );
+
   /** One tap: just the lift goes (its upload restarts with it); Whole clip puts back what went before. */
   const trimToLift = useCallback(
     (id: string) => {
@@ -480,7 +510,7 @@ export function useSlideTray({ open, initial, resetKey, coverCount, videoContext
   useEffect(() => () => discardRef.current(), []);
 
   const uploading = items.filter((it) => it.status === "preparing" || it.status === "uploading").length;
-  return { items, add, remove, retry, edit, trimToLift, undoLift, ready, commit, discard, setCover, setFraming, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
+  return { items, add, remove, retry, edit, trimToLift, undoLift, setSound, ready, commit, discard, setCover, setFraming, uploading, total: coverCount + items.length, full: coverCount + items.length >= MAX_SLIDES, trimmer: trimmer.element };
 }
 
 /** What the strip shows for a picked photo or clip. */
@@ -492,6 +522,8 @@ function itemFields(m: PickedMedia): Partial<TrayItem> {
     h: m.height,
     trim: m.video?.trim ?? null,
     seconds: pickedSeconds(m),
+    audio: m.video ? m.video.info.hasAudio : undefined,
+    muted: !!m.video?.muted,
   };
 }
 
@@ -571,6 +603,12 @@ export function SlideTray({
                   <Play className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow" />
                 ))}
               {it.seconds != null && !busy && it.status !== "error" && <span className="absolute bottom-0.5 right-0.5 rounded bg-black/60 px-0.5 text-[8px] font-bold tabular-nums">{formatClock(it.seconds)}</span>}
+              {/* no sound: said at once (above the bar while it uploads again) */}
+              {it.muted && it.status !== "error" && (
+                <span className={cn("absolute left-0.5 grid h-3.5 w-3.5 place-items-center rounded bg-black/60", busy ? "bottom-2.5" : "bottom-0.5")} aria-label="No sound" data-tray-muted>
+                  <VolumeX className="h-2.5 w-2.5" />
+                </span>
+              )}
               <span className="absolute left-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-black/60 px-1 text-[9px] font-bold">{i + first}</span>
               {busy && (
                 <span className="absolute inset-x-1 bottom-1 h-1 overflow-hidden rounded-full bg-black/50">

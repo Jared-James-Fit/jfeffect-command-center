@@ -31,6 +31,8 @@ export type VideoSendOptions = {
   userId: string;
   /** The path without its extension (the extension follows what's sent). */
   stem: string;
+  /** Posted with no sound: the audio track is left out. */
+  muted?: boolean;
 };
 
 /** How the bar is shared between the steps (a re-encode is most of the wait). */
@@ -64,7 +66,7 @@ export function createVideoSend(o: VideoSendOptions) {
   let uploadedPath: string | null = null;
   let checked: VideoCheck | null = null;
   let upMs = 0;
-  const plan = planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode });
+  const plan = planVideo(o.info, o.trim, o.context, { canEncode: o.canEncode, muted: o.muted });
 
   const extOf = (f: File) => (f.type.includes("webm") ? "webm" : f.type.includes("quicktime") ? "mov" : "mp4");
 
