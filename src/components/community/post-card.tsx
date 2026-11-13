@@ -466,6 +466,25 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       window.removeEventListener("resize", later);
     };
   }, [layout, pageFirst]);
+  // on its screen, where its words start (who, the caption, views), from its bottom: a picture shown
+  // whole sits in the room above them, TikTok's, so the words never cover it (--page-words-top →
+  // --feed-words-room, styles.css); read again whenever the words or the screen change size
+  const wordsRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const a = articleRef.current;
+    const w = wordsRef.current;
+    if (layout !== "page" || !a || !w) return;
+    const set = () => {
+      const top = a.getBoundingClientRect().bottom - w.getBoundingClientRect().top;
+      if (top > 0) a.style.setProperty("--page-words-top", `${Math.round(top)}px`);
+    };
+    set();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(set);
+    ro.observe(w);
+    ro.observe(a);
+    return () => ro.disconnect();
+  }, [layout]);
   // its sheet open: the shrunk post sits right under Crew's bar (over the story rail on the first screen)
   const [raise, setRaise] = useState(0);
   useLayoutEffect(() => {
@@ -680,15 +699,15 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         {/* bottom left: who, and the words (over a soft shade on a picture) */}
         {/* low on the screen, just above the tab bar (TikTok's), its shade running down under the bar */}
         <div
+          // its soft shade only over a clip that fills the screen; under a picture shown whole the words sit on black (styles.css)
           className={cn(
             "pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200",
-            visual && "bg-gradient-to-t from-black/75 via-black/35 to-transparent",
             (sheetOpen || under || holding) && "opacity-0",
           )}
           style={{ paddingBottom: "var(--feed-words-bottom)" }}
           data-page-words
         >
-          <div className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && !holding && "pointer-events-auto")}>
+          <div ref={wordsRef} className={cn("mr-16 space-y-1.5 px-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && !holding && "pointer-events-auto")} data-page-words-body>
             {note.bubble && <div data-note-over>{note.bubble}</div>}
             <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
             <AuthorLine
@@ -1189,8 +1208,12 @@ const PAGE_BODY_ROOM = { paddingTop: "calc(var(--feed-bar-room) + 1.5rem)", padd
 /** Its sheet open, the words and buttons are gone: the room above the sheet is all its own. */
 const PAGE_BODY_SHRUNK = { paddingTop: "1rem", paddingBottom: "1rem" } as const;
 
-/** On a post's screen (which ends at the tab bar), a picture shown whole sits under Crew's bar, between the bars. */
-const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;
+/**
+ * On a post's screen (which ends at the tab bar), a picture shown whole sits
+ * between Crew's bar and the post's words (TikTok's): the words never cover
+ * it. Only a clip that fills the screen runs under them.
+ */
+const BETWEEN_BARS = { top: "var(--feed-bar-room)", bottom: "var(--feed-words-room, 0px)" } as const;
 
 /**
  * A box's shape (width / height, to 3 places so a sub-pixel change never
@@ -1427,7 +1450,7 @@ function PostCarousel({
           const near = Math.abs(i - index) <= 1 || i < seen;
           const url = j === 0 ? coverUrl : (urls[slideThumbPath(sl) ?? ""] ?? null);
           return (
-            <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
+            <div key={`${sl.path}-${j}`} className="relative h-full w-full shrink-0 snap-center snap-always" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`} data-fit={page ? fits?.[j] : undefined}>
               {near ? <SlideMedia slide={sl} thumbUrl={url} full={full} active={i === index} withDots={!page} page={page} fit={fits?.[j]} shrunk={shrunk} /> : <div className={cn("h-full w-full", page ? "bg-black" : "bg-muted")} />}
             </div>
           );
