@@ -44,7 +44,10 @@ type FamilyStyle = {
 const STYLES: Record<MovementFamily, FamilyStyle> = {
   squat: {
     stripe: "bg-yellow-500",
-    badge: "bg-yellow-400 text-yellow-950 border-yellow-500/70",
+    // text-black, NOT text-yellow-950: the dark palette remaps every
+    // text-*-950 class to a light tint, which turned this digit into pale
+    // yellow on yellow in dark mode.
+    badge: "bg-yellow-400 text-black border-yellow-600/80",
     soft: "border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
     dot: "bg-yellow-500",
   },
