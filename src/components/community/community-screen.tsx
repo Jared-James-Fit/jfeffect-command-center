@@ -89,6 +89,12 @@ function personFromHash(): string | null {
  */
 /** The double-tap tip plays once per visit (app load), not on every feed render. */
 let tipShownThisVisit = false;
+/**
+ * How far ahead of the end the paged feed asks for its next page: four screens,
+ * i.e. four posts (a page of ten takes the database ~0.2 s, so it's in long
+ * before a quick run of swipes gets there).
+ */
+export const FEED_READ_AHEAD = "400% 0px";
 /** "Swipe right to go back": asks on up to 5 visits, until it's been used once. */
 const SWIPE_TIP_VISITS = 5;
 export const swipeTipKeys = Array.from({ length: SWIPE_TIP_VISITS }, (_, i) => `swipe_back_shown_${i + 1}`);
@@ -451,12 +457,14 @@ export function CommunityScreen({
       (entries) => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
       },
-      // well before the end, so scrolling never waits on the next posts
-      { rootMargin: "1400px 0px" },
+      // well before the end, so scrolling never waits on the next posts: on the
+      // paged feed four screens (four posts) ahead, so a quick run of swipes
+      // never reaches the end before the next page is in (FEED_READ_AHEAD)
+      { rootMargin: paging ? FEED_READ_AHEAD : "1400px 0px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, feedPosts.length, scope.kind]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, feedPosts.length, scope.kind, paging]);
 
   // The first screen is the story rail and the first post: from where it starts to the bottom of the screen.
   const firstScreen = useRef<HTMLDivElement | null>(null);

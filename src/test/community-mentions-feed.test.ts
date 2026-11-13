@@ -118,7 +118,8 @@ describe("collab header", () => {
 describe("feed that builds as you scroll", () => {
   it("smaller first page, next pages fetched well before the end", () => {
     expect(FIRST_FEED_PAGE).toBe(5);
-    expect(screen).toMatch(/rootMargin: "1400px 0px"/);
+    // the coach's card feed 1400px ahead, the clients' paged feed four screens (crew-feed-speed.test.ts)
+    expect(screen).toContain('rootMargin: paging ? FEED_READ_AHEAD : "1400px 0px"');
   });
   it("posts ease in as they arrive; a post-shaped placeholder while loading; a caught-up card at the end", () => {
     // the first post is the first thing in the feed (Activity is a bubble in the story row)
