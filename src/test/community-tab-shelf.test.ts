@@ -14,12 +14,16 @@ const profile = read("src/components/community/profile-view.tsx");
 const screen = read("src/components/community/community-screen.tsx");
 const item = (to: string): NavItem => ({ to, label: to, icon: Home });
 
-describe("client tab bar: Crew in the centre", () => {
-  it("five destinations, Crew (feed + rankings) raised in the middle", () => {
+describe("the tab bar: TikTok's / Instagram's", () => {
+  it("five equal tabs, Crew in the middle", () => {
     const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
     expect(visible.map((i) => i.label)).toEqual(["Home", "Workouts", "Crew", "Messages", "Nutrition"]);
-    expect(visible[2].featured).toBe(true);
     expect(visible.some((i) => i.to === MORE_BAR_TO)).toBe(false);
+    // no raised disc, no satellite: Crew is a tab like the others
+    expect(shell).not.toContain("data-featured-tab");
+    expect(shell).not.toContain("data-featured-shortcut");
+    expect(read("src/lib/admin-nav.ts")).not.toContain("featured: true");
+    expect(read("src/lib/internal-nav.ts")).not.toContain("featured: true");
   });
 
   it("a bar without a header More keeps More as its last slot", () => {
@@ -53,80 +57,56 @@ describe("client tab bar: Crew in the centre", () => {
     expect(shell).toContain("resolveVisibleBarItems(bottomItems, { more: !moreInHeader })");
   });
 
-  it("the raised button isn't clipped, and rings + counts when there's something new", () => {
-    expect(shell).toContain('raised ? "overflow-visible" : "overflow-hidden"');
-    expect(shell).toContain('badge?.count ? "bg-[linear-gradient(135deg,#ffb054,#ef3340)]" : "bg-card"');
+  it("edge to edge and flush with the bottom: a 50px row over the home indicator's room, opaque, a hairline on top", () => {
+    expect(shell).toContain('"fixed inset-x-0 bottom-0 z-50 border-t md:hidden"');
+    expect(shell).toContain('style={{ paddingBottom: "env(safe-area-inset-bottom)" }}');
+    expect(shell).toContain('<div className={cn("mx-auto grid h-[var(--mobile-bar-h)] max-w-[560px]"');
+    const css = read("src/styles.css");
+    expect(css).toContain("  --mobile-bar-h: 50px;\n  --mobile-bar-top: calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px));");
+    // pages clear exactly the bar (the chats end at its top)
+    expect(css).toContain("  :root { --bottom-nav-clearance: var(--mobile-bar-top); }");
+    // no floating card: no side gutter, rounding, shadow, blur or fade under it
+    const bar = shell.slice(shell.indexOf("export function MobileBottomBar"), shell.indexOf("// Every bar slot shares one box"));
+    for (const gone of ["inset-x-4", "rounded-2xl", "shadow-", "backdrop-blur", "bg-gradient-to-t"]) expect(bar).not.toContain(gone);
+    // floating buttons (page "+", Back to Today) still stack from the bar's real top edge
+    expect(read("src/components/tasks/quick-notes.tsx")).toContain('"calc(var(--mobile-bar-top) + 14px)"');
+    expect(read("src/components/return-to-dashboard.tsx")).toContain("bottom-[calc(var(--mobile-bar-top)+14px)]");
+    // over Crew's paged feed it's black, like TikTok's over its videos
+    expect(bar).toContain('overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background"');
   });
 
-  it("the centre button is only brand-red on its own page, and every label sits on one line", () => {
-    // a Cleo-style disc: brand gradient when you're on Crew, a quiet raised disc otherwise,
-    // so it never reads as the selected tab
-    expect(shell).toContain('? "bg-[image:var(--gradient-primary)] text-primary-foreground inset-ring');
-    expect(shell).toContain(': "bg-gradient-to-b from-secondary to-card text-foreground inset-ring');
-    // springy press, and the icon settles in when Crew opens
-    expect(shell).toContain("group-active/tab:scale-[0.92]");
-    expect(shell).toContain('lit && "animate-[crew-pop_360ms_cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:animate-none"');
-    expect(read("src/styles.css")).toContain("@keyframes crew-pop {");
-    // it shares the icon box with the other tabs, so its label lines up with theirs
-    expect(shell).toContain('<div className={cn(BAR_ICON_BOX, "w-full")}>');
-    // the active underline is absolute: lighting a tab doesn't shift it
-    expect(shell).toContain('<span aria-hidden className="absolute bottom-0.5 left-1/2 h-[3px] w-4');
-    expect(shell).not.toContain("min-h-[64px]");
+  it("each tab: a 24px icon (heavier when it's the one you're on) over a 10px label on one line; no underline", () => {
+    expect(shell).toContain('const barIcon = (active?: boolean) => cn("h-6 w-6", active ? "stroke-[2.3]" : "stroke-[1.8]");');
+    expect(shell).toContain('cn("w-full truncate text-center tracking-tight", dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active ? "font-semibold" : "font-medium")');
+    // the whole column is the tap, the icon dips on press
+    expect(shell).toContain('"group/slot relative flex h-full min-w-0 flex-col items-center justify-center gap-[3px]');
+    expect(shell).toContain("group-active/slot:scale-90");
+    expect(shell).not.toContain("BarActiveMark");
+    // the tab you're on is the brand red (the design system's one accent); counts read out
+    expect(shell).toContain('className={cn(BAR_SLOT, active ? "text-primary" : "text-muted-foreground hover:text-foreground")}');
+    expect(shell).toContain("aria-label={badge?.count ? `${item.label}, ${badge.count} new` : undefined}");
     // --primary is oklch; hsl(var(--primary)) is an invalid colour
     expect(shell).not.toContain("hsl(var(--primary)");
   });
 
-  it("sits just above the home indicator, lined up with the page, with the page fading out under it", () => {
-    // ~22pt off the bottom on Face ID iPhones (not the full 34pt safe area), 10px elsewhere
-    expect(shell).toContain('const BAR_BOTTOM = "var(--mobile-bar-bottom)";');
-    expect(read("src/styles.css")).toContain("--mobile-bar-bottom: max(calc(env(safe-area-inset-bottom) - 12px), 10px);");
-    // floating buttons (page "+", Back to Today) stack from the bar's real top edge
-    expect(read("src/components/tasks/quick-notes.tsx")).toContain('"calc(var(--mobile-bar-top) + 14px)"');
-    expect(read("src/components/return-to-dashboard.tsx")).toContain("bottom-[calc(var(--mobile-bar-top)+14px)]");
-    // same 16px gutter as the page's px-4
-    expect(shell).toContain('"fixed inset-x-4 z-50 mx-auto grid max-w-md');
-    // the fade is tagged like the bar, so keyboard / workout focus / pinch-zoom hide and pin it too
-    expect(shell).toMatch(/aria-hidden\s+data-mobile-bottom-nav\s+className=\{cn\("pointer-events-none fixed inset-x-0 bottom-0 z-40 bg-gradient-to-t from-background/);
-  });
-
   it("holds still while scrolling: only pinned to the visual viewport when zoomed or the keyboard is up", () => {
-    // Safari's toolbar show/hide and iOS sub-pixel insets move the visual viewport mid-scroll;
-    // chasing them a frame late made the raised Crew button wiggle
+    // Safari's toolbar show/hide and iOS sub-pixel insets move the visual viewport mid-scroll
     expect(shell).toContain("const dy = Math.round(window.innerHeight - (vv.height + vv.offsetTop));");
     expect(shell).toContain("(zoomed || keyboard) && (dy > 0 || dx !== 0)");
     expect(shell).not.toContain("dy > 0 || dx !== 0 || scale !== 1");
-    // even 56px disc (50 + 3px ring), so centring it never lands on a half pixel
-    expect(shell).toContain('"absolute bottom-px left-1/2 -translate-x-1/2 rounded-full p-[3px]"');
-    expect(shell).toContain('"relative grid h-[50px] w-[50px] place-items-center rounded-full"');
-    // a whole 12px label line, placed after the size so tailwind-merge keeps it
-    expect(shell).toContain('dense ? "text-[10px]" : "text-[10.5px]", "leading-3", active && "font-semibold")');
   });
 
-  it("League has its own satellite on Crew's button: one tap each, one lit at a time", () => {
-    const visible = resolveVisibleBarItems(clientBottomNav, { more: false });
-    expect(visible[2].shortcut).toMatchObject({ to: "/portal/community", hash: "rankings", label: "Rankings" });
-    // lit while its view is open; Crew goes quiet then
-    expect(shell).toContain("const shortcutOn = !!shortcut && pathname === shortcut.to && hash.startsWith(shortcut.hash);");
-    expect(shell).toContain("const lit = active && !shortcutOn;");
-    // its own link beside Crew's (never nested), told apart by the hash, tap area growing away from the disc
-    expect(shell).toContain("if (!shortcut) return link;");
-    // a page of its own (the coach's League) has no hash to add
-    expect(shell).toMatch(/<Link\s+to=\{shortcut\.to\}\s+hash=\{shortcut\.hash \|\| undefined\}\s+activeOptions=\{\{ includeHash: true \}\}/);
-    expect(shell).toContain("activeOptions={shortcut ? { includeHash: true } : undefined}");
-    // A 44px tap area that grows up and left only, away from the disc.
-    expect(shell).toContain('"after:absolute after:-left-4 after:-top-4 after:bottom-1/2 after:right-1/2 after:content-[\'\']"');
-    // Docked on the disc's shoulder with the disc's own 3px cut-out ring.
-    expect(shell).toContain("left-[calc(50%-38px)] top-[-33px]");
-    expect(shell).toContain("ring-[3px] ring-card");
-    // The trophy is gold in both states; lit, the satellite glows gold (Crew lights red).
-    const satellite = shell.slice(shell.indexOf("data-featured-shortcut"), shell.indexOf("<ShortcutIcon"));
-    expect(satellite.match(/text-amber-500/g)?.length).toBe(2);
-    expect(satellite).not.toContain("text-primary-foreground");
-    // the Crew screen follows the hash, so the shortcut and Crew switch the view in place
-    const crew = read("src/components/community/community-screen.tsx");
-    expect(crew).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
-    // ‹ back out of Rankings (or your profile) drops the hash, so Crew's button lights again
-    expect(crew).toContain('if (k === "feed" && /^#(rankings|league|you)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
+  it("Rankings (the coach's League) is the trophy bubble right after Your story", () => {
+    const rail = read("src/components/community/crew-stories.tsx");
+    expect(rail).toContain("data-story-rankings");
+    expect(rail).toContain("if (!groups.length && !mine && !addStory && !rankings) return null;");
+    expect(screen).toContain('? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) }');
+    expect(screen).toContain('void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });');
+    expect(screen.match(/rankings=\{rankings\}/g)?.length).toBe(2);
+    // the Crew screen follows the hash, so a link to #rankings still opens it
+    expect(screen).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
+    // ‹ back out of Rankings (or your profile) drops the hash
+    expect(screen).toContain('if (k === "feed" && /^#(rankings|league|you)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
   });
 
   it("no community for this account: no centre button", () => {

@@ -15,12 +15,12 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(read("src/components/community/community-screen.tsx")).toContain("const unwatch = watchFeedViewport();");
   });
 
-  it("Crew's bar floats over the top of each post and the tab bar over its bottom", () => {
+  it("each post fills the screen down to the tab bar, Crew's bar floating over its top", () => {
     expect(css).toContain("  --feed-bar-room: 3rem;\n  --feed-nav-room: var(--mobile-bar-top);");
-    // the post itself runs from under the status bar to the bottom of the screen
-    expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : 0 }}");
+    // the post itself runs from under the status bar down to the tab bar (opaque, TikTok's)
+    expect(card).toContain('style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}');
     // a picture shown whole sits between the bars; a clip that fills the screen runs under both
-    expect(card).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room)", bottom: "var(--feed-nav-room)" } as const;');
+    expect(card).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;');
     expect(card).toContain("<FitBox ratio={0.8} page>");
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('const between = controls === "top" && fit === "contain";');
@@ -31,11 +31,10 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(css).toContain("[data-sheet-open] { --feed-bar-room: 0px; --feed-nav-room: 0px; }");
   });
 
-  it("the words sit low, just above the tab bar and clear of the raised Crew button's trophy; the buttons go right down to it", () => {
-    expect(css).toContain("  --feed-words-bottom: calc(var(--mobile-bar-top) + 36px);");
+  it("the words and the buttons down the right sit just above the tab bar (nothing stands over the bar any more)", () => {
+    expect(css).toContain("  --feed-words-bottom: calc(var(--mobile-bar-top) + 12px);");
     expect(css).toContain("  --feed-actions-bottom: calc(var(--mobile-bar-top) + 8px);");
-    // the trophy stands 29px over the bar (top-[-33px] on a slot 4px under the bar's top)
-    expect(read("src/components/app-shell.tsx")).toContain("absolute left-[calc(50%-38px)] top-[-33px] z-10 grid h-7 w-7");
+    expect(read("src/components/app-shell.tsx")).not.toContain("top-[-33px]");
     // their shade runs down under the tab bar
     expect(card).toContain('"pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200"');
   });
@@ -43,7 +42,7 @@ describe("every post fills the screen, TikTok's way", () => {
   it("the paged feed is dark whatever the theme: the posts, Crew's bar, the tab bar and the status bar", () => {
     const shell = read("src/components/app-shell.tsx");
     expect(shell).toContain("const overFeed = useFeedPaging();");
-    expect(shell).toContain('overFeed && "dark text-foreground",');
+    expect(shell).toContain('overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background"');
     expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
     expect(read("src/components/community/crew-header.tsx")).toContain('overlay && "dark text-foreground"');
   });

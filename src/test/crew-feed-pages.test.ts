@@ -85,7 +85,7 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
       "<ReactionBar post={post} onReact={onReact} onOpenComments={onOpenComments} onOpenAuthor={onOpenAuthor} onReposted={note.ask} unit={unit} column />",
     );
     // the whole screen, the bars floating over it; the words just above the tab bar
-    expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : 0 }}");
+    expect(card).toContain('style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}');
     expect(card).toContain('style={{ paddingBottom: "var(--feed-words-bottom)" }}');
     expect(card).toContain('style={{ bottom: "var(--feed-actions-bottom)" }}');
     // pictures sit on black; the whole paged feed is dark whatever the theme

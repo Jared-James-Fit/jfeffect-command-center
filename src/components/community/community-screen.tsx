@@ -45,7 +45,7 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
  * left with Find athletes, the JF Effect name in the middle (with people you
  * follow, it's also the All / Following switch), Activity (the heart, with
  * its bubble) and your photo (your profile) on the right. Rankings is the
- * trophy on Crew's own button in the bar at the bottom. Each of those opens
+ * trophy bubble right after Your story at the top of the feed. Each of those opens
  * as a page with ‹ back, and back lands where you were in the feed.
  */
 type Tab = "feed" | "rankings" | "you" | "members" | "activity";
@@ -323,6 +323,16 @@ export function CommunityScreen({
     go({ kind: "you" });
     void navigate({ to: ".", hash: "you", replace: true, resetScroll: false });
   };
+  /** The trophy bubble at the start of the stories: Rankings (the coach's Crew page: the League, its own page). */
+  const rankings = hideTabs
+    ? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) }
+    : {
+        label: "Rankings",
+        onOpen: () => {
+          go({ kind: "rankings" });
+          void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });
+        },
+      };
 
   // (Rankings keeps its own sideways swipe between boards, so no swipe-back there.)
   const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
@@ -656,6 +666,7 @@ export function CommunityScreen({
               onJumpTo={setJumpTo}
               addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
               addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
+              rankings={rankings}
             />
           }
           empty={
@@ -737,6 +748,7 @@ export function CommunityScreen({
             onJumpTo={setJumpTo}
             addStory={canShare ? (t) => <ShareWorkoutButton unit={unit} previewOnly={previewOnly} trigger={t} story /> : undefined}
             addYours={canShare ? <ShareWorkoutButton unit={unit} label="Add yours" variant="block" previewOnly={previewOnly} story /> : null}
+            rankings={rankings}
           />
           {/* All / Following lives in the name at the top (its ⌄), Instagram's way: no second row of chips here */}
           {following && feedPosts.length === 0 && (

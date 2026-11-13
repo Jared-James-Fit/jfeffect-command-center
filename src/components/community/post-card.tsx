@@ -553,8 +553,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out motion-reduce:transition-none",
             sheetOpen && (visual ? "bg-black" : "bg-background"),
           )}
-          // the whole screen, Crew's bar and the tab bar floating over it (TikTok's)
-          style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : 0 }}
+          // the whole screen down to the tab bar, Crew's bar floating over its top (TikTok's)
+          style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}
           data-post-hero
           data-sheet-open={sheetOpen ? "" : undefined}
         >
@@ -1105,8 +1105,8 @@ function belowBar(el: HTMLElement): number {
 /** Words, a workout or a lock in on its screen: clear of Crew's bar above and the words and tab bar below. */
 const PAGE_BODY_ROOM = { paddingTop: "calc(var(--feed-bar-room) + 1.5rem)", paddingBottom: "calc(var(--feed-words-bottom) + 8rem)" } as const;
 
-/** On a post's screen, a picture shown whole sits between Crew's bar and the tab bar (what floats over the screen). */
-const BETWEEN_BARS = { top: "var(--feed-bar-room)", bottom: "var(--feed-nav-room)" } as const;
+/** On a post's screen (which ends at the tab bar), a picture shown whole sits under Crew's bar, between the bars. */
+const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;
 
 /**
  * A box's shape (width / height, to 3 places so a sub-pixel change never

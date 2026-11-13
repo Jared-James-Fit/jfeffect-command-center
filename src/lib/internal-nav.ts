@@ -303,16 +303,13 @@ const REGISTRY: Entry[] = [
 
 /**
  * Every staff account's phone bar (admin, coach), laid out like the client
- * app: plain tabs with Crew as the raised centre button, named the same as the
- * clients' (the feed, the posts that go out on their own, insights), and the
- * League on its trophy. More opens from the header.
+ * app: five equal tabs with Crew in the middle (the League is the trophy
+ * bubble at the start of Crew's stories, and in More). More opens from the header.
  */
 export const STAFF_BAR: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/clients", label: "Clients", icon: Contact },
-  { to: "/admin/community", label: "Crew", icon: UsersRound, featured: true,
-    // the satellite on Crew's button: the League, its own page
-    shortcut: { to: "/admin/league", hash: "", label: "League", icon: Trophy } },
+  { to: "/admin/community", label: "Crew", icon: UsersRound },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/tasks", label: "Tasks", icon: ListChecks },
 ];

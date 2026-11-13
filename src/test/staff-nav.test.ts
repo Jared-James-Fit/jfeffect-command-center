@@ -5,11 +5,10 @@ import { STAFF_BAR, buildInternalNav, buildInternalNavCollapsed } from "@/lib/in
 const read = (p: string) => readFileSync(p, "utf8");
 
 describe("one staff app, laid out like the client app", () => {
-  it("every staff phone bar is Dashboard, Clients, Crew (raised, centre), Messages, Tasks: plain tabs", () => {
+  it("every staff phone bar is Dashboard, Clients, Crew (centre), Messages, Tasks: plain tabs", () => {
     expect(STAFF_BAR.map((i) => i.label)).toEqual(["Dashboard", "Clients", "Crew", "Messages", "Tasks"]);
     expect(STAFF_BAR.map((i) => i.to)).toEqual(["/admin", "/admin/clients", "/admin/community", "/admin/messages", "/admin/tasks"]);
     expect(STAFF_BAR.every((i) => !i.children && !!i.icon)).toBe(true);
-    expect(STAFF_BAR.filter((i) => i.featured).map((i) => i.label)).toEqual(["Crew"]);
   });
 
   it("Crew rings and counts new posts for staff, like the client button", () => {

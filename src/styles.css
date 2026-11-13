@@ -348,16 +348,17 @@ html[data-keyboard-open="true"] [data-hide-on-keyboard] {
   --composer-bottom-pad: max(env(safe-area-inset-bottom), 0.5rem);
 }
 @media (max-width: 768px) {
-  :root { --bottom-nav-clearance: 92px; }
+  :root { --bottom-nav-clearance: var(--mobile-bar-top); }
 }
 
-/* The floating mobile tab bar's edges. Its bottom sits just above the home
-   indicator (~22pt on Face ID iPhones, not the full 34pt safe area; 10px on
-   phones with none); it is 70px tall. Floating buttons (Cleo, page "+"
-   buttons, Back to Today) stack from its top so they all clear it evenly. */
+/* The phone's tab bar (MobileBottomBar), TikTok's / Instagram's: edge to edge
+   and flush with the bottom, a 50px row of tabs over the home indicator's room
+   (the full safe area, 34pt on Face ID iPhones). Its top edge from the bottom of
+   the screen is --mobile-bar-top: pages clear it (--bottom-nav-clearance) and
+   floating buttons (page "+" buttons, Back to Today) stack from it. */
 :root {
-  --mobile-bar-bottom: max(calc(env(safe-area-inset-bottom) - 12px), 10px);
-  --mobile-bar-top: calc(var(--mobile-bar-bottom) + 70px);
+  --mobile-bar-h: 50px;
+  --mobile-bar-top: calc(var(--mobile-bar-h) + env(safe-area-inset-bottom, 0px));
 }
 html[data-keyboard-open="true"] {
   --bottom-nav-clearance: 0px;
@@ -1257,9 +1258,10 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
 /* Crew's feed, one post per screen, swiped one at a time (TikTok's). A page is
    the whole screen under the status bar (--feed-vh, the window's measured height:
    100svh came out ~75pt short on the iPhone home-screen app), and the window snaps
-   to each one. Every post fills it: Crew's bar floats over its top (transparent, a
-   soft shade under it, `.crew-bar[data-overlay]`) and the floating tab bar over its
-   bottom, TikTok's way; on a computer the bar sits in the page and scrolls away. The
+   to each one. Every post fills it down to the tab bar (black over the feed), with
+   Crew's bar floating over its top (transparent, a soft shade under it,
+   `.crew-bar[data-overlay]`), TikTok's way; on a computer the bar sits in the page
+   and scrolls away. The
    stories (`.feed-first`) sit on top of the first post, which is full size like
    every other and runs off the bottom (TikTok's Friends): the very top is a snap
    point of its own, so one swipe brings the post up whole and the top brings the
@@ -1268,12 +1270,11 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
    it starts). The paged feed is always dark, whatever the theme (TikTok's, Reels'). */
 :root {
   --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top));
-  /* what floats over a post's screen: Crew's bar on top, the tab bar at the bottom */
+  /* what covers a post's screen: Crew's bar floats over its top, the tab bar takes its bottom (a post ends at it) */
   --feed-bar-room: 3rem;
   --feed-nav-room: var(--mobile-bar-top);
-  /* a post's words sit just above the tab bar, clear of the raised Crew button and the trophy on
-     its shoulder (they stand ~30px above the bar); its buttons down the right go right down to it */
-  --feed-words-bottom: calc(var(--mobile-bar-top) + 36px);
+  /* a post's words and its buttons down the right sit just above the tab bar, TikTok's */
+  --feed-words-bottom: calc(var(--mobile-bar-top) + 12px);
   --feed-actions-bottom: calc(var(--mobile-bar-top) + 8px);
 }
 @media (min-width: 768px) {
@@ -1391,13 +1392,6 @@ html.feed-paging main { overflow-x: clip; }
 @keyframes slow-load-hint-in {
   from { opacity: 0; visibility: hidden; }
   to { opacity: 1; visibility: visible; }
-}
-
-/* The Crew button's icon settles in with a small spring when Crew opens. */
-@keyframes crew-pop {
-  0% { transform: scale(0.82); }
-  60% { transform: scale(1.08); }
-  100% { transform: scale(1); }
 }
 
 /* ── Live indicators: one look everywhere something is happening right now

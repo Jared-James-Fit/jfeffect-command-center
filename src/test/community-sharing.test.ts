@@ -374,13 +374,12 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
   it("bottom bar is Home, Workouts, Crew (centre), Messages, Nutrition; More opens from the top bar", () => {
     const nav = read("src/lib/admin-nav.ts");
     const bottom = nav.slice(nav.indexOf("export const clientBottomNav"), nav.indexOf("];", nav.indexOf("export const clientBottomNav")));
-    // the tabs (one per line); Crew's satellite shortcut isn't a tab
+    // the tabs (one per line), Crew among them like any other
     expect(bottom.match(/^\s*\{ to: "[^"]+"/gm)?.map((m) => m.trim())).toEqual([
       '{ to: "/portal"', '{ to: "/portal/workouts"', '{ to: "/portal/community"', '{ to: "/portal/messages"', '{ to: "/portal/nutrition-targets"',
     ]);
-    expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: UsersRound, featured: true,');
-    expect(bottom).toContain('shortcut: { to: "/portal/community", hash: "rankings", label: "Rankings", icon: Trophy } },');
-    // the count of new posts rides on the centre button
+    expect(bottom).toContain('{ to: "/portal/community", label: "Crew", icon: UsersRound },');
+    // the count of new posts rides on Crew's tab
     expect(read("src/hooks/use-client-nav-badges.ts")).toContain('result["/portal/community"] = { count: community.unseen };');
     // its own tab now, so Home no longer lights up for it
     expect(shellSrc).not.toContain('(item.to === "/portal" && pathname === "/portal/community")');
@@ -412,9 +411,9 @@ describe("community is the centre tab and a shelf on Home; Nutrition keeps its t
     expect(entry).toContain("data.unseen <= 0) return null;");
   });
   it("puts the community behind the coach's Crew button (named like the clients'), with one-tap props on that page", () => {
-    expect(read("src/lib/internal-nav.ts")).toContain('{ to: "/admin/community", label: "Crew", icon: UsersRound, featured: true,');
-    // the League is its own page, on the trophy beside Crew's button
-    expect(read("src/lib/internal-nav.ts")).toContain('shortcut: { to: "/admin/league", hash: "", label: "League", icon: Trophy } },');
+    expect(read("src/lib/internal-nav.ts")).toContain('{ to: "/admin/community", label: "Crew", icon: UsersRound },');
+    // the League is its own page, on the trophy bubble in Crew's stories
+    expect(read("src/components/community/crew-stories.tsx")).toContain("data-story-rankings");
     expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CoachPostRow key={x.id} post={x} unit={unit} />");
     expect(entry).toContain('react.mutate(given ? null : "fire"');
     // a ❤️ from the feed counts as props given
