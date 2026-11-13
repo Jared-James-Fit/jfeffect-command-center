@@ -23,12 +23,57 @@
  */
 import { buildBillingSummary, clientTaxRate, type BillingSessionEvent, type RenewalLine, type UnbilledLine } from "@/lib/client-billing-summary";
 import { addPeriod, autoPayPlan, type AutoPay, type PackageSale } from "@/lib/session-packages";
-import { billingPeriod, saleMoney, type MoneyLedgerRow, type SaleMoney } from "@/lib/sale-money";
+import { billingPeriod, saleMoney, type MoneyLedgerRow, type SaleMoney, type SaleState } from "@/lib/sale-money";
 import type { SessionBalanceRow } from "@/lib/sessions-inventory";
 
 export type ScheduleSale = PackageSale & {
   first_payment_date?: string | null;
   purchased_at?: string | null;
+  /** The package's own number in the client's account (stored once, never changes). */
+  package_number?: number | null;
+  /** The package a renewal followed on from. */
+  renewed_from_id?: string | null;
+};
+
+/**
+ * One session package's training and money side by side, the way the coach
+ * reads a package: its sessions, its price, what came in, what's left, and
+ * the value of the sessions already delivered that payments haven't covered.
+ *
+ * Unpaid training delivered (one method, everywhere): a package's price is
+ * spread evenly over the sessions it sold (16 for $672 = $42 a session), so
+ * the training delivered is that share of the price for every session
+ * completed or counted as a no-show (never more than the price: free
+ * sessions added on top are free), and what's unpaid of it is that value
+ * less the payments allocated to the package, net of refunds, never below
+ * zero and never more than what's left on it. Cancelled and moved sessions
+ * use nothing, so they deliver nothing. It's a measure of exposure, not a
+ * due date: overdue is only ever a scheduled payment that didn't come in.
+ */
+export type PackageAccount = {
+  saleId: string;
+  number: number;
+  label: string;
+  name: string;
+  /** The package this one renewed, when it's a renewal. */
+  renewedFrom: { saleId: string; number: number | null } | null;
+  /** When it was bought or renewed. */
+  boughtOn: string | null;
+  /** Its period (its term), when it has one. */
+  from: string | null;
+  to: string | null;
+  sessions: { purchased: number; completed: number; booked: number; available: number; expired: number };
+  /** Its price in the dollars the client pays (what came in, once it's paid). */
+  totalCents: number;
+  paidCents: number;
+  /** Left to pay on it (0 once paid; its price while a payment link is out). */
+  balanceCents: number;
+  /** The share of its price the sessions completed are worth. */
+  deliveredCents: number;
+  unpaidDeliveredCents: number;
+  state: SaleState;
+  /** When what's left gets paid (null once nothing's owed). */
+  schedule: SaleSchedule | null;
 };
 
 export type DueState =
@@ -122,6 +167,12 @@ export type ClientPayments = {
   notBilled: RenewalLine | UnbilledLine | null;
   /** Each live sale's money as read here (a renewal auto-pay pays is billed), for the sale cards. */
   money: Map<string, SaleMoney>;
+  /** Every session package, Package 1 first. */
+  packages: PackageAccount[];
+  /** Training delivered that payments haven't covered: on the packages, plus training past every package not billed yet. */
+  unpaidDeliveredCents: number;
+  /** The part of it from training past every package (not billed yet, so not in what's outstanding). */
+  notBilledDeliveredCents: number;
 };
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -143,16 +194,34 @@ const LIVE_SUB = new Set(["active", "trialing", "past_due"]);
 const liveSub = (s: ScheduleSale) =>
   !!s.stripe_subscription_id && (LIVE_SUB.has(String(s.stripe_subscription_status ?? "").toLowerCase()) || String(s.payment_status ?? "") === "Active Subscription");
 
+const chronological = (a: ScheduleSale, b: ScheduleSale) =>
+  startOf(a).localeCompare(startOf(b)) || String(a.purchased_at ?? "").localeCompare(String(b.purchased_at ?? "")) || String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+
 /**
- * "Package N" for session packages, numbered oldest first the way the
- * Sessions tab numbers them; other sales keep their own name.
+ * Each session package's number in the client's account: the one stored on
+ * it (purchase_records.package_number, given once and never changed), else
+ * its place in running order after the stored ones.
  */
+export function packageNumbers(sales: ScheduleSale[]): Map<string, number> {
+  const pkgs = sales.filter((s) => isPackage(s)).sort(chronological);
+  const out = new Map<string, number>();
+  let top = 0;
+  for (const s of pkgs) {
+    const stored = n(s.package_number);
+    if (stored > 0) {
+      out.set(s.id, stored);
+      top = Math.max(top, stored);
+    }
+  }
+  for (const s of pkgs) if (!out.has(s.id)) out.set(s.id, ++top);
+  return out;
+}
+
+/** "Package N" for session packages; other sales keep their own name. */
 export function saleLabels(sales: ScheduleSale[]): Map<string, string> {
-  const pkgs = sales
-    .filter((s) => !s.archived_at && isPackage(s))
-    .sort((a, b) => startOf(a).localeCompare(startOf(b)) || String(a.purchased_at ?? "").localeCompare(String(b.purchased_at ?? "")));
+  const numbers = packageNumbers(sales.filter((s) => !s.archived_at));
   const out = new Map<string, string>();
-  pkgs.forEach((s, i) => out.set(s.id, `Package ${i + 1}`));
+  for (const [id, num] of numbers) out.set(id, `Package ${num}`);
   for (const s of sales) if (!out.has(s.id)) out.set(s.id, s.offer_name ?? "Sale");
   return out;
 }
@@ -333,6 +402,57 @@ export function buildClientPayments(input: {
     : null;
   const notBilled = (billing?.lines.find((l) => l.kind === "renewal" || l.kind === "unbilled") ?? null) as RenewalLine | UnbilledLine | null;
 
+  // Each package's training and money side by side.
+  const balanceOf = new Map((input.balance ?? []).map((b) => [b.purchase_id, b]));
+  const numbers = packageNumbers(packages);
+  const scheduleOf = new Map(balances.map((b) => [b.saleId, b]));
+  const packageAccounts: PackageAccount[] = [...packages].sort((a, b) => numbers.get(a.id)! - numbers.get(b.id)!).map((s) => {
+    const m = moneyOf.get(s.id)!;
+    const b = balanceOf.get(s.id);
+    const purchased = n(s.sessions_purchased);
+    const completed = n(b?.used);
+    const expiredByDate = !!(b?.expires_at && String(b.expires_at).slice(0, 10) < today);
+    const sessions = {
+      purchased,
+      completed,
+      booked: n(b?.reserved),
+      available: expiredByDate ? 0 : Math.max(0, n(b?.remaining)),
+      expired: n(b?.expired),
+    };
+    const owing = m.state === "left" || m.state === "past_due";
+    const balanceCents = owing || m.state === "waiting" ? m.leftCents : 0;
+    // A subscription charges per period, so its sessions have no package price to share out.
+    const valued = m.kind !== "subscription" && m.kind !== "free" && purchased > 0;
+    const totalCents = m.priceCents;
+    const deliveredCents = valued ? Math.round((totalCents * Math.min(completed, purchased)) / purchased) : 0;
+    const unpaidDeliveredCents = valued && owing ? Math.min(balanceCents, Math.max(0, deliveredCents - m.paidCents)) : 0;
+    const fromId = s.renewed_from_id ?? null;
+    const fromSale = fromId ? packages.find((x) => x.id === fromId) ?? null : null;
+    return {
+      saleId: s.id,
+      number: numbers.get(s.id)!,
+      label: `Package ${numbers.get(s.id)!}`,
+      name: s.offer_name ?? "Session package",
+      renewedFrom: fromId ? { saleId: fromId, number: fromSale ? numbers.get(fromSale.id) ?? null : null } : null,
+      boughtOn: String(s.purchased_at ?? s.created_at ?? "").slice(0, 10) || null,
+      from: s.term_start_date ? String(s.term_start_date).slice(0, 10) : null,
+      to: s.term_end_date ? String(s.term_end_date).slice(0, 10) : null,
+      sessions,
+      totalCents,
+      paidCents: m.paidCents,
+      balanceCents,
+      deliveredCents,
+      unpaidDeliveredCents,
+      state: m.state,
+      schedule: scheduleOf.get(s.id) ?? null,
+    };
+  });
+  // Training past every package: a renewal's share per session, until it's billed.
+  const notBilledDeliveredCents = notBilled && notBilled.kind === "renewal" && notBilled.size > 0
+    ? Math.round((notBilled.eachCents * notBilled.trained) / notBilled.size)
+    : 0;
+  const unpaidDeliveredCents = packageAccounts.reduce((t, p) => t + p.unpaidDeliveredCents, 0) + notBilledDeliveredCents;
+
   return {
     currency,
     taxIncluded: rate != null,
@@ -351,6 +471,9 @@ export function buildClientPayments(input: {
     autoPay,
     notBilled,
     money: moneyOf,
+    packages: packageAccounts,
+    unpaidDeliveredCents,
+    notBilledDeliveredCents,
   };
 }
 

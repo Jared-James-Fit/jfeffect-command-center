@@ -919,7 +919,7 @@ export function ClientProfileWorkspace({
 
         <TabsContent value="purchases" className={WORKSPACE_GRID_CLASS}>
           <Suspense fallback={<TabFallback />}>
-            <ClientBillingPanel clientId={id} />
+            <ClientBillingPanel clientId={id} onOpenSessions={() => setTab("sessions")} />
             <ClientSalesTable clientId={id} />
           </Suspense>
         </TabsContent>

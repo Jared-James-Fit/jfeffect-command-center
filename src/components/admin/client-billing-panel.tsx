@@ -29,7 +29,7 @@ import { useAuth } from "@/lib/auth";
 import { formatMoney } from "@/lib/payment-display";
 import { billingPeriod, salePayments, type PaymentRow } from "@/lib/sale-money";
 import { addPeriod } from "@/lib/session-packages";
-import { saleLabels, type ClientPayments, type Installment, type SaleSchedule } from "@/lib/payment-schedule";
+import { saleLabels, type ClientPayments, type Installment, type PackageAccount, type SaleSchedule } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
 
 /** "Fri Nov 13" (the year only when it isn't this year). */
@@ -40,7 +40,7 @@ export function payDay(iso: string | null | undefined, thisYear = new Date().get
   return d.toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", ...(d.getFullYear() === thisYear ? {} : { year: "numeric" }) });
 }
 
-export function ClientBillingPanel({ clientId }: { clientId: string }) {
+export function ClientBillingPanel({ clientId, onOpenSessions }: { clientId: string; onOpenSessions?: () => void }) {
   const qc = useQueryClient();
   const { role } = useAuth();
   const isAdmin = role === "admin";
@@ -97,6 +97,7 @@ export function ClientBillingPanel({ clientId }: { clientId: string }) {
           labels={saleLabels(sales)}
           isAdmin={isAdmin}
           renewing={renew.isPending}
+          onOpenSessions={onOpenSessions}
           onRecord={setRecording}
           onSetDates={setDating}
           onRenew={(id) => renew.mutate(id)}
@@ -151,23 +152,17 @@ function RecordButton({ balances, onPick }: { balances: SaleSchedule[]; onPick: 
   );
 }
 
-const HOW: Record<SaleSchedule["how"], string> = {
-  auto_pay: "Auto-pay",
-  stripe: "Stripe",
-  manual: "Collected by you",
-  none: "No payment dates",
-};
-
 /**
  * The overview itself. Pure view over the payments model, so it can be
  * checked with fixture data (Marc's real records are the reference).
  */
-export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onRecord, onSetDates, onRenew }: {
+export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onOpenSessions, onRecord, onSetDates, onRenew }: {
   p: ClientPayments;
   ledger: any[];
   labels: Map<string, string>;
   isAdmin: boolean;
   renewing?: boolean;
+  onOpenSessions?: () => void;
   onRecord: (saleId: string) => void;
   onSetDates: (saleId: string) => void;
   onRenew: (fromSaleId: string) => void;
@@ -192,11 +187,23 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onRecord
           </div>
         </div>
 
+        {p.unpaidDeliveredCents > 0 && (
+          <div className="flex items-start justify-between gap-3 border-t border-border pt-3" data-unpaid-delivered>
+            <div className="min-w-0">
+              <div className="text-[14px] font-medium">Unpaid training delivered</div>
+              <div className="text-[12px] text-muted-foreground">
+                Completed sessions not yet covered by payments{p.notBilledDeliveredCents > 0 ? `, incl. ${money(p.notBilledDeliveredCents)} not billed yet` : ""}
+              </div>
+            </div>
+            <div className="shrink-0 text-[15px] font-semibold tabular-nums">{money(p.unpaidDeliveredCents)}</div>
+          </div>
+        )}
+
         {p.outstandingCents > 0 && (
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-billing-split>
             <Split label="Overdue" cents={p.overdueCents} money={money} tone={p.overdueCents > 0 ? "error" : "muted"} />
-            <Split label="Due today" cents={p.dueNowCents} money={money} tone={p.dueNowCents > 0 && !(p.next?.auto) ? "attention" : "muted"} />
-            <Split label="Scheduled" cents={p.scheduledCents} money={money} tone="muted" />
+            <Split label="Due now" cents={p.dueNowCents} money={money} tone={p.dueNowCents > 0 && !(p.next?.auto) ? "attention" : "muted"} />
+            <Split label="Future installments" cents={p.scheduledCents} money={money} tone="muted" />
             <Split label="No dates yet" cents={p.unscheduledCents} money={money} tone={p.unscheduledCents > 0 ? "attention" : "muted"} />
           </dl>
         )}
@@ -264,24 +271,16 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onRecord
 
       {p.upcoming.length > 0 && <Upcoming items={p.upcoming} money={money} isAdmin={isAdmin} onRecord={onRecord} />}
 
-      {p.balances.length > 0 && (
-        <Folder title="By package" summary={`${p.balances.length}`} data-billing-balances>
-          <ul className="divide-y divide-border">
-            {p.balances.map((b) => (
-              <li key={b.saleId} className="space-y-1 py-2">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="min-w-0 truncate text-[14px] font-medium">{b.label}</span>
-                  <span className="shrink-0 text-[14px] font-semibold tabular-nums">{money(b.money.leftCents)} left</span>
-                </div>
-                <div className="text-[13px] text-muted-foreground">
-                  {HOW[b.how]}
-                  {b.installments.length > 0 && ` · ${b.installments.length} payment${b.installments.length === 1 ? "" : "s"}, ${payDay(b.installments[0].date)}${b.installments.length > 1 ? ` – ${payDay(b.installments[b.installments.length - 1].date)}` : ""}`}
-                  {b.money.paidCents > 0 && ` · ${money(b.money.paidCents)} paid`}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Folder>
+      {p.packages.length > 0 && (
+        <PackageHistory
+          packages={p.packages}
+          ledger={ledger}
+          money={money}
+          isAdmin={isAdmin}
+          onOpenSessions={onOpenSessions}
+          onRecord={onRecord}
+          onSetDates={onSetDates}
+        />
       )}
 
       {p.waiting.length > 0 && (
@@ -308,6 +307,158 @@ export function BillingOverview({ p, ledger, labels, isAdmin, renewing, onRecord
         <p className="text-[14px] text-muted-foreground">Nothing billed yet.</p>
       )}
     </>
+  );
+}
+
+/* ---------------- Packages ---------------- */
+
+/** "Oct 5 – Nov 1" */
+function period(a: string | null, b: string | null): string | null {
+  const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+  if (a && b) return `${fmt(a)} – ${fmt(b)}`;
+  return a ? `from ${fmt(a)}` : b ? `to ${fmt(b)}` : null;
+}
+
+/** "16/16 completed", or "7 completed · 9 booked · 0 available". */
+export function packageSessionsLine(x: PackageAccount): string {
+  const s = x.sessions;
+  if (s.completed >= s.purchased && s.booked === 0) return `${s.completed}/${s.purchased} completed`;
+  const parts = [`${s.completed} completed`, `${s.booked} booked`, `${s.available} available`];
+  if (s.expired) parts.push(`${s.expired} expired`);
+  return parts.join(" · ");
+}
+
+/** How what's left on it gets paid, in a few words. */
+function planLine(x: PackageAccount, money: (c: number) => string): string {
+  if (x.state === "paid") return "Paid in full";
+  if (x.state === "free") return "Free";
+  if (x.state === "ended") return "Cancelled";
+  if (x.state === "waiting") return "Payment link out, nothing paid yet";
+  const sc = x.schedule;
+  if (!sc || sc.how === "none") return "No payment dates";
+  const list = sc.installments;
+  const n = list.length;
+  const when = n ? `${payDay(list[0].date)}${n > 1 ? ` – ${payDay(list[n - 1].date)}` : ""}` : "";
+  const by = sc.how === "auto_pay" ? "Auto-pay" : sc.how === "stripe" ? "Stripe" : "Collected by you";
+  return `${by} · ${n} payment${n === 1 ? "" : "s"} of ${money(list[0]?.cents ?? 0)}${when ? `, ${when}` : ""}`;
+}
+
+/** Finished and settled: nothing left to train or to pay. */
+const settled = (x: PackageAccount) =>
+  x.balanceCents === 0 && x.unpaidDeliveredCents === 0 && x.sessions.booked === 0 && x.sessions.available === 0 && x.state !== "past_due";
+
+/**
+ * Every package in order, Package 1 first, each with its training and its
+ * money side by side. Settled ones fold into one line; the ones with money
+ * left or sessions to go are cards, the ones that need something first in
+ * their own order.
+ */
+function PackageHistory({ packages, ledger, money, isAdmin, onOpenSessions, onRecord, onSetDates }: {
+  packages: PackageAccount[];
+  ledger: any[];
+  money: (c: number) => string;
+  isAdmin: boolean;
+  onOpenSessions?: () => void;
+  onRecord: (saleId: string) => void;
+  onSetDates: (saleId: string) => void;
+}) {
+  const done = packages.filter(settled);
+  const live = packages.filter((x) => !settled(x));
+  const doneLabel = done.length === 1 ? done[0].label : `Packages ${done.map((x) => x.number).join(", ")}`;
+  return (
+    <section className="space-y-2" data-billing-packages>
+      <h4 className="text-[15px] font-semibold">
+        Packages <span className="font-normal text-muted-foreground">· {packages.map((x) => x.number).join(" → ")}</span>
+      </h4>
+      {done.length > 0 && (
+        <Folder title={`${doneLabel} · paid in full`} summary={done.length > 1 ? `${done.length}` : undefined} data-billing-packages-settled>
+          {done.map((x) => (
+            <PackageCard key={x.saleId} x={x} ledger={ledger} money={money} isAdmin={isAdmin} onOpenSessions={onOpenSessions} onRecord={onRecord} onSetDates={onSetDates} />
+          ))}
+        </Folder>
+      )}
+      {live.map((x) => (
+        <PackageCard key={x.saleId} x={x} ledger={ledger} money={money} isAdmin={isAdmin} onOpenSessions={onOpenSessions} onRecord={onRecord} onSetDates={onSetDates} />
+      ))}
+    </section>
+  );
+}
+
+function PackageCard({ x, ledger, money, isAdmin, onOpenSessions, onRecord, onSetDates }: {
+  x: PackageAccount;
+  ledger: any[];
+  money: (c: number) => string;
+  isAdmin: boolean;
+  onOpenSessions?: () => void;
+  onRecord: (saleId: string) => void;
+  onSetDates: (saleId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const late = x.schedule?.installments.some((i) => i.state === "overdue" || i.state === "failed");
+  const chip = x.state === "past_due" ? { text: "Payment failed", tone: "error" as const }
+    : late ? { text: "Overdue", tone: "error" as const }
+    : x.state === "paid" ? { text: "Paid", tone: "done" as const }
+    : null;
+  const payments = useMemo(() => salePayments(ledger.filter((l: any) => l.purchase_id === x.saleId)), [ledger, x.saleId]);
+  const when = period(x.from, x.to);
+  return (
+    <div className="overflow-hidden rounded-xl border border-border" data-billing-package={x.number}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full space-y-1 p-3 text-left">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 text-[15px] font-semibold">
+            {x.label}{when ? <span className="font-normal text-muted-foreground"> · {when}</span> : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {chip && <StatusChip tone={chip.tone}>{chip.text}</StatusChip>}
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </div>
+        </div>
+        <div className="text-[13px] tabular-nums">{packageSessionsLine(x)}</div>
+        <div className="text-[13px] tabular-nums text-muted-foreground">
+          Total {money(x.totalCents)} · Paid {money(x.paidCents)} · Balance {money(x.balanceCents)}
+        </div>
+        {x.unpaidDeliveredCents > 0 && (
+          <div className="text-[13px] tabular-nums" data-package-unpaid-delivered>
+            <span className="text-muted-foreground">Unpaid delivered </span>
+            <span className="font-semibold">{money(x.unpaidDeliveredCents)}</span>
+          </div>
+        )}
+        <div className={cn("text-[13px]", x.schedule?.how === "none" ? "text-warning" : "text-muted-foreground")}>{planLine(x, money)}</div>
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-border px-3 pb-3 pt-2">
+          <p className="text-[13px] text-muted-foreground" data-package-origin>
+            {x.renewedFrom
+              ? `Renewed from ${x.renewedFrom.number ? `Package ${x.renewedFrom.number}` : "the package before"}${x.boughtOn ? ` on ${payDay(x.boughtOn)}` : ""}`
+              : x.boughtOn ? `Bought ${payDay(x.boughtOn)}` : "Bought"}
+            {` · ${x.name}`}
+          </p>
+          {x.schedule && x.schedule.installments.length > 0 && (
+            <div>
+              <div className="text-[13px] font-medium">Payments still to come</div>
+              <ul className="divide-y divide-border">
+                {x.schedule.installments.map((i) => <InstallmentRow key={i.key} i={i} money={money} inPackage />)}
+              </ul>
+            </div>
+          )}
+          <div>
+            <div className="text-[13px] font-medium">Payments received</div>
+            {payments.length > 0
+              ? <PaymentHistory rows={payments} labels={new Map([[x.saleId, x.label]])} money={money} />
+              : <p className="py-1 text-[13px] text-muted-foreground">None yet.</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {onOpenSessions && <Button size="sm" variant="outline" className="h-10" onClick={onOpenSessions}>View sessions</Button>}
+            {isAdmin && (x.state === "left" || x.state === "past_due") && (
+              <Button size="sm" variant="outline" className="h-10" onClick={() => onRecord(x.saleId)}>Record payment</Button>
+            )}
+            {isAdmin && x.schedule?.canSetDates && (
+              <Button size="sm" variant="outline" className="h-10" onClick={() => onSetDates(x.saleId)}><CalendarClock className="mr-1.5 h-4 w-4" /> Set dates</Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -374,14 +525,14 @@ const STATE_CHIP: Partial<Record<Installment["state"], { text: string; tone: "er
   due_today: { text: "Today", tone: "attention" },
 };
 
-function InstallmentRow({ i, money, action }: { i: Installment; money: (c: number) => string; action?: ReactNode }) {
+function InstallmentRow({ i, money, action, inPackage }: { i: Installment; money: (c: number) => string; action?: ReactNode; inPackage?: boolean }) {
   const chip = STATE_CHIP[i.state];
   return (
     <li className="flex min-h-12 items-center gap-3 py-2" data-installment={i.state}>
       <div className="min-w-0 flex-1">
         <div className="text-[14px] font-medium tabular-nums">{payDay(i.date)}</div>
         <div className="text-[13px] text-muted-foreground">
-          {i.label}{i.nth && i.of ? ` · payment ${i.nth} of ${i.of}` : ""} · {i.recurring ? "subscription" : i.auto ? "auto-pay" : "collected by you"}
+          {[inPackage ? null : i.label, i.nth && i.of ? `payment ${i.nth} of ${i.of}` : null, i.recurring ? "subscription" : i.auto ? "auto-pay" : "collected by you"].filter(Boolean).join(" · ")}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -395,7 +546,7 @@ function InstallmentRow({ i, money, action }: { i: Installment; money: (c: numbe
 
 function Upcoming({ items, money, isAdmin, onRecord }: { items: Installment[]; money: (c: number) => string; isAdmin: boolean; onRecord: (saleId: string) => void }) {
   const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, 4);
+  const shown = all ? items : items.slice(0, 3);
   return (
     <section className="space-y-1" data-billing-upcoming>
       <h4 className="text-[15px] font-semibold">Upcoming payments <span className="font-normal text-muted-foreground">· {items.length}</span></h4>
@@ -409,7 +560,7 @@ function Upcoming({ items, money, isAdmin, onRecord }: { items: Installment[]; m
           />
         ))}
       </ul>
-      {items.length > 4 && (
+      {items.length > 3 && (
         <button type="button" onClick={() => setAll((v) => !v)} className="flex min-h-10 w-full items-center justify-center gap-1 text-[13px] text-muted-foreground">
           {all ? "Show fewer" : `Show all ${items.length}`}
           <ChevronDown className={cn("h-4 w-4 transition-transform", all && "rotate-180")} />
