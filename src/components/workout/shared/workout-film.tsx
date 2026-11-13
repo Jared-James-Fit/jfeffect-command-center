@@ -1,8 +1,8 @@
 /**
  * A finished workout's film, on the workout's own card and its recap:
- *   🎥 3 sets on film · In the feed ✓      (View)
- *   🎥 3 sets on film · 1 still uploading, posts when it's done
- *   🎥 3 sets on film · Coach only          (Share to Crew)
+ *   [posters] 3 sets on film · In the feed ✓      (View)
+ *   [posters] 3 sets on film · 1 still uploading, posts when it's done
+ *   [posters] 3 sets on film · Coach only          (Share to Crew)
  * and "Who sees your film" at the end of the review: Crew (it posts by
  * itself) or Coach only (saved on the account). Their coach gets every clip
  * either way: each one is already its own message in the coach chat. Only
@@ -99,7 +99,7 @@ export function WorkoutFilmRow({
 
   async function post() {
     const res = await film.postNow();
-    if (res?.status === "posted") toast.success("Your film is in the feed 🎥");
+    if (res?.status === "posted") toast.success("Your film is in the feed");
     else if (res?.status === "up_to_date") toast.success("It's already in the feed");
     else if (res?.status === "no_crew") toast.error("Crew isn't on for your account.");
     else if (res?.status === "no_clips") toast.error("No clips fit a Crew post yet (90 seconds a clip).");

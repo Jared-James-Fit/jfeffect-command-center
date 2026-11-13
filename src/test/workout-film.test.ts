@@ -6,7 +6,6 @@ import {
   filmLabels,
   filmPaths,
   filmCaptionFor,
-  filmPostCaption,
   filmUpToDate,
   isFilmPath,
   isOwnFilmCaption,
@@ -52,24 +51,39 @@ describe("each clip's caption", () => {
     const labels = filmLabels(values, null);
     expect(filmCaption({ exercise: "Competition Squat", set: 2, ...labels }, true).detail).toBe("Set 2 · 5 reps @ RPE 8");
   });
+  it("names the set the way the workout does: a top set and its backoffs never both read \"Set 1\" (Jared's bench, Nov 13 2026)", () => {
+    const top = { exercise: "1ct Paused Bench", set: 1, set_name: "Top set", label: "255 lb × 4 @ RPE 6", label_no_load: "4 reps @ RPE 6" };
+    const back = { exercise: "1ct Paused Bench", set: 1, set_name: "Backoff 1", label: "245 lb × 4 @ RPE 6", label_no_load: "4 reps @ RPE 6" };
+    expect(filmCaption(top, false).detail).toBe("Top set · 255 lb × 4 @ RPE 6");
+    expect(filmCaption(back, false).detail).toBe("Backoff 1 · 245 lb × 4 @ RPE 6");
+    expect(filmCaption(back, true).detail).toBe("Backoff 1 · 4 reps @ RPE 6");
+    // a slide from before set names: its number
+    expect(filmCaption({ ...back, set_name: null, set: 2 }, false).detail).toBe("Set 2 · 245 lb × 4 @ RPE 6");
+    const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8");
+    expect(fn).toContain('admin.rpc("pl_day_set_names", { _day: comp.day_id })');
+    expect(fn).toContain('set_name: named?.set_name ?? `Set ${set}`,');
+  });
   it("falls back to the clip's own label when the set's numbers can't be read", () => {
     expect(filmLabels(null, "100 kg × 5 @ RPE 8")).toEqual({ label: "100 kg × 5 @ RPE 8", label_no_load: "5 reps @ RPE 8" });
   });
-  it("the post's caption when they haven't written one", () => {
-    expect(filmPostCaption("Lower A (Squat Focus)", 3)).toBe("Lower A (Squat Focus) · 3 sets on film 🎥");
-    expect(filmPostCaption(null, 1)).toBe("1 set on film 🎥");
+  it("the post's own caption is the database's: the best set of each main lift, no emoji", () => {
+    const fn = readFileSync("src/lib/workout-film.functions.ts", "utf8");
+    expect(fn).toContain('admin.rpc("film_caption", { _film: filmOnPost, _hide: hide })');
+    expect(fn).toContain("const caption = filmCaptionFor(post?.caption, previous, typeof next === \"string\" ? next : \"\");");
+    expect(fn).not.toContain("🎥");
   });
-  it("ours keeps up with the clips on the post; theirs is never touched", () => {
-    const t = "Thursday — Secondary Squat + Primary Bench";
-    // Jared's Nov 12 film: 4 clips at first, 9 once the big ones had their 720p copies
-    expect(filmCaptionFor(`${t} · 4 sets on film 🎥`, t, 9)).toBe(`${t} · 9 sets on film 🎥`);
-    expect(filmCaptionFor("1 set on film 🎥", null, 3)).toBe("3 sets on film 🎥");
-    expect(filmCaptionFor("", t, 2)).toBe(`${t} · 2 sets on film 🎥`);
-    expect(filmCaptionFor(null, null, 1)).toBe("1 set on film 🎥");
-    // their own words stay, even when they mention the film
-    expect(filmCaptionFor("new bench PR 💪", t, 9)).toBe("new bench PR 💪");
-    expect(filmCaptionFor("Leg day · 4 sets on film 🎥", t, 9)).toBe("Leg day · 4 sets on film 🎥");
-    expect(readFileSync("src/lib/workout-film.functions.ts", "utf8")).toContain("const caption = filmCaptionFor(post?.caption,");
+  it("ours keeps up with the film; theirs is never touched", () => {
+    const next = "High Bar Squat 365 lb × 6 · 1ct Paused Bench 255 lb × 4";
+    const before = "High Bar Squat 365 lb × 6";
+    // empty, the old "N sets on film 🎥" one, or exactly what the film wrote last time: ours
+    expect(filmCaptionFor("", before, next)).toBe(next);
+    expect(filmCaptionFor(null, null, next)).toBe(next);
+    expect(filmCaptionFor("Thursday — Secondary Squat + Primary Bench · 9 sets on film 🎥", null, next)).toBe(next);
+    expect(filmCaptionFor("1 set on film 🎥", null, next)).toBe(next);
+    expect(filmCaptionFor(before, before, next)).toBe(next);
+    // their own words stay
+    expect(filmCaptionFor("new bench PR 💪", before, next)).toBe("new bench PR 💪");
+    expect(filmCaptionFor("Leg day", before, next)).toBe("Leg day");
   });
   it("on a post's screen ours isn't said twice: the workout's own line already names it (Fionna's Nov 12 film, Nov 13 2026)", () => {
     const names = ["Glutes + Legs", "Block 3 · Week 2"];

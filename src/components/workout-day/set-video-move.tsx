@@ -77,7 +77,7 @@ export function SetVideoMovePicker({
       _label_no_load: set.labelNoLoad || null,
     });
     if (error) throw error;
-    return data as { moved: boolean; exercise?: string; set_index?: number; result_id?: string | null };
+    return data as { moved: boolean; exercise?: string; set_index?: number; set_name?: string; result_id?: string | null };
   };
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
@@ -108,7 +108,8 @@ export function SetVideoMovePicker({
       );
       refresh();
       onMoved();
-      toast.success(`Moved to ${ex.name} · Set ${set.n}`, {
+      // the set by its name in the workout ("Top set", "Backoff 2"), as the chat now says it
+      toast.success(`Moved to ${ex.name} · ${res.set_name || `Set ${set.n}`}`, {
         action:
           fromRow && from
             ? {

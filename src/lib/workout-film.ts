@@ -1,8 +1,12 @@
 /**
  * Workout film (pure, tested): a finished workout's set videos as its Crew
  * post, one clip per slide, each with a caption made for the athlete: the
- * exercise, then "Set 2 · 145 kg × 5 @ RPE 8". The server builds it
+ * exercise, then the set by its name in the workout and what was lifted
+ * ("Top set · 145 kg × 5 @ RPE 8", "Backoff 2 · 130 kg × 5", "Set 3 · …";
+ * the database names them, pl_day_set_names). The server builds it
  * (workout-film.functions.ts) and the feed shows each clip's caption on it.
+ * The post's own caption is the database's film_caption: the best set of
+ * each main lift filmed, no emoji.
  */
 import { setVideoLabel } from "@/lib/set-videos/label";
 
@@ -11,6 +15,12 @@ export type FilmSlide = {
   path: string;
   exercise: string;
   set: number;
+  /** The set by its name in the workout: "Top set", "Backoff 2", "Set 3" (pl_day_set_names). */
+  set_name?: string | null;
+  /** One of the workout's main lifts (the post's caption names those). */
+  main?: boolean;
+  /** Its weight in kg, so the caption can pick the heaviest. */
+  kg?: number | null;
   /** "145 kg × 5 @ RPE 8". */
   label: string;
   /** The same without the weight, for a post that hides weights. */
@@ -106,34 +116,29 @@ export function filmLabels(v: FilmSetValues | null, fallback: string | null): { 
   };
 }
 
-/** What a clip's caption says: the exercise, then "Set 2 · 145 kg × 5 @ RPE 8". */
-export function filmCaption(f: Pick<FilmSlide, "exercise" | "set" | "label" | "label_no_load">, hideLoads: boolean): { title: string; detail: string } {
+/** What a clip's caption says: the exercise, then "Top set · 145 kg × 5 @ RPE 8" ("Set 2" when it's a plain set). */
+export function filmCaption(
+  f: Pick<FilmSlide, "exercise" | "set" | "set_name" | "label" | "label_no_load">,
+  hideLoads: boolean,
+): { title: string; detail: string } {
   const what = (hideLoads ? f.label_no_load : f.label) || "";
-  return { title: f.exercise || "Set", detail: [`Set ${f.set}`, what].filter(Boolean).join(" · ") };
+  const which = (f.set_name ?? "").trim() || `Set ${f.set}`;
+  return { title: f.exercise || "Set", detail: [which, what].filter(Boolean).join(" · ") };
 }
 
-/** The post's own caption when the athlete hasn't written one. */
-export function filmPostCaption(workoutTitle: string | null | undefined, clips: number): string {
-  const sets = `${clips} ${clips === 1 ? "set" : "sets"} on film 🎥`;
-  const title = (workoutTitle ?? "").trim();
-  return title ? `${title} · ${sets}` : sets;
-}
-
-/** Our caption's shape: "Lower A (Squat Focus) · 3 sets on film 🎥", or just the count. */
+/** The caption films used to write: "Lower A (Squat Focus) · 3 sets on film 🎥", or just the count. */
 const FILM_CAPTION = /^(?:(.*) · )?\d+ sets? on film 🎥$/u;
 
 /**
- * A film post's caption: their own words when they wrote some, else ours,
- * kept to the count on the post as clips are added (a clip that landed later,
- * or one that only fit once its 720p copy was made, never leaves the caption
- * saying fewer sets than the post shows).
+ * A film post's caption: their own words when they wrote some, else the
+ * film's own (the database's film_caption of its slides, `next`), kept in step
+ * as clips are added or moved. It's still ours while it's empty, the old
+ * "· N sets on film 🎥" one, or exactly what the film wrote last time (`previous`).
  */
-export function filmCaptionFor(current: string | null | undefined, workoutTitle: string | null | undefined, clips: number): string {
+export function filmCaptionFor(current: string | null | undefined, previous: string | null | undefined, next: string): string {
   const now = (current ?? "").trim();
-  const ours = filmPostCaption(workoutTitle, clips);
-  if (!now) return ours;
-  const m = FILM_CAPTION.exec(now);
-  return m && (m[1] ?? "").trim() === (workoutTitle ?? "").trim() ? ours : now;
+  if (!now || FILM_CAPTION.test(now) || (!!previous && now === previous.trim())) return next;
+  return now;
 }
 
 /**
