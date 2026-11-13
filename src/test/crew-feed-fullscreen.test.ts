@@ -10,9 +10,10 @@ describe("every post fills the screen, TikTok's way", () => {
 
   it("a screen is the window's measured height, read again only on a rotation (never a toolbar or the keyboard)", () => {
     const lib = read("src/lib/feed-paging.ts");
-    expect(lib).toContain("const vh = Math.round(window.innerHeight);");
+    expect(lib).toContain("vh = Math.round(window.innerHeight);");
     expect(lib).toContain('root.style.setProperty("--feed-vh", `${vh}px`);');
-    expect(lib).toContain("if (window.innerWidth === width) return;");
+    // a resize at the same width (a toolbar, a keyboard) only reads the gap again, never the pages' height
+    expect(lib).toContain("if (window.innerWidth === width) return setGap();");
     expect(read("src/components/community/community-screen.tsx")).toContain("const unwatch = watchFeedViewport();");
   });
 

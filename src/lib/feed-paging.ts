@@ -67,23 +67,55 @@ export function useFeedPaging(): boolean {
 export function watchFeedViewport(): () => void {
   const root = document.documentElement;
   let width = window.innerWidth;
-  const set = () => {
-    const vh = Math.round(window.innerHeight);
-    root.style.setProperty("--feed-vh", `${vh}px`);
+  let vh = 0;
+  // the gap is read again whenever it may have settled: iOS can report the screen at the window's
+  // height for a moment (at a launch, coming back to the app), and a reading taken then stuck for
+  // the whole visit (Nov 14 2026: every post stopped 61pt above the tab bar, the gap read as 0)
+  const setGap = () => {
+    if (typing()) return;
     root.style.setProperty("--feed-gap", `${feedGap(fixedScreenHeight(), vh)}px`);
   };
+  const set = () => {
+    vh = Math.round(window.innerHeight);
+    root.style.setProperty("--feed-vh", `${vh}px`);
+    setGap();
+  };
   set();
+  const timers = FEED_GAP_SETTLE_MS.map((ms) => window.setTimeout(setGap, ms));
   const onResize = () => {
-    if (window.innerWidth === width) return;
+    if (window.innerWidth === width) return setGap();
     width = window.innerWidth;
     set();
   };
+  const onShow = () => {
+    if (document.visibilityState !== "visible") return;
+    setGap();
+    window.setTimeout(setGap, 400);
+  };
+  // the first finger down: by then the app has settled
+  const onFirstTouch = () => setGap();
   window.addEventListener("resize", onResize);
+  window.addEventListener("pageshow", setGap);
+  document.addEventListener("visibilitychange", onShow);
+  window.addEventListener("touchstart", onFirstTouch, { once: true, passive: true });
   return () => {
+    timers.forEach((t) => window.clearTimeout(t));
     window.removeEventListener("resize", onResize);
+    window.removeEventListener("pageshow", setGap);
+    document.removeEventListener("visibilitychange", onShow);
+    window.removeEventListener("touchstart", onFirstTouch);
     root.style.removeProperty("--feed-vh");
     root.style.removeProperty("--feed-gap");
   };
+}
+
+/** When the gap is read again after Crew opens (ms): the next task, then as the launch settles. */
+export const FEED_GAP_SETTLE_MS = [0, 250, 1000, 3000] as const;
+
+/** A text box has the keyboard up: a keyboard can shrink what a fixed box measures (Android), so the gap waits. */
+function typing(): boolean {
+  const a = document.activeElement as HTMLElement | null;
+  return !!a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable);
 }
 
 /** The most the screen is believed to run past the window (anything more is a bad reading, ignored). */
