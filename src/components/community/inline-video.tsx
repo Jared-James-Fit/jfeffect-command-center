@@ -252,6 +252,8 @@ export function InlineVideo({
   }, [el, sound, mode]);
 
   const soundOn = sound && !blocked;
+  // the phone is holding its sound back until a tap: say so, plainly (TikTok's "Tap for sound")
+  const askTap = sound && blocked;
   // on a post's screen (controls up top), shown whole: between the bars
   const between = controls === "top" && fit === "contain";
   return (
@@ -309,14 +311,17 @@ export function InlineVideo({
             setFeedSound(!soundOn);
           }}
           className={cn(
-            "absolute right-2.5 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
+            "absolute right-2.5 flex h-8 items-center justify-center gap-1.5 rounded-full bg-black/55 text-white backdrop-blur active:scale-90",
+            askTap ? "px-3 text-[13px] font-semibold" : "w-8",
             controls === "top" ? "top-[calc(var(--feed-bar-room,0px)+3rem)]" : "bottom-2.5",
           )}
           aria-label={soundOn ? "Mute" : "Turn sound on"}
           aria-pressed={soundOn}
           data-video-sound
+          data-sound-held={askTap ? "" : undefined}
         >
-          {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 shrink-0" />}
+          {askTap && <span>Tap for sound</span>}
         </button>
       )}
     </div>
