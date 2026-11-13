@@ -319,3 +319,41 @@ describe("JF Effect library installer (jf-library-install hook)", () => {
     expect(hook).toContain("apply: body?.apply === true");
   });
 });
+
+describe("the library line and builder header read a multi-block template", () => {
+  it("counts a v2 template's blocks, weeks and workouts, and says an optional day apart", async () => {
+    const { summarizeTemplatePayload } = await import("@/lib/pl-programs");
+    const { programLine } = await import("@/lib/programs/library-view");
+    const lib = buildLibrary();
+    const elite = lib.find((t) => t.slug === "jf-elite-powerlifting")!;
+    const s = summarizeTemplatePayload(elite);
+    expect(s).toMatchObject({ blocks: 3, weeks: 12, days: 48, optionalDays: 12 });
+    expect(programLine(elite, { weeks: s.weeks, blocks: s.blocks, optionalDays: s.optionalDays })).toBe(
+      "3 blocks · 12 weeks · 3 days a week + 1 optional · Powerlifting",
+    );
+    const glute = lib.find((t) => t.slug === "jf-glute-physique-builder")!;
+    const g = summarizeTemplatePayload(glute);
+    expect(programLine(glute, { weeks: g.weeks, blocks: g.blocks, optionalDays: g.optionalDays })).toBe(
+      "3 blocks · 12 weeks · 4 days a week · Bodybuilding",
+    );
+    // an archived block in the payload isn't counted
+    const withArchived = { ...glute, payload: { ...glute.payload, blocks_data: [...glute.payload.blocks_data, { ...glute.payload.blocks_data[0], archived: true }] } };
+    expect(summarizeTemplatePayload(withArchived).blocks).toBe(3);
+  });
+});
+
+describe("session length of a top set + back-off day", () => {
+  it("doesn't count a new warm-up for a back-off row of the lift above it", async () => {
+    const { estimateDayMinutes, estimateRowSeconds } = await import("@/lib/pl-programs");
+    const top = { sets: 1, rest_seconds: 240, time_profile: "main_lift" as const };
+    const back = { ...top, sets: 3, percentage_basis: "top_set" };
+    expect(estimateRowSeconds(back)).toBe(3 * (60 + 240));
+    expect(estimateRowSeconds({ ...back, percentage_basis: "none" })).toBe(600 + 3 * (60 + 240) + 180);
+    // Elite Powerlifting's Friday SBD, week 1: three top singles with back-offs
+    const elite = buildLibrary().find((t) => t.slug === "jf-elite-powerlifting")!;
+    const friday = elite.payload.blocks_data[0].weeks_data[0].days[3];
+    const minutes = estimateDayMinutes(friday.rows);
+    expect(minutes).toBeGreaterThanOrEqual(75);
+    expect(minutes).toBeLessThanOrEqual(110);
+  });
+});

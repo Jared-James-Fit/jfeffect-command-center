@@ -166,7 +166,7 @@ export function ProgramLibrary({
       membershipByTemplate(isAdmin ? listings : [], revisions),
       (id) => {
         const s = summarizeTemplatePayload(byId.get(id));
-        return { weeks: s.weeks, blocks: s.blocks };
+        return { weeks: s.weeks, blocks: s.blocks, optionalDays: (s as { optionalDays?: number }).optionalDays ?? 0 };
       },
     );
   }, [templates, usageRows, listings, isAdmin, byId]);
