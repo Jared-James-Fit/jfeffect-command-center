@@ -42,10 +42,9 @@ describe("set video label", () => {
   });
 
   it("makes one chat line, never over 200 characters", () => {
-    expect(setVideoMessageBody("Bench Press", 3, "100 kg × 5 @ RPE 8")).toBe(
-      "🎥 Bench Press · Set 3 · 100 kg × 5 @ RPE 8",
-    );
-    expect(setVideoMessageBody("  ", 1, "")).toBe("🎥 Exercise · Set 1");
+    expect(setVideoMessageBody("Bench Press", 3, "100 kg × 5 @ RPE 8")).toBe("Bench Press · Set 3 · 100 kg × 5 @ RPE 8");
+    expect(setVideoMessageBody("1ct Paused Bench", "Top set", "255 lb × 4 @ RPE 6")).toBe("1ct Paused Bench · Top set · 255 lb × 4 @ RPE 6");
+    expect(setVideoMessageBody("  ", 1, "")).toBe("Exercise · Set 1");
     expect(setVideoMessageBody("x".repeat(400), 1, "y").length).toBeLessThanOrEqual(200);
   });
 

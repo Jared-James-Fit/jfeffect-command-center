@@ -11,6 +11,11 @@
  * Their coach gets every clip either way: each set video is already its own
  * message in the coach chat (set_video_attach), with its set details.
  *
+ * Each slide names its set the way the workout does ("Top set", "Backoff 2",
+ * "Set 3": the database's pl_day_set_names, the same names the coach chat
+ * uses), and the post's own caption is the database's film_caption of the
+ * slides: the best set of each main lift filmed, no emoji.
+ *
  * Only the athlete (the workout's own login) can post it, never a coach
  * viewing as them. The clips are copied from their coach chat's storage into
  * their own community-media folder, so the set video in the chat never
@@ -71,6 +76,19 @@ async function copyInto(admin: any, from: string, to: string): Promise<boolean> 
   return !upErr;
 }
 
+/** A new film post hides weights when their last workout post did. */
+async function lastHideLoads(admin: any, clientId: string): Promise<boolean> {
+  const { data: last } = await admin
+    .from("community_posts")
+    .select("hide_loads")
+    .eq("client_id", clientId)
+    .eq("kind", "workout")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return !!last?.hide_loads;
+}
+
 export const postWorkoutFilmFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) => Input.parse(i))
@@ -112,16 +130,20 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
 
     const rowIds = [...new Set(all.map((v) => v.row_id).filter(Boolean))];
     const resultIds = [...new Set(all.map((v) => v.result_id))];
-    const [{ data: rows }, { data: results }, { data: day }] = await Promise.all([
+    const [{ data: rows }, { data: results }, { data: names }] = await Promise.all([
       rowIds.length ? admin.from("pl_exercise_rows").select("id, sort_order").in("id", rowIds) : Promise.resolve({ data: [] }),
       admin
         .from("pl_row_results")
-        .select("id, actual_load, actual_load_unit, entered_value, entered_unit, actual_reps, actual_rpe_num, actual_rpe, actual_rir, completed_duration_seconds, load_type")
+        .select("id, actual_load, actual_load_unit, entered_value, entered_unit, actual_reps, actual_rpe_num, actual_rpe, actual_rir, completed_duration_seconds, load_type, normalized_kg")
         .in("id", resultIds),
-      admin.from("pl_days").select("title, subtitle").eq("id", comp.day_id).maybeSingle(),
+      // every set of the workout by its name in it ("Top set", "Backoff 2", "Set 3") and whether it's a main lift
+      admin.rpc("pl_day_set_names", { _day: comp.day_id }),
     ]);
     const orderOf = new Map<string, number>(((rows ?? []) as any[]).map((r) => [r.id, Number(r.sort_order) || 0]));
     const resultOf = new Map<string, any>(((results ?? []) as any[]).map((r) => [r.id, r]));
+    const nameOf = new Map<string, { set_name: string; main: boolean }>(
+      ((names ?? []) as any[]).map((n) => [`${n.row_id}:${n.set_index}`, { set_name: n.set_name, main: !!n.main }]),
+    );
 
     // each clip as the film uses it: its feed copy when it has one
     const { picked, tooLong, overMax } = pickFilmClips(
@@ -187,7 +209,18 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
       filmSlides.push({ path, thumb: hasPoster ? thumb : null, type: "video", width: v.width ?? null, height: v.height ?? null });
       const r = resultOf.get(v.result_id);
       const values: FilmSetValues | null = r ? filmSetValues(r) : null;
-      film.push({ path, exercise: v.exercise_name ?? "Set", set: Number(v.set_index) || 1, ...filmLabels(values, v.label) });
+      const set = Number(v.set_index) || 1;
+      const named = nameOf.get(`${v.row_id}:${set}`);
+      const kg = r?.normalized_kg == null || r.normalized_kg === "" ? null : Number(r.normalized_kg);
+      film.push({
+        path,
+        exercise: v.exercise_name ?? "Set",
+        set,
+        set_name: named?.set_name ?? `Set ${set}`,
+        main: named?.main ?? false,
+        kg: Number.isFinite(kg) ? kg : null,
+        ...filmLabels(values, v.label),
+      });
     }
     if (!filmSlides.length) throw new Error("Couldn't get your clips ready. Try again in a minute.");
 
@@ -203,8 +236,13 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
     const extras = slides.slice(1);
     const onPost = new Set(slides.map((s) => s.path));
     const filmOnPost = film.filter((f) => onPost.has(f.path));
-    const title = (day?.subtitle ?? "").trim() || (day?.title ?? "").trim() || null;
-    const caption = filmCaptionFor(post?.caption, /^day\s*\d+$/i.test(title ?? "") ? null : title, filmOnPost.length);
+    // the post's own caption: the best set of each main lift filmed (film_caption), no emoji; theirs stays theirs
+    const hide = post ? !!post.hide_loads : !!(await lastHideLoads(admin, comp.client_id));
+    const [{ data: next }, { data: previous }] = await Promise.all([
+      admin.rpc("film_caption", { _film: filmOnPost, _hide: hide }),
+      post?.film ? admin.rpc("film_caption", { _film: post.film, _hide: hide }) : Promise.resolve({ data: null }),
+    ]);
+    const caption = filmCaptionFor(post?.caption, previous, typeof next === "string" ? next : "");
     // where it goes: where they put it, else the crew (a private account's
     // trigger keeps it to their followers)
     const visibility = post && !post.auto_shared && crewVisible(post.visibility) ? post.visibility : "community";
@@ -241,17 +279,9 @@ export const postWorkoutFilmFn = createServerFn({ method: "POST" })
       );
       if (stale.length) await admin.storage.from(DST_BUCKET).remove(stale).catch(() => undefined);
     } else {
-      const { data: last } = await admin
-        .from("community_posts")
-        .select("hide_loads")
-        .eq("client_id", comp.client_id)
-        .eq("kind", "workout")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
       const { data: made, error } = await admin
         .from("community_posts")
-        .insert({ ...fields, author_user_id: userId, client_id: comp.client_id, completion_id: comp.id, hide_loads: !!last?.hide_loads })
+        .insert({ ...fields, author_user_id: userId, client_id: comp.client_id, completion_id: comp.id, hide_loads: hide })
         .select("id")
         .single();
       if (error) throw new Error(error.message || "Couldn't post your film. Try again.");

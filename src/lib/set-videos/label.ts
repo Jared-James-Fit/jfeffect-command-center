@@ -58,10 +58,15 @@ export function setVideoLabel(v: SetVideoSetValues): string {
   return effort ? `${work} @ ${effort}` : work;
 }
 
-/** The chat message: "🎥 Bench Press · Set 3 · 100 kg × 5 @ RPE 8" (≤ 200 characters). */
-export function setVideoMessageBody(exercise: string, setIndex: number, label: string): string {
-  const parts = [exercise.trim() || "Exercise", `Set ${setIndex}`, label.trim()].filter(Boolean);
-  return `🎥 ${parts.join(" · ")}`.slice(0, 200);
+/**
+ * The chat message, as set_video_attach writes it: "Bench Press · Top set ·
+ * 100 kg × 5 @ RPE 8" (≤ 200 characters, no emoji). `set` is the set's name in
+ * the workout (pl_day_set_names: "Top set", "Backoff 2"), or its number.
+ */
+export function setVideoMessageBody(exercise: string, set: number | string, label: string): string {
+  const which = typeof set === "number" ? `Set ${set}` : set.trim() || "Set";
+  const parts = [exercise.trim() || "Exercise", which, label.trim()].filter(Boolean);
+  return parts.join(" · ").slice(0, 200);
 }
 
 /**
