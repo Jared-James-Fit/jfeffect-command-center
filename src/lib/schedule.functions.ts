@@ -351,7 +351,8 @@ export const answerSessionChange = createServerFn({ method: "POST" })
       body = `Approved: your ${title} moves from ${was} to ${sessionWhenText(r.proposed_date, start)}.`;
       try {
         const { textSessionChange } = await import("@/lib/pt-session-reminders.server");
-        await textSessionChange(db, s.id, "moved", new Date(), s.starts_at);
+        // They asked for this time: the "Approved" chat message pushes them; a text only if push can't.
+        await textSessionChange(db, s.id, "moved", new Date(), s.starts_at, { clientAsked: true });
       } catch {
         /* the chat message is the record; the text is a courtesy */
       }

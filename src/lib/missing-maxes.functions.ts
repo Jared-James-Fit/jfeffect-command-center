@@ -2,20 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
-
 function b64url(s: string) {
   return Buffer.from(s, "utf8").toString("base64")
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  return "+" + cleaned;
 }
 
 const Input = z.object({
@@ -126,38 +115,25 @@ export const notifyMissingMaxesFn = createServerFn({ method: "POST" })
       errors.push(`email: ${e?.message ?? e}`);
     }
 
-    // Best-effort: SMS via Twilio (requires admin_notify_phone)
+    // Best-effort: a staff alert text (needs Admin notify phone in SMS
+    // settings), through the one sender: once per client a day, budget-capped.
     try {
-      const { data: smsSettings } = await supabase
-        .from("sms_settings").select("*").eq("singleton", true).maybeSingle();
-      const target = normalizePhone(smsSettings?.admin_notify_phone);
-      const from = normalizePhone(smsSettings?.from_phone);
-      const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-      const TWILIO_API_KEY = process.env.TWILIO_API_KEY;
-      if (!target) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: smsSettings } = await supabaseAdmin
+        .from("sms_settings").select("admin_notify_phone").eq("singleton", true).maybeSingle();
+      if (!smsSettings?.admin_notify_phone) {
         errors.push("sms: set Admin Notify Phone in SMS settings");
-      } else if (!from) {
-        errors.push("sms: configure From Phone in SMS settings");
-      } else if (!smsSettings?.enabled) {
-        errors.push("sms: SMS sending disabled in settings");
-      } else if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
-        errors.push("sms: Twilio connector not linked");
       } else {
-        const smsBody = `JF Effect: ${clientName} is missing their 1RM/Training Max. Please add it in their profile.`;
-        const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "X-Connection-Api-Key": TWILIO_API_KEY,
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ To: target, From: from, Body: smsBody }).toString(),
+        const { sendSms, smsResultMessage } = await import("@/lib/sms-gateway.server");
+        const r = await sendSms(supabaseAdmin, {
+          category: "staff_alert",
+          to: smsSettings.admin_notify_phone,
+          body: `JF Effect: ${clientName} is missing their 1RM/Training Max. Please add it in their profile.`,
+          key: `missing_maxes:${data.clientId}:${new Date().toISOString().slice(0, 10)}`,
+          maxAttempts: 1,
         });
-        if (!res.ok) {
-          const t = await res.text().catch(() => "");
-          throw new Error(`Twilio ${res.status}: ${t.slice(0, 200)}`);
-        }
-        channels.push("sms");
+        if (r.status === "sent") channels.push("sms");
+        else errors.push(`sms: ${smsResultMessage(r)}`);
       }
     } catch (e: any) {
       errors.push(`sms: ${e?.message ?? e}`);

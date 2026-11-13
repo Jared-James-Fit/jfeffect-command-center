@@ -22,6 +22,8 @@ import { SmsPersonalDialog } from "@/components/sms-personal-dialog";
 import { SmsAutomationDialog, type AutomationRow } from "@/components/sms-automation-dialog";
 import { SmsTemplateField } from "@/components/sms-template-field";
 import { smsSender } from "@/lib/sms-identity";
+import { SmsCostCard } from "@/components/sms/sms-cost-card";
+import { BLOCKED_REASON_TEXT, CATEGORY_LABEL } from "@/lib/sms-policy";
 
 export const Route = createFileRoute("/_authenticated/admin/settings_/sms")({ component: SmsSettings });
 
@@ -59,7 +61,7 @@ function SmsSettings() {
     queryFn: async () => {
       const { data } = await supabase
         .from("sms_log")
-        .select("id, created_at, kind, reminder_step, status, to_phone, body, error, clients(full_name)")
+        .select("id, created_at, kind, category, reminder_step, status, to_phone, body, error, blocked_reason, segments, twilio_status, clients(full_name)")
         .order("created_at", { ascending: false })
         .limit(30);
       return data ?? [];
@@ -138,7 +140,7 @@ function SmsSettings() {
   };
   const doSweep = async () => {
     setBusy(true);
-    try { const r: any = await sweep({}); toast.success(`Reminder sweep ran — processed ${r?.processed ?? 0}`); }
+    try { const r: any = await sweep({}); toast.success(`Nudges sent: ${r?.pushed ?? 0} by push, ${r?.texted ?? 0} by text`); }
     catch (e: any) { toast.error(e?.message ?? "Failed"); }
     finally { setBusy(false); }
   };
@@ -146,7 +148,7 @@ function SmsSettings() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <PageHeader title="SMS Notifications" subtitle="Twilio-powered text alerts, personal messages, and custom automations." />
+        <PageHeader title="SMS" subtitle="Texts cost money; push and the in-app chat don't. Texts are kept for what needs one." />
         <div className="flex items-center gap-2 flex-wrap">
           <SaveStatus state={autosave.state} savedAt={autosave.savedAt} />
           <Button size="sm" variant="outline" onClick={() => setPersonalOpen(true)}>
@@ -157,6 +159,8 @@ function SmsSettings() {
           </Button>
         </div>
       </div>
+
+      <SmsCostCard settings={settings as any} />
 
       <Card className="p-5 space-y-4 border-primary/30">
         <div>
@@ -225,8 +229,12 @@ function SmsSettings() {
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="font-bold">Automatic unread reminders</div>
-            <div className="text-xs text-muted-foreground">Sends after admin message has been unread for this many minutes. Reminders stop once the client reads the message or after the last step.</div>
+            <div className="font-bold">Unread message nudges</div>
+            <div className="text-xs text-muted-foreground">
+              When your message has been unread this many minutes, the client gets a free push. Only someone the push can't reach gets
+              the text below, and only for a message you wrote (automated check-in and form prompts stop at the push). One nudge a
+              client a day, 9am to 8pm their time. Stops once they read it.
+            </div>
           </div>
           <Button size="sm" variant="outline" onClick={() => setSteps([...steps, { delay_minutes: 60, enabled: true, template: "Hi {first_name}, it's {coach} from {brand}. You still have an unread message from me in the app. Reply STOP to opt out." }])}>
             <Plus className="mr-1 h-4 w-4" /> Add step
@@ -324,12 +332,12 @@ function SmsSettings() {
                 <tr key={r.id} className="border-t border-border align-top">
                   <td className="p-2 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
                   <td className="p-2">{r.clients?.full_name ?? "—"}</td>
-                  <td className="p-2">{r.kind}{r.reminder_step != null ? ` #${r.reminder_step + 1}` : ""}</td>
+                  <td className="p-2">{CATEGORY_LABEL[r.category] ?? r.kind}{r.reminder_step != null ? ` #${r.reminder_step + 1}` : ""}{r.segments > 1 ? ` · ${r.segments} parts` : ""}</td>
                   <td className="p-2 whitespace-nowrap">{r.to_phone || "—"}</td>
                   <td className="p-2">
-                    <Badge variant={r.status === "sent" ? "default" : r.status === "failed" ? "destructive" : "outline"}>{r.status}</Badge>
+                    <Badge variant={r.status === "sent" ? "default" : r.status === "failed" ? "destructive" : "outline"}>{r.twilio_status === "delivered" ? "delivered" : r.status}</Badge>
                   </td>
-                  <td className="p-2 max-w-md">{r.error ? <span className="text-destructive">{r.error}</span> : <span className="text-muted-foreground">{r.body}</span>}</td>
+                  <td className="p-2 max-w-md">{r.blocked_reason ? <span className="text-muted-foreground">{BLOCKED_REASON_TEXT[r.blocked_reason] ?? r.blocked_reason}</span> : r.error ? <span className="text-destructive">{r.error}</span> : <span className="text-muted-foreground">{r.body}</span>}</td>
                 </tr>
               ))}
               {(!recent || recent.length === 0) && (

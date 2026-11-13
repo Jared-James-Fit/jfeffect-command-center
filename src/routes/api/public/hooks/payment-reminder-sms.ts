@@ -34,8 +34,8 @@ export const Route = createFileRoute("/api/public/hooks/payment-reminder-sms")({
           }
 
           const { runPaymentSmsSweep } = await import("@/lib/payment-sms.server");
-          const { sendViaTwilio, normalizePhone } = await import("@/lib/sms.functions");
-          const result = await runPaymentSmsSweep(supabaseAdmin, { sendSms: sendViaTwilio, normalizePhone });
+          const { sendSms } = await import("@/lib/sms-gateway.server");
+          const result = await runPaymentSmsSweep(supabaseAdmin, { sendSms });
           return Response.json({ ok: true, ...result, push });
         } catch (e: any) {
           console.error("[payment-reminder-sms] sweep failed", e?.message ?? e);

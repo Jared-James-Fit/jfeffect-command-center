@@ -1,25 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  inSmsSendWindow,
-  pickAnchorMessages,
-  reminderLookbackMs,
-  SMS_CLIENT_COOLDOWN_MS,
-} from "@/lib/sms-reminder-rules";
-import { coachById, isAssignedCoachOf, renderSmsTemplate, resolveCoachName, smsSender, withAssignedCoach, withLinkHeadsUp } from "@/lib/sms-identity";
+import { isAssignedCoachOf, renderSmsTemplate, resolveCoachName, smsSender, withAssignedCoach } from "@/lib/sms-identity";
+import { normalizePhone } from "@/lib/sms-policy";
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
+// Every text goes through the one sender (sms-gateway.server.ts), loaded
+// inside handlers so no server code reaches the client bundle.
+async function gateway() {
+  return import("@/lib/sms-gateway.server");
+}
 
-export function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  // Assume US 10-digit if no country code
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
+async function admin() {
+  return (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+}
+
+/** Same text to the same person in the same window = one send (double taps). */
+async function textKey(prefix: string, who: string, body: string, windowMinutes: number): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
+  const hex = Array.from(new Uint8Array(digest).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+  const bucket = Math.floor(Date.now() / (windowMinutes * 60_000));
+  return `${prefix}:${who}:${hex}:${bucket}`;
 }
 
 const renderTemplate = renderSmsTemplate;
@@ -30,27 +30,6 @@ async function assertCanMessage(supabase: any, userId: string, clientId: string)
   if (isAdmin) return { isAdmin: true };
   if (!(await isAssignedCoachOf(supabase, userId, clientId))) throw new Error("Forbidden: not assigned to this client");
   return { isAdmin: false };
-}
-
-export async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
-  if (!twilioKey) throw new Error("TWILIO_API_KEY missing — connect Twilio in Integrations");
-  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
-  });
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || `Twilio error (${res.status})`);
-  }
-  return { sid: data.sid as string };
 }
 
 const SendManual = z.object({
@@ -65,57 +44,36 @@ export const sendManualSms = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     await assertCanMessage(supabase, userId, data.client_id);
 
-    const { data: settings, error: sErr } = await supabase
-      .from("sms_settings").select("*").eq("singleton", true).maybeSingle();
-    if (sErr) throw new Error(sErr.message);
-    if (!settings) throw new Error("SMS settings not configured");
-    if (!settings.enabled) throw new Error("SMS sending is disabled in settings");
-    if (!settings.from_phone) throw new Error("Set a Twilio From phone number in SMS settings first");
-
+    const db = await admin();
+    const { data: settings } = await db.from("sms_settings").select("rate_limit_per_hour").eq("singleton", true).maybeSingle();
     const { data: client, error: cErr } = await supabase
-      .from("clients").select("id, phone, sms_opt_out, first_name, full_name").eq("id", data.client_id).maybeSingle();
+      .from("clients").select("id, phone, sms_opt_out").eq("id", data.client_id).maybeSingle();
     if (cErr) throw new Error(cErr.message);
     if (!client) throw new Error("Client not found");
     if (client.sms_opt_out) throw new Error("This client is opted out of SMS");
-    const toPhone = normalizePhone(client.phone);
-    if (!toPhone) throw new Error("Client has no valid phone number on file");
+    if (!normalizePhone(client.phone)) throw new Error("Client has no valid phone number on file");
 
-    // Rate limit
-    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabase
+    // Coach's own hourly limit per client (on top of the gateway's daily caps).
+    const { count } = await db
       .from("sms_log")
       .select("id", { count: "exact", head: true })
       .eq("client_id", data.client_id)
-      .gte("created_at", since)
+      .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
       .eq("status", "sent");
-    if ((count ?? 0) >= (settings.rate_limit_per_hour ?? 3)) {
+    if ((count ?? 0) >= (settings?.rate_limit_per_hour ?? 3)) {
       throw new Error("Hourly SMS rate limit reached for this client");
     }
 
-    try {
-      const { sid } = await sendViaTwilio(toPhone, settings.from_phone, data.body);
-      await supabase.from("sms_log").insert({
-        client_id: data.client_id,
-        to_phone: toPhone,
-        body: data.body,
-        kind: "manual",
-        status: "sent",
-        twilio_sid: sid,
-        sender_user_id: userId,
-      });
-      return { ok: true, sid };
-    } catch (e: any) {
-      await supabase.from("sms_log").insert({
-        client_id: data.client_id,
-        to_phone: toPhone,
-        body: data.body,
-        kind: "manual",
-        status: "failed",
-        error: e?.message ?? String(e),
-        sender_user_id: userId,
-      });
-      throw e;
-    }
+    const { sendSms, requireSent } = await gateway();
+    const r = requireSent(await sendSms(db, {
+      category: "manual",
+      to: client.phone,
+      body: data.body,
+      key: await textKey("manual", data.client_id, data.body, 10),
+      clientId: data.client_id,
+      senderUserId: userId,
+    }));
+    return { ok: true, sid: r.sid, segments: r.segments };
   });
 
 const UpdateSettings = z.object({
@@ -131,6 +89,13 @@ const UpdateSettings = z.object({
     enabled: z.boolean(),
     template: z.string().trim().min(1).max(1000),
   })).min(0).max(6).optional(),
+  // Cost controls (Settings → SMS → Cost).
+  monthly_budget_cad: z.number().min(1).max(10000).optional(),
+  security_texts_enabled: z.boolean().optional(),
+  client_daily_cap: z.number().int().min(1).max(20).optional(),
+  price_per_segment_usd: z.number().positive().max(0.5).optional(),
+  number_fee_usd: z.number().min(0).max(100).optional(),
+  usd_to_cad: z.number().min(0.5).max(3).optional(),
 });
 
 export const updateSmsSettings = createServerFn({ method: "POST" })
@@ -161,135 +126,10 @@ export const sendTestSms = createServerFn({ method: "POST" })
     const to = normalizePhone(data.to);
     if (!to) throw new Error("Invalid phone number");
     const body = `Test text from ${smsSender(settings.default_coach_name, settings.brand_name)}. If you got this, your setup works.`;
-    const { sid } = await sendViaTwilio(to, settings.from_phone, body);
-    return { ok: true, sid };
+    const { sendSms, requireSent } = await gateway();
+    const r = requireSent(await sendSms(await admin(), { category: "test", to, body, senderUserId: userId }));
+    return { ok: true, sid: r.sid };
   });
-
-/**
- * Core reminder engine, usable by both manual "run now" and cron.
- *
- * Guard rails (see sms-reminder-rules.ts): only messages from the last
- * (longest step + 1 day), one anchor message per client, one text per client per
- * 24 hours, and only between 9am and 8pm in the client's timezone. Payment
- * requests are excluded because they have their own timed text.
- */
-export async function runReminderSweep(supabaseAdmin: any) {
-  const { data: settings } = await supabaseAdmin.from("sms_settings").select("*").eq("singleton", true).maybeSingle();
-  if (!settings?.enabled || !settings.from_phone) return { processed: 0, reason: "disabled_or_no_from" };
-  const steps: Array<{ delay_minutes: number; enabled: boolean; template: string }> = Array.isArray(settings.reminder_steps) ? settings.reminder_steps : [];
-  const enabledSteps = steps.map((s, i) => ({ ...s, index: i })).filter((s) => s.enabled);
-  if (enabledSteps.length === 0) return { processed: 0, reason: "no_steps" };
-
-  const now = Date.now();
-  const lookback = new Date(now - reminderLookbackMs(enabledSteps)).toISOString();
-
-  const { data: candidates, error } = await supabaseAdmin
-    .from("messages")
-    .select("id, client_id, created_at, sender_role, is_internal_note, read_by_client_at, body, message_type, is_automated")
-    .eq("sender_role", "admin")
-    .eq("is_internal_note", false)
-    .is("read_by_client_at", null)
-    .is("deleted_at", null)
-    // Payment requests and their reminders have their own single, better timed
-    // text (payment-reminder-sms), so the generic unread sweep skips them.
-    .or("message_type.is.null,message_type.neq.Payment")
-    .gte("created_at", lookback)
-    .order("created_at", { ascending: true })
-    .limit(500);
-  if (error) throw new Error(error.message);
-
-  let processed = 0;
-  // Automatic schedule notes ("Moved your session to ...") ride on their own
-  // texts (evening-before reminder, last-minute change text), so they never
-  // earn an extra "you have an unread message" text.
-  const nudgeable = ((candidates ?? []) as any[]).filter(
-    (m) => !(m.is_automated && m.message_type === "Scheduling"),
-  );
-  for (const msg of pickAnchorMessages(nudgeable)) {
-    const ageMin = (now - new Date(msg.created_at).getTime()) / 60000;
-    // Find highest eligible step (sorted ascending by delay)
-    const sorted = [...enabledSteps].sort((a, b) => a.delay_minutes - b.delay_minutes);
-    const due = sorted.filter((s) => ageMin >= s.delay_minutes);
-    if (due.length === 0) continue;
-
-    // Existing sent steps for this message
-    const { data: priorLogs } = await supabaseAdmin
-      .from("sms_log")
-      .select("reminder_step, status")
-      .eq("message_id", msg.id)
-      .eq("kind", "reminder");
-    const doneSteps = new Set((priorLogs ?? []).filter((l: any) => l.status === "sent" || l.status === "skipped").map((l: any) => l.reminder_step));
-    const next = due.find((s) => !doneSteps.has(s.index));
-    if (!next) continue;
-
-    // Get client
-    const { data: clientRow } = await supabaseAdmin
-      .from("clients").select("id, phone, sms_opt_out, first_name, full_name, timezone, assigned_coach_id").eq("id", msg.client_id).maybeSingle();
-    if (!clientRow) continue;
-    const client = { ...clientRow, coach: await coachById(supabaseAdmin, (clientRow as any).assigned_coach_id) };
-    if (client.sms_opt_out) {
-      await supabaseAdmin.from("sms_log").insert({
-        client_id: msg.client_id, message_id: msg.id, to_phone: "", body: "", kind: "reminder",
-        reminder_step: next.index, status: "skipped", error: "client_opted_out",
-      });
-      continue;
-    }
-    const toPhone = normalizePhone(client.phone);
-    if (!toPhone) {
-      await supabaseAdmin.from("sms_log").insert({
-        client_id: msg.client_id, message_id: msg.id, to_phone: "", body: "", kind: "reminder",
-        reminder_step: next.index, status: "skipped", error: "no_phone",
-      });
-      continue;
-    }
-
-    // Only text at a sane hour for the client; the next run (10 min later) tries again.
-    if (!inSmsSendWindow(client.timezone, new Date(now))) continue;
-
-    // One reminder text per client per 24 hours, however many messages are unread.
-    const cooldownSince = new Date(now - SMS_CLIENT_COOLDOWN_MS).toISOString();
-    const { count: recentReminders } = await supabaseAdmin
-      .from("sms_log")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", msg.client_id)
-      .eq("kind", "reminder")
-      .eq("status", "sent")
-      .gte("created_at", cooldownSince);
-    if ((recentReminders ?? 0) > 0) continue;
-
-    // Rate limit
-    const since = new Date(now - 60 * 60 * 1000).toISOString();
-    const { count } = await supabaseAdmin
-      .from("sms_log")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", msg.client_id)
-      .gte("created_at", since)
-      .eq("status", "sent");
-    if ((count ?? 0) >= (settings.rate_limit_per_hour ?? 3)) continue;
-
-    const body = renderTemplate(next.template, {
-      first_name: client.first_name ?? client.full_name?.split(" ")[0] ?? "there",
-      full_name: client.full_name ?? "",
-      coach: resolveCoachName((client as any).coach, settings.default_coach_name),
-      brand: settings.brand_name,
-    });
-
-    try {
-      const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-      await supabaseAdmin.from("sms_log").insert({
-        client_id: msg.client_id, message_id: msg.id, to_phone: toPhone, body, kind: "reminder",
-        reminder_step: next.index, status: "sent", twilio_sid: sid,
-      });
-      processed++;
-    } catch (e: any) {
-      await supabaseAdmin.from("sms_log").insert({
-        client_id: msg.client_id, message_id: msg.id, to_phone: toPhone, body, kind: "reminder",
-        reminder_step: next.index, status: "failed", error: e?.message ?? String(e),
-      });
-    }
-  }
-  return { processed };
-}
 
 export const runReminderSweepNow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -297,8 +137,8 @@ export const runReminderSweepNow = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    return await runReminderSweep(supabaseAdmin);
+    const { runReminderSweep } = await import("@/lib/sms-unread-reminders.server");
+    return await runReminderSweep(await admin());
   });
 
 const ToggleOptOut = z.object({ client_id: z.string().uuid(), sms_opt_out: z.boolean() });
@@ -342,6 +182,8 @@ export const sendBulkSms = createServerFn({ method: "POST" })
     let sent = 0, skipped = 0, failed = 0;
     const results: Array<{ client_id: string; status: string; reason?: string }> = [];
     const kind = data.kind ?? "bulk";
+    const db = await admin();
+    const { sendSms, smsResultMessage } = await gateway();
 
     for (const c of clients ?? []) {
       if (!isAdmin) {
@@ -359,20 +201,17 @@ export const sendBulkSms = createServerFn({ method: "POST" })
         brand: settings.brand_name,
       });
 
-      try {
-        const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-        await supabase.from("sms_log").insert({
-          client_id: c.id, to_phone: toPhone, body, kind,
-          status: "sent", twilio_sid: sid, sender_user_id: userId,
-        });
-        sent++; results.push({ client_id: c.id, status: "sent" });
-      } catch (e: any) {
-        await supabase.from("sms_log").insert({
-          client_id: c.id, to_phone: toPhone, body, kind,
-          status: "failed", error: e?.message ?? String(e), sender_user_id: userId,
-        });
-        failed++; results.push({ client_id: c.id, status: "failed", reason: e?.message });
-      }
+      const r = await sendSms(db, {
+        category: kind === "bulk" ? "bulk" : "manual",
+        to: toPhone,
+        body,
+        key: await textKey(kind, c.id, body, 24 * 60),
+        clientId: c.id,
+        senderUserId: userId,
+      });
+      if (r.status === "sent") { sent++; results.push({ client_id: c.id, status: "sent" }); }
+      else if (r.status === "skipped") { skipped++; results.push({ client_id: c.id, status: "skipped", reason: smsResultMessage(r) }); }
+      else { failed++; results.push({ client_id: c.id, status: "failed", reason: r.error }); }
     }
     return { sent, skipped, failed, total: (clients ?? []).length, results };
   });
@@ -450,6 +289,40 @@ export const testSmsAutomation = createServerFn({ method: "POST" })
       brand: settings.brand_name ?? "",
       setup_link: `${process.env.PUBLIC_APP_URL || process.env.SITE_URL || ""}/member-setup?token=SAMPLE`,
     });
-    const { sid } = await sendViaTwilio(to, settings.from_phone, rendered);
-    return { ok: true, sid, rendered };
+    const { sendSms, requireSent } = await gateway();
+    const r = requireSent(await sendSms(await admin(), { category: "test", to, body: rendered, senderUserId: userId }));
+    return { ok: true, sid: r.sid, rendered };
+  });
+
+/* ============================================================
+ * Cost dashboard (Settings → SMS → Cost)
+ * ============================================================ */
+
+async function assertAdmin(supabase: any, userId: string) {
+  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  if (!(roles ?? []).some((r: any) => r.role === "admin")) throw new Error("Admin only");
+}
+
+/** This month's texts and cost, read through the admin's own login. */
+export const getSmsCostSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data, error } = await supabase.rpc("sms_cost_summary");
+    if (error) throw new Error(error.message);
+    return data as any;
+  });
+
+/** Read back delivery and billing from Twilio now (instead of waiting for the 10-minute tick). */
+export const refreshSmsCosts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const db = await admin();
+    const { pollSmsStatuses, refreshTwilioUsage } = await import("@/lib/sms-status.server");
+    const statuses = await pollSmsStatuses(db, 60);
+    const usage = await refreshTwilioUsage(db, { force: true });
+    return { statuses, usage };
   });

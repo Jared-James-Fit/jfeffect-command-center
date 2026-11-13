@@ -18,7 +18,6 @@ import {
   looksLikeEmail,
 } from "./account-recovery.constants";
 import { assertAdminView } from "@/lib/permissions.server";
-import { withLinkHeadsUp } from "@/lib/sms-identity";
 
 // ─────────────────────────────── helpers (server-only) ──────────────────────
 
@@ -45,26 +44,12 @@ function getClientIp(): string | null {
   return getRequestHeader("x-real-ip") ?? null;
 }
 
-async function sendViaTwilio(
-  toPhone: string,
-  fromPhone: string,
-  body: string,
-): Promise<{ sid: string }> {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey || !twilioKey) throw new Error("sms_unavailable");
-  const res = await fetch("https://connector-gateway.lovable.dev/twilio/Messages.json", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
-  });
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `twilio_${res.status}`);
-  return { sid: data.sid as string };
+/** Account-security text through the one sender: its own switch, never stopped by the budget, links redacted from the log. */
+async function sendSecuritySms(supabaseAdmin: any, toPhone: string, body: string, logBody: string): Promise<{ sid: string }> {
+  const { sendSms } = await import("@/lib/sms-gateway.server");
+  const r = await sendSms(supabaseAdmin, { category: "security", to: toPhone, body, logBody });
+  if (r.status === "sent") return { sid: r.sid };
+  throw new Error(r.status === "failed" ? r.error : r.reason === "security_texts_off" || r.reason === "no_from_phone" ? "sms_disabled" : r.reason);
 }
 
 /**
@@ -242,33 +227,10 @@ async function dispatchSmsReset(
     });
   if (insErr) return { ok: false, error: insErr.message };
 
-  const { data: settings } = await supabaseAdmin
-    .from("sms_settings")
-    .select("from_phone, enabled")
-    .eq("singleton", true)
-    .maybeSingle();
-  if (!settings?.enabled || !settings?.from_phone) {
-    return { ok: false, error: "sms_disabled" };
-  }
-
   try {
-    const { sid } = await sendViaTwilio(phoneE164, settings.from_phone, recoverySmsBody(link));
-    await supabaseAdmin.from("sms_log").insert({
-      to_phone: phoneE164,
-      body: "[password reset link redacted]",
-      kind: "manual",
-      status: "sent",
-      twilio_sid: sid,
-    });
+    await sendSecuritySms(supabaseAdmin, phoneE164, recoverySmsBody(link), "[password reset link redacted]");
     return { ok: true };
   } catch (e: any) {
-    await supabaseAdmin.from("sms_log").insert({
-      to_phone: phoneE164,
-      body: "[password reset link redacted]",
-      kind: "manual",
-      status: "failed",
-      error: e?.message ?? String(e),
-    });
     return { ok: false, error: e?.message ?? String(e) };
   }
 }
@@ -503,17 +465,10 @@ export const consumeRecoveryToken = createServerFn({ method: "POST" })
         // (Audit-only confirmation; account settings shows last-changed date.)
       }
       if (phone) {
-        const { data: settings } = await supabaseAdmin
-          .from("sms_settings")
-          .select("from_phone, enabled")
-          .eq("singleton", true)
-          .maybeSingle();
-        if (settings?.enabled && settings?.from_phone) {
-          try {
-            await sendViaTwilio(phone, settings.from_phone, confirmationSmsBody());
-          } catch {
-            /* ignore */
-          }
+        try {
+          await sendSecuritySms(supabaseAdmin, phone, confirmationSmsBody(), confirmationSmsBody());
+        } catch {
+          /* ignore */
         }
       }
     } catch {

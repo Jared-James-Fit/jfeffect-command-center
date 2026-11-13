@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { smartEncode, smsSegments } from "@/lib/sms-policy";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,8 +52,9 @@ export function SendSmsDialog({
 
   const doSend = async () => {
     if (!body.trim()) return toast.error("Message is empty");
-    if (!settings?.from_phone) return toast.error("Set a Twilio From phone number in SMS settings first");
-    if (!settings?.enabled) return toast.error("SMS sending is disabled in settings");
+    // Settings are admin-only; a coach can't read them and the server decides.
+    if (settings && !settings.from_phone) return toast.error("Set a Twilio From phone number in SMS settings first");
+    if (settings && !settings.enabled) return toast.error("SMS sending is disabled in settings");
     if (!phone) return toast.error("This client has no phone number on file");
     setBusy(true);
     try {
@@ -96,7 +98,9 @@ export function SendSmsDialog({
             <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} maxLength={1000} />
             <div className="flex justify-between text-[11px] text-muted-foreground">
               <span>Use plain language — clients may not know app jargon.</span>
-              <span>{body.length}/1000</span>
+              <span className={smsSegments(smartEncode(body)) > 1 ? "text-warning" : undefined}>
+                {body.length}/1000 · {smsSegments(smartEncode(body))} text{smsSegments(smartEncode(body)) === 1 ? "" : "s"} billed
+              </span>
             </div>
           </div>
         </div>

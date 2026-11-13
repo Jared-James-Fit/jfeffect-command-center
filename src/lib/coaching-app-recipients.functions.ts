@@ -89,23 +89,14 @@ export const sendCoachingAppRecipientTestSms = createServerFn({ method: "POST" }
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { sendOneTwilioSms } = await import("./coaching-app-notify.server");
+    const { sendOneTestSms } = await import("./coaching-app-notify.server");
     const { data: r } = await supabaseAdmin
       .from("coaching_app_notification_recipients")
       .select("*").eq("id", data.id).maybeSingle();
     if (!r) throw new Error("Recipient not found");
     if (!r.phone) throw new Error("Recipient has no phone");
-    const { data: smsSettings } = await supabaseAdmin
-      .from("sms_settings").select("enabled, from_phone").eq("singleton", true).maybeSingle();
-    if (!smsSettings?.enabled || !smsSettings?.from_phone)
-      throw new Error("SMS is disabled or no from-number set in SMS settings");
     const body = `JF Effect test alert for ${r.name}. Coaching application notifications are reaching this phone.`;
-    const { sid } = await sendOneTwilioSms(r.phone, smsSettings.from_phone, body);
-    await supabaseAdmin.from("sms_log").insert({
-      to_phone: r.phone, body, kind: "admin_alert",
-      automation_trigger: `recipient_test:${r.id}:${Date.now()}`,
-      status: "sent", twilio_sid: sid,
-    });
+    const { sid } = await sendOneTestSms(supabaseAdmin, r.phone, body);
     await supabaseAdmin.from("coaching_app_notification_recipients")
       .update({ phone_verified_at: new Date().toISOString() }).eq("id", r.id);
     return { ok: true, sid };

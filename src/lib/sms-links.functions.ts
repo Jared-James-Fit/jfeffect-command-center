@@ -4,52 +4,37 @@ import { mintShareLinkForPurchase } from "@/lib/payment-share.server";
 import { sanitizeShareUrl } from "@/lib/payment-share-link";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertPermission } from "@/lib/permissions.server";
-import { coachById, isAssignedCoachOf, resolveCoachName, smsSender, withLinkHeadsUp } from "@/lib/sms-identity";
+import { coachById, isAssignedCoachOf, resolveCoachName, smsSender } from "@/lib/sms-identity";
 import { SETUP_INVITE_DAYS, setupInviteUrl } from "@/lib/setup-invite";
 
-/* ============================================================
- * Shared helpers (duplicated from sms.functions.ts to keep this
- * file self-contained and avoid leaking server-only code via
- * cross-imports between .functions.ts files).
- * ============================================================ */
+import { normalizePhone } from "@/lib/sms-policy";
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
-
-function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
+/* Every text goes through the one sender (sms-gateway.server.ts), loaded inside
+ * handlers so no server code reaches the client bundle. */
+async function sendThroughGateway(req: import("@/lib/sms-gateway.server").SmsRequest) {
+  const [{ sendSms, requireSent }, { supabaseAdmin }] = await Promise.all([
+    import("@/lib/sms-gateway.server"),
+    import("@/integrations/supabase/client.server"),
+  ]);
+  const r = requireSent(await sendSms(supabaseAdmin, req));
+  return r;
 }
 
-async function sendViaTwilio(toPhone: string, fromPhone: string, body: string) {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const twilioKey = process.env.TWILIO_API_KEY;
-  if (!lovableKey) throw new Error("LOVABLE_API_KEY missing");
-  if (!twilioKey) throw new Error("TWILIO_API_KEY missing — connect Twilio in Integrations");
-  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": twilioKey,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ To: toPhone, From: fromPhone, Body: withLinkHeadsUp(body) }).toString(),
-  });
-  const data: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || `Twilio error (${res.status})`);
-  return { sid: data.sid as string };
-}
-
-async function loadSmsSettings(supabase: any) {
-  const { data, error } = await supabase
+/**
+ * Who the text is from, plus a clear error before anything is built. Read as
+ * the server: sms_settings is admin-only, and a coach texting their own client
+ * a setup link still needs the brand. Account-security texts follow their own
+ * switch, not the master switch.
+ */
+async function loadSmsSettings(_supabase: any, purpose: "security" | "manual" = "manual") {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
     .from("sms_settings").select("*").eq("singleton", true).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("SMS settings not configured");
-  if (!data.enabled) throw new Error("SMS sending is disabled in settings");
+  if (purpose === "security" ? data.security_texts_enabled === false : !data.enabled) {
+    throw new Error(purpose === "security" ? "Account texts are switched off in SMS settings" : "SMS sending is disabled in settings");
+  }
   if (!data.from_phone) throw new Error("Set a Twilio From phone number in SMS settings first");
   return data;
 }
@@ -91,22 +76,6 @@ async function assertAdminOrAssignedCoach(supabase: any, userId: string, clientI
   if (isAdmin) return { isAdmin: true };
   if (!(await isAssignedCoachOf(supabase, userId, clientId))) throw new Error("Forbidden: not assigned to this client");
   return { isAdmin: false };
-}
-
-async function logSmsSend(supabase: any, opts: {
-  clientId: string; toPhone: string; body: string; kind: "manual" | "bulk" | "automation";
-  status: "sent" | "failed"; twilio_sid?: string; error?: string; userId: string;
-}) {
-  await supabase.from("sms_log").insert({
-    client_id: opts.clientId,
-    to_phone: opts.toPhone,
-    body: opts.body,
-    kind: opts.kind,
-    status: opts.status,
-    twilio_sid: opts.twilio_sid ?? null,
-    error: opts.error ?? null,
-    sender_user_id: opts.userId,
-  });
 }
 
 /* ============================================================
@@ -157,7 +126,7 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     await assertAdminOrAssignedCoach(supabase, userId, data.clientId);
-    const settings = await loadSmsSettings(supabase);
+    const settings = await loadSmsSettings(supabase, "security");
     const { client, toPhone } = await loadClientForSms(supabase, data.clientId);
     let url: string;
     if (data.kind === "setup") {
@@ -185,30 +154,32 @@ export const sendAuthLinkBySms = createServerFn({ method: "POST" })
     const expiry = data.kind === "setup" ? `The link works for ${SETUP_INVITE_DAYS} days.` : "The link is single-use and expires soon.";
     const body = `Hi ${first}, this is ${brand}. Tap to ${label}: ${url}\n\n${expiry} Reply STOP to opt out.`;
 
-    try {
-      const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-      await logSmsSend(supabase, { clientId: data.clientId, toPhone, body, kind: "manual", status: "sent", twilio_sid: sid, userId });
-      // Stamp client status
-      const patch: any = {};
-      if (data.kind === "setup") {
-        patch.invite_sent_at = new Date().toISOString();
-        patch.invite_last_resent_at = new Date().toISOString();
-        patch.invite_expires_at = null;
-        patch.account_status = client.user_id ? "Account Created" : "Invite Sent";
-      }
-      if (data.kind === "reset") {
-        patch.password_reset_sent_at = new Date().toISOString();
-        patch.invite_expires_at = null;
-        patch.account_status = "Password Reset Sent";
-      }
-      if (Object.keys(patch).length > 0) {
-        await supabase.from("clients").update(patch).eq("id", data.clientId);
-      }
-      return { ok: true, sid };
-    } catch (e: any) {
-      await logSmsSend(supabase, { clientId: data.clientId, toPhone, body, kind: "manual", status: "failed", error: e?.message ?? String(e), userId });
-      throw e;
+    // Account security: never stopped by the budget, and the link (a sign-in
+    // token) is redacted from the log.
+    const r = await sendThroughGateway({
+      category: "security",
+      to: toPhone,
+      body,
+      clientId: data.clientId,
+      senderUserId: userId,
+    });
+    // Stamp client status
+    const patch: any = {};
+    if (data.kind === "setup") {
+      patch.invite_sent_at = new Date().toISOString();
+      patch.invite_last_resent_at = new Date().toISOString();
+      patch.invite_expires_at = null;
+      patch.account_status = client.user_id ? "Account Created" : "Invite Sent";
     }
+    if (data.kind === "reset") {
+      patch.password_reset_sent_at = new Date().toISOString();
+      patch.invite_expires_at = null;
+      patch.account_status = "Password Reset Sent";
+    }
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("clients").update(patch).eq("id", data.clientId);
+    }
+    return { ok: true, sid: r.sid };
   });
 
 /* ============================================================
@@ -245,14 +216,17 @@ export const sendPaymentLinkBySms = createServerFn({ method: "POST" })
     const amount = `${rec.currency ?? "USD"} ${Number(rec.full_payable_amount ?? 0).toLocaleString()}`;
     const body = `Hi ${first}, this is ${brand}. Your payment link for ${rec.offer_name} (${amount}) is ready: ${shareUrl}\n\nReply STOP to opt out.`;
 
-    try {
-      const { sid } = await sendViaTwilio(toPhone, settings.from_phone, body);
-      await logSmsSend(supabase, { clientId: rec.client_id, toPhone, body, kind: "manual", status: "sent", twilio_sid: sid, userId });
-      return { ok: true, sid };
-    } catch (e: any) {
-      await logSmsSend(supabase, { clientId: rec.client_id, toPhone, body, kind: "manual", status: "failed", error: e?.message ?? String(e), userId });
-      throw e;
-    }
+    const r = await sendThroughGateway({
+      category: "manual",
+      to: toPhone,
+      body,
+      // One text per sale a day: a double tap never texts the link twice.
+      key: `payment_link_sms:${rec.id}:${new Date().toISOString().slice(0, 10)}`,
+      maxAttempts: 3,
+      clientId: rec.client_id,
+      senderUserId: userId,
+    });
+    return { ok: true, sid: r.sid };
   });
 
 /* ============================================================

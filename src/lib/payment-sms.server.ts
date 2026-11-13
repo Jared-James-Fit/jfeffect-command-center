@@ -17,10 +17,12 @@ export function buildPaymentSmsBody(i: { firstName?: string | null; brand?: stri
 }
 
 import { assignedCoachOf, resolveCoachName, smsSender } from "@/lib/sms-identity";
+import { normalizePhone } from "@/lib/sms-policy";
+import type { SmsRequest, SmsResult } from "@/lib/sms-gateway.server";
 
 export type PaymentSmsDeps = {
-  sendSms: (toPhone: string, fromPhone: string, body: string) => Promise<{ sid: string }>;
-  normalizePhone: (raw: string | null | undefined) => string | null;
+  /** The one sender (sms-gateway.server.ts sendSms); injected so tests never reach Twilio. */
+  sendSms: (admin: any, req: SmsRequest) => Promise<SmsResult>;
 };
 
 export async function runPaymentSmsSweep(
@@ -38,7 +40,7 @@ export async function runPaymentSmsSweep(
 
   let sent = 0, failed = 0, skipped = 0;
   for (const row of (due ?? []) as any[]) {
-    const toPhone = deps.normalizePhone(row.o_phone);
+    const toPhone = normalizePhone(row.o_phone);
     if (!toPhone) { skipped++; continue; }
 
     // Respect the same per-client hourly cap as every other text.
@@ -61,22 +63,22 @@ export async function runPaymentSmsSweep(
       brand: settings.brand_name,
       coach: resolveCoachName(coachOf, settings.default_coach_name),
     });
-    try {
-      const { sid } = await deps.sendSms(toPhone, settings.from_phone, body);
-      await supabaseAdmin.from("sms_log").insert({
-        client_id: row.o_client_id, to_phone: toPhone, body, kind: "automation",
-        automation_trigger: "payment_setup_reminder", status: "sent", twilio_sid: sid,
-      });
-      sent++;
-    } catch (e: any) {
+    const r = await deps.sendSms(supabaseAdmin, {
+      category: "payment",
+      kind: "automation",
+      to: toPhone,
+      body,
+      key: `payment_setup_sms:${row.o_purchase_id}`,
+      maxAttempts: 3,
+      clientId: row.o_client_id,
+      automationTrigger: "payment_setup_reminder",
+    });
+    if (r.status === "sent") sent++;
+    else if (r.status === "failed") {
       // Give the sale its slot back so a later run can retry (capped at 3 attempts).
       await supabaseAdmin.rpc("release_payment_sms", { p_purchase_id: row.o_purchase_id });
-      await supabaseAdmin.from("sms_log").insert({
-        client_id: row.o_client_id, to_phone: toPhone, body, kind: "automation",
-        automation_trigger: "payment_setup_reminder", status: "failed", error: e?.message ?? String(e),
-      });
       failed++;
-    }
+    } else skipped++;
   }
   return { sent, failed, skipped };
 }

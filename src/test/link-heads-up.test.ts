@@ -34,17 +34,26 @@ describe("texts with an app link say it can take a minute to open", () => {
   });
 
   it("every sender that texts clients (or invitees) a link adds it; staff alerts don't", () => {
+    // One sender adds it for everyone (sms-gateway.server.ts), so no other file calls Twilio.
+    const gateway = read("src/lib/sms-gateway.server.ts");
+    expect(gateway).toContain("return linkHeadsUp ? withLinkHeadsUp(t) : t;");
+    expect(gateway).toContain('req.linkHeadsUp ?? req.category !== "staff_alert"');
     for (const f of [
-      "src/lib/sms.functions.ts", // manual, bulk, automations, session reminders, payment reminders
+      "src/lib/sms.functions.ts",
       "src/lib/sms-trigger.server.ts",
       "src/lib/sms-links.functions.ts",
       "src/lib/onboarding-admin.functions.ts",
       "src/lib/account-recovery.functions.ts",
       "src/lib/staff-invites.server.ts",
+      "src/lib/pt-session-reminders.server.ts",
       "src/routes/api/public/hooks/appointment-reminders.ts",
-    ]) expect(read(f), f).toContain("Body: withLinkHeadsUp(body)");
-    for (const f of ["src/lib/support-alerts.functions.ts", "src/lib/coaching-app-notify.server.ts", "src/lib/missing-maxes.functions.ts"])
-      expect(read(f), f).not.toContain("withLinkHeadsUp");
+      "src/lib/support-alerts.functions.ts",
+      "src/lib/coaching-app-notify.server.ts",
+      "src/lib/missing-maxes.functions.ts",
+    ]) {
+      expect(read(f), f).not.toContain("connector-gateway.lovable.dev/twilio");
+      expect(read(f), f).toContain("sms-gateway.server");
+    }
   });
 
   it("the SMS editor's preview shows it, so the segment count is what's really sent", () => {

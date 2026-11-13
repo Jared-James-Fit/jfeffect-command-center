@@ -37,12 +37,13 @@ function fake(opts: {
 const SETTINGS = { enabled: true, from_phone: "+18145550100", brand_name: "Jared James Coaching", rate_limit_per_hour: 3 };
 const ROW: Row = { o_purchase_id: "p1", o_client_id: "c1", o_first_name: "Jarrett", o_phone: "2045551234", o_offer: "Online Coaching" };
 
-const smsSenderImpl = async (_toPhone: string, _fromPhone: string, _body: string) => ({ sid: "SM123" });
-let sendSms = vi.fn(smsSenderImpl);
-const normalizePhone = (raw: string | null | undefined) => (raw ? "+1" + String(raw).replace(/\D/g, "") : null);
+import type { SmsRequest, SmsResult } from "@/lib/sms-gateway.server";
+
+const sentImpl = async (_admin: any, _req: SmsRequest): Promise<SmsResult> => ({ status: "sent", sid: "SM123", id: "log-1", segments: 1 });
+let sendSms = vi.fn(sentImpl);
 
 beforeEach(() => {
-  sendSms = vi.fn(smsSenderImpl);
+  sendSms = vi.fn(sentImpl);
 });
 
 describe("payment setup SMS copy", () => {
@@ -63,51 +64,60 @@ describe("payment setup SMS copy", () => {
 describe("runPaymentSmsSweep", () => {
   it("sends one text per due sale, claims it first, and logs it", async () => {
     const f = fake({ settings: SETTINGS, due: [ROW] });
-    const res = await runPaymentSmsSweep(f.client, { sendSms, normalizePhone });
+    const res = await runPaymentSmsSweep(f.client, { sendSms });
     expect(res).toEqual({ sent: 1, failed: 0, skipped: 0 });
-    expect(sendSms).toHaveBeenCalledWith("+12045551234", "+18145550100", expect.stringContaining("Hi Jarrett"));
+    // Through the one sender, as a nonessential "payment" text with a per-sale key.
+    expect(sendSms).toHaveBeenCalledWith(f.client, expect.objectContaining({
+      category: "payment", kind: "automation", to: "+12045551234", clientId: "c1",
+      automationTrigger: "payment_setup_reminder", key: "payment_setup_sms:p1",
+      body: expect.stringContaining("Hi Jarrett"),
+    }));
     const order = f.rpcCalls.map(([n]) => n);
     expect(order.indexOf("claim_payment_sms")).toBeLessThan(order.length);
-    expect(f.log[0].row).toMatchObject({
-      client_id: "c1", kind: "automation", automation_trigger: "payment_setup_reminder", status: "sent", twilio_sid: "SM123",
-    });
   });
 
   it("does nothing when SMS is disabled or has no from number", async () => {
     const off = fake({ settings: { ...SETTINGS, enabled: false }, due: [ROW] });
-    expect(await runPaymentSmsSweep(off.client, { sendSms, normalizePhone })).toMatchObject({ sent: 0 });
+    expect(await runPaymentSmsSweep(off.client, { sendSms })).toMatchObject({ sent: 0 });
     const noFrom = fake({ settings: { ...SETTINGS, from_phone: null }, due: [ROW] });
-    expect(await runPaymentSmsSweep(noFrom.client, { sendSms, normalizePhone })).toMatchObject({ sent: 0 });
+    expect(await runPaymentSmsSweep(noFrom.client, { sendSms })).toMatchObject({ sent: 0 });
     expect(sendSms).not.toHaveBeenCalled();
   });
 
   it("never texts when another run already claimed the sale", async () => {
     const f = fake({ settings: SETTINGS, due: [ROW], claim: false });
-    const res = await runPaymentSmsSweep(f.client, { sendSms, normalizePhone });
+    const res = await runPaymentSmsSweep(f.client, { sendSms });
     expect(res).toEqual({ sent: 0, failed: 0, skipped: 1 });
     expect(sendSms).not.toHaveBeenCalled();
   });
 
-  it("gives the sale its slot back when Twilio fails, and logs the failure", async () => {
-    sendSms.mockRejectedValueOnce(new Error("Twilio 400"));
+  it("gives the sale its slot back when Twilio fails", async () => {
+    sendSms.mockResolvedValueOnce({ status: "failed", error: "Twilio 400", segments: 1 });
     const f = fake({ settings: SETTINGS, due: [ROW] });
-    const res = await runPaymentSmsSweep(f.client, { sendSms, normalizePhone });
+    const res = await runPaymentSmsSweep(f.client, { sendSms });
     expect(res).toEqual({ sent: 0, failed: 1, skipped: 0 });
     expect(f.rpcCalls.some(([n, a]) => n === "release_payment_sms" && a.p_purchase_id === "p1")).toBe(true);
-    expect(f.log[0].row).toMatchObject({ status: "failed", error: "Twilio 400" });
+  });
+
+  it("a text the budget or a cap stopped keeps the sale's slot (no retry pile-up)", async () => {
+    sendSms.mockResolvedValueOnce({ status: "skipped", reason: "budget", segments: 1 });
+    const f = fake({ settings: SETTINGS, due: [ROW] });
+    const res = await runPaymentSmsSweep(f.client, { sendSms });
+    expect(res).toEqual({ sent: 0, failed: 0, skipped: 1 });
+    expect(f.rpcCalls.some(([n]) => n === "release_payment_sms")).toBe(false);
   });
 
   it("skips a client with no usable phone and respects the hourly cap", async () => {
     const noPhone = fake({ settings: SETTINGS, due: [{ ...ROW, o_phone: null }] });
-    expect(await runPaymentSmsSweep(noPhone.client, { sendSms, normalizePhone })).toMatchObject({ skipped: 1, sent: 0 });
+    expect(await runPaymentSmsSweep(noPhone.client, { sendSms })).toMatchObject({ skipped: 1, sent: 0 });
     const capped = fake({ settings: SETTINGS, due: [ROW], sentLastHour: 3 });
-    expect(await runPaymentSmsSweep(capped.client, { sendSms, normalizePhone })).toMatchObject({ skipped: 1, sent: 0 });
+    expect(await runPaymentSmsSweep(capped.client, { sendSms })).toMatchObject({ skipped: 1, sent: 0 });
     expect(sendSms).not.toHaveBeenCalled();
   });
 });
 
 describe("wiring contracts", () => {
-  const sweepSrc = readFileSync("src/lib/sms.functions.ts", "utf8");
+  const sweepSrc = readFileSync("src/lib/sms-unread-reminders.server.ts", "utf8");
   const hookSrc = readFileSync("src/routes/api/public/hooks/payment-reminder-sms.ts", "utf8");
   const sql = readFileSync("supabase/migrations/20261007120000_payment_setup_reminders.sql", "utf8");
 

@@ -3,7 +3,6 @@
  * chat), SMS, or a link the admin copies. Server-only.
  */
 import { STAFF_ROLE_INFO, staffInviteMessage, type InvitableRole } from "@/lib/staff-roles";
-import { withLinkHeadsUp } from "@/lib/sms-identity";
 
 export function genSetupToken(len = 32) {
   const arr = new Uint8Array(len);
@@ -19,17 +18,8 @@ export function setupPath(token: string) {
   return `/staff-setup?token=${token}`;
 }
 
-const TWILIO_GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
-
-export function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const cleaned = String(raw).replace(/[^\d+]/g, "");
-  if (!cleaned) return null;
-  if (cleaned.startsWith("+")) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return "+1" + cleaned;
-  if (/^1\d{10}$/.test(cleaned)) return "+" + cleaned;
-  return "+" + cleaned;
-}
+export { normalizePhone } from "@/lib/sms-policy";
+import { normalizePhone } from "@/lib/sms-policy";
 
 export type DeliveryResult = { sent: boolean; reason?: string };
 
@@ -44,36 +34,18 @@ export async function sendInviteSms(opts: {
   if (!toPhone) return { sent: false, reason: "no_phone" };
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: settings } = await supabaseAdmin
-      .from("sms_settings").select("*").eq("singleton", true).maybeSingle();
-    if (!settings?.enabled) return { sent: false, reason: "sms_disabled" };
-    if (!settings?.from_phone) return { sent: false, reason: "no_from_phone" };
-    const lovableKey = process.env.LOVABLE_API_KEY;
-    const twilioKey = process.env.TWILIO_API_KEY;
-    if (!lovableKey || !twilioKey) return { sent: false, reason: "twilio_not_configured" };
+    const { sendSms } = await import("@/lib/sms-gateway.server");
     const name = (opts.firstName || "").trim();
     const label = STAFF_ROLE_INFO[opts.role].label;
     // URL on its own line so phones render it as one tap target.
     const body = `${name ? `Hi ${name}, ` : ""}you're invited to a JF Effect team account (${label}). Tap to set it up:\n${opts.link}\n(Link expires in 7 days.)`;
-    const res = await fetch(`${TWILIO_GATEWAY_URL}/Messages.json`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableKey}`,
-        "X-Connection-Api-Key": twilioKey,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ To: toPhone, From: settings.from_phone, Body: withLinkHeadsUp(body) }).toString(),
-    });
-    const data: any = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.warn("[staff invite SMS] twilio error", res.status, data?.message);
-      return { sent: false, reason: `twilio_${res.status}` };
+    // Account access: its own switch, never stopped by the budget; the setup
+    // token is redacted from the log.
+    const r = await sendSms(supabaseAdmin, { category: "security", to: toPhone, body });
+    if (r.status !== "sent") {
+      console.warn("[staff invite SMS] not sent", r.status === "failed" ? r.error : r.reason);
+      return { sent: false, reason: r.status === "failed" ? "failed" : r.reason };
     }
-    try {
-      await (supabaseAdmin.from("sms_log") as any).insert({
-        to_phone: toPhone, body, kind: "manual", status: "sent", twilio_sid: data?.sid ?? null,
-      });
-    } catch {}
     return { sent: true };
   } catch (e: any) {
     console.warn("[staff invite SMS] failed", e?.message || e);
