@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
 import { submitOrEditReview, type WorkoutCompletionCtx } from "@/lib/workout-completion.functions";
 import { FilmAudienceChoice } from "@/components/workout/shared/workout-film";
+import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
 import { useServiceTier } from "@/lib/service-tier";
 import { pushWorkoutNote } from "@/lib/workout-notes";
 import {
@@ -488,6 +489,9 @@ export function WorkoutReviewEditor({
               {coached ? "Add a note for your coach" : "Add a note"}
             </button>
           )}
+
+          {/* clips they filmed in the app and haven't saved to the phone: one tap saves them all */}
+          {ctx.kind === "client" && !actAsClientId && <PhoneCopyReminder dayId={ctx.dayId} />}
 
           {/* their film: Crew (posts by itself) or Coach only (saved on the account) */}
           {ctx.kind === "client" && !actAsClientId && <FilmAudienceChoice dayId={ctx.dayId} />}

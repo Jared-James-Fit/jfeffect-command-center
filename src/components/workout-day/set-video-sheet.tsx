@@ -1,14 +1,16 @@
 /**
  * A set's videos, opened from its video cell (lazy): each clip plays where
- * it is, says it's in the coach chat (a tap opens the chat), and can come
- * off the set (and the chat with it). A clip on its way shows how far it's
- * got, with Try again / Cancel when it didn't send.
+ * it is, says it's in the coach chat (a tap opens the chat), saves to the
+ * phone (Save to Photos), and can come off the set (and the chat with it). A
+ * clip filmed in the app and never saved says so before it's removed, with
+ * Save to Photos first: removing it would leave it nowhere. A clip on its
+ * way shows how far it's got, with Try again / Cancel when it didn't send.
  */
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageCircle, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowDownToLine, MessageCircle, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ChatVideoTile } from "@/components/chat-video-tile";
@@ -18,6 +20,15 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { isActiveJob, jobStatusText, type SetVideoJob } from "@/lib/set-videos/jobs";
 import { setVideosKey, type SetVideo } from "@/components/workout-day/set-video-cell";
+import { filmedFile, forgetFilmed, useUnsavedFilmed } from "@/lib/set-videos/phone-copy";
+import {
+  dismissPhoneCopyOffer,
+  isUnsavedFilmed,
+  jobIdForSetVideo,
+  phoneSaveWords,
+  useSaveSetVideos,
+  type SetVideoSaveTarget,
+} from "@/components/workout-day/set-video-phone-copy";
 
 export default function SetVideoSheet({
   open,
@@ -54,6 +65,15 @@ export default function SetVideoSheet({
   const { urls } = useChatSignedUrls(paths);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const unsaved = useUnsavedFilmed(user?.id);
+  const { save, warm } = useSaveSetVideos();
+  const words = phoneSaveWords();
+  const targetOf = (v: SetVideo): SetVideoSaveTarget => ({
+    jobId: jobIdForSetVideo(v.id, unsaved),
+    setVideoId: v.id,
+    path: v.storage_path || null,
+    name: `${exerciseName} set ${setIndex}`,
+  });
 
   const openChat = () => {
     onOpenChange(false);
@@ -71,6 +91,9 @@ export default function SetVideoSheet({
       );
       void qc.invalidateQueries({ queryKey: setVideosKey(dayId) });
       void qc.invalidateQueries({ queryKey: ["messages"] });
+      // let go of on purpose: stop offering it for the phone
+      dismissPhoneCopyOffer(jobIdForSetVideo(v.id, unsaved));
+      if (user?.id) forgetFilmed(user.id, { setVideoIds: [v.id] });
       toast.success("Video removed from the set and the chat");
       if (videos.length <= 1 && !jobs.length) onOpenChange(false);
     } catch (e) {
@@ -171,6 +194,17 @@ export default function SetVideoSheet({
                       Pick the video again
                     </Button>
                   )}
+                  {filmedFile(j.id) && unsaved.some((e) => e.jobId === j.id) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-10 gap-1.5"
+                      onPointerDown={() => warm([{ jobId: j.id, name: `${exerciseName} set ${setIndex}` }])}
+                      onClick={() => save([{ jobId: j.id, name: `${exerciseName} set ${setIndex}` }])}
+                    >
+                      <ArrowDownToLine className="h-4 w-4" /> {words.label}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -187,6 +221,8 @@ export default function SetVideoSheet({
           {videos.map((v) => {
             const mine = v.uploaded_by === user?.id;
             const canRemove = mine || !staff || role === "admin";
+            // filmed in the app on this login and never saved to the phone
+            const onlyHere = mine && isUnsavedFilmed(v.id, unsaved);
             return (
               <div key={v.id} className="space-y-2" data-set-video-id={v.id}>
                 <ChatVideoTile
@@ -217,28 +253,42 @@ export default function SetVideoSheet({
                   ) : (
                     <span className="flex-1 text-sm text-muted-foreground">On this set</span>
                   )}
+                  {v.storage_path && confirming !== v.id && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-10 shrink-0 gap-1.5 text-muted-foreground"
+                      data-set-video-save
+                      onPointerDown={() => warm([targetOf(v)])}
+                      onClick={() => save([targetOf(v)])}
+                    >
+                      <ArrowDownToLine className="h-4 w-4" /> {words.label}
+                    </Button>
+                  )}
                   {canRemove &&
                     (confirming === v.id ? (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-10"
-                          onClick={() => setConfirming(null)}
-                          disabled={removing === v.id}
-                        >
-                          Keep
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-10"
-                          onClick={() => void remove(v)}
-                          disabled={removing === v.id}
-                        >
-                          {removing === v.id ? "Removing…" : "Remove from set and chat"}
-                        </Button>
-                      </div>
+                      onlyHere ? null : (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-10"
+                            onClick={() => setConfirming(null)}
+                            disabled={removing === v.id}
+                          >
+                            Keep
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-10"
+                            onClick={() => void remove(v)}
+                            disabled={removing === v.id}
+                          >
+                            {removing === v.id ? "Removing…" : "Remove from set and chat"}
+                          </Button>
+                        </div>
+                      )
                     ) : (
                       <Button
                         size="sm"
@@ -251,6 +301,44 @@ export default function SetVideoSheet({
                       </Button>
                     ))}
                 </div>
+                {canRemove && confirming === v.id && onlyHere && (
+                  // filmed in the app and never saved: removing it would leave it nowhere
+                  <div className="rounded-xl border border-border bg-muted/40 p-3" data-set-video-only-copy>
+                    <p className="text-sm font-semibold">This video isn't {words.place}</p>
+                    <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                      You filmed it in the app. Removing it takes it off the set and out of your coach's chat, and it won't be anywhere else.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-10 gap-1.5"
+                        onPointerDown={() => warm([targetOf(v)])}
+                        onClick={() => save([targetOf(v)])}
+                      >
+                        <ArrowDownToLine className="h-4 w-4" /> {words.label}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-10"
+                        onClick={() => void remove(v)}
+                        disabled={removing === v.id}
+                      >
+                        {removing === v.id ? "Removing…" : "Remove anyway"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-10"
+                        onClick={() => setConfirming(null)}
+                        disabled={removing === v.id}
+                      >
+                        Keep
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -21,6 +21,7 @@ import { drawWorkoutStory, type StoryRecord } from "@/lib/workout-story-card";
 import { NewRecordsSection, TonnageStat, recordsHeadline } from "@/components/records/training-records";
 import { RecapPostFooter } from "@/components/community/recap-post";
 import { WorkoutFilmRow } from "@/components/workout/shared/workout-film";
+import { PhoneCopyReminder } from "@/components/workout-day/set-video-phone-copy";
 import { usePublicSessionTitle } from "@/lib/community.queries";
 import { SoundToggleButton } from "@/components/sound-toggle";
 
@@ -435,6 +436,7 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
             // (with what it earns); the camera opens the full studio. Their
             // film (set videos) sits above it: posting by itself, or one tap.
             <div className="w-full">
+            <PhoneCopyReminder dayId={dayId ?? null} className="mb-2.5 rounded-2xl border-border/80 px-3 py-2.5" />
             <WorkoutFilmRow completionId={completionId} dayId={dayId ?? null} className="mb-2.5 rounded-2xl border border-border/80 bg-card px-3 py-2.5" />
             <RecapPostFooter
               completionId={completionId}

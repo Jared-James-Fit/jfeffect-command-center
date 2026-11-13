@@ -103,6 +103,21 @@ function keep(key: string, file: File) {
   }
 }
 
+/**
+ * A file the app already has for this item (a set video just filmed): held so
+ * the tap that saves it opens the share sheet at once, nothing downloaded.
+ */
+export function holdSaveFile(item: SaveItem, file: File) {
+  const key = saveKey(item);
+  if (!key) return;
+  const hit = ready.get(key);
+  if (hit?.file === file) {
+    hit.usedAt = Date.now();
+    return;
+  }
+  keep(key, file);
+}
+
 /** Every item's file, if all are in hand right now (synchronous: safe inside a tap). */
 export function readyFiles(items: SaveItem[]): File[] | null {
   if (!items.length) return null;
