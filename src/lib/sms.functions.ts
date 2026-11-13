@@ -322,7 +322,8 @@ export const refreshSmsCosts = createServerFn({ method: "POST" })
     await assertAdmin(supabase, userId);
     const db = await admin();
     const { pollSmsStatuses, refreshTwilioUsage } = await import("@/lib/sms-status.server");
-    const statuses = await pollSmsStatuses(db, 60);
+    // Bounded: a slow Twilio never holds the admin's screen for long.
     const usage = await refreshTwilioUsage(db, { force: true });
+    const statuses = await pollSmsStatuses(db, 40, { deadline: Date.now() + 12_000 });
     return { statuses, usage };
   });
