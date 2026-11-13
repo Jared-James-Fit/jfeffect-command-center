@@ -393,7 +393,7 @@ export function inFollowingFeed(post: Pick<CommunityPost, "is_mine" | "author" |
     || !!post.reposted_by?.some((r) => followingIds.has(r.user_id));
 }
 
-/** Can this person repost it, or take back their repost? (No button at all on your own posts.) */
+/** Can this person repost it (their own posts included), or take back their repost? The server decides (`can_repost`). */
 export function showRepostButton(post: Pick<CommunityPost, "can_repost" | "my_repost">): boolean {
   return !!post.can_repost || !!post.my_repost;
 }

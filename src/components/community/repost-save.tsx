@@ -32,8 +32,9 @@ const buzz = (ms: number) => {
 /**
  * 🔁 under a post. Tap: it's reposted to your followers and an "Add a note"
  * bubble floats up on the post (Instagram's). Tap again: the repost is
- * taken back, with Undo. Not on your own posts, an automatic story, or a
- * post that isn't shared with the whole crew.
+ * taken back, with Undo. Your own posts too (they come back up in the feed
+ * like anyone's repost); never a story, an automatic workout story, or a post
+ * that isn't shared with the crew (community_repost_refusal decides).
  */
 export function RepostButton({ post, onReposted, stacked = false }: { post: CommunityPost; onReposted?: () => void; stacked?: boolean }) {
   const repost = useRepost();
