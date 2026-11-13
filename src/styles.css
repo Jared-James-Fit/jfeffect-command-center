@@ -1256,8 +1256,10 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
 /* The feed builds as you scroll: each post eases in the first time it's on screen. */
 /* Crew's feed, one post per screen, swiped one at a time (TikTok's). A page is
    the screen under Crew's bar (fixed on a phone; in the page on a computer,
-   where it scrolls away), and the window snaps to each one. The first screen (`.feed-first`) is the story rail
-   and the first post together; its height is set from where it starts. */
+   where it scrolls away), and the window snaps to each one. The stories (`.feed-first`) sit on top of the
+   first post, which is full size like every other and runs off the bottom (TikTok's Friends): the very top
+   is a snap point of its own, so one swipe brings the post up whole and the top brings the stories back.
+   With no posts, the stories and the empty note fill the screen (its height set from where it starts). */
 :root { --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) + 3rem); }
 @media (min-width: 768px) { :root { --feed-page-top: 0px; } }
 html.feed-paging { scroll-snap-type: y mandatory; }

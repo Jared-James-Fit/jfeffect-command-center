@@ -452,6 +452,11 @@ export function CommunityScreen({
   useLayoutEffect(() => {
     const el = firstScreen.current;
     if (!paging || !el) return;
+    // with posts the stories sit on top of a full-size first post (TikTok's Friends); only an empty feed fills the screen
+    if (hasFeedPosts) {
+      el.style.height = "";
+      return;
+    }
     const fit = () => {
       const top = Math.max(0, Math.round(el.getBoundingClientRect().top + window.scrollY));
       const h = `calc(100svh - ${top}px)`;
@@ -688,6 +693,7 @@ export function CommunityScreen({
                   onDoubleTap={onDoubleTap}
                   onTipDone={onTipDone}
                   layout="page"
+                  pageFirst={i === 0}
                 />
               ),
             });
@@ -838,29 +844,33 @@ function FeedPager({
   loadingMore: boolean;
   end: ReactNode;
 }) {
-  const [first, ...rest] = pages;
-  const screen = (pg: { key: string; post?: CommunityPost; node: ReactNode }, i: number, firstOne = false) =>
+  const screen = (pg: { key: string; post?: CommunityPost; node: ReactNode }, i: number) =>
     pg.post ? (
       <FeedItem
         key={pg.key}
         index={i}
         data-post-id={pg.post.id}
-        className={cn(firstOne ? "min-h-0 flex-1" : "feed-page", "transition-shadow duration-700", flash === pg.post.id && "ring-2 ring-inset ring-primary")}
+        data-feed-first-post={i === 0 ? "" : undefined}
+        className={cn("feed-page transition-shadow duration-700", flash === pg.post.id && "ring-2 ring-inset ring-primary")}
       >
         {pg.node}
       </FeedItem>
     ) : (
-      <div key={pg.key} className={cn(firstOne ? "min-h-0 flex-1" : "feed-page", "flex flex-col justify-center overflow-y-auto px-3")} style={{ paddingBottom: "var(--bottom-nav-clearance)" }} data-feed-moment={pg.key}>
+      <div key={pg.key} className="feed-page flex flex-col justify-center overflow-y-auto px-3" style={{ paddingBottom: "var(--bottom-nav-clearance)" }} data-feed-moment={pg.key}>
         {pg.node}
       </div>
     );
+  const pager = useRef<HTMLDivElement | null>(null);
+  useStoriesSwipe(pager, firstScreen, pages[0]?.post ? pages[0].key : null);
   return (
-    <div data-feed-pager>
+    <div ref={pager} data-feed-pager>
+      {/* the stories on top of the first post, full size and running off the bottom (TikTok's Friends):
+          a swipe or a tap brings the post up whole, and the very top brings the stories back */}
       <div ref={firstScreen} className="feed-first flex flex-col" data-feed-first>
-        <div className="shrink-0 px-3 pt-1.5 sm:px-4">{rail}</div>
-        {empty ? <div className="px-3 pt-3">{empty}</div> : first ? screen(first, 0, true) : null}
+        <div className="shrink-0 px-3 pb-2 pt-1.5 sm:px-4">{rail}</div>
+        {empty && <div className="px-3 pt-3">{empty}</div>}
       </div>
-      {rest.map((pg, i) => screen(pg, i + 1))}
+      {pages.map((pg, i) => screen(pg, i))}
       {loadingMore && (
         <div className="feed-page grid place-items-center text-muted-foreground" role="status" aria-label="Loading more posts" data-feed-more>
           <ActivitySpinner size={28} />
@@ -874,6 +884,77 @@ function FeedPager({
       <div ref={sentinel} aria-hidden className="h-px" />
     </div>
   );
+}
+
+/**
+ * From the top of the feed (the stories over the first post), a swipe up brings
+ * the first post up whole, TikTok's Friends: the stories are shorter than a
+ * swipe, so the window's own snapping would carry a normal swipe past the
+ * first post onto the second. Only that one swipe is taken over (on the
+ * stories and the first post, while the stories show); a pull down still
+ * refreshes, a sideways swipe still scrolls the stories, a tap still taps.
+ */
+function useStoriesSwipe(pager: React.RefObject<HTMLDivElement | null>, rail: React.RefObject<HTMLDivElement | null>, firstKey: string | null) {
+  useEffect(() => {
+    const top = rail.current;
+    const first = pager.current?.querySelector<HTMLElement>("[data-feed-first-post]");
+    if (!top || !first || !firstKey) return;
+    // where the first post sits up whole: its top under Crew's bar (its own snap point)
+    const target = () => Math.round(first.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(first).scrollMarginTop) || 0));
+    let x0 = 0;
+    let y0 = 0;
+    let y = 0;
+    let state: "off" | "maybe" | "mine" = "off";
+    const start = (e: TouchEvent) => {
+      state = "off";
+      if (e.touches.length !== 1 || window.scrollY >= target() - 1) return;
+      x0 = e.touches[0].clientX;
+      y0 = y = e.touches[0].clientY;
+      state = "maybe";
+    };
+    const move = (e: TouchEvent) => {
+      if (state === "off") return;
+      const dx = e.touches[0].clientX - x0;
+      y = e.touches[0].clientY;
+      const dy = y - y0;
+      if (state === "maybe") {
+        if (dx === 0 && dy === 0) return;
+        // a pull down refreshes, a sideways swipe scrolls the stories: theirs
+        if (dy > 0 || Math.abs(dx) > Math.abs(dy)) {
+          state = "off";
+          return;
+        }
+        state = "mine";
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    const end = () => {
+      // a tap that moved a hair is still a tap (the post's own tap brings it up too)
+      if (state === "mine" && y0 - y >= 10) {
+        const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: target(), behavior: reduce ? "auto" : "smooth" });
+      }
+      state = "off";
+    };
+    const cancel = () => {
+      state = "off";
+    };
+    const els = [top, first];
+    for (const el of els) {
+      el.addEventListener("touchstart", start, { passive: true });
+      el.addEventListener("touchmove", move, { passive: false });
+      el.addEventListener("touchend", end);
+      el.addEventListener("touchcancel", cancel);
+    }
+    return () => {
+      for (const el of els) {
+        el.removeEventListener("touchstart", start);
+        el.removeEventListener("touchmove", move);
+        el.removeEventListener("touchend", end);
+        el.removeEventListener("touchcancel", cancel);
+      }
+    };
+  }, [pager, rail, firstKey]);
 }
 
 /** One row owns its mutation so an optimistic reaction only re-renders that card. */
@@ -893,6 +974,7 @@ function PostRow(props: {
   layout?: "card" | "page";
   onOpenCaption?: (p: CommunityPost) => void;
   sheetOpen?: boolean;
+  pageFirst?: boolean;
 }) {
   const react = useReact(props.post, props.viewerIsStaff);
   return (

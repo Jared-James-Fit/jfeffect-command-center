@@ -35,14 +35,33 @@ describe("Crew's feed: one post per screen, swiped one at a time", () => {
     expect(css).toContain("@media (min-width: 768px) { :root { --feed-page-top: 0px; } }");
   });
 
-  it("the first screen is the stories and the first post; its snap point is the very top (a pull there still refreshes)", () => {
+  it("the stories sit over a full-size first post (TikTok's Friends); the very top is their own snap point (a pull there still refreshes)", () => {
     expect(css).toContain(
       ".feed-first { scroll-snap-align: start; scroll-snap-stop: always; scroll-margin-top: 100vh; }",
     );
     expect(screen).toContain(
       '<div ref={firstScreen} className="feed-first flex flex-col" data-feed-first>',
     );
+    // every post is a full screen, the first one too; only an empty feed fills the screen with the stories
+    expect(screen).toContain("{pages.map((pg, i) => screen(pg, i))}");
+    expect(screen).toContain('data-feed-first-post={i === 0 ? "" : undefined}');
+    expect(screen).toContain('if (hasFeedPosts) {\n      el.style.height = "";');
     expect(screen).toContain("const h = `calc(100svh - ${top}px)`;");
+  });
+
+  it("from the stories, one swipe up brings the first post up whole, never past it; a pull, a sideways swipe or a tap stay theirs", () => {
+    expect(screen).toContain("useStoriesSwipe(pager, firstScreen, pages[0]?.post ? pages[0].key : null);");
+    expect(screen).toContain("if (e.touches.length !== 1 || window.scrollY >= target() - 1) return;");
+    expect(screen).toContain("if (dy > 0 || Math.abs(dx) > Math.abs(dy)) {");
+    expect(screen).toContain('if (state === "mine" && y0 - y >= 10) {');
+    expect(screen).toContain('el.addEventListener("touchmove", move, { passive: false });');
+    const card = read("src/components/community/post-card.tsx");
+    // a tap on it comes up whole too; once up, a tap pauses a clip as before
+    expect(card).toContain('window.scrollBy({ top: below, behavior: "smooth" });');
+    // its words and buttons wait until it's up, its top corners rounded like a card coming up
+    expect(card).toContain("setUnder(belowTopBar(articleRef.current) > 4);");
+    expect(card).toContain('(sheetOpen || under) && "pointer-events-none opacity-0",');
+    expect(card).toContain('pageFirst && "rounded-t-[18px]",');
   });
 
   it("the feed's own moments get a screen when they have something to show, never an empty one", () => {

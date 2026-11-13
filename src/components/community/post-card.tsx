@@ -419,21 +419,44 @@ type Props = {
   onOpenCaption?: (post: CommunityPost) => void;
   /** "page" only: this post's sheet is open, so the post shrinks into the space above it and its words and buttons step aside. */
   sheetOpen?: boolean;
+  /** "page" only: the feed's first post, under the stories (TikTok's Friends): its top corners are rounded, like a card coming up. */
+  pageFirst?: boolean;
 };
 
-function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false }: Props) {
+function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComments, onOpenAuthor, onReact, doubleTapHint, onDoubleTap, onTipDone, openHint, onOpenReel, layout = "card", onOpenCaption, sheetOpen = false, pageFirst = false }: Props) {
   const [burst, setBurst] = useState(0);
   const lastTap = useRef(0);
   // half on screen for two seconds = a view (never your own)
   const articleRef = useRef<HTMLElement | null>(null);
   usePostViewTracker(articleRef, post);
+  // the feed's first post while the stories sit over it (TikTok's Friends): its words and buttons
+  // wait until it's up whole, the way TikTok's sit below the screen there
+  const [under, setUnder] = useState(false);
+  useEffect(() => {
+    if (layout !== "page" || !pageFirst) return setUnder(false);
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      setUnder(belowTopBar(articleRef.current) > 4);
+    };
+    const later = () => {
+      if (!raf) raf = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener("scroll", later, { passive: true });
+    window.addEventListener("resize", later);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", later);
+      window.removeEventListener("resize", later);
+    };
+  }, [layout, pageFirst]);
   // its sheet open: the shrunk post also takes the room above it up to Crew's bar (the story rail on the first screen)
   const [raise, setRaise] = useState(0);
   useLayoutEffect(() => {
     const a = articleRef.current;
     if (layout !== "page" || !sheetOpen || !a) return setRaise(0);
-    const bar = document.querySelector("[data-crew-bar]")?.getBoundingClientRect().bottom ?? 0;
-    setRaise(Math.max(0, Math.round(a.getBoundingClientRect().top - Math.max(0, bar))));
+    setRaise(belowTopBar(a));
   }, [layout, sheetOpen]);
   const singleTimer = useRef<number | null>(null);
   const s = post.stats;
@@ -467,6 +490,17 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       return;
     }
     lastTap.current = now;
+    // on its own screen, a post still partly under the stories comes up whole on a tap (TikTok's Friends)
+    if (layout === "page") {
+      const below = belowTopBar(articleRef.current);
+      if (below > 4) {
+        singleTimer.current = window.setTimeout(() => {
+          singleTimer.current = null;
+          window.scrollBy({ top: below, behavior: "smooth" });
+        }, 300);
+        return;
+      }
+    }
     // a clip: full screen (or sound on / off), once it's clear this wasn't the first of two taps
     const clip = (e.target as Element | null)?.closest?.("[data-inline-video]");
     if (!clip) return;
@@ -505,7 +539,12 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
         ref={articleRef}
         data-feed-post
         data-feed-page-post={visual ? "visual" : "words"}
-        className={cn("relative h-full w-full text-foreground", raise > 0 ? "z-[1] overflow-visible" : "overflow-hidden", visual ? "dark bg-black" : "bg-background")}
+        className={cn(
+          "relative h-full w-full text-foreground",
+          raise > 0 ? "z-[1] overflow-visible" : "overflow-hidden",
+          visual ? "dark bg-black" : "bg-background",
+          pageFirst && "rounded-t-[18px]",
+        )}
       >
         {/* the post itself; taps never open it (double tap ❤️, a clip's tap pauses it). Its sheet open: it shrinks into the space above it, still playing */}
         <div
@@ -564,12 +603,12 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           className={cn(
             "pointer-events-none absolute inset-x-0 z-[2] pt-16 transition-opacity duration-200",
             visual && "bg-gradient-to-t from-black/70 via-black/30 to-transparent",
-            sheetOpen && "opacity-0",
+            (sheetOpen || under) && "opacity-0",
           )}
           style={{ bottom: "var(--bottom-nav-clearance)" }}
           data-page-words
         >
-          <div className={cn("mr-16 space-y-1.5 px-3 pb-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && "pointer-events-auto")}>
+          <div className={cn("mr-16 space-y-1.5 px-3 pb-3 [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]", !sheetOpen && !under && "pointer-events-auto")}>
             {note.bubble && <div data-note-over>{note.bubble}</div>}
             <RepostedHeader post={post} onOpenAuthor={onOpenAuthor} />
             <AuthorLine
@@ -623,7 +662,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
           className={cn(
             "absolute right-1 z-[3] flex flex-col items-center gap-1 transition-opacity duration-200",
             visual && "[filter:drop-shadow(0_1px_2px_rgb(0_0_0/0.55))]",
-            sheetOpen && "pointer-events-none opacity-0",
+            (sheetOpen || under) && "pointer-events-none opacity-0",
           )}
           style={{ bottom: "calc(var(--bottom-nav-clearance) + 0.75rem)" }}
           data-page-actions
@@ -1041,6 +1080,13 @@ export function PostMedia({
       {cover ? <SlideMedia slide={cover} thumbUrl={thumbUrl} full={full} page={page} /> : <div className="h-full w-full animate-pulse bg-muted" />}
     </div>
   );
+}
+
+/** How far a post's screen still sits below Crew's bar (the stories above the first post), in px; 0 once it's up whole. */
+function belowTopBar(el: HTMLElement | null): number {
+  if (!el) return 0;
+  const bar = document.querySelector("[data-crew-bar]")?.getBoundingClientRect().bottom ?? 0;
+  return Math.max(0, Math.round(el.getBoundingClientRect().top - Math.max(0, bar)));
 }
 
 /**
