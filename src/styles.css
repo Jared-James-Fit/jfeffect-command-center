@@ -1282,10 +1282,13 @@ html[data-keyboard-open="true"] .shell-bar { visibility: hidden; }
   --feed-page-top: calc(var(--app-chrome-top) + var(--app-safe-top) - var(--app-edge-room));
   /* what covers a post's screen: Crew's bar floats over its top (with that band), the tab bar takes its bottom (a post ends at it) */
   --feed-bar-room: calc(3rem + var(--app-edge-room));
-  --feed-nav-room: var(--mobile-bar-top);
+  /* --feed-gap: how far the real screen runs past the window (feed-paging.ts: the iPhone
+     home-screen app reports the window the notch's height short while the tab bar sits at the
+     screen's bottom), so a post still ends right at the tab bar */
+  --feed-nav-room: max(0px, calc(var(--mobile-bar-top) - var(--feed-gap, 0px)));
   /* a post's words and its buttons down the right sit just above the tab bar, TikTok's */
-  --feed-words-bottom: calc(var(--mobile-bar-top) + 12px);
-  --feed-actions-bottom: calc(var(--mobile-bar-top) + 8px);
+  --feed-words-bottom: max(12px, calc(var(--mobile-bar-top) + 12px - var(--feed-gap, 0px)));
+  --feed-actions-bottom: max(8px, calc(var(--mobile-bar-top) + 8px - var(--feed-gap, 0px)));
 }
 @media (min-width: 768px) {
   :root { --feed-page-top: 0px; --feed-bar-room: 0px; --feed-nav-room: 0px; --feed-words-bottom: 0.75rem; --feed-actions-bottom: 0.75rem; }

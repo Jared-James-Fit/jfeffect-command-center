@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BUBBLE_FOLD_SPAN, BUBBLE_WAVE, bubbleFold, ease, storiesProgress } from "@/lib/feed-paging";
+import { BUBBLE_FOLD_SPAN, BUBBLE_WAVE, FEED_GAP_MAX, bubbleFold, ease, feedGap, storiesProgress } from "@/lib/feed-paging";
 
 const read = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 
@@ -10,15 +10,17 @@ describe("every post fills the screen, TikTok's way", () => {
 
   it("a screen is the window's measured height, read again only on a rotation (never a toolbar or the keyboard)", () => {
     const lib = read("src/lib/feed-paging.ts");
-    expect(lib).toContain('root.style.setProperty("--feed-vh", `${Math.round(window.innerHeight)}px`);');
+    expect(lib).toContain("const vh = Math.round(window.innerHeight);");
+    expect(lib).toContain('root.style.setProperty("--feed-vh", `${vh}px`);');
     expect(lib).toContain("if (window.innerWidth === width) return;");
     expect(read("src/components/community/community-screen.tsx")).toContain("const unwatch = watchFeedViewport();");
   });
 
   it("each post fills the screen down to the tab bar, Crew's bar floating over its top", () => {
-    expect(css).toContain("  --feed-bar-room: calc(3rem + var(--app-edge-room));\n  --feed-nav-room: var(--mobile-bar-top);");
+    expect(css).toContain("  --feed-bar-room: calc(3rem + var(--app-edge-room));");
+    expect(css).toContain("  --feed-nav-room: max(0px, calc(var(--mobile-bar-top) - var(--feed-gap, 0px)));");
     // the post itself runs from under the status bar down to the tab bar (opaque, TikTok's)
-    expect(card).toContain('style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}');
+    expect(card).toContain("style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : \"var(--feed-nav-room)\" }}");
     // a picture shown whole sits between the bars; a clip that fills the screen runs under both
     expect(card).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room)" } as const;');
     expect(card).toContain("<FitBox ratio={0.8} page>");
@@ -32,8 +34,8 @@ describe("every post fills the screen, TikTok's way", () => {
   });
 
   it("the words and the buttons down the right sit just above the tab bar (nothing stands over the bar any more)", () => {
-    expect(css).toContain("  --feed-words-bottom: calc(var(--mobile-bar-top) + 12px);");
-    expect(css).toContain("  --feed-actions-bottom: calc(var(--mobile-bar-top) + 8px);");
+    expect(css).toContain("  --feed-words-bottom: max(12px, calc(var(--mobile-bar-top) + 12px - var(--feed-gap, 0px)));");
+    expect(css).toContain("  --feed-actions-bottom: max(8px, calc(var(--mobile-bar-top) + 8px - var(--feed-gap, 0px)));");
     expect(read("src/components/app-shell.tsx")).not.toContain("top-[-33px]");
     // their shade runs down under the tab bar
     expect(card).toContain('"pointer-events-none absolute inset-x-0 bottom-0 z-[2] pt-16 transition-opacity duration-200"');
@@ -45,6 +47,28 @@ describe("every post fills the screen, TikTok's way", () => {
     expect(shell).toContain('overFeed ? "dark border-white/10 bg-black text-foreground" : "border-border/70 bg-background"');
     expect(css).toContain("html.feed-paging:not([data-pov-banner-on]) .ios-status-band { background-color: #000; }");
     expect(read("src/components/community/crew-header.tsx")).toContain('overlay && "dark text-foreground"');
+  });
+});
+
+describe("a post ends at the tab bar even where the window reports itself shorter than the screen", () => {
+  it("the gap is how far the screen (where fixed bars sit) runs past the window, never a bad reading", () => {
+    // the iPhone home-screen app (iOS 26): the window reads 793pt on an 852pt screen, the tab bar at the screen's bottom
+    expect(feedGap(852, 793)).toBe(59);
+    expect(feedGap(852, 852)).toBe(0);
+    // a fixed box shorter than the window (a browser toolbar mid-move) is no gap
+    expect(feedGap(780, 793)).toBe(0);
+    // anything bigger than a status bar's worth is a reading gone wrong, ignored
+    expect(feedGap(793 + FEED_GAP_MAX + 1, 793)).toBe(0);
+    expect(feedGap(Number.NaN, 793)).toBe(0);
+  });
+
+  it("is measured with the window's height and moves the post's bottom, words and buttons down by it", () => {
+    const lib = read("src/lib/feed-paging.ts");
+    expect(lib).toContain('root.style.setProperty("--feed-gap", `${feedGap(fixedScreenHeight(), vh)}px`);');
+    expect(lib).toContain('probe.style.cssText = "position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none";');
+    expect(lib).toContain('root.style.removeProperty("--feed-gap");');
+    // the pages keep the window's height, so each swipe still lands on the next post
+    expect(read("src/styles.css")).toContain("  height: calc(var(--feed-vh, 100svh) - var(--feed-page-top));");
   });
 });
 

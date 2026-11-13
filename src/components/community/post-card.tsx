@@ -559,8 +559,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
             "absolute inset-x-0 select-none transition-[top,bottom] duration-300 ease-out motion-reduce:transition-none",
             sheetOpen && (visual ? "bg-black" : "bg-background"),
           )}
-          // the whole screen down to the tab bar, Crew's bar floating over its top (TikTok's)
-          style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}
+          // the whole screen down to the tab bar, Crew's bar floating over its top (TikTok's); its sheet open, down to the sheet
+          style={{ top: -raise, bottom: sheetOpen ? `calc(${POST_SHEET_HEIGHT} - var(--feed-gap, 0px))` : "var(--feed-nav-room)" }}
           data-post-hero
           data-sheet-open={sheetOpen ? "" : undefined}
         >
