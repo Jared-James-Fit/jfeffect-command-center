@@ -63,6 +63,33 @@ export type FilmSetValues = {
   durationSec: number | null;
 };
 
+/** A logged set's numbers (a pl_row_results row), as its labels read them. */
+export type LoggedSetRow = {
+  entered_value?: number | string | null;
+  entered_unit?: string | null;
+  actual_load?: number | string | null;
+  actual_load_unit?: string | null;
+  actual_reps?: number | string | null;
+  actual_rpe_num?: number | string | null;
+  actual_rpe?: number | string | null;
+  actual_rir?: number | string | null;
+  completed_duration_seconds?: number | string | null;
+  load_type?: string | null;
+};
+
+export function filmSetValues(r: LoggedSetRow): FilmSetValues {
+  const num = (x: unknown) => (x == null || x === "" || !Number.isFinite(Number(x)) ? null : Number(x));
+  return {
+    load: num(r.entered_value) ?? num(r.actual_load),
+    unit: (r.entered_unit ?? r.actual_load_unit) === "lb" ? "lb" : "kg",
+    reps: num(r.actual_reps),
+    rpe: num(r.actual_rpe_num) ?? num(r.actual_rpe),
+    rir: num(r.actual_rir),
+    loadType: r.load_type === "bodyweight" || r.load_type === "assisted" ? r.load_type : "external",
+    durationSec: num(r.completed_duration_seconds),
+  };
+}
+
 /** A clip's two labels: with the weight, and without it (a post that hides weights). */
 export function filmLabels(v: FilmSetValues | null, fallback: string | null): { label: string; label_no_load: string } {
   if (!v) {
