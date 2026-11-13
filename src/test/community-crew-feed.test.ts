@@ -75,7 +75,11 @@ describe("the engagement pop", () => {
     expect(pop).toContain("}, 500);");
   });
   it("in the feed it never covers the post: the reactions rise out of the heart and who reacted pops", () => {
-    expect(card).toContain('{on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} className="bottom-1/2 left-5" />}');
+    expect(card).toContain('{on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} className="bottom-1/2 left-5" />}');
+    // on a post's own screen they rise high out of the heart down the right, once its buttons are showing (Nov 13 2026)
+    expect(card).toContain('{on && <ReactionsRise kinds={kinds.length ? kinds : ["💬"]} total={reactionTotal(post)} size="lg" className="bottom-3/4 left-1/2" />}');
+    expect(card).toContain("column hidden={sheetOpen || under || holding} />");
+    expect(pop).toContain("if (!el || hidden || !engaged || on || popped.has(post.id) || typeof IntersectionObserver === \"undefined\") return;");
     expect(card).toContain('on && "engage-chip"');
     expect(card).not.toContain("<EngagementPop");
     // Home's cards get the capsule

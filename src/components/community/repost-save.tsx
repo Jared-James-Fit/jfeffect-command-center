@@ -80,7 +80,7 @@ export function RepostButton({ post, onReposted, stacked = false }: { post: Comm
       )}
       data-repost-button={mine ? "on" : "off"}
     >
-      <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
+      <span key={pop} className={cn("inline-flex", pop > 0 && "repost-spin")}>
         <Repeat2 className={cn(stacked ? "h-[28px] w-[28px]" : "h-[23px] w-[23px]", mine ? "text-emerald-500" : stacked ? "text-foreground" : "text-foreground/80")} strokeWidth={mine ? 2.6 : 2} />
       </span>
       {count > 0 && <span className={cn(stacked ? "text-[12px]" : "text-[13px]", "font-bold tabular-nums", mine ? "text-emerald-600 dark:text-emerald-400" : stacked ? "text-foreground" : "text-muted-foreground")}>{count}</span>}
@@ -184,7 +184,7 @@ export function SaveButton({ post, stacked = false }: { post: CommunityPost; sta
         className="grid h-11 w-11 shrink-0 select-none place-items-center rounded-full [-webkit-touch-callout:none] [touch-action:manipulation] hover:bg-muted active:scale-90"
         data-save-button={saved ? "on" : "off"}
       >
-        <span key={pop} className={cn("inline-flex", pop > 0 && "community-pop")}>
+        <span key={pop} className={cn("inline-flex", pop > 0 && "repost-spin")}>
           <Bookmark className={cn(stacked ? "h-[27px] w-[27px]" : "h-[23px] w-[23px]", saved ? "fill-foreground text-foreground" : stacked ? "text-foreground" : "text-foreground/80")} strokeWidth={2} />
         </span>
       </button>

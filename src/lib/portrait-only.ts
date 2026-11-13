@@ -28,12 +28,36 @@ export type OrientationReading = {
  * viewport wider than tall while the phone is upright.
  */
 export function phoneOnItsSide(r: OrientationReading): boolean {
-  if (!r.coarse) return false;
-  const short = Math.min(r.screenW, r.screenH);
-  if (!(short > 0) || short >= PHONE_SHORT_SIDE_MAX) return false;
+  if (!isPhone(r)) return false;
   if (r.type) return r.type.startsWith("landscape");
   if (typeof r.angle === "number") return Math.abs(r.angle) === 90;
   return false;
+}
+
+/** A phone: a finger for a pointer and a short side under PHONE_SHORT_SIDE_MAX (tablets and computers turn freely). */
+export function isPhone(r: OrientationReading): boolean {
+  if (!r.coarse) return false;
+  const short = Math.min(r.screenW, r.screenH);
+  return short > 0 && short < PHONE_SHORT_SIDE_MAX;
+}
+
+/**
+ * Ask the browser to hold a phone upright (`screen.orientation.lock`), the
+ * way TikTok and Instagram never turn: Android's browsers and installed
+ * apps honour it; where it's refused (iPhone Safari and its home-screen apps
+ * don't support it today) nothing happens and PortraitOnly covers it. Never
+ * throws; true when the browser took it.
+ */
+export async function lockPortrait(r: OrientationReading | null = readOrientation()): Promise<boolean> {
+  if (!r || !isPhone(r)) return false;
+  const o = (typeof screen !== "undefined" ? screen.orientation : undefined) as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined;
+  if (typeof o?.lock !== "function") return false;
+  try {
+    await o.lock("portrait-primary");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** This device, now. */

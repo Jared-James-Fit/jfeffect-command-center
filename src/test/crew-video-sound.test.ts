@@ -208,11 +208,13 @@ describe("feed clips play with their sound", () => {
 describe("on a post's screen a clip's sound is a tap, Instagram's Reels", () => {
   const card = read("src/components/community/post-card.tsx");
   const inline = read("src/components/community/inline-video.tsx");
+  const gestures = read("src/components/community/clip-gestures.tsx");
 
   it("one tap turns the sound off or on after the double-tap window and says which in the middle; two taps ❤️", () => {
     expect(card).toContain("flashSound(toggleFeedSound());");
-    expect(card).toContain("{soundFlash && <SoundFlash key={soundFlash.n} on={soundFlash.on} onDone={() => setSoundFlash(null)} />}");
-    expect(card).toContain('{on ? <Volume2 className="h-8 w-8" /> : <VolumeX className="h-8 w-8" />}');
+    expect(card).toContain("const [soundFlash, flashSound] = useSoundFlash();");
+    expect(card).toContain("{soundFlash}");
+    expect(gestures).toContain('{on ? <Volume2 className="h-8 w-8" /> : <VolumeX className="h-8 w-8" />}');
     // the second of two quick taps cancels the first's sound change and likes instead
     expect(card).toContain("if (now - lastTap.current < 300) {\n      if (singleTimer.current) window.clearTimeout(singleTimer.current);");
     expect(inline).toContain("export function toggleFeedSound(): boolean {");
@@ -228,13 +230,16 @@ describe("on a post's screen a clip's sound is a tap, Instagram's Reels", () => 
   });
 
   it("a finger held on a clip pauses it with the words and buttons out of the way; letting go plays it, and isn't a tap", () => {
-    expect(card).toContain("export const HOLD_TO_PAUSE_MS = 250;");
-    expect(card).toContain("clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: true }));");
-    expect(card).toContain("h.clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: false }));");
-    expect(card).toContain("if (now - holdEndedAt.current < 400) return;");
+    expect(gestures).toContain("export const HOLD_TO_PAUSE_MS = 250;");
+    expect(card).toContain("(clip, on) => clip.dispatchEvent(new CustomEvent(CLIP_HOLD_EVENT, { detail: on })),");
+    expect(card).toContain("if (hold.justReleased()) return;");
+    expect(gestures).toContain("export const HOLD_RELEASE_GRACE_MS = 400;");
     // a finger that moves is a swipe, never a hold; a scroll cancels it
-    expect(card).toContain("if (h && !h.on && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP_PX) endHold();");
-    expect(card).toContain("onPointerCancel={endHold}");
+    expect(gestures).toContain("if (h && !h.on && Math.hypot(e.clientX - h.x, e.clientY - h.y) > HOLD_SLOP_PX) end();");
+    expect(gestures).toContain("handlers: { onPointerDown, onPointerMove, onPointerUp: end, onPointerCancel: end, onPointerLeave: end, onContextMenu },");
+    expect(card).toContain("{...hold.handlers}");
+    // held, Crew's bar steps aside too
+    expect(read("src/styles.css")).toContain("html[data-clip-held] .crew-bar { opacity: 0; pointer-events: none; }");
     expect(card).toContain('(sheetOpen || under || holding) && "opacity-0",');
     // never the phone's long-press menu
     expect(card).toContain("[-webkit-touch-callout:none]");

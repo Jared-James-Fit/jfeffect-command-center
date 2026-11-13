@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Smartphone } from "lucide-react";
-import { phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
+import { lockPortrait, phoneOnItsSide, readOrientation } from "@/lib/portrait-only";
 
 /**
- * A phone held on its side, where the browser can't lock it upright (Safari,
- * the iPhone home-screen app): one calm screen over the app asking to turn it
- * back. Nothing underneath changes or reloads, so turning it upright again
+ * Phones stay upright: on mount (and on coming back) it asks the browser to
+ * lock portrait (lockPortrait: Android takes it). Held on its side where the
+ * browser won't lock (Safari, the iPhone home-screen app): one calm screen
+ * over the app asking to turn it back. Nothing underneath changes or reloads, so turning it upright again
  * picks up exactly where they were. The installed app never shows it (iOS
  * keeps it upright).
  */
@@ -17,14 +18,21 @@ export function PortraitOnly() {
       setSideways(!!r && phoneOnItsSide(r));
     };
     check();
+    // hold it upright where the browser lets us (and again on coming back: a lock can lapse in the background)
+    void lockPortrait();
+    const back = () => {
+      if (document.visibilityState === "visible") void lockPortrait();
+    };
     const o = typeof screen !== "undefined" ? screen.orientation : undefined;
     o?.addEventListener?.("change", check);
     window.addEventListener("orientationchange", check);
     window.addEventListener("resize", check);
+    document.addEventListener("visibilitychange", back);
     return () => {
       o?.removeEventListener?.("change", check);
       window.removeEventListener("orientationchange", check);
       window.removeEventListener("resize", check);
+      document.removeEventListener("visibilitychange", back);
     };
   }, []);
   if (!sideways) return null;
