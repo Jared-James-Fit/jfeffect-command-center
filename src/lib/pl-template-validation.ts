@@ -108,12 +108,24 @@ export function validateTemplatePayload(tpl: any): DayIssue[] {
   if (!tpl) return out;
   const type = tpl.template_type;
   const payload = tpl.payload || {};
+  // A multi-block template (full_prep, or a v2 "block" / "program" template with
+  // blocks_data / blocks) is checked block by block: walking only the payload's
+  // own weeks_data found nothing in those and called every one of them ready.
+  const blockList: any[] | null =
+    Array.isArray(payload.blocks_data) && payload.blocks_data.length ? payload.blocks_data
+    : Array.isArray(payload.blocks) && payload.blocks.length ? payload.blocks
+    : null;
+  const walkBlocks = (blocks: any[]) =>
+    blocks
+      .filter((b) => !b?.archived && !b?.deleted_at)
+      .forEach((b, bi) => {
+        const label = b?.name || `Block ${bi + 1}`;
+        walkBlock({ ...b, weeks_data: Array.isArray(b?.weeks_data) ? b.weeks_data : b?.weeks }, `Block: ${label} · `, out);
+      });
   if (type === "full_prep") {
-    const blocks: any[] = Array.isArray(payload.blocks_data) ? payload.blocks_data : [];
-    blocks.forEach((b, bi) => {
-      const label = b?.name || `Block ${bi + 1}`;
-      walkBlock(b, `Block: ${label} · `, out);
-    });
+    walkBlocks(blockList ?? []);
+  } else if ((type === "block" || type === "program") && blockList) {
+    walkBlocks(blockList);
   } else if (type === "block") {
     walkBlock(payload, "", out);
   } else if (type === "week") {

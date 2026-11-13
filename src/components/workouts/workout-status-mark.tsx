@@ -31,6 +31,7 @@ export function workoutMark(item: WorkoutItem | null | undefined, now: Date = ne
   if (isSkipped(item)) return { kind: "skipped" };
   const { status } = getWorkoutStatus(item, now);
   if (DONE.includes(status)) return { kind: "done" };
+  if (status === "optional_skipped") return { kind: "skipped" };
   if (status === "in_progress" || status === "incomplete") {
     return { kind: "progress", pct: Math.max(0, Math.min(100, Math.round(item.progress_pct ?? 0))) };
   }

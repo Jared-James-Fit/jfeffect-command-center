@@ -17399,6 +17399,7 @@ export type Database = {
           focus: string | null
           id: string
           is_custom: boolean
+          is_optional: boolean
           notes: string | null
           notes_client_visible: boolean
           schedule_locked: boolean
@@ -17427,6 +17428,7 @@ export type Database = {
           focus?: string | null
           id?: string
           is_custom?: boolean
+          is_optional?: boolean
           notes?: string | null
           notes_client_visible?: boolean
           schedule_locked?: boolean
@@ -17455,6 +17457,7 @@ export type Database = {
           focus?: string | null
           id?: string
           is_custom?: boolean
+          is_optional?: boolean
           notes?: string | null
           notes_client_visible?: boolean
           schedule_locked?: boolean

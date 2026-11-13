@@ -255,6 +255,7 @@ import { Route as ApiPublicHooksClientCalendarsTickRouteImport } from './routes/
 import { Route as ApiPublicHooksDailyVisualsTickRouteImport } from './routes/api/public/hooks/daily-visuals-tick'
 import { Route as ApiPublicHooksFilloutRouteImport } from './routes/api/public/hooks/fillout'
 import { Route as ApiPublicHooksGcalSessionImportRouteImport } from './routes/api/public/hooks/gcal-session-import'
+import { Route as ApiPublicHooksJfLibraryInstallRouteImport } from './routes/api/public/hooks/jf-library-install'
 import { Route as ApiPublicHooksLeadRepliesTickRouteImport } from './routes/api/public/hooks/lead-replies-tick'
 import { Route as ApiPublicHooksLiftArchiveTickRouteImport } from './routes/api/public/hooks/lift-archive-tick'
 import { Route as ApiPublicHooksMediaArchiveRouteImport } from './routes/api/public/hooks/media-archive'
@@ -1708,6 +1709,12 @@ const ApiPublicHooksGcalSessionImportRoute =
     path: '/api/public/hooks/gcal-session-import',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksJfLibraryInstallRoute =
+  ApiPublicHooksJfLibraryInstallRouteImport.update({
+    id: '/api/public/hooks/jf-library-install',
+    path: '/api/public/hooks/jf-library-install',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksLeadRepliesTickRoute =
   ApiPublicHooksLeadRepliesTickRouteImport.update({
     id: '/api/public/hooks/lead-replies-tick',
@@ -2181,6 +2188,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -2465,6 +2473,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -2755,6 +2764,7 @@ export interface FileRoutesById {
   '/api/public/hooks/daily-visuals-tick': typeof ApiPublicHooksDailyVisualsTickRoute
   '/api/public/hooks/fillout': typeof ApiPublicHooksFilloutRoute
   '/api/public/hooks/gcal-session-import': typeof ApiPublicHooksGcalSessionImportRoute
+  '/api/public/hooks/jf-library-install': typeof ApiPublicHooksJfLibraryInstallRoute
   '/api/public/hooks/lead-replies-tick': typeof ApiPublicHooksLeadRepliesTickRoute
   '/api/public/hooks/lift-archive-tick': typeof ApiPublicHooksLiftArchiveTickRoute
   '/api/public/hooks/media-archive': typeof ApiPublicHooksMediaArchiveRoute
@@ -3045,6 +3055,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -3329,6 +3340,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -3618,6 +3630,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/daily-visuals-tick'
     | '/api/public/hooks/fillout'
     | '/api/public/hooks/gcal-session-import'
+    | '/api/public/hooks/jf-library-install'
     | '/api/public/hooks/lead-replies-tick'
     | '/api/public/hooks/lift-archive-tick'
     | '/api/public/hooks/media-archive'
@@ -3740,6 +3753,7 @@ export interface RootRouteChildren {
   ApiPublicHooksDailyVisualsTickRoute: typeof ApiPublicHooksDailyVisualsTickRoute
   ApiPublicHooksFilloutRoute: typeof ApiPublicHooksFilloutRoute
   ApiPublicHooksGcalSessionImportRoute: typeof ApiPublicHooksGcalSessionImportRoute
+  ApiPublicHooksJfLibraryInstallRoute: typeof ApiPublicHooksJfLibraryInstallRoute
   ApiPublicHooksLeadRepliesTickRoute: typeof ApiPublicHooksLeadRepliesTickRoute
   ApiPublicHooksLiftArchiveTickRoute: typeof ApiPublicHooksLiftArchiveTickRoute
   ApiPublicHooksMediaArchiveRoute: typeof ApiPublicHooksMediaArchiveRoute
@@ -5494,6 +5508,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGcalSessionImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/jf-library-install': {
+      id: '/api/public/hooks/jf-library-install'
+      path: '/api/public/hooks/jf-library-install'
+      fullPath: '/api/public/hooks/jf-library-install'
+      preLoaderRoute: typeof ApiPublicHooksJfLibraryInstallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/lead-replies-tick': {
       id: '/api/public/hooks/lead-replies-tick'
       path: '/api/public/hooks/lead-replies-tick'
@@ -6493,6 +6514,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksDailyVisualsTickRoute: ApiPublicHooksDailyVisualsTickRoute,
   ApiPublicHooksFilloutRoute: ApiPublicHooksFilloutRoute,
   ApiPublicHooksGcalSessionImportRoute: ApiPublicHooksGcalSessionImportRoute,
+  ApiPublicHooksJfLibraryInstallRoute: ApiPublicHooksJfLibraryInstallRoute,
   ApiPublicHooksLeadRepliesTickRoute: ApiPublicHooksLeadRepliesTickRoute,
   ApiPublicHooksLiftArchiveTickRoute: ApiPublicHooksLiftArchiveTickRoute,
   ApiPublicHooksMediaArchiveRoute: ApiPublicHooksMediaArchiveRoute,

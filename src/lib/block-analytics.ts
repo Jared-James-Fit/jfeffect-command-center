@@ -209,7 +209,9 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
   const rpes = completedSets.map((s) => s.rpe).filter((x): x is number => x != null);
   const avgRpe = rpes.length ? Math.round((rpes.reduce((a, b) => a + b, 0) / rpes.length) * 10) / 10 : null;
   const workoutsDone = (comps as any[]).filter((c) => c.completed_at).length;
-  const totalWorkouts = days.length;
+  // an optional session (pl_days.is_optional) counts only once it's trained
+  const doneDayIds = new Set((comps as any[]).filter((c) => c.completed_at).map((c) => c.day_id));
+  const totalWorkouts = (days as any[]).filter((d) => !d.is_optional || doneDayIds.has(d.id)).length;
   const totalMin = (comps as any[]).reduce((acc, c) => acc + (c.actual_duration_min ?? 0), 0);
   const manualWeeks = (weeks as any[]).filter((w) => w.manually_completed).length;
 
@@ -218,7 +220,7 @@ export async function getBlockAnalytics(blockId: string): Promise<BlockAnalytics
   const missed = (days as any[]).filter((d) => {
     const comp = compByDay.get(d.id) as any;
     if (comp?.completed_at) return false;
-    if (!d.scheduled_date) return false;
+    if (!d.scheduled_date || d.is_optional) return false;
     return parseISO(d.scheduled_date) < today;
   }).length;
 

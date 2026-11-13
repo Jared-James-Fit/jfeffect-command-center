@@ -9,6 +9,7 @@
  * conversation's current proposal and stores the result. Nothing is written
  * to the program here.
  */
+import { programGuideText } from "./program-guide";
 import { buildBrief, setupText } from "@/lib/program-intel/brief";
 import { buildGeneratorIntel } from "@/lib/program-intel/intelligence";
 import { loadIntelRecords } from "@/lib/program-intel/load";
@@ -174,6 +175,14 @@ export async function runProgramAiEdit(admin: Db, editId: string | null): Promis
       } else {
         templateNote = "This is a LIBRARY TEMPLATE: no athlete, no logs. Program for the kind of lifter it's meant for; don't assume any one client's history.";
       }
+    }
+
+    // the library program's own coaching guide, when the program came from one
+    try {
+      const guide = await loadProgramGuide(admin, snap, edit.target_kind === "client" ? null : edit.template_id);
+      if (guide) templateNote = [templateNote, guide].filter(Boolean).join("\n\n");
+    } catch {
+      // a guide is extra context: never fail the edit over it
     }
 
     // 2. the athlete
@@ -354,4 +363,19 @@ export function recodeChanges(changes: EditChange[], prev: Record<string, Catalo
     ...ch,
     ops: ch.ops.map((op: any) => (op.op === "add_day" ? { ...op, exercises: op.exercises.map((x: any) => ({ ...x, exercise: recode(x.exercise) })) } : op.exercise ? { ...op, exercise: recode(op.exercise) } : op)),
   }));
+}
+
+/** The coaching guide of the library program(s) this program came from (program-guide.ts). */
+async function loadProgramGuide(admin: Db, snap: ProgramSnapshot, templateId: string | null): Promise<string | null> {
+  let ids: string[] = [];
+  if (templateId) ids = [templateId];
+  else {
+    const blockIds = snap.blocks.map((b) => b.id).filter(Boolean);
+    if (!blockIds.length) return null;
+    const { data } = await admin.from("pl_blocks").select("source_template_id").in("id", blockIds);
+    ids = [...new Set(((data ?? []) as any[]).map((r) => r.source_template_id).filter(Boolean))];
+  }
+  if (!ids.length) return null;
+  const { data: templates } = await admin.from("pl_templates").select("id, name, notes").in("id", ids.slice(0, 3));
+  return programGuideText(((templates ?? []) as any[]).map((t) => ({ name: t.name, notes: t.notes })));
 }
