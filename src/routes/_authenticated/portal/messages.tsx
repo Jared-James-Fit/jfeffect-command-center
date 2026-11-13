@@ -125,7 +125,7 @@ function ClientMessages() {
 
   const coachUnread = !!coachLast?.coachUnread;
   const coachPreview = coachLast
-    ? `${coachLast.sender_role === "client" ? "You: " : ""}${coachLast.body?.trim() || (coachLast.attachments?.length ? "Attachment" : "")}`
+    ? `${coachLast.sender_role === "client" ? "You: " : ""}${messagePreviewText(coachLast.body, coachLast.attachments)}`
     : "Message your coach";
 
   const markCoachUnread = async () => {

@@ -45,7 +45,8 @@ export function isUnread(t: DirectThread, me: string | null | undefined) {
 export function previewLine(t: DirectThread, me: string | null | undefined) {
   const l = t.last;
   if (!l) return "No messages yet";
-  const text = l.body?.trim() || (l.card ? "Replied to a post" : l.media ? "Sent an attachment" : "Message");
+  // a reply always has words, so a card on its own is a post sent from the share sheet
+  const text = l.body?.trim() || (l.card ? "Sent a post" : l.media ? "Sent an attachment" : "Message");
   return l.sender_id === me ? `You: ${text}` : text;
 }
 

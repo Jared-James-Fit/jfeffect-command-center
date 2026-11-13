@@ -118,7 +118,7 @@ describe("the Chats list", () => {
   });
   it("previews: 'You: …' for mine, something for a card with no words", () => {
     expect(previewLine(thread({ last: { ...thread().last!, sender_id: "amanda" } }), "amanda")).toBe("You: That squat was moving");
-    expect(previewLine(thread({ last: { ...thread().last!, body: "" } }), "amanda")).toBe("Replied to a post");
+    expect(previewLine(thread({ last: { ...thread().last!, body: "" } }), "amanda")).toBe("Sent a post");
   });
   it("the cap reads like a person said it", () => {
     expect(friendlyError("request_limit")).toBe("You can send more once they reply.");
@@ -144,10 +144,12 @@ describe("the Chats list", () => {
     expect(pane).toContain('if (typeof window !== "undefined" && /group=/.test(window.location.hash)) return;');
     expect(pane).toContain("const m = window.location.hash.match(/group=([0-9a-f-]{36})/i);");
   });
-  it("posts get a Message button (not on your own, not coach-to-coach)", () => {
+  it("a post's ✈️ is the share sheet: the poster is one of the people it can go to (a new 1:1 is still a request)", () => {
     const card = read("src/components/community/post-card.tsx");
-    expect(card).toContain('const canMessage = !post.is_mine && !(post.author.is_coach && (role === "admin" || role === "coach"));');
-    expect(card).toContain("<MessageAuthorSheet post={post} open={messaging} onOpenChange={setMessaging} />");
-    expect(read("src/components/community/message-author-sheet.tsx")).toContain("gets this as a message request and can reply when they see it.");
+    expect(card).toContain("const shareTap = () => setSharing(true);");
+    expect(card).toContain("{sharing !== null && (");
+    // sends to a person go through chat_direct_open, like the old Message button did
+    const sql = read("supabase/migrations/20270312090000_share_sheet.sql");
+    expect(sql).toContain("g := public.chat_direct_open(uid, v_id);");
   });
 });

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { signCommunityPaths } from "@/lib/community-media";
+import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
 /** The bits of a message attachment (kind "community_post") the card reads. */
@@ -16,12 +17,16 @@ export type PostCardAttachment = {
   reply?: boolean;
   /** Sent from the story viewer (a message or a quick emoji). */
   story?: boolean;
+  /** Sent from a post's share sheet (✈️ → pick people → Send). */
+  shared?: boolean;
+  /** The post's author's Crew photo (a shared post's header). */
+  author_avatar?: string | null;
 };
 
-/** A message that answers a story or post: its card leads, Instagram style. */
+/** A message that answers a story or post, or sends one: its card leads, Instagram style. */
 export function postReplyCard(attachments: unknown): PostCardAttachment | null {
   if (!Array.isArray(attachments)) return null;
-  const a = attachments.find((x: any) => x?.kind === "community_post" && x?.post_id && x?.reply);
+  const a = attachments.find((x: any) => x?.kind === "community_post" && x?.post_id && (x?.reply || x?.shared));
   return (a as PostCardAttachment) ?? null;
 }
 
@@ -64,6 +69,44 @@ export function CommunityPostChatCard({ att, mine, staff }: { att: PostCardAttac
     ? mine ? `You replied to ${att.name ? `${att.name}'s` : "their"} ${what}` : `Replied to your ${what}`
     : null;
   const to = staff ? "/admin/community" : "/portal/community";
+
+  if (att.shared) {
+    // Instagram's sent post: who posted it, the picture (or its words), the caption under it
+    const words = att.request_note?.trim() || null;
+    return (
+      <div className={cn("flex max-w-full", mine ? "justify-end" : "justify-start")} data-post-shared-card>
+        <Link
+          to={to}
+          hash={`post=${att.post_id}`}
+          aria-label={`Open ${att.title || `the ${what}`}`}
+          className="block w-[220px] max-w-full overflow-hidden rounded-2xl border border-border bg-background text-left text-foreground transition active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-2 px-3 py-2">
+            <UserAvatar src={att.author_avatar ?? null} name={att.name ?? null} size={24} expandable={false} />
+            <span className="min-w-0 truncate text-[13px] font-semibold">{att.name || "Crew"}</span>
+          </span>
+          <span className={cn("relative block w-full bg-muted", att.story ? "aspect-[9/16]" : "aspect-[4/5]")}>
+            {thumb ? (
+              <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" draggable={false} onError={() => setBroken(thumb)} />
+            ) : (
+              <span className="absolute inset-0 flex items-center justify-center p-4 text-center">
+                {birthday ? (
+                  <span className="text-[44px] leading-none">🎂</span>
+                ) : (
+                  <span className="line-clamp-[8] whitespace-pre-wrap break-words text-[14px] font-semibold leading-snug">{words || att.title || "Crew post"}</span>
+                )}
+              </span>
+            )}
+          </span>
+          {thumb && words && (
+            <span className="line-clamp-2 px-3 py-2 text-[13px] leading-snug">
+              <span className="font-semibold">{att.name}</span> {words}
+            </span>
+          )}
+        </Link>
+      </div>
+    );
+  }
 
   if (att.reply) {
     const words = att.request_note?.trim() || null;
