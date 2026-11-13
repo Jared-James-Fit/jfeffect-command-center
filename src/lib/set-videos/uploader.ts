@@ -47,6 +47,13 @@ import { captureVideoPoster } from "@/lib/video-poster";
 import { chatUrlCache } from "@/hooks/use-chat-signed-urls";
 import { keepChatVideo } from "@/lib/chat-video-store";
 import { setVideoFileKey, setVideoStem } from "@/lib/set-videos/label";
+import { probeVideo } from "@/lib/video-edit/probe";
+import {
+  catchUpJobId,
+  markCatchUpChecked,
+  takeCatchUpLaunch,
+  type CatchUpClip,
+} from "@/lib/set-videos/catch-up";
 import {
   FEED_COPY_MAX_MS,
   FEED_COPY_TRIES,
@@ -113,11 +120,16 @@ let wired = false;
 
 /** A clip that went as it was, held for its Crew copy until the coach has it (this session only). */
 type FeedSource = { video: PickedVideo; plan: FeedCopyPlan; sentBytes: number };
-type FeedCopy = FeedSource & {
+type FeedCopy = Partial<Pick<FeedSource, "video" | "plan">> & {
+  sentBytes: number;
   jobId: string;
   setVideoId: string;
   clientId: string;
   tries: number;
+  /** A clip sent before this session (catch-up.ts): fetched from storage when its turn comes, null when no copy fits. */
+  load?: () => Promise<Pick<FeedSource, "video" | "plan"> | null>;
+  /** What the server's check is told about the source (kept so the fetched clip can be let go once the copy is made). */
+  source?: { src_s: number; src_mb: number; sel_s: number };
   /** Kept once made: a retry sends the same bytes (the upload resumes by path). */
   file?: File;
   uploaded?: boolean;
@@ -771,6 +783,9 @@ async function waitForIdleSending(signal: AbortSignal) {
 async function makeFeedCopy(item: FeedCopy, signal: AbortSignal) {
   if (!item.file) {
     if (!(await filmGoesToCrew())) return;
+    const src = item.video && item.plan ? { video: item.video, plan: item.plan } : await item.load?.();
+    if (!src) return;
+    if (signal.aborted) throw new VideoRenderError("Cancelled.", "aborted");
     // an encode still going after FEED_COPY_MAX_MS is given up on (aborted: never retried)
     const slow = new AbortController();
     const stop = () => slow.abort();
@@ -778,7 +793,7 @@ async function makeFeedCopy(item: FeedCopy, signal: AbortSignal) {
     const timer = setTimeout(stop, FEED_COPY_MAX_MS);
     let out: Awaited<ReturnType<typeof renderVideo>>;
     try {
-      out = await renderVideo(item.video.file, item.video.info, item.plan, {
+      out = await renderVideo(src.video.file, src.video.info, src.plan, {
         signal: slow.signal,
         limitSeconds: videoLimit("workout"),
         maxBytes: videoBudget("workout").max,
@@ -789,6 +804,14 @@ async function makeFeedCopy(item: FeedCopy, signal: AbortSignal) {
     }
     if (out.mode !== "transcode" || !feedCopyWorthIt(out.file.size, item.sentBytes)) return;
     item.file = out.file;
+    item.source = {
+      src_s: Math.round(src.video.info.duration * 10) / 10,
+      src_mb: Math.round((src.video.info.bytes / 1048576) * 10) / 10,
+      sel_s: Math.round((src.plan.end - src.plan.start) * 10) / 10,
+    };
+    // the copy is made: the clip it was made from (a fetched original is ~70 MB) can go
+    item.video = undefined;
+    item.load = undefined;
   }
   const file = item.file;
   const path = feedCopyPath(item.clientId, item.jobId, videoExt(file));
@@ -817,9 +840,7 @@ async function makeFeedCopy(item: FeedCopy, signal: AbortSignal) {
       client: {
         mode: "transcode",
         reason: "feed-copy",
-        src_s: Math.round(item.video.info.duration * 10) / 10,
-        src_mb: Math.round((item.video.info.bytes / 1048576) * 10) / 10,
-        sel_s: Math.round((item.plan.end - item.plan.start) * 10) / 10,
+        ...item.source,
         encode: true,
         ua: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 160) : undefined,
       },
@@ -837,4 +858,45 @@ async function makeFeedCopy(item: FeedCopy, signal: AbortSignal) {
       /* the next time the workout is open brings it up to date */
     }
   }
+}
+
+/* ---- Catch-up: copies for clips sent before this session (catch-up.ts) ---- */
+
+/** The clip the coach got, fetched back from storage, and the copy that fits a workout post (null: none does). */
+async function loadSentClip(path: string, mime: string | null): Promise<Pick<FeedSource, "video" | "plan"> | null> {
+  const { data, error } = await supabase.storage.from(BUCKET).download(path);
+  if (error || !data) throw new Error(String(error?.message ?? "Couldn't fetch the clip."));
+  const name = path.split("/").pop() ?? "clip.mov";
+  const file = new File([data], name, { type: data.type || mime || "video/quicktime" });
+  const probe = await probeVideo(file);
+  if (!probe) return null;
+  const plan = feedCopyPlan("original", probe.info, null, probe.canEncode);
+  return plan ? { video: { file, info: probe.info, canEncode: probe.canEncode, trim: null }, plan } : null;
+}
+
+/**
+ * On a launch: this athlete's recent set videos the film leaves out for their
+ * size (sent before copies existed, or whose copy never got made) get their
+ * 720p copy now, one at a time while nothing for the coach is sending, and a
+ * film already in the feed picks each one up as it's recorded.
+ */
+export async function catchUpFeedCopies(userId: string, clips: CatchUpClip[]) {
+  wireOnce();
+  if (typeof window === "undefined" || typeof (window as any).VideoEncoder === "undefined") return;
+  if (!(await filmGoesToCrew())) return;
+  let queued = 0;
+  for (const c of clips) {
+    const jobId = catchUpJobId(c.client_id, c.storage_path);
+    if (!jobId || !takeCatchUpLaunch(c.id)) continue;
+    queued += 1;
+    queueFeedCopy({
+      jobId,
+      setVideoId: c.id,
+      clientId: c.client_id,
+      sentBytes: Number(c.size_bytes) || 0,
+      tries: 0,
+      load: () => loadSentClip(c.storage_path, c.mime),
+    });
+  }
+  if (!queued) markCatchUpChecked(userId);
 }
