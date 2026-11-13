@@ -68,7 +68,7 @@ describe("the post's sheet: the whole caption, then the comments, one swipe to c
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain('style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--bottom-nav-clearance)" }}');
     expect(card).toContain('document.querySelector("[data-crew-bar]")');
-    expect(card).toContain('sheetOpen && "pointer-events-none opacity-0"');
+    expect(card).toContain('(sheetOpen || under) && "pointer-events-none opacity-0"');
   });
 
   it("the paged feed opens it from … more and 💬; the coach's card feed keeps its comments sheet", () => {
