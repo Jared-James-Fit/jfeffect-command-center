@@ -16,6 +16,7 @@ import { clientTaxRate } from "@/lib/client-billing-summary";
 import { latestPackage } from "@/lib/client-owed";
 import { billingPeriod, saleMoney, withTax, type MoneyLedgerRow, type MoneySale, type SaleMoney } from "@/lib/sale-money";
 import type { SessionBalanceRow } from "@/lib/sessions-inventory";
+import { pickTrainingNow, trainingStatus, type TrainingStatus } from "@/lib/package-status";
 
 export type PackageLedgerEvent = {
   id: string;
@@ -119,6 +120,10 @@ export type PackageView = {
    * sessions to train; finished: every session trained (or expired).
    */
   phase: "waiting" | "active" | "finished";
+  /** Where its training stands (package-status.ts), the same reading as Billing's. */
+  training: TrainingStatus;
+  /** Still to book now (0 once it's past its use-by date). */
+  available: number;
   money: SaleMoney;
   /** Last day a session on it can be used, when it expires. */
   expiresAt: string | null;
@@ -290,7 +295,6 @@ export function buildSessionPackages(input: {
 
   let owedCents = 0;
   let paidCents = 0;
-  let currentId: string | null = null;
   const views: PackageView[] = ordered.map(({ s }, i) => {
     const b = input.balance.find((r) => r.purchase_id === s.id);
     const done = n(b?.used);
@@ -300,7 +304,6 @@ export function buildSessionPackages(input: {
     const open = b ? Math.max(0, n(b.remaining)) : 0;
     const sessions = [...(onSale.get(s.id) ?? [])].sort(byWhen);
     const phase: PackageView["phase"] = !b || n(b.granted) <= 0 ? "waiting" : open + booked > 0 ? "active" : "finished";
-    if (phase === "active" && !currentId) currentId = s.id;
     const money = saleMoney(s, input.payments.filter((p) => p.purchase_id === s.id), rate, { sessionsUsed: done });
     if (money.state === "left" || money.state === "past_due") owedCents += money.leftCents;
     paidCents += money.paidCents;
@@ -320,10 +323,23 @@ export function buildSessionPackages(input: {
       termFrom: s.term_start_date ?? null,
       termTo: s.term_end_date ?? null,
       phase,
+      training: "upcoming" as TrainingStatus,
+      available: open,
       money,
       expiresAt: (b?.expires_at ?? s.package_expiry_date ?? null)?.slice(0, 10) ?? null,
     };
   });
+  // The package being trained now: the lowest-numbered with sessions still to train (Billing reads it the same way).
+  for (const v of views) if (input.today && v.expiresAt && v.expiresAt < input.today) v.available = 0;
+  const currentId = pickTrainingNow(
+    views.map((v) => ({ id: v.id, number: v.number, granted: v.phase !== "waiting", cancelled: v.money.state === "ended", booked: v.booked, available: v.available })),
+  );
+  for (const v of views) {
+    v.training = trainingStatus(
+      { purchased: v.size, completed: v.done, booked: v.booked, available: v.available, expired: v.expired + (v.open - v.available) },
+      { trainingNow: v.id === currentId, granted: v.phase !== "waiting", cancelled: v.money.state === "ended" },
+    );
+  }
 
   // Past every package: free sessions cover the first of them, the rest are the next package.
   const loose = [...(onSale.get(null) ?? [])].sort((a, b) => {

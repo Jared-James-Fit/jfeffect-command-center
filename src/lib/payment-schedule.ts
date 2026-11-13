@@ -25,6 +25,17 @@ import { buildBillingSummary, clientTaxRate, type BillingSessionEvent, type Rene
 import { addPeriod, autoPayPlan, type AutoPay, type PackageSale } from "@/lib/session-packages";
 import { billingPeriod, saleMoney, type MoneyLedgerRow, type SaleMoney, type SaleState } from "@/lib/sale-money";
 import type { SessionBalanceRow } from "@/lib/sessions-inventory";
+import {
+  payingNow as payingNowOf,
+  paymentStatus,
+  pickTrainingNow,
+  sessionCoverage,
+  trainingStatus,
+  type Coverage,
+  type PayingNow,
+  type PaymentStatus,
+  type TrainingStatus,
+} from "@/lib/package-status";
 
 export type ScheduleSale = PackageSale & {
   first_payment_date?: string | null;
@@ -63,6 +74,18 @@ export type PackageAccount = {
   from: string | null;
   to: string | null;
   sessions: { purchased: number; completed: number; booked: number; available: number; expired: number };
+  /** Its sessions are granted (a package not paid for yet has none until it is). */
+  granted: boolean;
+  /** Where its training stands, on its own. */
+  training: TrainingStatus;
+  /** The package being trained now (package-status.ts: the lowest-numbered with sessions still to train). */
+  trainingNow: boolean;
+  /** Where its money stands, on its own. */
+  payment: PaymentStatus;
+  /** A payment stream's next payment goes to it. */
+  payingNow: boolean;
+  /** Which of its completed sessions payments cover (a display split; null when it has no price to share out). */
+  coverage: Coverage | null;
   /** Its price in the dollars the client pays (what came in, once it's paid). */
   totalCents: number;
   paidCents: number;
@@ -173,6 +196,10 @@ export type ClientPayments = {
   unpaidDeliveredCents: number;
   /** The part of it from training past every package (not billed yet, so not in what's outstanding). */
   notBilledDeliveredCents: number;
+  /** The package being trained now (null: nothing left to train on any package). */
+  trainingNowId: string | null;
+  /** Per payment stream, the package its next payment goes to; earliest first. */
+  payingNow: PayingNow<Installment>[];
 };
 
 const n = (v: unknown) => Number(v ?? 0) || 0;
@@ -406,6 +433,8 @@ export function buildClientPayments(input: {
   const balanceOf = new Map((input.balance ?? []).map((b) => [b.purchase_id, b]));
   const numbers = packageNumbers(packages);
   const scheduleOf = new Map(balances.map((b) => [b.saleId, b]));
+  const paying = payingNowOf(balances);
+  const payingIds = new Set(paying.map((x) => x.saleId));
   const packageAccounts: PackageAccount[] = [...packages].sort((a, b) => numbers.get(a.id)! - numbers.get(b.id)!).map((s) => {
     const m = moneyOf.get(s.id)!;
     const b = balanceOf.get(s.id);
@@ -417,7 +446,8 @@ export function buildClientPayments(input: {
       completed,
       booked: n(b?.reserved),
       available: expiredByDate ? 0 : Math.max(0, n(b?.remaining)),
-      expired: n(b?.expired),
+      // Never used and past its use-by date (the ledger's own expiry, else its date passing).
+      expired: n(b?.expired) + (expiredByDate ? Math.max(0, n(b?.remaining)) : 0),
     };
     const owing = m.state === "left" || m.state === "past_due";
     const balanceCents = owing || m.state === "waiting" ? m.leftCents : 0;
@@ -428,6 +458,7 @@ export function buildClientPayments(input: {
     const unpaidDeliveredCents = valued && owing ? Math.min(balanceCents, Math.max(0, deliveredCents - m.paidCents)) : 0;
     const fromId = s.renewed_from_id ?? null;
     const fromSale = fromId ? packages.find((x) => x.id === fromId) ?? null : null;
+    const schedule = scheduleOf.get(s.id) ?? null;
     return {
       saleId: s.id,
       number: numbers.get(s.id)!,
@@ -438,15 +469,29 @@ export function buildClientPayments(input: {
       from: s.term_start_date ? String(s.term_start_date).slice(0, 10) : null,
       to: s.term_end_date ? String(s.term_end_date).slice(0, 10) : null,
       sessions,
+      granted: n(b?.granted) > 0,
+      // Filled in below, once the package being trained now is known.
+      training: "upcoming" as TrainingStatus,
+      trainingNow: false,
+      payment: paymentStatus({ state: m.state, paidCents: m.paidCents, balanceCents, schedule }),
+      payingNow: payingIds.has(s.id),
+      coverage: sessionCoverage({ sessions, totalCents, paidCents: m.paidCents, deliveredCents, unpaidDeliveredCents, valued: valued && m.state !== "ended" }),
       totalCents,
       paidCents: m.paidCents,
       balanceCents,
       deliveredCents,
       unpaidDeliveredCents,
       state: m.state,
-      schedule: scheduleOf.get(s.id) ?? null,
+      schedule,
     };
   });
+  const trainingNowId = pickTrainingNow(
+    packageAccounts.map((x) => ({ id: x.saleId, number: x.number, granted: x.granted, cancelled: x.state === "ended", booked: x.sessions.booked, available: x.sessions.available })),
+  );
+  for (const x of packageAccounts) {
+    x.trainingNow = x.saleId === trainingNowId;
+    x.training = trainingStatus(x.sessions, { trainingNow: x.trainingNow, granted: x.granted, cancelled: x.state === "ended" });
+  }
   // Training past every package: a renewal's share per session, until it's billed.
   const notBilledDeliveredCents = notBilled && notBilled.kind === "renewal" && notBilled.size > 0
     ? Math.round((notBilled.eachCents * notBilled.trained) / notBilled.size)
@@ -474,6 +519,8 @@ export function buildClientPayments(input: {
     packages: packageAccounts,
     unpaidDeliveredCents,
     notBilledDeliveredCents,
+    trainingNowId,
+    payingNow: paying,
   };
 }
 
@@ -494,4 +541,31 @@ export function billingStatusLine(
   if (p.notBilled) return { text: "Training past their package isn't billed yet", tone: "attention" };
   if (nextText) return { text: `Paid up · next ${nextText}`, tone: "done" };
   return { text: p.paidCents > 0 ? "Paid up" : "Nothing billed yet", tone: p.paidCents > 0 ? "done" : "neutral" };
+}
+
+/**
+ * The Sessions tab's one money line, said as which package the money is
+ * going to: "Paying off Package 2 · $168.00 due today by auto-pay". Falls
+ * back to billingStatusLine when nothing is being paid off (paid up, or a
+ * balance with no dates).
+ */
+export function payingOffLine(
+  p: ClientPayments,
+  fmt: (cents: number) => string,
+  day: (iso: string) => string,
+): { lead: string | null; text: string; tone: "error" | "attention" | "neutral" | "done" } {
+  const first = p.payingNow[0];
+  if (!first) {
+    const line = billingStatusLine(p, fmt, day);
+    return { lead: null, ...line };
+  }
+  const i = first.next;
+  const late = i.state === "failed" || i.state === "overdue";
+  const when = i.state === "failed" ? "failed" : i.state === "overdue" ? `overdue since ${day(i.date)}` : i.state === "due_today" || i.state === "unconfirmed" ? "due today" : `on ${day(i.date)}`;
+  const more = p.payingNow.length > 1 ? ` · +${p.payingNow.length - 1} more` : "";
+  return {
+    lead: `Paying off ${first.label}`,
+    text: `${fmt(i.cents)} ${when}${i.auto && !late ? " by auto-pay" : ""}${more}`,
+    tone: late ? "error" : (i.state === "due_today" || i.state === "unconfirmed") && !i.auto ? "attention" : "neutral",
+  };
 }

@@ -12,6 +12,7 @@
  * reference (checkout session id, payment intent id, invoice id), so
  * re-running it produces no duplicates.
  */
+import { subscriptionNextCharge } from "@/lib/stripe-next-charge";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { AdminTransactionRow } from "@/lib/admin-transactions";
@@ -89,10 +90,7 @@ export const reconcilePurchaseWithStripe = createServerFn({ method: "POST" })
       patch.is_recurring = true;
       patch.stripe_subscription_status = status;
       patch.cancel_at_period_end = !!sub?.cancel_at_period_end;
-      patch.next_billing_date =
-        sub?.cancel_at_period_end || !sub?.current_period_end || !["active", "trialing"].includes(status ?? "")
-          ? null
-          : new Date(sub.current_period_end * 1000).toISOString().split("T")[0];
+      patch.next_billing_date = subscriptionNextCharge(sub, purchase.next_billing_date);
       patch.payment_status =
         status === "active" || status === "trialing" ? "Active Subscription"
         : status === "past_due" || status === "unpaid" ? "Overdue"
