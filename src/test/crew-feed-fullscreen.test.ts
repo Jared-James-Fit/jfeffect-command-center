@@ -16,7 +16,7 @@ describe("every post fills the screen, TikTok's way", () => {
   });
 
   it("each post fills the screen down to the tab bar, Crew's bar floating over its top", () => {
-    expect(css).toContain("  --feed-bar-room: 3rem;\n  --feed-nav-room: var(--mobile-bar-top);");
+    expect(css).toContain("  --feed-bar-room: calc(3rem + var(--app-edge-room));\n  --feed-nav-room: var(--mobile-bar-top);");
     // the post itself runs from under the status bar down to the tab bar (opaque, TikTok's)
     expect(card).toContain('style={{ top: -raise, bottom: sheetOpen ? POST_SHEET_HEIGHT : "var(--feed-nav-room)" }}');
     // a picture shown whole sits between the bars; a clip that fills the screen runs under both
