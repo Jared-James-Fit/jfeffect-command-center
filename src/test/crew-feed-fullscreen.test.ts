@@ -35,12 +35,16 @@ describe("every post fills the screen, TikTok's way", () => {
   });
 
   it("a picture or card shown whole sits above the post's words, never under them (TikTok's); only a clip that fills the screen runs under them (Nov 13 2026)", () => {
-    // where the words start, measured from the post's bottom and kept up to date
-    expect(card).toContain("const top = a.getBoundingClientRect().bottom - w.getBoundingClientRect().top;");
-    expect(card).toContain('if (top > 0) a.style.setProperty("--page-words-top", `${Math.round(top)}px`);');
+    // how tall the words are, measured inside their own box and kept up to date: never where they sit,
+    // which the screen's reading settling (--feed-gap) moves with nothing resizing (a stale position left
+    // every picture a gap short of its words on the iPhone home-screen app, Nov 13 2026)
+    expect(card).toContain("const h = box.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(box).paddingBottom) || 0) - w.getBoundingClientRect().top;");
+    expect(card).toContain('if (h > 0) a.style.setProperty("--page-words-h", `${Math.round(h)}px`);');
+    expect(card).not.toContain("--page-words-top");
     expect(card).toContain("<div ref={wordsRef} className=");
-    // the room they take: from the hero's bottom (the tab bar) to the words' top, and 8px
-    expect(css).toContain("[data-feed-page-post] { --feed-words-room: calc(var(--page-words-top, var(--feed-words-bottom)) - var(--feed-nav-room) + 8px); }");
+    // the room they take: their height, how far up they sit, less where the hero ends (the tab bar), and 8px;
+    // the last two both move with --feed-gap, so the room is the same however the screen reads
+    expect(css).toContain("[data-feed-page-post] { --feed-words-room: calc(var(--page-words-h, 0px) + var(--feed-words-bottom) - var(--feed-nav-room) + 8px); }");
     // photos, cards and clips shown whole all sit in it
     const inline = read("src/components/community/inline-video.tsx");
     expect(inline).toContain('const BETWEEN_BARS = { top: "var(--feed-bar-room, 0px)", bottom: "var(--feed-words-room, 0px)" } as const;');
@@ -129,5 +133,17 @@ describe("the stories fold away as the first post comes up, and back in on the w
     expect(screen).toContain("const r = `${(FIRST_POST_RADIUS * (1 - ease(p))).toFixed(1)}px`;");
     // reduced motion keeps the fade, without the movement
     expect(screen).toContain('row.style.transform = p <= 0 || reduce ? "" :');
+  });
+
+  it("under the stories the first post's picture sits right under them, not a bar's height lower, and eases to its place as it comes up (Nov 13 2026)", () => {
+    const screen = read("src/components/community/community-screen.tsx");
+    const css = read("src/styles.css");
+    expect(screen).toContain("const u = reduce ? 0 : 1 - ease(p);");
+    expect(screen).toContain('first.style.setProperty("--first-under", u.toFixed(3));');
+    // once it's up nothing is left on it (a transform would trap a fixed child)
+    expect(screen).toContain('first.removeAttribute("data-first-under");');
+    // only a picture shown whole moves (a clip that fills its screen already starts at the post's top), never on a computer
+    expect(css).toContain('[data-first-under] [data-post-hero]:not(:has([data-fit="cover"])) {');
+    expect(css).toContain("transform: translate3d(0, calc(var(--first-under, 0) * min(0px, 8px - var(--feed-bar-room))), 0);");
   });
 });

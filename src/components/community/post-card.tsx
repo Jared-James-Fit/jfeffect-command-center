@@ -453,17 +453,19 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
       window.removeEventListener("resize", later);
     };
   }, [layout, pageFirst]);
-  // on its screen, where its words start (who, the caption, views), from its bottom: a picture shown
-  // whole sits in the room above them, TikTok's, so the words never cover it (--page-words-top →
-  // --feed-words-room, styles.css); read again whenever the words or the screen change size
+  // on its screen, how tall its words are (who, the caption, views): a picture shown whole sits in the
+  // room above them, TikTok's, so the words never cover it (--page-words-h → --feed-words-room,
+  // styles.css). Their own height, never where they sit: the screen's reading settling (--feed-gap)
+  // moves them without resizing anything, and a stale position left the picture a gap short of them
   const wordsRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
     const a = articleRef.current;
     const w = wordsRef.current;
-    if (layout !== "page" || !a || !w) return;
+    const box = w?.parentElement;
+    if (layout !== "page" || !a || !w || !box) return;
     const set = () => {
-      const top = a.getBoundingClientRect().bottom - w.getBoundingClientRect().top;
-      if (top > 0) a.style.setProperty("--page-words-top", `${Math.round(top)}px`);
+      const h = box.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(box).paddingBottom) || 0) - w.getBoundingClientRect().top;
+      if (h > 0) a.style.setProperty("--page-words-h", `${Math.round(h)}px`);
     };
     set();
     if (typeof ResizeObserver === "undefined") return;
