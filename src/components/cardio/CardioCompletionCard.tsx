@@ -156,7 +156,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
     }
   }
 
-  // One tap: log the prescribed session as done. Tap again to reset.
+  // One tap: "I did the session as prescribed", so it records the planned
+  // minutes (the button says so). Tap again to reset.
   const toggleComplete = () => run(async () => {
     if (isCompleted || isSkipped) {
       await deleteCardioCompletion(supabase, key);
@@ -208,7 +209,8 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
       ...key,
       completed: true,
       skipped: false,
-      duration_minutes: minutes != null ? Math.round(minutes) : target.duration_minutes ?? null,
+      // what they typed only: a blank time is unknown, never the plan's
+      duration_minutes: minutes != null ? Math.round(minutes) : null,
       cardio_type: target.cardio_type,
       rpe: num(rpe),
       distance: num(distance),
@@ -359,7 +361,7 @@ export function CardioCompletionCard({ target, clientId, date, readonly = false 
         {!readonly && !expanded && !isCompleted && !isSkipped && (
           <div className="mt-2 flex gap-2">
             <Button size="sm" className="flex-1" onClick={toggleComplete} disabled={saving}>
-              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Done
+              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Done as planned
             </Button>
             <Button size="sm" variant="outline" className="flex-1" onClick={() => setExpanded(true)} disabled={saving}>
               Add numbers

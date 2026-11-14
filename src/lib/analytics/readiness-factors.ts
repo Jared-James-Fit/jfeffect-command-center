@@ -659,14 +659,34 @@ export function buildReadinessBreakdown(inp: BreakdownInput): ReadinessBreakdown
   return { factors, order, positive, limiter, recommendation: rec };
 }
 
-function pickRecommendation(
+export function pickRecommendation(
   f: Record<FactorKey, FactorDetail>,
   limiter: FactorDetail | null,
 ): string {
   if (f.pain.score < 80) return "You flagged pain recently. Sub in a pain-free variation and stay well shy of failure today.";
-  if (f.sleep.score < 60) return "Sleep was short. Reduce optional volume, keep top sets at the prescribed RPE, and skip AMRAP finishers.";
-  if (f.load.score < 60) return "Training load has spiked. Complete prescribed work and skip unnecessary back-off sets.";
-  if (f.recovery.score < 60) return "You're feeling under-recovered. Warm up thoroughly and let the first working set dictate the day.";
+  // Nothing logged is never a low score: missing sleep or energy says nothing.
+  if (!f.sleep.isMissing && f.sleep.score < 60) return "Sleep was short. Reduce optional volume, keep top sets at the prescribed RPE, and skip AMRAP finishers.";
+  if (!f.load.isMissing && f.load.score < 60) return "Training load has spiked. Complete prescribed work and skip unnecessary back-off sets.";
+  if (!f.recovery.isMissing && f.recovery.score < 60) return "You're feeling under-recovered. Warm up thoroughly and let the first working set dictate the day.";
   if (!limiter) return "Everything is in a great window. Train as planned and push your top sets if warm-ups feel sharp.";
   return "Train as planned. Stay within today's prescribed RPE and avoid adding unnecessary volume.";
 }
+
+/** A readiness score older than this says nothing about today: it isn't shown. */
+export const READINESS_STALE_DAYS = 14;
+
+/**
+ * How old the readiness score is. It's the last finished workout's (its
+ * check-out and what was logged), so from two days on the row says when:
+ * "From your Thursday workout", "From your Nov 6 workout".
+ */
+export function readinessAge(ts: string | null | undefined, now: Date = new Date()): { days: number; stale: boolean; fromLabel: string | null } | null {
+  if (!ts) return null;
+  const t = new Date(ts);
+  if (Number.isNaN(t.getTime())) return null;
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.max(0, Math.round((day(now) - day(t)) / 86_400_000));
+  const fromLabel = days <= 1 ? null : days < 7 ? t.toLocaleDateString("en-US", { weekday: "long" }) : t.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return { days, stale: days > READINESS_STALE_DAYS, fromLabel };
+}
+

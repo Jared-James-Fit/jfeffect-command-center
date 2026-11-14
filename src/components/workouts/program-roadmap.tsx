@@ -183,7 +183,9 @@ export function ProgramRoadmapCard({
           : thisWeekIdx >= 0 ? `Week ${thisWeekIdx + 1} of ${current.weekCount}` : weeksLabel(current.weekCount),
       ].filter(Boolean).join(" · ")
     : null;
-  const programWeekText = programWeek && !allDone ? `Week ${programWeek} of ${totalWeeks}` : null;
+  // The program's own week says "Program" so it never reads as a second, different
+  // "Week N of M" beside the block's; a one-block program has only the one.
+  const programWeekText = programWeek && !allDone && blocks.length > 1 ? `Program week ${programWeek} of ${totalWeeks}` : null;
   const line = !allDone ? weekLine(thisWeek, current) : null;
   const pick = (id: string) => {
     setPicking(false);

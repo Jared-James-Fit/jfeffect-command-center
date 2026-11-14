@@ -169,6 +169,10 @@ export function TrainingAnalyticsPreviewCard({
                     )}
                   </div>
                 )}
+                {/* What the three numbers count, said once (month-highlights.ts). */}
+                <p className="mt-3 border-t border-border/60 pt-3 text-[11px] leading-relaxed text-muted-foreground" data-month-definitions>
+                  Workouts are days with a logged set. PRs are exercises with a new best estimated max this month (a first time doing one doesn't count). Week streak is weeks in a row with a logged set.
+                </p>
               </CollapsibleContent>
             </>
           )}

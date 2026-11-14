@@ -3,6 +3,7 @@
 // light penalty for pain. No DB schema changes.
 
 import { displayExerciseName } from "@/lib/exercise-display-name";
+import { planCheck, type PlanCheck } from "@/lib/workouts/plan-vs-actual";
 
 export type SummaryRow = {
   id: string;
@@ -65,6 +66,8 @@ export type WorkoutSummary = {
   missedExercises: string[];
   avgRpe: number | null;
   score: number;                // 0-100
+  /** The workout against its prescription (sets, reps, effort): plan-vs-actual.ts. */
+  plan?: PlanCheck;
 };
 
 type Opts = {
@@ -153,5 +156,7 @@ export function computeWorkoutSummary(
     missedExercises,
     avgRpe: rpeCount > 0 ? Math.round((rpeSum / rpeCount) * 10) / 10 : null,
     score,
+    // rows and results carry their prescription and set fields at runtime (full rows)
+    plan: planCheck(rows as any, results as any),
   };
 }

@@ -6,6 +6,8 @@ import type { WorkoutItem } from "@/lib/workout-today";
 /**
  * One workout status mark for every calendar (Home week, Workouts week and month):
  *   scheduled / not started → small grey dot
+ *   missed                  → a small hollow rose ring (a past day with nothing logged:
+ *                             told apart from what's still ahead, never called skipped)
  *   in progress             → a ring filled to the real logged-set progress (neutral: red reads as a problem)
  *   completed               → green check
  *   skipped                 → muted red minus (only when a workout is explicitly skipped;
@@ -14,6 +16,7 @@ import type { WorkoutItem } from "@/lib/workout-today";
  */
 export type WorkoutMark =
   | { kind: "scheduled" }
+  | { kind: "missed" }
   | { kind: "progress"; pct: number }
   | { kind: "done" }
   | { kind: "skipped" };
@@ -35,6 +38,7 @@ export function workoutMark(item: WorkoutItem | null | undefined, now: Date = ne
   if (status === "in_progress" || status === "incomplete") {
     return { kind: "progress", pct: Math.max(0, Math.min(100, Math.round(item.progress_pct ?? 0))) };
   }
+  if (status === "missed") return { kind: "missed" };
   return { kind: "scheduled" };
 }
 
@@ -42,7 +46,7 @@ export function workoutMark(item: WorkoutItem | null | undefined, now: Date = ne
 export function dayMark(items: Array<WorkoutItem | null | undefined>, now: Date = new Date()): WorkoutMark | null {
   const marks = items.map((i) => workoutMark(i, now)).filter((m): m is WorkoutMark => !!m);
   if (!marks.length) return null;
-  const rank = { progress: 0, scheduled: 1, skipped: 2, done: 3 } as const;
+  const rank = { progress: 0, missed: 1, scheduled: 2, skipped: 3, done: 4 } as const;
   return marks.sort((a, b) => rank[a.kind] - rank[b.kind])[0];
 }
 
@@ -83,6 +87,13 @@ export function WorkoutStatusMark({ mark, onPrimary = false, className }: { mark
           className={onPrimary ? "stroke-white" : "stroke-foreground"}
         />
       </svg>
+    );
+  }
+  if (mark.kind === "missed") {
+    return (
+      <span className={box} aria-label="Missed">
+        <span className={cn("h-2 w-2 rounded-full border-[1.5px]", onPrimary ? "border-white/70" : "border-rose-500/70")} />
+      </span>
     );
   }
   return (

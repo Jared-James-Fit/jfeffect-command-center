@@ -73,7 +73,7 @@ import {
   getAtHomeBackupSessionState,
   removeEmptyAtHomeBackupSession,
 } from "@/lib/at-home-backup.functions";
-import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock } from "@/lib/at-home-backup";
+import { AT_HOME_BACKUP_BADGE, isAtHomeBackupClient, isAtHomeBackupSessionBlock, isPrimaryProgramBlock } from "@/lib/at-home-backup";
 import { activeCalendarBlockIds, filterCalendarItemsWithHistory, historicalAnchorDate } from "@/lib/active-calendar";
 import { canDragRescheduleItem, moveTargetFromItem, type MoveTarget } from "@/lib/workout-move";
 import { useMoveWorkout } from "@/lib/use-move-workout";
@@ -88,7 +88,7 @@ import { KIND_META, placeLabel, scheduleTitle, useClientSessionItems, type Calen
 import { AGENDA_ROW, AgendaRow, FAMILY_ACCENT, startLabel } from "@/components/schedule/agenda";
 import { ClientSessionSheet, type ClientSession } from "@/components/schedule/client-session-sheet";
 import { compactTimeRange, compareInstants } from "@/lib/schedule-time";
-import { WorkoutStatusMark, dayMark } from "@/components/workouts/workout-status-mark";
+import { WorkoutStatusMark, dayMark, workoutMark, type WorkoutMark } from "@/components/workouts/workout-status-mark";
 import { buildWorkoutDateMap } from "@/lib/workout-calendar";
 import { ProgramRoadmapCard, programName, useClientVisibleBlocks, useProgramRoadmap } from "@/components/workouts/program-roadmap";
 import type { ProgramRoadmap } from "@/lib/training-roadmap";
@@ -598,15 +598,11 @@ function MonthGrid({
           const iso = toLocalISO(d);
           const list = byDate.get(iso) ?? [];
           const item = list[0];
-          const extraCount = Math.max(0, list.length - 1);
-          const status: WorkoutStatus | "none" = item
-            ? getWorkoutStatus(item).status
-            : "none";
           const inMonth = isSameMonth(d, monthStart);
           const isToday = isSameDay(d, today);
           const isSelected = isSameDay(d, selectedDate);
-          // Compact month cells: prefer a meaningful subtitle, else week+day
-          // identity so W1 D3 and W2 D3 never read as the same workout.
+          // The workout's name only labels a drag: a cell is the date and its
+          // mark, and the day picked shows its workout under the calendar.
           const title = item
             ? formatCompactWorkoutLabel(item.day as any, item.week as any)
               ?? cleanDayTitle(item.day?.title, item.day?.day_index)
@@ -622,7 +618,7 @@ function MonthGrid({
               {...cellDnd.props}
               className={cn(
                 cellDnd.className,
-                "flex min-h-[64px] flex-col items-stretch rounded-lg border p-1 text-left transition",
+                "flex h-11 flex-col items-center justify-center gap-0.5 rounded-lg border transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 // neutral like the week strip: the day picked is a soft fill, today a filled number
                 isSelected ? "border-foreground/25 bg-secondary" : "border-transparent hover:bg-secondary/60",
@@ -632,23 +628,16 @@ function MonthGrid({
               aria-current={isToday ? "date" : undefined}
               aria-label={`${format(d, "EEEE MMMM d")}${isToday ? " (today)" : ""}${item ? `, ${getWorkoutStatus(item).label}` : ", rest day"}${sessionDays?.has(iso) ? ", session with your coach" : ""}`}
             >
-              <div className="flex items-center justify-between">
-                <span className={cn(
-                  "grid h-5 min-w-5 place-items-center rounded-full px-0.5 text-xs font-semibold tabular-nums",
-                  isToday && "bg-foreground text-background",
-                )}>
-                  {format(d, "d")}
-                </span>
-                <span className="flex items-center gap-0.5">
-                  {sessionDays?.has(iso) && <SessionDot />}
-                  <WorkoutStatusMark mark={dayMark(list)} />
-                </span>
-              </div>
-              {title && (
-                <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-muted-foreground">
-                  {title}{extraCount > 0 ? ` +${extraCount}` : ""}
-                </span>
-              )}
+              <span className={cn(
+                "grid h-6 min-w-6 place-items-center rounded-full px-1 text-[13px] font-semibold tabular-nums",
+                isToday && "bg-foreground text-background",
+              )}>
+                {format(d, "d")}
+              </span>
+              <span className="flex h-2.5 items-center gap-0.5">
+                {sessionDays?.has(iso) && <SessionDot />}
+                <WorkoutStatusMark mark={dayMark(list)} />
+              </span>
             </button>
               )}
             </CalendarDayCell>
@@ -656,7 +645,38 @@ function MonthGrid({
 
         })}
       </div>
+      <MonthTally days={days.filter((d) => isSameMonth(d, monthStart))} byDate={byDate} />
     </Card>
+  );
+}
+
+/**
+ * The month in one line, each count beside its own mark (so it reads as the
+ * key too): done, missed, in progress, still ahead. Only what's there.
+ */
+function MonthTally({ days, byDate }: { days: Date[]; byDate: Map<string, WorkoutItem[]> }) {
+  const counts = { done: 0, missed: 0, progress: 0, scheduled: 0 };
+  for (const d of days) {
+    for (const item of byDate.get(toLocalISO(d)) ?? []) {
+      const m = workoutMark(item);
+      if (m && m.kind in counts) counts[m.kind as keyof typeof counts] += 1;
+    }
+  }
+  const parts: Array<{ mark: WorkoutMark; text: string }> = [];
+  if (counts.done) parts.push({ mark: { kind: "done" }, text: `${counts.done} done` });
+  if (counts.missed) parts.push({ mark: { kind: "missed" }, text: `${counts.missed} missed` });
+  if (counts.progress) parts.push({ mark: { kind: "progress", pct: 50 }, text: `${counts.progress} not finished` });
+  if (counts.scheduled) parts.push({ mark: { kind: "scheduled" }, text: `${counts.scheduled} ahead` });
+  if (!parts.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-[12px] text-muted-foreground" data-month-tally>
+      {parts.map((p) => (
+        <span key={p.text} className="inline-flex items-center gap-1">
+          <WorkoutStatusMark mark={p.mark} />
+          {p.text}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -1531,7 +1551,9 @@ function BlockViewTab({
     for (const it of items) {
       if (it.block?.id && !seen.has(it.block.id)) seen.set(it.block.id, it.block);
     }
-    return [...seen.values()];
+    // The at-home backup sessions aren't a block of the program (the roadmap
+    // leaves them out too), so the picker and "current block" never land on them.
+    return [...seen.values()].filter((b) => isPrimaryProgramBlock(b));
   }, [allBlocks, items]);
 
   const today = localStartOfToday();

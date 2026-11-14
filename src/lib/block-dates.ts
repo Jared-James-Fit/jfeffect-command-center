@@ -1,4 +1,4 @@
-import { addDays, format, isWithinInterval } from "date-fns";
+import { addDays, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
 
@@ -71,10 +71,14 @@ export function weekDisplayRange(
   return { ...r, source: "auto" };
 }
 
-export function isCurrentWeek(range: { start: Date; end: Date } | null): boolean {
+/**
+ * Today falls in this week: its start through its last day (`end` is that day
+ * at midnight). The day after it ends is the next week's, never both (an
+ * inclusive end + 1 made the old week "current" on the new week's first day).
+ */
+export function isCurrentWeek(range: { start: Date; end: Date } | null, today: Date = localStartOfToday()): boolean {
   if (!range) return false;
-  const startOfDay = localStartOfToday();
-  return isWithinInterval(startOfDay, { start: range.start, end: addDays(range.end, 1) });
+  return today.getTime() >= range.start.getTime() && today.getTime() < addDays(range.end, 1).getTime();
 }
 
 /**

@@ -215,7 +215,7 @@ export async function getBlockTree(blockId: string) {
     : { data: [] };
   const dayIds = (days ?? []).map((d: any) => d.id);
   const { data: rows } = dayIds.length
-    ? await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues)").in("day_id", dayIds).order("sort_order")
+    ? await sb.from("pl_exercise_rows").select("*, exercises(id,name,video_url,vimeo_embed_url,thumbnail_url,cues,competition_lift_type,is_competition_lift,exercise_category,movement_family)").in("day_id", dayIds).order("sort_order")
     : { data: [] };
   return { block, weeks: weeks ?? [], days: days ?? [], rows: rows ?? [] };
 }
