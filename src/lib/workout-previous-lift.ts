@@ -35,6 +35,8 @@ export type PreviousLiftLog = {
   /** A timed set's logged time and calories (cardio, holds). */
   durationSeconds?: number | null;
   calories?: number | null;
+  /** A run's distance, in metres. */
+  distanceM?: number | null;
 };
 
 /** Last time for an exercise done for time. */
@@ -44,6 +46,8 @@ export type PreviousTimed = {
   seconds: number | null;
   /** cardio only: the session's calories added up. */
   calories: number | null;
+  /** cardio only: the session's distance added up, in metres (a run). */
+  meters?: number | null;
   /** cardio: the hardest set's RPE; hold: the longest set's. */
   rpe: number | null;
   /** Sets that session. */
@@ -172,7 +176,7 @@ export function matchHistoryLogs(
 }
 
 function hasTimedPerformance(log: PreviousLiftLog): boolean {
-  return finitePositive(log.durationSeconds) != null || finitePositive(log.calories) != null || finitePositive(log.rpe) != null;
+  return finitePositive(log.durationSeconds) != null || finitePositive(log.calories) != null || finitePositive(log.distanceM) != null || finitePositive(log.rpe) != null;
 }
 
 /**
@@ -196,11 +200,14 @@ export function summarizeTimedSession(kind: "cardio" | "hold", sets: PreviousLif
   }
   const secs = sets.map((x) => finitePositive(x.durationSeconds)).filter((n): n is number => n != null);
   const cals = sets.map((x) => finitePositive(x.calories)).filter((n): n is number => n != null);
+  const meters = sets.map((x) => finitePositive(x.distanceM)).filter((n): n is number => n != null);
   const rpes = sets.map((x) => finitePositive(x.rpe)).filter((n): n is number => n != null);
   return {
     kind,
     seconds: secs.length ? Math.round(secs.reduce((t, n) => t + n, 0)) : null,
     calories: cals.length ? Math.round(cals.reduce((t, n) => t + n, 0)) : null,
+    // a run's distance, only when one was logged (a walk or a bike reads as before)
+    ...(meters.length ? { meters: Math.round(meters.reduce((t, n) => t + n, 0)) } : {}),
     rpe: rpes.length ? Math.max(...rpes) : null,
     sets: sets.length,
   };
@@ -231,8 +238,13 @@ export function selectPreviousLifts(
     );
     if (valid.length === 0) continue;
     if (identity.timed) {
-      const latest = valid.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0];
-      const session = valid.filter((log) => log.sessionKey === latest.sessionKey);
+      // the same kind of session when there is one: a threshold run's last time
+      // is the last threshold session, not last Sunday's long run
+      const timedRole = normalizeRole(identity.purposeLabel);
+      const sameKind = timedRole ? valid.filter((log) => normalizeRole(log.purposeLabel) === timedRole) : [];
+      const pool = sameKind.length > 0 ? sameKind : valid;
+      const latest = pool.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0];
+      const session = pool.filter((log) => log.sessionKey === latest.sessionKey);
       result.set(identity.rowId, {
         ...latest,
         match: idMatches.length > 0 ? "exercise_id" : "name",
@@ -277,10 +289,11 @@ export function formatPreviousLiftLoad(log: PreviousLiftLog, unit: "kg" | "lb"):
   const rounded = Math.abs(value - Math.round(value)) < 0.05 ? Math.round(value) : Number(value.toFixed(1));
   return `${rounded} ${unit}`;
 }
-/** "20:30 · 162 kcal · RPE 5.5" (cardio), "0:45 · RPE 7" (a hold), "" when nothing was logged. */
-export function formatPreviousTimed(t: PreviousTimed, clock: (seconds: number) => string): string {
+/** "20:30 · 162 kcal · RPE 5.5" (cardio), "32:10 · 5.4 km · RPE 4" (a run), "0:45 · RPE 7" (a hold), "" when nothing was logged. */
+export function formatPreviousTimed(t: PreviousTimed, clock: (seconds: number) => string, distance?: (meters: number) => string): string {
   const rpe = t.rpe != null ? `RPE ${Math.round(t.rpe * 10) / 10}` : null;
-  return [t.seconds != null ? clock(t.seconds) : null, t.calories != null ? `${t.calories} kcal` : null, rpe]
+  const dist = t.meters != null && t.meters > 0 && distance ? distance(t.meters) : null;
+  return [t.seconds != null ? clock(t.seconds) : null, dist, t.calories != null ? `${t.calories} kcal` : null, rpe]
     .filter(Boolean)
     .join(" · ");
 }

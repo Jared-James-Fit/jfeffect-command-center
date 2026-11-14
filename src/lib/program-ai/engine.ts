@@ -261,6 +261,10 @@ function applyRx(row: RowSnap, p: RxPatch | undefined, unit: "kg" | "lb", issues
     row.restSeconds = p.rest_seconds;
     row.restOverride = p.rest_seconds;
   }
+  if (p.duration_seconds !== undefined) {
+    if (row.measurementType === "time" || row.measurementType === "duration") row.durationSeconds = p.duration_seconds;
+    else issues.push({ level: "error", text: `${where}: only a timed exercise (a run, a walk, a hold) has a time per set.` });
+  }
   if (p.tempo !== undefined) {
     if (p.tempo && !TEMPO.test(p.tempo)) issues.push({ level: "error", text: `${where}: tempo "${p.tempo}" should be digits like 3-1-1-0 or 31X1.` });
     row.tempo = p.tempo || null;
@@ -514,13 +518,13 @@ export function dayMinutes(day: DaySnap, ctx: EngineCtx): number | null {
     name: r.name,
     equipment: (r.exerciseId && ctx.byId.get(r.exerciseId)?.equipment) || null,
     sets: r.sets ?? 1,
-    reps: r.measurementType === "duration" && r.durationSeconds ? null : r.reps,
+    reps: (r.measurementType === "duration" || r.measurementType === "time") && r.durationSeconds ? null : r.reps,
     restSeconds: r.restOverride ?? r.restSeconds,
   }));
   try {
     const est = estimateDay(xs).minutes;
     // timed rows (a walk): their time, not reps
-    const timed = day.rows.reduce((n, r) => n + (r.measurementType === "duration" && r.durationSeconds ? (r.durationSeconds * (r.sets ?? 1)) / 60 : 0), 0);
+    const timed = day.rows.reduce((n, r) => n + ((r.measurementType === "duration" || r.measurementType === "time") && r.durationSeconds ? (r.durationSeconds * (r.sets ?? 1)) / 60 : 0), 0);
     return Math.round(est + timed);
   } catch {
     return null;

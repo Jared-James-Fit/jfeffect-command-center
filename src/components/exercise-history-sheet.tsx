@@ -25,6 +25,7 @@ import {
   type SetDraft,
 } from "@/lib/history-set-edit";
 import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio-history";
+import { formatDistance, formatPace, isRunningExercise, paceSeconds, readDistanceUnit } from "@/lib/running/run-log";
 
 const sb = supabase as any;
 
@@ -154,7 +155,7 @@ export function ExerciseHistorySheet({
         .select(`
           id, set_index, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rpe_num, mean_concentric_velocity_mps,
-          completed_duration_seconds, actual_calories,
+          completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit, load_type, is_bodyweight,
           pl_exercise_rows!inner(
@@ -266,6 +267,12 @@ export function ExerciseHistorySheet({
 
   // A treadmill walk or a bike is time, calories and effort, never load / reps / velocity.
   const cardio = useMemo(() => isCardioHistory(exerciseName, rows), [exerciseName, rows]);
+  // A run reads by distance and pace instead of calories.
+  const runHistory = useMemo(
+    () => cardio && (isRunningExercise(exerciseName) || rows.some((r: any) => Number(r.actual_distance_m) > 0)),
+    [cardio, exerciseName, rows],
+  );
+  const distanceUnit = useMemo(() => readDistanceUnit(), []);
   const cardioSummary = useMemo(() => {
     if (!cardio) return null;
     const ymd = (t: number) => (t ? format(new Date(t), "yyyy-MM-dd") : "");
@@ -306,7 +313,7 @@ export function ExerciseHistorySheet({
     const nextCardio: Record<string, CardioDraft> = {};
     for (const set of sets) {
       next[set.id] = setEditDraft(set, displayUnit);
-      nextCardio[set.id] = cardioEditDraft(set);
+      nextCardio[set.id] = cardioEditDraft(set, distanceUnit);
     }
     setDrafts(next);
     setCardioDrafts(nextCardio);
@@ -424,7 +431,9 @@ export function ExerciseHistorySheet({
               {[
                 { label: "Sessions", value: String(cardioSummary.sessions) },
                 { label: "Avg time", value: cardioClock(cardioSummary.avgSeconds) },
-                { label: "Avg kcal", value: cardioSummary.avgCalories != null ? String(cardioSummary.avgCalories) : "—" },
+                runHistory
+                  ? { label: "Avg distance", value: formatDistance(cardioSummary.avgMeters, distanceUnit) || "—" }
+                  : { label: "Avg kcal", value: cardioSummary.avgCalories != null ? String(cardioSummary.avgCalories) : "—" },
                 { label: "Avg RPE", value: cardioSummary.avgRpe != null ? String(cardioSummary.avgRpe) : "—" },
               ].map((x) => (
                 <div key={x.label} className="min-w-0">
@@ -516,7 +525,7 @@ export function ExerciseHistorySheet({
                     <div className="grid grid-cols-[24px_minmax(0,1fr)_72px_56px] gap-2 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                       <span>Set</span>
                       <span>Time</span>
-                      <span>Cal</span>
+                      <span>{runHistory ? (cardioDrafts[g.sets[0]?.id]?.distanceUnit ?? distanceUnit) : "Cal"}</span>
                       <span>RPE</span>
                     </div>
                     {g.sets.map((s: any, i: number) => {
@@ -534,15 +543,28 @@ export function ExerciseHistorySheet({
                             aria-label={`Set ${i + 1} time`}
                             className="h-10 min-w-0 px-2 text-center text-base tabular-nums"
                           />
-                          <Input
-                            value={d.calories}
-                            onChange={(e) => patchCardioDraft(s.id, { calories: e.target.value.replace(/[^0-9]/g, "") })}
-                            inputMode="numeric"
-                            enterKeyHint="done"
-                            placeholder="—"
-                            aria-label={`Set ${i + 1} calories`}
-                            className="h-10 px-1 text-center text-base tabular-nums"
-                          />
+                          {runHistory ? (
+                            <Input
+                              value={d.distance ?? ""}
+                              onChange={(e) => patchCardioDraft(s.id, { distance: e.target.value.replace(/[^0-9.,]/g, "") })}
+                              inputMode="decimal"
+                              enterKeyHint="done"
+                              placeholder="—"
+                              aria-label={`Set ${i + 1} distance in ${d.distanceUnit === "mi" ? "miles" : "kilometres"}`}
+                              data-history-distance
+                              className="h-10 px-1 text-center text-base tabular-nums"
+                            />
+                          ) : (
+                            <Input
+                              value={d.calories}
+                              onChange={(e) => patchCardioDraft(s.id, { calories: e.target.value.replace(/[^0-9]/g, "") })}
+                              inputMode="numeric"
+                              enterKeyHint="done"
+                              placeholder="—"
+                              aria-label={`Set ${i + 1} calories`}
+                              className="h-10 px-1 text-center text-base tabular-nums"
+                            />
+                          )}
                           <Input
                             value={d.rpe}
                             onChange={(e) => patchCardioDraft(s.id, { rpe: e.target.value.replace(/[^0-9.]/g, "") })}
@@ -640,10 +662,13 @@ export function ExerciseHistorySheet({
                 </div>
               ) : cardio ? (
               <div className="overflow-hidden rounded-md border border-border" data-history-cardio>
-                <div className="grid grid-cols-[30px_minmax(56px,1fr)_56px_44px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                <div className={cn(
+                  "grid gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground",
+                  runHistory ? "grid-cols-[30px_minmax(52px,1fr)_60px_64px_36px_20px]" : "grid-cols-[30px_minmax(56px,1fr)_56px_44px_20px]",
+                )}>
                   <span>Set</span>
                   <span>Time</span>
-                  <span>Cal</span>
+                  {runHistory ? <><span>Dist</span><span>Pace</span></> : <span>Cal</span>}
                   <span>RPE</span>
                   <span></span>
                 </div>
@@ -651,13 +676,21 @@ export function ExerciseHistorySheet({
                   <div
                     key={s.id}
                     className={cn(
-                      "grid grid-cols-[30px_minmax(56px,1fr)_56px_44px_20px] items-center gap-1.5 border-t border-border/60 px-2 py-1.5 text-xs",
+                      "grid items-center gap-1.5 border-t border-border/60 px-2 py-1.5 text-xs",
+                      runHistory ? "grid-cols-[30px_minmax(52px,1fr)_60px_64px_36px_20px]" : "grid-cols-[30px_minmax(56px,1fr)_56px_44px_20px]",
                       s.completed_at && "bg-green-500/5",
                     )}
                   >
                     <span className="font-mono text-muted-foreground">{i + 1}</span>
                     <span className="font-medium tabular-nums">{cardioClock(s.completed_duration_seconds)}</span>
-                    <span className="tabular-nums">{s.actual_calories != null ? s.actual_calories : "—"}</span>
+                    {runHistory ? (
+                      <>
+                        <span className="tabular-nums" data-history-run-distance>{formatDistance(s.actual_distance_m, s.actual_distance_unit === "mi" ? "mi" : distanceUnit) || "—"}</span>
+                        <span className="tabular-nums">{formatPace(paceSeconds(s.completed_duration_seconds, s.actual_distance_m, s.actual_distance_unit === "mi" ? "mi" : distanceUnit), s.actual_distance_unit === "mi" ? "mi" : distanceUnit) || "—"}</span>
+                      </>
+                    ) : (
+                      <span className="tabular-nums">{s.actual_calories != null ? s.actual_calories : "—"}</span>
+                    )}
                     <span className="tabular-nums">{s.actual_rpe ?? "—"}</span>
                     <span className="text-right">
                       {s.completed_at

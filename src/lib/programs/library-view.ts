@@ -116,7 +116,7 @@ export function membershipByTemplate(
 }
 
 /** The JF Effect library's browse categories (navigation, never a restriction on who may use one). */
-export const LIBRARY_CATEGORIES = ["Athletes", "Men", "Women", "At Home"] as const;
+export const LIBRARY_CATEGORIES = ["Athletes", "Men", "Women", "At Home", "Running"] as const;
 export type LibraryCategory = (typeof LIBRARY_CATEGORIES)[number];
 
 /** A JF Effect library program's category, from its tags ("JF Effect" + one category). */
@@ -285,7 +285,7 @@ export type LibrarySection = { key: string; label: string; items: LibraryProgram
 
 /**
  * The All view without a search: the JF Effect programs by category (Athletes,
- * Men, Women, At Home: beginner → advanced), then every other program, newest
+ * Men, Women, At Home, Running: beginner → advanced), then every other program, newest
  * first. A list with no JF Effect programs is one plain section (no heading).
  */
 export function libraryCategorySections(programs: LibraryProgram[]): LibrarySection[] {

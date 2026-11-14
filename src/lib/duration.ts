@@ -12,6 +12,15 @@ export function parseDurationInput(raw: string | number | null | undefined): num
   const s = String(raw).trim().toLowerCase();
   if (!s) return null;
 
+  // h:mm:ss (a long run: "1:45:30")
+  const hms = s.match(/^(\d+):(\d{1,2}):(\d{1,2})$/);
+  if (hms) {
+    const [h, mm, ss] = [parseInt(hms[1], 10), parseInt(hms[2], 10), parseInt(hms[3], 10)];
+    if (mm >= 60 || ss >= 60) return null;
+    const total = h * 3600 + mm * 60 + ss;
+    return total > 0 ? total : null;
+  }
+
   // mm:ss
   const colon = s.match(/^(\d+):(\d{1,2})$/);
   if (colon) {

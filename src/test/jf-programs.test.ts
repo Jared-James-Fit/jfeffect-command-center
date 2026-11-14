@@ -273,22 +273,23 @@ describe("JF Effect library installer (jf-library-install hook)", () => {
     expect(r.applied).toBe(false);
     expect(f.writes).toHaveLength(0);
     expect(r.templates.every((t) => t.action === "would add")).toBe(true);
-    expect(r.totals).toMatchObject({ programs: 12, blocks: 36, weeks: 144, coreDays: 504, optionalDays: 12 });
+    // the 12 strength programs (36 blocks, 144 weeks, 504 + 12 workouts) and the 3 running ones (11 blocks, 42 weeks, 144 + 58)
+    expect(r.totals).toMatchObject({ programs: 15, blocks: 47, weeks: 186, coreDays: 648, optionalDays: 70 });
   });
 
-  it("adds the 12 programs and 6 exercises once; a second run adds nothing", async () => {
+  it("adds the 15 programs (12 strength, 3 running) and 6 exercises once; a second run adds nothing", async () => {
     const { installJfLibrary } = await import("@/lib/jf-programs/install.server");
     const f = fakeAdmin();
     const first = await installJfLibrary(f.client, { apply: true });
     expect(first.exercises.filter((e) => e.action === "added")).toHaveLength(6);
-    expect(first.templates.filter((t) => t.action === "added")).toHaveLength(12);
+    expect(first.templates.filter((t) => t.action === "added")).toHaveLength(15);
     expect(f.db.pl_templates.every((t) => t.owner_user_id === "admin-1" && t.status === "Published")).toBe(true);
     const writes = f.writes.length;
     const second = await installJfLibrary(f.client, { apply: true });
     expect(f.writes.length).toBe(writes);
     expect(second.templates.every((t) => t.action === "already in the library")).toBe(true);
     expect(second.exercises.every((e) => e.action === "already added")).toBe(true);
-    expect(second.totals.weeks).toBe(144);
+    expect(second.totals.weeks).toBe(186);
   });
 
   it("uses an exercise the library already has by name instead of adding a second one", async () => {

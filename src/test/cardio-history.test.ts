@@ -148,8 +148,9 @@ describe("cardio analytics: the details coaches read", () => {
 describe("cardio history: fixing a day", () => {
   const set = { id: "s1", completed_duration_seconds: 600, actual_calories: 80, actual_rpe: "6" };
   it("opens with the logged values", () => {
-    expect(cardioEditDraft(set)).toEqual({ time: "10:00", calories: "80", rpe: "6" });
-    expect(cardioEditDraft({ id: "s2" })).toEqual({ time: "", calories: "", rpe: "" });
+    // a walk has no distance: its box is empty, in the phone's unit
+    expect(cardioEditDraft(set)).toEqual({ time: "10:00", calories: "80", rpe: "6", distance: "", distanceUnit: "km" });
+    expect(cardioEditDraft({ id: "s2" })).toEqual({ time: "", calories: "", rpe: "", distance: "", distanceUnit: "km" });
   });
   it("writes only what changed", () => {
     expect(cardioEditPatch(set, { time: "10:00", calories: "80", rpe: "6" })).toBeNull();

@@ -1,7 +1,8 @@
 /**
  * Puts the 12 JF Effect library programs (and the six exercises they need that
- * the library lacked) into the database: the same rows, under the same fixed
- * ids, as supabase/migrations/20270314090000_jf_effect_program_library.sql,
+ * the library lacked) and the 3 running programs into the database: the same
+ * rows, under the same fixed ids, as supabase/migrations/20270314090000_jf_effect_program_library.sql
+ * and 20270321090000_jf_effect_running_library.sql,
  * for databases where that file isn't run by hand (it's 1.5 MB).
  *
  * Preview first: without `apply` it only says what it would add. With it, it
@@ -12,6 +13,7 @@
  */
 import { NEW_EXERCISES } from "./catalog";
 import { buildLibrary, payloadSummary } from "./build";
+import { buildRunningLibrary } from "./running-build";
 
 type Admin = any;
 
@@ -66,8 +68,8 @@ export async function installJfLibrary(admin: Admin, opts: { apply?: boolean } =
     exercises.push({ name: e.name, id: e.id, action: apply ? "added" : "would add" });
   }
 
-  // 2. The 12 programs: only the ones not already there, owned by the admin login.
-  const lib = buildLibrary();
+  // 2. The 12 strength programs and the 3 running ones: only the ones not already there, owned by the admin login.
+  const lib = [...buildLibrary(), ...buildRunningLibrary()];
   const existing = new Set(
     unwrap<any[]>(await admin.from("pl_templates").select("id").in("id", lib.map((t) => t.id)), "read the library").map((r) => r.id),
   );
