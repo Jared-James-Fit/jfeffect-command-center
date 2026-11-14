@@ -41,10 +41,11 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      Once a working set is logged today, that set takes over.
 //   9. LIVE ACROSS CARDS: a back-off of the same exercise on its own card
 //      (top set on one card, back-offs on the next) is worked out from today's
-//      sets of that exercise, exactly as if they were on its own card (note 5):
-//      495 lb × 4 @ 10 → 4 @ 6 ≈ 445. History keeps its 25% only to bring the
-//      number DOWN, never up (backing off is the safe side, and a back-off
-//      after a grind must never come out at the top set's weight). A variation
+//      sets of that exercise, exactly as if they were on its own card (note 5),
+//      less BACKOFF_FATIGUE for the fatigue the top set leaves: 495 lb × 4 @ 10
+//      → 4 @ 6 ≈ 420. History keeps its 25% only to bring the number DOWN,
+//      never up (backing off is the safe side, and a back-off after a grind
+//      must never come out at the top set's weight). A variation
 //      of the family (paused, tempo) starts from its own history and moves by
 //      how today's sets of the lift compared with what history predicted
 //      ("today ran +3%"), trusted 50% and capped at ±8%; it replaces the
@@ -58,6 +59,14 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      suggestion and rated harder never raises it. Every rated set counts;
 //      a set claims at most MAX_EASIER_CREDIT RPE "easier than the target",
 //      and today's sets are weighed by order and reps, never by their rating.
+// Back-offs (note 9), backtested Nov 13 2026 on 214 real first back-off sets
+// after a top set on an earlier card (12 athletes, mostly SBD): the chart alone
+// read a median 8.3% off, +5.9% heavy, 54% more than 5% too heavy; athletes
+// load a back-off about 6% under what the chart says their top set implies,
+// even at the same RPE (153 of the 214 were rated as hard as the top set or
+// harder). With BACKOFF_FATIGUE: 5.5% off, −0.4%, 27%; every back-off set,
+// own sets included, 1.7% off and 14% too heavy. A per-athlete drop learned
+// from past sessions gained little more and isn't used.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
 // 8% cold, 4.4% once today's first set is in. Monotonic effort (Oct 2026, 7,000
 // real sets): "rated easier → lower" 621 → 0 of 4,200 next-set cases; next-set
@@ -303,6 +312,8 @@ export interface LoadModel {
   dayFactor: number | null;
   /** True when "today" includes this exercise's earlier sets on another card (a back-off after its top set). */
   carried: boolean;
+  /** The latest of those sets as logged (before BACKOFF_FATIGUE), for the "why": the top set it follows. */
+  carriedTop: { load: number; reps: number; rpe: number; e1rm: number } | null;
   /** Cold suggestion from thin history (one recent session): wider range, labelled as early. */
   early: boolean;
 }
@@ -408,9 +419,16 @@ export function buildLoadModel(input: {
     // easier rating drop the set and fall back to older history).
     const est = setE1rm(s);
     if (est && s.rpe != null) {
-      today.push({ e1rm: est.e1rm, load: s.load, reps: s.reps, rpe: Math.max(MIN_RPE, s.rpe), trust: est.trust, weight: i + 1 });
+      // A carried top set is read after the fatigue it leaves (BACKOFF_FATIGUE).
+      const k = i < carry.length ? 1 - BACKOFF_FATIGUE : 1;
+      today.push({ e1rm: est.e1rm * k, load: s.load * k, reps: s.reps, rpe: Math.max(MIN_RPE, s.rpe), trust: est.trust, weight: i + 1 });
     }
   });
+  const top = carry.length ? carry[carry.length - 1] : null;
+  const topEst = top ? setE1rm(top) : null;
+  const carriedTop = top && topEst && top.rpe != null
+    ? { load: top.load, reps: top.reps, rpe: top.rpe, e1rm: topEst.e1rm }
+    : null;
 
   const wE1rm = input.warmup ? warmupE1rm(input.warmup) : null;
   const warmup = wE1rm && input.warmup && today.length === 0 ? { e1rm: wE1rm, load: input.warmup.load, reps: input.warmup.reps, trust: warmupTrust(input.warmup.rpe) } : null;
@@ -420,6 +438,7 @@ export function buildLoadModel(input: {
     early: historyEarly && today.length === 0,
     dayFactor: historyReady && today.length === 0 ? dayFactor : null,
     carried,
+    carriedTop,
   };
   if (today.length > 0) {
     return {
@@ -473,6 +492,14 @@ export const TODAY_ALPHA = 0.8;
  * so a set predicted from an earlier set today is discounted per set apart.
  */
 export const SET_FATIGUE = 0.035;
+
+/**
+ * A back-off read from the top set on an earlier card is set this much under
+ * the chart: the fatigue a top set leaves (RTS's "fatigue percent"). Measured,
+ * not assumed: see the back-off backtest above (5% to 6% fit best; 6% errs
+ * light, the safe side for volume after a heavy set).
+ */
+export const BACKOFF_FATIGUE = 0.06;
 
 export function estimateFor(model: LoadModel, reps: number, rpe: number): { load: number; spread: number } | null {
   if (model.status !== "ready") return null;

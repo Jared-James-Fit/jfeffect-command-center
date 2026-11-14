@@ -2,7 +2,7 @@ import { Check, Info, Target, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { audibleStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
+import { audibleStep, BACKOFF_FATIGUE, loadStep, roundToStep, type LoadModel, type LoadSuggestion } from "@/lib/load-suggestion";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
@@ -124,8 +124,23 @@ export function LoadSuggestionCard({
             Based on {why}.
             {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
               ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change.`}
-            {" "}Let your first set decide:
           </p>
+          {model.carriedTop && (() => {
+            // The math behind a back-off, the way a coach would say it.
+            const top = model.carriedTop;
+            const step = loadStep(hint.unit, top.load);
+            return (
+              <p className="mt-1 text-muted-foreground" data-testid="load-backoff-math">
+                Top set today:{" "}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {fmtNum(roundToStep(top.load, step / 2))} {hint.unit} × {top.reps} @ {fmtNum(top.rpe)}
+                </span>{" "}
+                (e1RM about {fmtNum(roundToStep(top.e1rm, step))}). Back-offs sit about {Math.round(BACKOFF_FATIGUE * 100)}% under what that
+                says, for the fatigue a top set leaves.
+              </p>
+            );
+          })()}
+          <p className="mt-1 text-muted-foreground">Let your first set decide:</p>
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
             <li><span className="font-semibold text-foreground">Bar flying?</span> Add {fmtNum(audible)} {hint.unit} next set.</li>
             <li><span className="font-semibold text-foreground">Slow or form breaking?</span> Drop {fmtNum(audible)} {hint.unit}.</li>
