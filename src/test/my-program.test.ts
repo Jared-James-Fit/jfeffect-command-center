@@ -227,6 +227,10 @@ describe("the screens: one Programs page, every program says where it's from, an
       'const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;',
     );
     expect(workouts).toContain("{!noProgram && (");
+    // Past programs sits in the page's own flow, never after its tab-bar padding (a dead band above it)
+    const page = readFileSync("src/routes/_authenticated/portal/workouts.index.tsx", "utf8");
+    expect(page).toContain('footer={<WorkoutArchiveSection clientId={client.id} mode="client" />}');
+    expect(workouts).toContain("        {footer}\n      </div>");
   });
 
   it("Manage: edit (own programs), see the plan (JF Effect), switch, end, with what ending does said before the tap", () => {
