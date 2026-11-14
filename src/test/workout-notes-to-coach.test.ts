@@ -14,6 +14,12 @@ describe("pain reads like a coach would say it", () => {
     expect(painAreaLabel("Low back")).toBe("Low back");
     expect(painAreaLabel("General")).toBe("General");
   });
+  it("several places in one line, later ones in lower case", () => {
+    expect(painAreaLabel("Neck, Low back")).toBe("Neck, low back");
+    expect(painAreaLabel("Neck, Shoulder (R), Knee (L), Knee (R)")).toBe("Neck, right shoulder, both knees");
+    expect(painAreaLabel("Neck, SI joint")).toBe("Neck, SI joint");
+    expect(painLine({ area: "Neck, Low back", level: 8 })).toBe("Neck, low back · Sharp (8/10)");
+  });
   it("the review's own severity words", () => {
     expect([painSeverityLabel(3), painSeverityLabel(5), painSeverityLabel(8)]).toEqual(["Mild", "Moderate", "Sharp"]);
     expect(painLine({ area: "Knee (L)", level: 5 })).toBe("Left knee · Moderate (5/10)");

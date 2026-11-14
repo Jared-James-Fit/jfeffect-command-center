@@ -43,16 +43,32 @@ export function effortChip(v: number | null | undefined): number | null {
   return v <= 6 ? 5 : v;
 }
 
-export const PAIN_AREAS = ["Shoulder", "Elbow", "Wrist", "Low back", "Hip", "Knee", "Other"] as const;
+/**
+ * Where it hurts, head to toe, three across in the review. Neck, Upper back,
+ * Chest, Hamstring and Calf / ankle came from what "Other" was used for (Nov
+ * 2026: 5 of the last 11 "Other" reports were the neck, then mid back, chest,
+ * adductor, calf); the note covers anything else.
+ */
+export const PAIN_AREAS = [
+  "Neck", "Shoulder", "Upper back",
+  "Chest", "Elbow", "Wrist",
+  "Low back", "Hip / groin", "Hamstring",
+  "Knee", "Calf / ankle", "Other",
+] as const;
 
 /** Areas that come in pairs; these get an optional Left / Right / Both pick. */
-export const SIDED_PAIN_AREAS: readonly string[] = ["Shoulder", "Elbow", "Wrist", "Hip", "Knee"];
+export const SIDED_PAIN_AREAS: readonly string[] = [
+  "Shoulder", "Chest", "Elbow", "Wrist", "Hip / groin", "Hamstring", "Knee", "Calf / ankle",
+];
 export type PainSide = "L" | "R" | "both";
 export const PAIN_SIDES: { v: PainSide; label: string }[] = [
   { v: "L", label: "Left" },
   { v: "R", label: "Right" },
   { v: "both", label: "Both" },
 ];
+
+/** One place that hurts, as picked in the review. */
+export type PainPick = { area: string; side: PainSide | null };
 
 /**
  * pain_area is free text shown to the coach as-is, so the side is written into
@@ -64,19 +80,95 @@ export function composePainArea(area: string, side: PainSide | null): string {
   return side === "both" ? `${area} (L), ${area} (R)` : `${area} (${side})`;
 }
 
-/** Read a stored pain_area back into chip + side; anything else stays as written. */
-export function parsePainArea(stored: string | null | undefined): {
-  area: string | null;
-  side: PainSide | null;
-} {
-  const s = (stored ?? "").trim();
-  if (!s) return { area: null, side: null };
-  if ((PAIN_AREAS as readonly string[]).includes(s)) return { area: s, side: null };
-  const one = /^(.+) \((L|R)\)$/.exec(s);
-  if (one && SIDED_PAIN_AREAS.includes(one[1])) return { area: one[1], side: one[2] as PainSide };
-  const both = /^(.+) \(L\), (.+) \(R\)$/.exec(s);
-  if (both && both[1] === both[2] && SIDED_PAIN_AREAS.includes(both[1])) return { area: both[1], side: "both" };
-  return { area: null, side: null };
+const AREA_ORDER = new Map<string, number>(PAIN_AREAS.map((a, i) => [a, i]));
+
+/**
+ * Several places are one ", " list (the earlier sheet stored them the same
+ * way): head to toe, then anything written that isn't a chip, as written.
+ * Nothing picked → null.
+ */
+export function composePainAreas(picks: PainPick[], other: string[] = []): string | null {
+  const seen = new Set<string>();
+  const parts = [...picks]
+    .filter((p) => !seen.has(p.area) && seen.add(p.area))
+    .sort((a, b) => (AREA_ORDER.get(a.area) ?? 99) - (AREA_ORDER.get(b.area) ?? 99))
+    .map((p) => composePainArea(p.area, p.side));
+  for (const o of other) if (o.trim() && !parts.includes(o.trim())) parts.push(o.trim());
+  return parts.length ? parts.join(", ") : null;
+}
+
+/** Earlier names for a chip: the old sheet's "Lower back", "Ankle/foot", "Hip". */
+const AREA_ALIASES: Record<string, string> = {
+  ...Object.fromEntries(PAIN_AREAS.map((a) => [a.toLowerCase(), a])),
+  "lower back": "Low back",
+  "mid back": "Upper back",
+  hip: "Hip / groin",
+  groin: "Hip / groin",
+  "ankle/foot": "Calf / ankle",
+  ankle: "Calf / ankle",
+  calf: "Calf / ankle",
+};
+
+/** A stored pain_area split into its places, each with its side ("Knee (L), Knee (R)" = both knees). */
+function painPlaces(stored: string | null | undefined): { name: string; side: PainSide | null; raw: string[] }[] {
+  const out = new Map<string, { name: string; l: boolean; r: boolean; plain: boolean; raw: string[] }>();
+  for (const token of (stored ?? "").split(",")) {
+    const t = token.trim();
+    if (!t) continue;
+    const m = /^(.+?)\s*\((L|R)\)$/.exec(t);
+    const name = (m ? m[1] : t).trim();
+    const key = name.toLowerCase();
+    const cur = out.get(key) ?? { name, l: false, r: false, plain: false, raw: [] };
+    if (m?.[2] === "L") cur.l = true;
+    else if (m?.[2] === "R") cur.r = true;
+    else cur.plain = true;
+    cur.raw.push(t);
+    out.set(key, cur);
+  }
+  return [...out.values()].map((p) => ({
+    name: p.name,
+    side: p.l && p.r ? "both" : p.l ? "L" : p.r ? "R" : null,
+    raw: p.raw,
+  }));
+}
+
+/**
+ * Read a stored pain_area back into the review's chips + sides. Anything that
+ * isn't a chip ("General" from the first review) stays as written in `other`.
+ */
+export function parsePainAreas(stored: string | null | undefined): { picks: PainPick[]; other: string[] } {
+  const picks: PainPick[] = [];
+  const other: string[] = [];
+  for (const p of painPlaces(stored)) {
+    const area = AREA_ALIASES[p.name.toLowerCase()];
+    // a side written on a place that has none ("Low back (R)") stays as written
+    if (!area || (p.side && !SIDED_PAIN_AREAS.includes(area))) other.push(...p.raw);
+    else if (!picks.some((x) => x.area === area)) picks.push({ area, side: p.side });
+  }
+  return { picks, other };
+}
+
+/** "Both knees", "Chest (both sides)": a plural only where it reads as one. */
+function bothSides(name: string): string {
+  const a = name.toLowerCase();
+  if (/^[a-z]+$/.test(a) && a !== "chest") return `Both ${a.endsWith("s") ? a : `${a}s`}`;
+  return `${name} (both sides)`;
+}
+
+/** Each place in words: ["Neck", "Right shoulder", "Both knees"]; anything else as written. */
+export function painAreaParts(stored: string | null | undefined): string[] {
+  return painPlaces(stored).map((p) =>
+    p.side === "L" ? `Left ${p.name.toLowerCase()}`
+    : p.side === "R" ? `Right ${p.name.toLowerCase()}`
+    : p.side === "both" ? bothSides(p.name)
+    : p.name,
+  );
+}
+
+/** The places without their sides, by chip where there is one ("low back", "shoulder"), for counting. */
+export function painAreaNames(stored: string | null | undefined): string[] {
+  const names = painPlaces(stored).map((p) => (AREA_ALIASES[p.name.toLowerCase()] ?? p.name).toLowerCase());
+  return [...new Set(names)];
 }
 
 export const PAIN_SEVERITY: { v: number; label: string }[] = [

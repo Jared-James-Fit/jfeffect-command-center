@@ -11,6 +11,7 @@ import { fmtLoad, mean, round, sum } from "./core";
 import { trend } from "./analyze";
 import type { IntelRecords, IntelReport, Lift } from "./types";
 import { LIFTS } from "./types";
+import { painAreaNames } from "@/lib/workout-review";
 
 export type Pattern = {
   id: string;
@@ -141,9 +142,10 @@ export function findPatterns(h: IntelReport, rec: IntelRecords): Pattern[] {
   // Pain reported after sessions with the same exercise, more than once.
   const painDays = h.days.filter((d) => d.feedback?.pain && d.feedback.pain_area);
   const co = new Map<string, { n: number; area: string; ex: string; dates: string[] }>();
-  for (const d of painDays) for (const r of d.rows.filter((x) => x.setsDone > 0)) {
-    const key = `${(d.feedback!.pain_area as string).toLowerCase()}|${r.exerciseId ?? r.exercise}`;
-    const cur = co.get(key) ?? { n: 0, area: (d.feedback!.pain_area as string).toLowerCase(), ex: r.exercise, dates: [] };
+  // each place reported counts on its own ("Neck, Low back" is neck and low back), sides together
+  for (const d of painDays) for (const area of painAreaNames(d.feedback!.pain_area)) for (const r of d.rows.filter((x) => x.setsDone > 0)) {
+    const key = `${area}|${r.exerciseId ?? r.exercise}`;
+    const cur = co.get(key) ?? { n: 0, area, ex: r.exercise, dates: [] };
     cur.n++;
     cur.dates.push(d.date ?? "?");
     co.set(key, cur);
