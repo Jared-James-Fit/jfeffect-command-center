@@ -681,6 +681,50 @@ export function audibleStep(target: number, unit: "kg" | "lb"): number {
 }
 
 /**
+ * When the suggestion is a weight to choose from rather than one number: the
+ * first working set of a squat, bench or deadlift (or a variation of one) that's
+ * prescribed by effort, read from enough history, before anything today has
+ * said how the day is going. That's the call a lifter makes from their
+ * warm-ups, so the card offers the loads one "audible" either side of the
+ * estimate (about ±2.5%, the same step the ⓘ says to move by when the bar is
+ * flying or slow), never wider than the model's own calibrated range.
+ *
+ * Everything else stays one number: once a set is logged today (the engine has
+ * read the day), after a logged final warm-up (it already tuned the number), a
+ * back-off read from today's top set, an early estimate from thin history (a
+ * range would claim a precision it doesn't have), and accessories, whose loads
+ * jump by the stack or the dumbbell and progress from last time. A coach's load
+ * (a % of a max, a fixed weight, a top-set back-off) never reaches the engine.
+ */
+export const PICK_RANGE_MAX_LOADS = 7;
+export function suggestionPicks(input: {
+  hint: LoadSuggestion;
+  model: Pick<LoadModel, "source" | "early" | "carried" | "warmup" | "today">;
+  /** The exercise is a competition lift or a variation of one (squat / bench / deadlift family). */
+  mainLift: boolean;
+  /** The prescription names an RPE or RIR (planningTarget otherwise assumes RPE 8). */
+  effortPrescribed: boolean;
+}): { low: number; high: number; loads: number[] } | null {
+  const { hint, model } = input;
+  if (!input.mainLift || !input.effortPrescribed) return null;
+  if (model.source !== "history" || model.early || model.carried || model.warmup || model.today.length) return null;
+  const swing = audibleStep(hint.target, hint.unit);
+  const down = Math.min(swing, hint.target - hint.low);
+  const up = Math.min(swing, hint.high - hint.target);
+  // Loadable weights from the target out, a plate step apart (two when a heavy
+  // pull would make it a long row), so the target is always one of them.
+  let by = loadStep(hint.unit, hint.target);
+  const steps = (span: number) => Math.floor(span / by + 1e-9);
+  while (steps(down) + steps(up) + 1 > PICK_RANGE_MAX_LOADS) by *= 2;
+  const kd = steps(down);
+  const ku = steps(up);
+  if (kd + ku === 0) return null;
+  const loads: number[] = [];
+  for (let k = -kd; k <= ku; k++) loads.push(Math.round((hint.target + k * by) * 100) / 100);
+  return { low: loads[0], high: loads[loads.length - 1], loads };
+}
+
+/**
  * What the athlete's LAST warm-up should be before the first working set, so it
  * is heavy enough to read how today feels yet light enough to cost nothing:
  * a single at ~90% for a top set of 1–3 reps, a double at ~87% for 4–6 and

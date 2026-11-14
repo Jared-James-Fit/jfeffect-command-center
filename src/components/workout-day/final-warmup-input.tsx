@@ -240,24 +240,27 @@ export function WarmupRows({
       {formOpen && !editingId ? (
         warmupForm(null)
       ) : (
+        // The prompt is a suggestion, not a logged warm-up: quiet, no orange
+        // (logged warm-ups keep their orange W so they never read as working sets).
         canEdit && prompt?.tunes && sets.length === 0 && !formOpen && (
           <button
             type="button"
             onClick={() => onFormChange("new")}
             data-testid="warmup-prompt"
-            className="grid w-full items-center gap-1.5 border-t border-orange-500/25 bg-orange-500/[0.07] px-2 py-1.5 text-left transition active:bg-orange-500/15"
+            className="grid min-h-10 w-full items-center gap-1.5 border-t border-border px-2 py-1 text-left transition active:bg-muted"
             style={{ gridTemplateColumns: gridTemplate }}
           >
-            <WBadge />
+            <span className="text-center text-sm font-semibold text-muted-foreground" aria-hidden="true">W</span>
             <span className="flex min-w-0 items-center gap-1.5" style={{ gridColumn: "2 / -1" }}>
-              <Flame className="h-3.5 w-3.5 shrink-0 text-orange-500" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
-                <span className="font-bold">Last warm-up</span>
-                <span className="text-muted-foreground">
-                  {prompt.suggested ? ` · ~${fmt(prompt.suggested.load)} × ${prompt.suggested.reps}` : " · sets today's weight"}
+              <Flame className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
+                Last warm-up
+                <span className="tabular-nums text-foreground">
+                  {prompt.suggested ? ` · ~${fmt(prompt.suggested.load)} × ${prompt.suggested.reps}` : ""}
                 </span>
+                {!prompt.suggested && " · sets today's weight"}
               </span>
-              <span className="shrink-0 text-xs font-bold text-orange-600 dark:text-orange-400">Log</span>
+              <span className="shrink-0 text-xs font-semibold text-foreground">Log</span>
             </span>
           </button>
         )

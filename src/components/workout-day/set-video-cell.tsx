@@ -198,6 +198,8 @@ export type SetVideoCellProps = {
   resultId: string | null;
   /** The set has numbers saved: a video can go on it. */
   logged: boolean;
+  /** The set is done (its number tapped, or logged in full): what the "film your sets" tip waits for. Defaults to `logged`. */
+  done?: boolean;
   readonly: boolean;
   focusMode?: boolean;
   /** "100 kg × 5 @ RPE 8": what the coach's card says about the set. */
@@ -206,6 +208,8 @@ export type SetVideoCellProps = {
 
 export function SetVideoCell(props: SetVideoCellProps) {
   const { clientId, rowId, dayId, setIndex, resultId, logged, readonly, focusMode } = props;
+  // A weight put in the set from a suggestion is saved but not done: the tip waits.
+  const done = props.done ?? logged;
   const { user } = useAuth();
   const { data } = useSetVideosForDay(dayId, !!clientId);
   const allJobs = useSetVideoJobs();
@@ -261,18 +265,19 @@ export function SetVideoCell(props: SetVideoCellProps) {
     if (canAdd) warmSetVideoCode();
   }, [canAdd]);
 
-  // The point-out: the moment this set is logged (not when the workout opens
-  // on sets logged before), if it's due and nothing else holds the screen.
+  // The point-out: the moment this set is done (not when the workout opens
+  // on sets done before, and never for a weight filled in ahead), if it's due
+  // and nothing else holds the screen.
   const tip = useSetVideoTip(clientId, canAdd);
   const [tipOpen, setTipOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const wasLogged = useRef(logged);
+  const wasLogged = useRef(done);
   const tipLive = useRef({ due: tip.due, canAdd, has: false });
   tipLive.current = { due: tip.due, canAdd, has: videos.length > 0 || !!active };
   useEffect(() => {
     const was = wasLogged.current;
-    wasLogged.current = logged;
-    if (was || !logged) return;
+    wasLogged.current = done;
+    if (was || !done) return;
     if (!canAdd || !tip.due || videos.length || active) return;
     if (!claimSetVideoTip()) return;
     let tries = 0;
@@ -308,7 +313,7 @@ export function SetVideoCell(props: SetVideoCellProps) {
       if (!settled) releaseSetVideoTip();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logged]);
+  }, [done]);
 
   const openPicker = () => {
     if (!canAdd) return;

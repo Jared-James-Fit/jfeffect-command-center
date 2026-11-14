@@ -29,6 +29,7 @@ import {
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
 import { withLivePercent } from "@/lib/workouts/backoff-basis";
+import { focusNames } from "@/lib/workouts/focus-names";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
 import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
@@ -136,6 +137,7 @@ import {
   planningTarget,
   predictReadiness,
   suggestFinalWarmup,
+  suggestionPicks,
   suggestSetLoad,
   NEUTRAL_READINESS,
   type LoadModel,
@@ -3001,7 +3003,13 @@ function WorkoutDay({
 
       {storyOpen && storyRowIds.length > 0 && (
         <StoryChrome
-          names={(rows as any[]).map((r) => r.exercises?.name ?? r.exercise_name_override ?? "Exercise")}
+          names={focusNames((rows as any[]).map((r) => ({
+            name: r.exercises?.name ?? r.exercise_name_override ?? "Exercise",
+            purposeLabel: r.purpose_label ?? null,
+            notes: r.notes ?? null,
+            sets: r.sets ?? null,
+            reps: r.reps_text ?? null,
+          })))}
           done={(rows as any[]).map((r) => statusSummary.doneRowIds.has(String(r.id)))}
           listRef={storyListRef}
           initialIndex={Math.min(storyIndexRef.current, storyRowIds.length - 1)}
@@ -3246,31 +3254,42 @@ function UnsupportedExerciseCard({ row }: { row: any }) {
 }
 
 /**
- * Long coach descriptions on an exercise (multi-sentence programming notes)
- * used to render as a wall of italic text above every set input. Now short
- * notes still render inline, but anything longer collapses behind a
- * "Read notes" toggle so it doesn't push the logging UI off-screen.
+ * The coach's notes on an exercise, one quiet line: the first thing they say
+ * (usually the cue that matters, "Top set: log weight, reps, RPE…"), and a tap
+ * on the line opens the rest in place (rest periods, technique, the plan). A
+ * note that fits shows whole and isn't a button. Used to be a wall of italic
+ * text, then a bordered button that hid even a one-line cue.
  */
 function ExerciseNotesBlock({ notes }: { notes: string }) {
   const [open, setOpen] = useState(false);
-  const isLong = notes.length > 140 || notes.split(/\r?\n/).length > 2;
-  if (!isLong) {
-    return <p className="mt-1 text-xs text-muted-foreground italic whitespace-pre-wrap">{notes}</p>;
-  }
+  const [clipped, setClipped] = useState(false);
+  const textRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el || open) return;
+    const check = () => setClipped(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+    check();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [notes, open]);
+  const canToggle = clipped || open;
   return (
-    <div className="mt-1">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-md border bg-secondary/40 px-2 py-1 text-xs font-medium text-foreground/80 hover:bg-secondary"
-        aria-expanded={open}
-      >
-        {open ? "Hide notes" : "Read notes"}
-      </button>
-      {open && (
-        <p className="mt-2 text-xs text-muted-foreground italic whitespace-pre-wrap">{notes}</p>
+    <button
+      type="button"
+      onClick={canToggle ? () => setOpen((v) => !v) : undefined}
+      aria-expanded={canToggle ? open : undefined}
+      tabIndex={canToggle ? 0 : -1}
+      data-exercise-notes={open ? "open" : "line"}
+      className={cn(
+        "mt-1 flex w-full min-w-0 items-start gap-1.5 text-left text-xs leading-snug text-muted-foreground",
+        canToggle ? "min-h-6" : "cursor-default",
       )}
-    </div>
+    >
+      <span ref={textRef} className={cn("min-w-0 flex-1", open ? "whitespace-pre-wrap break-words" : "line-clamp-1 break-words")}>{notes}</span>
+      {canToggle && <span className="shrink-0 font-medium text-foreground/80">{open ? "Less" : "More"}</span>}
+    </button>
   );
 }
 
@@ -3936,12 +3955,32 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     () => (loadModel && loadPlan ? suggestSetLoad(loadModel, loadPlan) : null),
     [loadModel, loadPlan],
   );
+  // The first heavy set of a main lift, by feel: a few weights to choose from by
+  // how the warm-ups move (suggestionPicks); everything else stays one number.
+  const loadPicks = useMemo(
+    () => (loadHint && loadModel
+      ? suggestionPicks({ hint: loadHint, model: loadModel, mainLift: isMainLiftFamily(family), effortPrescribed: rpeTarget != null || rirTarget != null })
+      : null),
+    [loadHint, loadModel, family, rpeTarget, rirTarget],
+  );
   // "Last warm-up" row at the top of the set table (compound lifts, before the
   // first working set): says what to warm up to, then reads how it felt to set
   // or tune the working weight. Opens the warm-up form pre-filled.
+  // It ramps to the weight they mean to use: one they've put in the first open
+  // set (picked from the suggestion, or typed), else the suggestion itself.
+  const intendedLoad = useMemo(() => {
+    const open = existingResults
+      .filter((r: any) => !r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+      .sort((a: any, b: any) => a.set_index - b.set_index);
+    for (const r of open) {
+      const v = Number(displayLoadInUnit(r, activeUnit));
+      if (v > 0) return v;
+    }
+    return null;
+  }, [existingResults, activeUnit]);
   const warmupGaugeSuggested = useMemo(
-    () => (loadHint && loadPlan ? suggestFinalWarmup(loadHint.target, loadPlan.reps, activeUnit) : null),
-    [loadHint?.target, loadPlan?.reps, activeUnit],
+    () => (loadHint && loadPlan ? suggestFinalWarmup(intendedLoad ?? loadHint.target, loadPlan.reps, activeUnit) : null),
+    [loadHint?.target, intendedLoad, loadPlan?.reps, activeUnit],
   );
   const heaviestWarmupId = useMemo(() => {
     let best: { id: string; kg: number } | null = null;
@@ -4541,7 +4580,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       {showSuggestionCard && loadModel && loadPlan && (
         openSetCount === 0 && workedToday
           ? <LoadSuggestionsDone own={dayRead?.own ?? null} next={loadHint} plan={loadPlan} today={todayRead} />
-          : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} />
+          : <LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} picks={loadPicks} onApply={!readonly && clientId && openSetCount > 0 ? fillLoadOnOpenSets : null} />
       )}
       {row.manual_override && (row.load_kg || row.load_lb) && (
         <SuggestedLoadBadge
@@ -6808,6 +6847,7 @@ function SetRow({
           setIndex={setIndex}
           resultId={existing?.id ?? null}
           logged={!!existing?.id && (isConfirmed || hasLoggedValue || existing?.actual_reps != null || existing?.actual_load != null)}
+          done={!!existing?.id && isConfirmed}
           readonly={readonly}
           focusMode={focusMode}
           label={setVideoLabel({

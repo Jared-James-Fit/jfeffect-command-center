@@ -50,9 +50,10 @@ describe("the point-out in the set row", () => {
   const cell = readFileSync("src/components/workout-day/set-video-cell.tsx", "utf8");
   const tip = readFileSync("src/lib/set-videos/tip.ts", "utf8");
   const sql = readFileSync("supabase/migrations/20270306090000_set_video_tip.sql", "utf8");
-  it("shows only the moment a set is logged, never on sets logged before the workout opened", () => {
-    expect(cell).toContain("const wasLogged = useRef(logged);");
-    expect(cell).toContain("if (was || !logged) return;");
+  it("shows only the moment a set is done, never on sets done before the workout opened or a weight filled in ahead", () => {
+    expect(cell).toContain("const wasLogged = useRef(done);");
+    expect(cell).toContain("if (was || !done) return;");
+    expect(readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8")).toContain("done={!!existing?.id && isConfirmed}");
   });
   it("Film this set opens the phone's picker from that tap", () => {
     expect(cell).toMatch(/Film this set/);

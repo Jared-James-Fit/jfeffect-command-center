@@ -140,8 +140,7 @@ function loadInLb(log: PreviousLiftLog): number {
 }
 
 function bestSet(logs: PreviousLiftLog[]): PreviousLiftLog | null {
-  const working = logs.filter((log) => log.isWorkingSet !== false);
-  const candidates = working.length > 0 ? working : logs;
+  const candidates = logs.filter((log) => log.isWorkingSet !== false);
   return candidates.slice().sort((a, b) => {
     const loadDifference = loadInLb(b) - loadInLb(a);
     if (Math.abs(loadDifference) > 0.001) return loadDifference;
@@ -234,6 +233,7 @@ export function selectPreviousLifts(
     const valid = matches.filter((log) =>
       log.sessionKey !== currentSessionKey &&
       occurredAtMs(log) > 0 &&
+      log.isWorkingSet !== false &&
       (identity.timed ? hasTimedPerformance(log) : hasUsefulPerformance(log, identity.repsOnly === true)),
     );
     if (valid.length === 0) continue;
@@ -252,15 +252,21 @@ export function selectPreviousLifts(
       });
       continue;
     }
-    const latestSession = valid.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0]?.sessionKey;
-    if (!latestSession) continue;
     // Same lift twice in a workout (top set + back-off): Last Time is the same
-    // card last session, not the heaviest set of the lift (a back-off showed
-    // last week's 224.5 kg top set instead of its own 143 kg).
+    // card's last time, not the heaviest set of the lift (a back-off showed
+    // last week's 224.5 kg top set instead of its own 143 kg). That's the
+    // latest session that had this role, even when a later session of the lift
+    // didn't (a back-off card after a heavy-singles day still reads its own
+    // back-offs); with no history in this role, the lift's latest session.
     const role = normalizeRole(identity.purposeLabel);
-    const lastSession = valid.filter((log) => log.sessionKey === latestSession);
-    const sameRole = role ? lastSession.filter((log) => normalizeRole(log.purposeLabel) === role) : [];
-    const top = bestSet(sameRole.length > 0 ? sameRole : lastSession);
+    const inRole = role ? valid.filter((log) => normalizeRole(log.purposeLabel) === role) : [];
+    const pool = inRole.length > 0 ? inRole : valid;
+    const latestSession = pool.slice().sort((a, b) => occurredAtMs(b) - occurredAtMs(a))[0]?.sessionKey;
+    if (!latestSession) continue;
+    const lastSession = pool.filter((log) => log.sessionKey === latestSession);
+    // Working sets only: warm-ups live in their own table (pl_warmup_sets) and
+    // never reach this list, and a set flagged not working is never Last Time.
+    const top = bestSet(lastSession);
     if (!top) continue;
     result.set(identity.rowId, {
       ...top,

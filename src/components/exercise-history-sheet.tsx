@@ -401,7 +401,7 @@ export function ExerciseHistorySheet({
           <SheetDescription>
             {cardio
               ? "Every logged session across all blocks: how long, the calories and how hard it felt (RPE)."
-              : "Past logged sets across all blocks. Velocity is mean concentric velocity (m/s), so the same metric is compared session to session."}
+              : "Every set you've logged, across all blocks. Last time on your card is your best working set from the last session in the same role (top set or back-off)."}
           </SheetDescription>
         </SheetHeader>
         {!cardio && (
