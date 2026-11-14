@@ -14,6 +14,13 @@ import { FullPageLoader } from "@/components/full-page-loader";
 import { ViewOnlyStrip } from "@/components/view-only-strip";
 import { TeamPreviewBanner } from "@/components/team-preview-banner";
 
+/**
+ * Crew draws its own phone top bar (+ · Manage · JF Effect · heart · you), the
+ * clients' bar, so the shell's steps aside there; not for the finance login,
+ * whose Crew is the feed alone under the shell's bar.
+ */
+const CREW_OWN_BAR = ["/admin/community"] as const;
+
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
@@ -77,7 +84,7 @@ function AdminLayout() {
   }
 
   return (
-    <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader>
+    <AppShell items={nav} bottomItems={bottomItems} title={title} moreInHeader ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR}>
       <AdminTopBar />
       <TeamPreviewBanner />
       {viewOnly && !preview && <ViewOnlyStrip />}

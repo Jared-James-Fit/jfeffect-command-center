@@ -49,7 +49,7 @@ import { PostShareSheet } from "@/components/community/post-share-sheet";
 import { InstagramShareSheet } from "@/components/community/instagram-share-sheet";
 import { PostArtImage } from "@/components/community/post-art";
 import { instagramPlan } from "@/lib/instagram-export";
-import { PostScoreRow } from "@/components/community/post-score";
+import { PostScoreChip, PostScoreRow } from "@/components/community/post-score";
 import { openStoryShare, useStoryShareReady } from "@/lib/story-reply";
 import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
@@ -718,8 +718,8 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
               post.caption && (!isNote || visual) && <FeedCaption name={post.author.name} caption={post.caption} mentions={post.mentions} onOpenPerson={onOpenAuthor} className="px-0 pt-0" />
             )}
             {(!isNote || visual) && !auto && <PostExtras post={post} />}
-            {/* one line, never two: the views, then the coach's ❤️ or reply (every line here is room the picture loses) */}
-            {((post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented) && (
+            {/* one line, never two: the views, then the coach's ❤️ or reply, and a coach's own score (every line here is room the picture loses) */}
+            {((post.views?.count ?? 0) > 0 || post.coach_reactions.length > 0 || post.coach_commented || viewerIsStaff) && (
               <div className="flex min-w-0 items-center gap-2 [&_[data-post-views]]:mx-0 [&_[data-post-views]]:mb-0 [&_[data-post-views]]:shrink-0" data-page-meta>
                 <PostViewsRow post={post} onOpenAuthor={onOpenAuthor} />
                 {(post.coach_reactions.length > 0 || post.coach_commented) && (
@@ -731,6 +731,7 @@ function PostCardInner({ post, thumbUrl, unit, viewerIsStaff, onOpen, onOpenComm
                     </span>
                   </div>
                 )}
+                {viewerIsStaff && <PostScoreChip post={post} />}
               </div>
             )}
           </div>

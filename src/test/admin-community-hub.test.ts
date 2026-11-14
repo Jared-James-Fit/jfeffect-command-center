@@ -9,27 +9,50 @@ const hub = read("src/components/community/admin-community-hub.tsx");
 const dash = read("src/routes/_authenticated/admin/index.tsx");
 
 describe("the coach's community, in one place", () => {
-  it("the Crew page is one row (+, Feed · Posts · Insights, the heart, your photo), opening on the Feed like the clients'", () => {
+  it("the coach's Crew is the clients' Crew (their bar, stories and full-screen feed), with + and Manage in it (Nov 14 2026)", () => {
     expect(read("src/routes/_authenticated/admin/community.tsx")).toContain("component: AdminCommunityHub,");
-    // the coach's order: Feed, Posts, Insights (the League is its own page now)
-    expect(hub).toContain('{ key: "feed", label: "Feed" },\n  { key: "posts", label: "Posts" },\n  { key: "insights", label: "Insights" },');
+    const screen = read("src/components/community/community-screen.tsx");
+    // the same screen as the clients', with the coach's tools passed in
+    expect(hub).toContain("<CommunityScreen\n        coach={{");
+    expect(hub).toContain("onWrite: () => setWriting(true),");
+    expect(hub).toContain('startTab: counts.needs > 0 ? "needs" : "posts",');
+    expect(hub).toContain("manage: <CrewManage counts={counts} />,");
+    // the shell's bar steps aside on Crew, like the clients' (not for the finance login)
+    expect(read("src/routes/_authenticated/admin/route.tsx")).toContain('const CREW_OWN_BAR = ["/admin/community"] as const;');
+    expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR}");
+    expect(read("src/components/admin-top-bar.tsx")).toContain("if (isChatRoute || isCrew) return null;");
+    // the bar: the coach's + (his composer), Manage in the trophy's place with a dot while something waits; the heart and photo as everyone's
+    expect(screen).toContain('<BarButton label="Write a post" onClick={coach.onWrite} data-crew-write>');
+    expect(screen).toContain("{canShare && !coach && (");
+    expect(screen).toContain('<BarButton label={coach.waiting ? "Manage Crew, something\'s waiting on you" : "Manage Crew"} onClick={openManage} data-crew-manage>');
+    expect(screen).toContain('<BarButton label="Rankings" onClick={openRankings} data-crew-rankings>');
+    // Manage: a page with ‹ back to the same spot in the feed, the League the trophy on its bar
+    expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed", manage: "feed" };');
+    expect(screen).toContain('<BarButton label="League" onClick={() => void navigate({ to: "/admin/league" })} data-crew-league>');
+    expect(screen).toContain('void navigate({ to: ".", hash: `tab=${coach.startTab}`, replace: true, resetScroll: false });');
+    expect(screen).toContain('if (k === "feed" && /^#(rankings|league|you|tab=)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
+    expect(screen).toContain("else if (coachPage && manageTabFromHash(`#${routeHash}`)) setScope({ kind: \"manage\" });");
+    // the paged feed is everyone's: no card feed or League bubble for the coach, no people-to-follow screen either
+    expect(screen).toContain("const paging = ownBar && scope.kind === \"feed\";");
+    expect(screen).toContain("if (!previewOnly && !following && !coach && i === 0)");
+    expect(hub).not.toContain("data-crew-hub-bar");
+    // Manage's three tabs, the tab in the hash
+    expect(read("src/lib/crew-manage.ts")).toContain('{ key: "needs", label: "Needs you" },\n  { key: "posts", label: "Posts" },\n  { key: "insights", label: "Insights" },');
+    expect(hub).toContain('const setTab = (t: ManageTab) => void navigate({ to: ".", hash: `tab=${t}`, replace: true, resetScroll: false });');
     expect(hub).not.toContain("StaffLeagueTab");
     expect(hub).not.toContain("<h1");
-    expect(hub).toContain('<BarButton label="Write a post" onClick={() => setWriting(true)} data-crew-write>');
-    expect(hub).toContain('<ActivityHeart onOpen={() => onFeed(openCrewActivity)} />');
-    // the Feed: only what's waiting on you, then the feed
-    expect(hub).toContain("{!viewOnly && <NeedsYou onGo={setTab} />}");
-    expect(hub).toContain("<CommunityScreen hideTabs />");
-    expect(hub).toContain("if (!any) return null;");
+    // Needs you: what's waiting, else one line that says so
+    expect(hub).toContain("<NeedsYou onGo={setTab} />");
+    expect(hub).toContain("Nothing's waiting on you in Crew.");
     // Posts: one schedule of everything going out, then Recently out and Manage (posts-schedule.test.ts)
     expect(hub).toContain("<CoachPostsTab />");
-    // Insights: the week in numbers, then each post's score
-    expect(hub).toContain("<WeekCard />\n            <PostScoreBoard />");
-    // the tab is kept in the hash so Back returns to it; Crew's own button (no hash) is the Feed
-    expect(hub).toContain('void navigate({ to: ".", hash: t === "feed" ? "" : `tab=${t}`, replace: true, resetScroll: false });');
-    expect(hub).toContain("const t = hubTabFromHash(`#${routeHash}`);");
+    // Insights: the week in numbers, then each post's score (and each post's score on its own screen)
+    expect(hub).toContain("<WeekCard />\n          <PostScoreBoard />");
+    expect(read("src/components/community/post-card.tsx")).toContain("{viewerIsStaff && <PostScoreChip post={post} />}");
+    // the finance login: the feed alone
+    expect(hub).toContain("<CommunityScreen hideTabs />");
     // old League links go to the League page
-    expect(hub).toContain('if (t === "league") void navigate({ to: "/admin/league", replace: true });');
+    expect(hub).toContain('if (hubTabFromHash(`#${routeHash}`) === "league") void navigate({ to: "/admin/league", replace: true });');
     expect(read("src/routes/_authenticated/admin/league.tsx")).toContain("component: AdminLeaguePage,");
     expect(read("src/routes/_authenticated/admin/athlete-records.tsx")).toContain('backTo="/admin/league" backLabel="League"');
     expect(hub).toContain('await act.mutateAsync({ kind: "note", body, poll, media });');
@@ -47,22 +70,29 @@ describe("the coach's community, in one place", () => {
     expect(hubTabFromHash("#tab=birthdays")).toBe("posts");
     expect(hubTabFromHash("#birthday=6f9619ff-8b86-d011-b42d-00cf4fc964ff")).toBe("posts");
     expect(hubTabFromHash("#tab=insights")).toBe("insights");
+    expect(hubTabFromHash("#tab=needs")).toBe("needs");
+    // the Posts tab's own pages stay on Posts
+    expect(hubTabFromHash("#tab=posts&manage=lessons")).toBe("posts");
     expect(hubTabFromHash("#tab=league")).toBe("league");
     expect(hubTabFromHash("#rankings")).toBe("league");
   });
-  it("a tab shows a dot only for what's waiting there", () => {
-    const base = { to_reply: [], waiting_props: 0, lessons_review: 0, birthday_review: 0 } as unknown as CommunityPulse;
-    expect(hubTabCounts(undefined)).toEqual({ feed: 0, posts: 0, insights: 0 });
-    expect(hubTabCounts(base)).toEqual({ feed: 0, posts: 0, insights: 0 });
+  it("a tab shows a dot only for what's waiting there, and Manage while anything is", () => {
+    const base = { to_reply: [], waiting_props: 0, lessons_review: 0, birthday_review: 0, paused: false } as unknown as CommunityPulse;
+    expect(hubTabCounts(undefined)).toEqual({ needs: 0, posts: 0, insights: 0 });
+    expect(hubTabCounts(base)).toEqual({ needs: 0, posts: 0, insights: 0 });
     const replies = [
       { post_id: "a", comment_id: "1", created_at: "", body: "x", name: "Fionna", avatar_url: null },
       { post_id: "a", comment_id: "2", created_at: "", body: "y", name: "Alyssa", avatar_url: null },
     ];
     // two comments on one post is one reply to make
-    expect(hubTabCounts({ ...base, to_reply: replies, waiting_props: 2 }).feed).toBe(3);
-    expect(hubTabCounts({ ...base, lessons_review: 2, birthday_review: 1 }).posts).toBe(3);
+    expect(hubTabCounts({ ...base, to_reply: replies, waiting_props: 2 }).needs).toBe(3);
+    // the crew's reports wait there too
+    expect(hubTabCounts(base, 2).needs).toBe(2);
+    // a lesson or birthday post waiting for an OK: on Needs you and Posts
+    expect(hubTabCounts({ ...base, lessons_review: 2, birthday_review: 1 })).toEqual({ needs: 3, posts: 3, insights: 0 });
+    expect(hubTabCounts({ ...base, paused: true } as CommunityPulse).needs).toBe(1);
   });
-  it("the League is its own page behind the trophy bubble at the start of Crew's stories", () => {
+  it("the League is its own page: the trophy on Manage's bar (the finance login's feed keeps the bubble)", () => {
     const nav = read("src/lib/internal-nav.ts");
     expect(read("src/components/community/community-screen.tsx")).toContain('? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) }');
     expect(read("src/components/community/admin-league-page.tsx")).toContain("<StaffLeagueTab tools={!viewOnly} />");

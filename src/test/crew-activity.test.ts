@@ -61,8 +61,8 @@ describe("Crew Activity screen", () => {
     expect(screen).toMatch(/right=\{\s*!previewOnly && \(\s*<>\s*\{\/\*[^*]*\*\/\}\s*<ActivityHeart onOpen=\{\(\) => go\(\{ kind: "activity" \}\)\}/);
     expect(heart).toContain("const q = useCrewActivity(true);");
     expect(heart).toContain("data-activity-dot");
-    // the coach's Crew page has the heart too, opening Activity on its Feed
-    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<ActivityHeart");
+    // the coach's Crew page is the same screen, so the same heart (Nov 14 2026)
+    expect(read("src/components/community/admin-community-hub.tsx")).toContain("<CommunityScreen\n        coach={{");
     expect(screen).toContain("window.addEventListener(OPEN_ACTIVITY_EVENT, open);");
   });
   it("shares the bell's read state, and opening it reads what was new (kept as New while you're there)", () => {

@@ -252,10 +252,10 @@ describe("the finance phone bar: Home, Money, Crew (raised), Clients, Tasks", ()
 
   it("the League is the crew's boards and feed, without the coach's queues and tools", () => {
     const hub = read("src/components/community/admin-community-hub.tsx");
-    // the feed alone: no tabs, no + or queues
-    expect(hub).toContain('const tab: HubTab = viewOnly ? "feed" : picked;');
-    expect(hub).toContain("{!viewOnly && (\n        <div className=\"sticky top-0");
-    expect(hub).toContain("{!viewOnly && <NeedsYou onGo={setTab} />}");
+    // the feed alone: no bar of its own, no + or Manage (the coach's tools), under the shell's bar
+    expect(hub).toContain("// the finance login: the feed alone, no tools\n  if (viewOnly) {");
+    expect(hub).toContain("<CommunityScreen hideTabs />");
+    expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR}");
     expect(hub).toContain("useCommunityPulse(!viewOnly)");
     // the League page (the trophy on the Crew button): the boards, without the tools
     expect(read("src/components/community/admin-league-page.tsx")).toContain("<StaffLeagueTab tools={!viewOnly} />");

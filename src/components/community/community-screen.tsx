@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Dumbbell, Menu, Search, SquarePlus, Trophy } from "lucide-react";
+import { ArrowLeft, ChartNoAxesColumn, Dumbbell, Menu, Search, SquarePlus, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +30,7 @@ import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
 import { bubbleFold, ease, FIRST_POST_RADIUS, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
+import { manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
 import { caughtUpAt, inFeed, inFollowingFeed, storiesNeedMore, uniquePosts, type CommunityAuthor, type CommunityPost, type ReactionKey } from "@/lib/community";
 import { SuggestedAthletes } from "@/components/community/suggested-athletes";
@@ -48,13 +49,13 @@ import { useMediaPinchZoom } from "@/hooks/use-media-pinch-zoom";
  * right. Each of those opens as a page with ‹ back, and back lands where you
  * were in the feed.
  */
-type Tab = "feed" | "rankings" | "you" | "members" | "activity";
+type Tab = "feed" | "rankings" | "you" | "members" | "activity" | "manage";
 /** A tab, or someone else's profile opened from one. */
 type Scope = { kind: Tab } | { kind: "author"; author: CommunityAuthor; from: Tab };
-const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", you: "You", members: "Find athletes", activity: "Activity" };
+const TAB_LABEL: Record<Tab, string> = { feed: "Feed", rankings: "Rankings", you: "You", members: "Find athletes", activity: "Activity", manage: "Manage" };
 /** Pages opened from another one, and where their back arrow goes. */
 /** (Find athletes goes back to wherever it was opened from: the feed, Activity, a tab.) */
-const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed" };
+const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed", manage: "feed" };
 
 /** `#post=<id>` opens a post straight away (used by the Home strip and pushes). */
 function postFromHash(): string | null {
@@ -100,15 +101,34 @@ const SWIPE_TIP_VISITS = 5;
 export const swipeTipKeys = Array.from({ length: SWIPE_TIP_VISITS }, (_, i) => `swipe_back_shown_${i + 1}`);
 let swipeTipShownThisVisit = false;
 
+/**
+ * The coach's own Crew page (/admin/community): the clients' Crew, bar, stories
+ * and full-screen feed, with the coach's tools in it (crew-manage.ts). + writes
+ * a post to the crew (the coach's composer, not the studio), and Manage takes
+ * the trophy's place: a page of its own with what's waiting on them, Posts and
+ * Insights (the League is the trophy on Manage's bar).
+ */
+export type CoachCrew = {
+  /** + : the coach's composer. */
+  onWrite: () => void;
+  /** Something is waiting on the coach: a dot on Manage. */
+  waiting: boolean;
+  /** The tab Manage opens on. */
+  startTab: ManageTab;
+  /** Manage's page, under Crew's bar with ‹ back to the feed. */
+  manage: ReactNode;
+};
+
 export function CommunityScreen({
-  canShare = false, previewOnly = false, backTo, hideTabs = false,
+  canShare = false, previewOnly = false, backTo, hideTabs = false, coach,
 }: {
   canShare?: boolean;
   previewOnly?: boolean;
   /** A small back arrow at the start of the top row (instead of a page header). */
   backTo?: string;
-  /** Just the feed, no Feed / Crew / You row (the coach's Community page has its own tabs). */
+  /** Just the feed of cards, no bar of its own (the finance login's look at the crew). */
   hideTabs?: boolean;
+  coach?: CoachCrew;
 }) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
@@ -120,8 +140,10 @@ export function CommunityScreen({
   const [scope, setScope] = useState<Scope>(() => {
     const person = personFromHash();
     if (person) return { kind: "author", author: { user_id: person, name: "", avatar_url: null, is_coach: false }, from: "feed" };
-    // the coach's own Community page is just the feed
+    // the finance login's look at the crew is just the feed
     if (hideTabs) return { kind: "feed" };
+    // the coach's Manage (#tab=needs / posts / insights): straight there
+    if (coach && manageTabFromHash(window.location.hash)) return { kind: "manage" };
     // Home's ranking tiles (and old #league links) land on Rankings; #you on your profile; everything else on the Feed
     if (rankingsFromHash()) return { kind: "rankings" };
     if (youFromHash() && !previewOnly) return { kind: "you" };
@@ -228,7 +250,7 @@ export function CommunityScreen({
     const onRetap = (e: Event) => {
       if ((e as CustomEvent).detail !== window.location.pathname) return;
       // out of someone's profile first, out of yours to the feed; on the feed, back to the top and fresh
-      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" || sc.kind === "activity" ? { kind: "feed" } : sc));
+      setScope((sc) => (sc.kind === "author" ? { kind: sc.from } : sc.kind === "you" || sc.kind === "members" || sc.kind === "activity" || sc.kind === "manage" ? { kind: "feed" } : sc));
       if (scopeRef.current.kind === "feed") showNew.current();
     };
     window.addEventListener("nav-retap", onRetap);
@@ -250,22 +272,25 @@ export function CommunityScreen({
   const routeHash = useRouterState({ select: (s) => s.location.hash });
   // null: also apply the hash once on arrival (the router's, not window's).
   const seenHash = useRef<string | null>(null);
+  const coachPage = !!coach;
   useEffect(() => {
     if (hideTabs || routeHash === seenHash.current) return;
     seenHash.current = routeHash;
     if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });
+    // the coach's Manage, any tab (a push, an old link, the Posts tab's own pages)
+    else if (coachPage && manageTabFromHash(`#${routeHash}`)) setScope({ kind: "manage" });
     else if (youFromHash(`#${routeHash}`) && !previewOnly) setScope({ kind: "you" });
     // no hash (Crew's own button) or #feed (after posting): back on the feed
-    else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" ? { kind: "feed" } : sc));
-  }, [routeHash, hideTabs, previewOnly]);
+    else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" || sc.kind === "manage" ? { kind: "feed" } : sc));
+  }, [routeHash, hideTabs, previewOnly, coachPage]);
   const parent = scope.kind === "members" ? discoverBack : PARENT[scope.kind as Tab];
-  // The clients' Crew draws its own bar (the shell's steps aside); the coach's Crew page has its own header and tabs.
+  // Crew draws its own bar (the shell's steps aside), the clients' and the coach's alike; only the finance login's look at the crew (hideTabs) doesn't.
   const ownBar = !hideTabs;
   // a coach viewing as a client: the shell's bar and the preview banner stay, so Crew's bar sits in the page
   // Crew's own feed is one post per screen, swiped one at a time (TikTok's): the window snaps
   // to each post (html.feed-paging, styles.css), every post the whole screen with Crew's bar
   // floating over its top (it stays put) and the tab bar over its bottom; screens are the
-  // window's measured height (--feed-vh). The coach's Crew page keeps its working feed of cards.
+  // window's measured height (--feed-vh). The coach's Crew page is the same feed (Nov 14 2026).
   const paging = ownBar && scope.kind === "feed";
   useLayoutEffect(() => {
     if (!paging) return;
@@ -323,7 +348,7 @@ export function CommunityScreen({
     setScope({ kind: k });
     if (k !== "feed") window.scrollTo({ top: 0 });
     // (back to Rankings or your profile from someone's page keeps its hash, or the hash effect would bounce it to the feed)
-    if (k === "feed" && /^#(rankings|league|you)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });
+    if (k === "feed" && /^#(rankings|league|you|tab=)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });
   };
   const openMe = () => {
     go({ kind: "you" });
@@ -334,8 +359,14 @@ export function CommunityScreen({
     go({ kind: "rankings" });
     void navigate({ to: ".", hash: "rankings", replace: true, resetScroll: false });
   };
-  /** The coach's Crew page has no room in its row for it: the League is the trophy bubble at the start of its stories. */
+  /** The finance login's feed has no bar: the League is the trophy bubble at the start of its stories. */
   const rankings = hideTabs ? { label: "League", onOpen: () => void navigate({ to: "/admin/league" }) } : undefined;
+  /** The coach's Manage: the bar's chart, in the trophy's place (its tab lives in the hash, so Back and links agree). */
+  const openManage = () => {
+    if (!coach) return;
+    go({ kind: "manage" });
+    void navigate({ to: ".", hash: `tab=${coach.startTab}`, replace: true, resetScroll: false });
+  };
 
   // (Rankings keeps its own sideways swipe between boards, so no swipe-back there.)
   const canSwipeBack = inProfile || youAsPage || !!parent || !!backTo;
@@ -515,8 +546,14 @@ export function CommunityScreen({
       overlay={paging}
       left={
         <>
+          {/* the coach's + : a post to the crew from the coach's composer */}
+          {coach && (
+            <BarButton label="Write a post" onClick={coach.onWrite} data-crew-write>
+              <SquarePlus className="h-[25px] w-[25px]" strokeWidth={1.9} />
+            </BarButton>
+          )}
           {/* + : the camera and everything you can post (post, meal, lock in, workout, write), Instagram's spot */}
-          {canShare && (
+          {canShare && !coach && (
             <ShareWorkoutButton
               unit={unit}
               previewOnly={previewOnly}
@@ -529,9 +566,17 @@ export function CommunityScreen({
           )}
           {/* Rankings: the League and Hall of Strength, one tap from any post (Find athletes is Activity's search,
               the people-to-follow row and the caught-up card) */}
-          <BarButton label="Rankings" onClick={openRankings} data-crew-rankings>
-            <Trophy className="h-[23px] w-[23px]" strokeWidth={2} />
-          </BarButton>
+          {coach ? (
+            // the coach's Manage in the trophy's place: what's waiting on them, Posts and Insights, a dot while something waits
+            <BarButton label={coach.waiting ? "Manage Crew, something's waiting on you" : "Manage Crew"} onClick={openManage} data-crew-manage>
+              <ChartNoAxesColumn className="h-[24px] w-[24px]" strokeWidth={2} />
+              {coach.waiting && <span className="absolute right-[7px] top-[7px] h-[9px] w-[9px] rounded-full bg-primary ring-2 ring-background" aria-hidden data-manage-waiting />}
+            </BarButton>
+          ) : (
+            <BarButton label="Rankings" onClick={openRankings} data-crew-rankings>
+              <Trophy className="h-[23px] w-[23px]" strokeWidth={2} />
+            </BarButton>
+          )}
         </>
       }
       center={
@@ -560,6 +605,18 @@ export function CommunityScreen({
     />
   ) : scope.kind === "rankings" ? (
     <CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />
+  ) : scope.kind === "manage" && coach ? (
+    <CrewBar
+      label="Manage Crew"
+      left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />}
+      center={<BarTitle>Manage</BarTitle>}
+      // the League (standings, the crew goal, Hall of Strength), the trophy it is on the clients' bar
+      right={
+        <BarButton label="League" onClick={() => void navigate({ to: "/admin/league" })} data-crew-league>
+          <Trophy className="h-[23px] w-[23px]" strokeWidth={2} />
+        </BarButton>
+      }
+    />
   ) : scope.kind === "you" && user?.id ? (
     <CrewBar
       label="Your profile"
@@ -620,7 +677,9 @@ export function CommunityScreen({
         </Button>
       ) : null}
 
-      {scope.kind === "rankings" ? (
+      {scope.kind === "manage" && coach ? (
+        coach.manage
+      ) : scope.kind === "rankings" ? (
         <RankingsHub />
       ) : scope.kind === "activity" ? (
         <CrewActivity
@@ -717,8 +776,8 @@ export function CommunityScreen({
                 />
               ),
             });
-            // people to follow right after the first post (Instagram's spot), a screen of their own
-            if (!previewOnly && !following && i === 0)
+            // people to follow right after the first post (Instagram's spot), a screen of their own (never the coach's)
+            if (!previewOnly && !following && !coach && i === 0)
               out.push({ key: "suggested", node: <SuggestedAthletes onOpen={openAuthor} strongOnly hideable onSeeAll={() => openDiscover("feed")} /> });
             if (canShare && !following && i === Math.min(1, feedPosts.length - 1))
               out.push({ key: "share-nudge", node: <ShareNudge surface="feed" unit={unit} /> });

@@ -23,7 +23,9 @@ export function AdminTopBar() {
   const isChatRoute =
     pathname.startsWith("/admin/messages") ||
     (pathname.startsWith("/admin/communication") && (search?.tab ?? "messages") === "messages");
-  if (isChatRoute) return null;
+  // Crew is the clients' full-screen feed with its own bar: the strip would sit over the top of every post.
+  const isCrew = pathname === "/admin/community" || pathname === "/admin/community/";
+  if (isChatRoute || isCrew) return null;
 
   return (
     <div className="sticky top-0 z-40 hidden items-center justify-end gap-2 border-b border-border bg-background/90 px-6 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:flex">
