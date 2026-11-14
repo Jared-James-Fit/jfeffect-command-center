@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
 import { MentionText } from "@/components/community/mentions";
 import { CommentThread } from "@/components/community/comments-sheet";
-import { AuthorLine, AutoPostCaption } from "@/components/community/post-card";
-import { InlineFollow } from "@/components/community/follow-button";
+import { AutoPostCaption, CoachBadge } from "@/components/community/post-card";
+import { UserAvatar } from "@/components/user-avatar";
 import { useVisualViewportBox } from "@/hooks/use-touch-viewport";
 import { isAutoPost, postTimeLabel, withHandles, type CommunityAuthor, type CommunityPost } from "@/lib/community";
 import { POST_SHEET_HEIGHT, sheetDragCloses, SHEET_DRAG_START_PX } from "@/lib/post-sheet";
@@ -12,10 +13,11 @@ import { POST_SHEET_HEIGHT, sheetDragCloses, SHEET_DRAG_START_PX } from "@/lib/p
 export type PostSheetAt = "caption" | "comments";
 
 /**
- * A post's words and comments on the clients' paged Crew feed, Reels' way:
- * a sheet over the bottom of the screen with who posted (and Follow), the
- * whole caption and when, then the comments in the same scroll, the comment
- * box pinned under them. The post stays on screen above it, shrunk to fit
+ * A post's words and comments on the clients' paged Crew feed, Instagram's
+ * and TikTok's way: a sheet over the bottom of the screen titled Comments
+ * (✕ closes it), the post's caption as its first line, written like a
+ * comment (photo, name, when, the words), then the comments in the same
+ * scroll, the quick emoji and the comment box pinned under them. The post stays on screen above it, shrunk to fit
  * (PostCard `sheetOpen`), still playing. One swipe down closes it (from the
  * handle, the caption, or the comments once they're scrolled to the top), as
  * do a tap on the post above it and Escape. The coach's card feed keeps
@@ -60,14 +62,21 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor }: {
             e.preventDefault();
             content.current?.focus({ preventScroll: true });
           }}
-          className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-[24px] bg-background shadow-[0_-10px_30px_rgb(0_0_0/0.28)] outline-none data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=closed]:duration-200 data-[state=open]:duration-300 dark:bg-card sm:mx-auto sm:max-w-[520px]"
+          className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-[24px] bg-card shadow-[0_-10px_30px_rgb(0_0_0/0.28)] outline-none data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=closed]:duration-200 data-[state=open]:duration-300 sm:mx-auto sm:max-w-[520px]"
           style={vv?.keyboard ? { top: vv.top + 8, height: vv.height - 8, bottom: "auto" } : { height: POST_SHEET_HEIGHT }}
           data-post-sheet={item?.at ?? "caption"}
         >
-          <Dialog.Title className="sr-only">{item ? `${item.post.author.name}'s post` : "Post"}</Dialog.Title>
-          {/* the grip: drag it (or the words under it) down to close */}
-          <div className="grid shrink-0 cursor-grab place-items-center pb-1 pt-2.5" data-sheet-handle aria-hidden>
-            <span className="h-1 w-10 rounded-full bg-muted-foreground/35" />
+          {/* the grip and the title: drag them (or the words under them) down to close */}
+          <div className="relative shrink-0 cursor-grab pb-2 pt-2" data-sheet-handle>
+            <span aria-hidden className="mx-auto block h-1 w-10 rounded-full bg-muted-foreground/35" />
+            <Dialog.Title className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</Dialog.Title>
+            <Dialog.Close
+              className="absolute right-2 top-[14px] grid h-10 w-10 place-items-center rounded-full text-foreground active:scale-95"
+              aria-label="Close comments"
+              data-post-sheet-close
+            >
+              <X className="h-[22px] w-[22px]" strokeWidth={1.75} />
+            </Dialog.Close>
           </div>
           {item && (
             <CommentThread
@@ -85,30 +94,54 @@ export function PostSheet({ post, at, viewerIsStaff, onClose, onOpenAuthor }: {
   );
 }
 
-/** The top of the sheet: who posted (Follow), the whole caption, when; a hairline, then the comments. */
+/**
+ * The post's own words as the first line of the comments, the way Instagram
+ * lists a caption: the photo, the name and when, then the words, a hairline
+ * under them. A post with no words has none (the comments start the sheet).
+ */
 function PostSheetCaption({ post, onOpenAuthor }: { post: CommunityPost; onOpenAuthor?: (a: CommunityAuthor) => void }) {
   const auto = isAutoPost(post);
   const caption = post.caption?.trim() ? withHandles(post.caption, post.mentions) : null;
+  if (!auto && !caption) return null;
+  const open = onOpenAuthor ? () => onOpenAuthor(post.author) : undefined;
+  const collabs = post.collaborators ?? [];
+  const also = collabs.length === 1 ? ` and ${collabs[0].name}` : collabs.length > 1 ? ` and ${collabs.length} others` : "";
   return (
-    <div className="-mx-4 mb-2 border-b border-border/70 px-4 pb-4" data-post-sheet-caption>
-      <AuthorLine
-        author={post.author}
-        onOpen={onOpenAuthor ? () => onOpenAuthor(post.author) : undefined}
-        collaborators={post.collaborators}
-        onOpenPerson={onOpenAuthor}
-        trailing={!post.is_mine && onOpenAuthor ? <InlineFollow userId={post.author.user_id} name={post.author.name} /> : null}
-      />
-      {auto ? (
-        // an automated post's words with what rides under them (the Recap's "work on this week", a poll)
-        <AutoPostCaption post={post} clamp={false} named={false} onOpenPerson={onOpenAuthor} className="px-0 pt-3" />
+    <div className="-mx-4 mb-1 flex items-start gap-3 border-b border-border/60 px-4 pb-3.5 pt-1" data-post-sheet-caption>
+      {open ? (
+        <button type="button" onClick={open} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${post.author.name}'s profile`}>
+          <UserAvatar src={post.author.avatar_url} name={post.author.name} size={36} expandable={false} />
+        </button>
       ) : (
-        caption && (
-          <p className="mt-3 whitespace-pre-line text-[15px] leading-[1.45]">
-            <MentionText text={caption.text} mentions={caption.mentions} onOpen={onOpenAuthor} />
-          </p>
-        )
+        <UserAvatar src={post.author.avatar_url} name={post.author.name} size={36} expandable={false} />
       )}
-      <div className="mt-2.5 text-[13px] text-muted-foreground">{postTimeLabel(post.created_at)}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+          {open ? (
+            <button type="button" onClick={open} className="min-w-0 truncate text-left font-semibold active:opacity-70">
+              {post.author.name}
+              {also}
+            </button>
+          ) : (
+            <span className="min-w-0 truncate font-semibold">
+              {post.author.name}
+              {also}
+            </span>
+          )}
+          {post.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
+          <span className="shrink-0 text-[12px] text-muted-foreground">{postTimeLabel(post.created_at)}</span>
+        </div>
+        {auto ? (
+          // an automated post's words with what rides under them (the Recap's "work on this week", a poll)
+          <AutoPostCaption post={post} clamp={false} named={false} onOpenPerson={onOpenAuthor} className="px-0 pt-0.5" />
+        ) : (
+          caption && (
+            <p className="mt-0.5 whitespace-pre-line break-words text-[15px] leading-[1.45]">
+              <MentionText text={caption.text} mentions={caption.mentions} onOpen={onOpenAuthor} />
+            </p>
+          )
+        )}
+      </div>
     </div>
   );
 }

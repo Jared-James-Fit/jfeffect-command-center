@@ -143,17 +143,24 @@ export function RecordingBar({ elapsed, levels, onCancel, onDone, className }: {
   );
 }
 
-/** The mic, where Send goes while there's nothing to send. */
-export function MicButton({ onClick, disabled, className }: { onClick: () => void; disabled?: boolean; className?: string }) {
+/**
+ * The mic, where Send goes while there's nothing to send. `quiet` is an icon
+ * inside a comment box (Instagram's / TikTok's), not a big red button.
+ */
+export function MicButton({ onClick, disabled, quiet = false, className }: { onClick: () => void; disabled?: boolean; quiet?: boolean; className?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label="Record a voice memo"
-      className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground active:scale-95 disabled:opacity-50", className)}
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full active:scale-95 disabled:opacity-50",
+        quiet ? "h-9 w-9 text-muted-foreground hover:text-foreground" : "h-11 w-11 bg-primary text-primary-foreground",
+        className,
+      )}
     >
-      <Mic className="h-5 w-5" />
+      <Mic className={quiet ? "h-[22px] w-[22px]" : "h-5 w-5"} strokeWidth={quiet ? 1.75 : 2} />
     </button>
   );
 }
