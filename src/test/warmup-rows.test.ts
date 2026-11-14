@@ -93,7 +93,7 @@ describe("warm-up rows in the set table", () => {
     expect(rows).toBeLessThan(wdv.indexOf("<SetRow\n"));
     expect(wdv).toContain('!hideWeight && rowLoadType === "external" && !readonly && adapter?.kind !== "member" && !!clientId;');
     expect(wdv).toContain("const warmupGauge = warmupPromptable && loadModel && !workedToday ?");
-    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg });");
+    expect(wdv).toContain("const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });");
   });
 
   it("'use for all sets' fills only open sets with the weight, keeping each set's reps / RPE, as drafts", () => {

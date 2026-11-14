@@ -3,6 +3,7 @@ import {
   DAY_FACTOR_TRUST_SAME,
   dayFactorFrom,
   todayVsUsual,
+  type LiftKind,
   type SetSample,
 } from "@/lib/load-suggestion";
 import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
@@ -20,6 +21,8 @@ export type DayReadRow = {
   /** Squat / bench / deadlift family, for a variation after the main lift. */
   family: string | null;
   history: PreviousLiftLog[] | null;
+  /** How its history is read (liftKindOf). */
+  lift?: LiftKind;
   /** This card's completed sets today, in kg, in set order, with when each was done. */
   sets: Array<SetSample & { at: number }>;
 };
@@ -39,7 +42,7 @@ export function computeDayReads(rows: DayReadRow[], bodyweightKg?: number | null
   const own = new Map<string, { ratio: number; lastAt: number }>();
   for (const r of rows) {
     if (!r.sets.length || !r.history?.length) continue;
-    const ratio = todayVsUsual({ history: r.history, sets: r.sets, unit: "kg", bodyweightKg, now });
+    const ratio = todayVsUsual({ history: r.history, sets: r.sets, unit: "kg", bodyweightKg, lift: r.lift, now });
     if (ratio != null) own.set(r.rowId, { ratio, lastAt: Math.max(...r.sets.map((s) => s.at)) });
   }
   const latest = (candidates: DayReadRow[]) =>

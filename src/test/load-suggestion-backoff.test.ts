@@ -26,7 +26,7 @@ const history = [
 ];
 const BACKOFF = { reps: 4, rpe: 6 };
 const card = (rowId: string, sets: DayReadRow["sets"] = []): DayReadRow =>
-  ({ rowId, name: "Competition Deadlift", exerciseKey: "dl", family: "deadlift", history, sets });
+  ({ rowId, name: "Competition Deadlift", exerciseKey: "dl", family: "deadlift", lift: "competition", history, sets });
 const set = (lb: number, reps: number, rpe: number, at: number) => ({ load: lb / LB, reps, rpe, at });
 
 /** What the back-off card suggests, wired like WorkoutDayView (kg day read → the card's unit). */
@@ -34,7 +34,7 @@ function backoff(topRpe: number, own: SetSample[] = []) {
   const reads = computeDayReads([card("top", [set(495, 4, topRpe, 1)]), card("back", own.map((s, i) => set(s.load, s.reps, s.rpe!, 2 + i)))], null, NOW);
   const r = reads.get("back")!;
   const model = buildLoadModel({
-    history, today: own, unit: "lb", now: NOW,
+    history, today: own, unit: "lb", now: NOW, lift: "competition",
     dayFactor: r.factor, carryToday: r.carryKg.map((x) => ({ ...x, load: x.load * LB })),
   });
   return { model, read: r, hint: suggestSetLoad(model, BACKOFF)! };
@@ -76,9 +76,9 @@ describe("a back-off on its own card follows today's top set", () => {
   });
 
   it("history only ever brings it down, never up", () => {
-    const cold = estimateFor(buildLoadModel({ history, today: [], unit: "lb", now: NOW }), BACKOFF.reps, BACKOFF.rpe)!.load;
-    expect(cold).toBeGreaterThan(470); // history alone still says ~480 for 4 @ 6
+    const cold = estimateFor(buildLoadModel({ history, today: [], unit: "lb", now: NOW, lift: "competition" }), BACKOFF.reps, BACKOFF.rpe)!.load;
     const fromTopOnly = estimateFor(buildLoadModel({ history: [], today: [], unit: "lb", now: NOW, carryToday: [{ load: 495, reps: 4, rpe: 10 }] }), BACKOFF.reps, BACKOFF.rpe)!.load;
+    expect(cold).toBeGreaterThan(fromTopOnly + 20); // history alone says ~465 for 4 @ 6, the top set ~420
     expect(estimateFor(backoff(10).model, BACKOFF.reps, BACKOFF.rpe)!.load).toBeLessThanOrEqual(fromTopOnly + 1e-9);
   });
 
@@ -100,7 +100,7 @@ describe("a back-off on its own card follows today's top set", () => {
   it("a variation of the family still moves by the capped day factor", () => {
     const reads = computeDayReads([
       card("top", [set(495, 4, 6, 1)]),
-      { ...card("pause"), exerciseKey: "pdl", name: "Paused Deadlift" },
+      { ...card("pause"), exerciseKey: "pdl", name: "Paused Deadlift", lift: "other" },
     ], null, NOW);
     expect(reads.get("pause")!.carryKg).toEqual([]);
     expect(reads.get("pause")!.factor).not.toBeNull();
