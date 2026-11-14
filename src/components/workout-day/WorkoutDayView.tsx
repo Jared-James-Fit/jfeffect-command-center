@@ -86,6 +86,7 @@ import { matchPreviousWeekSlots, type SlotRow } from "@/lib/previous-week-slot";
 import { LastWeekSwapChip, type LastWeekSwap } from "@/components/workout-day/last-week-swap";
 import { useCardHistory, type CardHistoryAction } from "@/components/workout-day/use-card-history";
 import { LoadSuggestionCard, LoadSuggestionsChip, LoadSuggestionsDone, LoadSuggestionsNudge } from "@/components/workout-day/load-suggestion-card";
+import { effortRange, loggedRpe, setGuidance } from "@/lib/workouts/plan-vs-actual";
 import { dismissSuggestionsNudgeForNow, suggestionsNudgeDismissed, useShowLoadSuggestions, LOAD_SUGGESTIONS_TRIED_KEY } from "@/lib/load-suggestion-visibility";
 import { TypedValueInput } from "@/components/workout-day/typed-value-input";
 import { EffortScaleHeader } from "@/components/workout-day/effort-scale-help";
@@ -2876,6 +2877,10 @@ function WorkoutDay({
                       warmedUp={warmedUpRowIds.has(r.id)}
                       lastWeekSwap={lastWeekSwapByRow.get(r.id) ?? null}
                       dayRead={dayReadByRow.get(r.id) ?? null}
+                      backoffsFollow={(rows as any[]).slice(rowIndex + 1).some((o) => {
+                        const id = o.exercise_id ?? o.exercises?.id;
+                        return !!id && id === (r.exercise_id ?? r.exercises?.id);
+                      })}
                       suggestNudge={suggestNudgeRowId === r.id ? hideSuggestNudge : null}
                       onSuggestEligible={reportSuggestEligible}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
@@ -3416,7 +3421,7 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, backoffsFollow = false, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; /** A later card today holds the same exercise (its back-offs). */ backoffsFollow?: boolean; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -4014,6 +4019,32 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   }, [existingResults, activeUnit]);
   const openSetCount = Array.from({ length: setCount }, (_, i) => i + 1)
     .filter((i) => !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
+  // The latest set against its prescription (harder, easier, short of the
+  // reps), said once with what it means for what's left today (plan-vs-actual.ts).
+  const timedRow = row.tracking_type === "time" || row.measurement_type === "time";
+  const setNote = useMemo(() => {
+    if (readonly || timedRow) return null;
+    const sets = existingResults
+      .filter((r: any) => r.completed_at && r.is_working_set !== false)
+      .map((r: any) => {
+        const load = resolveLoadType(r.load_type, r.is_bodyweight) === "external" && !hideWeight ? Number(displayLoadInUnit(r, activeUnit)) : NaN;
+        return { set: Number(r.set_index), load: load > 0 ? load : null, reps: r.actual_reps == null ? null : Number(r.actual_reps), rpe: loggedRpe(r) };
+      });
+    const note = setGuidance({
+      reps: repTarget,
+      effort: effortRange(row.rpe, row.rir),
+      sets,
+      openSets: openSetCount,
+      backoffsFollow,
+      unit: activeUnit,
+      step: weightIncrement(activeUnit),
+      coachLoad: coachOwnsLoad,
+      suggested: loadHint?.target ?? null,
+    });
+    // An overshoot on a % row is the RPE-cap line's to say.
+    if (note?.kind === "harder" && capHeld && openSetCount > 0) return null;
+    return note;
+  }, [readonly, timedRow, existingResults, hideWeight, activeUnit, repTarget, row.rpe, row.rir, openSetCount, backoffsFollow, coachOwnsLoad, loadHint?.target, capHeld]);
   // Put one weight into every open set as a draft (never a confirmed set);
   // each set keeps its own reps / RPE.
   const fillLoadOnOpenSets = async (load: number): Promise<number> => {
@@ -4982,6 +5013,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         {capHeld && openSetCount > 0 && !readonly && (
           <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-rpe-cap-next>
             Set {capHeld.over.set} hit RPE {fmtNum(capHeld.over.rpe)}, over the cap of {fmtNum(capValue as number)} · next sets {formatDualLoad(capHeld.load, activeUnit)}
+          </p>
+        )}
+        {/* The latest set strayed from the plan: one quiet line, amber when it
+            was harder or short of the reps. */}
+        {setNote && (
+          <p className="flex items-start gap-2 px-3 py-1.5 text-[12px] leading-snug text-muted-foreground" data-set-guidance={setNote.kind}>
+            <span aria-hidden className={cn("mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full", setNote.kind === "easier" ? "bg-muted-foreground/50" : "bg-warning")} />
+            <span>{setNote.text}</span>
           </p>
         )}
         {/* One tap adds a working set; a warm-up is its own small "+ Warm-up"

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { getBlockTree, durationRange } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  effectiveRestSeconds, resolveCategory,
+  effectiveRestSeconds,
   deriveWeeklyPurposeLabelByRowId,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
@@ -21,6 +21,7 @@ import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-tod
 import { localStartOfToday, parseLocalDate } from "@/lib/today";
 import { ScheduleHistoryDrawer } from "@/components/schedule/ScheduleHistoryDrawer";
 import { STYLE_LABEL, type ProgramRoadmap } from "@/lib/training-roadmap";
+import { weekPriorities } from "@/lib/block-priorities";
 
 /* ──────────────────────────────────────────────────────────────────────────
    ClientBlockView
@@ -280,37 +281,21 @@ export function ClientBlockView({
     [days, rowsByDay, block, resolvedWeek],
   );
 
-  // Weekly priority summary — collects non-Assistance labelled rows across
-  // every day in the current week and groups by (movement family, label).
-  const weeklyPriorities = useMemo(() => {
-    const RANK: Record<string, number> = { Primary: 0, Secondary: 1, Tertiary: 2, Quaternary: 3 };
-    const FAMILY_LABEL: Record<string, string> = {
-      squat: "Squat", bench: "Bench", deadlift: "Deadlift",
-      upper: "Upper", lower: "Lower", other: "Other",
-    };
-    const items: Array<{ key: string; label: string; family: string; dayId: string; dayName: string; rank: number }> = [];
-    for (const d of days) {
-      const rows = (rowsByDay.get(d.id) ?? []).slice().sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-      if (!rows.length) continue;
-      const dd = dayDate(d);
-      const dayName = dd ? format(dd, "EEEE") : `Day ${d.day_index}`;
-      rows.forEach((r: any) => {
-        const label = weeklyPurposeLabelById.get(r.id) ?? "Assistance";
-        if (!label || label === "Assistance") return;
-        const family = (r.movement_family as string | null) ?? r.exercises?.competition_lift_type ?? "other";
-        items.push({
-          key: `${family}|${label}|${d.id}`,
-          label,
-          family: FAMILY_LABEL[family] ?? "Other",
-          dayId: d.id,
-          dayName,
-          rank: RANK[label] ?? 99,
-        });
-      });
-    }
-    items.sort((a, b) => a.rank - b.rank || a.family.localeCompare(b.family));
-    return items;
-  }, [days, rowsByDay, block, resolvedWeek, weeklyPurposeLabelById]);
+  // The week's priorities, one line per training day (weekPriorities in
+  // block-priorities.ts): the ranked lifts only, back-offs folded into their top
+  // set, nothing twice.
+  const weeklyPriorities = useMemo(
+    () => weekPriorities(
+      days.map((d: any) => ({
+        id: d.id,
+        date: dayDate(d),
+        dayIndex: d.day_index ?? null,
+        rows: (rowsByDay.get(d.id) ?? []) as any[],
+      })),
+      (row: any) => weeklyPurposeLabelById.get(row.id) ?? "Assistance",
+    ),
+    [days, rowsByDay, block, resolvedWeek, weeklyPurposeLabelById],
+  );
 
   // ── Selected day (URL-persisted via parent). Falls back to today, then the
   // first not-yet-completed day, then index 0. Invalid IDs fall back safely. ──
@@ -768,17 +753,17 @@ export function ClientBlockView({
           )}
           {weeklyPriorities.length > 0 && (
           <>
-          <ul className="grid gap-0.5">
+          <ul className="grid gap-0.5" data-week-priorities>
             {weeklyPriorities.map((p) => {
-              const line = `${p.label} ${p.family} — ${p.dayName}`;
               const inner = (
-                <span className="flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-muted">
-                  <span className="truncate font-semibold">{line}</span>
+                <span className="flex items-baseline gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-muted">
+                  <span className="w-8 shrink-0 text-muted-foreground">{p.dayLabel}</span>
+                  <span className="min-w-0 flex-1 line-clamp-2 font-semibold">{p.items.join(" · ")}</span>
                 </span>
               );
               if (mode === "client") {
                 return (
-                  <li key={p.key}>
+                  <li key={p.dayId}>
                     <Link to="/portal/workouts/$dayId" params={{ dayId: p.dayId }} search={{}}>
                       {inner}
                     </Link>
@@ -786,7 +771,7 @@ export function ClientBlockView({
                 );
               }
               return (
-                <li key={p.key}>
+                <li key={p.dayId}>
                   <button
                     type="button"
                     className="w-full text-left"
@@ -958,7 +943,6 @@ export function ClientBlockView({
                     const name = r.exercises?.name ?? r.exercise_name_override ?? "Exercise";
                     const meta = r.exercises ?? null;
                     const rest = effectiveRestSeconds(r, meta);
-                    const cat = resolveCategory(meta);
                     const isComp = !!meta?.is_competition_lift;
                     const reps = r.reps_text ?? "—";
                     const sets = r.sets ?? "—";
@@ -979,11 +963,8 @@ export function ClientBlockView({
                               {purpose[i] && (
                                 <span className="break-words rounded border border-border px-1 py-0 text-muted-foreground">{purpose[i]}</span>
                               )}
+                              {/* the role says what it's for; a category beside it only repeated or contradicted it ("Primary · assistance") */}
                               {isComp && <span className="shrink-0 rounded bg-secondary px-1 text-foreground">Comp</span>}
-                              {/* the category only when it says something the purpose didn't ("Assistance · Assistance") */}
-                              {String(cat).toLowerCase() !== String(purpose[i] ?? "").toLowerCase() && (
-                                <span className="break-words text-foreground/50">· {cat}</span>
-                              )}
                             </div>
                           </div>
                         </div>

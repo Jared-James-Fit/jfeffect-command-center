@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Trophy, Dumbbell, Activity, CheckCircle2, Flame, Clock, Star, ChevronLeft, Heart, X, Repeat2, CircleX, Sparkles, Medal, Share2, Download } from "lucide-react";
 import { StudioShell } from "@/components/community/studio-chunks";
 import type { WorkoutSummary } from "@/lib/workout-summary";
+import type { PlanCheck } from "@/lib/workouts/plan-vs-actual";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
 import {
@@ -151,6 +153,8 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
   const headline =
     recordHeadline ? recordHeadline
     : prList.length > 0 ? (prList.length === 1 ? "NEW ATPR!" : `${prList.length} NEW ATPRs!`)
+    // the score counts what was done, not how hard it ran: no cheering over a plan that ran hot
+    : summary.plan?.lines.some((l) => l.kind === "harder" || l.kind === "short") ? "Workout done"
     : summary.score >= 90 ? "Crushed it!"
     : summary.score >= 75 ? "Great work!"
     : summary.score >= 50 ? "Solid effort"
@@ -338,7 +342,10 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
               </section>
             )}
 
-            {displayTakeaways.length > 0 && (
+            {/* The workout against its plan (sets, reps, effort): facts, not cheering. */}
+            {summary.plan && summary.plan.setsPlanned > 0 ? (
+              <PlanSection plan={summary.plan} />
+            ) : displayTakeaways.length > 0 && (
               <section className="rounded-2xl border border-border/80 bg-card/70 p-3">
                 <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
                   Today's takeaways
@@ -542,5 +549,32 @@ function Cell({ label, value, highlight, tone }: { label: string; value: string;
         `text-sm font-bold ${highlight ? "text-primary" : ""} ${tone === "warn" ? "text-amber-700 dark:text-amber-300" : ""}`
       }>{value}</div>
     </div>
+  );
+}
+
+/** "Done as planned", or what strayed from it, and one line for next time. */
+function PlanSection({ plan }: { plan: PlanCheck }) {
+  const onTarget = [plan.checked.reps && "reps", plan.checked.effort && "effort"].filter(Boolean).join(" and ");
+  return (
+    <section className="rounded-2xl border border-border/80 bg-card/70 p-3" data-plan-check={plan.asPlanned ? "as-planned" : "off"}>
+      <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+        {plan.asPlanned && <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />}
+        {plan.asPlanned ? "Done as planned" : "Vs the plan"}
+      </div>
+      <p className="mt-0.5 text-[12px] text-muted-foreground">
+        {plan.setsDone} of {plan.setsPlanned} sets{plan.asPlanned && onTarget ? `, ${onTarget} on target` : ""}
+      </p>
+      {plan.lines.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {plan.lines.map((l) => (
+            <li key={l.text} className="flex items-start gap-2 text-[12px] leading-snug text-foreground" data-plan-line={l.kind}>
+              <span aria-hidden className={cn("mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full", l.kind === "easier" || l.kind === "extra" ? "bg-muted-foreground/50" : "bg-warning")} />
+              <span>{l.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {plan.next && <p className="mt-2 text-[12px] leading-snug text-muted-foreground">{plan.next}</p>}
+    </section>
   );
 }

@@ -14,6 +14,7 @@ import { InfoTip } from "@/components/analytics/info-tip";
 import { fetchRecoveryScoreSeries, type SleepBucket } from "@/lib/analytics/recovery-score";
 import {
   buildReadinessBreakdown,
+  readinessAge,
   type FactorDetail,
   type FactorKey,
   type FactorStatus,
@@ -473,6 +474,8 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
       return {
         hasData: latest != null,
         latest: latest ?? 0,
+        // the score is the last finished workout's: when that was
+        latestTs: series.length ? series[series.length - 1].ts : null,
         breakdown,
       };
     },
@@ -491,7 +494,10 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
     );
   }
 
-  if (!data || !data.hasData) {
+  // The score is read from the last finished workout's check-out; one from
+  // weeks ago says nothing about today (readinessAge).
+  const age = data?.hasData ? readinessAge(data.latestTs) : null;
+  if (!data || !data.hasData || (age && age.stale)) {
     if (hideWhenEmpty) return null;
     return (
       <section aria-label="Training Readiness">
@@ -515,7 +521,9 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
   // what's limiting it; the whole call and every factor are one tap away.
   // (no lookbehind: older iPhones can't parse it)
   const lead = bd.recommendation.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? bd.recommendation;
-  const takeaway = bd.limiter ? `${lead.replace(/[.!?]$/, "")} · Limiter: ${bd.limiter.label}` : lead;
+  const takeaway = age?.fromLabel
+    ? `From your ${age.fromLabel} workout · ${lead.replace(/[.!?]$/, "")}`
+    : bd.limiter ? `${lead.replace(/[.!?]$/, "")} · Limiter: ${bd.limiter.label}` : lead;
 
   return (
     <section aria-label="Training Readiness">
@@ -538,7 +546,7 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
           />
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-semibold leading-tight text-foreground">
-              Today's readiness <span className={cn("font-semibold", tier.labelClass)}>· {tier.label}</span>
+              {age?.fromLabel ? "Readiness" : "Today's readiness"} <span className={cn("font-semibold", tier.labelClass)}>· {tier.label}</span>
             </div>
             <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{takeaway}</p>
           </div>
@@ -561,6 +569,7 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
               score={data.latest}
               tier={tier}
               bd={bd}
+              fromLabel={age?.fromLabel ?? null}
               onOpenFactor={(k) => setView(k)}
             />
           )}
@@ -572,11 +581,13 @@ export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) 
 
 /** The whole readiness picture: the score, today's call, the limiter and the six inputs. */
 function ReadinessSheet({
-  score, tier, bd, onOpenFactor,
+  score, tier, bd, onOpenFactor, fromLabel = null,
 }: {
   score: number;
   tier: ReturnType<typeof tierFor>;
   bd: ReadinessBreakdown;
+  /** The score is from a workout two or more days ago: "Thursday", "Nov 6". */
+  fromLabel?: string | null;
   onOpenFactor: (k: FactorKey) => void;
 }) {
   return (
@@ -585,10 +596,10 @@ function ReadinessSheet({
       <SheetHeader className="text-left">
         <SheetTitle className="flex items-center gap-2 text-lg">
           <Activity className="h-4 w-4 text-muted-foreground" aria-hidden />
-          Today's readiness
+          {fromLabel ? "Readiness" : "Today's readiness"}
         </SheetTitle>
         <SheetDescription className="sr-only">
-          Your readiness score, what to do about it, and the six inputs behind it
+          Your readiness score, what to do about it, and the six factors around it
         </SheetDescription>
       </SheetHeader>
 
@@ -621,7 +632,14 @@ function ReadinessSheet({
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-1 border-t border-border/50 pt-2">
+      {/* Why the score and a factor can disagree: they read different things. */}
+      <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground" data-readiness-how>
+        The score reads your {fromLabel ? `${fromLabel} ` : "last "}workout and its check-out: how much you finished, how hard it felt, your sleep, energy and any pain.
+        The factors below look across your recent weeks, so one can sit lower while the score is fine.
+        It's built from what you log, not a measurement.
+      </p>
+
+      <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-1 border-t border-border/50 pt-2">
         {bd.order.map((k) => (
           <FactorBar key={k} factor={bd.factors[k]} onClick={() => onOpenFactor(k)} />
         ))}
