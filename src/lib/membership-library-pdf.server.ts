@@ -1,4 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { payloadWeeks } from "@/lib/programs/core-days";
+import { mins } from "@/lib/running/run-log";
 
 function safe(s: any): string {
   return String(s ?? "").replace(/[^\x20-\x7E]/g, "?");
@@ -82,10 +84,14 @@ export async function generateLibraryPdf(plan: any): Promise<Uint8Array> {
   gap(4);
 
   const payload = plan.published_payload ?? {};
-  const weeks = Array.isArray(payload.weeks_data) ? payload.weeks_data : [];
+  // every block's weeks, numbered through the program (a multi-block program's
+  // weeks start at 1 in each block, and its PDF used to come out empty)
+  const weeks = payloadWeeks(payload);
+  let weekNo = 0;
   for (const w of weeks) {
+    weekNo++;
     ensure(30);
-    draw(`Week ${w.week_index}`, { size: 14, bold: true });
+    draw(`Week ${weekNo}`, { size: 14, bold: true });
     const days = Array.isArray(w.days) ? w.days : [];
     for (const d of days) {
       // Estimate day height; if it won't fit, start a new page (page break between days, not mid-exercise)
@@ -96,15 +102,18 @@ export async function generateLibraryPdf(plan: any): Promise<Uint8Array> {
         page = doc.addPage([pageWidth, pageHeight]);
         y = pageHeight - margin;
       }
-      draw(`${d.title || `Day ${d.day_index}`}`, { size: 12, bold: true, indent: 10 });
+      draw(`${d.title || `Day ${d.day_index}`}${d.is_optional ? " (optional)" : ""}`, { size: 12, bold: true, indent: 10 });
       const rows = Array.isArray(d.rows) ? d.rows : [];
       if (rows.length === 0) {
         draw("Rest / no exercises", { size: 10, color: [0.5,0.5,0.55], indent: 20 });
       } else {
         for (const r of rows) {
-          const name = r.exercise_name || r.name || "Exercise";
+          const name = r.exercise_name_override || r.exercise_name || r.name || "Exercise";
           const sets = r.sets ?? r.target_sets ?? "";
-          const reps = r.reps ?? r.target_reps ?? "";
+          // a timed row (a run, a walk) by its time; else its reps
+          const reps = r.measurement_type === "time" && Number(r.duration_seconds) > 0
+            ? mins(Number(r.duration_seconds))
+            : r.reps_text ?? r.reps ?? r.target_reps ?? "";
           const rpe  = r.rpe != null ? `  RPE ${r.rpe}` : (r.rir != null ? `  RIR ${r.rir}` : "");
           const rest = r.rest_seconds ? `  rest ${r.rest_seconds}s` : "";
           // Reserve enough space for the exercise + its notes so we never break mid-exercise

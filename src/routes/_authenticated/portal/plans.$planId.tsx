@@ -18,6 +18,7 @@ import { isMemberAccessActive } from "@/lib/memberAccess";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { displayExerciseName } from "@/lib/exercise-display-name";
 import { replacesLine } from "@/lib/my-program";
+import { optionalDaysPerWeek } from "@/lib/programs/core-days";
 
 export const Route = createFileRoute("/_authenticated/portal/plans/$planId")({ component: PlanDetail });
 
@@ -124,9 +125,13 @@ function PlanDetail() {
     } catch (e: any) { toast.error(e?.message ?? "Download unavailable"); }
   };
 
+  // extra sessions (a recovery day, easy runs) go on free days; they never need a training day
+  const optionalPerWeek = optionalDaysPerWeek(plan.published_payload);
   const meta = [
     plan.weeks ? `${plan.weeks} weeks` : null,
-    plan.days_per_week ? `${plan.days_per_week} days a week` : null,
+    plan.days_per_week
+      ? `${plan.days_per_week} days a week${optionalPerWeek ? ` + ${optionalPerWeek} optional` : ""}`
+      : null,
     plan.est_minutes_per_workout ? `~${plan.est_minutes_per_workout} min a workout` : null,
   ].filter(Boolean).join(" · ");
   const tags = [plan.training_style, plan.difficulty, plan.goal].filter(Boolean) as string[];

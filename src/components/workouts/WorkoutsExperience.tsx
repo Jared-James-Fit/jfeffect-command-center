@@ -1063,6 +1063,13 @@ function SelectedDayCard({
                 <span className="font-medium text-foreground/80">{item.block.name} ·</span>
               )}
               <span>{dayText}</span>
+              {/* an optional session (a recovery day, an extra easy run): skipping it is never a miss */}
+              {item.day?.is_optional && !isCompleted && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span data-testid="workout-optional">Optional</span>
+                </>
+              )}
               {!isCompleted && (() => {
                 const est = ((item as any).estimated_minutes ?? resolveEstimatedWorkoutMinutes({ day: item.day as any, block: item.block as any }));
                 return est != null ? (

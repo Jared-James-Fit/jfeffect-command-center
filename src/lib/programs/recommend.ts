@@ -32,6 +32,7 @@ export function isProfileReady(g: GoalsSetupInput | null | undefined): boolean {
 function normalizeGoal(mainGoal: string | null | undefined): ProgramGoal | null {
   const v = (mainGoal ?? "").toLowerCase();
   if (!v) return null;
+  if (/\brun|marathon|\b5k\b|\b10k\b/.test(v)) return "running";
   if (v.includes("fat")) return "fat_loss";
   if (v.includes("glute")) return "glutes";
   if (v.includes("muscle") || v.includes("hypertrophy") || v.includes("body")) return "muscle";
@@ -74,6 +75,8 @@ export function scoreProgram(f: ProgramFacets, g: GoalsSetupInput): Recommendati
     score += 3;
     reasons.push({ text: `Built for your ${goalLabel(wantGoal).toLowerCase()} goal`, weight: 3 });
   }
+  // a running program is never picked for someone whose goal is lifting, however well its days fit
+  if (f.goals.includes("running") && wantGoal !== "running") score -= 6;
 
   if (g.training_days_per_week && f.daysPerWeek) {
     if (f.daysPerWeek === g.training_days_per_week) {
