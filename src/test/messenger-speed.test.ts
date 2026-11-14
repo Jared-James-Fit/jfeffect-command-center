@@ -164,7 +164,7 @@ describe("messenger stays current after the app resumes", () => {
 
   it("re-checks lists on open instead of trusting a cache realtime wasn't updating", () => {
     const groupPane = readFileSync("src/components/group-chats-pane.tsx", "utf8");
-    expect(messagesRoute.match(/refetchOnMount: "always"/g)?.length).toBe(3);
+    expect(messagesRoute.match(/refetchOnMount: "always"/g)?.length).toBe(4); // states, staff state, last messages, members' Support chats
     expect(groupPane).toContain('refetchOnMount: "always"');
     expect(groupThread).toContain('refetchOnMount: "always"');
   });

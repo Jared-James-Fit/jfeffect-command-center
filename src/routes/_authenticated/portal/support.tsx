@@ -2,53 +2,64 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
-import { getMySupportThread, sendSupportMessage, markMyThreadRead, getLiveSupportStatus } from "@/lib/member-support.functions";
-import { formatTicket } from "@/lib/support-ticket";
-import { Button } from "@/components/ui/button";
-import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
-import { Badge } from "@/components/ui/badge";
-import { Send, Bug, Lightbulb, HelpCircle, Headphones, Radio, Ticket } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { getMemberSupport, getMySupportThread, markMyThreadRead, sendSupportMessage } from "@/lib/member-support.functions";
+import { useClientImpersonation, useViewingAsClient } from "@/lib/client-impersonation";
+import { PREVIEW_ONLY_MESSAGE } from "@/lib/community";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { cn } from "@/lib/utils";
 import { listenChannel } from "@/lib/realtime-channel";
 
 export const Route = createFileRoute("/_authenticated/portal/support")({ component: SupportPage });
 
-type Category = "question" | "bug" | "suggestion";
+type Msg = { id: string; sender_role: string; body: string; created_at: string; pending?: boolean };
 
-const CAT_META: Record<Category, { label: string; icon: any; tone: string }> = {
-  question: { label: "Question", icon: HelpCircle, tone: "border-blue-500/30 bg-blue-500/10 text-blue-500" },
-  bug: { label: "Bug", icon: Bug, tone: "border-rose-500/30 bg-rose-500/10 text-rose-500" },
-  suggestion: { label: "Suggestion", icon: Lightbulb, tone: "border-amber-500/30 bg-amber-500/10 text-amber-500" },
-};
+const timeLabel = (iso: string) =>
+  new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
+/**
+ * A JF member's chat with JF Effect (members have no coach chat). It reads
+ * like Messages: theirs on the right, ours on the left, one box to write in.
+ * The coach answers from Messages, where this chat is a row like any other;
+ * each side gets a push when the other writes.
+ */
 function SupportPage() {
   const qc = useQueryClient();
-  const fetchThread = useServerFn(getMySupportThread);
+  const previewing = useViewingAsClient();
+  const { client: povClient } = useClientImpersonation();
+  const fetchMine = useServerFn(getMySupportThread);
+  const fetchAsCoach = useServerFn(getMemberSupport);
   const send = useServerFn(sendSupportMessage);
   const markRead = useServerFn(markMyThreadRead);
-  const liveStatusFn = useServerFn(getLiveSupportStatus);
 
-  const { data } = useQuery({ queryKey: ["m-support"], queryFn: () => fetchThread() });
-  const messages = (data?.messages ?? []) as any[];
-  const thread = data?.thread as any;
-  const { data: liveStatus } = useQuery({
-    queryKey: ["live-support-status"],
-    queryFn: () => liveStatusFn(),
-    refetchInterval: 30_000,
+  const key = ["m-support", previewing ? povClient?.id : "me"];
+  const { data, isLoading } = useQuery({
+    queryKey: key,
+    queryFn: async () => {
+      // A coach previewing a member sees their chat as it is, read-only.
+      if (previewing && povClient?.id) {
+        const r = await fetchAsCoach({ data: { clientId: povClient.id } });
+        return { thread: r.thread, messages: r.messages };
+      }
+      return fetchMine();
+    },
   });
-  const liveCount = liveStatus?.availableCount ?? 0;
+  const thread = data?.thread as { id: string; unread_for_member?: number } | null | undefined;
+  const [pending, setPending] = useState<Msg[]>([]);
+  const messages: Msg[] = [...((data?.messages ?? []) as Msg[]), ...pending];
 
   const [body, setBody] = useState("");
-  const [category, setCategory] = useState<Category>("question");
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
+  // Reading it clears the Support tab's badge (never while a coach previews).
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto" });
-    markRead().catch(() => {});
-  }, [messages.length]);
+    endRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "auto", block: "end" });
+    if (previewing || !thread?.id || !(thread.unread_for_member ?? 0)) return;
+    markRead().then(() => qc.invalidateQueries({ queryKey: ["client-nav-badges"] })).catch(() => {});
+  }, [messages.length, thread?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!thread?.id) return;
@@ -56,162 +67,128 @@ function SupportPage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "member_support_messages", filter: `thread_id=eq.${thread.id}` },
-        () => qc.invalidateQueries({ queryKey: ["m-support"] }),
+        () => qc.invalidateQueries({ queryKey: key }),
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [thread?.id, qc]);
+  }, [thread?.id, qc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     const message = body.trim();
     if (!message || busy) return;
+    if (previewing) {
+      toast(PREVIEW_ONLY_MESSAGE);
+      return;
+    }
+    const temp: Msg = { id: `pending-${Date.now()}`, sender_role: "member", body: message, created_at: new Date().toISOString(), pending: true };
+    setPending((p) => [...p, temp]);
+    setBody("");
     setBusy(true);
     try {
-      await send({ data: { body: message, category } });
-      setBody("");
-      await qc.invalidateQueries({ queryKey: ["m-support"] });
+      await send({ data: { body: message } });
+      await qc.invalidateQueries({ queryKey: key });
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not send");
+      setBody(message);
+      toast.error(e?.message ?? "Your message didn't send. Try again.");
     } finally {
+      setPending((p) => p.filter((m) => m.id !== temp.id));
       setBusy(false);
     }
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-14.25rem)] w-full max-w-3xl flex-col overflow-hidden border-x border-border/50 bg-background md:my-4 md:h-[calc(100dvh-6rem)] md:min-h-0 md:rounded-2xl md:border">
-      <header className="shrink-0 border-b border-border bg-card/95 px-3 py-2.5 backdrop-blur sm:px-4">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-            <Headphones className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <h1 className="truncate text-sm font-bold sm:text-base">JF Effect Support</h1>
-              {thread?.status && (
-                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px] capitalize">
-                  {thread.status}
-                </Badge>
-              )}
-            </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground sm:text-[11px]">
-              <span className={cn("inline-flex shrink-0 items-center gap-1", liveCount > 0 && "text-emerald-500")}>
-                <Radio className={cn("h-2.5 w-2.5", liveCount > 0 && "animate-pulse")} />
-                {liveCount > 0 ? "Team online" : "Replies within 24–48h"}
-              </span>
-              <span>·</span>
-              <span className="truncate">App, billing & account help</span>
-            </div>
-          </div>
-          {thread?.ticket_number != null && (
-            <Badge variant="outline" className="shrink-0 gap-1 px-2 font-mono text-[9px] sm:text-[10px]">
-              <Ticket className="h-3 w-3" />
-              {formatTicket(thread.ticket_number)}
-            </Badge>
-          )}
-        </div>
-        <div className="mt-2 rounded-lg bg-muted/35 px-2.5 py-1.5 text-[10px] leading-snug text-muted-foreground">
-          Coaching questions belong in coaching Messages. Use Support for app, billing, account issues and suggestions.
+    <div
+      className="fixed inset-x-0 z-30 flex flex-col bg-background md:static md:inset-auto md:z-auto md:mx-auto md:h-full md:w-full md:max-w-3xl md:flex-1 md:border-x md:border-border"
+      style={{
+        // Like the coach chat: anchored to the visible part of the screen,
+        // so the box sits right above the keyboard, under the top bar.
+        top: "calc(var(--vv-top, 0px) + var(--app-top-chrome, 0px))",
+        height: "calc(var(--vv-h, 100dvh) - var(--app-top-chrome, 0px) - var(--bottom-nav-clearance, 0px))",
+      }}
+      data-member-support
+    >
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background px-4 py-2.5">
+        <img src="/icon-192.png" alt="" className="h-10 w-10 shrink-0 rounded-full border border-border object-cover" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[16px] font-semibold leading-5">JF Effect Support</h1>
+          <p className="truncate text-[13px] leading-[18px] text-muted-foreground">Usually replies within a day</p>
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-4">
-        {messages.length === 0 && (
-          <div className="grid h-full min-h-32 place-items-center px-6 py-4 text-center">
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-4">
+        {isLoading ? (
+          <div className="grid h-24 place-items-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
+        ) : messages.length === 0 ? (
+          <div className="grid h-full min-h-48 place-items-center px-8 text-center" data-support-empty>
             <div>
-              <Headphones className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
-              <div className="text-sm font-semibold">How can we help?</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Send a message below. Your conversation stays together here just like Messages.
-              </div>
+              <img src="/icon-192.png" alt="" className="mx-auto mb-3 h-16 w-16 rounded-full border border-border object-cover" />
+              <div className="text-[16px] font-semibold">How can we help?</div>
+              <p className="mt-1 text-[15px] leading-5 text-muted-foreground">
+                Ask anything about the app, your account or your training. Found a bug? Tell us what happened.
+                You'll get a notification when we reply.
+              </p>
             </div>
           </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {messages.map((m, i) => {
+              const mine = m.sender_role === "member";
+              const next = messages[i + 1];
+              const lastOfRun = !next || (next.sender_role === "member") !== mine
+                || new Date(next.created_at).getTime() - new Date(m.created_at).getTime() > 10 * 60_000;
+              return (
+                <li key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")} data-support-message={mine ? "mine" : "theirs"}>
+                  <div className={cn("max-w-[80%]", lastOfRun && "mb-2")}>
+                    <div
+                      className={cn(
+                        "whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-[15px] leading-5",
+                        mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-secondary text-foreground",
+                        m.pending && "opacity-60",
+                      )}
+                    >
+                      {m.body}
+                    </div>
+                    {lastOfRun && (
+                      <div className={cn("mt-0.5 px-1 text-[11px] text-muted-foreground", mine && "text-right")}>
+                        {m.pending ? "Sending…" : `${mine ? "" : "JF Effect · "}${timeLabel(m.created_at)}`}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
-
-        {messages.map((m) => {
-          const isMember = m.sender_role === "member";
-          const cat = (m.category as Category) || "question";
-          const Meta = CAT_META[cat] ?? CAT_META.question;
-          const Icon = Meta.icon;
-          return (
-            <div key={m.id} className={cn("flex", isMember ? "justify-end" : "justify-start")}>
-              <div className="max-w-[86%] space-y-1 sm:max-w-[75%]">
-                {!isMember && (
-                  <div className="px-1 text-[10px] font-semibold text-muted-foreground">JF Effect Support</div>
-                )}
-                <div
-                  className={cn(
-                    "rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap shadow-sm",
-                    isMember
-                      ? "rounded-br-md bg-primary text-primary-foreground"
-                      : "rounded-bl-md border border-border bg-card text-foreground",
-                  )}
-                >
-                  {m.body}
-                </div>
-                <div className={cn("flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground", isMember && "justify-end")}>
-                  {isMember && m.category !== "reply" && (
-                    <span className="inline-flex items-center gap-1">
-                      <Icon className="h-2.5 w-2.5" />
-                      {Meta.label}
-                    </span>
-                  )}
-                  <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
         <div ref={endRef} />
       </main>
 
       <footer
-        className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-card/95 px-3 pt-2 backdrop-blur sm:px-4"
-        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}
+        className="shrink-0 border-t border-border bg-background px-3 pt-2 sm:px-4"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.5rem)" }}
       >
-        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
-          {(Object.entries(CAT_META) as Array<[Category, (typeof CAT_META)[Category]]>).map(([key, meta]) => {
-            const Icon = meta.icon;
-            const active = category === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setCategory(key)}
-                className={cn(
-                  "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[10px] font-semibold transition",
-                  active ? meta.tone : "border-border bg-background text-muted-foreground",
-                )}
-              >
-                <Icon className="h-3 w-3" />
-                {meta.label}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="flex items-end gap-2">
           <AutoGrowTextarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && window.matchMedia("(min-width: 768px)").matches) {
                 e.preventDefault();
                 void submit();
               }
             }}
             placeholder="Message support…"
-            enterKeyHint="send"
-            className="max-h-36 min-h-11 flex-1 resize-none rounded-[22px] bg-background px-4 py-[11px] text-base leading-5"
+            aria-label="Message support"
+            className="max-h-36 min-h-11 flex-1 resize-none rounded-[22px] border border-border bg-background px-4 py-[11px] text-base leading-5"
           />
-          <Button
+          <button
+            type="button"
             onClick={() => void submit()}
             disabled={busy || !body.trim()}
-            size="icon"
-            className="h-11 w-11 shrink-0 rounded-full"
-            aria-label="Send support message"
+            aria-label="Send"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40"
           >
-            <Send className="h-4 w-4" />
-          </Button>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+          </button>
         </div>
       </footer>
     </div>

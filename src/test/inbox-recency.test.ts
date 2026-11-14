@@ -36,8 +36,8 @@ describe("every conversation list is newest first (iMessage / Instagram DMs)", (
     expect(pane).not.toContain("localeCompare(a.at)");
   });
 
-  it("Support: newest first too", () => {
-    const item = (id: string, at: string): SupportItem => ({ kind: "ticket", id, name: id, avatar: null, title: "", preview: "", at, unread: 0, needsYou: true, done: false });
+  it("App alerts: newest first too", () => {
+    const item = (id: string, at: string): SupportItem => ({ kind: "alert", id, name: id, avatar: null, title: "", preview: "", at, needsYou: true, done: false });
     const sorted = filterSupportItems([item("old", "2026-10-01T00:00:00Z"), item("new", "2026-10-19T23:59:00.123+00:00")], "needs");
     expect(sorted.map((i) => i.id)).toEqual(["new", "old"]);
   });

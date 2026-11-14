@@ -21,8 +21,8 @@ describe("the Messages badge is new messages only", () => {
   });
 
   it("the tab shows that number and nothing else: no dot for waiting work", () => {
-    expect(adminBadgeMap({ messages: 3, checkIns: 0, supportAlerts: 0, supportTickets: 0 })["/admin/messages"]).toEqual({ count: 3 });
-    expect(adminBadgeMap({ messages: 0, checkIns: 0, supportAlerts: 0, supportTickets: 0 })["/admin/messages"]).toBeUndefined();
+    expect(adminBadgeMap({ messages: 3, checkIns: 0, supportAlerts: 0 })["/admin/messages"]).toEqual({ count: 3 });
+    expect(adminBadgeMap({ messages: 0, checkIns: 0, supportAlerts: 0 })["/admin/messages"]).toBeUndefined();
   });
 
   it("reads staff_inbox_state's unread only: never needs reply or lift uploads", () => {

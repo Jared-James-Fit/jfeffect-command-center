@@ -53,6 +53,13 @@ import { CHAT_ROW_AVATAR, ChatListRow, UNREAD_DOT } from "@/components/messages/
 import { InboxGuideButton, InboxGuideSheet, type GuideFilter } from "@/components/messages/inbox-guide";
 import { filterHelp } from "@/lib/inbox-guide";
 import { messagePreviewText } from "@/lib/message-preview";
+import { MemberSupportPane, SUPPORT_REFRESH_KEYS } from "@/components/support/member-support-pane";
+import { useServerFn } from "@tanstack/react-start";
+import { updateMemberSupport } from "@/lib/member-support.functions";
+import {
+  SUPPORT_LINE, mergeByRecency, sortSupportChats, supportChat, supportInFilter, supportMatches, supportNewChats,
+  type SupportChat, type SupportThreadRow,
+} from "@/lib/member-support";
 
 type StaffInboxRow = {
   client_id: string;
@@ -198,9 +205,10 @@ function inFilter(it: FilterRow, filter: Filter): boolean {
 
 export function MessagesInbox({
   initialClient,
+  initialSupport,
   embedded = false,
   view,
-}: { initialClient?: string; embedded?: boolean; view?: "chats" | "groups" } = {}) {
+}: { initialClient?: string; initialSupport?: string; embedded?: boolean; view?: "chats" | "groups" } = {}) {
   const selectedFromUrl = initialClient;
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -210,6 +218,8 @@ export function MessagesInbox({
   const [briefFor, setBriefFor] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
+  // A JF member's Support chat, open in the pane (its thread id).
+  const [supportId, setSupportId] = useState<string | null>(initialSupport ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
   // the selected client's workout notes log (pain, review and exercise notes)
   const [notesOpen, setNotesOpen] = useState(false);
@@ -219,14 +229,15 @@ export function MessagesInbox({
   const [massOpen, setMassOpen] = useState(false);
   const { role } = useAuth();
 
-  useEffect(() => { if (selectedFromUrl) setSelectedId(selectedFromUrl); }, [selectedFromUrl]);
+  useEffect(() => { if (selectedFromUrl) { setSelectedId(selectedFromUrl); setSupportId(null); } }, [selectedFromUrl]);
+  useEffect(() => { if (initialSupport) { setSupportId(initialSupport); setSelectedId(null); } }, [initialSupport]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-min"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, user_id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, profile_picture_url, archived, status, last_active_at")
+        .select("id, user_id, full_name, first_name, last_name, email, phone, call_access_enabled, sms_opt_out, profile_picture_url, archived, status, last_active_at, service_tier")
         .order("full_name");
       if (error) throw error;
       return data;
@@ -260,6 +271,21 @@ export function MessagesInbox({
     },
   });
   const inboxByClient = useMemo(() => new Map(inboxState.map((r) => [r.client_id, r])), [inboxState]);
+
+  // JF members' Support chats (they have no coach chat): rows in this list, opening here.
+  const { data: supportRows = [] } = useQuery({
+    queryKey: ["staff-support-threads"],
+    enabled: role === "admin" || role === "coach",
+    staleTime: 15_000,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("staff_support_threads");
+      if (error) throw error;
+      return (data ?? []) as SupportThreadRow[];
+    },
+  });
+  const supportChats = useMemo(() => sortSupportChats(supportRows.map(supportChat)), [supportRows]);
+  const updateSupport = useServerFn(updateMemberSupport);
 
   const { data: lastMessages = [] } = useQuery({
     queryKey: ["last-messages"],
@@ -325,7 +351,7 @@ export function MessagesInbox({
 
   // Refetch everything the list is built from: realtime can't replay what
   // happened while the app was backgrounded or the socket was down.
-  const INBOX_KEYS = ["last-messages", "conversation-states", "staff-inbox-state", "admin-nav-badges", "message-lift-review-inbox", "message-form-checkin-inbox"];
+  const INBOX_KEYS = ["last-messages", "conversation-states", "staff-inbox-state", "admin-nav-badges", "message-lift-review-inbox", "message-form-checkin-inbox", "staff-support-threads"];
   const resyncInbox = () => { for (const k of INBOX_KEYS) qc.invalidateQueries({ queryKey: [k] }); };
   useResyncOnResume(resyncInbox);
 
@@ -432,6 +458,9 @@ export function MessagesInbox({
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "nf_submissions" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
       .on("postgres_changes", { event: "*", schema: "public", table: "messenger_checkins" }, () => scheduleInvalidate(["message-form-checkin-inbox"]))
+      // A member wrote to Support, or a support chat was read / done.
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "member_support_messages" }, () => scheduleInvalidate(["staff-support-threads", "admin-nav-badges"]))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "member_support_threads" }, () => scheduleInvalidate(["staff-support-threads", "admin-nav-badges"]))
       .subscribe((status: string) => {
         rejoin(status);
         if (closing || rebuild) return;
@@ -571,7 +600,9 @@ export function MessagesInbox({
     return m;
   }, [sessionRequestRows]);
 
-  const allRows = useMemo(() => clients.map((c) => {
+  // Coach chats only: a JF member can't open the coach chat, so their row in
+  // this list is their Support chat (supportChats), never a coach chat.
+  const allRows = useMemo(() => clients.filter((c) => (c as any).service_tier !== "self_serve").map((c) => {
     const state = stateMap.get(c.id);
     const last = lastByClient.get(c.id);
     const unread = unreadByClient.get(c.id) ?? 0;
@@ -653,14 +684,31 @@ export function MessagesInbox({
     for (const it of allRows) {
       for (const f of COUNTED) if (inFilter(it, f)) counts[f] = (counts[f] ?? 0) + 1;
     }
+    // Support chats marked Done sit under Archived.
+    const doneSupport = supportChats.filter((c) => c.done).length;
+    if (doneSupport) counts.Archived = (counts.Archived ?? 0) + doneSupport;
     return counts;
-  }, [allRows]);
+  }, [allRows, supportChats]);
 
   // The Inbox chip's number: chats with a new message, the same chats and the
   // same number as the Messages tab's badge (messagesBadge).
   const newChats = useMemo(
-    () => allRows.filter((it) => it.unread > 0 && (it.state?.status ?? "open") !== "archived").length,
-    [allRows],
+    () => allRows.filter((it) => it.unread > 0 && (it.state?.status ?? "open") !== "archived").length
+      + supportNewChats(supportChats),
+    [allRows, supportChats],
+  );
+
+  // Members' Support chats this filter shows, then one list with the coach chats, newest first.
+  const supportVisible = useMemo(
+    () => supportChats.filter((c) => supportMatches(c, search) && supportInFilter(c, filter)),
+    [supportChats, search, filter],
+  );
+  const listRows = useMemo(
+    () => mergeByRecency(
+      conversations, (it) => latestOf(it.last?.created_at, it.liftReview?.latestAt),
+      supportVisible, (c) => c.at,
+    ),
+    [conversations, supportVisible],
   );
 
   const briefRow = briefFor ? allRows.find((r) => r.client.id === briefFor) ?? null : null;
@@ -688,7 +736,14 @@ export function MessagesInbox({
   const selected = clients.find((c) => c.id === selectedId);
   const selectedState = selectedId ? stateMap.get(selectedId) : undefined;
   // "Live in chat" for the client only while I actually have their chat open.
-  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin", tab !== "groups" && !!selected);
+  // A JF member opens their Support chat (they can't see the coach chat).
+  const selectedIsMember = (selected as any)?.service_tier === "self_serve";
+  const openSupport: SupportChat | null = supportId
+    ? supportChats.find((c) => c.threadId === supportId) ?? null
+    : selectedIsMember ? supportChats.find((c) => c.clientId === selected!.id) ?? null : null;
+  const supportOpen = !!supportId || selectedIsMember;
+  const paneOpen = !!selected || !!supportId;
+  const { peerLive: selectedClientLive } = useChatPresence(selectedId, "admin", tab !== "groups" && !!selected && !selectedIsMember);
 
   // A client is "active in the app" if they've pinged within the last 3 min.
   const isClientActive = (last_active_at?: string | null) => {
@@ -703,12 +758,28 @@ export function MessagesInbox({
   };
 
   const selectClient = (id: string) => {
+    setSupportId(null);
     setSelectedId(id);
     navigate({ to: "/admin/communication", search: { tab: "messages", client: id } as any, replace: true });
   };
+  const selectSupport = (threadId: string) => {
+    setSelectedId(null);
+    setSupportId(threadId);
+    navigate({ to: "/admin/communication", search: { tab: "messages", support: threadId } as any, replace: true });
+  };
   const clearSelection = () => {
     setSelectedId(null);
+    setSupportId(null);
     navigate({ to: "/admin/communication", search: { tab: "messages" } as any, replace: true });
+  };
+  const supportAction = async (threadId: string, patch: { status?: "open" | "closed"; read?: boolean }, ok: string) => {
+    try {
+      await updateSupport({ data: { threadId, ...patch } });
+      SUPPORT_REFRESH_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [...k] }));
+      toast.success(ok);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Couldn't update this chat");
+    }
   };
 
   const enterSelectedClientPov = () => {
@@ -807,7 +878,7 @@ export function MessagesInbox({
       <aside
         className={cn(
           "flex w-full flex-col border-r border-border bg-card md:w-[340px] md:shrink-0",
-          selected ? "hidden md:flex" : "flex",
+          paneOpen ? "hidden md:flex" : "flex",
         )}
       >
         <header
@@ -945,9 +1016,17 @@ export function MessagesInbox({
           )}
           {/* New coaching applications, with the AI's read and a text to send (admin). */}
           {role === "admin" && !search && filter === "Inbox" && <LeadsInboxRow />}
-          {conversations.length === 0 ? (
+          {listRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No conversations.</div>
-          ) : conversations.map(({ client, state, last, unread, liftReview, workflow, signals, tags }) => (
+          ) : listRows.map((row) => row.kind === "support" ? (
+            <SupportChatRow
+              key={`support:${row.item.threadId}`}
+              chat={row.item}
+              selected={supportId === row.item.threadId || (!!selectedId && selectedId === row.item.clientId)}
+              onOpen={() => selectSupport(row.item.threadId)}
+              onAction={supportAction}
+            />
+          ) : (({ client, state, last, unread, liftReview, workflow, signals, tags }) => (
             <SwipeableRow
               key={client.id}
               actions={[
@@ -1059,7 +1138,7 @@ export function MessagesInbox({
               )}
             />
             </SwipeableRow>
-          ))}
+          ))(row.item))}
         </div>
       </aside>
 
@@ -1067,10 +1146,21 @@ export function MessagesInbox({
       <section
         className={cn(
           "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-          selected ? "flex" : "hidden md:flex",
+          paneOpen ? "flex" : "hidden md:flex",
         )}
       >
-        {selected ? (
+        {supportOpen ? (
+          <MemberSupportPane
+            key={openSupport?.threadId ?? supportId ?? `client:${selected?.id}`}
+            threadId={openSupport?.threadId ?? supportId ?? undefined}
+            clientId={openSupport || supportId ? undefined : selected?.id}
+            fallback={openSupport
+              ? { name: openSupport.name, avatar: openSupport.avatar }
+              : selected ? { name: selected.full_name ?? "Member", avatar: selected.profile_picture_url ?? null } : undefined}
+            onBack={clearSelection}
+            embedded={embedded}
+          />
+        ) : selected ? (
           <>
             <header
               className="flex items-center gap-1.5 border-b border-border bg-card/80 px-2 py-2 backdrop-blur sm:gap-2 supports-[backdrop-filter]:bg-card/60 md:px-4"
@@ -1267,6 +1357,61 @@ export function MessagesInbox({
       </div>
       )}
     </div>
+  );
+}
+
+/** A JF member's Support chat in the list: their face, the latest message, the blue dot, "JF member · Support". */
+function SupportChatRow({
+  chat, selected, onOpen, onAction,
+}: {
+  chat: SupportChat;
+  selected: boolean;
+  onOpen: () => void;
+  onAction: (threadId: string, patch: { status?: "open" | "closed"; read?: boolean }, ok: string) => Promise<void>;
+}) {
+  const unread = chat.unread > 0;
+  return (
+    <SwipeableRow
+      actions={[
+        {
+          key: "unread",
+          label: unread ? "Read" : "Unread",
+          color: "primary",
+          icon: unread ? <MailOpen className="h-4 w-4" /> : <Mail className="h-4 w-4" />,
+          onSelect: () => onAction(chat.threadId, { read: unread }, unread ? "Marked read" : "Marked unread"),
+        },
+        chat.done
+          ? {
+              key: "reopen",
+              label: "Inbox",
+              color: "primary" as const,
+              icon: <Archive className="h-4 w-4" />,
+              onSelect: () => onAction(chat.threadId, { status: "open" }, "Back in your Inbox"),
+            }
+          : {
+              key: "done",
+              label: "Done",
+              color: "primary" as const,
+              icon: <Check className="h-4 w-4" />,
+              onSelect: () => onAction(chat.threadId, { status: "closed" }, "Done. It comes back if they write again."),
+            },
+      ]}
+    >
+      <ChatListRow
+        data-support-row={chat.threadId}
+        onClick={onOpen}
+        selected={selected}
+        dim={chat.done}
+        unread={unread}
+        unreadLabel={`${chat.unread} new message${chat.unread === 1 ? "" : "s"}`}
+        at={chat.at}
+        avatar={<UserAvatar src={chat.avatar} name={chat.name} size={CHAT_ROW_AVATAR} expandable={false} />}
+        name={chat.name}
+        preview={chat.preview || "New message"}
+        extra={<span className="mt-0.5 block truncate text-[13px] leading-[18px] text-muted-foreground" data-support-line>{SUPPORT_LINE}</span>}
+        label={`${chat.name}, Support chat${unread ? ", new message" : ""}`}
+      />
+    </SwipeableRow>
   );
 }
 

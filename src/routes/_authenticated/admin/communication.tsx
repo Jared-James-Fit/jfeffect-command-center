@@ -23,7 +23,9 @@ function TabFallback() {
 const TABS = [
   { value: "messages", label: "1:1 Chats" },
   { value: "groups", label: "Groups" },
-  { value: "support", label: "Support" },
+  // App problems (a workout that didn't load, a sync that failed). Members'
+  // Support chats are 1:1 Chats rows, answered like any chat.
+  { value: "support", label: "Alerts" },
 ] as const;
 type TabKey = typeof TABS[number]["value"];
 
@@ -39,13 +41,20 @@ function isTab(v: unknown): v is TabKey {
   return typeof v === "string" && TABS.some((t) => t.value === v);
 }
 
-type Search = { tab: TabKey; client?: string; sub?: string };
+type Search = { tab: TabKey; client?: string; sub?: string; support?: string };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const Route = createFileRoute("/_authenticated/admin/communication")({
   validateSearch: (raw: Record<string, unknown>): Search => {
     const t = typeof raw?.tab === "string" && LEGACY_TABS[raw.tab] ? LEGACY_TABS[raw.tab] : raw?.tab;
     const client = typeof raw?.client === "string" ? (raw.client as string) : undefined;
     const sub = typeof raw?.sub === "string" ? (raw.sub as string) : undefined;
+    // A member's Support chat (a push, or an old Support-tab ticket link "t:<id>") opens in 1:1 Chats.
+    const ticket = /^t:(.+)$/.exec(sub ?? "")?.[1];
+    const support = typeof raw?.support === "string" && UUID.test(raw.support) ? raw.support
+      : ticket && UUID.test(ticket) ? ticket : undefined;
+    if (support) return { tab: "messages", support };
     if (isTab(t)) return { tab: t, client, sub };
     // No ?tab= opens Chats, never whichever tab was used last.
     return { tab: "messages", client, sub };
@@ -61,11 +70,11 @@ export const Route = createFileRoute("/_authenticated/admin/communication")({
 });
 
 function CommunicationWorkspace() {
-  const { tab, client, sub } = Route.useSearch();
+  const { tab, client, sub, support } = Route.useSearch();
   const navigate = useNavigate();
   const viewportLockedTab = tab === "messages" || tab === "groups" || tab === "support";
   const { data: badgeCounts } = useAdminNavBadgeCounts();
-  const supportCount = (badgeCounts?.supportAlerts ?? 0) + (badgeCounts?.supportTickets ?? 0);
+  const supportCount = badgeCounts?.supportAlerts ?? 0;
 
   // Tabs scroll sideways on phones: fade whichever edge has more tabs, and
   // keep the active tab in view.
@@ -161,7 +170,7 @@ function CommunicationWorkspace() {
       <div className="hidden md:block">
         <PageHeader
           title="Communication"
-          subtitle="Chats, group chats and support. Popups and chat media live in Settings."
+          subtitle="Chats (members' Support chats too), group chats and app alerts. Popups and chat media live in Settings."
         />
       </div>
       <div className="flex shrink-0 items-center border-b border-border bg-background/50">
@@ -212,7 +221,7 @@ function CommunicationWorkspace() {
           messenger header/sidebar to drift as the outer container scrolls. */}
       {viewportLockedTab && (
         <div className="min-h-0 flex-1 overflow-hidden">
-          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} embedded view="chats" />}
+          {tab === "messages" && <MessagesInbox key="chats" initialClient={client} initialSupport={support} embedded view="chats" />}
           {tab === "groups" && <MessagesInbox key="groups" embedded view="groups" />}
           {tab === "support" && (
             <Suspense fallback={<TabFallback />}>

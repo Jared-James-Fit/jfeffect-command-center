@@ -22,7 +22,8 @@ describe("membership experience", () => {
     expect(support).toContain("JF Effect Support");
     expect(support).toContain("Message support…");
     expect(support).toContain("rounded-br-md bg-primary");
-    expect(support).toContain("rounded-bl-md border border-border bg-card");
+    // the team's replies read like the coach chat's incoming bubbles
+    expect(support).toContain("rounded-bl-md bg-secondary");
   });
 
   it("labels member nutrition as suggested and includes the disclaimer", () => {

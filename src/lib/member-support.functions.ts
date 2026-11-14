@@ -1,53 +1,45 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { avatarFor } from "@/lib/member-support";
 
-const Category = z.enum(["question", "bug", "suggestion", "reply"]);
+/**
+ * Member support: a JF member's one conversation with JF Effect (they have no
+ * coach chat). The member writes from Support (/portal/support); the coach
+ * answers in Messages, where each member's chat is a row in 1:1 Chats
+ * (staff_support_threads, member-support-pane.tsx). Each side gets a push
+ * when the other writes (support_message / support_reply).
+ *
+ * A thread exists only once someone writes: opening Support never makes one,
+ * so the coach's list never fills with empty chats.
+ */
 
-/** Live-support agent: read count of currently-available agents (any signed-in user). */
-export const getLiveSupportStatus = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
-    const { data: agents } = await supabase
-      .from("live_support_agents")
-      .select("user_id,is_available,updated_at");
-    const available = (agents ?? []).filter((a: any) => a.is_available);
-    const mine = (agents ?? []).find((a: any) => a.user_id === userId) ?? null;
-    return {
-      availableCount: available.length,
-      isAvailable: !!mine?.is_available,
-    };
-  });
+const Body = z.string().trim().min(1).max(4000);
 
-/** Live-support agent: toggle own availability. */
-export const setLiveSupportAvailability = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) => z.object({ available: z.boolean() }).parse(i))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { error } = await supabase
-      .from("live_support_agents")
-      .upsert({ user_id: userId, is_available: data.available, updated_at: new Date().toISOString() });
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
+/** The member's own client record (every member has one), for pushes. */
+async function clientIdForUser(admin: any, userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const { data } = await admin
+    .from("clients")
+    .select("id, service_tier")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  const rows = (data ?? []) as { id: string; service_tier: string | null }[];
+  return (rows.find((r) => r.service_tier === "self_serve") ?? rows[0])?.id ?? null;
+}
 
-/** Member: get-or-create own thread + list messages. */
+/* ---------- Member ---------- */
+
+/** Member: their support chat (null until they first write). */
 export const getMySupportThread = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const { data: me } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
-    if (!me) throw new Error("Member not found");
-    let { data: thread } = await supabase
+    if (!me) return { thread: null, messages: [] as any[] };
+    const { data: thread } = await supabase
       .from("member_support_threads").select("*").eq("member_id", me.id).maybeSingle();
-    if (!thread) {
-      const ins = await supabase.from("member_support_threads")
-        .insert({ member_id: me.id }).select("*").single();
-      if (ins.error) throw new Error(ins.error.message);
-      thread = ins.data;
-    }
+    if (!thread) return { thread: null, messages: [] as any[] };
     const { data: messages } = await supabase
       .from("member_support_messages")
       .select("*")
@@ -56,148 +48,210 @@ export const getMySupportThread = createServerFn({ method: "GET" })
     return { thread, messages: messages ?? [] };
   });
 
-/** Member: send a message. */
+/** Member: send a message (makes the chat on the first one) and push the team. */
 export const sendSupportMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i: unknown) =>
     z.object({
-      body: z.string().trim().min(1).max(4000),
-      category: Category.default("question"),
+      body: Body,
+      category: z.enum(["question", "bug", "suggestion"]).default("question"),
     }).parse(i),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: me } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
-    if (!me) throw new Error("Member not found");
+    if (!me) throw new Error("Support is for JF Effect members.");
     let { data: thread } = await supabase
       .from("member_support_threads").select("id").eq("member_id", me.id).maybeSingle();
     if (!thread) {
       const ins = await supabase.from("member_support_threads")
         .insert({ member_id: me.id }).select("id").single();
-      if (ins.error) throw new Error(ins.error.message);
-      thread = ins.data;
+      if (ins.error) {
+        // Two sends at once: the other one made it.
+        const again = await supabase.from("member_support_threads").select("id").eq("member_id", me.id).maybeSingle();
+        if (!again.data) throw new Error(ins.error.message);
+        thread = again.data;
+      } else {
+        thread = ins.data;
+      }
     }
-    const { error } = await supabase.from("member_support_messages").insert({
-      thread_id: thread.id,
+    const { data: msg, error } = await supabase.from("member_support_messages").insert({
+      thread_id: thread!.id,
       member_id: me.id,
       sender_user_id: userId,
       sender_role: "member",
       category: data.category,
       body: data.body,
-    });
+    }).select("id, created_at").single();
     if (error) throw new Error(error.message);
-    return { ok: true };
+
+    // Tell the team (content-free; never fails the send).
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+      const clientId = await clientIdForUser(supabaseAdmin, userId);
+      if (clientId) {
+        await notifyAppEvent(supabaseAdmin as any, "support_message", {
+          clientId, sourceId: msg.id, actorUserId: userId, target: thread!.id,
+        });
+      }
+    } catch (e) {
+      console.warn("[support] push to team failed", e);
+    }
+    return { ok: true, message: msg };
   });
 
-/** Member: mark team messages read. */
+/** Member: they've read the team's replies. */
 export const markMyThreadRead = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const { data: me } = await supabase.from("app_members").select("id").eq("user_id", userId).maybeSingle();
     if (!me) return { ok: true };
-    await supabase.from("member_support_threads").update({ unread_for_member: 0 }).eq("member_id", me.id);
+    await supabase.from("member_support_threads").update({ unread_for_member: 0 }).eq("member_id", me.id).gt("unread_for_member", 0);
     return { ok: true };
   });
 
-/* ---------- Admin / team ---------- */
+/* ---------- Staff (the coach's Messages) ---------- */
 
-async function assertTeam(ctx: any) {
-  const { data: isAdmin } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
-  if (isAdmin) return;
-  const { data: coach } = await ctx.supabase
-    .from("coaches").select("id").eq("user_id", ctx.userId).eq("archived", false).eq("status", "Active").maybeSingle();
-  if (!coach) throw new Error("Team access required");
+type Who = { threadId?: string; clientId?: string };
+const WhoSchema = z.object({ threadId: z.string().uuid().optional(), clientId: z.string().uuid().optional() })
+  .refine((w) => !!w.threadId || !!w.clientId, "Pick a chat");
+
+/**
+ * The member behind a thread or a client record, and whether the signed-in
+ * staff member may answer them: an admin always, a coach for members
+ * assigned to them (the tables' own RLS rule).
+ */
+async function resolveMember(ctx: any, who: Who) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const admin = supabaseAdmin as any;
+  let memberId: string | null = null;
+  let thread: any = null;
+  if (who.threadId) {
+    const { data } = await admin.from("member_support_threads").select("*").eq("id", who.threadId).maybeSingle();
+    if (!data) throw new Error("That support chat is gone.");
+    thread = data;
+    memberId = data.member_id;
+  } else {
+    const { data: c } = await admin.from("clients").select("user_id").eq("id", who.clientId).maybeSingle();
+    if (!c?.user_id) throw new Error("This person doesn't have an app account yet.");
+    const { data: m } = await admin.from("app_members").select("id").eq("user_id", c.user_id).maybeSingle();
+    if (!m) throw new Error("This person doesn't have a member account.");
+    memberId = m.id;
+    const { data: t } = await admin.from("member_support_threads").select("*").eq("member_id", memberId).maybeSingle();
+    thread = t ?? null;
+  }
+  const [{ data: isAdmin }, { data: isCoach }] = await Promise.all([
+    ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" }),
+    ctx.supabase.rpc("is_assigned_coach_for_member", { _member_id: memberId }),
+  ]);
+  if (!isAdmin && !isCoach) throw new Error("Only an admin or their coach can answer this chat.");
+  const { data: member } = await admin
+    .from("app_members").select("id, user_id, full_name, email, avatar_url").eq("id", memberId).maybeSingle();
+  const clientId = who.clientId ?? (await clientIdForUser(admin, member?.user_id));
+  let client: any = null;
+  if (clientId) {
+    const { data } = await admin
+      .from("clients").select("id, full_name, profile_picture_url, service_tier, last_active_at").eq("id", clientId).maybeSingle();
+    client = data;
+  }
+  return { admin, memberId: memberId as string, thread, member, client };
 }
 
-export const listSupportThreads = createServerFn({ method: "GET" })
+/** Staff: one member's support chat, by its thread or by their client record. Opening it reads it. */
+export const getMemberSupport = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: { status?: string } | undefined) => i ?? {})
+  .inputValidator((i: unknown) => WhoSchema.parse(i))
   .handler(async ({ data, context }) => {
-    await assertTeam(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin
-      .from("member_support_threads")
-      .select("*, member:app_members!member_support_threads_member_id_fkey(id, full_name, email, avatar_url, account_type)")
-      .order("last_member_message_at", { ascending: false, nullsFirst: false });
-    if (data?.status) q = q.eq("status", data.status);
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
-    // Last message per thread, for the inbox preview line.
-    const ids = (rows ?? []).map((r: any) => r.id);
-    const last = new Map<string, { body: string; category: string | null; sender_role: string; created_at: string }>();
-    if (ids.length) {
-      const { data: msgs } = await supabaseAdmin
+    const { admin, thread, member, client } = await resolveMember(context, data);
+    let messages: any[] = [];
+    if (thread) {
+      const { data: rows } = await admin
         .from("member_support_messages")
-        .select("thread_id, body, category, sender_role, created_at")
-        .in("thread_id", ids)
-        .order("created_at", { ascending: false })
-        .limit(1000);
-      for (const m of (msgs ?? []) as any[]) if (!last.has(m.thread_id)) last.set(m.thread_id, m);
+        .select("id, sender_role, sender_user_id, category, body, created_at")
+        .eq("thread_id", thread.id)
+        .order("created_at", { ascending: true });
+      messages = rows ?? [];
+      if ((thread.unread_for_team ?? 0) > 0) {
+        await admin.from("member_support_threads").update({ unread_for_team: 0 }).eq("id", thread.id);
+        thread.unread_for_team = 0;
+      }
     }
-    return { threads: (rows ?? []).map((r: any) => ({ ...r, last_message: last.get(r.id) ?? null })) };
+    return {
+      thread,
+      messages,
+      person: {
+        clientId: client?.id ?? null,
+        name: client?.full_name?.trim() || member?.full_name?.trim() || member?.email || "Member",
+        email: member?.email ?? null,
+        avatar: avatarFor(client?.profile_picture_url, member?.avatar_url),
+        tier: client?.service_tier ?? null,
+        lastActiveAt: client?.last_active_at ?? null,
+      },
+    };
   });
 
-export const getSupportThread = createServerFn({ method: "GET" })
+/** Staff: answer a member (starts their chat if there isn't one) and push them. */
+export const replyMemberSupport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: { threadId: string }) => z.object({ threadId: z.string().uuid() }).parse(i))
+  .inputValidator((i: unknown) => z.object({
+    threadId: z.string().uuid().optional(),
+    clientId: z.string().uuid().optional(),
+    body: Body,
+  }).refine((w) => !!w.threadId || !!w.clientId, "Pick a chat").parse(i))
   .handler(async ({ data, context }) => {
-    await assertTeam(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: thread } = await supabaseAdmin
-      .from("member_support_threads")
-      .select("*, member:app_members!member_support_threads_member_id_fkey(id, full_name, email, avatar_url, account_type, phone)")
-      .eq("id", data.threadId).maybeSingle();
-    if (!thread) throw new Error("Thread not found");
-    const { data: messages } = await supabaseAdmin
-      .from("member_support_messages")
-      .select("*")
-      .eq("thread_id", data.threadId)
-      .order("created_at", { ascending: true });
-    // Mark read for team.
-    await supabaseAdmin.from("member_support_threads").update({ unread_for_team: 0 }).eq("id", data.threadId);
-    return { thread, messages: messages ?? [] };
-  });
-
-export const replySupportMessage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
-    z.object({
-      threadId: z.string().uuid(),
-      body: z.string().trim().min(1).max(4000),
-    }).parse(i),
-  )
-  .handler(async ({ data, context }) => {
-    await assertTeam(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: thread } = await supabaseAdmin
-      .from("member_support_threads").select("member_id").eq("id", data.threadId).maybeSingle();
-    if (!thread) throw new Error("Thread not found");
-    const { error } = await supabaseAdmin.from("member_support_messages").insert({
-      thread_id: data.threadId,
-      member_id: thread.member_id,
+    const resolved = await resolveMember(context, data);
+    const { admin, memberId, member, client } = resolved;
+    let thread = resolved.thread;
+    if (!thread) {
+      const ins = await admin.from("member_support_threads").insert({ member_id: memberId }).select("*").single();
+      if (ins.error) {
+        const again = await admin.from("member_support_threads").select("*").eq("member_id", memberId).maybeSingle();
+        if (!again.data) throw new Error(ins.error.message);
+        thread = again.data;
+      } else {
+        thread = ins.data;
+      }
+    }
+    // As the coach (RLS: admin, or their coach), so the row says who wrote it.
+    const { data: msg, error } = await context.supabase.from("member_support_messages").insert({
+      thread_id: thread.id,
+      member_id: memberId,
       sender_user_id: context.userId,
       sender_role: "team",
       category: "reply",
       body: data.body,
-    });
+    }).select("id, sender_role, sender_user_id, category, body, created_at").single();
     if (error) throw new Error(error.message);
-    return { ok: true };
+
+    try {
+      const { notifyAppEvent } = await import("@/lib/push/app-events.server");
+      const clientId = client?.id ?? (await clientIdForUser(admin, member?.user_id));
+      if (clientId) {
+        await notifyAppEvent(admin, "support_reply", { clientId, sourceId: msg.id, actorUserId: context.userId });
+      }
+    } catch (e) {
+      console.warn("[support] push to member failed", e);
+    }
+    return { ok: true, threadId: thread.id as string, message: msg };
   });
 
-export const setSupportThreadStatus = createServerFn({ method: "POST" })
+/** Staff: Done (closed, under Archived until they write again), reopen, or read / unread. */
+export const updateMemberSupport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i: unknown) =>
-    z.object({
-      threadId: z.string().uuid(),
-      status: z.enum(["open", "answered", "closed"]),
-    }).parse(i),
-  )
+  .inputValidator((i: unknown) => z.object({
+    threadId: z.string().uuid(),
+    status: z.enum(["open", "answered", "closed"]).optional(),
+    read: z.boolean().optional(),
+  }).parse(i))
   .handler(async ({ data, context }) => {
-    await assertTeam(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
-      .from("member_support_threads").update({ status: data.status }).eq("id", data.threadId);
+    const { admin, thread } = await resolveMember(context, { threadId: data.threadId });
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.status) patch.status = data.status;
+    if (data.read === true) patch.unread_for_team = 0;
+    if (data.read === false) patch.unread_for_team = Math.max(1, thread?.unread_for_team ?? 0);
+    const { error } = await admin.from("member_support_threads").update(patch).eq("id", data.threadId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

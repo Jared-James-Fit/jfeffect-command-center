@@ -16,7 +16,7 @@ export const FILTER_HELP: Record<Exclude<InboxFilterKey, "Inbox">, string> = {
   Pain: "A client said something hurt after a workout. Worth a check-in.",
   Media: "Photos and videos a client sent in the last 2 weeks that you haven't replied to or reacted to.",
   Sessions: "A client asked for a session and is waiting on your answer.",
-  Archived: "Chats you archived. One comes back to the Inbox when the client writes.",
+  Archived: "Chats you archived, and members' Support chats you marked Done. One comes back to the Inbox when they write.",
 };
 
 /** The Inbox's line: how many chats have a new message, the same number as the Messages tab. */
@@ -31,13 +31,14 @@ export function filterHelp(filter: InboxFilterKey, newChats: number): string {
 
 /** The guide's sections, in the order a coach meets them. */
 export const GUIDE_BADGE =
-  "How many chats have a new message from a client that you haven't read. The Inbox chip shows the same number. Forms and check-ins never add to it: they have their own filters. Opening the chat clears it.";
+  "How many chats have a new message you haven't read, from a client or from a member writing to Support. The Inbox chip shows the same number. Forms and check-ins never add to it: they have their own filters. Opening the chat clears it.";
 
 export const GUIDE_ROW: { title: string; body: string }[] = [
   { title: "Blue dot and bold name", body: "A new message you haven't read. Swipe left to mark a chat read or unread." },
   { title: "The line under a name", body: "What's waiting on you, most important first: red is pain, amber is overdue, blue is something to review." },
   { title: "Their photo or that line", body: "Opens the Brief: everything waiting on you for that client, with a short summary." },
   { title: "Swipe a chat left", body: "Read or Unread, Done when no reply is needed, and Archive for a chat that's finished." },
+  { title: "JF member · Support", body: "A free member (no coach) writing to Support in their app. Reply right here: they get a push and read it on their Support screen." },
 ];
 
 export const GUIDE_FILTERS_NOTE = "A filter only shows while something's in it. Its number is how many clients are in it, in the colour of their line: red is pain, amber is overdue, blue is something to review.";
