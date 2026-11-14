@@ -798,7 +798,7 @@ const ReviewInput = z.intersection(
     sessionRpe: z.number().int().min(1).max(10),
     pain: z.boolean().default(false),
     painLevel: z.number().int().min(1).max(10).nullable().optional(),
-    painArea: z.string().nullable().optional(),
+    painArea: z.string().max(400).nullable().optional(),
     painNote: z.string().nullable().optional(),
     clientNote: z.string().nullable().optional(),
     strengthFeel: z.string().nullable().optional(),

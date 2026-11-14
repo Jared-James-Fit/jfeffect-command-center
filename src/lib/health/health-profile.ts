@@ -24,6 +24,7 @@ import type { FactKind, FoodHistory, StickyFact } from "@/lib/nutrition-targets/
 import { saidWhen, splitHealthParts } from "@/lib/nutrition-targets/food-history";
 import { isNoneAnswer } from "@/lib/nutrition-targets/food-notes";
 import { answerFor, type QA } from "@/lib/nutrition-ai-prompts";
+import { painAreaParts } from "@/lib/workout-review";
 
 export type HealthKind = "injury" | "condition" | "medication" | "supplement" | "allergy";
 export type SupplementBudget = "essentials" | "some" | "open";
@@ -266,12 +267,15 @@ export function buildHealthProfile(input: HealthInput): HealthProfile {
   for (const p of input.pain ?? []) {
     const d = day(p.date);
     if (!d || d < since) continue;
-    const area = clean(p.area).toLowerCase() || "not said";
-    const a = byArea.get(area) ?? { area, count: 0, last: d, worst: null };
-    a.count++;
-    if (d > a.last) a.last = d;
-    if (p.level != null && (a.worst == null || p.level > a.worst)) a.worst = p.level;
-    byArea.set(area, a);
+    // each place on its own, in words ("Neck, Shoulder (R)" is neck and right shoulder)
+    const places = painAreaParts(p.area).map((x) => x.toLowerCase());
+    for (const area of places.length ? places : ["not said"]) {
+      const a = byArea.get(area) ?? { area, count: 0, last: d, worst: null };
+      a.count++;
+      if (d > a.last) a.last = d;
+      if (p.level != null && (a.worst == null || p.level > a.worst)) a.worst = p.level;
+      byArea.set(area, a);
+    }
   }
   const pain = [...byArea.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
 

@@ -1,4 +1,4 @@
-import { parsePainArea } from "@/lib/workout-review";
+import { painAreaParts } from "@/lib/workout-review";
 
 /**
  * A coaching client's workout notes reach their coach in Messages: the
@@ -42,17 +42,15 @@ export type WorkoutNoteEntry = {
   message_id: string | null;
 };
 
-/** "Left knee", "Both knees", "Low back" — from the review's stored "Knee (L)". */
+/**
+ * "Left knee", "Both knees", "Neck, right shoulder" — from the review's stored
+ * "Knee (L)" / "Neck, Shoulder (R)". Anything else reads as written.
+ */
 export function painAreaLabel(stored: string | null | undefined): string | null {
-  const s = (stored ?? "").trim();
-  if (!s) return null;
-  const { area, side } = parsePainArea(s);
-  if (!area) return s;
-  const a = area.toLowerCase();
-  if (side === "L") return `Left ${a}`;
-  if (side === "R") return `Right ${a}`;
-  if (side === "both") return `Both ${a.endsWith("s") ? a : `${a}s`}`;
-  return area;
+  const parts = painAreaParts(stored);
+  if (!parts.length) return null;
+  // later places in lower case ("Neck, right shoulder"), unless it's an acronym ("SI joint")
+  return parts.map((p, i) => (i && /^[A-Z][a-z]/.test(p) ? p[0].toLowerCase() + p.slice(1) : p)).join(", ");
 }
 
 /** Same words as the review's chips: 3 Mild, 5 Moderate, 8 Sharp. */
