@@ -85,7 +85,9 @@ describe("the coach's community, in one place", () => {
       { post_id: "a", comment_id: "2", created_at: "", body: "y", name: "Alyssa", avatar_url: null },
     ];
     // two comments on one post is one reply to make
-    expect(hubTabCounts({ ...base, to_reply: replies, waiting_props: 2 }).needs).toBe(3);
+    expect(hubTabCounts({ ...base, to_reply: replies, waiting_props: 2 }).needs).toBe(1);
+    // workouts waiting on props are listed, never counted (there's nearly always a week of them)
+    expect(hubTabCounts({ ...base, waiting_props: 27 }).needs).toBe(0);
     // the crew's reports wait there too
     expect(hubTabCounts(base, 2).needs).toBe(2);
     // a lesson or birthday post waiting for an OK: on Needs you and Posts
