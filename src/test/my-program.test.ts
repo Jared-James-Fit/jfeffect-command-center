@@ -314,5 +314,9 @@ describe("the membership screens stay calm and never dead-end", () => {
     const dialog = readFileSync("src/components/programs/start-plan-dialog.tsx", "utf8");
     expect(dialog).toContain('navigate({ to: "/portal/workouts", replace: true });');
     expect(dialog).toContain("data-switch-note");
+    // the old program's days never show after a switch or an end while the list refetches
+    expect(dialog).toContain('void qc.resetQueries({ queryKey: ["my-workouts"] });');
+    const hook = readFileSync("src/components/athlete-programs/use-my-program.ts", "utf8");
+    expect(hook).toContain('void qc.resetQueries({ queryKey: ["my-workouts"] });');
   });
 });

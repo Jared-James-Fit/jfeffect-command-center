@@ -164,7 +164,10 @@ export function StartPlanDialog({
         `${title} is on your calendar${days.length ? `: ${listDays(days)}` : ""}${when ? `, from ${when}` : ""}.${ended}`,
         { duration: 7000 },
       );
-      // a new program touches the schedule, today, workouts, analytics
+      // a new program touches the schedule, today, workouts, analytics. The
+      // program list is dropped, not just marked old: Workouts shows its
+      // placeholder until the new program is in, never the old one's days.
+      void qc.resetQueries({ queryKey: ["my-workouts"] });
       void qc.invalidateQueries();
       // replace this page: Back from Workouts never returns to a program you just started
       navigate({ to: "/portal/workouts", replace: true });
