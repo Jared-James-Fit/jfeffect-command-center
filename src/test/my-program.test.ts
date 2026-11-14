@@ -313,7 +313,9 @@ describe("the membership screens stay calm and never dead-end", () => {
 
   it("Programs pages light the Workouts tab, and the start sheet replaces itself in history", () => {
     const nav = readFileSync("src/lib/admin-nav.ts", "utf8");
-    expect(nav).toContain('export const WORKOUTS_AREA = ["/portal/programs", "/portal/plans", "/portal/exercises"];');
+    expect(nav).toContain(
+      'export const WORKOUTS_AREA = ["/portal/programs", "/portal/plans", "/portal/exercises", "/portal/schedule"];',
+    );
     expect(nav.match(/activeOn: WORKOUTS_AREA/g)?.length).toBe(2);
     const dialog = readFileSync("src/components/programs/start-plan-dialog.tsx", "utf8");
     expect(dialog).toContain('navigate({ to: "/portal/workouts", replace: true });');
@@ -322,5 +324,32 @@ describe("the membership screens stay calm and never dead-end", () => {
     expect(dialog).toContain('void qc.resetQueries({ queryKey: ["my-workouts"] });');
     const hook = readFileSync("src/components/athlete-programs/use-my-program.ts", "utf8");
     expect(hook).toContain('void qc.resetQueries({ queryKey: ["my-workouts"] });');
+  });
+});
+
+describe("Workouts reads today first, and every page under it has a way back", () => {
+  const workouts = readFileSync("src/components/workouts/WorkoutsExperience.tsx", "utf8");
+  it("the schedule's Week · Month · Block is one control in the athlete's header, a row only on a coach's view", () => {
+    expect(workouts).toContain(
+      '{mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}',
+    );
+    expect(workouts).toContain('{mode === "coach" && <ScheduleViewSwitch view={view} onChange={setView} />}');
+    expect(workouts.match(/aria-label="Schedule view"/g)?.length).toBe(1);
+  });
+
+  it("no empty readiness or month card before there's anything in them", () => {
+    expect(workouts).toMatch(/<RecoveryPreviewCard[\s\S]{0,160}hideWhenEmpty/);
+    expect(workouts).toContain("<TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty />");
+    const ready = readFileSync("src/components/analytics/recovery-preview-card.tsx", "utf8");
+    expect(ready.match(/if \(hideWhenEmpty\) return null;/g)?.length).toBe(2);
+    const month = readFileSync("src/components/training-analytics-preview-card.tsx", "utf8");
+    expect(month).toContain("if (hideWhenEmpty && (isLoading || empty)) return null;");
+  });
+
+  it("Programs and Move workouts have Back like the program, plan, builder and analytics pages", () => {
+    const hub = readFileSync("src/components/athlete-programs/programs-hub.tsx", "utf8");
+    expect(hub).toMatch(/title="Programs"\s+backTo="\/portal\/workouts"/);
+    const move = readFileSync("src/routes/_authenticated/portal/schedule.tsx", "utf8");
+    expect(move).toContain('backTo="/portal/workouts"');
   });
 });

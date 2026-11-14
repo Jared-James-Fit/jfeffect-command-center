@@ -11,7 +11,7 @@ import type { NavItem } from "@/components/app-shell";
  * back to it, so its tab stays lit there (a page that lights no tab reads as
  * somewhere else in the app).
  */
-export const WORKOUTS_AREA = ["/portal/programs", "/portal/plans", "/portal/exercises"];
+export const WORKOUTS_AREA = ["/portal/programs", "/portal/plans", "/portal/exercises", "/portal/schedule"];
 
 // Staff menus live in `@/lib/internal-nav` (one role-aware registry for the
 // sidebar, More and the phone bar). These are the client portal's.

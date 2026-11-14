@@ -298,7 +298,11 @@ export function WorkoutsExperience({
         // you've moved off today; analytics is the month card's and this ⋮.
         actionsInline={mode === "self"}
         actions={
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
+            {/* The schedule's three views sit in the header, beside ⋯: a page
+                control, not the first thing on the page (the calendar and
+                today's workout are). */}
+            {mode === "self" && !noProgram && <ScheduleViewSwitch view={view} onChange={setView} compact />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-9 w-9 p-0" aria-label="More actions">
@@ -359,24 +363,8 @@ export function WorkoutsExperience({
 
         {/* One control for the schedule: this week, the month, or the block's workouts in order.
             (The Calendar page is for appointments; this is the training schedule.) */}
-        {!noProgram && (
-        <div className="grid grid-cols-3 rounded-xl bg-muted p-1" role="group" aria-label="Schedule view" data-testid="workouts-view">
-          {(["week", "month", "block"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              aria-pressed={view === v}
-              className={cn(
-                "h-9 rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                view === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {v === "week" ? "Week" : v === "month" ? "Month" : "Block"}
-            </button>
-          ))}
-        </div>
-        )}
+        {/* A coach's view of a client keeps the switch on its own row (the header holds the client's name). */}
+        {mode === "coach" && <ScheduleViewSwitch view={view} onChange={setView} />}
 
         {/* Training days: only while they still have to be set (or read-only for a coach); the athlete's are in ⋯. */}
         {showDaysChip && !noProgram && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}
@@ -487,6 +475,7 @@ export function WorkoutsExperience({
                 <RecoveryPreviewCard
                   clientId={clientId}
                   analyticsTo={"/portal/workouts/analytics"}
+                  hideWhenEmpty
                 />
                 <DeferredAnalytics clientId={clientId} />
               </>
@@ -539,14 +528,11 @@ function DeferredAnalytics({ clientId }: { clientId: string }) {
   // Render the analytics card immediately alongside the rest of the page so
   // sections appear together instead of popping in one-by-one on scroll.
   return (
-    // sized to the month card (its label, one row of numbers, the More / analytics row)
-    <div className="min-h-[148px]">
-      <Suspense
-        fallback={
-          <Card className="h-[148px] animate-pulse bg-muted/30" aria-hidden />
-        }
-      >
-        <TrainingAnalyticsPreviewCard clientId={clientId} />
+    // no reserved height: the card isn't there at all until there's a workout to count
+    // (empty:hidden, so an empty wrapper takes no gap in the column either)
+    <div className="empty:hidden">
+      <Suspense fallback={null}>
+        <TrainingAnalyticsPreviewCard clientId={clientId} hideWhenEmpty />
       </Suspense>
     </div>
   );
@@ -677,6 +663,46 @@ function MonthGrid({
 /* ---------------------------------------------------------------------- */
 /* Selected day card                                                      */
 /* ---------------------------------------------------------------------- */
+
+/**
+ * One control for the schedule: this week, the month, or the block's workouts
+ * in order (the Calendar page is for appointments). Compact in the athlete's
+ * header; a full-width row on a coach's view of a client.
+ */
+function ScheduleViewSwitch({
+  view,
+  onChange,
+  compact = false,
+}: {
+  view: "week" | "month" | "block";
+  onChange: (v: "week" | "month" | "block") => void;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(compact ? "inline-flex rounded-lg bg-muted p-0.5" : "grid grid-cols-3 rounded-xl bg-muted p-1")}
+      role="group"
+      aria-label="Schedule view"
+      data-testid="workouts-view"
+    >
+      {(["week", "month", "block"] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          aria-pressed={view === v}
+          className={cn(
+            "font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            compact ? "h-9 rounded-md px-2.5 text-[13px]" : "h-9 rounded-lg text-sm",
+            view === v ? "bg-background text-foreground shadow-sm dark:bg-[oklch(0.34_0.008_280)]" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {v === "week" ? "Week" : v === "month" ? "Month" : "Block"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 type NextWorkout = { date: Date; title: string };
 
