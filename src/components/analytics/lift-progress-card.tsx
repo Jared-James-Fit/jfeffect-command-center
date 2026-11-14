@@ -72,12 +72,18 @@ export function LiftProgressCard({
   displayUnit,
   conv,
   onOpenSet,
+  single = false,
 }: {
   history: LiftHistory[];
   displayUnit: Unit;
   /** lb → display unit. */
   conv: (lb: number) => number;
-  onOpenSet: (point: GraphDotPoint) => void;
+  onOpenSet?: (point: GraphDotPoint) => void;
+  /**
+   * One exercise's own progress (its History sheet): no exercise picker, and
+   * no session list (the sheet lists every day right under it).
+   */
+  single?: boolean;
 }) {
   const [selectedEx, setSelectedEx] = useState("");
   const [metric, setMetric] = useState<Metric>("est");
@@ -242,7 +248,8 @@ export function LiftProgressCard({
     .slice(0, showAllSessions ? undefined : SESSIONS_SHOWN);
 
   return (
-    <Card className="space-y-4 border-border/80 bg-card p-4">
+    <Card className="space-y-4 border-border/80 bg-card p-4" data-lift-progress={single ? "single" : undefined}>
+      {!single && (
       <div className="space-y-2">
         <SearchableSelect
           options={exerciseOptions}
@@ -280,6 +287,7 @@ export function LiftProgressCard({
           </div>
         )}
       </div>
+      )}
 
       {series && selected ? (
         <>
@@ -332,9 +340,9 @@ export function LiftProgressCard({
             isPr={selected.key === prKey}
             displayUnit={displayUnit}
             fmtLoad={fmtLoad}
-            onDetails={() =>
+            onDetails={onOpenSet ? () =>
               onOpenSet(toPoint(activeMetric === "top" ? selected.heaviest : selected.top))
-            }
+            : undefined}
           />
 
           {sessions.length > 1 ? (
@@ -527,6 +535,7 @@ export function LiftProgressCard({
 
           {velocityInsight}
 
+          {!single && (
           <div>
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               Sessions
@@ -608,7 +617,7 @@ export function LiftProgressCard({
                             <li key={set.id}>
                               <button
                                 type="button"
-                                onClick={() => onOpenSet(toPoint(set as LiftHistoryPoint))}
+                                onClick={() => onOpenSet?.(toPoint(set as LiftHistoryPoint))}
                                 className="grid min-h-11 w-full grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-secondary/60"
                               >
                                 <span className="text-[11px] font-bold text-muted-foreground">
@@ -646,6 +655,7 @@ export function LiftProgressCard({
               </button>
             )}
           </div>
+          )}
         </>
       ) : (
         <div className="py-10 text-center text-sm text-muted-foreground">
@@ -675,7 +685,7 @@ function SessionReadout({
   isPr: boolean;
   displayUnit: Unit;
   fmtLoad: (lb: number) => string;
-  onDetails: () => void;
+  onDetails?: () => void;
 }) {
   const v = value(session, metric);
   const pv = previous ? value(previous, metric) : null;
@@ -717,13 +727,15 @@ function SessionReadout({
           {format(parseISO(session.key), "EEE · MMM d, yyyy")}
           {isLatest && " · Latest"}
         </div>
-        <button
-          type="button"
-          onClick={onDetails}
-          className="-my-1 inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-xs font-bold text-primary hover:bg-secondary"
-        >
-          Details <ChevronRight className="h-3.5 w-3.5" />
-        </button>
+        {onDetails && (
+          <button
+            type="button"
+            onClick={onDetails}
+            className="-my-1 inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-xs font-bold text-primary hover:bg-secondary"
+          >
+            Details <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
       <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
         <span className="text-2xl font-bold tabular-nums">{main}</span>

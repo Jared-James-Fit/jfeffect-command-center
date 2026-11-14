@@ -21,6 +21,7 @@ export function TypedValueInput({
   disabled = false,
   focusMode = false,
   empty = "—",
+  planned = false,
 }: {
   /** Stored value as typed in this field's terms (RIR for RIR rows). */
   value: string;
@@ -33,6 +34,12 @@ export function TypedValueInput({
   disabled?: boolean;
   focusMode?: boolean;
   empty?: string;
+  /**
+   * The value is the plan (the prescription, or filled down from the set
+   * above), not what was lifted: it reads faded until the set is logged or the
+   * athlete types their own, like the weight's suggestion.
+   */
+  planned?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState("");
@@ -108,12 +115,13 @@ export function TypedValueInput({
           type="button"
           disabled={disabled}
           onClick={start}
-          aria-label={ariaLabel}
+          aria-label={planned && hasValue ? `${ariaLabel}, planned ${displayValue ?? value}` : ariaLabel}
+          data-planned={planned && hasValue ? "" : undefined}
           className={cn(
             "flex w-full items-center justify-center whitespace-nowrap rounded-md border px-2 text-sm font-medium tabular-nums transition-colors",
             cellHeight,
             hasValue
-              ? "border-border/60 bg-muted/40 text-foreground"
+              ? cn("border-border/60 bg-muted/40", planned ? "text-muted-foreground/80" : "text-foreground")
               : "border-blue-500/40 bg-blue-500/10 text-muted-foreground",
             !disabled && "cursor-text hover:bg-muted/60",
           )}

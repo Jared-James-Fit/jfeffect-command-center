@@ -104,8 +104,13 @@ async function findFutureSiblings(supabase: any, ctx: RowCtx): Promise<string[]>
     .in("day_id", openDayIds);
   if (rErr) throw rErr;
   const normalizedSrc = (srcName ?? "").trim().toLowerCase();
+  // A workout that's been started has sets on it: those are history and keep
+  // the exercise they were logged as, whatever the day's completion says.
+  const candidateIds = ((rows ?? []) as any[]).map((r) => r.id);
+  const logged = await rowsWithLoggedSets(supabase, candidateIds);
   const matches: string[] = [];
   for (const r of (rows ?? []) as any[]) {
+    if (logged.has(r.id)) continue;
     if (ctx.exerciseId && r.exercise_id === ctx.exerciseId) {
       matches.push(r.id);
       continue;
@@ -120,16 +125,35 @@ async function findFutureSiblings(supabase: any, ctx: RowCtx): Promise<string[]>
   return matches;
 }
 
+/** The rows among `rowIds` that already have a set saved on them. */
+async function rowsWithLoggedSets(supabase: any, rowIds: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (let i = 0; i < rowIds.length; i += 150) {
+    const { data, error } = await supabase
+      .from("pl_row_results")
+      .select("row_id")
+      .in("row_id", rowIds.slice(i, i + 150));
+    if (error) throw error;
+    for (const r of (data ?? []) as any[]) out.add(r.row_id);
+  }
+  return out;
+}
+
+const SWAP_LOGGED_MESSAGE =
+  "You've logged sets on this exercise today, and they stay as you logged them. Add the new exercise to this workout instead.";
+
 export const getSwapImpact = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => ImpactInput.parse(data))
   .handler(async ({ data, context }) => {
     const ctx = await loadRowContext(context.supabase, data.rowId);
     const futureRowIds = await findFutureSiblings(context.supabase, ctx);
+    const todayLogged = (await rowsWithLoggedSets(context.supabase, [ctx.rowId])).has(ctx.rowId);
     return {
       blockId: ctx.blockId,
       isTemplate: ctx.clientId === null,
       futureCount: futureRowIds.length,
+      todayLogged,
     };
   });
 
@@ -141,11 +165,17 @@ export const applySwap = createServerFn({ method: "POST" })
     if (data.scope === "future" && ctx.clientId === null) {
       throw new Error("Cannot swap future workouts on a template block");
     }
-    const ids = [ctx.rowId];
+    // Sets already logged on today's row are history: a swap never moves them
+    // to another exercise (its history would show them as the new one). Today
+    // then keeps its exercise; a swap for the rest of the block still goes ahead.
+    const todayLogged = (await rowsWithLoggedSets(context.supabase, [ctx.rowId])).has(ctx.rowId);
+    if (todayLogged && data.scope === "today") throw new Error(SWAP_LOGGED_MESSAGE);
+    const ids = todayLogged ? [] : [ctx.rowId];
     if (data.scope === "future") {
       const siblings = await findFutureSiblings(context.supabase, ctx);
       for (const id of siblings) if (!ids.includes(id)) ids.push(id);
     }
+    if (!ids.length) return { updatedRowIds: [], count: 0, keptToday: todayLogged };
     // RLS on pl_exercise_rows only lets coaches/admins UPDATE — clients
     // (the trainee themself) can only SELECT. That meant client-portal
     // swaps came back "successful" with zero rows actually changed
@@ -160,7 +190,7 @@ export const applySwap = createServerFn({ method: "POST" })
       .in("id", ids)
       .select("id");
     if (error) throw error;
-    return { updatedRowIds: (updated ?? []).map((r: any) => r.id), count: (updated ?? []).length };
+    return { updatedRowIds: (updated ?? []).map((r: any) => r.id), count: (updated ?? []).length, keptToday: todayLogged };
   });
 
 const AddExerciseInput = z.object({
