@@ -149,9 +149,10 @@ describe("helpers", () => {
 
 describe("final warm-up (SBD) → working-set suggestion", () => {
   const plan = { reps: 5, rpe: 8 };
-  const base = () => buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW });
+  // Final warm-ups are offered on the competition lifts.
+  const base = () => buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, lift: "competition" });
   const withWarm = (w: { load: number; reps: number; rpe?: number | null }, extra: Record<string, unknown> = {}) =>
-    buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, warmup: w, ...extra });
+    buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, warmup: w, lift: "competition", ...extra });
 
   describe("warmupE1rm", () => {
     it("floors the RPE at 6 so a claimed 'easy' warm-up can never inflate the estimate", () => {
@@ -226,7 +227,7 @@ describe("final warm-up (SBD) → working-set suggestion", () => {
 
     it("keeps the readiness trim instead of cancelling it", () => {
       const tired = { multiplier: 0.95, reasons: ["short sleep"] };
-      const noWarm = estimateFor(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, readiness: tired }), 5, 8)!.load;
+      const noWarm = estimateFor(buildLoadModel({ history: twoWeeks, today: [], unit: "kg", now: NOW, readiness: tired, lift: "competition" }), 5, 8)!.load;
       const warm = estimateFor(withWarm({ load: 135, reps: 2, rpe: 7 }, { readiness: tired }), 5, 8)!.load;
       expect(warm).toBeLessThan(hist.target); // still eased for the bad sleep
       expect(warm / noWarm).toBeGreaterThanOrEqual(0.97 - 1e-9); // the warm-up only nudges: −3% .. +1.5%
@@ -500,7 +501,11 @@ describe("effort is monotonic: the same set rated easier never lowers the sugges
     const seq = [6, 5, 4, 3, 2].map(next);
     expect(seq).toEqual([...seq].sort((a, b) => a - b));
     expect(next(5)).toBe(235); // right on plan: same weight
-    expect(next(4)).toBeGreaterThan(235); // easier than planned: up
+    // One RPE easier is ~1.5% on a 7-rep set, under a plate step once history
+    // is read near the load used (HISTORY_PROFILES.other): never down, and two
+    // easier goes up.
+    expect(next(4)).toBeGreaterThanOrEqual(235);
+    expect(next(3)).toBeGreaterThan(235);
     expect(next(6)).toBeLessThan(235); // harder than planned: down
   });
 

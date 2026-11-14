@@ -126,6 +126,7 @@ import { computeRepMaxBests, computeAssistedBests, detectAssistedSetPR, detectSe
 import { trustedSessionRpe } from "@/lib/workout-review";
 import {
   buildLoadModel,
+  liftKindOf,
   parseRpe,
   planningTarget,
   predictReadiness,
@@ -1162,6 +1163,7 @@ function WorkoutDay({
         name: r.exercises?.name ?? r.exercise_name_override ?? "this lift",
         exerciseKey: String(r.exercises?.id ?? r.exercise_id ?? r.id),
         family: isMainLiftFamily(family) ? family : null,
+        lift: liftKindOf(r.exercises),
         history: loadHistoryByRow.get(r.id) ?? null,
         sets: (results as any[])
           .filter((x) => x.row_id === r.id && x.completed_at && resolveLoadType(x.load_type, x.is_bodyweight) === "external")
@@ -3730,6 +3732,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const rampsUp = useMemo(() => !warmedUp && offersLastWarmup(family, name), [warmedUp, family, name]);
   const warmupPromptable = warmupEligible && rampsUp;
   const warmupForModel = warmupEligible ? pickFinalWarmup(warmupSets, activeUnit) : null;
+  // How this lift's history is read: the competition lifts and everything else differ (HISTORY_PROFILES).
+  const liftKind = liftKindOf(row.exercises);
   const loadModel = useMemo<LoadModel | null>(() => {
     if (!loadHistory || hideWeight || coachOwnsLoad || rowLoadType !== "external" || !loadPlan) return null;
     const today = existingResults
@@ -3746,9 +3750,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     const carryToday = (dayRead?.carryKg ?? []).map((x) => ({ ...x, load: toUnit(x.load) }));
     return buildLoadModel({
       history: loadHistory, today, unit: activeUnit, readiness, warmup: warmupForModel, bodyweightKg,
-      dayFactor: dayRead?.factor ?? null, carryToday,
+      dayFactor: dayRead?.factor ?? null, carryToday, lift: liftKind,
     });
-  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead]);
+  }, [loadHistory, hideWeight, coachOwnsLoad, rowLoadType, loadPlan, existingResults, activeUnit, readiness, warmupForModel?.load, warmupForModel?.reps, warmupForModel?.rpe, bodyweightKg, dayRead, liftKind]);
   // Every card that can suggest gets the on/off chip (one switch for the whole
   // workout). Doesn't wait for history so the chip never pops in late.
   const canSuggest = !hideWeight && !coachOwnsLoad && rowLoadType === "external" && !!loadPlan;
@@ -3812,10 +3816,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const previewWarmupTarget = useCallback(
     (w: { load: number; reps: number; rpe: number | null }): LoadSuggestion | null => {
       if (!warmupGauge || !loadHistory || !loadPlan) return null;
-      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg });
+      const model = buildLoadModel({ history: loadHistory, today: [], unit: activeUnit, readiness, warmup: w, bodyweightKg, lift: liftKind });
       return suggestSetLoad(model, loadPlan);
     },
-    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg],
+    [!!warmupGauge, loadHistory, loadPlan, activeUnit, readiness, bodyweightKg, liftKind],
   );
   // Logging sound: one soft "tock" each time this card gains a completed set —
   // however it was completed (typed, tapped, filled down, timed) — and a

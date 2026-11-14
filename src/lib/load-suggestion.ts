@@ -12,8 +12,12 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      often go unchanged), so the chart correction is only partly trusted and
 //      sets at similar reps/RPE count most. The athlete's own sets anchor the
 //      number; the chart bridges the gap.
-//   3. Recent sessions dominate (3-day half-life, relative), so a program's
-//      heavy/light weeks and real progress show up quickly.
+//   3. Recent sessions dominate, so a program's heavy/light weeks and real
+//      progress show up quickly. How history is read depends on the lift
+//      (HISTORY_PROFILES): the competition lifts trust the chart more and match
+//      history tightly on reps and RPE (heavy / light days and waves, rated
+//      with care); everything else stays near the load actually used, mostly
+//      the last session (accessories repeat and progress from last time).
 //   4. History needs at least 2 sessions spanning a week for a full cold
 //      suggestion. One recent session with an RPE (within 4 weeks) gives an
 //      "early estimate" with a wider range; with less, the card says what
@@ -67,6 +71,14 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 // harder). With BACKOFF_FATIGUE: 5.5% off, −0.4%, 27%; every back-off set,
 // own sets included, 1.7% off and 14% too heavy. A per-athlete drop learned
 // from past sessions gained little more and isn't used.
+// History profiles (note 3), backtested Nov 14 2026 on 2,807 real first sets
+// of a lift's day predicted from history alone (19 athletes, 200 days):
+// competition lifts 8.98% → 7.66% median off (within 5%: 29.5% → 36.3%),
+// better in both halves of the time range and for 6 of 7 athletes with
+// enough sets, none worse; everything else 5.3% → 4.4% (accessories: 12 of 17 athletes
+// better, 1 worse). Next-set predictions with history in the blend improved too
+// (competition 1.50% → 1.39%, accessories 0.99% → 0.71%), and the shown
+// range holds the load used more often at the same width.
 // Backtested on ~2,800 real sets (scratch script, not shipped): median error
 // 8% cold, 4.4% once today's first set is in. Monotonic effort (Oct 2026, 7,000
 // real sets): "rated easier → lower" 621 → 0 of 4,200 next-set cases; next-set
@@ -89,7 +101,6 @@ const MAX_EFFECTIVE_REPS = 30;
  * raise logged at 20 reps never got a suggestion (Oct 2026).
  */
 export const MAX_SET_REPS = 30;
-const HALF_LIFE_DAYS = 3;
 const HISTORY_WINDOW_DAYS = 56;
 const MAX_SESSIONS = 8;
 export const MIN_HISTORY_SESSIONS = 2;
@@ -236,6 +247,23 @@ export function setE1rm(s: SetSample): { e1rm: number; trust: number } | null {
   return { e1rm: s.load / pct, trust };
 }
 
+/**
+ * How a lift's history is read (header note 3). `alpha` is how far the RPE
+ * chart's correction is trusted between a past set and today's target (1 =
+ * fully, 0 = the load used as it was), `halfLifeDays` how fast older sessions
+ * fade, and the kernels how tightly past sets are matched on reps and RPE.
+ * Measured, see the history-profile backtest above.
+ */
+export type LiftKind = "competition" | "other";
+export const HISTORY_PROFILES: Record<LiftKind, { alpha: number; halfLifeDays: number; repKernel: number; rpeKernel: number }> = {
+  competition: { alpha: 0.85, halfLifeDays: 3, repKernel: 0.5, rpeKernel: 0.5 },
+  other: { alpha: 0.3, halfLifeDays: 2, repKernel: 1, rpeKernel: 1 },
+};
+/** The competition squat, bench and deadlift read as "competition"; every other exercise as "other". */
+export function liftKindOf(ex: { competition_lift_type?: string | null; is_competition_lift?: boolean | null } | null | undefined): LiftKind {
+  return ex?.competition_lift_type || ex?.is_competition_lift ? "competition" : "other";
+}
+
 export interface Readiness {
   /** ≤ 1. Applied to cold (history-only) suggestions. */
   multiplier: number;
@@ -316,6 +344,8 @@ export interface LoadModel {
   carriedTop: { load: number; reps: number; rpe: number; e1rm: number } | null;
   /** Cold suggestion from thin history (one recent session): wider range, labelled as early. */
   early: boolean;
+  /** How this lift's history is read (HISTORY_PROFILES). */
+  lift: LiftKind;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -343,9 +373,13 @@ export function buildLoadModel(input: {
   dayFactor?: number | null;
   /** This exercise's earlier sets today on the cards before this one: a back-off reads them as its own (note 9). */
   carryToday?: SetSample[];
+  /** How its history is read (liftKindOf); anything not a competition lift is "other". */
+  lift?: LiftKind;
   now?: Date;
 }): LoadModel {
   const { unit } = input;
+  const lift: LiftKind = input.lift ?? "other";
+  const profile = HISTORY_PROFILES[lift];
   const now = (input.now ?? new Date()).getTime();
   const readiness = input.readiness ?? NEUTRAL_READINESS;
 
@@ -406,7 +440,7 @@ export function buildLoadModel(input: {
       ...x,
       e1rm: x.e1rm * scale,
       load: x.load * scale,
-      weight: Math.pow(0.5, (now - s.at) / DAY_MS / HALF_LIFE_DAYS),
+      weight: Math.pow(0.5, (now - s.at) / DAY_MS / profile.halfLifeDays),
     })),
   );
 
@@ -439,6 +473,7 @@ export function buildLoadModel(input: {
     dayFactor: historyReady && today.length === 0 ? dayFactor : null,
     carried,
     carriedTop,
+    lift,
   };
   if (today.length > 0) {
     return {
@@ -467,18 +502,20 @@ export function buildLoadModel(input: {
  * Athletes rate effort on their own scale, so a set is best predicted from
  * their own sets at similar reps and RPE; the chart only bridges the gap.
  */
-function kernel(sample: ModelSample, reps: number, rpe: number): number {
-  return Math.exp(-Math.abs(sample.reps - reps) / REP_KERNEL) * Math.exp(-Math.abs(sample.rpe - rpe) / RPE_KERNEL);
+function kernel(sample: ModelSample, reps: number, rpe: number, lift: LiftKind): number {
+  const p = HISTORY_PROFILES[lift];
+  return Math.exp(-Math.abs(sample.reps - reps) / p.repKernel) * Math.exp(-Math.abs(sample.rpe - rpe) / p.rpeKernel);
 }
+/** Today's sets are matched to the target on reps only, by this width. */
 const REP_KERNEL = 1;
-const RPE_KERNEL = 1;
 
 /**
  * Self-rated RPE is noisy (±1 is normal, and pre-filled values often go
  * unchanged), so the chart's correction is only partly trusted: a past set's
- * load is scaled by (chart ratio)^ALPHA. ALPHA < 1 shrinks toward "the load
- * you actually used", which backtests far better on real logs than the raw
- * chart. Today's sets are rated in the same state, so they get more trust.
+ * load is scaled by (chart ratio)^alpha. alpha < 1 shrinks toward "the load
+ * you actually used"; how far depends on the lift (HISTORY_PROFILES). Today's
+ * sets are rated in the same state, so they get more trust (TODAY_ALPHA).
+ * HISTORY_ALPHA is only the range's ±0.5 RPE window.
  */
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 export const HISTORY_SPREAD = 0.05;
@@ -515,7 +552,7 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
   const est = (samples: ModelSample[], alpha: number, byEffort = true) => {
     const w = samples.map((s) => ({
       v: s.load * Math.pow(targetPct / samplePct(s), alpha),
-      w: byEffort ? s.weight * s.trust * kernel(s, reps, rpe) : s.weight * Math.exp(-Math.abs(s.reps - reps) / REP_KERNEL),
+      w: byEffort ? s.weight * s.trust * kernel(s, reps, rpe, model.lift) : s.weight * Math.exp(-Math.abs(s.reps - reps) / REP_KERNEL),
     }));
     const mean = weightedMean(w);
     if (mean == null) return null;
@@ -536,7 +573,7 @@ export function estimateFor(model: LoadModel, reps: number, rpe: number): { load
     const e = est([s], TODAY_ALPHA, false);
     return e && (!best || e.load > best.load) ? e : best;
   }, null);
-  const h = model.history.length ? est(model.history, HISTORY_ALPHA) : null;
+  const h = model.history.length ? est(model.history, HISTORY_PROFILES[model.lift].alpha) : null;
   // Final warm-up: only before any working set is logged today (model.warmup is
   // null otherwise). It nudges a history estimate, or — with no history — gives
   // a conservative first suggestion. See header note 8.
@@ -698,9 +735,10 @@ export function todayVsUsual(input: {
   sets: SetSample[];
   unit: "kg" | "lb";
   bodyweightKg?: number | null;
+  lift?: LiftKind;
   now?: Date;
 }): number | null {
-  const model = buildLoadModel({ history: input.history, today: [], unit: input.unit, bodyweightKg: input.bodyweightKg, now: input.now });
+  const model = buildLoadModel({ history: input.history, today: [], unit: input.unit, bodyweightKg: input.bodyweightKg, lift: input.lift, now: input.now });
   if (model.status !== "ready" || model.source !== "history" || model.early) return null;
   let sum = 0;
   let weight = 0;
