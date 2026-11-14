@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Check, Info, Target, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useShowLoadSuggestions } from "@/lib/load-suggestion-visibility";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -25,6 +27,8 @@ export function LoadSuggestionCard({
   plan,
   warmup = null,
   fromName = null,
+  picks = null,
+  onApply = null,
 }: {
   hint: LoadSuggestion | null;
   model: LoadModel;
@@ -33,7 +37,13 @@ export function LoadSuggestionCard({
   warmup?: WarmupGauge | null;
   /** The card today's adjustment comes from (model.dayFactor), e.g. "Competition Squat". */
   fromName?: string | null;
+  /** A weight to choose from instead of one number (suggestionPicks): the first set of a main lift, by feel. */
+  picks?: { low: number; high: number; loads: number[] } | null;
+  /** Puts a weight in every open set as a draft (never logs one); resolves to how many it filled. Null: nothing to fill. */
+  onApply?: ((load: number) => Promise<number>) | null;
 }) {
+  const [choosing, setChoosing] = useState(false);
+  const [busy, setBusy] = useState(false);
   if (model.status === "calibrating" || !hint) {
     // Suggest is on but there's no number yet: say why and what unlocks one
     // (a blank card read as broken). The warm-up row, when offered, is the
@@ -59,7 +69,7 @@ export function LoadSuggestionCard({
         ? "your recent sessions, nudged by your final warm-up"
         : model.source === "history"
       ? model.early
-        ? `your ${model.historySessions === 1 ? "one recent session" : "recent sessions"} of this lift — an early estimate that sharpens every session`
+        ? `your ${model.historySessions === 1 ? "one recent session" : "recent sessions"} of this lift, an early estimate that sharpens every session`
         : dayPct !== 0
         ? `your recent sessions, adjusted ${daySigned} for how today's ${fromName ?? "earlier"} sets moved`
         : model.readiness.reasons.length
@@ -83,17 +93,53 @@ export function LoadSuggestionCard({
       : model.early ? { text: "Early estimate", live: false }
       : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }
       : null;
-  return (
-    // One quiet line under "Last time": the number and what it's for. The range,
-    // the fast / slow call, the why and the off switch live behind ⓘ, so the
-    // card stays about the sets (it used to be a red box with a second line).
-    <div className="mt-1.5 flex min-h-9 items-center gap-2 rounded-lg border border-border bg-muted/40 py-0.5 pl-2.5 pr-0.5" data-testid="load-suggestion">
+  // A tap puts the weight in the open sets (as drafts: nothing is logged until
+  // the set's number is tapped). A range opens its loads first, one tap each.
+  const apply = async (load: number) => {
+    if (!onApply || busy) return;
+    setBusy(true);
+    try {
+      const n = await onApply(load);
+      setChoosing(false);
+      if (n > 0) toast.success(`${fmtNum(load)} ${hint.unit} in ${n} set${n === 1 ? "" : "s"}. Tap each set's number as you finish it`);
+    } catch {
+      toast.error("Couldn't fill your sets. Try again");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const shown = picks ? `${fmtNum(picks.low)}–${fmtNum(picks.high)}` : fmtNum(hint.target);
+  const body = (
+    <>
       <Target className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <div className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
         <span className="shrink-0 text-muted-foreground">Suggested</span>
-        <span className="shrink-0 text-sm font-bold tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
+        <span className="shrink-0 text-sm font-bold tabular-nums text-foreground" data-testid="load-target">{shown} {hint.unit}</span>
         <span className="min-w-0 truncate tabular-nums text-muted-foreground">× {plan.reps} @ {fmtNum(plan.rpe)}</span>
-      </div>
+      </span>
+    </>
+  );
+  return (
+    // One quiet line under "Last time": the number (or the weights to pick from
+    // on a first heavy set) and what it's for. The why, the fast / slow call and
+    // the off switch live behind ⓘ, so the card stays about the sets.
+    <div className="mt-1.5 rounded-lg border border-border bg-muted/40" data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
+    <div className="flex min-h-9 items-center gap-2 py-0.5 pl-2.5 pr-0.5">
+      {onApply ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => (picks ? setChoosing((v) => !v) : void apply(hint.target))}
+          aria-expanded={picks ? choosing : undefined}
+          aria-label={picks ? `Suggested ${shown} ${hint.unit}. Choose a weight for your sets` : `Suggested ${shown} ${hint.unit}. Put it in your sets`}
+          data-testid="load-apply"
+          className="-my-0.5 -ml-1 flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md pl-1 text-left active:bg-foreground/5 disabled:opacity-60"
+        >
+          {body}
+        </button>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-2">{body}</div>
+      )}
       {badge && (
         <span
           data-testid="load-badge"
@@ -103,19 +149,42 @@ export function LoadSuggestionCard({
           {badge.text}
         </span>
       )}
-      <SuggestionWhy hint={hint} why={why} model={model} warmup={warmup} audible={audible} range={range} />
+      <SuggestionWhy hint={hint} why={why} model={model} warmup={warmup} audible={audible} range={range} picks={picks} rpe={plan.rpe} canApply={!!onApply} />
+    </div>
+    {picks && choosing && onApply && (
+      <div className="flex gap-1.5 border-t border-border px-2 py-1.5" role="group" aria-label="Weights to choose from" data-testid="load-picks">
+        {picks.loads.map((l) => (
+          <button
+            key={l}
+            type="button"
+            disabled={busy}
+            onClick={() => void apply(l)}
+            data-testid="load-pick"
+            className={cn(
+              "h-9 min-w-0 flex-1 rounded-md text-sm font-semibold tabular-nums transition active:scale-[0.97] disabled:opacity-60",
+              l === hint.target ? "bg-foreground text-background" : "bg-background text-foreground",
+            )}
+          >
+            {fmtNum(l)}
+          </button>
+        ))}
+      </div>
+    )}
     </div>
   );
 }
 
 /** ⓘ on the suggestion line: the range, the fast / slow call, the why, and the off switch. */
-function SuggestionWhy({ hint, why, model, warmup, audible, range }: {
+function SuggestionWhy({ hint, why, model, warmup, audible, range, picks, rpe, canApply }: {
   hint: LoadSuggestion;
   why: string;
   model: LoadModel;
   warmup: WarmupGauge | null;
   audible: number;
   range: string | null;
+  picks: { low: number; high: number } | null;
+  rpe: number;
+  canApply: boolean;
 }) {
   const [, setShow] = useShowLoadSuggestions();
   return (
@@ -127,7 +196,13 @@ function SuggestionWhy({ hint, why, model, warmup, audible, range }: {
       </PopoverTrigger>
       <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
         <p className="font-semibold">Just a suggestion</p>
-        {range && (
+        {picks ? (
+          <p className="mt-1 text-muted-foreground" data-testid="load-range">
+            Pick within{" "}
+            <span className="font-semibold tabular-nums text-foreground">{fmtNum(picks.low)}–{fmtNum(picks.high)} {hint.unit}</span>{" "}
+            by how your warm-ups move, aiming for RPE {fmtNum(rpe)}.
+          </p>
+        ) : range && (
           <p className="mt-1 text-muted-foreground" data-testid="load-range">
             A good day lands anywhere in <span className="font-semibold tabular-nums text-foreground">{range} {hint.unit}</span>.
           </p>
@@ -158,14 +233,17 @@ function SuggestionWhy({ hint, why, model, warmup, audible, range }: {
           <li><span className="font-semibold text-foreground">Slow or form breaking?</span> Drop {fmtNum(audible)} {hint.unit}.</li>
           <li><span className="font-semibold text-foreground">Pain?</span> Stop and message your coach.</li>
         </ul>
-        <p className="mt-1 text-muted-foreground">Log an honest RPE and the next suggestion updates.</p>
+        <p className="mt-1 text-muted-foreground">
+          Log an honest RPE and the next suggestion updates.
+          {canApply && " Tap the weight to put it in your open sets; nothing is logged until you tap a set's number."}
+        </p>
         {warmup && (
           <p className="mt-1.5 border-t border-border pt-1.5 text-muted-foreground">
             <span className="font-semibold text-foreground">Tip: use your last warm-up as a gauge.</span>{" "}
             {warmup.suggested
               ? `Work up to about ${fmtNum(warmup.suggested.load)} ${hint.unit} × ${warmup.suggested.reps}, then log how it felt. `
               : "Log your heaviest warm-up and how it felt. "}
-            Moving easier than usual nudges this number up, harder nudges it down — before your first working set.
+            Moving easier than usual nudges this number up, harder nudges it down, before your first working set.
           </p>
         )}
         <button
