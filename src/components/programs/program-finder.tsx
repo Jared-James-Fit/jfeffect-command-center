@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ReactNode } from "react";
 import { isFullBodyRow, FULL_BODY_QUERY_ALIASES } from "@/lib/programs/facets";
+import { mins } from "@/lib/running/run-log";
 
 export type FinderItem = {
   id: string;
@@ -192,7 +193,7 @@ function rowName(r: any, i: number) {
     || `Row ${i + 1}`;
 }
 function rowReps(r: any) {
-  if (r?.measurement_type === "time" && r?.duration_seconds) return `${r.duration_seconds}s`;
+  if (r?.measurement_type === "time" && r?.duration_seconds) return mins(Number(r.duration_seconds));
   return r?.reps_text || r?.reps || "—";
 }
 

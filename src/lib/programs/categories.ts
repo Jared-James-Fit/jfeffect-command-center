@@ -9,6 +9,7 @@ export type CategoryId =
   | "strength"
   | "powerlifting"
   | "powerbuilding"
+  | "running"
   | "beginner"
   | "home"
   | "short"
@@ -29,6 +30,7 @@ export const CATEGORIES: CategoryDef[] = [
   { id: "strength", label: "Strength" },
   { id: "powerlifting", label: "Powerlifting" },
   { id: "powerbuilding", label: "Powerbuilding" },
+  { id: "running", label: "Running" },
   { id: "beginner", label: "Beginner" },
   { id: "home", label: "At Home" },
   { id: "short", label: "Short Workouts" },
@@ -54,6 +56,8 @@ export function matchesCategory(f: ProgramFacets, id: CategoryId): boolean {
       return f.goals.includes("powerlifting") || f.style === "powerlifting";
     case "powerbuilding":
       return f.goals.includes("powerbuilding") || f.style === "powerbuilding";
+    case "running":
+      return f.goals.includes("running");
     case "beginner":
       return f.level === "beginner" || f.level === "novice";
     case "home":
@@ -70,10 +74,22 @@ export interface GroupSection {
 }
 
 export const GROUP_SECTIONS: GroupSection[] = [
+  // first, so the running programs sit together, not among the lifting ones by level
+  {
+    id: "running",
+    label: "Running",
+    predicate: (f) => f.goals.includes("running"),
+  },
   {
     id: "beginner_foundations",
     label: "Beginner Foundations",
     predicate: (f) => f.level === "beginner" || f.level === "novice",
+  },
+  // where they train is the bigger constraint: a home muscle program is a home program
+  {
+    id: "home_training",
+    label: "Home Training",
+    predicate: (f) => f.location === "home",
   },
   {
     id: "muscle_building",
@@ -95,11 +111,6 @@ export const GROUP_SECTIONS: GroupSection[] = [
     id: "powerlifting",
     label: "Powerlifting",
     predicate: (f) => f.goals.includes("powerlifting") || f.style === "powerlifting",
-  },
-  {
-    id: "home_training",
-    label: "Home Training",
-    predicate: (f) => f.location === "home",
   },
   {
     id: "advanced",

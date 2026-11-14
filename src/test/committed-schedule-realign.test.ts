@@ -153,3 +153,71 @@ describe("todayInTimeZone", () => {
     expect(todayInTimeZone("Not/AZone", new Date("2026-10-06T12:00:00Z"))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
+
+describe("optional sessions go around the core workouts", () => {
+  // Week of Mon 2026-10-05 – Sun 2026-10-11; today is Monday.
+  const one = { ...base, weeks: [week(1)] };
+  const opt = { is_optional: true };
+
+  it("an optional day in the middle of the week never takes a core workout's training day", () => {
+    // Elite Powerlifting: Day 3 is the optional recovery day, Day 4 the main SBD day.
+    const days = [
+      day("d1", "w1", 1, "2026-10-05"), day("d2", "w1", 2, "2026-10-07"),
+      day("d3", "w1", 3, "2026-10-08", opt), day("d4", "w1", 4, "2026-10-10"),
+    ];
+    const plan = planCommittedRealign({ ...one, days, committed: ["Monday", "Wednesday", "Friday"] });
+    const at = Object.fromEntries(plan.moves.map((m) => [m.dayId, m.next]));
+    expect(at.d4).toBe("2026-10-09"); // the SBD day gets Friday
+    // the recovery day goes on a free day, not a training day
+    expect(["2026-10-05", "2026-10-07", "2026-10-09"]).not.toContain(at.d3 ?? "2026-10-08");
+    expect(plan.unplaced).toBe(0);
+  });
+
+  it("extras spread over the week's free days, and stay put on a re-run", () => {
+    // Distance Builder for a 3-day runner: easy, quality, long + an easy and a recovery run.
+    const days = [
+      day("d1", "w1", 1, "2026-10-05"), day("d2", "w1", 2, "2026-10-06"), day("d3", "w1", 3, "2026-10-08"),
+      day("d4", "w1", 4, "2026-10-09", opt), day("d5", "w1", 5, "2026-10-11", opt),
+    ];
+    const committed = ["Monday", "Wednesday", "Saturday"] as const;
+    const plan = planCommittedRealign({ ...one, days, committed: [...committed] });
+    const at = Object.fromEntries(plan.moves.map((m) => [m.dayId, m.next]));
+    expect([at.d1 ?? "2026-10-05", at.d2, at.d3]).toEqual(["2026-10-05", "2026-10-07", "2026-10-10"]);
+    // free: Tue, Thu, Fri, Sun. Fri and Sun are already free and kept
+    expect(at.d4).toBeUndefined();
+    expect(at.d5).toBeUndefined();
+    expect(plan.unplaced).toBe(0);
+
+    const after = days.map((d) => ({ ...d, scheduled_date: at[d.id] ?? d.scheduled_date }));
+    expect(planCommittedRealign({ ...one, days: after, committed: [...committed] }).moves).toEqual([]);
+  });
+
+  it("extras sitting on a training day move to free days, evenly", () => {
+    const days = [
+      day("d1", "w1", 1, "2026-10-05"), day("d2", "w1", 2, "2026-10-07"), day("d3", "w1", 3, "2026-10-10"),
+      day("d4", "w1", 4, "2026-10-07", opt), day("d5", "w1", 5, "2026-10-10", opt),
+    ];
+    const plan = planCommittedRealign({ ...one, days, committed: ["Monday", "Wednesday", "Saturday"] });
+    const at = Object.fromEntries(plan.moves.map((m) => [m.dayId, m.next]));
+    // free: Tue 6, Thu 8, Fri 9, Sun 11 → Thu and Sun
+    expect([at.d4, at.d5]).toEqual(["2026-10-08", "2026-10-11"]);
+  });
+
+  it("someone training more days than the core workouts gets the extras on training days", () => {
+    const days = [
+      day("d1", "w1", 1, null), day("d2", "w1", 2, null), day("d3", "w1", 3, null),
+      day("d4", "w1", 4, null, opt), day("d5", "w1", 5, null, opt),
+    ];
+    const plan = planCommittedRealign({ ...one, days, committed: ["Monday", "Tuesday", "Wednesday", "Friday", "Saturday"] });
+    expect(plan.moves.map((m) => [m.dayId, m.next])).toEqual([
+      ["d1", "2026-10-05"], ["d2", "2026-10-06"], ["d3", "2026-10-07"], ["d4", "2026-10-09"], ["d5", "2026-10-10"],
+    ]);
+  });
+
+  it("a week without optional days places exactly as before", () => {
+    const days = [day("d1", "w1", 1, null), day("d2", "w1", 2, null), day("d3", "w1", 3, null), day("d4", "w1", 4, null)];
+    const plan = planCommittedRealign({ ...one, days, committed: ["Monday", "Wednesday", "Friday"] });
+    expect(plan.moves.map((m) => m.next)).toEqual(["2026-10-05", "2026-10-07", "2026-10-09"]);
+    expect(plan.unplaced).toBe(1);
+  });
+});

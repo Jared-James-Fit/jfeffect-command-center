@@ -17,6 +17,7 @@ export type ProgramGoal =
   | "strength"
   | "powerlifting"
   | "powerbuilding"
+  | "running"
   | "general";
 
 export type ProgramLevel = "beginner" | "novice" | "intermediate" | "advanced" | "elite";
@@ -107,10 +108,18 @@ function parseGoals(row: ProgramRowLike, tags: string[]): ProgramGoal[] {
 
   if (/\bglute(s)?\b/.test(hay) || /\bbooty\b/.test(hay)) out.add("glutes");
   if (/\bfat\s*loss\b/.test(hay) || /\bcut(ting)?\b/.test(hay) || /\bweight\s*loss\b/.test(hay)) out.add("fat_loss");
+  // a running program (Run Foundation, Distance Builder, Marathon Performance) is
+  // running, never a lifting goal its name happens to share ("Builder")
+  if (/\brun(ning|ner|s)?\b|\bmarathon\b|\b5k\b|\b10k\b/.test(hay)) {
+    out.add("running");
+    return [...out];
+  }
   if (/\bpowerlift(ing)?\b/.test(hay)) out.add("powerlifting");
   if (/\bpowerbuild(ing)?\b/.test(hay)) out.add("powerbuilding");
   if (/\bstrength\b/.test(hay)) out.add("strength");
-  if (/\bhypertrophy\b/.test(hay) || /\bmuscle\b/.test(hay) || /\bbuild\b/.test(hay) || /\bsize\b/.test(hay)) out.add("muscle");
+  if (/\bhypertrophy\b/.test(hay) || /\bmuscle\b/.test(hay) || /\bsize\b/.test(hay)) out.add("muscle");
+  // a bare "build" is a muscle goal, except a powerlifting program's "build the squat, bench and deadlift"
+  else if (/\bbuild\b/.test(hay) && !out.has("powerlifting")) out.add("muscle");
   if (out.size === 0) out.add("general");
   return [...out];
 }
@@ -216,6 +225,7 @@ const GOAL_LABELS: Record<ProgramGoal, string> = {
   strength: "Strength",
   powerlifting: "Powerlifting",
   powerbuilding: "Powerbuilding",
+  running: "Running",
   general: "General",
 };
 

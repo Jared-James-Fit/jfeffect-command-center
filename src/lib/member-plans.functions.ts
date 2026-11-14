@@ -1,3 +1,4 @@
+import { countPayloadWorkouts, listingDaysPerWeek } from "@/lib/programs/core-days";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -9,17 +10,8 @@ async function assertAdmin(ctx: any) {
   if (!data) throw new Error("Admin required");
 }
 
-function countWorkouts(payload: any): number {
-  let n = 0;
-  const weeks = payload?.weeks_data ?? [];
-  for (const w of weeks) for (const d of (w?.days ?? [])) {
-    // Count a day as a workout if it has any rows (i.e. exercises)
-    if (Array.isArray(d?.rows) && d.rows.length > 0) n++;
-    // If rows can be empty but the day still counts, fall back to day count
-    else n++;
-  }
-  return n;
-}
+// every workout across the program's blocks (a multi-block program read 0 before)
+const countWorkouts = (payload: any): number => countPayloadWorkouts(payload);
 
 /* ---------- admin CRUD ---------- */
 
@@ -88,7 +80,7 @@ export const publishFromTemplate = createServerFn({ method: "POST" })
     if (error || !t) throw new Error("Template not found");
     const payload: any = t.payload || { weeks_data: [] };
     const weeks = t.weeks ?? (payload?.weeks_data?.length ?? 4);
-    const days = t.days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
+    const days = listingDaysPerWeek(t as any);
     const workouts_total = countWorkouts(payload);
     const { data: row, error: ie } = await supabaseAdmin.from("member_plans").insert({
       name: data.overrides.name ?? t.name,

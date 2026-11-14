@@ -104,7 +104,8 @@ export function recoveryWord(role: string | null | undefined, run = true): strin
   return r === "run/walk" || r === "strides" ? "walk" : "easy jog";
 }
 
-const mins = (seconds: number) => {
+/** a timed row's length in words: 45 → "45 s", 1200 → "20 min", 90 → "1:30", 10200 → "2 h 50 min" */
+export const mins = (seconds: number) => {
   if (seconds < 60) return `${seconds} s`;
   const m = seconds / 60;
   if (m >= 60 && Number.isInteger(m)) {

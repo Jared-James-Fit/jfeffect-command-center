@@ -15,6 +15,13 @@ import { WEEK_DAYS, type WeekDay } from "@/lib/training-schedule";
 //     person asks to move them too (client or coach alike) they move. A
 //     client can always move their own workouts; there's no coach lock.
 //   • idempotent: re-running with the same committed days produces no moves
+//   • an optional session (pl_days.is_optional: Elite Powerlifting's recovery
+//     day, the running programs' extra easy runs) never takes a training day
+//     from a core workout: core workouts map to the committed days by their
+//     order among core workouts, wherever the optional one sits in the week.
+//     An optional one takes a committed day only when the person trains more
+//     days than the core workouts; otherwise it goes on a free day of that
+//     week, spread out, and stays there on re-runs
 // ───────────────────────────────────────────────────────────────────────────
 
 export const WEEKDAY_INDEX: Record<WeekDay, number> = {
@@ -37,6 +44,8 @@ export interface RealignDay {
   scheduled_date: string | null;
   schedule_source: string | null;
   schedule_locked: boolean | null;
+  /** an optional session: placed around the core workouts, never instead of one */
+  is_optional?: boolean | null;
 }
 export interface RealignInstance {
   id: string;
@@ -172,9 +181,15 @@ export function planCommittedRealign(input: {
         pinned: boolean;
         effectiveDate: string | null;
         effectiveSource: string | null;
+        optional: boolean;
       }> = [];
+      // a core workout's slot is its place among the core workouts
+      let coreRank = 0;
       for (let dayPos = 0; dayPos < weekDays.length; dayPos++) {
         const d = weekDays[dayPos];
+        const optional = !!d.is_optional;
+        const ordinalTarget = optional ? null : committedDates[coreRank] ?? null;
+        if (!optional) coreRank++;
         const inst = instanceByDayId.get(d.id);
         const effectiveDate = inst?.scheduled_date ?? d.scheduled_date ?? null;
         const effectiveSource = inst?.schedule_source ?? d.schedule_source ?? null;
@@ -183,7 +198,6 @@ export function planCommittedRealign(input: {
         const canOverridePinned = includePinned;
         const isTouched = touchedDayIds.has(d.id);
         const isPast = !!effectiveDate && effectiveDate < todayISO;
-        const ordinalTarget = committedDates[dayPos] ?? null;
 
         // Started / completed / past workouts are never moved. Reserve their
         // intended committed-day slot too, so a completed Friday Day 1 does
@@ -201,26 +215,62 @@ export function planCommittedRealign(input: {
           continue;
         }
 
-        movable.push({ row: d, pinned: isPinned, effectiveDate, effectiveSource });
+        movable.push({ row: d, pinned: isPinned, effectiveDate, effectiveSource, optional });
       }
 
       const pool = committedDates.filter((dt) => !consumed.has(dt) && dt >= todayISO);
       let cursor = 0;
-      for (const m of movable) {
-        if (cursor >= pool.length) {
-          // More workouts than free committed days this week. Don't silently
-          // drop it: report any that is still off the committed schedule.
-          if (!m.effectiveDate || !committedDates.includes(m.effectiveDate)) unplaced++;
-          continue;
-        }
-        const next = pool[cursor++];
-        if (m.effectiveDate === next) continue;
+      // the dates in this week a workout now sits on
+      const taken = new Set<string>(consumed);
+      const place = (m: (typeof movable)[number], next: string) => {
+        taken.add(next);
+        if (m.effectiveDate === next) return;
         moves.push({
           dayId: m.row.id,
           prev: m.effectiveDate,
           next,
           prevSource: m.effectiveSource,
           wasPinned: m.pinned,
+        });
+      };
+      const extras: typeof movable = [];
+      // core workouts first, then optional ones while training days are left
+      for (const m of [...movable.filter((x) => !x.optional), ...movable.filter((x) => x.optional)]) {
+        if (cursor >= pool.length) {
+          if (m.optional) {
+            extras.push(m);
+            continue;
+          }
+          // More workouts than free committed days this week. Don't silently
+          // drop it: report any that is still off the committed schedule.
+          if (!m.effectiveDate || !committedDates.includes(m.effectiveDate)) unplaced++;
+          continue;
+        }
+        place(m, pool[cursor++]);
+      }
+
+      if (extras.length) {
+        // An optional session with no training day left goes on a free day of
+        // this week: kept where it is when that's still free, else spread out.
+        const weekDates: string[] = [];
+        for (let i = 0; i < 7; i++) weekDates.push(format(addDays(weekStart, i), "yyyy-MM-dd"));
+        const free = new Set(weekDates.filter((dt) => dt >= todayISO && !committedDates.includes(dt) && !taken.has(dt)));
+        const rest: typeof extras = [];
+        for (const m of extras) {
+          if (m.effectiveDate && free.has(m.effectiveDate)) {
+            free.delete(m.effectiveDate);
+            taken.add(m.effectiveDate);
+          } else rest.push(m);
+        }
+        const open = weekDates.filter((dt) => free.has(dt));
+        rest.forEach((m, i) => {
+          if (i >= open.length) {
+            if (!m.effectiveDate || !committedDates.includes(m.effectiveDate)) unplaced++;
+            return;
+          }
+          // evenly across what's free: two extras in Tue/Thu/Fri/Sun land Thu and Sun
+          const pick = rest.length <= open.length ? open[Math.floor(((i + 0.5) * open.length) / rest.length)] : open[i];
+          place(m, pick);
         });
       }
     }

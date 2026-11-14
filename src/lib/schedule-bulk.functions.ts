@@ -351,7 +351,7 @@ export async function realignClientToCommittedDays(args: {
   if (weekIds.length === 0) return empty;
   const { data: days } = await supabaseAdmin
     .from("pl_days")
-    .select("id, day_index, week_id, scheduled_date, schedule_source, schedule_locked, archived")
+    .select("id, day_index, week_id, scheduled_date, schedule_source, schedule_locked, archived, is_optional")
     .in("week_id", weekIds)
     .eq("archived", false)
     .is("deleted_at", null)

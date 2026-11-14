@@ -1,3 +1,4 @@
+import { countPayloadWorkouts, listingDaysPerWeek } from "@/lib/programs/core-days";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -44,14 +45,8 @@ async function assertAdmin(ctx: any) {
   if (!data) throw new Error("Admin required");
 }
 
-function countWorkouts(payload: any): number {
-  let n = 0;
-  const weeks = payload?.weeks_data ?? [];
-  for (const w of weeks) for (const d of (w?.days ?? [])) {
-    if (Array.isArray(d?.rows) && d.rows.length > 0) n++; else n++;
-  }
-  return n;
-}
+// every workout across the program's blocks (a multi-block program read 0 before)
+const countWorkouts = (payload: any): number => countPayloadWorkouts(payload);
 
 /**
  * Auto-create a Published Membership-Library listing (member_plans row) for
@@ -84,7 +79,8 @@ async function syncSharedTemplatesToLibrary(supabaseAdmin: any) {
   const rows = templates.map((t: any) => {
     const payload = t.payload ?? { weeks_data: [] };
     const weeks = t.weeks ?? (payload?.weeks_data?.length ?? 4);
-    const days = t.days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
+    // the core workouts a week: an optional day sits on a free day around them
+    const days = listingDaysPerWeek(t);
     return {
       name: t.name,
       public_title: t.name,
@@ -168,10 +164,13 @@ export const upsertLibraryListing = createServerFn({ method: "POST" })
     if (te || !t) throw new Error("Template not found");
     const payload: any = (t as any).payload ?? { weeks_data: [] };
     const weeks = (t as any).weeks ?? (payload?.weeks_data?.length ?? 4);
-    const days  = (t as any).days_per_week ?? (payload?.weeks_data?.[0]?.days?.length ?? 3);
+    const days  = listingDaysPerWeek(t as any);
     const workouts_total = countWorkouts(payload);
     const base = {
       ...data.metadata,
+      // the program's own tags (its level, At Home, Running) when the listing has none:
+      // the members' library shelves a program by them
+      tags: data.metadata.tags.length ? data.metadata.tags : ((t as any).tags ?? []),
       weeks, days_per_week: days, workouts_total,
       source_template_id: t.id,
       published_payload: payload,
@@ -221,6 +220,8 @@ export const publishLibraryListing = createServerFn({ method: "POST" })
     }
     const nextVersion = ((plan as any).published_version ?? 0) + 1;
     const { error } = await supabaseAdmin.from("member_plans").update({
+      // the program as it is now: its core workouts a week can change with it
+      days_per_week: listingDaysPerWeek({ payload: nextPayload, days_per_week: (plan as any).days_per_week }),
       status: "Published",
       membership_status: "live",
       published_payload: nextPayload,
