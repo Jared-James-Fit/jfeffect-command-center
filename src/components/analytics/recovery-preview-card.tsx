@@ -634,9 +634,8 @@ function ReadinessSheet({
 
       {/* Why the score and a factor can disagree: they read different things. */}
       <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground" data-readiness-how>
-        The score reads your {fromLabel ? `${fromLabel} ` : "last "}workout and its check-out: how much you finished, how hard it felt, your sleep, energy and any pain.
-        The factors below look across your recent weeks, so one can sit lower while the score is fine.
-        It's built from what you log, not a measurement.
+        The score reads what you logged for your {fromLabel ? `${fromLabel} ` : "last "}workout (effort, sleep, energy, pain).
+        The factors look across recent weeks, so one can sit lower while the score is fine.
       </p>
 
       <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-1 border-t border-border/50 pt-2">

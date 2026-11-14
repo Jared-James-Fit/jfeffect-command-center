@@ -4019,8 +4019,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   }, [existingResults, activeUnit]);
   const openSetCount = Array.from({ length: setCount }, (_, i) => i + 1)
     .filter((i) => !existingResults.find((x: any) => x.set_index === i && x.completed_at)).length;
-  // The latest set against its prescription (harder, easier, short of the
-  // reps), said once with what it means for what's left today (plan-vs-actual.ts).
+  // The latest set against its prescription, said only when it changes the
+  // next set or the back-offs (plan-vs-actual.ts); normal sets say nothing.
   const timedRow = row.tracking_type === "time" || row.measurement_type === "time";
   const setNote = useMemo(() => {
     if (readonly || timedRow) return null;
@@ -4040,11 +4040,12 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       step: weightIncrement(activeUnit),
       coachLoad: coachOwnsLoad,
       suggested: loadHint?.target ?? null,
+      suggestionShown: showSuggestionCard && !!loadModel && !!loadPlan,
     });
     // An overshoot on a % row is the RPE-cap line's to say.
     if (note?.kind === "harder" && capHeld && openSetCount > 0) return null;
     return note;
-  }, [readonly, timedRow, existingResults, hideWeight, activeUnit, repTarget, row.rpe, row.rir, openSetCount, backoffsFollow, coachOwnsLoad, loadHint?.target, capHeld]);
+  }, [readonly, timedRow, existingResults, hideWeight, activeUnit, repTarget, row.rpe, row.rir, openSetCount, backoffsFollow, coachOwnsLoad, loadHint?.target, capHeld, showSuggestionCard, loadModel, loadPlan]);
   // Put one weight into every open set as a draft (never a confirmed set);
   // each set keeps its own reps / RPE.
   const fillLoadOnOpenSets = async (load: number): Promise<number> => {

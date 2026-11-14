@@ -492,14 +492,6 @@ export function ClientBlockView({
         </div>
       )}
 
-      {/* Helper hint above the block picker — makes it obvious that
-          the cards are tappable and horizontally scrollable. */}
-      {orderedBlocks.length > 1 && (
-        <div className="flex items-center justify-between px-0.5 text-[10px] font-bold text-muted-foreground">
-          <span>Tap a block to switch</span>
-          <span className="hidden sm:inline">{orderedBlocks.length} blocks · swipe →</span>
-        </div>
-      )}
 
       {/* Block selector — current + next + previously assigned blocks.
           Always rendered when we have any blocks so clients can discover
@@ -786,17 +778,6 @@ export function ClientBlockView({
               );
             })}
           </ul>
-          <details className="mt-2 rounded border border-border/60 bg-background/60 px-2 py-1 text-[11px] text-muted-foreground">
-            <summary className="cursor-pointer select-none font-semibold text-foreground/70">
-              Priority legend
-            </summary>
-            <ul className="mt-1 grid gap-0.5 pl-2">
-              <li><span className="font-semibold text-foreground">Primary</span> — highest-priority exposure</li>
-              <li><span className="font-semibold text-foreground">Secondary</span> — second-priority exposure</li>
-              <li><span className="font-semibold text-foreground">Tertiary</span> — third-priority exposure</li>
-              <li><span className="font-semibold text-foreground">Quaternary</span> — fourth-priority exposure</li>
-            </ul>
-          </details>
           </>
           )}
         </Card>
@@ -960,7 +941,8 @@ export function ClientBlockView({
                           <div className="min-w-0">
                             <div className="break-words text-[13px] font-bold leading-snug">{name}</div>
                             <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold text-foreground/70">
-                              {purpose[i] && (
+                              {/* a role only when it says something (the builder's rule): never "Assistance" on every accessory */}
+                              {purpose[i] && purpose[i] !== "Assistance" && (
                                 <span className="break-words rounded border border-border px-1 py-0 text-muted-foreground">{purpose[i]}</span>
                               )}
                               {/* the role says what it's for; a category beside it only repeated or contradicted it ("Primary · assistance") */}
@@ -968,15 +950,17 @@ export function ClientBlockView({
                             </div>
                           </div>
                         </div>
-                        <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] tabular-nums sm:grid-cols-3">
-                          <div className="min-w-0"><span className="text-foreground/60">Sets</span> <span className="font-bold break-words">{sets}</span></div>
-                          <div className="min-w-0"><span className="text-foreground/60">Reps</span> <span className="font-bold break-words">{reps}</span></div>
-                          <div className="min-w-0"><span className="text-foreground/60">Rest</span> <span className="font-bold break-words">{fmtRest(rest)}</span></div>
-                          {(rpe != null && rpe !== "") && <div className="min-w-0"><span className="text-foreground/60">RPE</span> <span className="font-bold break-words">{rpe}</span></div>}
-                          {(rir != null && rir !== "") && <div className="min-w-0"><span className="text-foreground/60">RIR</span> <span className="font-bold break-words">{rir}</span></div>}
-                          {(loadVal != null) && <div className="min-w-0"><span className="text-foreground/60">Load</span> <span className="font-bold break-words">{loadVal}{loadUnit}</span></div>}
-                          {(pct != null && pct !== "") && <div className="min-w-0"><span className="text-foreground/60">%</span> <span className="font-bold break-words">{pct}%</span></div>}
-                          {r.tempo && <div className="col-span-2 min-w-0 sm:col-span-3"><span className="text-foreground/60">Tempo</span> <span className="font-bold break-words">{r.tempo}</span></div>}
+                        {/* the prescription in one line, as the builder writes it: "4 × 5 · RPE 7 · rest 3 min" */}
+                        <div className="mt-1 text-[12px] tabular-nums text-foreground/80" data-row-prescription>
+                          {[
+                            `${sets} × ${reps}`,
+                            rpe != null && rpe !== "" ? `RPE ${rpe}` : null,
+                            rir != null && rir !== "" ? `RIR ${rir}` : null,
+                            loadVal != null ? `${loadVal} ${loadUnit}` : null,
+                            pct != null && pct !== "" ? `${pct}%` : null,
+                            r.tempo ? `tempo ${r.tempo}` : null,
+                            `rest ${fmtRest(rest)}`,
+                          ].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                     );
