@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildClientPayments, payingOffLine, type ScheduleSale } from "@/lib/payment-schedule";
+import { buildClientPayments, type ScheduleSale } from "@/lib/payment-schedule";
+import { packageGlance } from "@/lib/package-view";
 import { buildSessionPackages } from "@/lib/session-packages";
 import { paymentStatus, payingNow, pickTrainingNow, sessionCoverage, trainingStatus } from "@/lib/package-status";
 import type { MoneyLedgerRow } from "@/lib/sale-money";
@@ -90,8 +91,8 @@ describe("Marc: the package he trains on and the package he pays off are differe
     expect(p.unpaidDeliveredCents).toBe(16800 + 67200 + 29400);
   });
 
-  it("the Sessions tab's money line names the package being paid", () => {
-    expect(payingOffLine(p, fmt, day)).toEqual({ lead: "Paying off Package 2", text: "$168.00 due today by auto-pay", tone: "neutral" });
+  it("the glance names the package being paid, apart from the one being trained", () => {
+    expect(packageGlance(p)).toMatchObject({ training: { label: "Package 4" }, paying: { kind: "plan", label: "Package 2", status: "due", then: ["Package 3", "Package 4"] } });
   });
 
   it("once tonight's payment lands, Package 2 is paid in full and Package 3 is the one being paid; he still trains on 4", () => {
@@ -214,7 +215,7 @@ describe("payment status", () => {
     expect(pkg(q, 1)).toMatchObject({ payment: "unscheduled", payingNow: false, unpaidDeliveredCents: 67200 });
     expect(q.payingNow).toEqual([]);
     expect(q.overdueCents).toBe(0);
-    expect(payingOffLine(q, fmt, day)).toEqual({ lead: null, text: "$672.00 left · no payment dates set", tone: "attention" });
+    expect(packageGlance(q).paying).toMatchObject({ kind: "unscheduled", label: "Package 1", leftCents: 67200 });
   });
 
   it("a payment link out: not owed yet, its sessions start once it's paid", () => {
@@ -253,10 +254,10 @@ describe("currently paying off", () => {
     expect(x[1].then).toEqual([{ saleId: "p3", label: "Package 3", first: "2026-11-27" }]);
   });
 
-  it("the Sessions tab's line leads with an overdue payment when there is one", () => {
+  it("the glance leads with an overdue payment when there is one", () => {
     const sale = { ...base, id: "h", package_number: 1, payment_status: "Partially Paid", term_start_date: "2026-10-01", first_payment_date: "2026-10-01", amount_paid_cents: 16800, amount_tax_paid_cents: 800 } as any;
     const q = buildClientPayments({ sales: [sale], ledger: [pay("h", "2026-10-01", 16800, 800)], balance: [bal("h", 8, 4, 4)] as any, events: [], today: "2026-10-20" });
-    expect(payingOffLine(q, fmt, day)).toEqual({ lead: "Paying off Package 1", text: "$168.00 overdue since 10-15", tone: "error" });
+    expect(packageGlance(q).paying).toMatchObject({ kind: "plan", label: "Package 1", status: "overdue", next: { date: "2026-10-15", state: "overdue" } });
   });
 });
 
