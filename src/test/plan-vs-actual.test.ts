@@ -17,25 +17,23 @@ describe("effort targets", () => {
   });
 });
 
-describe("one line after a set that strays from the plan", () => {
-  it("495 × 4 @ 10 on a 4 @ 6 prescription: harder, with the next set's weight when there is one", () => {
+describe("in the logger: a line only when it changes what comes next", () => {
+  it("495 × 4 @ 10 on a 4 @ 6 prescription with a set left: the next set's weight", () => {
     const g = setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }], openSets: 2 }))!;
     expect(g.kind).toBe("harder");
     expect(g.next).toBe(435); // the RPE chart: 4 @ 10 → 4 @ 6, rounded down a plate step
-    expect(g.text).toBe("Set 1 felt harder than planned (RPE 10 vs 6). Next set: about 435 lb.");
+    expect(g.text).toBe("RPE 10, planned 6 · next set ~435 lb");
   });
 
-  it("uses the logger's own suggestion so two numbers never disagree", () => {
-    const g = setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }], openSets: 2, suggested: 425 }))!;
-    expect(g.next).toBe(425);
+  it("uses the logger's own number so two never disagree, and steps aside when the Suggest card is showing it", () => {
+    expect(setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }], openSets: 2, suggested: 425 }))!.next).toBe(425);
+    expect(setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }], openSets: 2, suggested: 425, suggestionShown: true }))).toBeNull();
   });
 
-  it("the only working set: no next set to change, back-offs on a later card are named instead", () => {
-    const only = setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }] }))!;
-    expect(only.next).toBeNull();
-    expect(only.text).toContain("That was the last set of it today");
-    const top = setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }], backoffsFollow: true }))!;
-    expect(top.text).toContain("Go a little lighter on the back-offs.");
+  it("the only working set: nothing to change says nothing; back-offs on a later card are told to go lighter", () => {
+    expect(setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }] }))).toBeNull();
+    const top = setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }], backoffsFollow: true, suggestionShown: true }))!;
+    expect(top.text).toBe("RPE 10, planned 6 · go lighter on the back-offs");
   });
 
   it("normal RPE noise says nothing (one point over, or on target)", () => {
@@ -47,11 +45,10 @@ describe("one line after a set that strays from the plan", () => {
     expect(setGuidance(base({ sets: [{ set: 1, load: 495, reps: 4, rpe: 10 }, { set: 2, load: 440, reps: 4, rpe: 6 }], openSets: 1 }))).toBeNull();
   });
 
-  it("short of the reps: lighter next set, never heavier than what was just missed", () => {
+  it("short of the reps: a lighter next set, never heavier than what was just missed", () => {
     const g = setGuidance(base({ reps: { exact: 5 }, effort: { min: 8, max: 8 }, sets: [{ set: 2, load: 315, reps: 3, rpe: null }], openSets: 1 }))!;
     expect(g.kind).toBe("short");
-    expect(g.text.startsWith("Set 2 came up short (3 of 5 reps).")).toBe(true);
-    expect(g.next).not.toBeNull();
+    expect(g.text.startsWith("3 of 5 reps · next set ~")).toBe(true);
     expect(g.next!).toBeLessThan(315);
   });
 
@@ -60,24 +57,23 @@ describe("one line after a set that strays from the plan", () => {
     expect(g.kind).toBe("easier");
     expect(g.next!).toBeGreaterThan(200);
     expect(g.next!).toBeLessThanOrEqual(220); // at most +10%
-    expect(g.text).toContain("RPE 8 at most");
+    expect(g.text).toBe(`RPE 5, planned 7-8 · up to ~${g.next} lb next set`);
   });
 
-  it("the coach's weight stays the coach's: an easy set under a % or fixed load is never told to add", () => {
-    const g = setGuidance(base({ reps: { exact: 3 }, effort: { min: 7, max: 8 }, coachLoad: true, sets: [{ set: 1, load: 405, reps: 3, rpe: 5 }], openSets: 2 }))!;
-    expect(g.kind).toBe("easier");
-    expect(g.next).toBeNull();
-    expect(g.text).toContain("Keep the planned weight.");
+  it("an easy set says nothing under the coach's weight, with nothing left, or with no weight to add", () => {
+    const easy = { reps: { exact: 3 }, effort: { min: 7, max: 8 }, sets: [{ set: 1, load: 405, reps: 3, rpe: 5 }] };
+    expect(setGuidance(base({ ...easy, coachLoad: true, openSets: 2 }))).toBeNull();
+    expect(setGuidance(base({ ...easy, backoffsFollow: true }))).toBeNull();
+    expect(setGuidance(base({ ...easy, sets: [{ set: 1, load: null, reps: 3, rpe: 5 }], openSets: 2 }))).toBeNull();
   });
 
   it("no effort target and reps hit: nothing to say", () => {
     expect(setGuidance(base({ effort: null, sets: [{ set: 1, load: 100, reps: 4, rpe: 10 }], openSets: 1 }))).toBeNull();
   });
 
-  it("a bodyweight set gets the words without a weight", () => {
+  it("a bodyweight set gets the advice without a weight", () => {
     const g = setGuidance(base({ reps: { exact: 10 }, effort: { min: 7, max: 7 }, sets: [{ set: 1, load: null, reps: 10, rpe: 10 }], openSets: 1 }))!;
-    expect(g.next).toBeNull();
-    expect(g.text).toContain("Ease off a little on the next set.");
+    expect(g.text).toBe("RPE 10, planned 7 · ease off next set");
   });
 });
 

@@ -9,7 +9,6 @@ import type { WorkoutSummary } from "@/lib/workout-summary";
 import type { PlanCheck } from "@/lib/workouts/plan-vs-actual";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { computeRecoveryScore } from "@/lib/analytics/recovery-score";
 import {
   buildWorkoutTakeaways,
   formatPR,
@@ -175,13 +174,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
     if (!workoutDate) return null;
     try { return format(new Date(workoutDate), "EEE, MMM d, yyyy"); } catch { return null; }
   })();
-  const recovery = computeRecoveryScore({
-    completionPct: summary.completionPct,
-    avgRpe: summary.avgRpe ?? null,
-    sessionRpe: sessionRpe ?? null,
-    overallRating: sessionRating ?? null,
-    pain: pain ?? null,
-  });
 
   const displayTakeaways = prList.length > 0
     ? takeaways.filter((t) => !/^🏆/.test(t.trim()))
@@ -362,7 +354,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
 
             <section className="overflow-hidden rounded-2xl border border-border/80 bg-card">
               <div className="grid grid-cols-2 divide-x divide-y divide-border/70">
-                <CompactStat icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Completed" value={`${summary.completionPct}%`} />
                 <CompactStat icon={<Activity className="h-3.5 w-3.5" />} label="Sets" value={`${summary.completedSets}/${summary.prescribedSets}`} />
                 {summary.totalReps > 0 && (
                   <CompactStat icon={<Repeat2 className="h-3.5 w-3.5" />} label="Reps" value={`${summary.totalReps}`} />
@@ -372,13 +363,6 @@ export function WorkoutSubmissionSummary({ open, onOpenChange, summary, workoutT
                 )}
                 {summary.avgRpe != null && (
                   <CompactStat icon={<Flame className="h-3.5 w-3.5" />} label="Avg RPE" value={`${summary.avgRpe}`} />
-                )}
-                {recovery.hasData && (
-                  <CompactStat
-                    icon={<Heart className="h-3.5 w-3.5" />}
-                    label="Recovery"
-                    value={`${recovery.score}/100`}
-                  />
                 )}
               </div>
               {records && records.tonnage_kg > 0 ? (
@@ -557,16 +541,15 @@ function PlanSection({ plan }: { plan: PlanCheck }) {
   const onTarget = [plan.checked.reps && "reps", plan.checked.effort && "effort"].filter(Boolean).join(" and ");
   return (
     <section className="rounded-2xl border border-border/80 bg-card/70 p-3" data-plan-check={plan.asPlanned ? "as-planned" : "off"}>
+      {/* the set count is the Sets tile's; this is only how it went against the plan */}
       <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
         {plan.asPlanned && <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />}
         {plan.asPlanned ? "Done as planned" : "Vs the plan"}
+        {plan.asPlanned && onTarget && <span className="font-normal text-muted-foreground">· {onTarget} on target</span>}
       </div>
-      <p className="mt-0.5 text-[12px] text-muted-foreground">
-        {plan.setsDone} of {plan.setsPlanned} sets{plan.asPlanned && onTarget ? `, ${onTarget} on target` : ""}
-      </p>
       {plan.lines.length > 0 && (
-        <ul className="mt-2 space-y-1">
-          {plan.lines.map((l) => (
+        <ul className="mt-1.5 space-y-1">
+          {plan.lines.slice(0, 3).map((l) => (
             <li key={l.text} className="flex items-start gap-2 text-[12px] leading-snug text-foreground" data-plan-line={l.kind}>
               <span aria-hidden className={cn("mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full", l.kind === "easier" || l.kind === "extra" ? "bg-muted-foreground/50" : "bg-warning")} />
               <span>{l.text}</span>

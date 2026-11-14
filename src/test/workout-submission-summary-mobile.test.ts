@@ -24,9 +24,10 @@ describe("workout submission summary mobile layout", () => {
     expect(summary).toContain("summary.totalLifted > 0");
     expect(summary).toContain("summary.avgRpe != null");
     expect(summary).toContain("durationMin != null && durationMin > 0");
-    expect(summary).toContain("recovery.hasData");
     expect(summary).toContain("Baseline logged");
-    expect(summary).not.toContain('value={recovery.hasData ?');
+    // one score on the recap: no second "Recovery /100" or a Completed % beside Sets (Nov 14 2026)
+    expect(summary).not.toContain('label="Recovery"');
+    expect(summary).not.toContain('label="Completed"');
   });
 
   it("does not repeat the PR takeaway when a dedicated PR reveal is present", () => {

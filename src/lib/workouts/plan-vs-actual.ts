@@ -80,6 +80,8 @@ export type SetGuidanceInput = {
   coachLoad: boolean;
   /** What the logger's own suggestion says for the next set, so two numbers never disagree. */
   suggested?: number | null;
+  /** The Suggest card is on screen for this card's next set (it already says the number). */
+  suggestionShown?: boolean;
 };
 
 export type SetGuidance = { kind: "harder" | "easier" | "short"; set: number; next: number | null; text: string };
@@ -93,70 +95,59 @@ function chartLoad(load: number, reps: number, rpe: number, targetReps: number, 
 }
 
 /**
- * The latest logged set against its prescription: harder, easier or short of
- * the reps, said once with what it means for what's left today (the next set
- * on this card, the back-offs on a later card, or nothing left to change).
- * Null when it went as planned or there's nothing to compare it with.
+ * The latest logged set against its prescription, said only when it changes
+ * what comes next today: the next set on this card (its weight), or the
+ * back-offs on a later card. A set on target, a stray with nothing left to
+ * change, an easy set under the coach's weight, and anything the visible
+ * Suggest card already answers say nothing (the recap has the rest).
+ * Short and scannable: "RPE 10, planned 6 · next set ~435 lb".
  */
 export function setGuidance(input: SetGuidanceInput): SetGuidance | null {
   const sets = [...input.sets].filter((s) => (s.reps ?? 0) > 0).sort((a, b) => a.set - b.set);
   const last = sets[sets.length - 1];
   if (!last) return null;
+  const open = input.openSets > 0;
+  // the Suggest card on screen already moved the next set's number
+  if (open && input.suggestionShown) return null;
+  if (!open && !input.backoffsFollow) return null;
   const reps = last.reps as number;
   const floor = repFloor(input.reps);
   const effort = input.effort;
-  const loaded = last.load != null && last.load > 0;
-  const nounUnit = input.unit;
-  const atLoad = (n: number) => `${fmt(n)} ${nounUnit}`;
-  const after = (n: number | null, lighter: boolean): string => {
-    if (input.openSets > 0) {
-      if (n != null) return lighter ? ` Next set: about ${atLoad(n)}.` : ` You can go up to about ${atLoad(n)}${effort ? `, RPE ${fmt(effort.max)} at most` : ""}.`;
-      return lighter ? " Ease off a little on the next set." : "";
-    }
-    if (input.backoffsFollow) return lighter ? " Go a little lighter on the back-offs." : "";
-    return lighter ? " That was the last set of it today. Mention it in your review if something felt off." : "";
+  const load = last.load != null && last.load > 0 ? last.load : null;
+  const atLoad = (n: number) => `~${fmt(n)} ${input.unit}`;
+  const lighter = (n: number | null) => (!open ? "go lighter on the back-offs" : n != null ? `next set ${atLoad(n)}` : "ease off next set");
+  const down = (n: number | null): number | null => {
+    if (n == null || load == null) return null;
+    const v = Math.min(n, load - input.step);
+    return v > 0 ? v : null;
   };
 
   // Short of the reps: the plan's reps at the plan's effort (or a hard 9) from what was done.
   if (floor != null && reps < floor) {
     const doneRpe = last.rpe ?? 10;
-    const target = effort?.max ?? 9;
-    let next: number | null = null;
-    if (loaded && input.openSets > 0) {
-      next = input.suggested != null && input.suggested < (last.load as number) ? input.suggested
-        : chartLoad(last.load as number, reps, doneRpe, floor, Math.min(target, doneRpe), input.step);
-      if (next != null) next = Math.min(next, (last.load as number) - input.step);
-      if (next != null && !(next > 0)) next = null;
-    }
-    return { kind: "short", set: last.set, next, text: `Set ${last.set} came up short (${reps} of ${floor} reps).${after(next, true)}` };
+    const next = open && load != null
+      ? down(input.suggested != null && input.suggested < load ? input.suggested : chartLoad(load, reps, doneRpe, floor, Math.min(effort?.max ?? 9, doneRpe), input.step))
+      : null;
+    return { kind: "short", set: last.set, next, text: `${reps} of ${floor} reps · ${lighter(next)}` };
   }
   if (!effort || last.rpe == null) return null;
+  const said = `RPE ${fmt(last.rpe)}, planned ${rangeText(effort)}`;
 
   if (last.rpe >= effort.max + HARDER_BY) {
-    let next: number | null = null;
-    if (loaded && input.openSets > 0) {
-      next = input.suggested != null && input.suggested < (last.load as number) ? input.suggested
-        : chartLoad(last.load as number, reps, last.rpe, repTop(input.reps) ?? reps, effort.max, input.step);
-      if (next != null) next = Math.min(next, (last.load as number) - input.step);
-      if (next != null && !(next > 0)) next = null;
-    }
-    return { kind: "harder", set: last.set, next, text: `Set ${last.set} felt harder than planned (RPE ${fmt(last.rpe)} vs ${rangeText(effort)}).${after(next, true)}` };
+    const next = open && load != null
+      ? down(input.suggested != null && input.suggested < load ? input.suggested : chartLoad(load, reps, last.rpe, repTop(input.reps) ?? reps, effort.max, input.step))
+      : null;
+    return { kind: "harder", set: last.set, next, text: `${said} · ${lighter(next)}` };
   }
 
-  if (last.rpe <= effort.min - EASIER_BY && (floor == null || reps >= floor)) {
-    const base = `Set ${last.set} felt easier than planned (RPE ${fmt(last.rpe)} vs ${rangeText(effort)}).`;
-    // The coach's weight stays the coach's: an easy set is fine under a cap.
-    if (input.coachLoad) return { kind: "easier", set: last.set, next: null, text: input.openSets > 0 ? `${base} Keep the planned weight.` : base };
-    let next: number | null = null;
-    if (loaded && input.openSets > 0) {
-      const load = last.load as number;
-      const chart = chartLoad(load, reps, last.rpe, reps, effort.min, input.step);
-      const capped = Math.floor((load * (1 + MAX_STEP_UP)) / input.step) * input.step;
-      const fromSuggest = input.suggested != null && input.suggested > load ? input.suggested : null;
-      next = fromSuggest ?? (chart != null ? Math.min(chart, capped) : null);
-      if (next != null && !(next >= load + input.step)) next = null;
-    }
-    return { kind: "easier", set: last.set, next, text: `${base}${after(next, false)}` };
+  // Easier: only a weight the athlete chooses, only with a set left, and never past the RPE target.
+  if (last.rpe <= effort.min - EASIER_BY && (floor == null || reps >= floor) && open && !input.coachLoad && load != null) {
+    const chart = chartLoad(load, reps, last.rpe, reps, effort.min, input.step);
+    const capped = Math.floor((load * (1 + MAX_STEP_UP)) / input.step) * input.step;
+    const fromSuggest = input.suggested != null && input.suggested > load ? input.suggested : null;
+    const next = fromSuggest ?? (chart != null ? Math.min(chart, capped) : null);
+    if (next == null || next < load + input.step) return null;
+    return { kind: "easier", set: last.set, next, text: `${said} · up to ${atLoad(next)} next set` };
   }
   return null;
 }
