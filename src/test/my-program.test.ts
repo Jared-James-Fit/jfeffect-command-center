@@ -7,6 +7,8 @@ import {
   programOwnership,
   programProgress,
   programProgressLine,
+  replacesLine,
+  switchCopy,
   savedEditLine,
   splitOwnPrograms,
 } from "@/lib/my-program";
@@ -195,15 +197,36 @@ describe("the screens: one Programs page, every program says where it's from, an
     );
   });
 
-  it("the Workouts program card's ⋯ opens Manage only for a member's own program", () => {
+  it("the Workouts program card ends in a Manage program row (with where it came from) only for a member's own program", () => {
     expect(workouts).toContain(
       'const canManageProgram = mode === "self" && isSelfServe && origin.owned && !!origin.blockId;',
     );
     expect(workouts).toContain(
       "onManage={canManageProgram ? () => setManageOpen(true) : undefined}",
     );
-    expect(card).toContain('aria-label="Manage program"');
-    expect(card).toContain("{onManage && !browsing && (");
+    expect(workouts).toContain("manageHint={canManageProgram ? origin.label : null}");
+    // a plain row, never a hidden ⋯ in the header
+    expect(card).toContain("data-manage-program-row");
+    expect(card).not.toContain('aria-label="Manage program"');
+    expect(card).toContain(") : !browsing && onManage ? (");
+  });
+
+  it("a finished program of their own points at the next one; a one-block program's weeks fold like a roadmap", () => {
+    expect(card).toContain("{!browsing && nextProgramTo && allDone ? (");
+    expect(card).toContain("<span>Choose your next program</span>");
+    expect(workouts).toContain('nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}');
+    expect(card).toContain('showAll ? "Hide the weeks" : "See all weeks"');
+    expect(card).toContain("{showAll && (");
+    expect(card).not.toContain("(showAll || blocks.length === 1)");
+  });
+
+  it("a rest day says what's next, and a member with no program sees only the way to one", () => {
+    expect(workouts).toContain("next={nextWorkoutAfter(byDate, selectedDate)}");
+    expect(workouts).toContain('{next ? "Rest day" : "No workout"}');
+    expect(workouts).toContain(
+      'const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;',
+    );
+    expect(workouts).toContain("{!noProgram && (");
   });
 
   it("Manage: edit (own programs), see the plan (JF Effect), switch, end, with what ending does said before the tap", () => {
@@ -225,5 +248,71 @@ describe("the screens: one Programs page, every program says where it's from, an
     const fn = readFileSync("src/lib/athlete-programs.functions.ts", "utf8");
     expect(fn).toContain('rpc("athlete_program_sync_running", {');
     expect(fn).toContain("if (r.added || r.removed) {");
+  });
+});
+
+describe("starting or switching a program, said before the tap", () => {
+  it("a first program just starts", () => {
+    expect(switchCopy({ title: "Strength 4 Day", current: null })).toEqual({
+      kind: "start",
+      title: "Start Strength 4 Day",
+      lines: [],
+      action: "Start program",
+    });
+  });
+  it("switching says what ends, what comes off the calendar and what stays", () => {
+    const c = switchCopy({ title: "Strength 4 Day", current: "Upper Lower Basics", logged: 4, upcoming: 9 });
+    expect(c.kind).toBe("switch");
+    expect(c.title).toBe("Switch to Strength 4 Day");
+    expect(c.lines).toEqual([
+      "Upper Lower Basics ends. Its 9 upcoming workouts come off your calendar.",
+      "The 4 workouts you finished stay in your history and PRs.",
+    ]);
+    expect(c.action).toBe("Switch program");
+  });
+  it("a finished program moves to the past; unknown counts still promise the history", () => {
+    const c = switchCopy({ title: "B", current: "A", currentFinished: true });
+    expect(c.lines).toEqual([
+      "A is finished and moves to your past programs.",
+      "Every workout you finished stays in your history and PRs.",
+    ]);
+  });
+  it("the same program again is starting over", () => {
+    const c = switchCopy({ title: "A", current: "A", same: true, logged: 0 });
+    expect(c.kind).toBe("restart");
+    expect(c.action).toBe("Start over");
+    expect(c.lines[1]).toBe("You haven't finished a workout in it yet.");
+  });
+  it("the line under a program's button names what it replaces", () => {
+    expect(replacesLine("Upper Lower Basics")).toBe(
+      "Replaces Upper Lower Basics. Workouts you've finished stay in your history.",
+    );
+    expect(replacesLine(null)).toBeNull();
+  });
+});
+
+describe("the membership screens stay calm and never dead-end", () => {
+  it("an empty JF Effect library says so and points at building or the crew, never an empty search", () => {
+    const lib = readFileSync("src/route-pages/_authenticated/portal/plans.tsx", "utf8");
+    expect(lib).toContain("if (!isLoading && !isError && plans.length === 0) {");
+    expect(lib).toContain("JF Effect plans are on the way");
+    expect(lib).toContain('<Link to="/portal/programs/new">Build your own</Link>');
+  });
+
+  it("training analytics' picked chips and unit switch are neutral, never the brand red", () => {
+    const bar = readFileSync("src/components/analytics/analytics-filter-bar.tsx", "utf8");
+    const dash = readFileSync("src/components/analytics/client-analytics-dashboard.tsx", "utf8");
+    expect(bar).not.toContain("border-primary bg-primary text-primary-foreground");
+    expect(bar).toContain('? "border-foreground bg-foreground text-background"');
+    expect(dash).not.toContain("data-[state=on]:bg-primary");
+  });
+
+  it("Programs pages light the Workouts tab, and the start sheet replaces itself in history", () => {
+    const nav = readFileSync("src/lib/admin-nav.ts", "utf8");
+    expect(nav).toContain('export const WORKOUTS_AREA = ["/portal/programs", "/portal/plans", "/portal/exercises"];');
+    expect(nav.match(/activeOn: WORKOUTS_AREA/g)?.length).toBe(2);
+    const dialog = readFileSync("src/components/programs/start-plan-dialog.tsx", "utf8");
+    expect(dialog).toContain('navigate({ to: "/portal/workouts", replace: true });');
+    expect(dialog).toContain("data-switch-note");
   });
 });

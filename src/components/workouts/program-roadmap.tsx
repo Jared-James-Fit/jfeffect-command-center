@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, MoreHorizontal, Pencil, Sparkles } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, Eye, Flag, Pencil, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -131,10 +131,16 @@ export function ProgramRoadmapCard({
   coach = false,
   onSelectProgram,
   onManage,
+  manageHint,
+  nextProgramTo,
 }: {
   roadmap: ProgramRoadmap | null;
-  /** The athlete's own program (one they started or built): its ⋯ opens Manage program. */
+  /** The athlete's own program (one they started or built): the card's last row opens Manage program. */
   onManage?: () => void;
+  /** Beside Manage program: where the program came from ("JF Effect plan", "Built by you"). */
+  manageHint?: string | null;
+  /** A finished program of their own: its last row is the way to the next one. */
+  nextProgramTo?: string;
   /** Look at another program (read-only: nothing about the schedule changes). null = back to the current one. */
   onSelectProgram?: (programId: string | null) => void;
   selectedBlockId?: string | null;
@@ -216,17 +222,6 @@ export function ProgramRoadmapCard({
           ) : allDone && roadmap.start ? (
             <span className="shrink-0 text-[12px] text-muted-foreground">{rangeLabel(roadmap.start, roadmap.end)}</span>
           ) : null}
-          {onManage && !browsing && (
-            <button
-              type="button"
-              onClick={onManage}
-              aria-label="Manage program"
-              data-manage-program-button
-              className="-my-2 -mr-2.5 grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary/60 hover:text-foreground"
-            >
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
-          )}
         </div>
         <div className="mt-1 truncate text-xl font-semibold leading-tight tracking-tight">{headline}</div>
         {position && <div className="mt-0.5 text-[13px] text-muted-foreground tabular-nums" data-roadmap-position>{position}</div>}
@@ -248,21 +243,21 @@ export function ProgramRoadmapCard({
       )}
 
       {/* Roadmap: every block in order. Collapsed by default; always open for a finished program. */}
-      {blocks.length > 1 && roadmap.program.status !== "completed" && (
+      {roadmap.program.status !== "completed" && (
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={showAll}
           className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[13px] font-semibold transition hover:bg-secondary/40"
         >
-          <span>{showAll ? "Hide the roadmap" : "See the full roadmap"}</span>
+          <span>{blocks.length > 1 ? (showAll ? "Hide the roadmap" : "See the full roadmap") : showAll ? "Hide the weeks" : "See all weeks"}</span>
           <span className="inline-flex items-center gap-1 font-medium text-muted-foreground tabular-nums">
-            {programWeekText ?? `${blocks.length} blocks`}
+            {programWeekText ?? (blocks.length > 1 ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount))}
             <ChevronDown className={cn("h-4 w-4 transition-transform", showAll && "rotate-180")} />
           </span>
         </button>
       )}
-      {(showAll || blocks.length === 1) && (
+      {showAll && (
         <ol className="space-y-0 px-4 pb-3" aria-label="Blocks in this program">
           {blocks.map((b, i) => (
             <RoadmapStep
@@ -278,6 +273,32 @@ export function ProgramRoadmapCard({
           ))}
         </ol>
       )}
+
+      {/* A program of their own: one plain row to change, edit or end it (never a hidden ⋯);
+          a finished one: the way to the next. */}
+      {!browsing && nextProgramTo && allDone ? (
+        <Link
+          to={nextProgramTo as any}
+          className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-[14px] font-semibold transition hover:bg-secondary/40"
+          data-next-program
+        >
+          <span>Choose your next program</span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </Link>
+      ) : !browsing && onManage ? (
+        <button
+          type="button"
+          onClick={onManage}
+          className="flex min-h-12 w-full items-center justify-between gap-2 border-t border-border/60 px-4 py-3 text-left text-[14px] font-semibold transition hover:bg-secondary/40"
+          data-manage-program-row
+        >
+          <span>Manage program</span>
+          <span className="inline-flex min-w-0 items-center gap-1 font-normal text-muted-foreground">
+            {manageHint && <span className="truncate text-[13px]">{manageHint}</span>}
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          </span>
+        </button>
+      ) : null}
 
       {browsing && onSelectProgram && (
         <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
