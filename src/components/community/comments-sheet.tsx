@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Send, Share2, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowUp, Copy, CornerUpLeft, Eye, EyeOff, Heart, ImagePlus, Loader2, MoreHorizontal, Pin, PinOff, Play, Share2, Trash2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +13,8 @@ import { useAuth } from "@/lib/auth";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { followLabel, useFollow, useFollowState } from "@/lib/community-social";
 import { cn } from "@/lib/utils";
-import { COMMENT_MAX, likesLabel, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
+import { COMMENT_MAX, compactNumber, pinnedFirst, postTimeLabel, threadComments, type CommunityAuthor, type CommunityComment, type CommunityPost } from "@/lib/community";
+import { QUICK_COMMENT_EMOJI, insertAtCursor } from "@/lib/comment-composer";
 import { pickMedia, releasePicked, type PickedMedia } from "@/lib/community-media";
 import { useVideoTrimmer } from "@/components/video-trimmer";
 import type { ChatGif } from "@/lib/chat-gifs";
@@ -53,19 +54,16 @@ export function CommentsSheet({ post, viewerIsStaff, onClose, onOpenAuthor }: {
 }) {
   return (
     <Sheet open={!!post} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] p-0 sm:mx-auto sm:max-w-[520px]">
+      <SheetContent side="bottom" hideCloseButton className="flex h-[78dvh] max-h-[640px] flex-col gap-0 rounded-t-[24px] bg-card p-0 sm:mx-auto sm:max-w-[520px]">
         {post && (
           <>
-            <SheetHeader className="shrink-0 border-b border-border/70 px-4 py-3 text-left">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <SheetTitle className="text-base font-bold">Comments</SheetTitle>
-                  <SheetDescription className="text-xs">Quick encouragement. Coaching questions belong in Messages.</SheetDescription>
-                </div>
-                <SheetClose className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground" aria-label="Close">
-                  <X className="h-4 w-4" />
-                </SheetClose>
-              </div>
+            <SheetHeader className="relative shrink-0 space-y-0 pb-2 pt-2 text-center">
+              <span aria-hidden className="mx-auto block h-1 w-10 rounded-full bg-muted-foreground/35" />
+              <SheetTitle className="mt-2.5 text-center text-[16px] font-semibold leading-6">Comments</SheetTitle>
+              <SheetDescription className="sr-only">{`Comments on ${post.author.name}'s post`}</SheetDescription>
+              <SheetClose className="absolute right-2 top-[14px] grid h-10 w-10 place-items-center rounded-full text-foreground active:scale-95" aria-label="Close comments">
+                <X className="h-[22px] w-[22px]" strokeWidth={1.75} />
+              </SheetClose>
             </SheetHeader>
             <CommentThread
               key={post.id}
@@ -224,6 +222,20 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
     setReplyTo({ id: c.id, threadId: c.parent_id ?? c.id, name: c.author.name, mine: !!c.is_mine });
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+  const addEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    const next = insertAtCursor(text, emoji, el?.selectionStart, el?.selectionEnd, COMMENT_MAX);
+    if (next.text === text) return;
+    setText(next.text);
+    requestAnimationFrame(() => {
+      const box = inputRef.current;
+      if (!box) return;
+      box.focus({ preventScroll: true });
+      box.setSelectionRange(next.cursor, next.cursor);
+    });
+  };
+  // short, so it stays on one line in the box
+  const placeholder = replyTo ? `Reply to ${replyTo.mine ? "yourself" : replyTo.name.split(" ")[0]}…` : "Add a comment…";
   const toggleLike = (c: CommunityComment) => {
     if (c.pending) return;
     like.mutate({ id: c.id, liked: !c.liked }, { onError: (e: any) => toast.error(e?.message ?? "Couldn't like that") });
@@ -274,7 +286,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
     <>
       <div
         ref={scrollRef}
-        className={inline ? "space-y-1 px-4 py-3" : "relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-4 py-3"}
+        className={inline ? "space-y-0.5 px-4 py-3" : "relative min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-4 pb-3 pt-1"}
         data-sheet-scroll={inline ? undefined : ""}
       >
         {header}
@@ -289,7 +301,10 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
             </button>
           </div>
         ) : comments.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">No comments yet. Say something nice.</div>
+          <div className="py-12 text-center" data-comments-empty>
+            <div className="text-[20px] font-semibold leading-7">No comments yet</div>
+            <div className="mt-1 text-[14px] text-muted-foreground">Start the conversation.</div>
+          </div>
         ) : (
           <>
             {showHoldTip && <p className="pb-1 text-center text-[11px] font-semibold text-muted-foreground">Hold a comment to reply, share or copy it</p>}
@@ -300,14 +315,15 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
                 <div key={comment.id}>
                   <CommentRow c={comment} pinned={comment.id === pinnedId && !comment.hidden} url={urlFor(comment, urls)} progress={progress[comment.id]} onReply={startReply} onLike={toggleLike} onHold={openMenu} onOpenMedia={setViewing} onOpenAuthor={onOpenAuthor} />
                   {replies.length > 0 && (
-                    <div className="ml-10 space-y-0.5">
+                    <div className="ml-12 space-y-0.5">
                       {!open && (
                         <button
                           type="button"
                           onClick={() => setExpanded((s) => new Set(s).add(comment.id))}
-                          className="flex h-8 items-center gap-2 text-[12px] font-bold text-muted-foreground"
+                          className="flex h-8 items-center gap-3 text-[12px] font-semibold text-muted-foreground"
+                          data-view-replies
                         >
-                          <span className="h-px w-6 bg-border" /> View all {replies.length} replies
+                          <span className="h-px w-6 bg-muted-foreground/40" /> View {replies.length - shown.length} more {replies.length - shown.length === 1 ? "reply" : "replies"}
                         </button>
                       )}
                       {shown.map((r) => (
@@ -322,11 +338,33 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
         )}
       </div>
 
-      <div className={inline ? "px-3 pb-3 pt-1" : "shrink-0 border-t border-border/70 bg-background px-3 pt-2"} style={inline ? undefined : { paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)" }}>
+      <div
+        className={inline ? "px-3 pb-3 pt-1" : "shrink-0 border-t border-border/60 px-3 pt-1"}
+        style={inline ? undefined : { paddingBottom: "max(env(safe-area-inset-bottom), 0.625rem)" }}
+        data-comment-composer
+      >
+        {/* Instagram's quick emoji: one tap puts it in the box (never sends it) */}
+        {!recorder.recording && (
+          <div className="flex items-center justify-between" data-quick-emoji>
+            {QUICK_COMMENT_EMOJI.map((e) => (
+              <button
+                key={e}
+                type="button"
+                // keeps the box focused (and the keyboard up) while tapping
+                onPointerDown={(ev) => ev.preventDefault()}
+                onClick={() => addEmoji(e)}
+                className="grid h-11 min-w-0 flex-1 place-items-center rounded-full text-[24px] leading-none active:scale-90"
+                aria-label={`Add ${e}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
         {replyTo && (
-          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl bg-muted px-3 py-1.5 text-[12px] font-semibold text-muted-foreground">
+          <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-1.5 text-[12px] text-muted-foreground">
             <span className="truncate">
-              Replying to <span className="text-foreground">{replyTo.mine ? "yourself" : replyTo.name}</span>
+              Replying to <span className="font-semibold text-foreground">{replyTo.mine ? "yourself" : replyTo.name}</span>
             </span>
             <button type="button" onClick={() => setReplyTo(null)} className="grid h-7 w-7 shrink-0 place-items-center rounded-full" aria-label="Cancel reply">
               <X className="h-3.5 w-3.5" />
@@ -374,7 +412,7 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
             </button>
           </div>
         )}
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2.5">
           <input
             ref={fileRef}
             type="file"
@@ -388,48 +426,54 @@ export function CommentThread({ post, viewerIsStaff, inline = false, onOpenAutho
           {recorder.recording ? (
             <RecordingBar elapsed={recorder.elapsed} levels={recorder.levels} onCancel={recorder.cancel} onDone={() => void recorder.finish()} />
           ) : (
-          <>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={picking}
-            className="grid h-11 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
-            aria-label="Add a photo or video"
-          >
-            {picking ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setGifOpen(true)}
-            className="-ml-1 grid h-11 w-9 shrink-0 place-items-center rounded-full text-[11px] font-bold tracking-tight text-muted-foreground hover:bg-muted"
-            aria-label="Add a GIF"
-          >
-            <span className="rounded-[5px] border-[1.5px] border-current px-1 leading-[14px]">GIF</span>
-          </button>
-          <Textarea
-            ref={inputRef}
-            value={text}
-            onChange={(e) => setText(e.target.value.slice(0, COMMENT_MAX))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            rows={1}
-            placeholder={replyTo ? `Reply to ${replyTo.mine ? "yourself" : replyTo.name.split(" ")[0]}…` : viewerIsStaff && !post.is_mine ? "Say something to them…" : "Add a comment…"}
-            className="min-h-11 flex-1 resize-none rounded-2xl text-[16px]"
-            aria-label={replyTo ? "Write a reply" : "Add a comment"}
-          />
-          {/* nothing to send yet: the mic, to say it instead */}
-          {canSend ? (
-            <Button type="button" size="icon" className="h-11 w-11 shrink-0 rounded-full" onClick={send} aria-label="Send comment">
-              <Send className="h-4 w-4" />
-            </Button>
-          ) : (
-            <MicButton onClick={() => void recorder.start()} disabled={!user?.id || picking} />
-          )}
-          </>
+            <>
+              <UserAvatar src={me.avatar_url} name={me.name} size={32} expandable={false} className="mb-1.5" />
+              {/* one rounded box: the words, then a photo, a GIF and the mic inside it (the send arrow once there's something to send) */}
+              <div className="flex min-h-11 min-w-0 flex-1 items-end rounded-[22px] border border-border pl-4 pr-1 transition-colors focus-within:border-muted-foreground/60" data-comment-box>
+                <Textarea
+                  ref={inputRef}
+                  value={text}
+                  onChange={(e) => setText(e.target.value.slice(0, COMMENT_MAX))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  rows={1}
+                  placeholder={placeholder}
+                  className="max-h-32 min-h-0 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-[9px] text-[16px] leading-6 shadow-none [field-sizing:content] focus-visible:ring-0 md:text-[15px]"
+                  aria-label={replyTo ? "Write a reply" : "Add a comment"}
+                />
+                <div className="flex shrink-0 items-center py-[3px]">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={picking}
+                    className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="Add a photo or video"
+                  >
+                    {picking ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-[22px] w-[22px]" strokeWidth={1.75} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGifOpen(true)}
+                    className="grid h-9 w-9 place-items-center rounded-full text-[10px] font-bold tracking-tight text-muted-foreground hover:text-foreground"
+                    aria-label="Add a GIF"
+                  >
+                    <span className="rounded-[5px] border-[1.5px] border-current px-[3px] leading-[14px]">GIF</span>
+                  </button>
+                  {/* nothing to send yet: the mic, to say it instead */}
+                  {canSend ? (
+                    <Button type="button" size="icon" className="ml-0.5 h-9 w-9 shrink-0 rounded-full" onClick={send} aria-label="Send comment" data-comment-send>
+                      <ArrowUp className="h-5 w-5" strokeWidth={2.25} />
+                    </Button>
+                  ) : (
+                    <MicButton onClick={() => void recorder.start()} disabled={!user?.id || picking} quiet />
+                  )}
+                </div>
+              </div>
+            </>
           )}
         </div>
         <GifPicker
@@ -617,7 +661,8 @@ function CommentRow({
 }) {
   const hold = useHold(() => onHold(c), !!c.pending);
   const toProfile = onOpenAuthor && !c.pending ? () => onOpenAuthor(c.author) : undefined;
-  const likes = likesLabel(c.likes);
+  const likes = !c.pending && (c.likes ?? 0) > 0 ? compactNumber(c.likes ?? 0) : "";
+  const size = reply ? 28 : 36;
   return (
     <div
       {...hold.handlers}
@@ -625,7 +670,7 @@ function CommentRow({
       data-comment-id={c.id}
       aria-label={`${c.author.name}: ${c.body || mediaWord(c)}. Hold for options.`}
       className={cn(
-        "group -mx-2 flex select-none items-start gap-2.5 rounded-2xl px-2 py-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+        "group -mx-2 flex select-none items-start gap-3 rounded-xl px-2 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
         hold.pressing && "bg-muted",
         c.pending && "opacity-60",
         c.hidden && "opacity-60",
@@ -634,45 +679,44 @@ function CommentRow({
     >
       {toProfile ? (
         <button type="button" onClick={toProfile} className="shrink-0 rounded-full active:scale-95" aria-label={`Open ${c.author.name}'s profile`} data-comment-person>
-          <UserAvatar src={c.author.avatar_url} name={c.author.name} size={reply ? 26 : 32} expandable={false} />
+          <UserAvatar src={c.author.avatar_url} name={c.author.name} size={size} expandable={false} />
         </button>
       ) : (
-        <UserAvatar src={c.author.avatar_url} name={c.author.name} size={reply ? 26 : 32} expandable={false} />
+        <UserAvatar src={c.author.avatar_url} name={c.author.name} size={size} expandable={false} />
       )}
       <div className="min-w-0 flex-1">
         {pinned && (
-          <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+          <div className="mb-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
             <Pin className="h-3 w-3 rotate-45" /> Pinned
           </div>
         )}
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
           {toProfile ? (
-            <button type="button" onClick={toProfile} className="min-w-0 truncate text-left text-[13px] font-bold active:opacity-70">
+            <button type="button" onClick={toProfile} className="min-w-0 truncate text-left font-semibold active:opacity-70">
               {c.author.name}
             </button>
           ) : (
-            <span className="truncate text-[13px] font-bold">{c.author.name}</span>
+            <span className="min-w-0 truncate font-semibold">{c.author.name}</span>
           )}
           {c.author.is_coach && <CoachBadge className="h-3.5 w-3.5" />}
-          <span className="shrink-0 text-[11px] text-muted-foreground">
+          <span className="shrink-0 text-[12px] text-muted-foreground">
             {c.pending ? (progress != null && progress < 100 ? `Uploading ${progress}%` : "Sending…") : postTimeLabel(c.created_at)}
           </span>
         </div>
         {(c.body || c.reply_to) && (
-          <p className="whitespace-pre-line break-words text-[14px] leading-snug">
-            {c.reply_to && <span className="font-semibold text-primary">@{c.reply_to} </span>}
+          <p className="mt-0.5 whitespace-pre-line break-words text-[14px] leading-[1.4]">
+            {c.reply_to && <span className="font-semibold">@{c.reply_to} </span>}
             {c.body}
           </p>
         )}
         {c.media && <CommentMedia c={c} url={url} onOpen={onOpenMedia} />}
         {!c.pending && (
-          <div className="mt-0.5 flex items-center gap-3.5 text-[12px] font-semibold text-muted-foreground">
-            {likes && <span>{likes}</span>}
-            <button type="button" data-no-hold onClick={() => onReply(c)} className="py-1 hover:text-foreground">
+          <div className="mt-1 flex items-center gap-4 text-[12px] font-semibold text-muted-foreground">
+            <button type="button" data-no-hold onClick={() => onReply(c)} className="-my-1 py-1 hover:text-foreground">
               Reply
             </button>
             {c.hidden && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
                 <EyeOff className="h-3 w-3" /> Hidden
               </span>
             )}
@@ -680,7 +724,8 @@ function CommentRow({
         )}
       </div>
       {!c.pending && (
-        <div className="flex shrink-0 flex-col items-center">
+        <div className="-mr-1 flex w-9 shrink-0 flex-col items-center">
+          {/* the heart with its count under it (Instagram's, TikTok's) */}
           <button
             type="button"
             data-no-hold
@@ -689,8 +734,16 @@ function CommentRow({
             aria-label={c.liked ? "Unlike comment" : "Like comment"}
             className="grid h-9 w-9 place-items-center rounded-full active:scale-90"
           >
-            <Heart className={cn("h-[18px] w-[18px] transition-transform", c.liked ? "scale-110 fill-[#ef3340] text-[#ef3340]" : "text-muted-foreground")} />
+            <Heart
+              className={cn("h-[18px] w-[18px] transition-transform", c.liked ? "scale-110 fill-[#ef3340] text-[#ef3340]" : "text-muted-foreground")}
+              strokeWidth={1.75}
+            />
           </button>
+          {likes && (
+            <span className="-mt-1.5 text-[11px] leading-4 text-muted-foreground tabular-nums" data-comment-likes>
+              {likes}
+            </span>
+          )}
           {/* mouse users get a visible way in (touch holds) */}
           <button
             type="button"
