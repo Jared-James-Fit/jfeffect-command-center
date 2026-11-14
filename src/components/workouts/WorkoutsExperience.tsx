@@ -107,6 +107,7 @@ export function WorkoutsExperience({
   clientName,
   openDate,
   openDays = false,
+  footer,
 }: {
   clientId: string;
   mode?: Mode;
@@ -115,6 +116,8 @@ export function WorkoutsExperience({
   openDate?: string | null;
   /** open the training days editor once the client is known */
   openDays?: boolean;
+  /** last in the page's own flow (Past programs), above the tab bar's room, never after it */
+  footer?: React.ReactNode;
 }) {
   const { data: client, isFetched: clientFetched } = useQuery({
     queryKey: ["workouts-experience-client", clientId],
@@ -490,6 +493,7 @@ export function WorkoutsExperience({
             )}
           </div>
         )}
+        {footer}
       </div>
 
       <ScheduleHistoryDrawer

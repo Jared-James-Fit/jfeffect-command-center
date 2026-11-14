@@ -48,10 +48,13 @@ function WorkoutsPage() {
 
   return (
     <>
-      <WorkoutsExperience clientId={client.id} mode="self" openDate={open ?? null} openDays={days === 1} />
-      <div className="px-4 pb-24 md:px-6">
-        <WorkoutArchiveSection clientId={client.id} mode="client" />
-      </div>
+      <WorkoutsExperience
+        clientId={client.id}
+        mode="self"
+        openDate={open ?? null}
+        openDays={days === 1}
+        footer={<WorkoutArchiveSection clientId={client.id} mode="client" />}
+      />
     </>
   );
 }
