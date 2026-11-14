@@ -198,7 +198,7 @@ describe("the coach inbox", () => {
     const badges = route.slice(route.indexOf("const FILTER_BADGE"), route.indexOf("const BADGE_STYLE"));
     expect(badges).not.toContain("Archived");
     expect(route).toContain('const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));');
-    expect(route).toContain("aria-label={n ? `${label}, ${n}` : label}");
+    expect(route).toContain('aria-label={n ? `${label}, ${n}${f === "Inbox" ? " with new messages" : ""}` : label}');
   });
 });
 

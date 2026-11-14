@@ -49,7 +49,9 @@ import {
   type ClientSignals, type SignalFilter, type SignalTag,
 } from "@/lib/inbox-brief";
 import { ClientBriefSheet } from "@/components/messages/client-brief-sheet";
-import { CHAT_ROW_AVATAR, ChatListRow } from "@/components/messages/chat-list-row";
+import { CHAT_ROW_AVATAR, ChatListRow, UNREAD_DOT } from "@/components/messages/chat-list-row";
+import { InboxGuideButton, InboxGuideSheet, type GuideFilter } from "@/components/messages/inbox-guide";
+import { filterHelp } from "@/lib/inbox-guide";
 import { messagePreviewText } from "@/lib/message-preview";
 
 type StaffInboxRow = {
@@ -138,8 +140,8 @@ function SignalLine({ tags }: { tags: SignalTag[] }) {
 // works his forms queue first: the weekly check-ins and Nutrition Updates
 // each on their own, then every form), then pain, media and session requests.
 // Needs reply, unread, follow up and priority already show on every row (bold
-// name, blue dot, the line under it) and on the Messages tab badge, so they
-// aren't filters. Inbox is "everything"; Archived is the way back to archived
+// name, blue dot, the line under it), so they aren't filters; the Messages
+// tab's badge and the Inbox chip count new messages only (messagesBadge). Inbox is "everything"; Archived is the way back to archived
 // chats. Every chip but Inbox shows only while something's in it.
 const FILTERS = ["Inbox", "Weekly", "Nutrition", "To Review", "Overdue", "Pain", "Media", "Sessions", "Archived"] as const;
 type Filter = typeof FILTERS[number];
@@ -167,6 +169,12 @@ const BADGE_STYLE = {
   info: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
 } as const;
 const COUNTED = FILTERS.filter((f) => FILTER_BADGE[f] || ONLY_WHEN_ANY.has(f));
+/** The guide's filters as their chips show them: the name and the count's own colours. */
+const GUIDE_FILTERS: GuideFilter[] = FILTERS.filter((f) => f !== "Inbox").map((f) => ({
+  key: f as GuideFilter["key"],
+  label: FILTER_LABEL[f] ?? f,
+  badge: FILTER_BADGE[f] ? BADGE_STYLE[FILTER_BADGE[f]!] : undefined,
+}));
 const badgeNumber = (n: number) => (n > 99 ? "99+" : String(n));
 
 type FilterRow = {
@@ -200,6 +208,7 @@ export function MessagesInbox({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("Inbox");
   const [briefFor, setBriefFor] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(selectedFromUrl ?? null);
   const [smsOpen, setSmsOpen] = useState(false);
   // the selected client's workout notes log (pain, review and exercise notes)
@@ -519,7 +528,8 @@ export function MessagesInbox({
     return { waiting, chip: requestChip(req), hasRequests: !!req && (req.pending.length > 0 || req.toReview > 0 || req.missed > 0) };
   };
 
-  // Blue dot = new inbound client activity *I* (this staff member) haven't viewed.
+  // Blue dot = a new message from the client that *I* (this staff member)
+  // haven't read (staff_inbox_state: never a form sent in or a check-in card).
   const unreadByClient = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of inboxState) if (r.unread) m.set(r.client_id, Math.max(1, r.unread_count));
@@ -645,6 +655,13 @@ export function MessagesInbox({
     }
     return counts;
   }, [allRows]);
+
+  // The Inbox chip's number: chats with a new message, the same chats and the
+  // same number as the Messages tab's badge (messagesBadge).
+  const newChats = useMemo(
+    () => allRows.filter((it) => it.unread > 0 && (it.state?.status ?? "open") !== "archived").length,
+    [allRows],
+  );
 
   const briefRow = briefFor ? allRows.find((r) => r.client.id === briefFor) ?? null : null;
 
@@ -812,6 +829,7 @@ export function MessagesInbox({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <InboxGuideButton onClick={() => setGuideOpen(true)} />
             {view && (
               <Button
                 size="icon"
@@ -827,7 +845,7 @@ export function MessagesInbox({
           </div>
           <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {FILTERS.filter((f) => !ONLY_WHEN_ANY.has(f) || (filterCounts[f] ?? 0) > 0 || filter === f).map((f) => {
-              const n = FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;
+              const n = f === "Inbox" ? newChats : FILTER_BADGE[f] ? filterCounts[f] ?? 0 : 0;
               const on = filter === f;
               const label = FILTER_LABEL[f] ?? f;
               return (
@@ -835,7 +853,7 @@ export function MessagesInbox({
                   key={f}
                   onClick={() => setFilter(f)}
                   data-inbox-filter={f}
-                  aria-label={n ? `${label}, ${n}` : label}
+                  aria-label={n ? `${label}, ${n}${f === "Inbox" ? " with new messages" : ""}` : label}
                   aria-pressed={on}
                   className={cn(
                     // Instagram's chips: the one you're on is a grey fill, the rest outlined
@@ -847,10 +865,11 @@ export function MessagesInbox({
                   {label}
                   {n > 0 && (
                     <span
-                      data-filter-badge={FILTER_BADGE[f]}
+                      data-filter-badge={f === "Inbox" ? "new" : FILTER_BADGE[f]}
                       className={cn(
                         "ml-1.5 inline-block h-5 min-w-5 rounded-full px-1.5 text-center text-[12px] font-bold leading-5 tabular-nums",
-                        BADGE_STYLE[FILTER_BADGE[f]!],
+                        // new messages wear the blue dot's colour, like the tab badge's number
+                        f === "Inbox" ? cn(UNREAD_DOT, "text-white") : BADGE_STYLE[FILTER_BADGE[f]!],
                       )}
                     >
                       {badgeNumber(n)}
@@ -860,6 +879,10 @@ export function MessagesInbox({
               );
             })}
           </div>
+          {/* What the filter you're on shows, in a sentence (the ? has them all). */}
+          <p className="mt-0.5 text-[13px] leading-[18px] text-muted-foreground" data-filter-help={filter}>
+            {filterHelp(filter, newChats)}
+          </p>
           {formFilterSummary && (
             <Link
               to="/admin/forms"
@@ -1220,7 +1243,8 @@ export function MessagesInbox({
       </section>
         </div>
         <MassMessageDialog open={massOpen} onOpenChange={setMassOpen} />
-        <ClientBriefSheet
+        <InboxGuideSheet open={guideOpen} onOpenChange={setGuideOpen} filters={GUIDE_FILTERS} />
+      <ClientBriefSheet
           open={!!briefRow}
           onOpenChange={(o) => { if (!o) setBriefFor(null); }}
           client={briefRow ? {

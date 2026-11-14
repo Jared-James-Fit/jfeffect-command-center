@@ -24,9 +24,8 @@ export function adjustAdminNavBadge(qc: QueryClient, field: keyof AdminBadgeCoun
 }
 
 export type AdminBadgeCounts = {
+  /** Chats with a new message from the client you haven't read (`messagesBadge`). */
   messages: number;
-  liftReviews: number;
-  liftUrgent: number;
   checkIns: number;
   supportAlerts: number;
   /** Member support tickets waiting on a reply. */
@@ -34,6 +33,21 @@ export type AdminBadgeCounts = {
 };
 
 export type NavBadge = { count?: number; dot?: boolean };
+
+export type InboxBadgeRow = { client_id: string; unread: boolean; archived: boolean };
+
+/**
+ * The Messages tab's number: how many chats have a new message from the
+ * client you haven't read (or that you marked unread). The same chats carry
+ * the blue dot in the inbox and are counted on its Inbox chip. A form sent
+ * in or a check-in card is never "new message" (staff_inbox_state leaves
+ * them out); archived chats don't count (a new message reopens one).
+ */
+export function messagesBadge(rows: InboxBadgeRow[]): number {
+  const chats = new Set<string>();
+  for (const r of rows) if (r.unread && !r.archived) chats.add(r.client_id);
+  return chats.size;
+}
 
 export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
   const { user, role } = useAuth();
@@ -53,18 +67,10 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
     refetchIntervalInBackground: false,
     placeholderData: (prev) => prev, // keep last known count while refetching
     queryFn: async (): Promise<AdminBadgeCounts> => {
-      const [clientMessages, liftPending, liftUrgent, mediaPending, supportAlerts, supportTickets] = await Promise.all([
-        // Conversations that need *me*: Needs Response or new inbound activity I
-        // haven't seen. Outbound/automated reminders never count.
+      const [inbox, mediaPending, supportAlerts, supportTickets] = await Promise.all([
+        // Per staff login: which chats have a new message from the client
+        // (staff_inbox_state's `unread`: never a form sent in or a check-in card).
         (supabase as any).rpc("staff_inbox_state"),
-        (supabase.from("lift_videos") as any)
-          .select("client_id")
-          .in("status", ["New Upload", "Awaiting Review"]),
-        (supabase.from("lift_videos") as any)
-          .select("id", { count: "exact", head: true })
-          .eq("is_urgent", true)
-          .neq("status", "Archived")
-          .neq("status", "Reviewed"),
         (supabase.from("media_items") as any)
           .select("id", { count: "exact", head: true })
           .eq("media_type", "Check-In Videos")
@@ -77,14 +83,7 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
           .eq("status", "open"),
       ]);
       return {
-        messages: new Set<string>([
-          ...((clientMessages.data ?? []) as any[])
-            .filter((r) => !r.archived && (r.workflow_status === "needs_response" || r.unread))
-            .map((r) => r.client_id as string),
-          ...((liftPending.data ?? []) as any[]).map((r) => r.client_id as string),
-        ]).size,
-        liftReviews: (liftPending.data ?? []).length,
-        liftUrgent: liftUrgent.count ?? 0,
+        messages: messagesBadge((inbox.data ?? []) as InboxBadgeRow[]),
         checkIns: mediaPending.count ?? 0,
         supportAlerts: supportAlerts.count ?? 0,
         supportTickets: supportTickets.count ?? 0,
@@ -100,7 +99,6 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_state" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversation_staff_reads" }, bump)
-      .on("postgres_changes", { event: "*", schema: "public", table: "lift_videos" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "media_items" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_alerts" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "member_support_threads" }, bump)
@@ -130,14 +128,9 @@ export function useAdminNavBadgeCounts(enabledOverride?: boolean) {
 export function adminBadgeMap(counts: AdminBadgeCounts | undefined): Record<string, NavBadge> {
   const r: Record<string, NavBadge> = {};
   if (!counts) return r;
-  // One unit: conversations needing coach attention (lift reviews are already
-  // folded into `messages` as conversations, never double-counted).
-  const messageAttention = counts.messages;
-  if (messageAttention > 0) {
-    r["/admin/messages"] = { count: messageAttention };
-  } else if (counts.liftUrgent > 0) {
-    r["/admin/messages"] = { dot: true };
-  }
+  // New messages only (Instagram's): forms, check-ins and what's waiting on
+  // you live in the inbox's filters and the line under each name.
+  if (counts.messages > 0) r["/admin/messages"] = { count: counts.messages };
   if (counts.checkIns > 0) r["/admin/check-ins"] = { count: counts.checkIns };
   const support = counts.supportAlerts + (counts.supportTickets ?? 0);
   if (support > 0) r["/admin/support-alerts"] = { count: support };
