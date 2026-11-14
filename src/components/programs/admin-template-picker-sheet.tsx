@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { coachingTemplates } from "@/lib/programs/library-view";
 import { getClientGoalsSetupFn } from "@/lib/client-goals/goals.functions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,8 @@ export function AdminTemplatePickerSheet({
         .in("template_type", ["block", "full_prep"])
         .eq("archived", false)
         .order("updated_at", { ascending: false });
-      return (data ?? []) as TemplateRow[];
+      // the members' programs (JF Effect library) are started by members, never put on a coaching client
+      return coachingTemplates((data ?? []) as TemplateRow[]);
     },
   });
 

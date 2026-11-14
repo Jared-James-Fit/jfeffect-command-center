@@ -126,6 +126,24 @@ export function libraryCategoryOf(tags: string[] | null | undefined): LibraryCat
   return LIBRARY_CATEGORIES.find((c) => t.includes(c.toLowerCase())) ?? null;
 }
 
+/**
+ * A JF Effect library program (tagged "JF Effect" + a category) is a members'
+ * program: it lives in the membership app and nowhere on the coaching side.
+ * The coach's library shows it only under Membership app (with its category),
+ * it's never offered to assign to a coaching client (the library's ⋯ and
+ * Preview, the assign pickers, Cleo), and members start it from their own
+ * library (startLibraryPlan). Its template stays, since every member's start
+ * copies it.
+ */
+export function isMembersProgram(tags: string[] | null | undefined): boolean {
+  return libraryCategoryOf(tags) != null;
+}
+
+/** The programs a coach may put on a coaching client: everything but the members' programs. */
+export function coachingTemplates<T extends { tags?: string[] | null }>(rows: readonly T[] | null | undefined): T[] {
+  return (rows ?? []).filter((t) => !isMembersProgram(t.tags));
+}
+
 const LEVEL_RANK: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2 };
 function levelRank(tags: string[] | null | undefined): number {
   for (const tag of tags ?? []) {
@@ -140,6 +158,8 @@ export type LibraryProgram = {
   name: string;
   /** JF Effect library category (null for a coach's own / client programs) */
   category: LibraryCategory | null;
+  /** a members' program (isMembersProgram): only ever under Membership app, never assigned */
+  membersOnly: boolean;
   /** order inside a category: level, then days a week, then name */
   categoryOrder: number;
   archived: boolean;
@@ -213,6 +233,7 @@ export function toLibraryPrograms(
         id: t.id,
         name,
         category: libraryCategoryOf(t.tags),
+        membersOnly: isMembersProgram(t.tags),
         categoryOrder: levelRank(t.tags) * 10 + (t.days_per_week ?? 0),
         archived: !!t.archived,
         updatedAt: t.updated_at ?? "",
@@ -232,8 +253,10 @@ export function toLibraryPrograms(
 export function inScope(p: LibraryProgram, scope: LibraryScope): boolean {
   if (scope === "archived") return p.archived;
   if (p.archived) return false;
+  // a members' program lives only under Membership app, listed or taken out (so it can go back up)
+  if (scope === "membership") return p.membersOnly || p.membership.kind !== "off";
+  if (p.membersOnly) return false;
   if (scope === "clients") return p.clients.length > 0;
-  if (scope === "membership") return p.membership.kind !== "off";
   return true;
 }
 
@@ -284,9 +307,10 @@ export function emptyLibraryCopy(scope: LibraryScope, searching: boolean): { tit
 export type LibrarySection = { key: string; label: string; items: LibraryProgram[] };
 
 /**
- * The All view without a search: the JF Effect programs by category (Athletes,
- * Men, Women, At Home, Running: beginner → advanced), then every other program, newest
- * first. A list with no JF Effect programs is one plain section (no heading).
+ * The Membership app view without a search: the JF Effect programs by category
+ * (Athletes, Men, Women, At Home, Running: beginner → advanced), then any other
+ * program listed for members, newest first. A list with no JF Effect programs
+ * is one plain section (no heading).
  */
 export function libraryCategorySections(programs: LibraryProgram[]): LibrarySection[] {
   const sections: LibrarySection[] = [];

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  clientsLabel, emptyLibraryCopy, inScope, matchesSearch, membershipByTemplate, programLine,
+  clientsLabel, coachingTemplates, emptyLibraryCopy, inScope, isMembersProgram, matchesSearch, membershipByTemplate, programLine,
   scopeCounts, toLibraryPrograms, usageByTemplate, visibleScopes, type UsageBlock,
 } from "@/lib/programs/library-view";
 import { buildInternalNav, buildInternalNavCollapsed } from "@/lib/internal-nav";
@@ -175,5 +175,54 @@ describe("the fresh-start cleanup", () => {
     expect(sql).toContain("AND dc.completed_at >= now() - interval '42 days'");
     // never a client's own program: only library templates and membership listings
     expect(sql).not.toMatch(/DELETE FROM public\.pl_blocks/);
+  });
+});
+
+describe("the JF Effect programs live only in the membership app", () => {
+  const jf = (id: string, extra: Record<string, unknown> = {}) => ({
+    id, name: `JF Effect | ${id}`, tags: ["JF Effect", "Running", "Beginner"], updated_at: "2026-11-14", ...extra,
+  });
+  const programs = toLibraryPrograms(
+    [
+      jf("listed"),
+      jf("taken-out"),
+      jf("archived-jf", { archived: true }),
+      { id: "own", name: "Meet Prep", tags: [], updated_at: "2026-11-12" },
+      { id: "own-listed", name: "Apex Glute", tags: null, updated_at: "2026-11-11" },
+    ],
+    // members who started it are clients too: it still never shows under On clients
+    new Map([["listed", [{ clientId: "m1", name: "A member" }]], ["own", [{ clientId: "c1", name: "Ashley" }]]]),
+    new Map([
+      ["listed", { kind: "live", planId: "p1" } as const],
+      ["taken-out", { kind: "off", planId: "p2" } as const],
+      ["own-listed", { kind: "live", planId: "p3" } as const],
+    ]),
+  );
+  const ids = (s: Parameters<typeof inScope>[1]) => programs.filter((p) => inScope(p, s)).map((p) => p.id).sort();
+
+  it("never in All or On clients; always under Membership app, even taken out, so it can go back up", () => {
+    expect(ids("all")).toEqual(["own", "own-listed"]);
+    expect(ids("clients")).toEqual(["own"]);
+    expect(ids("membership")).toEqual(["listed", "own-listed", "taken-out"]);
+    expect(ids("archived")).toEqual(["archived-jf"]);
+  });
+
+  it("the coaching side never offers one: the pickers, Cleo, the library's Assign", () => {
+    expect(coachingTemplates([jf("x"), { id: "own", tags: ["Powerlifting"] }, { id: "none", tags: null }]).map((t) => t.id)).toEqual(["own", "none"]);
+    expect(isMembersProgram(["JF Effect", "Athletes"])).toBe(true);
+    expect(isMembersProgram(["Powerlifting"])).toBe(false);
+    for (const f of [
+      "src/components/clients/assign-program-dialog.tsx",
+      "src/components/programs/admin-template-picker-sheet.tsx",
+      "src/components/quick-assign-template-dialog.tsx",
+      "src/routes/_authenticated/admin/program-assign.$clientId.tsx",
+      "src/lib/cleo-program.server.ts",
+    ]) expect(read(f)).toContain("coachingTemplates(");
+    expect(read("src/lib/cleo-program.server.ts")).toContain("if (isMembersProgram(t.tags)) throw");
+    const page = read("src/route-pages/_authenticated/admin/program-library.tsx");
+    expect(page).toContain("!p.archived && !p.membersOnly && (");
+    expect(page).toContain("!isMembersProgram(tpl.tags) && (");
+    // the categories group the Membership app view, never All
+    expect(page).toContain('scope === "membership" && !q.trim() ? libraryCategorySections(shown)');
   });
 });

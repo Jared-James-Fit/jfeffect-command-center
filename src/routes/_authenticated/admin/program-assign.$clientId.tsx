@@ -1,6 +1,7 @@
 import { createFileRoute, useSearch, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { coachingTemplates } from "@/lib/programs/library-view";
 import { PageHeader } from "@/components/app-shell";
 import { ProgramAssignmentPlanner } from "@/components/program-planner/ProgramAssignmentPlanner";
 import { Card } from "@/components/ui/card";
@@ -22,12 +23,13 @@ function PlannerPage() {
   const { data: templates = [] } = useQuery({
     queryKey: ["pl-templates-assignable-plan"],
     enabled: !templateId,
-    queryFn: async () => (await (supabase as any)
+    queryFn: async () => coachingTemplates((await (supabase as any)
       .from("pl_templates")
       .select("id, name, template_type, weeks, training_focus, tags, payload")
       .in("template_type", ["block","full_prep"])
       .eq("archived", false)
-      .order("updated_at", { ascending: false })).data ?? [],
+      // the members' programs (JF Effect library) are started by members, never put on a coaching client
+      .order("updated_at", { ascending: false })).data ?? []),
   });
 
   return (

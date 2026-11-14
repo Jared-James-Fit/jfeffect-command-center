@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { coachingTemplates } from "@/lib/programs/library-view";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
@@ -25,12 +26,13 @@ export function AssignProgramDialog({ open, onOpenChange, clientId, clientName }
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["assign-dialog-templates"],
     enabled: open && !templateId,
-    queryFn: async () => (await (supabase as any)
+    queryFn: async () => coachingTemplates((await (supabase as any)
       .from("pl_templates")
       .select("id, name, template_type, weeks, training_focus, tags, payload, updated_at")
       .in("template_type", ["block", "full_prep"])
       .eq("archived", false)
-      .order("updated_at", { ascending: false })).data ?? [],
+      // the members' programs (JF Effect library) are started by members, never put on a coaching client
+      .order("updated_at", { ascending: false })).data ?? []),
   });
 
   const filtered = (templates as any[]).filter((t) => {
