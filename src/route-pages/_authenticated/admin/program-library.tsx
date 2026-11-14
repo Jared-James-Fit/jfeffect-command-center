@@ -51,7 +51,7 @@ import { useClientWeightUnit } from "@/hooks/use-client-weight-unit";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
-  LIBRARY_SCOPES, clientsLabel, emptyLibraryCopy, inScope, libraryCategorySections, matchesSearch, membershipByTemplate,
+  LIBRARY_SCOPES, clientsLabel, emptyLibraryCopy, inScope, isMembersProgram, libraryCategorySections, matchesSearch, membershipByTemplate,
   scopeCounts, toLibraryPrograms, usageByTemplate, visibleScopes,
   type LibraryProgram, type LibraryScope, type ListingRow, type UsageBlock,
 } from "@/lib/programs/library-view";
@@ -258,7 +258,7 @@ export function ProgramLibrary({
           </div>
         ) : (
           <div className="space-y-5">
-            {(scope === "all" && !q.trim() ? libraryCategorySections(shown) : [{ key: "list", label: "", items: shown }]).map((section) => (
+            {(scope === "membership" && !q.trim() ? libraryCategorySections(shown) : [{ key: "list", label: "", items: shown }]).map((section) => (
               <section key={section.key} data-library-section={section.key}>
                 {section.label && (
                   <h2 className="mb-2 flex items-baseline gap-2 px-1 text-[15px] font-semibold">
@@ -352,6 +352,12 @@ function LibraryRow({
             <Smartphone className="h-3.5 w-3.5" /> Members have an older version
           </button>
         )}
+        {/* a members' program taken out of the app still lives here, so it can go back up */}
+        {isAdmin && p.membersOnly && !p.archived && p.membership.kind === "off" && (
+          <button type="button" onClick={onMembership} className={cn(CHIP, "bg-secondary text-muted-foreground")} data-library-membership="off">
+            <Smartphone className="h-3.5 w-3.5" /> Not in the app
+          </button>
+        )}
         {p.archived && <span className={cn(CHIP, "bg-secondary text-muted-foreground")}>Archived</span>}
         {tpl && !p.archived && <ProgramStatusBadge template={tpl} quiet />}
       </div>
@@ -392,7 +398,8 @@ function RowMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
-          {!p.archived && (
+          {/* a members' program is started by members, never put on a coaching client */}
+          {!p.archived && !p.membersOnly && (
             <DropdownMenuItem onSelect={onAssign}>
               <UserPlus className="mr-2 h-4 w-4" /> Assign to a client
             </DropdownMenuItem>
@@ -777,7 +784,9 @@ function PreviewDialog({ templateId, onClose, onAssign }: { templateId: string |
                   <Pencil className="mr-1 h-3 w-3" /> Edit
                 </Link>
               </Button>
-              <Button onClick={() => onAssign(tpl)}><UserPlus className="mr-1 h-3 w-3" /> Assign</Button>
+              {!isMembersProgram(tpl.tags) && (
+                <Button onClick={() => onAssign(tpl)}><UserPlus className="mr-1 h-3 w-3" /> Assign</Button>
+              )}
             </>
           )}
         </DialogFooter>

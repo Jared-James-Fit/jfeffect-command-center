@@ -22,6 +22,7 @@ import { filterPrimaryProgramBlocks } from "@/lib/at-home-backup";
 import { rxText, rxToRow, trainingDayDates, weekdayLabel, type Rx, type Weekday } from "@/lib/cleo-program";
 import { carryPlanDayRules } from "@/lib/client-nutrition-day";
 import { lowValueReason, EXERCISE_STANDARD } from "@/lib/program-intel/exercise-standard";
+import { coachingTemplates, isMembersProgram } from "@/lib/programs/library-view";
 
 type Db = any;
 
@@ -105,12 +106,13 @@ export function cleoProgramTools({ db, today }: { db: Db; today: string }) {
     }),
 
     program_templates: tool({
-      description: "Program templates in the library (name, type, style, weeks, days per week) with their ids, for assigning a client a program.",
+      description: "Program templates in the library (name, type, style, weeks, days per week) with their ids, for assigning a client a program. The JF Effect membership programs aren't here: members start those themselves.",
       inputSchema: z.object({ query: z.string().trim().max(60).optional() }),
       execute: safe("program templates", async ({ query }) => {
         let q = db.from("pl_templates").select("*").eq("archived", false).order("updated_at", { ascending: false }).limit(40);
         if (query) q = q.ilike("name", `%${query.replace(/[%_]/g, "")}%`);
-        const list = rows<any>(await q, "templates");
+        // the members' programs (JF Effect library) live in the membership app, never on a coaching client
+        const list = coachingTemplates(rows<any>(await q, "templates"));
         if (!list.length) return query ? `No template matches "${query}".` : "There are no program templates.";
         return [
           "Program templates:",
@@ -316,8 +318,9 @@ export async function describeProgramAction(db: Db, kind: ProgramKind, p: any, t
   switch (kind) {
     case "assign_program_template": {
       const c = await client(db, p.client_id);
-      const { data: t } = await db.from("pl_templates").select("name, weeks, days_per_week, archived").eq("id", p.template_id).maybeSingle();
+      const { data: t } = await db.from("pl_templates").select("name, weeks, days_per_week, archived, tags").eq("id", p.template_id).maybeSingle();
       if (!t || t.archived) throw new Error("I couldn't find that template.");
+      if (isMembersProgram(t.tags)) throw new Error(`"${t.name}" is a membership app program: members start it themselves, it isn't put on a coaching client.`);
       const days = (c.committed_training_days ?? []) as string[];
       return [
         `Put ${clientLabel(c)} on "${p.name ?? t.name}" (${t.weeks ?? "?"} weeks, ${t.days_per_week ?? "?"} days/week) starting ${longDate(p.start_date)}.`,

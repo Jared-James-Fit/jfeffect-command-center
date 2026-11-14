@@ -5,6 +5,7 @@ import { saveCommittedSchedule } from "@/lib/schedule-bulk.functions";
 import { invalidateScheduleQueries } from "@/lib/schedule-invalidate";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { coachingTemplates } from "@/lib/programs/library-view";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,12 +55,13 @@ export function QuickAssignTemplateDialog({ open, onOpenChange, clientId, client
   const { data: templates = [] } = useQuery({
     queryKey: ["pl-templates-assignable"],
     enabled: open,
-    queryFn: async () => (await (supabase as any)
+    queryFn: async () => coachingTemplates((await (supabase as any)
       .from("pl_templates")
       .select("id, name, template_type, weeks, training_style, training_focus, goal, tags, days_per_week, est_duration_min, payload")
       .in("template_type", ["block", "full_prep"])
       .eq("archived", false)
-      .order("updated_at", { ascending: false })).data ?? [],
+      // the members' programs (JF Effect library) are started by members, never put on a coaching client
+      .order("updated_at", { ascending: false })).data ?? []),
   });
 
   const selected = (templates as any[]).find((t) => t.id === templateId);
