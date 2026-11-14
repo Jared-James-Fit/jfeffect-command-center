@@ -60,15 +60,17 @@ export function hubTabFromHash(h: string = typeof window === "undefined" ? "" : 
 
 /**
  * What's waiting on the coach on each Manage tab (a dot on the tab, and on
- * the bar's Manage while anything is): comments to answer, workouts waiting
- * on props, the crew's reports and posts paused on Needs you; a lesson or a
- * birthday post waiting for their OK on Posts too (Needs you lists them, a
- * tap from Posts).
+ * the bar's Manage while anything is): the crew's reports, comments to
+ * answer and posts paused on Needs you; a lesson or a birthday post waiting
+ * for their OK on Posts too (Needs you lists them, a tap from Posts).
+ * Workouts waiting on props are listed on Needs you but never count: there's
+ * nearly always a week of them (27 on Nov 14 2026), so counted, the dot would
+ * never go away and would stop meaning anything.
  */
 export function hubTabCounts(p: CommunityPulse | undefined, reports = 0): Record<ManageTab, number> {
   const toApprove = p ? (p.lessons_review ?? 0) + p.birthday_review : 0;
   return {
-    needs: reports + (p ? groupReplies(p.to_reply).length + p.waiting_props + toApprove + (p.paused ? 1 : 0) : 0),
+    needs: reports + (p ? groupReplies(p.to_reply).length + toApprove + (p.paused ? 1 : 0) : 0),
     posts: toApprove,
     insights: 0,
   };
