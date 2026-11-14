@@ -27,6 +27,7 @@ import {
   type ExerciseMeta,
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
+import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
@@ -3639,7 +3640,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     });
   };
 
-  const { data: maxes = [] } = useQuery({
+  const { data: maxes = [], isPending: maxesPending } = useQuery({
     queryKey: ["pl-client-maxes", clientId, blockId ?? null],
     enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
     queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
@@ -3707,8 +3708,26 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const showRir = !!row.rir && !row.rpe;
 
   // RPE-based load suggestion (history + today's sets + predicted readiness).
-  // A coach's fixed load or top-set back-off stays the only suggestion.
-  const coachOwnsLoad = !!row.manual_override || row.percentage_basis === "top_set";
+  // A coach's fixed load, top-set back-off or % of a max stays the only
+  // suggestion: on a % row the RPE is its cap, never a reason to add weight
+  // (and the engine waits while the max loads, so it never flashes in first).
+  const maxBasedPct =
+    !!row.percentage &&
+    (row.percentage_basis === "training_max" || row.percentage_basis === "1rm" || row.percentage_basis === "est_1rm");
+  const pctLoadIsCoachs = maxBasedPct && (maxesPending || (computed?.status === "ok" && computed.load != null));
+  const coachOwnsLoad = !!row.manual_override || row.percentage_basis === "top_set" || pctLoadIsCoachs;
+  // What the % is of and that the RPE is its cap, under the prescription line
+  // (which shows only the weight once there's one to show).
+  const pctLine = useMemo(() => {
+    if (hideWeight || row.manual_override || (maxBasedPct && maxesPending)) return null;
+    return percentLoadLine({
+      percentage: row.percentage,
+      basis: row.percentage_basis,
+      rpe: row.rpe,
+      linkedLoad: topSetBasis,
+      reference: computed?.status === "ok" ? maxReference(computed.max, computed.base, computed.unit) : null,
+    });
+  }, [hideWeight, row.manual_override, row.percentage, row.percentage_basis, row.rpe, maxBasedPct, maxesPending, topSetBasis?.value, topSetBasis?.unit, computed]);
   const loadPlan = useMemo(
     () => planningTarget({ repTarget, rpeTarget, rirTarget }),
     [repTarget, rpeTarget, rirTarget],
@@ -4284,6 +4303,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {row.tempo && <span className="ml-2 text-sm font-normal text-muted-foreground">tempo {row.tempo}</span>}
       </div>
+      {pctLine && (
+        <p className="mt-0.5 text-xs text-muted-foreground" data-pct-line>{pctLine}</p>
+      )}
       {/* Reference row: "Last time" IS the History button (tap it for the
           full history), so the row holds it and the Suggest switch on one line.
           With no last time to show, a plain History chip stands in. */}

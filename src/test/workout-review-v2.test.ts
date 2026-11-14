@@ -124,7 +124,7 @@ describe("load suggestions in the logger", () => {
     expect(wdv).toContain("<LoadSuggestionCard hint={loadHint} model={loadModel} plan={loadPlan} warmup={warmupGauge} fromName={dayRead?.fromName ?? null} />");
     expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");
   });
-  it("never competes with a coach's fixed load or top-set back-off", () => {
-    expect(wdv).toContain('const coachOwnsLoad = !!row.manual_override || row.percentage_basis === "top_set";');
+  it("never competes with a coach's fixed load, top-set back-off or % of a max", () => {
+    expect(wdv).toContain('const coachOwnsLoad = !!row.manual_override || row.percentage_basis === "top_set" || pctLoadIsCoachs;');
   });
 });
