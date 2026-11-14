@@ -105,7 +105,12 @@ export function useEndProgram() {
       if (error) throw error;
       return data as EndFacts;
     },
-    onSuccess: () => void qc.invalidateQueries(),
+    // the ended program's days leave the list at once (its placeholder, then
+    // what's left), never shown as still on the calendar while it refetches
+    onSuccess: () => {
+      void qc.resetQueries({ queryKey: ["my-workouts"] });
+      void qc.invalidateQueries();
+    },
   });
   return { preview, end };
 }
