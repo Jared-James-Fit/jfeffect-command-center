@@ -27,22 +27,21 @@ describe("ways into a profile (Instagram, TikTok, Strava)", () => {
 
   it("opens your own profile from your photo at the top right of Crew's bar (not while a coach views as a client)", () => {
     const screen = read("src/components/community/community-screen.tsx");
-    expect(screen).toContain('type Tab = "feed" | "rankings" | "you" | "members" | "activity";');
+    expect(screen).toContain('type Tab = "feed" | "rankings" | "you" | "members" | "activity" | "manage";');
     // no Feed · Rankings · You toggle any more: your photo in the bar is the way in
     expect(screen).not.toContain('role="tablist" aria-label="Crew view"');
     expect(screen).toContain('<BarButton label="Your profile" onClick={openMe} data-my-profile>');
     expect(screen).toContain("<MyTabPhoto size={27} />");
     // it keeps its place in the URL (#you), and Crew's own button (no hash) brings you back to the feed
     expect(screen).toContain('void navigate({ to: ".", hash: "you", replace: true, resetScroll: false });');
-    expect(screen).toContain('else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" ? { kind: "feed" } : sc));');
+    expect(screen).toContain('else if (!routeHash || routeHash === "feed") setScope((sc) => (sc.kind === "rankings" || sc.kind === "you" || sc.kind === "manage" ? { kind: "feed" } : sc));');
     // a page with ‹ back to the feed, and the app's ☰ (Instagram's profile menu)
     expect(screen).toContain('const youAsPage = scope.kind === "you";');
     expect(screen).toContain('<BarButton label="More" onClick={openAppMore} data-crew-more>');
-    // the coach's Crew page: the same photo button, on the feed (where profiles live)
+    // the coach's Crew page is the same screen, so the same photo button (Nov 14 2026)
     const hub = read("src/components/community/admin-community-hub.tsx");
-    expect(hub).toContain('label="Your profile"');
-    expect(hub).toContain("<MyTabPhoto size={27} />");
-    expect(hub).toContain("if (id) onFeed(() => openCommunityPerson(id));");
+    expect(hub).toContain("<CommunityScreen\n        coach={{");
+    expect(hub).not.toContain("<MyTabPhoto");
   });
 
   it("sends your own id to your own profile (edit photo and bio), anyone else's to theirs", () => {

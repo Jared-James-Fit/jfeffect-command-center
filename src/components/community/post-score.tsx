@@ -94,6 +94,34 @@ export function PostScoreRow({ post }: { post: CommunityPost }) {
   );
 }
 
+/**
+ * The same on a post's own screen (the paged feed, where every line under a
+ * post is room its picture loses): the score and "Insights" in the line with
+ * its views, the breakdown a tap away. Staff only, never in View as client.
+ */
+export function PostScoreChip({ post }: { post: CommunityPost }) {
+  const { isImpersonating } = useClientImpersonation();
+  const scorable = !post.story && !post.auto && !post.archived_at && !isImpersonating;
+  const { data } = usePostScore(post.id, scorable);
+  const [open, setOpen] = useState(false);
+  if (!scorable || !data) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold active:opacity-70"
+        aria-label={`Post score ${data.score}, ${scoreBand(data).label}. See insights`}
+        data-post-score-chip
+      >
+        <ScoreBadge score={data} className="h-5 min-w-[1.9rem] text-[11px]" />
+        Insights
+      </button>
+      <PostScoreSheet score={data} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 function ScoreRing({ score }: { score: PostScore }) {
   const band = scoreBand(score);
   const r = 34;

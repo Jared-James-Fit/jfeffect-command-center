@@ -18,7 +18,7 @@ describe("one staff app, laid out like the client app", () => {
   });
 
   it("More opens from a big header button for staff, clients and members (members use the portal)", () => {
-    expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("title={title} moreInHeader>");
+    expect(read("src/routes/_authenticated/admin/route.tsx")).toContain("title={title} moreInHeader ownTopBarOn={viewOnly ? undefined : CREW_OWN_BAR}>");
     expect(read("src/routes/_authenticated/portal/route.tsx")).toContain('title="JF Effect" moreInHeader simpleHeader ownTopBarOn=');
     // on Crew (its own bar) More is your profile's ☰
     expect(read("src/components/community/community-screen.tsx")).toContain("onClick={openAppMore} data-crew-more");

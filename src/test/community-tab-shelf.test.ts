@@ -99,7 +99,7 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     expect(shell).not.toContain("dy > 0 || dx !== 0 || scale !== 1");
   });
 
-  it("Rankings is the trophy in Crew's bar, one tap from any post; the coach's League stays the bubble in his stories", () => {
+  it("Rankings is the trophy in Crew's bar, one tap from any post; the coach's Manage takes its place (the finance feed keeps the League bubble)", () => {
     const rail = read("src/components/community/crew-stories.tsx");
     expect(rail).toContain("data-story-rankings");
     expect(rail).toContain("if (!groups.length && !mine && !addStory && !rankings) return null;");
@@ -110,7 +110,7 @@ describe("the tab bar: TikTok's / Instagram's", () => {
     // the Crew screen follows the hash, so a link to #rankings still opens it
     expect(screen).toContain('if (rankingsFromHash(`#${routeHash}`)) setScope({ kind: "rankings" });');
     // ‹ back out of Rankings (or your profile) drops the hash
-    expect(screen).toContain('if (k === "feed" && /^#(rankings|league|you)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
+    expect(screen).toContain('if (k === "feed" && /^#(rankings|league|you|tab=)/.test(window.location.hash)) void navigate({ to: ".", hash: "", replace: true, resetScroll: false });');
   });
 
   it("no community for this account: no centre button", () => {

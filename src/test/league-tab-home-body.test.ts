@@ -25,7 +25,7 @@ describe("the centre tab is Crew: the feed and the rankings in one place", () =>
     expect(screen).toContain('<CrewBar label="Rankings" left={<BarBack label="Back to the feed" onClick={() => goBack("feed")} />} center={<BarTitle>Rankings</BarTitle>} />');
     expect(read("src/components/community/activity-heart.tsx")).toContain('aria-label={unread ? "Activity, new" : "Activity"}');
     // Find athletes (the members directory) opens from Activity's search or the top bar, and goes back where it came from
-    expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed" };');
+    expect(screen).toContain('const PARENT: Partial<Record<Tab, Tab>> = { activity: "feed", members: "feed", manage: "feed" };');
     expect(screen).toContain('const parent = scope.kind === "members" ? discoverBack : PARENT[scope.kind as Tab];');
     expect(read("src/components/community/crew-activity.tsx")).toContain('aria-label="Find people"');
     expect(crew).toContain("data-crew-me");

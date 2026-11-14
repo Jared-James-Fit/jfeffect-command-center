@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { CalendarClock, Cake, ChevronDown, ChevronRight, Eye, Flag, Flame, MessageCircle, Plus } from "lucide-react";
+import { CalendarClock, Cake, CheckCircle2, ChevronDown, ChevronRight, Eye, Flag, Flame, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
@@ -8,17 +8,13 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useCommunityFeed, useCommunityPulse, useSeriesAction, useViewerUnit, type CommunityPulse } from "@/lib/community.queries";
 import { CommunityScreen } from "@/components/community/community-screen";
-import { MyTabPhoto } from "@/components/community/profile-view";
-import { BarButton } from "@/components/community/crew-header";
-import { openCommunityPerson } from "@/lib/community-notifications";
-import { openCrewActivity } from "@/lib/crew-activity";
-import { ActivityHeart } from "@/components/community/activity-heart";
 import { CoachPostsTab } from "@/components/community/posts-schedule";
 import { PostScoreBoard } from "@/components/community/post-score-board";
 import { CoachPostRow } from "@/components/community/community-entry";
 import { NoteEditor } from "@/components/community/note-editor";
 import { PostDetailDialog } from "@/components/community/post-detail";
 import { ReportsReviewSheet, useOpenReports } from "@/components/community/reports-review";
+import { MANAGE_TABS, manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
 
 /** "Today 7:00 pm" · "Tomorrow 9:00 am" · "Mon 8:00 am", in the coach's own clock. */
 export function whenLabel(iso: string, now: Date = new Date()): string {
@@ -51,151 +47,80 @@ export function groupReplies(rows: CommunityPulse["to_reply"]) {
   }));
 }
 
-type HubTab = "feed" | "posts" | "insights";
-const HUB_TABS: { key: HubTab; label: string }[] = [
-  { key: "feed", label: "Feed" },
-  { key: "posts", label: "Posts" },
-  { key: "insights", label: "Insights" },
-];
-
 /**
- * Which tab a link asks for. The League is its own page now (the bar's
- * trophy), so its old links (`#tab=league`, `#rankings`) go there; old
- * `#tab=daily` / `#tab=birthdays` / `#birthday=<id>` links open Posts.
+ * Where a link to the coach's Crew lands: the feed, a Manage tab
+ * (crew-manage.ts: `#tab=needs`, `#tab=posts` and its old `#tab=daily` /
+ * `#tab=birthdays` / `#birthday=<id>`, `#tab=insights`), or the League,
+ * its own page (`#tab=league`, `#rankings`).
  */
-export function hubTabFromHash(h: string = typeof window === "undefined" ? "" : window.location.hash): HubTab | "league" {
+export function hubTabFromHash(h: string = typeof window === "undefined" ? "" : window.location.hash): ManageTab | "feed" | "league" {
   if (/tab=league/.test(h) || /rankings/.test(h)) return "league";
-  if (/tab=(posts|daily|birthdays)/.test(h) || /birthday=/.test(h)) return "posts";
-  if (/tab=(insights|scores)/.test(h)) return "insights";
-  return "feed";
+  return manageTabFromHash(h) ?? "feed";
 }
 
-/** What's waiting on the coach in each tab: a red dot on the tab (the count is in its label for screen readers). */
-export function hubTabCounts(p: CommunityPulse | undefined): Record<HubTab, number> {
-  if (!p) return { feed: 0, posts: 0, insights: 0 };
+/**
+ * What's waiting on the coach on each Manage tab (a dot on the tab, and on
+ * the bar's Manage while anything is): comments to answer, workouts waiting
+ * on props, the crew's reports and posts paused on Needs you; a lesson or a
+ * birthday post waiting for their OK on Posts too (Needs you lists them, a
+ * tap from Posts).
+ */
+export function hubTabCounts(p: CommunityPulse | undefined, reports = 0): Record<ManageTab, number> {
+  const toApprove = p ? (p.lessons_review ?? 0) + p.birthday_review : 0;
   return {
-    feed: groupReplies(p.to_reply).length + p.waiting_props,
-    posts: (p.lessons_review ?? 0) + p.birthday_review,
+    needs: reports + (p ? groupReplies(p.to_reply).length + p.waiting_props + toApprove + (p.paused ? 1 : 0) : 0),
+    posts: toApprove,
     insights: 0,
   };
 }
 
 /**
- * The coach's Crew page, behind the raised centre button. One row on top
- * (+ to write a post, Feed · Posts · Insights, the Activity heart, your
- * photo), like the clients' Crew bar:
- * - Feed: only what's waiting on you (comments to answer, workouts waiting
- *   on props, posts to approve), then the feed.
- * - Posts: one schedule of everything that goes out on its own, what's out
- *   lately, and Manage (each kind's settings on a page of its own,
- *   posts-schedule.tsx).
- * - Insights: the week in numbers and how each post did.
- * The League is its own page (`/admin/league`, the trophy on the bar).
+ * The coach's Crew page, behind Crew's tab: the clients' Crew (the same bar,
+ * stories and full-screen feed, CommunityScreen), with the coach's tools in it
+ * (Nov 14 2026): + writes a post to the crew, and Manage, in the trophy's place
+ * with a dot while something waits, opens the coach's page: Needs you (what's
+ * waiting, each a tap from done), Posts (everything that goes out on its own,
+ * posts-schedule.tsx) and Insights (the week's numbers, each post's score).
+ * The League is the trophy on Manage's bar (and its own page, /admin/league).
+ * A view-only login (finance) gets the feed alone.
  */
 export function AdminCommunityHub() {
-  const { viewOnly, user } = useAuth();
+  const { viewOnly } = useAuth();
   const navigate = useNavigate();
-  const [picked, setPicked] = useState<HubTab>(() => {
-    const t = hubTabFromHash();
-    return t === "league" ? "feed" : t;
-  });
-  // The tab lives in the hash: Back from a page opened here returns to the
-  // same tab, and Crew's own button (no hash) brings you back to the Feed.
+  // old League links (#tab=league, #rankings) go to the League page
   const routeHash = useRouterState({ select: (s) => s.location.hash });
-  // null: also apply the hash once on arrival (the router's, not window's).
-  const seenHash = useRef<string | null>(null);
   useEffect(() => {
-    if (routeHash === seenHash.current) return;
-    seenHash.current = routeHash;
-    const t = hubTabFromHash(`#${routeHash}`);
-    if (t === "league") void navigate({ to: "/admin/league", replace: true });
-    else setPicked(t);
+    if (hubTabFromHash(`#${routeHash}`) === "league") void navigate({ to: "/admin/league", replace: true });
   }, [routeHash, navigate]);
-  const setTab = (t: HubTab) => {
-    setPicked(t);
-    void navigate({ to: ".", hash: t === "feed" ? "" : `tab=${t}`, replace: true, resetScroll: false });
-  };
   const [writing, setWriting] = useState(false);
   const act = useSeriesAction();
   const { data: pulse } = useCommunityPulse(!viewOnly);
-  // a view-only login (finance) gets the feed alone: no queues, no tools
-  const tab: HubTab = viewOnly ? "feed" : picked;
-  const openReports = useOpenReports(!viewOnly).data?.length ?? 0;
-  const base = hubTabCounts(pulse);
-  // reports from the crew wait on the Feed tab, with what else is waiting
-  const counts = { ...base, feed: base.feed + openReports };
-  // profiles and Activity live in the feed: open them there
-  const onFeed = (open: () => void) => {
-    if (tab === "feed") return open();
-    setTab("feed");
-    window.setTimeout(open, 0);
-  };
+  const reports = useOpenReports(!viewOnly).data?.length ?? 0;
+  const counts = hubTabCounts(pulse, reports);
+
+  // the finance login: the feed alone, no tools
+  if (viewOnly) {
+    return (
+      <div className="mx-auto w-full max-w-[560px] px-3 pb-12 pt-2 sm:px-4">
+        <div className="-mx-3 sm:-mx-4">
+          <CommunityScreen hideTabs />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto w-full max-w-[560px] px-3 pb-12 sm:px-4">
-      {!viewOnly && (
-        <div className="sticky top-0 z-20 -mx-3 flex items-center gap-1 bg-background/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:-mx-4 sm:px-3 md:top-[41px]" data-crew-hub-bar>
-          <BarButton label="Write a post" onClick={() => setWriting(true)} data-crew-write>
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm">
-              <Plus className="h-5 w-5 stroke-[2.75]" />
-            </span>
-          </BarButton>
-          <div className="grid min-w-0 flex-1 grid-cols-3 rounded-full bg-muted p-1" role="tablist" aria-label="Crew sections">
-            {HUB_TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.key}
-                aria-label={counts[t.key] ? `${t.label}, ${counts[t.key]} waiting on you` : undefined}
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  "h-9 min-w-0 rounded-full px-1 text-[13px] font-bold transition-colors",
-                  tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
-                )}
-              >
-                {t.label}
-                {/* something waiting here: a red dot (the Feed's rows and Posts' cards say what) */}
-                {counts[t.key] > 0 && <span className="ml-0.5 inline-block h-1.5 w-1.5 -translate-y-1.5 rounded-full bg-primary" data-tab-waiting aria-hidden />}
-              </button>
-            ))}
-          </div>
-          {/* Activity: likes, comments and follows on your posts, with the bubble when there's something new */}
-          <ActivityHeart onOpen={() => onFeed(openCrewActivity)} />
-          {/* you: your own profile (posts, followers, edit), with your photo */}
-          <BarButton
-            label="Your profile"
-            onClick={() => {
-              const id = user?.id;
-              if (id) onFeed(() => openCommunityPerson(id));
-            }}
-            data-my-profile
-          >
-            <MyTabPhoto size={27} />
-          </BarButton>
-        </div>
-      )}
-
-      <div className="space-y-3 pt-2">
-        {tab === "feed" ? (
-          <>
-            {!viewOnly && <NeedsYou onGo={setTab} />}
-            <div className="-mx-3 sm:-mx-4">
-              <CommunityScreen hideTabs />
-            </div>
-          </>
-        ) : tab === "posts" ? (
-          <CoachPostsTab />
-        ) : (
-          <>
-            <WeekCard />
-            <PostScoreBoard />
-          </>
-        )}
-      </div>
-
+    <>
+      <CommunityScreen
+        coach={{
+          onWrite: () => setWriting(true),
+          waiting: counts.needs > 0,
+          startTab: counts.needs > 0 ? "needs" : "posts",
+          manage: <CrewManage counts={counts} />,
+        }}
+      />
       <NoteEditor
-        open={writing && !viewOnly}
+        open={writing}
         title="Write a post"
         initial=""
         saving={act.isPending}
@@ -209,19 +134,63 @@ export function AdminCommunityHub() {
           return r?.id;
         }}
       />
+    </>
+  );
+}
+
+/** Manage: Needs you · Posts · Insights, the tab in the hash (so Back, pushes and old links agree). */
+function CrewManage({ counts }: { counts: Record<ManageTab, number> }) {
+  const navigate = useNavigate();
+  const routeHash = useRouterState({ select: (s) => s.location.hash });
+  const tab = manageTabFromHash(`#${routeHash}`) ?? "needs";
+  const setTab = (t: ManageTab) => void navigate({ to: ".", hash: `tab=${t}`, replace: true, resetScroll: false });
+  return (
+    <div className="space-y-3" data-crew-manage={tab}>
+      <div className="grid grid-cols-3 rounded-full bg-muted p-1" role="tablist" aria-label="Manage Crew">
+        {MANAGE_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            aria-label={counts[t.key] ? `${t.label}, something's waiting on you` : undefined}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "h-9 min-w-0 rounded-full px-1 text-[14px] font-semibold transition-colors",
+              tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+            )}
+            data-manage-tab={t.key}
+          >
+            {t.label}
+            {/* something waiting here: a dot (the rows say what) */}
+            {counts[t.key] > 0 && <span className="ml-1 inline-block h-1.5 w-1.5 -translate-y-1.5 rounded-full bg-primary" data-tab-waiting aria-hidden />}
+          </button>
+        ))}
+      </div>
+      {tab === "needs" ? (
+        <NeedsYou onGo={setTab} />
+      ) : tab === "posts" ? (
+        <CoachPostsTab />
+      ) : (
+        <>
+          <WeekCard />
+          <PostScoreBoard />
+        </>
+      )}
     </div>
   );
 }
 
 /**
- * The top of the Feed: only what's waiting on the coach (comments to answer,
- * shared workouts waiting on props, posts to approve, posts paused), each one
- * tap from done. Nothing waiting, nothing shown: the feed starts right away.
+ * Manage → Needs you: only what's waiting on the coach (the crew's reports,
+ * comments to answer, shared workouts waiting on props, lessons or birthday
+ * posts waiting for an OK, posts paused), each a tap from done. Nothing
+ * waiting: one line that says so.
  */
-function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
+function NeedsYou({ onGo }: { onGo: (t: ManageTab) => void }) {
   const { user } = useAuth();
   const { data: unit = "lb" } = useViewerUnit(user?.id);
-  const { data: p, refetch } = useCommunityPulse();
+  const { data: p, refetch, isLoading } = useCommunityPulse();
   const feed = useCommunityFeed(null);
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [showProps, setShowProps] = useState(false);
@@ -234,18 +203,26 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
     return (feed.data?.pages[0]?.posts ?? []).filter((x) => !x.is_mine && x.kind !== "note" && !x.my_reaction && new Date(x.created_at).getTime() > weekAgo);
   }, [feed.data]);
 
+  if (isLoading) return <Skeleton className="h-32 w-full rounded-2xl" />;
   if (!p) return null;
   const replies = groupReplies(p.to_reply);
   const lessons = p.lessons_review ?? 0;
   const any = reportCount > 0 || replies.length > 0 || p.waiting_props > 0 || lessons > 0 || p.birthday_review > 0 || p.paused;
-  if (!any) return null;
+  if (!any) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4" data-crew-needs-you="none">
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold">All caught up</div>
+          <div className="text-[13px] text-muted-foreground">Nothing's waiting on you in Crew.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-primary/25 bg-card" data-crew-needs-you>
-      <div className="flex items-center gap-1.5 px-4 pt-3 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
-        <Flame className="h-3.5 w-3.5" /> Needs you
-      </div>
-      <div className="divide-y divide-border/60">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card" data-crew-needs-you>
+      <div className="divide-y divide-border">
         {reportCount > 0 && (
           <Row
             icon={<Flag className="h-4 w-4" />}
@@ -258,10 +235,9 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
         {replies.map((r) => (
           <Row
             key={r.post_id}
-            icon={<UserAvatar src={r.avatar_url} name={r.who} size={28} expandable={false} />}
+            icon={<UserAvatar src={r.avatar_url} name={r.who} size={32} expandable={false} />}
             title={r.who}
             sub={`“${r.body}”`}
-            hot
             tag="Reply"
             onClick={() => setOpenPost(r.post_id)}
           />
@@ -271,14 +247,13 @@ function NeedsYou({ onGo }: { onGo: (t: HubTab) => void }) {
           <>
             <Row
               icon={<Flame className="h-4 w-4" />}
-              title={`${p.waiting_props} shared ${p.waiting_props === 1 ? "workout" : "workouts"} waiting on your props`}
+              title={`${p.waiting_props} ${p.waiting_props === 1 ? "workout" : "workouts"} waiting on your props`}
               sub="One tap tells them you saw it"
-              hot
               open={showProps}
               onClick={() => setShowProps((v) => !v)}
             />
             {showProps && (
-              <div className="divide-y divide-border/60 px-4">
+              <div className="divide-y divide-border px-4">
                 {waiting.map((x) => (
                   <CoachPostRow key={x.id} post={x} unit={unit} />
                 ))}
@@ -347,21 +322,22 @@ function WeekCard() {
   ];
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card" data-crew-week>
+    <section className="overflow-hidden rounded-2xl border border-border bg-card" data-crew-week>
       <div className="px-4 pb-3 pt-3">
-        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Last 7 days · clients only</div>
-        <div className="mt-2 grid grid-cols-4 gap-2">
+        <div className="text-[16px] font-semibold">Last 7 days</div>
+        <div className="text-[12px] text-muted-foreground">Clients only</div>
+        <div className="mt-3 grid grid-cols-4 gap-2">
           {stats.map((s) => (
             <div key={s.label} className="min-w-0">
-              <div className="font-display truncate text-[24px] leading-none">{s.value}</div>
-              <div className="mt-1 text-[11px] font-semibold leading-tight text-muted-foreground">{s.label}</div>
+              <div className="truncate text-[22px] font-semibold leading-none tabular-nums">{s.value}</div>
+              <div className="mt-1 text-[12px] leading-tight text-muted-foreground">{s.label}</div>
             </div>
           ))}
         </div>
       </div>
 
       {p.not_opened.length > 0 && (
-        <div className="border-t border-border/60">
+        <div className="border-t border-border">
           <Row
             icon={<Eye className="h-4 w-4" />}
             title={`${p.not_opened.length} haven't looked this week`}
@@ -370,18 +346,18 @@ function WeekCard() {
             onClick={() => setShowQuiet((v) => !v)}
           />
           {showQuiet && (
-            <ul className="divide-y divide-border/60 px-4">
+            <ul className="divide-y divide-border px-4">
               {p.not_opened.map((c) => (
                 <li key={c.user_id} className="flex items-center gap-3 py-2">
                   <UserAvatar src={c.avatar_url} name={c.name} size={30} expandable={false} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-bold">{c.name}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">{lastLookedLabel(c.seen_at)}</div>
+                    <div className="truncate text-[14px] font-semibold">{c.name}</div>
+                    <div className="truncate text-[12px] text-muted-foreground">{lastLookedLabel(c.seen_at)}</div>
                   </div>
                   <Link
                     to="/admin/messages"
                     search={{ client: c.client_id } as any}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-border px-3 text-[12px] font-bold"
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border border-border px-3 text-[13px] font-semibold"
                   >
                     <MessageCircle className="h-3.5 w-3.5" /> Message
                   </Link>
@@ -395,23 +371,24 @@ function WeekCard() {
   );
 }
 
+/** One row: a plain icon tile, what it is, and a way in (`hot`: needs an OK, so its tile is amber). */
 function Row({ icon, title, sub, hot, open, tag, onClick }: { icon: ReactNode; title: string; sub?: string; hot?: boolean; open?: boolean; tag?: string; onClick?: () => void }) {
   const body = (
     <>
-      <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full", hot ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{icon}</span>
+      <span className={cn("grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full", hot ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground")}>{icon}</span>
       <div className="min-w-0 flex-1">
-        <div className={cn("truncate text-[13px] font-bold", hot && "text-primary")}>{title}</div>
-        {sub && <div className="truncate text-[12px] text-muted-foreground">{sub}</div>}
+        <div className="truncate text-[14px] font-semibold">{title}</div>
+        {sub && <div className="truncate text-[13px] text-muted-foreground">{sub}</div>}
       </div>
     </>
   );
   // a line that only says something (what's next) isn't a button
   if (!onClick) return <div className="flex w-full items-center gap-3 px-4 py-2.5">{body}</div>;
   return (
-    <button type="button" onClick={onClick} className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2.5 text-left active:bg-muted/60" aria-expanded={open}>
+    <button type="button" onClick={onClick} className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2.5 text-left active:bg-muted/60" aria-expanded={open}>
       {body}
       {tag ? (
-        <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[12px] font-bold text-primary-foreground">{tag}</span>
+        <span className="shrink-0 rounded-full border border-border px-3 py-1 text-[13px] font-semibold">{tag}</span>
       ) : open === undefined ? (
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       ) : (
