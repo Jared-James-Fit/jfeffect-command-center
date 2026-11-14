@@ -95,6 +95,9 @@ export interface RowForEstimate {
   estimated_seconds_override?: number | null;
   /** a back-off / drop row (`top_set`, `prev_set`) carries on the lift above it */
   percentage_basis?: string | null;
+  /** a timed row (a run, a walk, a plank) takes its own time per set */
+  measurement_type?: string | null;
+  duration_seconds?: number | null;
 }
 
 export function profileDefaults(profile: TimeProfile | null | undefined) {
@@ -107,19 +110,26 @@ export function estimateRowSeconds(row: RowForEstimate): number {
   const sets = Math.max(0, row.sets ?? 0);
   if (sets === 0) return 0;
   const prof = profileDefaults(row.time_profile);
-  const rest = row.rest_seconds ?? prof.defaultRest;
-  const workPerSet = prof.value === "main_lift" ? 60 : prof.value === "warmup_mobility" ? 0 : 45;
+  // A timed row takes its own time per set (a 90-minute long run read as ~5 min).
+  const timed = row.measurement_type === "time" && Number(row.duration_seconds) > 0;
+  // A continuous effort of a minute or more (a run, a walk) is its own warm-up and has
+  // no setup: just its sets and the recoveries between them.
+  const continuous = timed && Number(row.duration_seconds) >= 60;
+  const rest = row.rest_seconds ?? (continuous ? 0 : prof.defaultRest);
+  const workPerSet = timed ? Number(row.duration_seconds) : prof.value === "main_lift" ? 60 : prof.value === "warmup_mobility" ? 0 : 45;
   const transitions = 180; // setup between exercises
   // A back-off row's load is a % of the set right above it: the same lift carrying on,
   // already warm and set up, so it adds only its own sets (a powerlifting day of three
   // top singles with back-offs read 130–160 min with a warm-up counted per row).
   const carriesOn = row.percentage_basis === "top_set" || row.percentage_basis === "prev_set";
+  if (continuous) return sets * workPerSet + Math.max(0, sets - 1) * rest;
   return (carriesOn ? 0 : prof.warmupBuffer + transitions) + sets * (workPerSet + rest);
 }
 
 /** Whole-day minutes: sum rows + 10 min general warm-up; round to nearest 5. */
 export function estimateDayMinutes(rows: RowForEstimate[]): number {
-  const general = 600;
+  // a day that's all timed work (a run with its warm-up written in) has no general warm-up on top
+  const general = rows.length > 0 && rows.every((r) => r.measurement_type === "time") ? 0 : 600;
   const total = general + rows.reduce((s, r) => s + estimateRowSeconds(r), 0);
   return Math.max(5, Math.round(total / 60 / 5) * 5);
 }

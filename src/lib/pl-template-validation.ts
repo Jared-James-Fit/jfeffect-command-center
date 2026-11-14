@@ -36,7 +36,9 @@ function rowProblems(row: any): RowProblem[] {
   const isTime = row?.measurement_type === "time";
   if (isTime) {
     const d = row?.duration_seconds;
-    if (d == null || d === "" || Number(d) <= 0) issues.push("duration");
+    // a timed row with no time target says what it is instead ("5 km", "Race")
+    const named = typeof row?.reps_text === "string" && row.reps_text.trim().length > 0;
+    if ((d == null || d === "" || Number(d) <= 0) && !named) issues.push("duration");
   } else {
     if (typeof row?.reps_text !== "string" || row.reps_text.trim().length === 0) issues.push("reps");
   }

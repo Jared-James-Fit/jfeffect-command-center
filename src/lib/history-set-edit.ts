@@ -9,6 +9,7 @@
 import { WEIGHT_CAP, type WUnit } from "@/lib/workout-weight-input";
 import { MAX_SET_CALORIES } from "@/lib/timed-cardio";
 import { cardioClock, parseCardioTime, MAX_CARDIO_SECONDS } from "@/lib/cardio-history";
+import { distanceInputValue, isDistanceUnit, parseDistanceInput, type DistanceUnit } from "@/lib/running/run-log";
 
 export type HistorySetRow = {
   id: string;
@@ -133,16 +134,23 @@ export type CardioHistoryRow = {
   completed_duration_seconds?: number | null;
   actual_calories?: number | null;
   actual_rpe?: string | number | null;
+  /** a run's distance (metres) and the unit it was typed in */
+  actual_distance_m?: number | string | null;
+  actual_distance_unit?: string | null;
 };
 
-export type CardioDraft = { time: string; calories: string; rpe: string };
+/** distance is in distanceUnit: the unit the set was logged in, else the phone's (km) */
+export type CardioDraft = { time: string; calories: string; rpe: string; distance?: string; distanceUnit?: DistanceUnit };
 
-export function cardioEditDraft(set: CardioHistoryRow): CardioDraft {
+export function cardioEditDraft(set: CardioHistoryRow, unit: DistanceUnit = "km"): CardioDraft {
   const secs = Number(set.completed_duration_seconds);
+  const distanceUnit = isDistanceUnit(set.actual_distance_unit) ? set.actual_distance_unit : unit;
   return {
     time: Number.isFinite(secs) && secs > 0 ? cardioClock(secs) : "",
     calories: set.actual_calories != null ? String(Math.round(Number(set.actual_calories))) : "",
     rpe: numberText(set.actual_rpe),
+    distance: distanceInputValue(set.actual_distance_m != null ? Number(set.actual_distance_m) : null, distanceUnit),
+    distanceUnit,
   };
 }
 
@@ -161,6 +169,9 @@ export function cardioDraftIssue(d: CardioDraft): string | null {
     const r = Number(d.rpe);
     if (!/^\d*\.?\d+$/.test(d.rpe.trim()) || r < 1 || r > 10 || (r * 2) % 1 !== 0) return "RPE is 1 to 10, in half steps";
   }
+  if ((d.distance ?? "").trim() !== "" && parseDistanceInput(d.distance, d.distanceUnit ?? "km") == null) {
+    return `Distance is a number up to ${(d.distanceUnit ?? "km") === "km" ? "300 km" : "186 mi"}`;
+  }
   return null;
 }
 
@@ -168,11 +179,13 @@ export type CardioPatch = {
   completed_duration_seconds?: number | null;
   actual_calories?: number | null;
   actual_rpe?: string | null;
+  actual_distance_m?: number | null;
+  actual_distance_unit?: DistanceUnit | null;
 };
 
 /** Only what changed, or null when nothing did. The plan's cardio log follows by itself (its trigger). */
 export function cardioEditPatch(set: CardioHistoryRow, d: CardioDraft): CardioPatch | null {
-  const before = cardioEditDraft(set);
+  const before = cardioEditDraft(set, d.distanceUnit ?? "km");
   const patch: CardioPatch = {};
   const t = d.time.trim() === "" ? null : parseCardioTime(d.time);
   const tPrev = before.time === "" ? null : parseCardioTime(before.time);
@@ -181,5 +194,15 @@ export function cardioEditPatch(set: CardioHistoryRow, d: CardioDraft): CardioPa
   if (cal !== (before.calories === "" ? null : Number(before.calories))) patch.actual_calories = cal;
   const rpe = d.rpe.trim() === "" ? null : numberText(d.rpe);
   if (rpe !== (before.rpe === "" ? null : before.rpe)) patch.actual_rpe = rpe;
+  if (d.distance !== undefined) {
+    const u = d.distanceUnit ?? "km";
+    const m = d.distance.trim() === "" ? null : parseDistanceInput(d.distance, u);
+    const prev = set.actual_distance_m != null && Number(set.actual_distance_m) > 0 ? Number(set.actual_distance_m) : null;
+    // the same distance written again (a hair of rounding) isn't a change
+    if (m == null ? prev != null : prev == null || Math.abs(m - prev) >= 1) {
+      patch.actual_distance_m = m;
+      patch.actual_distance_unit = m == null ? null : u;
+    }
+  }
   return Object.keys(patch).length ? patch : null;
 }

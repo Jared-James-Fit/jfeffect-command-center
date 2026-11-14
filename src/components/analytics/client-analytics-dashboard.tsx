@@ -38,6 +38,7 @@ import { RecoverySummaryCard } from "@/components/analytics/recovery-summary-car
 import { SleepInsightsCard } from "@/components/analytics/sleep-insights-card";
 import { BodyweightTrendCard } from "@/components/analytics/bodyweight-trend-card";
 import { CardioAnalyticsSection } from "@/components/analytics/cardio-analytics-section";
+import { RunningAnalyticsSection } from "@/components/analytics/running-analytics-section";
 import { RecoveryPatternsCard } from "@/components/analytics/recovery-patterns-card";
 import { PredictedWindowCard } from "@/components/analytics/predicted-window-card";
 import { TrainingTimeCard } from "@/components/analytics/training-time-card";
@@ -743,6 +744,15 @@ export function ClientAnalyticsDashboard({
 
             <SectionErrorBoundary label="Cardio">
             <CardioAnalyticsSection
+              clientId={clientId}
+              rangeStart={filter.start}
+              rangeEnd={filter.end}
+              rangeLabel={filter.label}
+            />
+            </SectionErrorBoundary>
+
+            <SectionErrorBoundary label="Running">
+            <RunningAnalyticsSection
               clientId={clientId}
               rangeStart={filter.start}
               rangeEnd={filter.end}

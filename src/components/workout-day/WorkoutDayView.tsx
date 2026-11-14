@@ -28,6 +28,7 @@ import {
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
+import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
 import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
@@ -992,7 +993,7 @@ function WorkoutDay({
       const columns = `id, row_id, scheduled_workout_id, completed_at, updated_at, created_at,
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
-          is_bodyweight, load_type, completed_duration_seconds, actual_calories,
+          is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m,
           pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, exercises(name))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
@@ -1037,6 +1038,7 @@ function WorkoutDay({
           purposeLabel: historyRow?.purpose_label ?? null,
           durationSeconds: log.completed_duration_seconds ?? null,
           calories: log.actual_calories ?? null,
+          distanceM: log.actual_distance_m != null ? Number(log.actual_distance_m) : null,
         };
       });
     },
@@ -3307,7 +3309,7 @@ function PreviousTimedChip({ data, className, onOpen, fallback }: {
   onOpen?: () => void;
   fallback?: ReactNode;
 }) {
-  const text = data.timed ? formatPreviousTimed(data.timed, formatClockSeconds) : "";
+  const text = data.timed ? formatPreviousTimed(data.timed, formatClockSeconds, (m) => formatDistance(m, readDistanceUnit())) : "";
   if (!text) return <>{fallback}</>;
   const when = lastTimeWhen(data.occurredAt);
   const body = (
@@ -3571,9 +3573,20 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // box by default; any row can turn it on or off in the columns menu. It's
   // never needed for the set to count as done.
   const cardioRow = trackingType === "time" && isTimedCardio(name);
-  const showCalories = inputOverrides.calories ?? cardioRow;
+  // A run logs its distance instead (km by default, miles one tap away), and
+  // its pace is worked out under the sets; either box can be switched on or
+  // off on any timed row in the columns menu.
+  const runRow = trackingType === "time" && isRunningExercise(name);
+  const showCalories = inputOverrides.calories ?? (cardioRow && !runRow);
+  const showDistance = inputOverrides.distance ?? runRow;
+  const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>(readDistanceUnit);
+  const flipDistanceUnit = () => {
+    const next: DistanceUnit = distanceUnit === "km" ? "mi" : "km";
+    setDistanceUnitState(next);
+    writeDistanceUnit(next);
+  };
   const toggleInput = (field: keyof RowInputOverrides) => {
-    const current = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity, calories: showCalories }[field];
+    const current = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity, calories: showCalories, distance: showDistance }[field];
     const next: RowInputOverrides = { ...inputOverrides, [field]: !current };
     // Never allow a row with no logging input at all (calories alone can't log a set).
     const resolved = { reps: showReps, weight: showWeight, timer: showTimer, velocity: showVelocity, [field]: !current } as Record<string, boolean>;
@@ -3613,7 +3626,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   const setVideosOn = useEntitlement("lift_review") && adapter?.kind !== "member" && !!clientId;
   const rowHasVideos = useRowHasSetVideos(dayId, row.id, setVideosOn);
   const videoColumn = setVideosOn && (!readonly || rowHasVideos);
-  const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, showCalories, showVelocity, hideWeight, videoColumn });
+  const gridTemplate = setGridTemplate({ focusMode, showReps, showTimer, showDistance, showCalories, showVelocity, hideWeight, videoColumn });
   // The logging frontier: helper chips (suggested load, repeat previous set)
   // appear only on the next set to log — never on every row.
   const frontier = Array.from({ length: setCount }, (_, k) => k + 1)
@@ -3798,6 +3811,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     }
     return over ? { load: held, over } : null;
   }, [capOn, capValue, suggestedWeight, existingResults, activeUnit, repTarget?.exact, repTarget?.max, repTarget?.min]);
+  // A run's distance, time and pace so far, under its sets.
+  const runLine = useMemo(
+    () => showDistance
+      ? runSummaryLine(
+          existingResults
+            .filter((r: any) => r.completed_at)
+            .map((r: any) => ({ durationSeconds: r.completed_duration_seconds, distanceM: r.actual_distance_m != null ? Number(r.actual_distance_m) : null })),
+          distanceUnit,
+        )
+      : null,
+    [showDistance, existingResults, distanceUnit],
+  );
   // What an open set's weight cell starts at: the plan, or what the cap brought it down to.
   const openSetWeight = capHeld?.load ?? suggestedWeight;
   // Planned loads fill the weight cell of a set nobody has touched yet.
@@ -4387,9 +4412,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           </span>
         )}
       </div>
-      {/* Standardized prescription line: Sets × Reps @ Weight | RPE */}
-      <div className="mt-1.5 text-base font-bold text-foreground leading-snug break-words">
-        {formatPrescription({
+      {/* Standardized prescription line: Sets × Reps @ Weight | RPE (a run reads as a run:
+          "3 × 8 min · 2 min easy jog between | RPE 6–7") */}
+      <div className="mt-1.5 text-base font-bold text-foreground leading-snug break-words" data-run-rx={runRow || undefined}>
+        {runRow || cardioRow ? runPrescription({
+          run: runRow,
+          sets: row.sets,
+          durationSeconds: effectivePrescribedDurationSec ?? (row as any).duration_seconds,
+          restSeconds: row.rest_seconds,
+          repsText: row.reps_text,
+          role: row.purpose_label,
+          rpe: row.rpe,
+        }) : formatPrescription({
           sets: row.sets,
           repsText: row.reps_text,
           suggestedWeight,
@@ -4473,7 +4507,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           exerciseName={name}
         />
       )}
-      {row.percentage_basis === "none" && (
+      {row.percentage_basis === "none" && !hideWeight && (
         <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           Log the load used
         </div>
@@ -4758,6 +4792,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
                   ["reps", "Reps", showReps],
                   ["weight", "Weight", showWeight],
                   ["timer", "Timer", showTimer],
+                  ["distance", "Distance", showDistance],
                   ["calories", "Calories", showCalories],
                   ["velocity", "Avg velocity (m/s)", showVelocity],
                 ] as const).map(([field, label, on]) => (
@@ -4797,6 +4832,18 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           )}
           {showReps && <span>Reps</span>}
           {showTimer && <span>Time</span>}
+          {showDistance && (readonly ? <span>{distanceUnit === "km" ? "Km" : "Mi"}</span> : (
+            <button
+              type="button"
+              onClick={flipDistanceUnit}
+              title={`Distance in ${distanceUnit === "km" ? "kilometres" : "miles"}: tap for ${distanceUnit === "km" ? "miles" : "kilometres"}`}
+              aria-label={`Distance in ${distanceUnit === "km" ? "kilometres" : "miles"}, tap to switch`}
+              data-distance-unit={distanceUnit}
+              className="-my-1 inline-flex h-7 items-center justify-center rounded-md uppercase hover:bg-secondary hover:text-foreground"
+            >
+              {distanceUnit === "km" ? "Km" : "Mi"}
+            </button>
+          ))}
           {showCalories && <span title="Calories from the machine or your watch (optional)">Cal</span>}
           <EffortScaleHeader rir={showRir} />
           {showVelocity && <span title="Average concentric velocity — enter the final rep for multi-rep sets">Avg Vel</span>}
@@ -4843,6 +4890,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               gridTemplate={gridTemplate}
               showReps={showReps}
               showTimer={showTimer}
+              showDistance={showDistance}
+              distanceUnit={distanceUnit}
               showCalories={showCalories}
               showVelocity={showVelocity}
               prescribedDurationSeconds={effectivePrescribedDurationSec}
@@ -4890,6 +4939,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         })}
         {/* A set went over the RPE cap: the open sets start lighter (their cells
             already hold it when untouched). Quiet, and only while sets are left. */}
+        {runLine && (
+          <p className="px-3 py-1.5 text-[12px] font-medium tabular-nums text-muted-foreground" data-run-summary>{runLine}</p>
+        )}
         {capHeld && openSetCount > 0 && !readonly && (
           <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-rpe-cap-next>
             Set {capHeld.over.set} hit RPE {fmtNum(capHeld.over.rpe)}, over the cap of {fmtNum(capValue as number)} · next sets {formatDualLoad(capHeld.load, activeUnit)}
@@ -5219,7 +5271,7 @@ function SetRow({
   fieldCascade = null,
   onFieldCascade,
   readonly = false, unit = "kg", hideWeight = false, focusMode = false, onChange, onSetCompleted,
-  setCount, showReps = true, showTimer = false, showCalories = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
+  setCount, showReps = true, showTimer = false, showDistance = false, distanceUnit = "km", showCalories = false, showVelocity = false, gridTemplate, prescribedDurationSeconds = null,
   onTimerTargetChange,
   onTimerCascade,
   videoColumn = false,
@@ -5239,6 +5291,9 @@ function SetRow({
   /** Which inputs this row shows — Timer is just another optional column. */
   showReps?: boolean;
   showTimer?: boolean;
+  /** Optional distance input (runs by default), in distanceUnit; never needed for the set to count as done. */
+  showDistance?: boolean;
+  distanceUnit?: DistanceUnit;
   /** Optional calories input (cardio rows by default); never needed for the set to count as done. */
   showCalories?: boolean;
   /** Optional average concentric velocity (m/s) input; multi-rep sets use the final rep. */
@@ -5353,6 +5408,21 @@ function SetRow({
     if (caloriesFocusedRef.current) return;
     setCalories(serverCalories != null ? String(serverCalories) : "");
   }, [serverCalories]);
+  // A run's distance (stored in metres, shown in the card's km / mi). Optional.
+  const serverDistanceM = (existing as any)?.actual_distance_m != null ? Number((existing as any).actual_distance_m) : null;
+  const [distance, setDistance] = useState(() => distanceInputValue(serverDistanceM, distanceUnit));
+  const [distanceEdited, setDistanceEdited] = useState(false);
+  const distanceFocusedRef = useRef(false);
+  useEffect(() => {
+    if (distanceFocusedRef.current) return;
+    setDistance(distanceInputValue(serverDistanceM, distanceUnit));
+  }, [serverDistanceM, distanceUnit]);
+  // what a save writes for the distance box (nothing when the row has no box)
+  const distanceFields = (raw: string, u: DistanceUnit) => {
+    if (!showDistance) return {};
+    const meters = raw ? parseDistanceInput(raw, u) : null;
+    return { actual_distance_m: meters, actual_distance_unit: meters != null ? u : null };
+  };
   // Timer result for this set (seconds actually performed). Local state keeps
   // the cell responsive; the server value re-hydrates it whenever it changes.
   const serverDuration =
@@ -5675,12 +5745,14 @@ function SetRow({
     setVelocity(src?.mean_concentric_velocity_mps != null ? String(src.mean_concentric_velocity_mps) : "");
     setCalories(src?.actual_calories != null ? String(src.actual_calories) : "");
     setCaloriesEdited(false);
+    setDistance(distanceInputValue(src?.actual_distance_m != null ? Number(src.actual_distance_m) : null, distanceUnit));
+    setDistanceEdited(false);
     setDurationSec(src?.completed_duration_seconds != null ? Number(src.completed_duration_seconds) : null);
     adoptShownAsSaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore?.token]);
 
-  const value = useMemo(() => ({ load, reps, rpe, velocity, calories, unit: loadUnit, bw, loadType }), [load, reps, rpe, velocity, calories, loadUnit, bw, loadType]);
+  const value = useMemo(() => ({ load, reps, rpe, velocity, calories, distance, distanceUnit, unit: loadUnit, bw, loadType }), [load, reps, rpe, velocity, calories, distance, distanceUnit, loadUnit, bw, loadType]);
   // A timed set is done at its prescribed time once RPE or calories go in (timedSetAutoDuration).
   const autoDurationFor = (edited: boolean): number | null =>
     timedSetAutoDuration({ showTimer, loggedSeconds: durationSec, edited, prescribedSeconds: prescribedDurationSeconds });
@@ -5697,6 +5769,10 @@ function SetRow({
     // the saved value, so the set row is dirty only when load/reps/RPE change.
     equals: (a, b) => {
       if (a.reps !== b.reps || a.rpe !== b.rpe || a.velocity !== b.velocity || a.calories !== b.calories) return false;
+      // the same distance shown in the other unit isn't a change
+      const metersOf = (v: typeof a) => (v.distance ? parseDistanceInput(v.distance, v.distanceUnit) ?? v.distance : null);
+      const [ma, mb] = [metersOf(a), metersOf(b)];
+      if (typeof ma === "number" && typeof mb === "number" ? Math.abs(ma - mb) >= 1 : ma !== mb) return false;
       if (a.bw !== b.bw) return false;
       if (a.loadType !== b.loadType) return false;
       return equalDisplayLoads(a, b);
@@ -5713,7 +5789,7 @@ function SetRow({
     // Autosave even while a field remains focused so mobile keyboards / sticky
     // focus cannot leave workout inputs unsaved. The server hydration effect
     // still refuses to overwrite the focused field, so active typing is safe.
-    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || velocity.length > 0 || calories.length > 0 || bw || !!existing),
+    enabled: !readonly && !!clientId && serverHydrated && (load.length > 0 || reps.length > 0 || rpe.length > 0 || velocity.length > 0 || calories.length > 0 || distance.length > 0 || bw || !!existing),
     // A set that can't save right now (offline, or its first failed try) goes
     // to the durable queue at once, so leaving the workout or the app closing
     // can't lose it; the row's own later save supersedes it.
@@ -5724,7 +5800,7 @@ function SetRow({
       const rpeNum = value.rpe ? Number(value.rpe) : null;
       const velocityNum = value.velocity ? Number(value.velocity) : null;
       const caloriesNum = value.calories ? Number(value.calories) : null;
-      const autoDuration = autoDurationFor(rpeEdited || caloriesEdited);
+      const autoDuration = autoDurationFor(rpeEdited || caloriesEdited || distanceEdited);
       const persistedLoad = value.bw
         ? { value: 0, unit: value.unit }
         : persistedLoadForDisplayValue(value.load, value.unit, existing);
@@ -5761,16 +5837,17 @@ function SetRow({
             actual_rpe_num: rpeNum,
             mean_concentric_velocity_mps: velocityNum,
             ...(showCalories ? { actual_calories: caloriesNum } : {}),
+            ...distanceFields(value.distance, value.distanceUnit),
             ...(autoDuration ? { completed_duration_seconds: autoDuration, completion_method: "prescribed_quick_confirm" } : {}),
             completed_at: completedAt,
           }, adapter, workoutId),
         },
       });
     },
-    onSave: async ({ load, reps, rpe, velocity, calories, unit, bw, loadType }) => {
+    onSave: async ({ load, reps, rpe, velocity, calories, distance, distanceUnit: distUnit, unit, bw, loadType }) => {
       if (readonly) return;
       if (!clientId) return;
-      if (!load && !reps && !rpe && !velocity && !calories && !bw && !existing) return;
+      if (!load && !reps && !rpe && !velocity && !calories && !distance && !bw && !existing) return;
       // Auto-start the Workout Session clock on the first meaningful log.
       beginWorkoutSession(workoutId ?? null);
       // Validate numerics; silently skip persistence for invalid values (input stays).
@@ -5782,6 +5859,7 @@ function SetRow({
       // a value that can't be saved as typed (never queued: retrying can't fix it)
       const invalid = (message: string) => Object.assign(new Error(message), { invalid: true });
       if (calories && (caloriesNum == null || !Number.isInteger(caloriesNum) || caloriesNum < 0 || caloriesNum > MAX_SET_CALORIES)) throw invalid(`Calories must be 0–${MAX_SET_CALORIES}`);
+      if (showDistance && distance && parseDistanceInput(distance, distUnit) == null) throw invalid(`Distance must be a number up to ${distUnit === "km" ? "300 km" : "186 mi"}`);
       if (velocity && (velocityNum == null || !isFinite(velocityNum) || velocityNum <= 0 || velocityNum > 3.5)) throw invalid("Velocity must be 0.01–3.50 m/s");
       if (load && (displayLoadNum == null || !isFinite(displayLoadNum) || displayLoadNum < 0)) throw invalid("Weight must be a number");
       if (reps && (repsNum == null || !isFinite(repsNum) || repsNum < 0)) throw invalid("Reps must be a whole number");
@@ -5789,7 +5867,7 @@ function SetRow({
       const persistedLoad = bw
         ? { value: 0, unit }
         : persistedLoadForDisplayValue(load, loadUnit, existing);
-      const autoDuration = autoDurationFor(rpeEdited || caloriesEdited);
+      const autoDuration = autoDurationFor(rpeEdited || caloriesEdited || distanceEdited);
       const completedAt = isSetLogComplete({
         requireReps: showReps,
         requireTime: showTimer,
@@ -5820,6 +5898,7 @@ function SetRow({
         actual_rpe_num: rpeNum,
         mean_concentric_velocity_mps: velocityNum,
         ...(showCalories ? { actual_calories: caloriesNum } : {}),
+        ...distanceFields(distance, distUnit),
         ...(autoDuration
           ? { completed_duration_seconds: autoDuration, completion_method: "prescribed_quick_confirm", timer_completed_at: new Date().toISOString() }
           : {}),
@@ -6068,7 +6147,7 @@ function SetRow({
     loadType,
     load: bw ? 0 : load,
     reps,
-    durationSeconds: durationSec ?? autoDurationFor(rpeEdited || caloriesEdited),
+    durationSeconds: durationSec ?? autoDurationFor(rpeEdited || caloriesEdited || distanceEdited),
   });
   // Optimistic green: only while the row's own save for those values is still
   // in flight. Once it lands, `existing.completed_at` carries the state — and a
@@ -6084,7 +6163,7 @@ function SetRow({
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
-  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited || caloriesEdited;
+  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited || caloriesEdited || distanceEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
 
   const isAbortError = (err: unknown) => {
@@ -6160,6 +6239,7 @@ function SetRow({
         actual_rpe: rpe || null,
         actual_rpe_num: rpeNum,
         ...(showCalories ? { actual_calories: calories ? Number(calories) : null } : {}),
+        ...distanceFields(distance, distanceUnit),
       completed_at: nextCompletedAt,
     };
       payload = withMemberWorkoutIndexes(payload, adapter, workoutId);
@@ -6396,6 +6476,7 @@ function SetRow({
       actual_rpe: rpe || null,
       actual_rpe_num: rpeNumNow,
       ...(showCalories && calories && Number.isInteger(Number(calories)) ? { actual_calories: Number(calories) } : {}),
+      ...(showDistance && distance && parseDistanceInput(distance, distanceUnit) != null ? distanceFields(distance, distanceUnit) : {}),
       completed_at: completeNow ? (existing?.completed_at ?? nowIso) : null,
       }, adapter, workoutId);
     try {
@@ -6531,6 +6612,28 @@ function SetRow({
             void saveTimeCompletion(secs, { method });
             void onTimerCascade?.(setIndex, secs);
           }}
+        />
+      )}
+      {showDistance && (
+        <Input
+          value={distance}
+          onChange={(e) => {
+            setDistanceEdited(true);
+            setDistance(e.target.value.replace(/[^0-9.,]/g, "").slice(0, 6));
+          }}
+          onFocus={() => { distanceFocusedRef.current = true; }}
+          onBlur={() => { distanceFocusedRef.current = false; flushSaveAfterEdit(); }}
+          onKeyDown={onEnter}
+          inputMode="decimal"
+          enterKeyHint="done"
+          placeholder={distanceUnit}
+          aria-label={`Set ${setIndex} distance in ${distanceUnit === "km" ? "kilometres" : "miles"} (optional)`}
+          disabled={readonly}
+          data-set-distance
+          className={cn(
+            "px-1.5 text-center tabular-nums placeholder:text-muted-foreground/60",
+            focusMode ? "h-12 text-lg sm:h-10 sm:text-base" : "h-11 text-base sm:h-8 sm:text-sm",
+          )}
         />
       )}
       {showCalories && (

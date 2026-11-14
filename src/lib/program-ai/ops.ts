@@ -5,6 +5,7 @@
  * or library name; the server resolves both and refuses anything else.
  */
 import { z } from "zod";
+import { parseDurationInput } from "@/lib/duration";
 
 export const ROW_REF = /^B\d+W\d+D\d+E\d+$/;
 export const DAY_REF = /^B\d+W\d+D\d+$/;
@@ -34,6 +35,9 @@ const ALIASES: Record<string, string> = {
   unit: "load_unit",
   note: "notes",
   cue: "notes",
+  duration: "duration_seconds",
+  time: "duration_seconds",
+  seconds: "duration_seconds",
 };
 
 /** A prescription change: only the fields given change. Setting RPE clears RIR (and the other way), a % clears a fixed load. */
@@ -58,6 +62,10 @@ export const rxPatchSchema = z.preprocess(
       load: z.coerce.number().positive().max(2000).optional(),
       load_unit: z.enum(["kg", "lb"]).optional(),
       rest_seconds: z.coerce.number().int().min(0).max(1800).optional(),
+      // a timed row's time per set (a run, a walk, a plank): seconds, or "30:00" / "1:45:00"
+      duration_seconds: z
+        .preprocess((v) => (typeof v === "string" && /:/.test(v) ? parseDurationInput(v) : v), z.coerce.number().int().min(5).max(6 * 3600))
+        .optional(),
       tempo: text(20).optional(),
       notes: text(500).optional(),
       clear: z.array(z.enum(["rpe", "rir", "percentage", "load", "tempo", "notes", "rest"])).max(7).optional(),

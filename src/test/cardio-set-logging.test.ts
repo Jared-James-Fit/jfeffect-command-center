@@ -45,7 +45,8 @@ describe("the logger's cardio row", () => {
 
   it("shows Calories on cardio rows by default, optional, and in the columns menu for any row", () => {
     expect(view).toContain('const cardioRow = trackingType === "time" && isTimedCardio(name);');
-    expect(view).toContain("const showCalories = inputOverrides.calories ?? cardioRow;");
+    // a run logs distance instead by default (run-log.test.ts); any timed row can switch either
+    expect(view).toContain("const showCalories = inputOverrides.calories ?? (cardioRow && !runRow);");
     expect(view).toContain('["calories", "Calories", showCalories]');
     expect(view).toContain('placeholder="kcal"');
     expect(view).toContain("data-set-calories");
@@ -55,7 +56,7 @@ describe("the logger's cardio row", () => {
     expect(view).toContain("...(showCalories ? { actual_calories: caloriesNum } : {}),");
     expect(view).toContain('completed_duration_seconds: autoDuration, completion_method: "prescribed_quick_confirm"');
     expect(view).toContain("durationSeconds: durationSec ?? autoDuration,");
-    expect(view).toContain("durationSeconds: durationSec ?? autoDurationFor(rpeEdited || caloriesEdited),");
+    expect(view).toContain("durationSeconds: durationSec ?? autoDurationFor(rpeEdited || caloriesEdited || distanceEdited),");
   });
 
   it("the database keeps calories whole and 0–5000, and undo restores them", () => {

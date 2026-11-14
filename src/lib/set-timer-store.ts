@@ -157,20 +157,23 @@ export function subscribeTimers(fn: () => void): () => void {
 }
 
 /** "1:05" / "0:45" */
+/** 90 → "1:30", an hour and more as h:mm:ss (a long run: 6330 → "1:45:30"). */
 export function fmtMMSS(total: number): string {
   const s = Math.max(0, Math.round(total));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const h = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(mm).padStart(2, "0")}:${ss}` : `${mm}:${ss}`;
 }
 
-/** Forgiving MM:SS / seconds parser: "45" → 45, "1:30" → 90, "90" → 90. */
+/** Forgiving MM:SS / H:MM:SS / seconds parser: "45" → 45, "1:30" → 90, "90" → 90, "1:45:30" → 6330. */
 export function parseMMSS(raw: string): number | null {
   const t = raw.trim();
   if (!t) return null;
   if (t.includes(":")) {
-    const [m, s] = t.split(":");
-    const mm = Number(m.replace(/[^\d]/g, "") || 0);
-    const ss = Number(s.replace(/[^\d]/g, "") || 0);
-    const total = mm * 60 + ss;
+    const parts = t.split(":").map((p) => Number(p.replace(/[^\d]/g, "") || 0));
+    const [h, mm, ss] = parts.length >= 3 ? parts.slice(-3) : [0, parts[0], parts[1]];
+    const total = h * 3600 + mm * 60 + ss;
     return total > 0 ? Math.round(total) : null;
   }
   const n = Number(t.replace(/[^\d.]/g, ""));

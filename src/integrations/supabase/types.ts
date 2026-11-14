@@ -18199,6 +18199,8 @@ export type Database = {
       pl_row_results: {
         Row: {
           actual_calories: number | null
+          actual_distance_m: number | null
+          actual_distance_unit: string | null
           actual_load: number | null
           actual_load_kg: number | null
           actual_load_lb: number | null
@@ -18232,6 +18234,8 @@ export type Database = {
         }
         Insert: {
           actual_calories?: number | null
+          actual_distance_m?: number | null
+          actual_distance_unit?: string | null
           actual_load?: number | null
           actual_load_kg?: number | null
           actual_load_lb?: number | null
@@ -18265,6 +18269,8 @@ export type Database = {
         }
         Update: {
           actual_calories?: number | null
+          actual_distance_m?: number | null
+          actual_distance_unit?: string | null
           actual_load?: number | null
           actual_load_kg?: number | null
           actual_load_lb?: number | null

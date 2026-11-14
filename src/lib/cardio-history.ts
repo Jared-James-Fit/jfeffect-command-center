@@ -10,6 +10,8 @@ import { effortTrend, type EffortTrend } from "@/lib/analytics/cardio-adherence"
 export type CardioHistorySet = {
   completed_duration_seconds?: number | null;
   actual_calories?: number | null;
+  /** a run's distance, in metres */
+  actual_distance_m?: number | string | null;
   actual_rpe?: string | number | null;
   actual_rpe_num?: number | null;
   actual_reps?: number | null;
@@ -32,7 +34,7 @@ export function isCardioHistory(exerciseName: string | null | undefined, sets: C
       !has(s.actual_load) &&
       !has(s.entered_value) &&
       !has(s.actual_reps) &&
-      (has(s.completed_duration_seconds) || has(s.actual_calories)),
+      (has(s.completed_duration_seconds) || has(s.actual_calories) || has(s.actual_distance_m)),
   );
 }
 
@@ -71,6 +73,8 @@ export type CardioHistorySummary = {
   /** Per session (all its sets together). */
   avgSeconds: number | null;
   avgCalories: number | null;
+  /** a run's distance per session, in metres (null when none was logged) */
+  avgMeters: number | null;
   avgRpe: number | null;
   /** The same cardio getting easier or harder (4+ rated sessions). */
   effort: EffortTrend | null;
@@ -90,23 +94,27 @@ export function cardioHistorySummary(days: CardioDay[]): CardioHistorySummary {
     .map((d) => {
       const secs = d.sets.reduce((t, s) => t + (Number(s.completed_duration_seconds) > 0 ? Number(s.completed_duration_seconds) : 0), 0);
       const cals = d.sets.filter((s) => has(s.actual_calories)).map((s) => Number(s.actual_calories));
+      const meters = d.sets.filter((s) => Number(s.actual_distance_m) > 0).map((s) => Number(s.actual_distance_m));
       const rpes = d.sets.map(rpeOf).filter((n): n is number => n != null);
       return {
         date: d.date,
         seconds: secs > 0 ? secs : null,
         calories: cals.length ? cals.reduce((t, n) => t + n, 0) : null,
+        meters: meters.length ? meters.reduce((t, n) => t + n, 0) : null,
         rpe: rpes.length ? Math.max(...rpes) : null,
       };
     })
-    .filter((x) => x.seconds != null || x.calories != null || x.rpe != null);
+    .filter((x) => x.seconds != null || x.calories != null || x.meters != null || x.rpe != null);
   const mean = (xs: number[]) => (xs.length ? xs.reduce((t, n) => t + n, 0) / xs.length : null);
   const secs = mean(sessions.map((x) => x.seconds).filter((n): n is number => n != null));
   const cals = mean(sessions.map((x) => x.calories).filter((n): n is number => n != null));
+  const meters = mean(sessions.map((x) => x.meters).filter((n): n is number => n != null));
   const rpe = mean(sessions.map((x) => x.rpe).filter((n): n is number => n != null));
   return {
     sessions: sessions.length,
     avgSeconds: secs != null ? Math.round(secs) : null,
     avgCalories: cals != null ? Math.round(cals) : null,
+    avgMeters: meters != null ? Math.round(meters) : null,
     avgRpe: rpe != null ? Math.round(rpe * 10) / 10 : null,
     effort: effortTrend(
       sessions.map((x) => ({ date: x.date, minutes: x.seconds != null ? Math.round(x.seconds / 60) : null, rpe: x.rpe })),

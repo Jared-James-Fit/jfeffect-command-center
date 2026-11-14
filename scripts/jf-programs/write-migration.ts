@@ -1,5 +1,5 @@
 /**
- * Writes the JF Effect program library migration from src/lib/jf-programs.
+ * Writes the JF Effect program library migrations (strength and running) from src/lib/jf-programs.
  *
  *   npx tsx scripts/jf-programs/write-migration.ts
  *
@@ -9,7 +9,9 @@
  * when no exercise of that name exists.
  */
 import { writeFileSync } from "node:fs";
-import { librarySql, LIBRARY_MIGRATION } from "../../src/lib/jf-programs/sql";
+import { librarySql, LIBRARY_MIGRATION, runningLibrarySql, RUNNING_MIGRATION } from "../../src/lib/jf-programs/sql";
 
 writeFileSync(LIBRARY_MIGRATION, librarySql());
 console.log(`wrote ${LIBRARY_MIGRATION}`);
+writeFileSync(RUNNING_MIGRATION, runningLibrarySql());
+console.log(`wrote ${RUNNING_MIGRATION}`);
