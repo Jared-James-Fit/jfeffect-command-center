@@ -16,7 +16,12 @@ describe("suggestions: a switch on every exercise card, one state for the workou
   });
 
   it("lives in each card that can suggest, not at the top of the workout", () => {
-    expect(wdv).toContain("{canSuggest && !readonly && <LoadSuggestionsChip highlight={!!suggestNudge} />}");
+    // the chip turns them on; once on, the line's ⓘ and the card's ⋯ turn them off
+    expect(wdv).toContain("{canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}");
+    expect(wdv).toContain('{showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}');
+    const card = readFileSync("src/components/workout-day/load-suggestion-card.tsx", "utf8");
+    expect(card).toContain('data-testid="load-suggestions-off"');
+    expect(card).toContain('data-testid="load-range"');
     expect(wdv).not.toContain("LoadSuggestionsToggle");
     expect(wdv).toContain("{showSuggestionCard && loadModel && loadPlan && (");
     expect(wdv).not.toContain("suggested={!readonly && !isConfirmed && isNextSet");

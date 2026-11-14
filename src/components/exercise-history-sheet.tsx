@@ -26,6 +26,8 @@ import {
 } from "@/lib/history-set-edit";
 import { cardioClock, cardioHistorySummary, isCardioHistory } from "@/lib/cardio-history";
 import { formatDistance, formatPace, isRunningExercise, paceSeconds, readDistanceUnit } from "@/lib/running/run-log";
+import { LiftProgressCard, type LiftHistory } from "@/components/analytics/lift-progress-card";
+import { liftHistoryFromRows } from "@/lib/analytics/exercise-progress";
 
 const sb = supabase as any;
 
@@ -154,7 +156,7 @@ export function ExerciseHistorySheet({
         .from("pl_row_results")
         .select(`
           id, set_index, completed_at, updated_at, created_at,
-          actual_reps, actual_rpe, actual_rpe_num, mean_concentric_velocity_mps,
+          actual_reps, actual_rpe, actual_rpe_num, actual_rir, mean_concentric_velocity_mps,
           completed_duration_seconds, actual_calories, actual_distance_m, actual_distance_unit,
           entered_value, entered_unit, normalized_kg, normalized_lb,
           actual_load, actual_load_unit, load_type, is_bodyweight,
@@ -267,6 +269,12 @@ export function ExerciseHistorySheet({
 
   // A treadmill walk or a bike is time, calories and effort, never load / reps / velocity.
   const cardio = useMemo(() => isCardioHistory(exerciseName, rows), [exerciseName, rows]);
+  // This exercise's progress (the Analytics page's lift card, for one lift),
+  // from the same sets the list below shows, in the range picked above.
+  const progress = useMemo<LiftHistory | null>(
+    () => (cardio ? null : liftHistoryFromRows(rows as any[], exerciseName)),
+    [cardio, rows, exerciseName],
+  );
   // A run reads by distance and pace instead of calories.
   const runHistory = useMemo(
     () => cardio && (isRunningExercise(exerciseName) || rows.some((r: any) => Number(r.actual_distance_m) > 0)),
@@ -388,7 +396,7 @@ export function ExerciseHistorySheet({
       >
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <History className="h-4 w-4" /> {exerciseName} history
+            <History className="h-4 w-4" /> {exerciseName}
           </SheetTitle>
           <SheetDescription>
             {cardio
@@ -424,6 +432,17 @@ export function ExerciseHistorySheet({
             Include partial
           </label>
         </div>
+
+        {progress && (
+          <div className="mt-3" data-history-progress>
+            <LiftProgressCard
+              single
+              history={[progress]}
+              displayUnit={displayUnit}
+              conv={(lb) => (displayUnit === "kg" ? lb / 2.2046226218 : lb)}
+            />
+          </div>
+        )}
 
         {cardioSummary && cardioSummary.sessions > 0 && (
           <div className="mt-3 rounded-xl border border-border p-3" data-cardio-history-summary>

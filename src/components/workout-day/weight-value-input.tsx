@@ -51,6 +51,7 @@ export function WeightValueInput({
   ariaLabel,
   referenceWeight = null,
   suggested = null,
+  planned = false,
   canSwitchUnit = false,
 }: {
   value: string;
@@ -77,6 +78,11 @@ export function WeightValueInput({
    * uses it. Typing anything replaces it — it is never saved on its own.
    */
   suggested?: number | null;
+  /**
+   * The weight shown is the plan (a % of a max or of today's top set, filled
+   * in for them), not what was lifted: it reads faded until the set is logged.
+   */
+  planned?: boolean;
 }) {
   /** Inline editing of the actual cell. */
   const [editing, setEditing] = useState(false);
@@ -380,7 +386,8 @@ export function WeightValueInput({
           <button
             type="button"
             disabled={disabled}
-            aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}` : ariaLabel}
+            aria-label={ghost != null ? `${ariaLabel}, suggested ${ghost} ${unit}` : planned && !isEmpty ? `${ariaLabel}, planned ${shown}` : ariaLabel}
+            data-planned={planned && !isEmpty ? "" : undefined}
             onClick={() => startEditing()}
             className={cn(
               "flex w-full items-center justify-center whitespace-nowrap rounded-md border pl-2 pr-5 text-sm font-medium transition-colors",
@@ -389,7 +396,7 @@ export function WeightValueInput({
               loadType === "assisted" && "border-amber-500/50 bg-amber-500/10",
               isEmpty
                 ? "border-blue-500/40 bg-blue-500/10 text-muted-foreground"
-                : "border-border/60 bg-muted/40 text-foreground",
+                : cn("border-border/60 bg-muted/40", planned ? "text-muted-foreground/80" : "text-foreground"),
               !disabled && "cursor-pointer hover:bg-muted/60",
             )}
           >

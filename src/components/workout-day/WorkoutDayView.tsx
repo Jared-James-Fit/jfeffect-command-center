@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronsUpDown, Check, CheckCircle2, Circle, Video, StickyNote, NotebookPen, Info, AlertTriangle, RefreshCw, Send, MessageCircle, ChevronDown, ChevronUp, Zap, Trophy, HelpCircle, Loader2, Trash2, GripVertical, SlidersHorizontal, Repeat, Undo2, Redo2, RotateCcw, ArrowLeftRight, ChevronRight, Target, LineChart } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -28,6 +28,7 @@ import {
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
+import { withLivePercent } from "@/lib/workouts/backoff-basis";
 import { distanceInputValue, formatDistance, isRunningExercise, parseDistanceInput, readDistanceUnit, runPrescription, runSummaryLine, writeDistanceUnit, type DistanceUnit } from "@/lib/running/run-log";
 import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
@@ -1749,6 +1750,13 @@ function WorkoutDay({
     return resolvedUnitMap[`row:${r.id}`] ?? unit;
   };
 
+  // A back-off's % only follows a top set of the same exercise: after a swap
+  // of either one it reads as plain RPE (backoff-basis.ts).
+  const viewRows = useMemo(
+    () => new Map((rows as any[]).map((r) => [r.id as string, withLivePercent(r, rows as any[])])),
+    [rows],
+  );
+
   // Percentage backoffs based on a top set become useful only after the athlete
   // actually enters that top-set load. Resolve the nearest matching exercise
   // above this row and feed its logged load into the backoff card.
@@ -2838,7 +2846,7 @@ function WorkoutDay({
             ) : null}
             {canEditWorkoutStructure && rowsLoaded && (rows as any[]).length === 0 && (
               <div className="lg:col-span-2">
-                <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} />
+                <WorkoutAddExercise onAdd={(exercise) => addExerciseNow(exercise, 0)} disabled={rowsFetching} clientId={client?.id ?? null} />
               </div>
             )}
             {(rows as any[]).map((r, rowIndex) => (
@@ -2859,7 +2867,7 @@ function WorkoutDay({
                   <UnsupportedExerciseCard row={r} />
                 ) : (
                   <ExerciseBlock
-                    row={r}
+                    row={viewRows.get(r.id) ?? r}
                     dayId={dayId}
                     dayTitle={cleanDayTitle(day.title, day.day_index)}
                     dayIndex={day?.day_index ?? null}
@@ -2877,7 +2885,7 @@ function WorkoutDay({
                       readiness={readiness}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
                     blockId={blockId}
-                      topSetBasis={topSetBasisForRow(r, rowIndex)}
+                      topSetBasis={topSetBasisForRow(viewRows.get(r.id) ?? r, rowIndex)}
                     existingResults={(results as any[]).filter((x) => x.row_id === r.id)}
                       resultsReady={resultsLoaded && !resultsFetching}
                     existingNote={notesByRowId.get(r.id)}
@@ -2899,12 +2907,14 @@ function WorkoutDay({
                     onMoveDown={() => void moveExerciseNow(r.id, 1)}
                     onMoveTo={(position) => void moveExerciseTo(r.id, position)}
                     onRemove={canEditWorkoutStructure && !readonly ? () => void removeExerciseNow(r.id, r.exercises?.name ?? r.exercise_name_override ?? "Exercise") : undefined}
+                    onAddAfter={canEditWorkoutStructure && !readonly ? (exercise) => addExerciseNow(exercise, rowIndex + 1) : undefined}
                   />
                 )}
                 {/* Adding exercises lives in the list; Focus is for logging. */}
                 {canEditWorkoutStructure && !storyOpen && (
                   <WorkoutAddExercise
                     subtle
+                    clientId={client?.id ?? null}
                     onAdd={(exercise) => addExerciseNow(exercise, rowIndex + 1)}
                     disabled={rowsFetching}
                   />
@@ -3338,6 +3348,16 @@ function PreviousTimedChip({ data, className, onOpen, fallback }: {
   );
 }
 
+/** " @ 7" from a logged RPE, " · 2 RIR" from a logged RIR, else nothing. */
+function lastTimeEffort(data: { rpe?: string | number | null; rir?: string | number | null }): string {
+  const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
+  const rpe = n(data.rpe);
+  if (rpe != null && Number.isFinite(rpe) && rpe > 0) return ` @ ${Math.round(rpe * 10) / 10}`;
+  const rir = n(data.rir);
+  if (rir != null && Number.isFinite(rir) && rir >= 0) return ` · ${Math.round(rir * 10) / 10} RIR`;
+  return "";
+}
+
 /**
  * Compact "Last time" chip — shows the top set (heaviest × reps) the client
  * logged the last time they trained this exercise on a *different* day.
@@ -3368,11 +3388,13 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
         : (rawLoad ?? (data.enteredValue === 0 || data.normalizedLb === 0 ? "BW" : ""));
   const repsStr = data.reps != null ? ` × ${data.reps}` : "";
   if (!loadStr && !repsStr) return <>{fallback}</>;
+  // How hard it was matters as much as the weight in an RPE program: 192.5 × 4 @ 7.
+  const effortStr = lastTimeEffort(data);
   const when = lastTimeWhen(data.occurredAt);
   const body = (
     <>
       <span className="text-muted-foreground">Last time</span>
-      <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}</span>
+      <span className="font-semibold tabular-nums text-foreground">{loadStr}{repsStr}{effortStr}</span>
       {when && <span className="text-muted-foreground">· {when}</span>}
     </>
   );
@@ -3385,16 +3407,16 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
       type="button"
       onClick={onOpen}
       data-testid="last-time-history"
-      aria-label={`Last time: ${loadStr}${repsStr}${when ? `, ${when}` : ""}. Open history`}
+      aria-label={`Last time: ${loadStr}${repsStr}${effortStr}${when ? `, ${when}` : ""}. Open history and progress`}
       className={cn(chip, "h-8 transition hover:bg-muted active:scale-[0.97]", className)}
     >
       {body}
-      <ChevronRight className="-mr-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <LineChart className="ml-auto h-3.5 w-3.5 shrink-0 pl-0.5 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove, onAddAfter }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void; /** Add an exercise right after this one (a swap of an exercise already logged today). */ onAddAfter?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void> }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3777,7 +3799,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     return prescribedLoadInActiveUnit();
   }, [row.manual_override, row.load_kg, row.load_lb, percentageBackoffWeight, computed, activeUnit]);
 
-  const [showSuggestionCard] = useShowLoadSuggestions();
+  const [showSuggestionCard, setShowSuggestionCard] = useShowLoadSuggestions();
   const repTarget = useMemo(() => parseRepTarget(row.reps_text), [row.reps_text]);
   const rpeTarget = useMemo(() => parseEffortTarget(row.rpe), [row.rpe]);
   const rirTarget = useMemo(() => parseEffortTarget(row.rir), [row.rir]);
@@ -4449,7 +4471,9 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           <PreviousLiftChip
             data={previousLift}
             displayUnit={activeUnit}
-            className="mt-0"
+            // With a suggestion under it, the two read as one summary:
+            // Last time / Suggested, the same width, one above the other.
+            className={cn("mt-0", showSuggestionCard && loadModel && loadPlan && "h-9 w-full")}
             onOpen={clientId ? () => setHistoryOpen(true) : undefined}
             fallback={clientId ? (
               <DeferredExerciseHistoryButton
@@ -4463,7 +4487,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               />
             ) : null}
           />
-          {canSuggest && !readonly && <LoadSuggestionsChip highlight={!!suggestNudge} />}
+          {canSuggest && !readonly && !showSuggestionCard && <LoadSuggestionsChip highlight={!!suggestNudge} />}
         </div>
       )}
       {historyOpen && clientId && (
@@ -4582,6 +4606,17 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             <CardMenuItem onSelect={() => setSwapOpen(true)} className="rounded-lg">
               <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap exercise
             </CardMenuItem>
+            {clientId && (
+              <CardMenuItem onSelect={() => setHistoryOpen(true)} className="rounded-lg" data-testid="card-history">
+                <LineChart className="mr-2 h-4 w-4" /> History & progress
+              </CardMenuItem>
+            )}
+            {canSuggest && !readonly && (
+              // One switch for every card (the line's ⓘ has it too).
+              <CardMenuItem onSelect={() => setShowSuggestionCard(!showSuggestionCard)} className="rounded-lg" data-testid="card-suggestions">
+                <Target className="mr-2 h-4 w-4" /> {showSuggestionCard ? "Turn off weight suggestions" : "Suggest weights"}
+              </CardMenuItem>
+            )}
             {cues && (
               <CardMenuItem onSelect={() => setCuesOpen((v) => !v)} className="rounded-lg">
                 {cuesOpen ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
@@ -4683,6 +4718,8 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
         equipment={(exercise as any)?.equipment ?? null}
         difficulty={(exercise as any)?.difficulty ?? null}
         swapContext={swapContext}
+        loggedSets={existingResults.length}
+        onAddInstead={onAddAfter}
       />
       <TrainingHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
       {!readonly && !trackingType.includes("time") && clientId && (() => {
@@ -4746,7 +4783,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               variant="outline"
               onClick={() => void onFill()}
               disabled={!hasFirstWeight || quickFillLoading}
-              className="w-full h-9 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-50 gap-1.5"
+              className="w-full h-9 text-xs font-semibold disabled:opacity-50 gap-1.5"
               title={hasFirstWeight
                 ? `Copy ${fillLabel} from Set 1 into the remaining ${uncompletedAfterFirst} set${uncompletedAfterFirst !== 1 ? "s" : ""}`
                 : "Enter a weight in Set 1 first"}
@@ -6163,7 +6200,10 @@ function SetRow({
   // hasAnyEntry only counts weight (the field the client must enter) and
   // manually-edited reps/RPE. Pre-filled prescription values do NOT count
   // as draft data — otherwise every unlogged set shows the amber border.
-  const hasAnyEntry = load.length > 0 || bw || repsEdited || rpeEdited || caloriesEdited || distanceEdited;
+  // A weight the plan filled in (plannedFillRef) is the plan, not their entry:
+  // it reads faded like the planned reps / RPE, and the row isn't a draft.
+  const loadIsPlanned = !isConfirmed && !bw && load !== "" && plannedFillRef.current != null && load === plannedFillRef.current;
+  const hasAnyEntry = (load.length > 0 && !loadIsPlanned) || bw || repsEdited || rpeEdited || caloriesEdited || distanceEdited;
   const isDraft = !isConfirmed && (hasAnyEntry || (existing && !existing.completed_at));
 
   const isAbortError = (err: unknown) => {
@@ -6595,6 +6635,7 @@ function SetRow({
         ariaLabel={`Set ${setIndex} reps`}
         disabled={readonly}
         focusMode={focusMode}
+        planned={!isConfirmed && !repsEdited}
       />
       )}
       {/* Timer — just another set input, same size/aesthetic as the others */}
@@ -6667,6 +6708,7 @@ function SetRow({
           ariaLabel={`Set ${setIndex} ${showRir ? "RIR" : "RPE"}`}
           disabled={readonly}
           focusMode={focusMode}
+          planned={!isConfirmed && !rpeEdited}
       />
       {showVelocity && (
         <Input
@@ -6687,6 +6729,7 @@ function SetRow({
       {!hideWeight && (
       <WeightValueInput
         value={load}
+        planned={loadIsPlanned}
         isBodyweight={bw}
         loadType={loadType}
         unit={unit}

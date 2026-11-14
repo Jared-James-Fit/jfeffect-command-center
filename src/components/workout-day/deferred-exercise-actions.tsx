@@ -149,6 +149,9 @@ export function DeferredQuickSwapButton(props: {
   rowId: string;
   exerciseId: string | null;
   exerciseName: string;
+  /** Sets already saved on this exercise today (they keep it; today's swap becomes an add). */
+  loggedSets?: number;
+  onAddInstead?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void>;
   muscleGroup?: string | null;
   category?: string | null;
   equipment?: string | null;

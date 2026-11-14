@@ -16,8 +16,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Sheet,
   SheetContent,
@@ -355,20 +353,27 @@ function ExerciseRowCard({
 
   return (
     <div className="rounded-md border border-border bg-card">
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <div className="min-w-0 flex-1">
+      <div className="flex items-center justify-between gap-2 py-1 pl-1 pr-3">
+        {/* The whole row picks it (a tap on the name is the natural one); Use
+            stays for anyone looking for a button. */}
+        <button
+          type="button"
+          onClick={onSelect}
+          className="min-w-0 flex-1 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/50 active:bg-muted"
+          data-swap-pick={ex.id}
+        >
           <div className="truncate text-sm font-medium">
             <HighlightedName text={ex.name} tokens={highlightTokens ?? []} />
           </div>
-          {reason && <div className="mt-0.5 text-[11px] font-medium text-primary/80">{reason}</div>}
+          {reason && <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">{reason}</div>}
           {meta && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>}
-        </div>
+        </button>
         <div className="flex shrink-0 items-center gap-1.5">
           {hasVideo && (
             <Button
               size="sm"
               variant="outline"
-              className="h-7 w-7 p-0"
+              className="h-8 w-8 p-0"
               onClick={(e) => { e.stopPropagation(); setPlaying((p) => !p); }}
               aria-label={playing ? `Hide ${ex.name} video` : `Play ${ex.name} video`}
               aria-pressed={playing}
@@ -376,7 +381,7 @@ function ExerciseRowCard({
               {playing ? <X className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
             </Button>
           )}
-          <Button size="sm" variant="default" className="h-7 px-2 text-xs" onClick={onSelect}>
+          <Button size="sm" variant="secondary" className="h-8 px-2.5 text-xs" onClick={onSelect} tabIndex={-1} aria-hidden="true">
             Use
           </Button>
         </div>
@@ -424,6 +429,8 @@ export function QuickSwapButton({
   open: controlledOpen,
   onOpenChange,
   hideTrigger = false,
+  loggedSets = 0,
+  onAddInstead,
 }: {
   rowId: string;
   exerciseId: string | null;
@@ -453,13 +460,16 @@ export function QuickSwapButton({
   onOpenChange?: (open: boolean) => void;
   /** Hide the built-in trigger when an outer lazy boundary owns the first tap. */
   hideTrigger?: boolean;
+  /** Sets already saved on this exercise today: they keep it, so today's swap becomes an add. */
+  loggedSets?: number;
+  /** Add the pick to today's workout (after this exercise) instead of swapping it. */
+  onAddInstead?: (exercise: { id: string; name: string; muscle_group: string | null; equipment: string | null; category: string | null }) => Promise<void>;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [mode, setMode] = useState<ViewMode>("suggestions");
   const [pending, setPending] = useState<ExerciseLite | null>(null);
-  const [scope, setScope] = useState<"today" | "future">("today");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -479,7 +489,6 @@ export function QuickSwapButton({
     if (open) {
       setMode("suggestions");
       setPending(null);
-      setScope("today");
       setSearch("");
       setPage(0);
       setChip("Best Match");
@@ -661,7 +670,6 @@ export function QuickSwapButton({
 
   const startSelect = (ex: ExerciseLite) => {
     setPending(ex);
-    setScope("today");
     // Warn only when the pick trains a genuinely different target (no shared
     // primary muscle, or opposite hip action like abduction vs adduction).
     const srcMeta = srcMetaRef.current;
@@ -691,6 +699,22 @@ export function QuickSwapButton({
     },
   });
 
+  const [adding, setAdding] = useState(false);
+  const addInstead = async (ex: ExerciseLite) => {
+    if (!onAddInstead) return;
+    setAdding(true);
+    try {
+      await onAddInstead({ id: ex.id, name: ex.name, muscle_group: ex.muscle_group ?? null, equipment: ex.equipment ?? null, category: ex.category ?? null });
+      setOpen(false);
+    } catch {
+      // the add says what went wrong itself
+    } finally {
+      setAdding(false);
+    }
+  };
+  // Today's sets are logged: today stays, so the only "today" is adding it.
+  const todayLogged = loggedSets > 0 || !!(impact as any)?.todayLogged;
+
   const swapMutation = useMutation({
     mutationFn: async (vars: { newExerciseId: string; scope: "today" | "future" }) => {
       if (isMember && swapContext && swapContext.kind === "member") {
@@ -707,10 +731,10 @@ export function QuickSwapButton({
       }
       return applySwapFnClient({ data: { rowId, ...vars } });
     },
-    onSuccess: (res: { count: number }, vars) => {
+    onSuccess: (res: { count: number; keptToday?: boolean }, vars) => {
       toast.success(
         vars.scope === "future"
-          ? `Swapped across ${res.count} workout${res.count === 1 ? "" : "s"}`
+          ? `Swapped in ${res.count} workout${res.count === 1 ? "" : "s"}${res.keptToday ? " (today's logged sets stay)" : ""}`
           : `Swapped for today`,
       );
       // Refresh any cached workout-day data so the new exercise appears
@@ -771,7 +795,7 @@ export function QuickSwapButton({
                   : mode === "warning"
                   ? "Confirm different target."
                   : mode === "scope"
-                  ? "Choose where to apply."
+                  ? "Just today, or your program too."
                   : "Pick an alternate exercise."}
               </SheetDescription>
             </SheetHeader>
@@ -860,7 +884,7 @@ export function QuickSwapButton({
                       className={
                         "rounded-full border px-2.5 py-0.5 text-[11px] transition-colors " +
                         (chip === c
-                          ? "border-primary bg-primary text-primary-foreground"
+                          ? "border-foreground bg-foreground text-background"
                           : "border-border bg-card text-muted-foreground hover:text-foreground")
                       }
                     >
@@ -946,65 +970,60 @@ export function QuickSwapButton({
           )}
 
           {mode === "scope" && pending && (
-            <div className="mt-4 space-y-3">
-              <div className="rounded-md border border-border bg-card px-3 py-2">
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">New exercise</div>
-                <div className="mt-0.5 truncate text-sm font-medium">{pending.name}</div>
+            // One tap: today only, or today and the rest of this block. Sets
+            // already logged today stay on the exercise they were logged as.
+            <div className="mt-4 space-y-3" data-swap-scope>
+              <div className="rounded-lg border border-border bg-card px-3 py-2">
+                <div className="text-xs text-muted-foreground">New exercise</div>
+                <div className="mt-0.5 truncate text-sm font-semibold">{pending.name}</div>
               </div>
-              <div>
-                <div className="mb-2 text-sm font-medium">Where should this swap apply?</div>
-                <RadioGroup
-                  value={scope}
-                  onValueChange={(v) => setScope(v as "today" | "future")}
-                  className="space-y-2"
-                >
-                  <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2">
-                    <RadioGroupItem value="today" id="swap-scope-today" className="mt-0.5" />
-                    <Label htmlFor="swap-scope-today" className="flex-1 cursor-pointer">
-                      <div className="text-sm font-medium">Today only</div>
-                      <div className="text-xs text-muted-foreground">Just this workout.</div>
-                    </Label>
-                  </div>
-                  <div
-                    className={
-                      "flex items-start gap-2 rounded-md border border-border px-3 py-2 " +
-                      (impact?.isTemplate ? "opacity-50" : "")
-                    }
+              {todayLogged && (
+                <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground" data-swap-logged>
+                  You've logged {loggedSets > 0 ? `${loggedSets} set${loggedSets === 1 ? "" : "s"}` : "sets"} of {exerciseName} today. They stay as you logged them.
+                </p>
+              )}
+              <div className="space-y-2">
+                {todayLogged ? (
+                  onAddInstead && (
+                    <Button className="h-12 w-full" disabled={adding} onClick={() => void addInstead(pending)} data-swap-add-instead>
+                      {adding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Add it to today's workout
+                    </Button>
+                  )
+                ) : (
+                  <Button
+                    className="h-12 w-full"
+                    disabled={swapMutation.isPending}
+                    onClick={() => swapMutation.mutate({ newExerciseId: pending.id, scope: "today" })}
+                    data-swap-today
                   >
-                    <RadioGroupItem
-                      value="future"
-                      id="swap-scope-future"
-                      className="mt-0.5"
-                      disabled={!!impact?.isTemplate}
-                    />
-                    <Label htmlFor="swap-scope-future" className="flex-1 cursor-pointer">
-                      <div className="text-sm font-medium">Future workouts in this block</div>
-                      <div className="text-xs text-muted-foreground">
-                        {impactLoading
-                          ? "Counting…"
-                          : impact?.isTemplate
-                          ? "Not available on template blocks."
-                          : `${impact?.futureCount ?? 0} uncompleted workout${(impact?.futureCount ?? 0) === 1 ? "" : "s"} affected.`}
-                      </div>
-                    </Label>
-                  </div>
-                </RadioGroup>
+                    {swapMutation.isPending && swapMutation.variables?.scope === "today" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Swap for today
+                  </Button>
+                )}
+                {!impact?.isTemplate && (
+                  <Button
+                    variant="outline"
+                    className="h-auto min-h-12 w-full flex-col gap-0 py-2"
+                    disabled={swapMutation.isPending || impactLoading || (impact?.futureCount ?? 0) === 0}
+                    onClick={() => swapMutation.mutate({ newExerciseId: pending.id, scope: "future" })}
+                    data-swap-future
+                  >
+                    <span className="inline-flex items-center">
+                      {swapMutation.isPending && swapMutation.variables?.scope === "future" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {impactLoading
+                        ? "Counting upcoming workouts…"
+                        : (impact?.futureCount ?? 0) === 0
+                          ? "Not in any upcoming workout"
+                          : `${todayLogged ? "Swap" : "Today +"} ${impact?.futureCount} upcoming workout${impact?.futureCount === 1 ? "" : "s"}`}
+                    </span>
+                    <span className="text-[11px] font-normal text-muted-foreground">Changes your program for the rest of this block</span>
+                  </Button>
+                )}
               </div>
-              <div className="flex items-center gap-2 pt-1">
-                <Button variant="ghost" onClick={() => setMode("suggestions")} className="flex-1">
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
-                </Button>
-                <Button
-                  onClick={() => swapMutation.mutate({ newExerciseId: pending.id, scope })}
-                  disabled={swapMutation.isPending}
-                  className="flex-1"
-                >
-                  {swapMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : null}
-                  Confirm Swap
-                </Button>
-              </div>
+              <Button variant="ghost" onClick={() => setMode("suggestions")} className="w-full">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
             </div>
           )}
           </div>

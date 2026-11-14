@@ -9,9 +9,10 @@ function fmtNum(n: number): string {
 }
 
 /**
- * The load suggestion on an exercise card: the range for the prescribed reps @
- * RPE, a one-line "audible" (moving fast → add, grinding → drop) and an info
- * button holding the why + "just a suggestion" so the card stays one glance.
+ * The load suggestion on an exercise card: one quiet line ("Suggested 190 kg ×
+ * 4 @ 7") under "Last time", and an ⓘ holding the range, the "audible" (moving
+ * fast → add, grinding → drop), the why, "just a suggestion" and the off
+ * switch, so the card stays one glance.
  */
 export interface WarmupGauge {
   /** What the last warm-up should be (display unit), when a top-set target exists. */
@@ -43,7 +44,7 @@ export function LoadSuggestionCard({
       : "log your first set with an RPE and the rest get a live suggestion.";
     return (
       <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-2 py-1.5 text-[11px] leading-snug text-muted-foreground" data-testid="load-suggestion-pending">
-        <Target className="mt-px h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+        <Target className="mt-px h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span><span className="font-semibold text-foreground">{why}</span> · {next}</span>
       </div>
     );
@@ -83,83 +84,100 @@ export function LoadSuggestionCard({
       : dayPct !== 0 ? { text: `Live ${daySigned}`, live: true }
       : null;
   return (
-    <div className="mt-1.5 overflow-hidden rounded-lg border border-primary/25 bg-primary/5" data-testid="load-suggestion">
-    <div className="flex items-center gap-2 px-2.5 py-1.5">
-      <Target className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-      <div className="min-w-0 flex-1 leading-tight">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-base font-bold tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
-          <span className="truncate text-[11px] font-medium text-muted-foreground">
-            {plan.reps} @ RPE {fmtNum(plan.rpe)}
-          </span>
-          {badge && (
-            <span
-              data-testid="load-badge"
-              className={cn(
-                "ml-auto shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold",
-                badge.live ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
-              )}
-            >
-              {badge.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-current align-middle" aria-hidden="true" />}
-              {badge.text}
-            </span>
-          )}
-        </div>
-        <div className="truncate text-[11px] tabular-nums text-muted-foreground" data-testid="load-audible">
-          {range && <>{range}<span aria-hidden="true"> · </span></>}
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400">▲ Fast +{fmtNum(audible)}</span>
-          <span aria-hidden="true"> · </span>
-          <span className="font-semibold text-amber-600 dark:text-amber-400">▼ Slow −{fmtNum(audible)}</span>
-        </div>
+    // One quiet line under "Last time": the number and what it's for. The range,
+    // the fast / slow call, the why and the off switch live behind ⓘ, so the
+    // card stays about the sets (it used to be a red box with a second line).
+    <div className="mt-1.5 flex min-h-9 items-center gap-2 rounded-lg border border-border bg-muted/40 py-0.5 pl-2.5 pr-0.5" data-testid="load-suggestion">
+      <Target className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <div className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
+        <span className="shrink-0 text-muted-foreground">Suggested</span>
+        <span className="shrink-0 text-sm font-bold tabular-nums text-foreground" data-testid="load-target">{fmtNum(hint.target)} {hint.unit}</span>
+        <span className="min-w-0 truncate tabular-nums text-muted-foreground">× {plan.reps} @ {fmtNum(plan.rpe)}</span>
       </div>
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" aria-label="How this suggestion works" className="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10">
-            <Info className="h-3.5 w-3.5" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
-          <p className="font-semibold">Just a suggestion</p>
-          <p className="mt-1 text-muted-foreground">
-            Based on {why}.
-            {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
-              ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change.`}
+      {badge && (
+        <span
+          data-testid="load-badge"
+          className="shrink-0 rounded-full bg-background px-1.5 py-px text-[10px] font-semibold text-muted-foreground"
+        >
+          {badge.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" aria-hidden="true" />}
+          {badge.text}
+        </span>
+      )}
+      <SuggestionWhy hint={hint} why={why} model={model} warmup={warmup} audible={audible} range={range} />
+    </div>
+  );
+}
+
+/** ⓘ on the suggestion line: the range, the fast / slow call, the why, and the off switch. */
+function SuggestionWhy({ hint, why, model, warmup, audible, range }: {
+  hint: LoadSuggestion;
+  why: string;
+  model: LoadModel;
+  warmup: WarmupGauge | null;
+  audible: number;
+  range: string | null;
+}) {
+  const [, setShow] = useShowLoadSuggestions();
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label="How this suggestion works" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10">
+          <Info className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
+        <p className="font-semibold">Just a suggestion</p>
+        {range && (
+          <p className="mt-1 text-muted-foreground" data-testid="load-range">
+            A good day lands anywhere in <span className="font-semibold tabular-nums text-foreground">{range} {hint.unit}</span>.
           </p>
-          {model.carriedTop && (() => {
-            // The math behind a back-off, the way a coach would say it.
-            const top = model.carriedTop;
-            const step = loadStep(hint.unit, top.load);
-            return (
-              <p className="mt-1 text-muted-foreground" data-testid="load-backoff-math">
-                Top set today:{" "}
-                <span className="font-semibold text-foreground tabular-nums">
-                  {fmtNum(roundToStep(top.load, step / 2))} {hint.unit} × {top.reps} @ {fmtNum(top.rpe)}
-                </span>{" "}
-                (e1RM about {fmtNum(roundToStep(top.e1rm, step))}). Back-offs sit about {Math.round(BACKOFF_FATIGUE * 100)}% under what that
-                says, for the fatigue a top set leaves.
-              </p>
-            );
-          })()}
-          <p className="mt-1 text-muted-foreground">Let your first set decide:</p>
-          <ul className="mt-1 space-y-0.5 text-muted-foreground">
-            <li><span className="font-semibold text-foreground">Bar flying?</span> Add {fmtNum(audible)} {hint.unit} next set.</li>
-            <li><span className="font-semibold text-foreground">Slow or form breaking?</span> Drop {fmtNum(audible)} {hint.unit}.</li>
-            <li><span className="font-semibold text-foreground">Pain?</span> Stop and message your coach.</li>
-          </ul>
-          <p className="mt-1 text-muted-foreground">Log an honest RPE and the next suggestion updates.</p>
-          {warmup && (
-            <p className="mt-1.5 border-t border-border pt-1.5 text-muted-foreground">
-              <span className="font-semibold text-foreground">Tip: use your last warm-up as a gauge.</span>{" "}
-              {warmup.suggested
-                ? `Work up to about ${fmtNum(warmup.suggested.load)} ${hint.unit} × ${warmup.suggested.reps}, then log how it felt. `
-                : "Log your heaviest warm-up and how it felt. "}
-              Moving easier than usual nudges this number up, harder nudges it down — before your first working set.
+        )}
+        <p className="mt-1 text-muted-foreground">
+          Based on {why}.
+          {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
+            ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change.`}
+        </p>
+        {model.carriedTop && (() => {
+          // The math behind a back-off, the way a coach would say it.
+          const top = model.carriedTop;
+          const step = loadStep(hint.unit, top.load);
+          return (
+            <p className="mt-1 text-muted-foreground" data-testid="load-backoff-math">
+              Top set today:{" "}
+              <span className="font-semibold text-foreground tabular-nums">
+                {fmtNum(roundToStep(top.load, step / 2))} {hint.unit} × {top.reps} @ {fmtNum(top.rpe)}
+              </span>{" "}
+              (e1RM about {fmtNum(roundToStep(top.e1rm, step))}). Back-offs sit about {Math.round(BACKOFF_FATIGUE * 100)}% under what that
+              says, for the fatigue a top set leaves.
             </p>
-          )}
-        </PopoverContent>
-      </Popover>
-    </div>
-    </div>
+          );
+        })()}
+        <p className="mt-1 text-muted-foreground">Let your first set decide:</p>
+        <ul className="mt-1 space-y-0.5 text-muted-foreground" data-testid="load-audible">
+          <li><span className="font-semibold text-foreground">Bar flying?</span> Add {fmtNum(audible)} {hint.unit} next set.</li>
+          <li><span className="font-semibold text-foreground">Slow or form breaking?</span> Drop {fmtNum(audible)} {hint.unit}.</li>
+          <li><span className="font-semibold text-foreground">Pain?</span> Stop and message your coach.</li>
+        </ul>
+        <p className="mt-1 text-muted-foreground">Log an honest RPE and the next suggestion updates.</p>
+        {warmup && (
+          <p className="mt-1.5 border-t border-border pt-1.5 text-muted-foreground">
+            <span className="font-semibold text-foreground">Tip: use your last warm-up as a gauge.</span>{" "}
+            {warmup.suggested
+              ? `Work up to about ${fmtNum(warmup.suggested.load)} ${hint.unit} × ${warmup.suggested.reps}, then log how it felt. `
+              : "Log your heaviest warm-up and how it felt. "}
+            Moving easier than usual nudges this number up, harder nudges it down — before your first working set.
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => setShow(false)}
+          data-testid="load-suggestions-off"
+          className="mt-2 w-full rounded-lg border border-border py-2 text-xs font-semibold text-foreground hover:bg-muted"
+        >
+          Turn off suggestions
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -180,14 +198,14 @@ export function LoadSuggestionsChip({ highlight = false, className }: { highligh
       data-testid="load-suggestions-chip"
       className={cn(
         "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition active:scale-[0.97]",
-        show ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-background text-foreground",
+        show ? "border-border bg-secondary text-foreground" : "border-border bg-background text-foreground",
         highlight && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
         className,
       )}
     >
       <Target className="h-3.5 w-3.5" aria-hidden="true" />
       Suggest
-      <span aria-hidden="true" className={cn("relative h-3.5 w-6 rounded-full transition-colors", show ? "bg-primary" : "bg-muted-foreground/35")}>
+      <span aria-hidden="true" className={cn("relative h-3.5 w-6 rounded-full transition-colors", show ? "bg-foreground" : "bg-muted-foreground/35")}>
         <span className={cn("absolute top-0.5 h-2.5 w-2.5 rounded-full bg-background shadow-sm transition-all", show ? "left-3" : "left-0.5")} />
       </span>
     </button>

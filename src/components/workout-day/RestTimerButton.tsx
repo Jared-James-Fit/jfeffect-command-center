@@ -117,7 +117,7 @@ export function RestTimerButton({
           className,
         )}
       >
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-primary @max-[17rem]:h-auto @max-[17rem]:w-auto @max-[17rem]:bg-transparent">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-foreground @max-[17rem]:h-auto @max-[17rem]:w-auto @max-[17rem]:bg-transparent">
           <Play className="h-3 w-3 fill-current" />
         </span>
         <span className="hidden text-[11px] font-semibold text-muted-foreground @[26rem]:inline">{auto ? "Auto rest" : "Rest"}</span>
