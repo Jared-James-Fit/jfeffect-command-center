@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,14 +13,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
-  CalendarDays, CalendarPlus, CalendarRange, Check, ChevronDown, ChevronRight, ExternalLink, MessageSquare, Pencil, Plus, Repeat,
-  Settings2, SlidersHorizontal, StickyNote, Ticket, Wallet,
+  CalendarDays, CalendarPlus, CalendarRange, Check, ChevronDown, ChevronRight, MessageSquare, Plus, Repeat,
+  Settings2, SlidersHorizontal, StickyNote, Ticket,
 } from "lucide-react";
 import { GoogleImportDialog } from "@/components/sessions/google-import-dialog";
 import { PrebookDialog } from "@/components/sessions/prebook-dialog";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SellSessionsDialog } from "@/components/sell-sessions-dialog";
-import { CardHeader, MoreButton, StatusChip, type ChipTone } from "@/components/nutrition/nutrition-ui";
+import { CardHeader, MoreButton, StatusChip } from "@/components/nutrition/nutrition-ui";
 import { TermDateEditor } from "@/components/purchase-records-panel";
 import { useClientPayments } from "@/components/billing/use-client-payments";
 import { adjustSessionCredits } from "@/lib/session-credit-packages.functions";
@@ -29,7 +28,7 @@ import { renewSessionPackage } from "@/lib/billing.functions";
 import { COMMON_TIMEZONES } from "@/lib/pt-sessions";
 import { sessionEventLabel, type SessionBalanceRow } from "@/lib/sessions-inventory";
 import { WORKSPACE_FULL_SPAN_CLASS } from "@/components/workspace/workspace-container";
-import { SessionActionsSheet, whenLabel } from "@/components/schedule/session-actions-sheet";
+import { SessionActionsSheet } from "@/components/schedule/session-actions-sheet";
 import { sessionStatusLabel, shortDay } from "@/lib/session-credit";
 import { useCoachNotes } from "@/lib/session-coach-notes";
 import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
@@ -40,9 +39,11 @@ import { latestPackage } from "@/lib/client-owed";
 import { clientTaxRate } from "@/lib/client-billing-summary";
 import { withTax } from "@/lib/sale-money";
 import { formatMoney } from "@/lib/payment-display";
-import { fetchAllPages } from "@/lib/supabase-paginate";
-import { payingOffLine, type AutoPayStatus, type ClientPayments, type PackageAccount } from "@/lib/payment-schedule";
-import { BarLegend, PaymentStatusText, RoleTag, SessionBar, StatusText, TrainingStatusText } from "@/components/billing/package-visuals";
+import type { AutoPayStatus, ClientPayments } from "@/lib/payment-schedule";
+import { SessionBar } from "@/components/billing/package-visuals";
+import { PackageSnapshot } from "@/components/billing/package-snapshot";
+import { PackageList } from "@/components/billing/package-list";
+import { ptClientLedgerQuery, ptSessionsQuery } from "@/components/sessions/session-queries";
 import {
   buildSessionPackages,
   dayRange,
@@ -119,19 +120,7 @@ export function ClientSessionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  const { data: sessions = [], isLoading: sessionsLoading } = useQuery<any[]>({
-    queryKey: ["pt-sessions", clientId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pt_sessions")
-        .select("*")
-        .eq("client_id", clientId)
-        .order("session_date", { ascending: false })
-        .order("start_time", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery<any[]>(ptSessionsQuery(clientId));
 
   // Why a session was cancelled, moved or missed: the coach's own notes, never shown to the client.
   const { data: coachNotes } = useCoachNotes(clientId);
@@ -160,19 +149,7 @@ export function ClientSessionsPanel({
   });
 
   // The whole session ledger, page by page: which package each session is on.
-  const { data: events = [] } = useQuery<PackageLedgerEvent[]>({
-    queryKey: ["pt-client-ledger", clientId],
-    queryFn: () =>
-      fetchAllPages<PackageLedgerEvent>((from, to) =>
-        (supabase as any)
-          .from("session_ledger_events")
-          .select("id, purchase_id, pt_session_id, event_type, session_count, source, note, related_event_id, effective_date, created_at")
-          .eq("client_id", clientId)
-          .order("created_at", { ascending: true })
-          .order("id", { ascending: true })
-          .range(from, to),
-      ),
-  });
+  const { data: events = [] } = useQuery<PackageLedgerEvent[]>(ptClientLedgerQuery(clientId) as any);
 
   const { data: payments = [] } = useQuery<any[]>({
     queryKey: ["pt-payment-ledger", clientId],
@@ -265,6 +242,7 @@ export function ClientSessionsPanel({
             renewFromId={(pkg?.sale as any)?.id ?? null}
             manual={manual}
             payments={billing.payments}
+            ledger={(billing.data?.ledger ?? []) as any[]}
             onOpenBilling={onOpenBilling}
             onRenew={() => setRenewOpen(true)}
             onBookAhead={() => setPrebookOpen(true)}
@@ -314,16 +292,17 @@ export function ClientSessionsPanel({
 }
 
 /**
- * Everything under the Sessions header: the package being trained now first
- * (its sessions, the next one, and which package the money is going to),
- * what to do next, the sessions coming up and the package history folded
- * away. Pure view over the package model (session-packages.ts) and the
- * payments model (payment-schedule.ts), so it can be checked with fixture
- * data.
+ * Everything under the Sessions header, in the order a coach reads it:
+ * the glance (the package they're training on and the one being paid off,
+ * the same block as the Summary and Billing tabs), anything waiting on the
+ * coach, the one next step when there is one, the sessions coming up, then
+ * the packages (package-list.tsx) with their sessions inside. Pure view over
+ * the package model (session-packages.ts) and the payments model
+ * (payment-schedule.ts), so it can be checked with fixture data.
  */
 export function SessionsTrackerBody({
-  model, sessions, today, coachNotes, first, isAdmin, renewSize, renewEachCents, renewFromId, manual, payments,
-  onOpenBilling, onRenew, onBookAhead, onSell, onAdjust, onEditDates, onOpenSession,
+  model, sessions, today, coachNotes, first, isAdmin, renewSize, renewEachCents, manual, payments, ledger = [],
+  onOpenBilling, onRenew, onBookAhead, onSell, onEditDates, onOpenSession,
 }: {
   model: SessionPackages;
   sessions: any[];
@@ -334,10 +313,12 @@ export function SessionsTrackerBody({
   /** Sessions in the package a renewal copies (null: nothing priced to renew). */
   renewSize: number | null;
   renewEachCents: number | null;
-  /** The package a renewal copies (only its card offers Renew). */
+  /** The package a renewal copies. */
   renewFromId?: string | null;
   manual: PackageLedgerEvent[];
   payments?: ClientPayments | null;
+  /** Every payment row (each package's received payments, when it's opened). */
+  ledger?: any[];
   onOpenBilling?: () => void;
   onRenew: () => void;
   onBookAhead: () => void;
@@ -362,99 +343,78 @@ export function SessionsTrackerBody({
     ...model.unpriced.map((s) => s.id),
   ]);
   const others = sessions.filter((s) => !placed.has(s.id));
-
   const lastNumber = model.packages.reduce((m, p) => Math.max(m, p.number), 0);
-  // The package being trained now; with nothing left to train and nothing past it, the last package.
-  const trainingNow = model.packages.find((p) => p.id === model.currentId) ?? null;
-  const current = trainingNow ?? (model.next.length ? null : model.packages[0] ?? null);
-  const waitingAfter = model.packages.filter((p) => p.id !== current?.id && p.phase === "waiting" && p.number > (current?.number ?? 0));
-  const history = model.packages.filter((p) => p.id !== current?.id && !waitingAfter.includes(p));
-  // Each package's money in one word, from Billing's reading (never its amounts here).
-  const accountOf = useMemo(() => new Map((payments?.packages ?? []).map((a) => [a.saleId, a])), [payments]);
-  const paying = payments ? payingOffLine(payments, (c) => money(c, payments.currency), monthDay) : null;
+  const viewOf = useMemo(() => new Map(model.packages.map((p) => [p.id, p])), [model.packages]);
 
   const openSession = (s: PackageSessionRow) => onOpenSession(sessionById.get(s.id) ?? s);
   const sessionRow = (s: PackageSessionRow) => {
     const full = sessionById.get(s.id) ?? s;
     return <SessionRow key={s.id} s={full} today={today} coachNote={coachNotes?.get(s.id)} clientFirst={first} onOpen={() => openSession(s)} />;
   };
-  const moneyLine = paying ? <PayingLine line={paying} onOpenBilling={onOpenBilling} /> : null;
+  const moneyOf = (cents: number) => money(cents, payments?.currency ?? "CAD");
 
   return (
     <>
-      {step.kind === "renew" ? (
-        <NextStep
-          step={step}
-          first={first}
-          isAdmin={isAdmin}
-          number={lastNumber + 1}
-          renderSession={sessionRow}
-          renewPriceCents={renewEachCents}
-          onRenew={onRenew}
-          onBookAhead={onBookAhead}
-          onSell={onSell}
-          unpriced={model.unpriced}
-          footer={moneyLine}
-        />
-      ) : current ? (
-        <CurrentTraining
-          p={current}
-          now={!!trainingNow}
+      {payments ? (
+        <PackageSnapshot
+          p={payments}
           today={today}
-          isAdmin={isAdmin}
-          canRenew={renewFromId === current.id}
-          renderSession={sessionRow}
-          nextUp={upcoming[0] ?? null}
-          needsReview={needsReview.length}
-          moneyLine={moneyLine}
-          onOpenNext={upcoming[0] ? () => onOpenSession(upcoming[0]) : undefined}
-          onRenew={onRenew}
-          onBookAhead={onBookAhead}
-          onAdjust={onAdjust}
-          onEditDates={onEditDates}
+          nextSession={upcoming[0] ?? null}
           onOpenBilling={onOpenBilling}
+          showMoney={false}
         />
       ) : (
-        <section className="space-y-2 rounded-xl border border-border p-3" data-current-training="none">
-          <p className="text-[14px] text-muted-foreground">No sessions on a package yet.</p>
-          {moneyLine}
+        <div className="h-40 animate-pulse rounded-2xl bg-muted" aria-busy="true" />
+      )}
+
+      {needsReview.length > 0 && (
+        <section className="space-y-2 rounded-xl border border-warning/40 p-3" data-needs-review>
+          <p className="text-[14px]">
+            {needsReview.length === 1 ? "1 past session is" : `${needsReview.length} past sessions are`} waiting on you (a change request kept it open). Tap it to pick what happened.
+          </p>
+          <ul className="divide-y divide-border rounded-lg border border-border">{needsReview.map((s) => sessionRow(s))}</ul>
         </section>
       )}
 
-      {step.kind !== "renew" && (
-        <NextStep
-          step={step}
-          first={first}
-          isAdmin={isAdmin}
-          number={lastNumber + 1}
-          renderSession={sessionRow}
-          renewPriceCents={renewEachCents}
-          onRenew={onRenew}
-          onBookAhead={onBookAhead}
-          onSell={onSell}
-          unpriced={model.unpriced}
-        />
-      )}
+      <NextStep
+        step={step}
+        first={first}
+        isAdmin={isAdmin}
+        number={lastNumber + 1}
+        renderSession={sessionRow}
+        renewPriceCents={renewEachCents}
+        onRenew={onRenew}
+        onBookAhead={onBookAhead}
+        onSell={onSell}
+        unpriced={model.unpriced}
+      />
 
       {model.next.slice(1).map((n, i) => (
         <PendingPackage key={`next-${i}`} next={n} number={lastNumber + 2 + i} renderSession={sessionRow} />
       ))}
-      {waitingAfter.map((p) => (
-        <PackageRow key={p.id} p={p} account={accountOf.get(p.id)} renderSession={sessionRow} />
-      ))}
 
       {upcoming.length > 0 && (
-        <Folder title="Upcoming sessions" summary={`${upcoming.length}`} data-upcoming>
+        <Folder title="Upcoming sessions" summary={`${upcoming.length} · from ${shortDay(upcoming[0].session_date)}`} data-upcoming>
           <ul className="divide-y divide-border rounded-lg border border-border">{upcoming.map((s) => sessionRow(s))}</ul>
         </Folder>
       )}
 
-      {history.length > 0 && (
-        <Folder title="Package history" summary={history.map((p) => p.number).sort((a, b) => a - b).join(" · ")} data-history>
-          {[...history].sort((a, b) => b.number - a.number).map((p) => (
-            <PackageRow key={p.id} p={p} account={accountOf.get(p.id)} renderSession={sessionRow} />
-          ))}
-        </Folder>
+      {payments && payments.packages.length > 0 && (
+        <PackageList
+          packages={payments.packages}
+          ledger={ledger}
+          money={moneyOf}
+          mode="sessions"
+          isAdmin={isAdmin}
+          renderSessions={(saleId) => {
+            const v = viewOf.get(saleId);
+            return v && v.sessions.length > 0
+              ? <ul className="divide-y divide-border rounded-lg border border-border">{v.sessions.map(sessionRow)}</ul>
+              : <p className="text-[13px] text-muted-foreground">No sessions on it.</p>;
+          }}
+          onOpenBilling={onOpenBilling}
+          onEditDates={onEditDates}
+        />
       )}
 
       {(model.free.length > 0 || others.length > 0 || manual.length > 0) && (
@@ -464,42 +424,10 @@ export function SessionsTrackerBody({
   );
 }
 
-/** "Nov 27" */
-const monthDay = (iso: string) =>
-  new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
-
-const TONE_TEXT: Record<ChipTone, string> = {
-  neutral: "text-muted-foreground",
-  done: "text-success",
-  attention: "text-warning",
-  error: "text-destructive",
-};
-
-/** Which package the money is going to, one tap from Billing: "Paying off Package 2 · $168.00 due today by auto-pay". */
-function PayingLine({ line, onOpenBilling }: { line: ReturnType<typeof payingOffLine>; onOpenBilling?: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpenBilling}
-      disabled={!onOpenBilling}
-      className="flex min-h-11 w-full items-center gap-2 border-t border-border pt-2 text-left text-[13px]"
-      data-billing-line={line.tone}
-    >
-      <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1">
-        {line.lead && <span className="font-medium text-foreground">{line.lead}</span>}
-        {line.lead && <span className="text-muted-foreground"> · </span>}
-        <span className={TONE_TEXT[line.tone]}>{line.text}</span>
-      </span>
-      {onOpenBilling && <span className="flex shrink-0 items-center text-muted-foreground">Billing<ChevronRight className="h-4 w-4" /></span>}
-    </button>
-  );
-}
-
 /* ---------------- The one next step ---------------- */
 
 /** Only when there's something to do: renew once they've trained past it, book what's left, or sell a first package. */
-function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents, onRenew, onBookAhead, onSell, unpriced, footer }: {
+function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents, onRenew, onBookAhead, onSell, unpriced }: {
   step: SessionsNextStep;
   first: string;
   isAdmin: boolean;
@@ -510,8 +438,6 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
   onBookAhead: () => void;
   onSell: () => void;
   unpriced: PackageSessionRow[];
-  /** Under a renewal that leads the tab: where the money's going. */
-  footer?: ReactNode;
 }) {
   if (step.kind === "renew") {
     const n = step.next;
@@ -520,7 +446,6 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
         next={n}
         number={number}
         renderSession={renderSession}
-        eyebrow="Current training"
         lead={
           <p className="text-[13px] text-muted-foreground">
             {n.done > 0
@@ -540,7 +465,6 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
             )}
           </>
         ) : null}
-        footer={footer}
       />
     );
   }
@@ -571,7 +495,7 @@ function NextStep({ step, first, isAdmin, number, renderSession, renewPriceCents
       action = isAdmin && <Button className="h-11 w-full sm:w-auto" onClick={onSell}><Ticket className="mr-2 h-4 w-4" /> Sell a package</Button>;
       break;
     case "all_booked":
-      // Nothing to do: the training card says it's fully booked, and Renew is in its menu.
+      // Nothing to do: the glance says it's fully booked, and Renew is in the ⋯ menu.
       return null;
   }
   if (!text) return null;
@@ -594,203 +518,13 @@ export function countLine(p: { size: number; done: number; booked: number; open:
   return parts.join(" · ");
 }
 
-/** The package's period: its own term, else when its sessions ran. */
-const periodOf = (p: PackageView) => dayRange(p.termFrom ?? p.from, p.termTo ?? p.to);
-/** Unused sessions that can't be booked any more (the ledger's expiry, or its use-by date passing). */
-const expiredOf = (p: PackageView) => p.expired + Math.max(0, p.open - p.available);
-
-/** The three counts, the numbers in bold: "7 completed · 9 booked · 0 available". */
-function Counts({ done, booked, available, expired }: { done: number; booked: number; available: number; expired?: number }) {
-  const part = (n: number, w: string) => <span><span className="font-semibold text-foreground">{n}</span> {w}</span>;
-  return (
-    <div className="flex flex-wrap gap-x-1.5 text-[14px] tabular-nums text-muted-foreground" data-counts>
-      {part(done, "completed")}<span aria-hidden>·</span>{part(booked, "booked")}<span aria-hidden>·</span>{part(available, "available")}
-      {expired ? <><span aria-hidden>·</span>{part(expired, "expired")}</> : null}
-    </div>
-  );
-}
-
-/**
- * The package being trained now, unmistakable at the top: its number, what
- * it is, its sessions as one segmented bar (completed green, booked grey,
- * still to book empty), the next session, and the one line that says which
- * package the money is going to (often an earlier one).
- */
-function CurrentTraining({ p, now, today, isAdmin, canRenew, renderSession, nextUp, needsReview, moneyLine, onOpenNext, onRenew, onBookAhead, onAdjust, onEditDates, onOpenBilling }: {
-  p: PackageView;
-  /** It's the package being trained now (false: the last package, everything on it trained). */
-  now: boolean;
-  today: string;
-  isAdmin: boolean;
-  canRenew: boolean;
-  renderSession: (s: PackageSessionRow) => ReactNode;
-  nextUp: any | null;
-  needsReview: number;
-  moneyLine: ReactNode;
-  onOpenNext?: () => void;
-  onRenew: () => void;
-  onBookAhead: () => void;
-  onAdjust?: () => void;
-  onEditDates?: (saleId: string) => void;
-  onOpenBilling?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const period = periodOf(p);
-  const expired = expiredOf(p);
-  const lastBooked = [...p.sessions].reverse().find((s) => s.status === "Scheduled")?.session_date ?? null;
-  const fullyBooked = now && p.available === 0 && p.booked > 0;
-  return (
-    <section className="space-y-3 rounded-xl border border-border p-3 sm:p-4" aria-label="Current training" data-current-training={p.number}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-[13px] font-medium text-muted-foreground">{now ? "Current training" : "Last package"}</div>
-          <div className="flex flex-wrap items-center gap-x-2">
-            <h3 className="text-[20px] font-semibold leading-tight">Package {p.number}</h3>
-            {fullyBooked ? <StatusText tone="neutral" data-training-status="fully_booked">Fully booked</StatusText> : !now ? <TrainingStatusText status={p.training} /> : null}
-          </div>
-          <div className="line-clamp-2 text-[13px] text-muted-foreground">{p.name}</div>
-          {period && <div className="text-[13px] text-muted-foreground">{period}</div>}
-        </div>
-        {isAdmin && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-10 shrink-0 px-3">Manage<ChevronDown className="ml-1 h-4 w-4" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              {p.available > 0 && <DropdownMenuItem onSelect={onBookAhead}><CalendarRange className="mr-2 h-4 w-4" />Book the {p.available} available</DropdownMenuItem>}
-              {canRenew && <DropdownMenuItem onSelect={onRenew}><Repeat className="mr-2 h-4 w-4" />Renew: add the next {p.size}</DropdownMenuItem>}
-              {onAdjust && <DropdownMenuItem onSelect={onAdjust}><SlidersHorizontal className="mr-2 h-4 w-4" />Add or remove sessions</DropdownMenuItem>}
-              {onEditDates && <DropdownMenuItem onSelect={() => onEditDates(p.id)}><Pencil className="mr-2 h-4 w-4" />Edit its dates</DropdownMenuItem>}
-              <DropdownMenuSeparator />
-              {onOpenBilling && <DropdownMenuItem onSelect={onOpenBilling}><Wallet className="mr-2 h-4 w-4" />Payments on Billing</DropdownMenuItem>}
-              <DropdownMenuItem asChild>
-                <Link to="/admin/purchases/$id" params={{ id: p.id }}><ExternalLink className="mr-2 h-4 w-4" />Open the sale</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        {p.phase === "waiting" ? (
-          <div className="text-[14px] text-muted-foreground">{countLine(p, p.phase)}</div>
-        ) : (
-          <Counts done={p.done} booked={p.booked} available={p.available} expired={expired} />
-        )}
-        <SessionBar completed={p.done} booked={p.booked} available={p.phase === "waiting" ? p.size : p.available} expired={expired} />
-        <BarLegend items={[{ swatch: "done", text: "Completed" }, { swatch: "booked", text: "Booked" }, { swatch: "open", text: "Available" }]} />
-      </div>
-
-      {nextUp ? (
-        <button
-          type="button"
-          onClick={onOpenNext}
-          className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 text-left"
-          data-next-session
-        >
-          <span className="min-w-0 text-[14px]">
-            <span className="text-muted-foreground">Next session </span>
-            <span className="font-medium">{whenLabel(nextUp.session_date, String(nextUp.start_time).slice(0, 5))}</span>
-          </span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </button>
-      ) : (
-        <p className="text-[13px] text-muted-foreground">Nothing booked.</p>
-      )}
-      {fullyBooked && lastBooked && <p className="text-[13px] text-muted-foreground">Every session on it is booked, through {shortDay(lastBooked)}.</p>}
-      {p.expiresAt && now && p.available > 0 && (
-        <p className="text-[13px] text-muted-foreground">Use by {shortDay(p.expiresAt)}</p>
-      )}
-      {expired > 0 && p.expiresAt && p.expiresAt < today && (
-        <p className="text-[13px] text-warning">Expired {shortDay(p.expiresAt)}: its {plural(expired)} left can't be booked</p>
-      )}
-      {needsReview > 0 && (
-        <p className="text-[13px] text-warning">
-          {needsReview === 1 ? "1 past session is" : `${needsReview} past sessions are`} waiting on you (a change request kept it open). Tap it below to pick what happened.
-        </p>
-      )}
-
-      {p.sessions.length > 0 && (
-        <div>
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={() => setOpen((o) => !o)}
-            className="flex min-h-10 w-full items-center justify-between rounded-lg text-[14px] font-medium"
-          >
-            {open ? "Hide its sessions" : `Its sessions (${p.sessions.length})`}
-            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
-          </button>
-          {open && <ul className="mt-1 divide-y divide-border rounded-lg border border-border">{p.sessions.map(renderSession)}</ul>}
-        </div>
-      )}
-
-      {moneyLine}
-    </section>
-  );
-}
-
-/**
- * A package in the history (or one waiting to start): its number and
- * period, its training and money in a word each, and its sessions as the
- * same bar, the sessions themselves one tap away.
- */
-function PackageRow({ p, account, renderSession }: { p: PackageView; account?: PackageAccount; renderSession: (s: PackageSessionRow) => ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const period = periodOf(p);
-  const expired = expiredOf(p);
-  const auto = account?.schedule?.how === "auto_pay" || account?.schedule?.how === "stripe";
-  return (
-    <div className="overflow-hidden rounded-xl border border-border" data-package={p.number}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="w-full space-y-2 px-3 py-2.5 text-left">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[15px] font-semibold">
-              Package {p.number}{period ? <span className="font-normal text-muted-foreground"> · {period}</span> : null}
-            </span>
-            {account?.payingNow && <RoleTag role="paying" />}
-          </div>
-          <ChevronDown className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <TrainingStatusText status={p.training} />
-          {account && <PaymentStatusText status={account.payment} auto={auto} />}
-        </div>
-        {p.phase === "waiting" ? (
-          <div className="text-[13px] text-muted-foreground">{countLine(p, p.phase)}</div>
-        ) : (
-          <>
-            <div className="text-[13px] tabular-nums text-muted-foreground">
-              {p.done >= p.size && !p.booked ? `${p.done}/${p.size} completed` : countLine({ ...p, open: p.available, expired })}
-            </div>
-            <SessionBar completed={p.done} booked={p.booked} available={p.available} expired={expired} />
-          </>
-        )}
-      </button>
-      {open && (
-        <div className="space-y-2 border-t border-border px-3 pb-3 pt-2">
-          <div className="text-[13px] text-muted-foreground">{p.name}</div>
-          {p.sessions.length > 0 ? (
-            <ul className="divide-y divide-border rounded-lg border border-border">{p.sessions.map(renderSession)}</ul>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">No sessions on it.</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** The next package before it's added: the sessions already on it. */
-function PendingPackage({ next, number, renderSession, lead, actions, eyebrow, footer }: {
+function PendingPackage({ next, number, renderSession, lead, actions }: {
   next: NextPackage;
   number: number;
   renderSession: (s: PackageSessionRow) => ReactNode;
   lead?: ReactNode;
   actions?: ReactNode;
-  /** "Current training" when it's where their sessions are going now. */
-  eyebrow?: string;
-  footer?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const when = dayRange(next.sessions[0]?.session_date ?? null, next.sessions[next.sessions.length - 1]?.session_date ?? null);
@@ -798,7 +532,6 @@ function PendingPackage({ next, number, renderSession, lead, actions, eyebrow, f
     <section className={cn("space-y-3 rounded-xl border border-dashed p-3", next.owed ? "border-warning/60" : "border-border")} data-package-next={number}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          {eyebrow && <div className="text-[13px] font-medium text-muted-foreground">{eyebrow}</div>}
           <div className="text-[15px] font-semibold">Package {number} · next {next.size}</div>
           <div className="text-[13px] text-muted-foreground">{when ? `${when} · ` : ""}not added yet</div>
         </div>
@@ -819,7 +552,6 @@ function PendingPackage({ next, number, renderSession, lead, actions, eyebrow, f
         </div>
       )}
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
-      {footer}
     </section>
   );
 }

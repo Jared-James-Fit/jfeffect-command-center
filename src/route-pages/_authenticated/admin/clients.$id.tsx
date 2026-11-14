@@ -92,6 +92,7 @@ const ClientSalesTable = lazyDefault(() => import("@/components/admin/client-sal
 const PriceCardPickerDialog = lazyDefault(() => import("@/components/price-card-picker-dialog"), "PriceCardPickerDialog");
 const AgreementsPanel = lazyDefault(() => import("@/components/agreements-panel"), "AgreementsPanel");
 const ClientBillingPanel = lazyDefault(() => import("@/components/admin/client-billing-panel"), "ClientBillingPanel");
+const ClientPackageSnapshot = lazyDefault(() => import("@/components/billing/package-snapshot"), "ClientPackageSnapshot");
 const GoalsSetupPanel = lazyDefault(() => import("@/components/clients/goals-setup-panel"), "GoalsSetupPanel");
 const ClientTrainingTab = lazyDefault(() => import("@/components/clients/client-training-tab"), "ClientTrainingTab");
 
@@ -1938,7 +1939,18 @@ function ClientOverviewSnapshot({
 
   return (
     <div className="md:col-span-3 space-y-6">
-      {/* The coach's notes on this client first (Quick Notes saved to them land here). */}
+      {/* Their packages at a glance, first: the one they're training on and the one being paid
+          off, the next session and payment, what's left to pay and what's trained but not paid for.
+          Nothing for a client with no session package. */}
+      <Suspense fallback={null}>
+        <ClientPackageSnapshot
+          clientId={clientId}
+          hideWhenEmpty
+          onOpenSessions={() => onGoToTab("sessions")}
+          onOpenBilling={() => onGoToTab("purchases")}
+        />
+      </Suspense>
+      {/* The coach's notes on this client (Quick Notes saved to them land here). */}
       <Suspense fallback={<div className="h-24 rounded-2xl bg-muted" />}>
         <ClientFileNotes clientId={clientId} limit={3} />
       </Suspense>

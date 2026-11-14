@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   ShoppingBag, Plus, MoreHorizontal, ExternalLink, Pencil, Copy, Send, Download, RefreshCw, Share2,
-  Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock, Banknote, Undo2, PlusCircle, Repeat,
+  Archive, ArchiveRestore, Trash2, BellOff, Bell, CalendarClock, Banknote, Undo2, PlusCircle, Repeat, ChevronDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { createPaymentShareLink } from "@/lib/payment-share.functions";
 import { createCheckoutSessionForAssignment } from "@/lib/stripe-checkout.functions";
 import { reconcilePurchaseWithStripe } from "@/lib/stripe-sync.functions";
@@ -56,6 +57,8 @@ type Open =
 export function ClientSalesTable({ clientId }: { clientId: string }) {
   const qc = useQueryClient();
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("current");
+  // Folded: the packages and payments above already say where the money is; every sale's card and actions are one tap away.
+  const [open, setOpen] = useState(false);
   const [picker, setPicker] = useState(false);
   const [editingDates, setEditingDates] = useState<any | null>(null);
   const [editingExpiry, setEditingExpiry] = useState<any | null>(null);
@@ -137,33 +140,37 @@ export function ClientSalesTable({ clientId }: { clientId: string }) {
   const close = (o: boolean) => { if (!o) setDialog(null); };
 
   return (
-    <Card className="border-border bg-card p-4 md:col-span-3 md:p-6 space-y-4">
+    <Card className="border-border bg-card p-3 md:col-span-3 md:p-6 space-y-4" data-sales-card={open ? "open" : "folded"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-base font-semibold"><ShoppingBag className="h-4 w-4 text-muted-foreground" />Sales</h3>
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex min-h-10 items-center gap-2 text-left text-base font-semibold">
+          <ShoppingBag className="h-4 w-4 text-muted-foreground" />Sales
+          {rows.length > 0 && <span className="text-[13px] font-normal text-muted-foreground">{rows.length}</span>}
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </button>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={archiveFilter} onValueChange={(v) => setArchiveFilter(v as ArchiveFilter)}>
+          {open && <Select value={archiveFilter} onValueChange={(v) => setArchiveFilter(v as ArchiveFilter)}>
             <SelectTrigger className="h-9 w-[125px] text-xs" aria-label="Sale archive filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="current">Current</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
-          </Select>
+          </Select>}
           {(records?.length ?? 0) > 0 && addSale}
         </div>
       </div>
 
-      {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading sales…</p>}
+      {open && isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading sales…</p>}
       {isError && <div className="rounded-md border border-destructive/40 bg-destructive/5 p-6 text-center space-y-3"><p className="text-sm text-destructive">Sales could not be loaded.</p><Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Retry</Button></div>}
 
-      {!isLoading && !isError && rows.length === 0 && (
+      {!isLoading && !isError && rows.length === 0 && (open || archiveFilter === "current") && (
         <div className="rounded-md border border-dashed border-border p-8 text-center space-y-3">
           <p className="text-sm font-medium">{archiveFilter === "archived" ? "No archived sales." : "No products sold yet."}</p>
           {archiveFilter === "current" && <><p className="text-xs text-muted-foreground">Add a sale or send a payment request to connect a product to this client.</p><div className="flex justify-center">{addSale}</div></>}
         </div>
       )}
 
-      {!isLoading && !isError && rows.length > 0 && (
+      {open && !isLoading && !isError && rows.length > 0 && (
         <div className="space-y-3">
           {rows.map((row) => {
             const { raw, money, status, payments } = row;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { billingStatusLine, buildClientPayments, saleLabels, type ScheduleSale } from "@/lib/payment-schedule";
+import { buildClientPayments, saleLabels, type ScheduleSale } from "@/lib/payment-schedule";
+import { packageGlance } from "@/lib/package-view";
 import type { MoneyLedgerRow } from "@/lib/sale-money";
 
 // Marc Asugui's real records on Nov 13 2026: package 1 paid ($840), package 2 on
@@ -75,9 +76,8 @@ describe("Marc's payments (the reference account)", () => {
 
   it("auto-pay is on, and its last scheduled payment is never called 'paid up'", () => {
     expect(p.autoPay).toMatchObject({ state: "on", cents: 16800, per: "2 weeks", next: "2026-11-13", lastScheduled: "2027-03-05", uncoveredCents: 0 });
-    const line = billingStatusLine(p, fmt, day);
-    expect(line).toEqual({ text: "$168.00 due today by auto-pay · $1512.00 left", tone: "neutral" });
-    expect(line.text).not.toMatch(/paid up/i);
+    // What the screens say: paying off Package 2, $168 due today by auto-pay; never "paid up".
+    expect(packageGlance(p).paying).toMatchObject({ kind: "plan", label: "Package 2", status: "due", next: { cents: 16800, state: "due_today", auto: true } });
   });
 
   it("packages are numbered the way the Sessions tab numbers them", () => {
@@ -112,7 +112,7 @@ describe("what happens next (scenarios)", () => {
     expect(p.overdue.map((i) => [i.saleId, i.state, i.cents])).toEqual([["p2", "failed", 16800]]);
     expect(p.overdueCents).toBe(16800);
     expect(p.scheduledCents).toBe(134400);
-    expect(billingStatusLine(p, fmt, day)).toEqual({ text: "Overdue $168.00", tone: "error" });
+    expect(packageGlance(p).paying).toMatchObject({ kind: "plan", label: "Package 2", status: "failed" });
   });
 
   it("a manual payment pays down the oldest owed and auto-pay finishes sooner (nothing extra is charged)", () => {
@@ -153,7 +153,7 @@ describe("what happens next (scenarios)", () => {
     expect(p.balances[0]).toMatchObject({ how: "none", unscheduledCents: 64000, canSetDates: true, installments: [] });
     expect(p.overdueCents).toBe(0);
     expect(p.outstandingCents).toBe(64000);
-    expect(billingStatusLine(p, fmt, day)).toEqual({ text: "$640.00 left · no payment dates set", tone: "attention" });
+    expect(packageGlance(p).paying).toEqual({ kind: "unscheduled", saleId: "x", label: "Package 1", leftCents: 64000, packages: 1 });
   });
 
   it("all sessions used but money still owed: owed and scheduled, not overdue", () => {
@@ -190,7 +190,7 @@ describe("what happens next (scenarios)", () => {
     const p = buildClientPayments({ sales: [marc[0]], ledger: marcLedger.filter((l) => l.purchase_id === "p1"), today: TODAY });
     expect(p.outstandingCents).toBe(0);
     expect(p.paidCents).toBe(84000);
-    expect(billingStatusLine(p, fmt, day)).toEqual({ text: "Paid up", tone: "done" });
+    expect(packageGlance(p).paying).toEqual({ kind: "paid_up", nextCharge: null });
   });
 
   it("a monthly subscription is never 'owed': its next charge is just the next payment", () => {
@@ -199,7 +199,7 @@ describe("what happens next (scenarios)", () => {
     expect(p.outstandingCents).toBe(0);
     expect(p.recurring).toEqual([{ saleId: "s", name: "Online Coaching", cents: 13650, per: "month", next: "2026-12-06", state: "renews" }]);
     expect(p.next).toMatchObject({ date: "2026-12-06", cents: 13650, recurring: true });
-    expect(billingStatusLine(p, fmt, day).text).toBe("Paid up · next $136.50 on 12-06 by auto-pay");
+    expect(packageGlance(p).paying).toMatchObject({ kind: "paid_up", nextCharge: { date: "2026-12-06", cents: 13650, recurring: true } });
   });
 
   it("a payment link nobody has paid is waiting, not owed", () => {
@@ -218,7 +218,7 @@ describe("what happens next (scenarios)", () => {
     const p = buildClientPayments({ sales: [marc[0]], ledger: marcLedger.filter((l) => l.purchase_id === "p1"), balance: balance as any, events: events as any, today: TODAY });
     expect(p.outstandingCents).toBe(0);
     expect(p.notBilled).toMatchObject({ kind: "renewal", count: 1, trained: 2 });
-    expect(billingStatusLine(p, fmt, day).tone).toBe("attention");
+    expect(packageGlance(p).training).toMatchObject({ kind: "past", trained: 2, afterLabel: "Package 1" });
   });
 });
 

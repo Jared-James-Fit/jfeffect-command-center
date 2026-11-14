@@ -1,5 +1,5 @@
-import { MoreHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useRef } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,7 @@ import {
   CLIENT_WORKSPACE_PRIMARY_TABS,
   type WorkspaceTab,
 } from "@/components/clients/client-workspace-tab-model";
+import { cn } from "@/lib/utils";
 
 export type { WorkspaceTab };
 
@@ -23,60 +24,76 @@ interface ClientWorkspaceTabsProps {
 }
 
 /**
- * Compact client navigation intentionally preserves every existing client tab.
- * Primary coaching workflows stay one tap away; lower-frequency setup and
- * account tools remain discoverable under More without rebuilding any panel.
+ * The client's sections as one row of plain tabs, Instagram's profile way:
+ * words only, the one you're on in the foreground with a line under it, a
+ * hairline under the row, no box, no icons, no blur. On a phone the row
+ * scrolls sideways and keeps the tab you're on in view (so Billing, last in
+ * the row, never sits off the edge). Every existing tab stays: the work you
+ * do with a client in the row, profile and setup pages under More.
  */
 export function ClientWorkspaceTabs({ activeTab, onChange, heading }: ClientWorkspaceTabsProps) {
   const activeMore = CLIENT_WORKSPACE_MORE_TABS.find((item) => item.value === activeTab);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // Keep the tab you're on in view (centred when the row scrolls), without moving the page.
+  useEffect(() => {
+    const row = rowRef.current;
+    const el = row?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!row || !el || row.scrollWidth <= row.clientWidth) return;
+    const left = el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2;
+    row.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [activeTab]);
 
   return (
-    // Sticky so the coach can switch sections from anywhere in a long panel
-    // without scrolling back to the top of the client workspace.
-    <div className="sticky top-0 z-30 -mx-1 mb-5 space-y-2 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="mb-4 bg-background" data-client-tabs>
       {heading ? (
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {heading}
-        </div>
+        <div className="pb-1 text-[12px] font-medium text-muted-foreground">{heading}</div>
       ) : null}
-      <nav
-        aria-label="Client workspace"
-        className="overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]"
-      >
-        <div className="flex min-w-max items-center gap-1 rounded-xl border border-border bg-card/80 p-1">
+      <nav aria-label="Client workspace" className="border-b border-border">
+        <div
+          ref={rowRef}
+          className="-mb-px flex items-stretch overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {CLIENT_WORKSPACE_PRIMARY_TABS.map((item) => {
-            const Icon = item.icon;
             const isActive = activeTab === item.value;
             return (
               <button
                 key={item.value}
                 type="button"
                 onClick={() => onChange(item.value)}
-                className={[
-                  "inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  isActive
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                ].join(" ")}
+                className={cn(
+                  "relative flex h-11 shrink-0 items-center whitespace-nowrap px-3 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  isActive ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
                 aria-current={isActive ? "page" : undefined}
+                data-client-tab={item.value}
               >
-                <Icon className="h-4 w-4" />
                 {item.label}
+                <span
+                  aria-hidden
+                  className={cn("absolute inset-x-3 bottom-0 h-0.5 rounded-full", isActive ? "bg-foreground" : "bg-transparent")}
+                />
               </button>
             );
           })}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
+              <button
                 type="button"
-                variant={activeMore ? "secondary" : "ghost"}
-                size="sm"
-                className="min-h-10 gap-1.5 rounded-lg px-3 text-sm font-semibold"
+                className={cn(
+                  "relative flex h-11 shrink-0 items-center gap-1 whitespace-nowrap px-3 text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  activeMore ? "font-semibold text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-current={activeMore ? "page" : undefined}
                 aria-label="Open additional client workspace sections"
               >
-                <MoreHorizontal className="h-4 w-4" />
                 {activeMore ? activeMore.label : "More"}
-              </Button>
+                <ChevronDown className="h-4 w-4" />
+                <span
+                  aria-hidden
+                  className={cn("absolute inset-x-3 bottom-0 h-0.5 rounded-full", activeMore ? "bg-foreground" : "bg-transparent")}
+                />
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Client workspace</DropdownMenuLabel>

@@ -69,6 +69,39 @@ export function SessionBar({ completed, booked, available, expired = 0, classNam
   );
 }
 
+/**
+ * One continuous bar split into parts (completed then booked, or paid), on an
+ * empty track: the compact reading, where a cell per session would be noise.
+ */
+export function SegmentBar({ parts, total, label, className }: {
+  parts: Array<{ value: number; tone: "done" | "booked" | "unpaid" }>;
+  total: number;
+  label: string;
+  className?: string;
+}) {
+  const sum = Math.max(total, parts.reduce((t, p) => t + Math.max(0, p.value), 0), 1);
+  return (
+    <div role="img" aria-label={label} className={cn("flex h-2 w-full overflow-hidden rounded-full bg-border", className)} data-segment-bar>
+      {parts.map((p, i) =>
+        p.value > 0 ? (
+          <span
+            key={i}
+            data-part={p.tone}
+            className={cn(
+              "h-full first:rounded-l-full last:rounded-r-full",
+              p.tone === "done" && "bg-success",
+              p.tone === "booked" && "bg-foreground/35",
+              p.tone === "unpaid" && "bg-warning",
+              i > 0 && "border-l-2 border-card",
+            )}
+            style={{ width: `${(Math.max(0, p.value) / sum) * 100}%` }}
+          />
+        ) : null,
+      )}
+    </div>
+  );
+}
+
 const COVERAGE_WORDS: Record<CoverageCell, string> = {
   paid: "paid for",
   part: "partly paid for",
