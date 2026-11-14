@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLoadModel, estimateFor, suggestSetLoad, type SetSample } from "@/lib/load-suggestion";
+import { BACKOFF_FATIGUE, buildLoadModel, estimateFor, suggestSetLoad, type SetSample } from "@/lib/load-suggestion";
 import { computeDayReads, type DayReadRow } from "@/lib/workout-day-read";
 import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 
@@ -8,6 +8,8 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 // suggested at 485 (460–515), "Live +1%": the back-off was its history moved by
 // a capped day factor, and history (495 × 3 @ 5 the week before) read as "495
 // for 4 at anything heavy", so the top set rated 7, 8, 9 or 10 all gave 485.
+// Now it's read from the top set through the chart, less the fatigue a top set
+// leaves (BACKOFF_FATIGUE, measured on real back-offs).
 const NOW = new Date("2026-11-13T19:00:00Z");
 const LB = 2.2046226218;
 const log = (session: string, date: string, lb: number, reps: number, rpe: number | null): PreviousLiftLog => ({
@@ -39,15 +41,32 @@ function backoff(topRpe: number, own: SetSample[] = []) {
 }
 
 describe("a back-off on its own card follows today's top set", () => {
-  it("495 × 4 @ 10 → 2 × 4 @ 6 at about 445, not 485", () => {
+  it("495 × 4 @ 10 → 2 × 4 @ 6 at about 420, not 485", () => {
     const { hint, model, read } = backoff(10);
     expect(model.carried).toBe(true);
     expect(model.source).toBe("blend");
     expect(model.dayFactor).toBeNull(); // the top set is read directly, not as a capped nudge
     expect(read.fromName).toBe("Competition Deadlift");
-    expect(hint.target).toBeGreaterThanOrEqual(435);
-    expect(hint.target).toBeLessThanOrEqual(450);
-    expect(hint.high).toBeLessThan(485);
+    expect(hint.target).toBeGreaterThanOrEqual(410);
+    expect(hint.target).toBeLessThanOrEqual(430);
+    expect(hint.high).toBeLessThan(460);
+  });
+
+  it("the top set it follows is on the model as logged, for the why", () => {
+    const top = backoff(10).model.carriedTop!;
+    expect(top).toMatchObject({ reps: 4, rpe: 10 });
+    expect(top.load).toBeCloseTo(495, 6);
+    expect(top.e1rm).toBeGreaterThan(550); // 495 × 4 @ 10 ≈ 89% → ~555
+    expect(top.e1rm).toBeLessThan(560);
+  });
+
+  it("a back-off rated as hard as its top set sits about 6% under it (the fatigue a top set leaves)", () => {
+    // Backtest, 214 real back-offs: athletes load ~6% under the chart even at
+    // the same RPE as the top set (153 of the 214).
+    expect(BACKOFF_FATIGUE).toBe(0.06);
+    const t = backoff(6).hint.target;
+    expect(t).toBeGreaterThanOrEqual(460);
+    expect(t).toBeLessThanOrEqual(470);
   });
 
   it("a harder top set always means a lighter back-off", () => {
@@ -64,16 +83,16 @@ describe("a back-off on its own card follows today's top set", () => {
   });
 
   it("set 2 holds when set 1 landed on target, and follows how set 1 felt", () => {
-    const on = backoff(10, [{ load: 445, reps: 4, rpe: 6 }]).hint.target;
-    const harder = backoff(10, [{ load: 445, reps: 4, rpe: 7 }]).hint.target;
-    const easier = backoff(10, [{ load: 445, reps: 4, rpe: 5 }]).hint.target;
-    expect(on).toBe(445); // never drifts back up toward history's 480
+    const on = backoff(10, [{ load: 420, reps: 4, rpe: 6 }]).hint.target;
+    const harder = backoff(10, [{ load: 420, reps: 4, rpe: 7 }]).hint.target;
+    const easier = backoff(10, [{ load: 420, reps: 4, rpe: 5 }]).hint.target;
+    expect(on).toBe(420); // never drifts back up toward history's 480
     expect(harder).toBeLessThan(on);
     expect(easier).toBeGreaterThan(on);
   });
 
   it("the top set's card never reads the back-offs after it (its Next time stays its own)", () => {
-    const reads = computeDayReads([card("top", [set(495, 4, 10, 1)]), card("back", [set(445, 4, 6, 2), set(445, 4, 6, 3)])], null, NOW);
+    const reads = computeDayReads([card("top", [set(495, 4, 10, 1)]), card("back", [set(420, 4, 6, 2), set(420, 4, 6, 3)])], null, NOW);
     expect(reads.get("top")!.carryKg).toEqual([]);
     expect(reads.get("back")!.carryKg).toHaveLength(1);
   });
