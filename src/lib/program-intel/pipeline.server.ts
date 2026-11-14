@@ -32,6 +32,8 @@ import { buildGeneratorIntel, type GeneratorIntel } from "./intelligence";
 import { privacySafeRecords } from "./export";
 import { isLowValueExercise, meetsStandard, withStandardStrategy, withStandardSubstitutions } from "./exercise-standard";
 import { loadIntelRecords } from "./load";
+import { loadingRefsFrom, loadingRefsText, withLoadingGuard, type LoadingRefs } from "./loading";
+import { isLiftFamily, type LiftFamily } from "@/lib/workouts/load-reference";
 import { athleteCatalog, catalogText, equipmentFit, exerciseRow, parseJsonReply, resolveProgramExercises, withoutCardioRows, type CatalogExercise } from "./next-program";
 import { generatedProgramOutcomes, outcomeLines } from "./outcomes";
 import { benchRecords } from "./bench";
@@ -234,6 +236,17 @@ export function blockIssues(b: BuiltBlock, want: { weeks: number; days: number }
   return out;
 }
 
+/**
+ * Every percentage in a built block checked against what's on file (loading.ts): a job
+ * from before this check carries no refs and is left as it was written.
+ */
+function guardLoading(block: BuiltBlock, refs: LoadingRefs | null | undefined, catalog: CatalogExercise[]) {
+  if (!refs) return { block, changed: [] as string[] };
+  const fam = new Map<string, LiftFamily | null>(catalog.map((e) => [e.id, isLiftFamily(e.family) ? (String(e.family).toLowerCase() as LiftFamily) : null]));
+  const byName = new Map<string, LiftFamily | null>(catalog.map((e) => [e.name.toLowerCase(), fam.get(e.id) ?? null]));
+  return withLoadingGuard(block, refs, (id, name) => (id && fam.has(id) ? fam.get(id) ?? null : byName.get(name.toLowerCase()) ?? null));
+}
+
 async function libraryCatalog(admin: Db): Promise<Array<CatalogExercise & { archived?: boolean }>> {
   const used = new Set<string>();
   for (let from = 0; ; from += 1000) {
@@ -354,7 +367,12 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
       previous_adherence_pct: intel.ctx.previous?.sessionAdherencePct ?? null,
       // what the later stages build and audit from (the same data the brief came from)
       // a first program has no previous one: maxes entered at setup are its only load references
-      load_refs: loadReferences(intel.prev ?? (intel.history.lifts.some((l) => l.maxOnFileKg != null) ? intel.history : null)),
+      // and what a percentage may read per competition lift (loading.ts): never a max that isn't on file
+      load_refs: [
+        loadReferences(intel.prev ?? (intel.history.lifts.some((l) => l.maxOnFileKg != null) ? intel.history : null)),
+        loadingRefsText(loadingRefsFrom(rec.maxes, intel.history.lifts)),
+      ].filter(Boolean).join("\n\n"),
+      loading_refs: loadingRefsFrom(rec.maxes, intel.history.lifts),
       first_program: intel.firstProgram,
       athlete_catalog: intel.prev ? athleteCatalog(intel.prev, intel.exercises) : [],
       audit_inputs: {
@@ -438,7 +456,9 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
     // cardio is the client's cardio plan (added to every workout by the app), never a second copy here
     const lean = withoutCardioRows(withStandardSubstitutions(value));
     if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
-    built[i] = { ...lean.block, name: lean.block.name || sb.name };
+    const loaded = guardLoading(lean.block, ctxRow.loading_refs, [...athlete, ...library]);
+    if (loaded.changed.length) result.loadingAdjusted = [...(result.loadingAdjusted ?? []), ...loaded.changed];
+    built[i] = { ...loaded.block, name: loaded.block.name || sb.name };
     result.blocks = built;
     clearCalls(result);
     stages = setStage(stages, stage, "done", `${value.days.length} days · ${value.days.reduce((n, d) => n + d.exercises.length, 0)} exercises · ${model}`);
@@ -459,7 +479,9 @@ export async function runPipelineStage(admin: Db, job: any): Promise<"next" | "d
         const { value } = await askChecked<BuiltBlock>(admin, job, result, "repair", `repair:block ${bi + 1}:${result.repairRound ?? 1}`, constructSystemPrompt(brain, { first: !!ctxRow.first_program }), repairUserPrompt({ block: result.blocks[bi], blockIndex: bi, issues, setup, athleteCatalog: athlete, libraryCatalog: library, catalogText, equipmentRules: ai.equipment_rules ?? [] }), builtBlockSchema, (v) => blockIssues(v, { weeks: result.blocks[bi].weeks, days: setup.daysPerWeek }));
         const lean = withoutCardioRows(withStandardSubstitutions(value));
         if (lean.removed.length) result.cardioRemoved = [...new Set([...(result.cardioRemoved ?? []), ...lean.removed])];
-        result.blocks[bi] = lean.block;
+        const loaded = guardLoading(lean.block, ctxRow.loading_refs, [...athlete, ...all]);
+        if (loaded.changed.length) result.loadingAdjusted = [...(result.loadingAdjusted ?? []), ...loaded.changed];
+        result.blocks[bi] = loaded.block;
         result.repairs = [...(result.repairs ?? []), { round: result.repairRound ?? 1, block: bi, issues }];
         clearCalls(result);
       }

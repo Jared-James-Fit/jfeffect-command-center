@@ -66,7 +66,8 @@ describe("the line under a % prescription: what it's of, and the RPE as its cap"
   it("the logger shows it under the prescription, and a % of a max is the coach's load", () => {
     const wdv = readFileSync("src/components/workout-day/WorkoutDayView.tsx", "utf8");
     expect(wdv).toContain('<p className="mt-0.5 text-xs text-muted-foreground" data-pct-line>{pctLine}</p>');
-    expect(wdv).toContain("reference: computed?.status === \"ok\" ? maxReference(computed.max, computed.base, computed.unit) : null,");
+    // a max row names itself; a logged e1RM (no max row) is named by the competition lift it was read from
+    expect(wdv).toContain("maxReference(computed.max ?? (computed.refLift ? { lift: computed.refLift, unit: computed.unit } : null), computed.base, computed.unit)");
     // the RPE engine never suggests over a % of a max (it waits while the max loads)
     expect(wdv).toContain("const pctLoadIsCoachs = maxBasedPct && (maxesPending || (computed?.status === \"ok\" && computed.load != null));");
   });

@@ -23,7 +23,7 @@ describe("nothing typed is lost between the screen and the database", () => {
   it("values an effect shows are adopted as saved only after they render, never over unsaved work", () => {
     expect(day).not.toContain("queueMicrotask(() => { saveRef.current?.markClean");
     expect(day).toContain("if (keepUnsaved && saveRef.current?.hasPending()) return;");
-    expect(day.match(/adoptShownAsSaved\(true\)/g)).toHaveLength(3); // unit, fill from above, fill-down
+    expect(day.match(/adoptShownAsSaved\(true\)/g)).toHaveLength(4); // unit, fill from above, fill-down, a planned load arriving late
     expect(day.match(/adoptShownAsSaved\(false\)/g)).toHaveLength(2); // Fill All, undo / redo
   });
   it("a set that can't save goes to the durable queue at once, and a newer save supersedes it", () => {

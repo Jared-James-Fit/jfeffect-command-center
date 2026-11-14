@@ -173,6 +173,11 @@ export function withoutCardioRows<B extends { days: Array<{ exercises: Array<{ e
   return { block: removed.length ? { ...block, days } : block, removed };
 }
 
+/** A built exercise's percentage basis as the row stores it (a % with none named reads as e1RM, as before). */
+function rowBasis(b: string | null | undefined): "training_max" | "1rm" | "est_1rm" {
+  return b === "training_max" ? "training_max" : b === "1rm" ? "1rm" : "est_1rm";
+}
+
 export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number, day?: readonly BuiltExercise[] | null): Record<string, unknown> {
   const rx = rxForWeek(ex, week);
   // A walk or a bike is logged as time: "10" from the model is ten minutes, never ten reps.
@@ -200,11 +205,13 @@ export function exerciseRow(ex: BuiltExercise, week: number, sortOrder: number, 
     reps: rx.reps,
     ...(rx.rpe ? { rpe: rx.rpe } : {}),
     ...(rx.rir && !rx.rpe ? { rir: rx.rir } : {}),
-    ...(rx.percentage != null ? { percentage: rx.percentage, percentage_of: "est_1rm" as const } : {}),
+    ...(rx.percentage != null ? { percentage: rx.percentage, percentage_of: rowBasis(rx.percentage_of) } : {}),
     ...(ex.rest_seconds != null ? { rest_seconds: ex.rest_seconds } : {}),
     ...(ex.tempo ? { tempo: ex.tempo } : {}),
     ...(notes ? { notes } : {}),
   });
+  // a back-off reads today's top set of the same exercise (the logger fills it in once that's logged)
+  if (rx.percentage != null && rx.percentage_of === "top_set") row.percentage_basis = "top_set";
   return {
     ...row,
     sort_order: sortOrder,

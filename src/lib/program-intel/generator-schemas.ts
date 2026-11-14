@@ -169,12 +169,24 @@ export type Strategy = z.infer<typeof strategySchema>;
 
 // ── Stage 5: one constructed block ───────────────────────────────────────────
 
+/** What a percentage reads (loading.ts): read tolerantly, an unknown word is no basis (it then reads as e1RM). */
+const loadingBasis = z.preprocess((v) => {
+  if (v == null || v === "") return null;
+  const t = String(v).toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (t === "tm" || t.startsWith("trainingmax")) return "training_max";
+  if (t === "e1rm" || t === "est1rm" || t.startsWith("estimated")) return "e1rm";
+  if (t === "1rm" || t === "onerepmax" || t === "tested1rm") return "1rm";
+  if (t.startsWith("topset")) return "top_set";
+  return null;
+}, z.enum(["training_max", "e1rm", "1rm", "top_set"]).nullable());
+
 const rxFields = {
   sets: z.coerce.number().int().min(1).max(15).optional(),
   reps: z.coerce.string().trim().min(1).max(30).optional(),
   rpe: z.coerce.string().trim().max(10).nullish(),
   rir: z.coerce.string().trim().max(10).nullish(),
   percentage: z.coerce.number().min(30).max(110).nullish(),
+  percentage_of: loadingBasis.optional().catch(null),
   notes: z.preprocess((v) => (v == null ? null : asText(v)), z.string().nullable()).transform((v) => (v == null ? null : v.trim().slice(0, 500) || null)).optional(),
 };
 
@@ -208,6 +220,7 @@ export const builtExerciseSchema = z.object({
       rpe: rxFields.rpe.catch(undefined),
       rir: rxFields.rir.catch(undefined),
       percentage: rxFields.percentage.catch(undefined),
+      percentage_of: loadingBasis.optional().catch(undefined),
       notes: rxFields.notes.catch(undefined),
     }),
     MAX_PROGRAM_WEEKS,
