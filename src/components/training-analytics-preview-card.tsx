@@ -24,9 +24,12 @@ import {
 export function TrainingAnalyticsPreviewCard({
   clientId,
   unit: unitProp,
+  hideWhenEmpty = false,
 }: {
   clientId: string;
   unit?: Unit;
+  /** Nothing until there's a workout to count (analytics stays in Workouts' ⋯). */
+  hideWhenEmpty?: boolean;
 }) {
   const { data: results = [], isLoading } = useQuery({
     queryKey: ["pl-results-preview", clientId],
@@ -68,6 +71,8 @@ export function TrainingAnalyticsPreviewCard({
     : goalPct != null
       ? [`${goalPct}% of ${h.prevMonthLabel}'s total`, pace].filter(Boolean).join(" · ")
       : pace;
+
+  if (hideWhenEmpty && (isLoading || empty)) return null;
 
   return (
     <section aria-label={`Your ${h.monthLabel}`}>

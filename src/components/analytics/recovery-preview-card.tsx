@@ -35,6 +35,8 @@ interface Props {
   clientId: string;
   /** Deep link into full Training Analytics (kept for compatibility). */
   analyticsTo: string;
+  /** Nothing until there's a score: no "finish a few workouts to unlock it" card on the athlete's own Workouts. */
+  hideWhenEmpty?: boolean;
 }
 
 type Tier = "Ready" | "Good" | "Take It Easy" | "Low";
@@ -92,7 +94,7 @@ const statusColor: Record<FactorStatus, { ring: string; soft: string; text: stri
   },
 };
 
-export function RecoveryPreviewCard({ clientId }: Props) {
+export function RecoveryPreviewCard({ clientId, hideWhenEmpty = false }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ["training-readiness", clientId],
     enabled: !!clientId,
@@ -481,6 +483,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
   const [view, setView] = useState<"overview" | FactorKey | null>(null);
 
   if (isLoading) {
+    if (hideWhenEmpty) return null;
     return (
       <section aria-label="Training Readiness">
         <Card className="h-[68px] animate-pulse bg-muted/30" aria-hidden />
@@ -489,6 +492,7 @@ export function RecoveryPreviewCard({ clientId }: Props) {
   }
 
   if (!data || !data.hasData) {
+    if (hideWhenEmpty) return null;
     return (
       <section aria-label="Training Readiness">
         <Card className="flex items-center gap-3 p-4">

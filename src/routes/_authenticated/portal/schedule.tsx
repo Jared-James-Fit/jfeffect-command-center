@@ -24,7 +24,7 @@ function SchedulePage() {
   }
   return (
     <div className="space-y-4 px-3 sm:px-6 py-4 max-w-6xl mx-auto">
-      <PageHeader title="Move workouts" subtitle="Move one workout or several at once. Your program and logged workouts never change." />
+      <PageHeader title="Move workouts" subtitle="Move one workout or several at once. Your program and logged workouts never change." backTo="/portal/workouts" />
       <MissedWorkoutCard clientId={client.id} />
       <ScheduleManagerShell clientId={client.id} mode="client" />
     </div>

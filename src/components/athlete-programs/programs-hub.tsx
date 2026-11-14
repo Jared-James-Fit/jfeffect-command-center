@@ -59,9 +59,11 @@ export function ProgramsHub({ initialTab }: { initialTab?: ProgramsTab }) {
 
   return (
     <div className="mx-auto w-full max-w-2xl pb-28">
+      {/* A page under Workouts, so Back like every page beside it (a program,
+          a plan, the builder, analytics): to wherever they came from, else Workouts. */}
       <PageHeader
         title="Programs"
-        actionsInline
+        backTo="/portal/workouts"
         actions={
           <Button asChild size="sm">
             <Link to="/portal/programs/new">
