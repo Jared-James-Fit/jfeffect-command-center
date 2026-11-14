@@ -57,6 +57,7 @@ import { useMultiBlockBuilderFlag } from "@/lib/admin-flags";
 import { Layers } from "lucide-react";
 import { createContext, useContext } from "react";
 import { listClientMaxes, buildMaxIndex, computeRowLoad, type ClientMaxRow } from "@/lib/pl-maxes";
+import { hasRpeCap, isMaxBasis, plannedLoadLabel, referenceFamily } from "@/lib/workouts/load-reference";
 import { MaxEditorDialog } from "@/components/client-maxes-panel";
 import { BlockMaxesButton, BlockMaxesDialog } from "@/components/block-maxes-panel";
 import { AlertCircle as PbAlertCircle, Calculator as PbCalculator } from "lucide-react";
@@ -2840,6 +2841,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       setRow({ ...row, percentage_basis: row.percentage_basis && row.percentage_basis !== "manual" && row.percentage_basis !== "none" ? row.percentage_basis : "training_max", manual_override: false });
     }
   };
+  // A % of a max reads the exercise's own max, else its lift family's competition
+  // max (load-reference.ts): a High Bar Squat's 65% TM is the Competition Squat's.
+  const refFamily = referenceFamily({ rowFamily: row.movement_family, competitionLiftType: exMeta?.competition_lift_type, movementFamily: exMeta?.movement_family });
+  const ownCompetition = !!refFamily && String(exMeta?.competition_lift_type ?? "").toLowerCase() === refFamily;
   const computed = useMemo(() => {
     if (!clientId) return null;
     return computeRowLoad({
@@ -2850,8 +2855,10 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
       manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
       unit: rowUnit,
       maxesIndex,
+      family: refFamily,
+      ownCompetition,
     });
-  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, rowUnit, maxesIndex]);
+  }, [clientId, exName, row.percentage, row.percentage_basis, row.load_kg, row.load_lb, rowUnit, maxesIndex, refFamily, ownCompetition]);
   const overrideCalculated = () => {
     if (!computed || computed.status !== "ok" || computed.load == null) return;
     const patch: any = { ...row, manual_override: true, override_of_pct: row.percentage };
@@ -2962,12 +2969,20 @@ function RowEditor({ row, setRow, onDelete, exercises, compact, onMoveUp, onMove
   if (hasSets && amount) summaryParts.push(`${row.sets} × ${amount}`);
   else if (hasSets) summaryParts.push(`${row.sets} set${Number(row.sets) === 1 ? "" : "s"}`);
   else if (amount) summaryParts.push(isTime ? amount : `${amount} reps`);
-  if (row.rpe !== "" && row.rpe != null) summaryParts.push(`RPE ${row.rpe}`);
+  // An RPE beside a planned % caps it ("RPE cap 6"): the % is the load, the RPE the limit.
+  if (row.rpe !== "" && row.rpe != null) summaryParts.push(hasRpeCap(row) ? `RPE cap ${row.rpe}` : `RPE ${row.rpe}`);
   if (row.rir !== "" && row.rir != null) summaryParts.push(`RIR ${row.rir}`);
   const loadSummary = (() => {
     if (loadMode === "none") return null;
     if (loadMode === "pct" && row.percentage != null && row.percentage !== "") {
-      // "90% of Top Set", never "90% % of Top Set (linked row)"
+      // "65% Comp Squat TM" / "70% TM" / "92.5% of top set": what the athlete's weight is worked out from
+      const viaFamily = isMaxBasis(row.percentage_basis) && !!refFamily && !ownCompetition;
+      const label = computed?.status === "ok" && computed.label
+        ? computed.label
+        : plannedLoadLabel({ percentage: row.percentage, basis: row.percentage_basis, refLift: viaFamily && refFamily ? `Competition ${refFamily[0].toUpperCase()}${refFamily.slice(1)}` : null, viaFamily });
+      const load = computed?.status === "ok" && computed.load != null ? ` = ${computed.load} ${rowUnit}` : "";
+      if (label) return `${label}${load}`;
+      // "90% of Previous Week", never "90% % of Previous Week"
       const basisLabel = (PERCENTAGE_BASES.find((p) => p.value === row.percentage_basis)?.label) ?? "";
       const words = basisLabel.replace(/^%\s*/, "").replace(/\s*\(linked row\)$/, "");
       return `${row.percentage}%${words ? ` ${words}` : ""}`;

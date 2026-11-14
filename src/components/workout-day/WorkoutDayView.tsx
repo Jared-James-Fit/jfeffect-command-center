@@ -28,6 +28,7 @@ import {
 } from "@/lib/exercise-metadata";
 import { listClientMaxes, buildMaxIndex, computeRowLoad } from "@/lib/pl-maxes";
 import { percentLoadLine, maxReference } from "@/lib/percent-load-line";
+import { capAdjustedLoad, hasRpeCap, isMaxBasis, loggedE1rm, referenceFamily, rpeCapValue, type LiftFamily, type LoggedSet } from "@/lib/workouts/load-reference";
 import { useAutosave, readLocalDraft, clearLocalDraft } from "@/hooks/use-autosave";
 import { useUnsavedWarning } from "@/hooks/use-unsaved-warning";
 import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
@@ -1134,6 +1135,50 @@ function WorkoutDay({
     }
     return out;
   }, [lastWeekDay, rows]);
+
+  // "% of e1RM" rows with no e1RM stored read one worked out from their logged
+  // competition sets (loggedE1rm, load-reference.ts): one small read, only when
+  // this workout has such a row, for the lifts those rows refer to.
+  const e1rmFamilies = useMemo(() => {
+    const out = new Set<LiftFamily>();
+    for (const r of rows as any[]) {
+      if (r.percentage_basis !== "est_1rm" || !r.percentage || r.manual_override) continue;
+      const fam = referenceFamily({ rowFamily: r.movement_family, competitionLiftType: r.exercises?.competition_lift_type, movementFamily: r.exercises?.movement_family });
+      if (fam) out.add(fam);
+    }
+    return [...out].sort();
+  }, [rows]);
+  const { data: loggedE1rmByFamily = null } = useQuery({
+    queryKey: ["logged-e1rm", historyOwnerId, e1rmFamilies.join(",")],
+    enabled: adapter?.kind !== "member" && !!historyOwnerId && e1rmFamilies.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<Partial<Record<LiftFamily, number>>> => {
+      const since = new Date(Date.now() - 42 * 86_400_000).toISOString();
+      const { data, error } = await (supabase as any)
+        .from("pl_row_results")
+        .select("normalized_kg, actual_load, actual_load_unit, actual_reps, actual_rpe_num, actual_rpe, completed_at, load_type, is_bodyweight, pl_exercise_rows!inner(exercises!inner(competition_lift_type))")
+        .eq("client_id", historyOwnerId)
+        .not("completed_at", "is", null)
+        .gte("completed_at", since)
+        .in("pl_exercise_rows.exercises.competition_lift_type", e1rmFamilies)
+        .order("completed_at", { ascending: false })
+        .limit(600);
+      if (error) throw error;
+      const byFamily = new Map<LiftFamily, LoggedSet[]>();
+      for (const x of (data ?? []) as any[]) {
+        if (resolveLoadType(x.load_type, x.is_bodyweight) !== "external") continue;
+        const fam = String(x.pl_exercise_rows?.exercises?.competition_lift_type ?? "") as LiftFamily;
+        const kg = x.normalized_kg != null ? Number(x.normalized_kg) : x.actual_load_unit === "lb" ? Number(x.actual_load) * 0.45359237 : Number(x.actual_load);
+        byFamily.set(fam, [...(byFamily.get(fam) ?? []), { kg, reps: Number(x.actual_reps), rpe: parseRpe(x.actual_rpe_num ?? x.actual_rpe), at: x.completed_at }]);
+      }
+      const out: Partial<Record<LiftFamily, number>> = {};
+      for (const [fam, sets] of byFamily) {
+        const e = loggedE1rm(sets);
+        if (e) out[fam] = e.kg;
+      }
+      return out;
+    },
+  });
 
   // Per-row history for RPE-based load suggestions — same batch, same matching
   // rules as Last Time, current session excluded.
@@ -2825,6 +2870,7 @@ function WorkoutDay({
                       onSuggestEligible={reportSuggestEligible}
                     repMaxBests={repMaxBestsByRow.get(r.id) ?? null}
                       loadHistory={loadHistoryByRow.get(r.id) ?? null}
+                      loggedE1rmByFamily={loggedE1rmByFamily}
                       bodyweightKg={bodyweightNowKg}
                       readiness={readiness}
                     assistedBests={assistedBestsByRow.get(r.id) ?? null}
@@ -3087,14 +3133,17 @@ function WorkoutDay({
  * Exercise-level RPE suggestion: the range for today's working sets, what it's
  * planned for, and why (history / today's sets / readiness / layoff).
  */
+/** Extreme absolute loads flag a likely unit / data error (very few lifters program above these for any single exercise). */
+function looksSuspicious(load: number, unit: "kg" | "lb"): boolean {
+  return (unit === "kg" && load >= 350) || (unit === "lb" && load >= 770);
+}
+
 function SuggestedLoadBadge({ load, unit, exerciseName }: { load: number; unit: "kg" | "lb"; exerciseName: string }) {
   const nav = useWorkoutNavigation();
   // Cheap suspicious-load heuristic: extreme absolute values flag a likely unit / data error.
   // We deliberately keep this client-side and non-blocking — clients must always stop and
   // contact their coach if anything looks wrong.
-  const SUSP_KG = 350;   // very few lifters program above this for any single exercise
-  const SUSP_LB = 770;
-  const suspicious = (unit === "kg" && load >= SUSP_KG) || (unit === "lb" && load >= SUSP_LB);
+  const suspicious = looksSuspicious(load, unit);
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5">
       <div className={cn(
@@ -3343,7 +3392,7 @@ function PreviousLiftChip({ data, displayUnit, className, onOpen, fallback = nul
   );
 }
 
-function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void }) {
+function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, existingResults, resultsReady = false, topSetBasis = null, previousLift = null, lastWeekSwap = null, warmedUp = false, dayRead = null, suggestNudge = null, onSuggestEligible, repMaxBests = null, assistedBests = null, loadHistory = null, loggedE1rmByFamily = null, bodyweightKg = null, readiness = NEUTRAL_READINESS, existingNote, notesLoading = false, readonly = false, unit = "kg", onUnitChange, focusMode = false, onChange, onNoteChange, purposeLabel = null, swapContext = undefined, canMoveUp = false, canMoveDown = false, position, movePosition, moveCount, onMoveUp, onMoveDown, onMoveTo, onRemove }: { row: any; dayId: string; dayTitle: string; dayIndex?: number | null; clientId: string | undefined; blockId?: string | null; existingResults: any[]; /** Logged sets loaded and settled (no fetch in flight). */ resultsReady?: boolean; topSetBasis?: { value: number; unit: "kg" | "lb" } | null; previousLift?: PreviousLift | null; /** Last week's slot held a different exercise (see previous-week-slot.ts). */ lastWeekSwap?: LastWeekSwap | null; warmedUp?: boolean; dayRead?: DayRead | null; suggestNudge?: (() => void) | null; onSuggestEligible?: (rowId: string, eligible: boolean) => void; repMaxBests?: Map<number, PreviousLiftLog> | null; assistedBests?: Map<number, PreviousLiftLog> | null; loadHistory?: PreviousLiftLog[] | null; /** a recent e1RM (kg) per competition lift from their logged sets, for "% of e1RM" rows */ loggedE1rmByFamily?: Partial<Record<LiftFamily, number>> | null; bodyweightKg?: number | null; readiness?: Readiness; existingNote?: any; notesLoading?: boolean; readonly?: boolean; unit?: "kg" | "lb"; onUnitChange?: (u: "kg" | "lb") => void; focusMode?: boolean; onChange: () => void; onNoteChange: () => void; purposeLabel?: string | null; swapContext?: { kind: "client" } | { kind: "member"; enrollmentId: string; weekIndex: number; dayIndex: number; exerciseIndex: number } | undefined; canMoveUp?: boolean; canMoveDown?: boolean; position?: number; movePosition?: number; moveCount?: number; onMoveUp?: () => void; onMoveDown?: () => void; onMoveTo?: (position: number) => void; /** Remove from this workout only (reversible: Undo / Restore). */ onRemove?: () => void }) {
   const adapter = useOptionalAdapter();
   const name = row.exercises?.name ?? row.exercise_name_override ?? "Exercise";
   const exercise = row.exercises ?? null;
@@ -3645,6 +3694,15 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
     enabled: !!clientId && !!row.percentage && row.percentage_basis !== "manual",
     queryFn: () => listClientMaxes(clientId as string, blockId ?? null),
   });
+  // A % of a max reads this exercise's own max, else its lift family's competition max
+  // (load-reference.ts): a High Bar Squat at 65% TM is 65% of the Competition Squat TM.
+  const refFamily = referenceFamily({
+    rowFamily: row.movement_family,
+    competitionLiftType: row.exercises?.competition_lift_type,
+    movementFamily: row.exercises?.movement_family,
+  });
+  const ownCompetition = !!refFamily && String(row.exercises?.competition_lift_type ?? "").toLowerCase() === refFamily;
+  const loggedE1rmKg = refFamily ? loggedE1rmByFamily?.[refFamily] ?? null : null;
   const computed = useMemo(() => {
     if (!row.percentage || !row.percentage_basis || row.percentage_basis === "manual") return null;
     return computeRowLoad({
@@ -3655,8 +3713,14 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       manualLoadLb: row.load_lb ? Number(row.load_lb) : null,
       unit: "kg",
       maxesIndex: buildMaxIndex(maxes),
+      family: refFamily,
+      ownCompetition,
+      loggedE1rmKg,
     });
-  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes]);
+  }, [row.percentage, row.percentage_basis, row.load_kg, row.load_lb, name, maxes, refFamily, ownCompetition, loggedE1rmKg]);
+  // The coach planned this load as a % (of a max, or of today's top set): it's the
+  // weight in the cell, and the RPE beside it is a cap, not a target.
+  const plannedFromMax = !row.manual_override && isMaxBasis(row.percentage_basis) && computed?.status === "ok" && computed.load != null;
 
   // Resolved suggested weight in the *active display unit*. Priority:
   // 1) coach manual_override exact load   2) computed % weight (rounded)
@@ -3707,6 +3771,40 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
   // When the program prescribes RIR and not RPE, the input column behaves as RIR.
   const showRir = !!row.rir && !row.rpe;
 
+  // RPE cap on a planned % load: a set logged over it brings the rest of the
+  // exercise down to what would have sat at the cap (capAdjustedLoad), and it
+  // stays down. Nothing here ever raises the load above the plan.
+  const capOn = hasRpeCap(row) && suggestedWeight != null;
+  const capValue = capOn ? rpeCapValue(row.rpe) : null;
+  const capHeld = useMemo(() => {
+    if (!capOn || capValue == null || suggestedWeight == null) return null;
+    const done = existingResults
+      .filter((r: any) => r.completed_at && resolveLoadType(r.load_type, r.is_bodyweight) === "external")
+      .sort((a: any, b: any) => a.set_index - b.set_index);
+    let held = suggestedWeight;
+    let over: { set: number; rpe: number } | null = null;
+    for (const r of done) {
+      const load = Number(displayLoadInUnit(r, activeUnit));
+      const reps = Number(r.actual_reps);
+      const rpe = parseRpe(r.actual_rpe_num ?? r.actual_rpe);
+      const next = capAdjustedLoad({
+        planned: held,
+        last: { load, reps, rpe },
+        cap: capValue,
+        targetReps: repTarget?.exact ?? repTarget?.max ?? repTarget?.min ?? reps,
+        step: weightIncrement(activeUnit),
+      });
+      if (next != null) { held = next; over = { set: r.set_index, rpe: rpe as number }; }
+    }
+    return over ? { load: held, over } : null;
+  }, [capOn, capValue, suggestedWeight, existingResults, activeUnit, repTarget?.exact, repTarget?.max, repTarget?.min]);
+  // What an open set's weight cell starts at: the plan, or what the cap brought it down to.
+  const openSetWeight = capHeld?.load ?? suggestedWeight;
+  // Planned loads fill the weight cell of a set nobody has touched yet.
+  const autoFillPlanned = !readonly && (
+    (row.percentage_basis === "top_set" && percentageBackoffWeight != null) || plannedFromMax
+  );
+  // Where a planned weight came from, in a few characters: "70% TM", "65% Comp Squat TM", "92.5% of top set".
   // RPE-based load suggestion (history + today's sets + predicted readiness).
   // A coach's fixed load, top-set back-off or % of a max stays the only
   // suggestion: on a % row the RPE is its cap, never a reason to add weight
@@ -3725,7 +3823,10 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
       basis: row.percentage_basis,
       rpe: row.rpe,
       linkedLoad: topSetBasis,
-      reference: computed?.status === "ok" ? maxReference(computed.max, computed.base, computed.unit) : null,
+      // a logged e1RM has no max row: it's named by the competition lift it was read from
+      reference: computed?.status === "ok"
+        ? maxReference(computed.max ?? (computed.refLift ? { lift: computed.refLift, unit: computed.unit } : null), computed.base, computed.unit)
+        : null,
     });
   }, [hideWeight, row.manual_override, row.percentage, row.percentage_basis, row.rpe, maxBasedPct, maxesPending, topSetBasis?.value, topSetBasis?.unit, computed]);
   const loadPlan = useMemo(
@@ -4365,7 +4466,7 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
           exerciseName={name}
         />
       )}
-      {!row.manual_override && computed && computed.status === "ok" && computed.load != null && (
+      {!row.manual_override && computed && computed.status === "ok" && computed.load != null && looksSuspicious(Number(convertWeight(computed.load, computed.unit, activeUnit)), activeUnit) && (
         <SuggestedLoadBadge
           load={Number(convertWeight(computed.load, computed.unit, activeUnit).toFixed(1))}
           unit={activeUnit}
@@ -4755,11 +4856,11 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
               targetReps={row.reps_text}
               targetRpe={row.rpe}
               targetRir={row.rir}
-              suggestedWeight={suggestedWeight}
+              suggestedWeight={openSetWeight}
               // While the warm-up form is setting today's weight, its answer is
               // the only suggestion on screen (no stale ghost in the set row).
               loadHint={warmupForm && warmupGauge ? null : loadHint}
-              autoFillSuggestedWeight={row.percentage_basis === "top_set" && percentageBackoffWeight != null}
+              autoFillSuggestedWeight={autoFillPlanned}
               lastTimeWeight={activeUnit === "kg" ? (previousLift?.normalizedKg ?? null) : (previousLift?.normalizedLb ?? null)}
               repTarget={repTarget}
               rpeTarget={rpeTarget}
@@ -4787,6 +4888,13 @@ function ExerciseBlock({ row, dayId, dayTitle, dayIndex, clientId, blockId, exis
             />
           );
         })}
+        {/* A set went over the RPE cap: the open sets start lighter (their cells
+            already hold it when untouched). Quiet, and only while sets are left. */}
+        {capHeld && openSetCount > 0 && !readonly && (
+          <p className="px-3 py-1.5 text-[12px] text-muted-foreground" data-rpe-cap-next>
+            Set {capHeld.over.set} hit RPE {fmtNum(capHeld.over.rpe)}, over the cap of {fmtNum(capValue as number)} · next sets {formatDualLoad(capHeld.load, activeUnit)}
+          </p>
+        )}
         {/* One tap adds a working set; a warm-up is its own small "+ Warm-up"
             beside it (only where warm-ups can be logged). */}
         {!readonly && adapter?.kind !== "member" && (
@@ -5849,6 +5957,25 @@ function SetRow({
     save.markClean();
     setAdoptTick((n) => n + 1);
   });
+
+  // A planned weight that arrives after this row mounted (a % of a max once the
+  // maxes load, a back-off once the top set is logged, the lighter weight an RPE
+  // cap brought it to) fills the weight cell while nobody has touched it: never a
+  // logged set or one with a saved weight, never over what they typed or a fill
+  // from the set above. Adopted as shown, so it's not a draft until they log it.
+  const plannedFillRef = useRef<string | null>(initialDisplayLoad && !existingDisplayLoad ? initialDisplayLoad : null);
+  useEffect(() => {
+    if (!autoFillSuggestedWeight || suggestedWeight == null || readonly || hideWeight || bw) return;
+    if (existing && (existing.completed_at || Number(displayLoadInUnit(existing, unit) ?? 0) > 0)) return;
+    if (focusedFieldRef.current === "load") return;
+    const next = fmtLoad(suggestedWeight);
+    if (load === next) { plannedFillRef.current = next; return; }
+    if (load !== "" && load !== plannedFillRef.current) return;
+    plannedFillRef.current = next;
+    setLoadPaired(next);
+    adoptShownAsSaved(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFillSuggestedWeight, suggestedWeight, existing?.id, existing?.completed_at, unit, readonly, hideWeight]);
 
   // Canonical "commit now" signal for the inline weight cell.
   //

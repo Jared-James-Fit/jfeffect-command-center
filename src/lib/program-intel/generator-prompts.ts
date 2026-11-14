@@ -109,7 +109,7 @@ Building rules:
 - Supersets save time without cutting work: when a session is tight, pair accessories as "A1" / "A2" (same letter, next to each other; a push with a pull, an upper with a lower, or a small muscle beside a big one) on stations that don't clash: never two cable exercises on one column, two exercises needing the bench at different angles, one barbell loaded two ways, or two different weights on adjustable dumbbells. Never pair the day's main lift; its sets keep their full rest. The rest_seconds of the first exercise in a pair is the short rest before its partner; the last one's is the rest before the next round. The athlete reads who an exercise is paired with.
 - Top sets and back-offs are separate exercises: e.g. role "Primary Squat" (the top set) and "Primary Squat Backoff" (the back-off sets) on the same exercise_id. Other roles: "Secondary <Lift>", "Accessory", "Primary" / "Secondary" for non-competition work.
 - Prescribe every exercise: sets, reps ("5", "8-10", "AMRAP"), an effort target (rpe like "7" or "7-8", or rir), rest_seconds, tempo / pauses when it matters, "progression" (a conditional rule, e.g. "When all sets reach 10 reps at RPE ≤8, add 2.5 kg"), up to 3 "substitutions" from the catalog the athlete can swap to, and short notes the athlete reads (cues, station, setup).
-- Use "percentage" (of estimated 1RM) only for lifts with a reliable reference in the load references; otherwise use RPE. Never prescribe reps a percentage can't allow.
+${LOADING_RULES}
 - Weekly prescriptions: every week of the block is a complete, executable week. Give the base prescription and a "weeks" entry for every week that differs (sets, reps, rpe, rir, percentage, notes); a week with no entry repeats the base, so the base must stand on its own and the exercise's "progression" rule says how load moves within it. Progress conditionally and sensibly for the training model (autoregulate by RPE / RIR rather than pretending future loads are known); no fake progression (the same percentage added every week regardless of the model). Plan any deload or lighter week the strategy calls for, and nothing it doesn't.
 - Loads: use the load references to set the starting point in the notes when helpful (e.g. "start ~5 kg under last block's top set"), never as invented past results.
 
@@ -117,11 +117,22 @@ Reply with ONE JSON object for this block and nothing else:
 { "name": string, "objective": string, "weeks": int, "week_phases": [ { "week": int, "phase": string } ], "deload_rule": string|null, "progression_rules": [string],
   "days": [ { "day": int, "title": string, "focus": string,
     "exercises": [ { "exercise_id": string|null, "exercise_name": string, "role": string, "station": string|null, "superset": string|null,
-      "sets": int, "reps": string, "rpe": string|null, "rir": string|null, "percentage": number|null, "rest_seconds": int, "tempo": string|null,
+      "sets": int, "reps": string, "rpe": string|null, "rir": string|null, "percentage": number|null, "percentage_of": "training_max"|"1rm"|"e1rm"|"top_set"|null, "rest_seconds": int, "tempo": string|null,
       "progression": string, "substitutions": [ { "exercise_id": string|null, "exercise_name": string } ], "notes": string|null,
-      "weeks": [ { "week": int, "sets": int?, "reps": string?, "rpe": string?, "rir": string?, "percentage": number?, "notes": string? } ] } ] } ] }
+      "weeks": [ { "week": int, "sets": int?, "reps": string?, "rpe": string?, "rir": string?, "percentage": number?, "percentage_of": string?, "notes": string? } ] } ] } ] }
 "days" has exactly one entry per training day, in order. At most 12 exercises a day.`;
 }
+
+/**
+ * How each exercise's load is written (loading.ts checks it in code after every
+ * block: a % of a max that isn't on file, or on an accessory, never survives).
+ */
+export const LOADING_RULES = `- Loading method, per exercise, decided like a coach from the athlete's experience, goal (powerlifting vs bodybuilding), the exercise, the block's phase and what's actually on file (the "Loading references" in the brief):
+  · RPE only: competition lifts and their variations when the max a % would read isn't on file, newer lifters, technique work, and every top set ("1x4 @ RPE 7").
+  · RIR only (or RPE): hypertrophy and accessory work (machines, cables, dumbbells, isolation lifts: raises, curls, extensions, leg extensions). Never a percentage on them.
+  · Percentage + RPE cap: competition lifts and their barbell variations, only when the max it reads is on file: "percentage": 70, "percentage_of": "training_max", "rpe": "7" means 70% of their TM is the planned load and RPE 7 the cap (if it feels harder, they go lighter). A variation's % reads its competition lift (High Bar Squat at 65% of the squat TM). Best for volume and secondary work in strength blocks, and singles / doubles near a peak, for intermediate and advanced lifters.
+  · RPE top set + % back-offs: the top set by RPE, then the back-offs as a separate exercise entry on the same exercise_id with "percentage_of": "top_set", "percentage": 88-95 (8-12% lighter, less for more reps or more fatigue) and an RPE cap ("rpe": "6.5"-"7.5"). The app works out the back-off weight from the logged top set.
+  · "percentage_of": "training_max" (only a TM on file), "1rm" (a tested 1RM on file), "e1rm" (an e1RM on file or worth working out from their logs), "top_set". Never reference a max the loading references don't list, never invent a training max, and never give a % with reps it can't allow. When in doubt, RPE.`;
 
 export function constructUserPrompt(x: {
   brief: string;

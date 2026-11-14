@@ -7,7 +7,7 @@
 import type { BuiltBlock, BuiltExercise } from "./generator-schemas";
 import { supersetGroup } from "./session-time";
 
-export type WeekRx = { sets: number; reps: string; rpe: string | null; rir: string | null; percentage: number | null; notes: string | null };
+export type WeekRx = { sets: number; reps: string; rpe: string | null; rir: string | null; percentage: number | null; percentage_of?: "training_max" | "e1rm" | "1rm" | "top_set" | null; notes: string | null };
 
 export function rxForWeek(ex: BuiltExercise, week: number): WeekRx {
   const o = (ex.weeks ?? []).find((w) => w.week === week) ?? ({} as Partial<WeekRx>);
@@ -18,6 +18,7 @@ export function rxForWeek(ex: BuiltExercise, week: number): WeekRx {
     rpe: pick(o.rpe, ex.rpe),
     rir: pick(o.rir, ex.rir),
     percentage: pick(o.percentage, ex.percentage),
+    percentage_of: pick(o.percentage_of, ex.percentage_of),
     notes: pick(o.notes, ex.notes),
   };
 }
