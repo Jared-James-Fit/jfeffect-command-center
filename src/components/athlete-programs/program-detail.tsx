@@ -41,7 +41,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { startMyProgram } from "@/lib/athlete-programs.functions";
 import { useServiceTier } from "@/lib/service-tier";
 import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
-import { programProgressLine } from "@/lib/my-program";
+import { programProgressLine, replacesLine } from "@/lib/my-program";
 import { todayLocalISO } from "@/lib/today";
 import { programName } from "@/components/workouts/program-roadmap";
 import { ManageProgramSheet } from "./manage-program-sheet";
@@ -123,9 +123,12 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
   const [starting, setStarting] = useState(false);
   const [managing, setManaging] = useState(false);
   // is this the program on their calendar? (started from it, still running)
-  const current = useMyCurrentProgram(p.is_mine ? clientId : null, userId);
+  const current = useMyCurrentProgram(isSelfServe ? clientId : null, userId);
   const running =
     p.is_mine && current.origin.origin.kind === "own" && current.origin.origin.programId === p.id && !!current.roadmap;
+  // another program they started is on their calendar: starting this one switches
+  const replaces =
+    !running && current.roadmap && current.origin.owned ? programName(current.roadmap.program) : null;
   // "Save a copy and start" lands here on the new copy: open the days picker once the tier is known
   const autoOpened = useRef(false);
   useEffect(() => {
@@ -317,14 +320,21 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
                 </div>
               </div>
             ) : isSelfServe ? (
-              <Button
-                className="h-12 w-full text-[16px]"
-                onClick={() => (preview ? null : setStarting(true))}
-                disabled={preview}
-              >
-                <Play className="mr-2 h-4 w-4" aria-hidden />
-                Start this program
-              </Button>
+              <div className="space-y-1.5">
+                <Button
+                  className="h-12 w-full text-[16px]"
+                  onClick={() => (preview ? null : setStarting(true))}
+                  disabled={preview}
+                >
+                  <Play className="mr-2 h-4 w-4" aria-hidden />
+                  {replaces ? "Switch to this program" : "Start this program"}
+                </Button>
+                {replaces && (
+                  <p className="text-center text-[12px] text-muted-foreground" data-replaces-line>
+                    {replacesLine(replaces)}
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">
                 Your coach writes the program on your calendar. Show them this one in Messages if
@@ -352,7 +362,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
               disabled={copy.isPending}
             >
               <Bookmark className="mr-2 h-4 w-4" aria-hidden />
-              {isSelfServe ? "Save a copy and start" : "Save a copy"}
+              {isSelfServe ? (replaces ? "Save a copy and switch" : "Save a copy and start") : "Save a copy"}
             </Button>
             {isSelfServe && (
               <Button
@@ -368,6 +378,7 @@ function Loaded({ p, autoStart }: { p: ProgramDetail; autoStart: boolean }) {
               {p.copied
                 ? "You saved this before. A new copy is yours to change."
                 : "Your copy is yours to change. The original stays as it is."}
+              {isSelfServe && replaces ? ` ${replacesLine(replaces)}` : ""}
             </p>
           </div>
         )}

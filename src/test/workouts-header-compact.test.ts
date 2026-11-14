@@ -24,7 +24,7 @@ describe("Workouts: a compact top, no schedule card", () => {
   });
   it("the committed days are a chip only while they still need setting; once set they live in ⋯ (same sheet), never a card", () => {
     expect(page).not.toContain("<TrainingScheduleCard");
-    expect(page).toContain('{showDaysChip && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}');
+    expect(page).toContain('{showDaysChip && !noProgram && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}');
     expect(page).toContain('const showDaysChip = !!client && (mode === "coach" || !!daysState?.needed);');
     expect(page).toContain("<CalendarCheck className=\"mr-2 h-4 w-4\" /> Training days");
     expect(page).toContain("<TrainingDaysSheet client={client as any} open={daysOpen} onOpenChange={setDaysOpen} />");

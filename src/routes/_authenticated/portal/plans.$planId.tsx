@@ -17,6 +17,7 @@ import { useSavedPlans } from "@/components/athlete-programs/use-saved-plans";
 import { isMemberAccessActive } from "@/lib/memberAccess";
 import { useClientImpersonation } from "@/lib/client-impersonation";
 import { displayExerciseName } from "@/lib/exercise-display-name";
+import { replacesLine } from "@/lib/my-program";
 
 export const Route = createFileRoute("/_authenticated/portal/plans/$planId")({ component: PlanDetail });
 
@@ -92,6 +93,8 @@ function PlanDetail() {
     : accessKeys.has(plan.required_access_level) || (PROGRAM_LIBRARY_KEYS.has(plan.required_access_level) && memberActive);
   const canStart = unlocked && plan.allow_full_program !== false && plan.status === "Published" && plan.membership_status === "live";
   const running = !!plan.source_template_id && (started?.templateIds ?? []).includes(plan.source_template_id);
+  // another program they started is on their calendar: starting this one switches
+  const replaces = !running ? started?.name ?? null : null;
   const isSaved = saved.isSaved(planId);
 
   const toggleSave = () => {
@@ -176,9 +179,16 @@ function PlanDetail() {
               )}
             </>
           ) : canStart ? (
-            <Button className="h-12 w-full text-[16px]" onClick={() => setStartOpen(true)}>
-              <Play className="mr-2 h-4 w-4" aria-hidden /> Start this plan
-            </Button>
+            <>
+              <Button className="h-12 w-full text-[16px]" onClick={() => setStartOpen(true)}>
+                <Play className="mr-2 h-4 w-4" aria-hidden /> {replaces ? "Switch to this plan" : "Start this plan"}
+              </Button>
+              {replaces && (
+                <p className="text-center text-[12px] text-muted-foreground" data-replaces-line>
+                  {replacesLine(replaces)}
+                </p>
+              )}
+            </>
           ) : (
             <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5 text-[14px] text-muted-foreground">
               <Lock className="h-4 w-4 shrink-0" aria-hidden />

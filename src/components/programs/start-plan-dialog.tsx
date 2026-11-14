@@ -9,15 +9,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { startLibraryPlan } from "@/lib/member-plan-start.functions";
-import { useClientImpersonation } from "@/lib/client-impersonation";
+import { useClientImpersonation, usePortalUserId } from "@/lib/client-impersonation";
+import { switchCopy } from "@/lib/my-program";
+import { useMyCurrentProgram } from "@/components/athlete-programs/use-my-program";
+import { programName } from "@/components/workouts/program-roadmap";
 import { useServiceTier } from "@/lib/service-tier";
 import { localStartOfToday, toLocalISO } from "@/lib/today";
 import { cn } from "@/lib/utils";
@@ -38,12 +39,16 @@ export type StartablePlan = {
 };
 
 /**
- * A member starts a library plan: the days they train come in from their
- * committed schedule, fitted to the plan's workouts a week (every workout
- * gets its own day), and those days become their committed schedule, so the
- * plan and the schedule start in sync. The plan is copied into their own
- * program (the same engine a coach uses), then they land on Workouts with
- * Week 1 on the calendar.
+ * The one sheet that puts a program on a member's calendar, for a JF Effect
+ * plan or one they built or copied (`startWith`), whether it's their first,
+ * a switch, or the same one again. It knows what's on their calendar now
+ * (useMyCurrentProgram) and says before the tap what happens to it
+ * (`switchCopy`: what ends, how many upcoming workouts come off, that what
+ * they finished stays, from member_program_end's read-only preview), so a
+ * switch is one confirmation, never a second "Switch plans?" after the tap.
+ * The days they train come in from their committed schedule, fitted to the
+ * program's workouts a week (every workout gets its own day), and become
+ * their committed schedule. Then they land on Workouts with Week 1 on it.
  */
 export function StartPlanDialog({
   plan, open, onOpenChange, startWith,
@@ -60,6 +65,7 @@ export function StartPlanDialog({
   const qc = useQueryClient();
   const { isImpersonating } = useClientImpersonation();
   const { clientId } = useServiceTier();
+  const userId = usePortalUserId();
   const today = toLocalISO(localStartOfToday());
   const [startDate, setStartDate] = useState(today);
   const [days, setDays] = useState<WeekDay[]>([]);
@@ -84,9 +90,37 @@ export function StartPlanDialog({
     },
   });
 
+  // what's on their calendar now, and what switching does to it (read-only preview)
+  const current = useMyCurrentProgram(open ? clientId : null, userId);
+  // only a program they started themselves makes way (the start functions archive their own blocks)
+  const currentName = current.roadmap && current.origin.owned ? programName(current.roadmap.program) : null;
+  const ownedBlock = current.origin.owned ? current.origin.blockId : null;
+  const { data: facts } = useQuery({
+    queryKey: ["member-program-end-preview", ownedBlock],
+    enabled: open && !!ownedBlock,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("member_program_end", { _block_id: ownedBlock, _confirm: false });
+      if (error) return null;
+      return data as { logged: number; upcoming: number } | null;
+    },
+  });
+
   const title = plan ? plan.public_title || plan.name : "";
   const perWeek = plan?.days_per_week ?? null;
   const mine = committed ?? [];
+  const same =
+    !!plan &&
+    ((current.origin.origin.kind === "own" && current.origin.origin.programId === plan.id) ||
+      (current.origin.origin.kind === "jf" && current.origin.planId === plan.id));
+  const copy = switchCopy({
+    title,
+    current: currentName,
+    same,
+    currentFinished: current.roadmap?.program.status === "completed",
+    logged: facts?.logged ?? null,
+    upcoming: facts?.upcoming ?? null,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -113,19 +147,27 @@ export function StartPlanDialog({
     if (!plan || !daysReady) return;
     setPending(true);
     try {
-      const res = await start({ data: { planId: plan.id, startDate: startDate || null, trainingDays: days, confirmReplace } });
+      // the sheet already said what this replaces: that was the confirmation
+      const res = await start({
+        data: { planId: plan.id, startDate: startDate || null, trainingDays: days, confirmReplace: confirmReplace || copy.kind !== "start" },
+      });
       if (res.conflict) {
+        // something we didn't know about is running: ask once
         setReplaceName(res.currentName ?? "your current plan");
         return;
       }
       onOpenChange(false);
       setReplaceName(null);
+      const when = preview[0] ? format(parseISO(preview[0].date), "EEE, MMM d") : null;
+      const ended = copy.kind === "switch" && currentName ? ` ${currentName} ended; your finished workouts stay in your history.` : "";
       toast.success(
-        days.length ? `${title} is on your calendar: ${listDays(days)}. Let's go.` : `${title} is on your calendar. Let's go.`,
+        `${title} is on your calendar${days.length ? `: ${listDays(days)}` : ""}${when ? `, from ${when}` : ""}.${ended}`,
+        { duration: 7000 },
       );
       // a new program touches the schedule, today, workouts, analytics
       void qc.invalidateQueries();
-      navigate({ to: "/portal/workouts" });
+      // replace this page: Back from Workouts never returns to a program you just started
+      navigate({ to: "/portal/workouts", replace: true });
     } catch (e: any) {
       toast.error(e?.message ?? "Couldn't start this plan");
     } finally {
@@ -135,19 +177,34 @@ export function StartPlanDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Start {title}</DialogTitle>
-            <DialogDescription>
-              {plan?.weeks ? `${plan.weeks} weeks` : "Your plan"}
-              {perWeek ? ` · ${perWeek} workouts a week` : ""}. Each workout gets one of your training days.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5">
-            <div>
+      <Sheet open={open} onOpenChange={(o) => !pending && onOpenChange(o)}>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[92dvh] flex-col gap-0 rounded-t-2xl p-0 sm:mx-auto sm:max-w-lg"
+          data-start-program-sheet
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-4">
+            <SheetHeader className="space-y-0.5 pr-2 text-left">
+              <SheetTitle className="text-left text-lg leading-tight">{copy.title}</SheetTitle>
+              <SheetDescription className="text-left">
+                {plan?.weeks ? `${plan.weeks} weeks` : "Your plan"}
+                {perWeek ? ` · ${perWeek} workouts a week` : ""}
+              </SheetDescription>
+            </SheetHeader>
+
+            {copy.lines.length > 0 && (
+              <div className="mt-4 space-y-1 rounded-xl bg-muted px-3.5 py-3 text-[14px] leading-snug" data-switch-note>
+                {copy.lines.map((l, i) => (
+                  <p key={l} className={i === 0 ? "font-medium" : "text-muted-foreground"}>
+                    {l}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5">
               <div className="flex items-baseline justify-between gap-2">
-                <Label className="text-sm font-semibold">Days you train</Label>
+                <Label className="text-[15px] font-semibold">Days you train</Label>
                 {perWeek ? (
                   <span className={cn("text-xs font-semibold tabular-nums", daysReady ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
                     {days.length} of {perWeek}
@@ -166,7 +223,7 @@ export function StartPlanDialog({
                       onClick={() => toggleDay(d)}
                       className={cn(
                         "flex h-11 items-center justify-center rounded-xl border text-sm font-semibold transition-colors",
-                        on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/30 text-muted-foreground",
+                        on ? "border-foreground bg-foreground text-background" : "border-border bg-card text-muted-foreground",
                       )}
                     >
                       {SHORT_DAY[d].slice(0, 2)}
@@ -184,24 +241,24 @@ export function StartPlanDialog({
               />
             </div>
 
-            <div>
-              <Label className="text-sm font-semibold" htmlFor="plan-start-date">Start date</Label>
+            <div className="mt-5">
+              <Label className="text-[15px] font-semibold" htmlFor="plan-start-date">Starts</Label>
               <Input
                 id="plan-start-date"
                 type="date"
                 min={today}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value < today ? today : e.target.value)}
-                className="mt-2"
+                className="mt-2 h-11 text-base"
               />
             </div>
 
             {daysReady && preview.length > 0 && (
-              <div>
-                <p className="text-sm font-semibold">Week 1</p>
+              <div className="mt-5">
+                <p className="text-[15px] font-semibold">Week 1</p>
                 <ol className="mt-2 flex flex-wrap gap-1.5">
                   {preview.map((p) => (
-                    <li key={p.date} className="rounded-lg border bg-secondary/30 px-2.5 py-1.5 text-xs">
+                    <li key={p.date} className="rounded-lg bg-muted px-2.5 py-1.5 text-xs">
                       <span className="font-semibold">Day {p.day}</span>{" "}
                       <span className="text-muted-foreground">{format(parseISO(p.date), "EEE d")}</span>
                     </li>
@@ -211,20 +268,23 @@ export function StartPlanDialog({
             )}
 
             {isImpersonating && (
-              <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+              <p className="mt-4 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
                 You're viewing as this member. Only they can start a plan.
               </p>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={() => void submit(false)} disabled={pending || isImpersonating || !plan || !daysReady}>
+          <div className="border-t border-border px-5 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3">
+            <Button
+              className="h-12 w-full text-[16px]"
+              onClick={() => void submit(false)}
+              disabled={pending || isImpersonating || !plan || !daysReady}
+            >
               {pending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Start plan
+              {copy.action}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog open={!!replaceName} onOpenChange={(o) => !o && setReplaceName(null)}>
         <AlertDialogContent>
@@ -288,7 +348,7 @@ function DaysNote({
   if (fit && fit.added.length) {
     return (
       <p className={cn(base, "text-muted-foreground")}>
-        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
+        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
           You train {mine.length} day{mine.length === 1 ? "" : "s"} a week{mine.length ? "" : " so far"}, so we
           {mine.length ? " added " : " picked "}
@@ -301,7 +361,7 @@ function DaysNote({
   if (fit && fit.dropped.length) {
     return (
       <p className={cn(base, "text-muted-foreground")}>
-        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
+        <Sparkles className="mt-px h-3.5 w-3.5 shrink-0" />
         <span>
           We kept <strong className="text-foreground">{listDays(fit.days)}</strong> from your days. Tap any day to change it.
           Your training schedule updates to match.
@@ -319,7 +379,7 @@ function DaysNote({
   }
   return (
     <p className={cn(base, "text-muted-foreground")}>
-      <Check className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
+      <Check className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
       {mine.length ? "Matches your training schedule." : "These become your training schedule."} Move any workout later from your calendar.
     </p>
   );

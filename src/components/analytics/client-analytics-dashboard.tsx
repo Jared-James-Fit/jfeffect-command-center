@@ -320,7 +320,7 @@ export function ClientAnalyticsDashboard({
             <div className="min-w-0">{headerLeadingNode}</div>
             {showUnitToggle && (
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                <span className="text-xs font-medium text-muted-foreground">
                   Units
                 </span>
                 <ToggleGroup
@@ -329,10 +329,10 @@ export function ClientAnalyticsDashboard({
                   onValueChange={(v) => v && setDisplayUnit(v as Unit)}
                   className="rounded-lg border border-border bg-card p-0.5"
                 >
-                  <ToggleGroupItem value="lb" className="h-8 px-3 text-xs font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                  <ToggleGroupItem value="lb" className="h-8 px-3 text-xs font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background">
                     LB
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="kg" className="h-8 px-3 text-xs font-bold uppercase data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                  <ToggleGroupItem value="kg" className="h-8 px-3 text-xs font-semibold data-[state=on]:bg-foreground data-[state=on]:text-background">
                     KG
                   </ToggleGroupItem>
                 </ToggleGroup>
@@ -792,7 +792,7 @@ function SectionHeading({
     <div className="mb-3">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-foreground">
-          <span className="shrink-0 text-primary">{icon}</span>
+          <span className="shrink-0 text-muted-foreground">{icon}</span>
           <span className="truncate">{title}</span>
           {tip}
         </h2>
@@ -814,16 +814,13 @@ function StatCard({
   tip?: React.ReactNode;
 }) {
   return (
-    <Card
-      className="relative overflow-hidden border-border/80 bg-card p-3"
-      style={{ borderTop: `3px solid ${color}` }}
-    >
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-        <span style={{ color }}>{icon}</span>
+    <Card className="relative overflow-hidden border-border/80 bg-card p-3">
+      <div className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
+        <span>{icon}</span>
         <span className="truncate">{label}</span>
-        {tip && <span className="ml-auto normal-case">{tip}</span>}
+        {tip && <span className="ml-auto">{tip}</span>}
       </div>
-      <div className="mt-1 truncate text-xl font-bold tracking-tight text-foreground">
+      <div className="mt-1 truncate text-xl font-semibold tracking-tight text-foreground">
         {value}
       </div>
       {sublabel && (
@@ -843,15 +840,15 @@ function AnalyticsEmptyPreview() {
     { icon: <TrendingUp className="h-4 w-4" />, label: "Top e1RM gain", value: "—", color: ANALYTICS_COLORS.purple },
   ];
   const sections = [
-    { icon: <Trophy className="h-5 w-5 text-primary" />, title: "Recent ATPRs", desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically." },
-    { icon: <TrendingUp className="h-5 w-5 text-primary" />, title: "Estimated 1RM progress", desc: "Track strength curves per exercise — your top sets get plotted over time with PR markers." },
-    { icon: <Dumbbell className="h-5 w-5 text-primary" />, title: "Weekly volume by muscle", desc: "See how many sets each muscle group is getting so you can balance your training." },
-    { icon: <Calendar className="h-5 w-5 text-primary" />, title: "Planned vs actual", desc: "Compare what was programmed against what you actually completed, set by set." },
+    { icon: <Trophy className="h-5 w-5 text-muted-foreground" />, title: "Recent ATPRs", desc: "Every time you beat a previous best, the lift, weight, and gain land here automatically." },
+    { icon: <TrendingUp className="h-5 w-5 text-muted-foreground" />, title: "Estimated 1RM progress", desc: "Track strength curves per exercise — your top sets get plotted over time with PR markers." },
+    { icon: <Dumbbell className="h-5 w-5 text-muted-foreground" />, title: "Weekly volume by muscle", desc: "See how many sets each muscle group is getting so you can balance your training." },
+    { icon: <Calendar className="h-5 w-5 text-muted-foreground" />, title: "Planned vs actual", desc: "Compare what was programmed against what you actually completed, set by set." },
   ];
   return (
     <div className="space-y-6">
       <Card className="border-dashed border-border/70 bg-card/60 p-8 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <Dumbbell className="h-7 w-7" />
         </div>
         <h2 className="mt-4 text-xl font-bold tracking-tight text-foreground">
@@ -867,10 +864,9 @@ function AnalyticsEmptyPreview() {
           <Card
             key={s.label}
             className="relative overflow-hidden border-border/60 bg-card/60 p-3 opacity-70"
-            style={{ borderTop: `3px solid ${s.color}` }}
           >
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              <span style={{ color: s.color }}>{s.icon}</span>
+            <div className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
+              <span>{s.icon}</span>
               <span className="truncate">{s.label}</span>
             </div>
             <div className="mt-1 text-xl font-bold tracking-tight text-muted-foreground">

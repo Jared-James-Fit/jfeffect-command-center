@@ -213,6 +213,10 @@ export function WorkoutsExperience({
   const origin = useProgramOrigin(roadmap, visibleBlocks, mode === "self" ? (client as any)?.user_id ?? null : null);
   const canManageProgram = mode === "self" && isSelfServe && origin.owned && !!origin.blockId;
   const [manageOpen, setManageOpen] = useState(false);
+  // A JF member with no program yet: the empty state is the page (no Week /
+  // Month / Block switch, training-days chip or empty readiness and month cards
+  // around a calendar with nothing on it).
+  const noProgram = mode === "self" && isSelfServe && !isLoading && dayItems.length === 0;
 
   // One control for the three ways to look at the schedule: this week, the
   // month, or the block's workouts in order.
@@ -352,6 +356,7 @@ export function WorkoutsExperience({
 
         {/* One control for the schedule: this week, the month, or the block's workouts in order.
             (The Calendar page is for appointments; this is the training schedule.) */}
+        {!noProgram && (
         <div className="grid grid-cols-3 rounded-xl bg-muted p-1" role="group" aria-label="Schedule view" data-testid="workouts-view">
           {(["week", "month", "block"] as const).map((v) => (
             <button
@@ -368,9 +373,10 @@ export function WorkoutsExperience({
             </button>
           ))}
         </div>
+        )}
 
         {/* Training days: only while they still have to be set (or read-only for a coach); the athlete's are in ⋯. */}
-        {showDaysChip && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}
+        {showDaysChip && !noProgram && <TrainingScheduleChip client={client as any} editable={mode === "self"} className="min-w-0" />}
 
         {view !== "block" ? (
           <div className="space-y-4">
@@ -402,6 +408,8 @@ export function WorkoutsExperience({
                 {/* No legend under the strip: the dot, ring and check say it, and a day with a
                     session lists it right under its workout. Appointments live in the header's ⋯. */}
                 <SelectedDayList
+                  next={nextWorkoutAfter(byDate, selectedDate)}
+                  onSelectDate={setSelectedDate}
                   items={byDate.get(toLocalISO(selectedDate)) ?? []}
                   pageBlockId={currentBlockId}
                   sessions={sessionsByDate.get(toLocalISO(selectedDate)) ?? []}
@@ -450,6 +458,8 @@ export function WorkoutsExperience({
             coach={mode === "coach"}
             onSelectProgram={setRoadmapProgramId}
             onManage={canManageProgram ? () => setManageOpen(true) : undefined}
+            manageHint={canManageProgram ? origin.label : null}
+            nextProgramTo={mode === "self" && isSelfServe ? "/portal/programs" : undefined}
           />
           </div>
         )}
@@ -469,11 +479,15 @@ export function WorkoutsExperience({
               }
               date={selectedDate}
             />
-            <RecoveryPreviewCard
-              clientId={clientId}
-              analyticsTo={"/portal/workouts/analytics"}
-            />
-            <DeferredAnalytics clientId={clientId} />
+            {!noProgram && (
+              <>
+                <RecoveryPreviewCard
+                  clientId={clientId}
+                  analyticsTo={"/portal/workouts/analytics"}
+                />
+                <DeferredAnalytics clientId={clientId} />
+              </>
+            )}
           </div>
         )}
       </div>
@@ -660,10 +674,30 @@ function MonthGrid({
 /* Selected day card                                                      */
 /* ---------------------------------------------------------------------- */
 
+type NextWorkout = { date: Date; title: string };
+
+/** The first day after `date` with a workout on it (backup sessions aside). */
+function nextWorkoutAfter(byDate: Map<string, WorkoutItem[]>, date: Date): NextWorkout | null {
+  const from = toLocalISO(date);
+  let best: { iso: string; item: WorkoutItem } | null = null;
+  for (const [iso, list] of byDate) {
+    if (iso <= from || (best && iso >= best.iso)) continue;
+    const item = list.find((it) => !isAtHomeBackupSessionBlock(it.block));
+    if (item) best = { iso, item };
+  }
+  if (!best) return null;
+  const [y, m, d] = best.iso.split("-").map(Number);
+  const title = scheduleTitle({ kind: "workout", title: cleanDayTitle(best.item.day?.title, best.item.day?.day_index) });
+  return { date: new Date(y, m - 1, d), title };
+}
+
 function SelectedDayList({
-  items, sessions = [], date, readonly, clientId, mode, backupEnabled, pageBlockId = null,
+  items, sessions = [], date, readonly, clientId, mode, backupEnabled, pageBlockId = null, next = null, onSelectDate,
 }: {
   items: WorkoutItem[];
+  /** A day with nothing on it: the next workout, one tap to its day. */
+  next?: NextWorkout | null;
+  onSelectDate?: (d: Date) => void;
   /** The block the page's header names: a card in it doesn't say it again. */
   pageBlockId?: string | null;
   /** That day's sessions / appointments with the coach (client view). */
@@ -693,7 +727,7 @@ function SelectedDayList({
   return (
     <div className="space-y-3">
       {primaryItems.length === 0 && backupItems.length === 0 && (
-        <SelectedDayCard item={null} date={date} readonly={readonly} clientId={clientId} mode={mode} />
+        <SelectedDayCard item={null} date={date} readonly={readonly} clientId={clientId} mode={mode} next={next} onSelectDate={onSelectDate} />
       )}
       {primaryItems.map(card)}
       {backupEnabled && mode === "self" && backupItems.length === 0 && (
@@ -779,9 +813,11 @@ function dayCardStatusLabel(status: string, label: string): string {
 }
 
 function SelectedDayCard({
-  item, date, readonly, clientId, mode, pageBlockId = null,
+  item, date, readonly, clientId, mode, pageBlockId = null, next = null, onSelectDate,
 }: {
   item: WorkoutItem | null;
+  next?: NextWorkout | null;
+  onSelectDate?: (d: Date) => void;
   date: Date;
   readonly: boolean;
   clientId: string;
@@ -932,10 +968,24 @@ function SelectedDayCard({
         <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-muted">
           <Sun className="h-5 w-5 text-muted-foreground" />
         </div>
-        <div className="mt-3 text-base font-semibold">No lifting workout</div>
+        <div className="mt-3 text-base font-semibold">{next ? "Rest day" : "No workout"}</div>
         <div className="text-xs text-muted-foreground">
           {format(date, "EEEE, MMMM d")}
         </div>
+        {next && onSelectDate && (
+          <button
+            type="button"
+            onClick={() => onSelectDate(next.date)}
+            className="mx-auto mt-4 flex min-h-11 w-full max-w-xs items-center justify-between gap-2 rounded-xl bg-secondary px-3.5 py-2.5 text-left transition hover:bg-secondary/70"
+            data-next-workout
+          >
+            <span className="min-w-0">
+              <span className="block text-[12px] text-muted-foreground">Next workout · {format(next.date, "EEE, MMM d")}</span>
+              <span className="block truncate text-[14px] font-semibold">{next.title}</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          </button>
+        )}
       </Card>
     );
   }
@@ -1524,15 +1574,16 @@ function SelfEmptyState() {
       <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-muted">
         <ClipboardList className="h-6 w-6 text-muted-foreground" />
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">
-        No plan yet. Start a coach-written plan or build your own, and Week 1 lands here.
+      <div className="mt-3 text-base font-semibold">No program yet</div>
+      <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+        Start a JF Effect plan, copy one from the crew or build your own. Its workouts land on your training days here.
       </p>
-      <div className="mt-3 flex flex-wrap justify-center gap-2">
-        <Button asChild size="sm">
-          <Link to="/portal/programs" search={{ tab: "jf" }}>Browse plans</Link>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <Button asChild>
+          <Link to="/portal/programs" search={{ tab: "mine" }}>Find a program</Link>
         </Button>
-        <Button asChild size="sm" variant="secondary">
-          <Link to="/portal/programs" search={{ tab: "mine" }}>Build or copy one</Link>
+        <Button asChild variant="secondary">
+          <Link to="/portal/programs/new">Build your own</Link>
         </Button>
       </div>
     </Card>

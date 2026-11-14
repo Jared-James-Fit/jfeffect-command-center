@@ -141,7 +141,8 @@ export function useProgramEditor(initial: ProgramDraft, base: string | null): Pr
       dirtyRef.current = false;
       clearBackup(key);
       setDirty(false);
-      navigate({ to: "/portal/programs/$programId", params: { programId: id }, replace: editing });
+      // the builder makes way for the program: Back from it never lands in the builder again
+      navigate({ to: "/portal/programs/$programId", params: { programId: id }, replace: true });
       if (!editing) {
         toast.success("Program saved to My programs. Start it or share it from here.");
         return { ok: true };

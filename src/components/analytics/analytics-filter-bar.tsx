@@ -266,7 +266,7 @@ export function AnalyticsFilterBar({
               className={[
                 "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
                 activeChip
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-foreground bg-foreground text-background"
                   : "border-border bg-card text-muted-foreground hover:text-foreground",
                 c.disabled ? "opacity-40 cursor-not-allowed" : "",
               ].join(" ")}
@@ -296,7 +296,7 @@ export function AnalyticsFilterBar({
               variant="ghost"
               size="sm"
               onClick={returnToCurrent}
-              className="h-9 gap-1.5 text-primary"
+              className="h-9 gap-1.5 text-foreground"
             >
               <RotateCcw className="h-4 w-4" />
               Return to Current Block

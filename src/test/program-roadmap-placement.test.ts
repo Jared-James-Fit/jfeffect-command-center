@@ -24,7 +24,9 @@ describe("Workouts page: program roadmap under the calendar", () => {
     expect(card).toContain('<div className="h-full rounded-full bg-foreground" style={{ width: `${pct}%` }} />');
     expect(card).not.toMatch(/bg-primary|text-primary/);
     // the program's own week rides on the roadmap row
-    expect(card).toContain("{programWeekText ?? `${blocks.length} blocks`}");
+    expect(card).toContain(
+      "{programWeekText ?? (blocks.length > 1 ? `${blocks.length} blocks` : weeksLabel(blocks[0].weekCount))}",
+    );
   });
   it("reads in one pass: the program's name, the week, one bar, then this block and this week", () => {
     const card = readFileSync("src/components/workouts/program-roadmap.tsx", "utf8");

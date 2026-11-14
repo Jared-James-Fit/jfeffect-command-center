@@ -176,3 +176,61 @@ export function splitOwnPrograms<T extends { forked_from: { id: string | null } 
   for (const p of programs) (p.forked_from ? copied : built).push(p);
   return { built, copied };
 }
+
+/** What starting a program does to the one on their calendar. */
+export type SwitchFacts = {
+  /** the program starting */
+  title: string;
+  /** the program on their calendar now, if any */
+  current: string | null;
+  /** it's the same program again (starting over) */
+  same?: boolean;
+  /** the current program is done (nothing left in it) */
+  currentFinished?: boolean;
+  /** from member_program_end's preview, when known */
+  logged?: number | null;
+  upcoming?: number | null;
+};
+
+export type SwitchCopy = {
+  kind: "start" | "switch" | "restart";
+  /** the sheet's title */
+  title: string;
+  /** what happens to the current program, one line each; empty for a first start */
+  lines: string[];
+  /** the one button */
+  action: string;
+};
+
+/** The start / switch sheet in words: what starts, and what happens to what's running. */
+export function switchCopy(f: SwitchFacts): SwitchCopy {
+  const title = f.title?.trim() || "this program";
+  const current = f.current?.trim() || null;
+  if (!current) return { kind: "start", title: `Start ${title}`, lines: [], action: "Start program" };
+  const kept =
+    f.logged == null
+      ? "Every workout you finished stays in your history and PRs."
+      : f.logged > 0
+        ? `The ${plural(f.logged, "workout")} you finished stay${f.logged === 1 ? "s" : ""} in your history and PRs.`
+        : "You haven't finished a workout in it yet.";
+  if (f.same) {
+    return {
+      kind: "restart",
+      title: `Start ${title} over`,
+      lines: ["It starts again from week 1 on the date you pick.", kept],
+      action: "Start over",
+    };
+  }
+  const goes = f.currentFinished
+    ? `${current} is finished and moves to your past programs.`
+    : f.upcoming != null && f.upcoming > 0
+      ? `${current} ends. Its ${plural(f.upcoming, "upcoming workout")} come${f.upcoming === 1 ? "s" : ""} off your calendar.`
+      : `${current} ends and comes off your calendar.`;
+  return { kind: "switch", title: `Switch to ${title}`, lines: [goes, kept], action: "Switch program" };
+}
+
+/** Under a program's main button while another one is running. */
+export function replacesLine(current: string | null | undefined): string | null {
+  const c = current?.trim();
+  return c ? `Replaces ${c}. Workouts you've finished stay in your history.` : null;
+}

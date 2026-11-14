@@ -14,7 +14,7 @@ import { getBlockTree, durationRange } from "@/lib/pl-programs";
 import { supabase } from "@/integrations/supabase/client";
 import {
   effectiveRestSeconds, resolveCategory,
-  deriveWeeklyPurposeLabelByRowId, purposeLabelBadgeClass,
+  deriveWeeklyPurposeLabelByRowId,
 } from "@/lib/exercise-metadata";
 import { weekDisplayRange, isCurrentWeek, formatWeekRange } from "@/lib/block-dates";
 import { isWeekLocked, dayScheduledDate, cleanDayTitle } from "@/lib/workout-today";
@@ -458,9 +458,6 @@ export function ClientBlockView({
       {block && (
         <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-            Now viewing
-          </span>
           <span className="truncate text-sm font-bold">
             {block.name ?? "Block"}
           </span>
@@ -473,7 +470,7 @@ export function ClientBlockView({
             <Badge variant="outline" className="h-5 border-emerald-500/40 px-1.5 text-[9px] font-bold text-emerald-500">Done</Badge>
           )}
           {blockStatus === "current" && (
-            <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[9px] font-bold text-primary hover:bg-primary/20">Current</Badge>
+            <Badge className="h-5 border-border bg-secondary px-1.5 text-[9px] font-bold text-foreground hover:bg-secondary">Current</Badge>
           )}
           {blockStatus === "upcoming" && (
             <Badge variant="outline" className="h-5 border-amber-500/40 px-1.5 text-[9px] font-bold text-amber-500">Upcoming</Badge>
@@ -495,7 +492,7 @@ export function ClientBlockView({
         </div>
         {(blockRoadmap?.label || blockRoadmap?.purpose) && (
           <div className="mt-1.5 border-t border-border/60 pt-1.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-bold text-muted-foreground">
               {blockRoadmap.label && <span className="text-foreground/80">{blockRoadmap.label}</span>}
               {blockRoadmap.style && STYLE_LABEL[blockRoadmap.style] && <span>{STYLE_LABEL[blockRoadmap.style]}</span>}
               <span className="font-semibold normal-case tracking-normal">
@@ -513,7 +510,7 @@ export function ClientBlockView({
       {/* Helper hint above the block picker — makes it obvious that
           the cards are tappable and horizontally scrollable. */}
       {orderedBlocks.length > 1 && (
-        <div className="flex items-center justify-between px-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <div className="flex items-center justify-between px-0.5 text-[10px] font-bold text-muted-foreground">
           <span>Tap a block to switch</span>
           <span className="hidden sm:inline">{orderedBlocks.length} blocks · swipe →</span>
         </div>
@@ -551,49 +548,49 @@ export function ClientBlockView({
                 className={cn(
                   "snap-start shrink-0 min-w-[11rem] max-w-[18rem] cursor-pointer rounded-lg border-2 px-3 py-2 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0",
                   isSel
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-foreground/85 hover:border-primary/50 hover:bg-secondary/60",
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-card text-foreground/85 hover:border-foreground/40 hover:bg-secondary/60",
                 )}
                 aria-pressed={isSel}
                 aria-label={`${b.name ?? "Block"} — ${statusLabel}`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-xs font-bold uppercase tracking-wider">
+                  <span className="truncate text-xs font-bold">
                     {b.name ?? `Block`}
                   </span>
                   {st === "current" && (
                     <Badge className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
-                      isSel ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/15 text-primary")}>
+                      isSel ? "bg-background/20 text-background" : "bg-secondary text-foreground")}>
                       Current
                     </Badge>
                   )}
                   {st === "upcoming" && (
                     <Badge variant="outline" className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
-                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-amber-500/40 text-amber-500")}>
+                      isSel ? "border-background/40 text-background" : "border-amber-500/40 text-amber-500")}>
                       Next
                     </Badge>
                   )}
                   {st === "completed" && (
                     <Badge variant="outline" className={cn("h-4 shrink-0 px-1 text-[9px] font-bold",
-                      isSel ? "border-primary-foreground/40 text-primary-foreground" : "border-emerald-500/40 text-emerald-500")}>
+                      isSel ? "border-background/40 text-background" : "border-emerald-500/40 text-emerald-500")}>
                       Done
                     </Badge>
                   )}
                 </div>
                 {roadmap?.byBlock[b.id]?.label && (
                   <div className={cn("mt-0.5 truncate text-[10px] font-semibold",
-                    isSel ? "text-primary-foreground/90" : "text-foreground/80")}>
+                    isSel ? "text-background/90" : "text-foreground/80")}>
                     {roadmap.byBlock[b.id].label}
                   </div>
                 )}
                 <div className={cn("mt-0.5 text-[10px]",
-                  isSel ? "text-primary-foreground/80" : "text-foreground/65")}>
+                  isSel ? "text-background/80" : "text-foreground/65")}>
                   {range ?? "Dates pending"}
                   {weekCount ? ` · ${weekCount} wk${weekCount === 1 ? "" : "s"}` : null}
                 </div>
                 {st === "upcoming" && !isBlockAvailable(b, today) && (
                   <div className={cn("mt-0.5 text-[10px] font-semibold",
-                    isSel ? "text-primary-foreground/85" : "text-amber-600")}>
+                    isSel ? "text-background/85" : "text-amber-600")}>
                     Preview · not available yet
                   </div>
                 )}
@@ -639,9 +636,9 @@ export function ClientBlockView({
                   className={cn(
                     "snap-start shrink-0 rounded-md border px-3 py-1.5 text-left transition-colors",
                     isSel
-                      ? "border-primary bg-primary text-primary-foreground"
+                      ? "border-foreground bg-foreground text-background"
                       : "border-border bg-card text-foreground/80 hover:bg-secondary/60",
-                    !isSel && isCur && "border-primary/60",
+                    !isSel && isCur && "border-foreground/40",
                     !isSel && past && "bg-secondary/40 text-foreground/55",
                     !isSel && upcoming && "border-dashed",
                   )}
@@ -649,14 +646,14 @@ export function ClientBlockView({
                   aria-label={`Week ${w.week_index}${rw?.label ? `, ${rw.label}` : ""}${isCur ? " — current" : past ? " — done" : upcoming ? " — upcoming" : ""}`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider">W{w.week_index}</span>
+                    <span className="text-xs font-bold">W{w.week_index}</span>
                     {isCur && (
-                      <Crosshair className={cn("h-3 w-3", isSel ? "" : "text-primary")} />
+                      <Crosshair className={cn("h-3 w-3", isSel ? "" : "text-foreground")} />
                     )}
                     {allDone && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
                   </div>
                   {stats.total > 0 && (
-                    <div className={cn("mt-0.5 text-[9px] font-semibold tabular-nums", isSel ? "text-primary-foreground/80" : "text-foreground/55")}>
+                    <div className={cn("mt-0.5 text-[9px] font-semibold tabular-nums", isSel ? "text-background/80" : "text-foreground/55")}>
                       {stats.done}/{stats.total}
                     </div>
                   )}
@@ -680,7 +677,7 @@ export function ClientBlockView({
             <span>{formatWeekRange(weekRange.start, weekRange.end)} · {days.length} day{days.length === 1 ? "" : "s"}</span>
           )}
           {weekIsCurrent ? (
-            <Badge className="h-5 border-primary/40 bg-primary/15 px-1.5 text-[9px] font-bold text-primary hover:bg-primary/20">
+            <Badge className="h-5 border-border bg-secondary px-1.5 text-[9px] font-bold text-foreground hover:bg-secondary">
               <Crosshair className="mr-1 h-2.5 w-2.5" />Current
             </Badge>
           ) : (
@@ -732,20 +729,20 @@ export function ClientBlockView({
                   className={cn(
                     "snap-start shrink-0 rounded-lg border px-2.5 py-1 text-left text-[11px] font-semibold leading-tight min-h-[44px] min-w-[64px]",
                     isSel
-                      ? "border-primary bg-primary text-primary-foreground"
+                      ? "border-foreground bg-foreground text-background"
                       : "border-border bg-card text-foreground/85",
-                    isToday && !isSel && "ring-1 ring-primary/40",
+                    isToday && !isSel && "ring-1 ring-foreground/30",
                   )}
                   aria-pressed={isSel}
                   aria-label={`Day ${d.day_index}${dd ? `, ${format(dd, "EEEE, MMMM d")}` : ""}${done ? ", completed" : started ? ", in progress" : ""}`}
                 >
                   <div className="flex items-center gap-1 whitespace-nowrap">
-                    <span className="font-bold uppercase tracking-wide">Day {d.day_index}</span>
+                    <span className="font-bold">Day {d.day_index}</span>
                     {done && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
                     {started && !done && <span className="text-[9px] text-amber-500">●</span>}
                   </div>
                   <div className={cn("mt-0.5 text-[10px] font-medium whitespace-nowrap",
-                    isSel ? "text-primary-foreground/80" : "text-foreground/60")}>
+                    isSel ? "text-background/80" : "text-foreground/60")}>
                     {dd ? format(dd, "EEE · MMM d") : "—"}
                   </div>
                 </button>
@@ -757,7 +754,7 @@ export function ClientBlockView({
 
       {(weeklyPriorities.length > 0 || weekRoadmap?.label || weekRoadmap?.focus) && (
         <Card className="p-3">
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-foreground/70">
+          <div className="mb-1.5 text-[11px] font-bold text-foreground/70">
             Week {resolvedWeek?.week_index}
             {weekRoadmap?.label ? ` · ${weekRoadmap.label}` : weeklyPriorities.length > 0 ? " Priorities" : ""}
           </div>
@@ -767,7 +764,7 @@ export function ClientBlockView({
             </p>
           )}
           {weeklyPriorities.length > 0 && weekRoadmap?.label && (
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Priorities</div>
+            <div className="mb-1 text-[10px] font-bold text-muted-foreground">Priorities</div>
           )}
           {weeklyPriorities.length > 0 && (
           <>
@@ -880,7 +877,7 @@ export function ClientBlockView({
                   params={{ dayId: d.id }}
                   className={cn("block", disabled && "pointer-events-none opacity-60")}
                   aria-disabled={disabled || undefined} search={{}}>
-                  <Button size="sm" variant={variant as any} className="w-full font-bold uppercase tracking-wide">
+                  <Button size="sm" variant={variant as any} className="w-full font-semibold">
                     <Icon className="mr-1.5 h-3.5 w-3.5" /> {label}
                   </Button>
                 </Link>
@@ -898,7 +895,7 @@ export function ClientBlockView({
                   "w-[calc(100vw-3rem)] max-w-[380px] shrink-0",
                   // Desktop/tablet grid cards fill their column instead of forcing horizontal overflow.
                   "md:w-full md:max-w-none md:shrink md:snap-none",
-                  isToday && !done && blockStatus === "current" && "border-primary ring-2 ring-primary/40",
+                  isToday && !done && blockStatus === "current" && "border-foreground/40 ring-1 ring-foreground/20",
                 )}
               >
                 {/* Sticky day header inside the column */}
@@ -910,7 +907,7 @@ export function ClientBlockView({
                           {cleanDayTitle(d.title, d.day_index)}
                         </h3>
                         {isToday && !done && blockStatus === "current" && (
-                          <Badge className="h-4 shrink-0 whitespace-nowrap border-primary/40 bg-primary/15 px-1 text-[9px] font-bold text-primary hover:bg-primary/20">
+                          <Badge className="h-4 shrink-0 whitespace-nowrap border-border bg-secondary px-1 text-[9px] font-bold text-foreground hover:bg-secondary">
                             Today
                           </Badge>
                         )}
@@ -973,17 +970,20 @@ export function ClientBlockView({
                     return (
                       <div key={r.id ?? i} className={cn(
                         "min-w-0 rounded-md border bg-background/40 p-2",
-                        isComp ? "border-primary/40" : "border-border",
+                        isComp ? "border-foreground/25" : "border-border",
                       )}>
                         <div className="grid grid-cols-1 gap-2">
                           <div className="min-w-0">
                             <div className="break-words text-[13px] font-bold leading-snug">{name}</div>
-                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/70">
+                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-semibold text-foreground/70">
                               {purpose[i] && (
-                                <span className={cn("break-words rounded border px-1 py-0", purposeLabelBadgeClass(purpose[i]))}>{purpose[i]}</span>
+                                <span className="break-words rounded border border-border px-1 py-0 text-muted-foreground">{purpose[i]}</span>
                               )}
-                              {isComp && <span className="shrink-0 rounded bg-primary/15 px-1 text-primary">Comp</span>}
-                              <span className="break-words text-foreground/50">· {cat}</span>
+                              {isComp && <span className="shrink-0 rounded bg-secondary px-1 text-foreground">Comp</span>}
+                              {/* the category only when it says something the purpose didn't ("Assistance · Assistance") */}
+                              {String(cat).toLowerCase() !== String(purpose[i] ?? "").toLowerCase() && (
+                                <span className="break-words text-foreground/50">· {cat}</span>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -5,6 +5,14 @@ import {
 } from "lucide-react";
 import type { NavItem } from "@/components/app-shell";
 
+/**
+ * Pages that belong to Workouts though they live at their own address: a
+ * program, the library and a plan's page are reached from Workouts and lead
+ * back to it, so its tab stays lit there (a page that lights no tab reads as
+ * somewhere else in the app).
+ */
+export const WORKOUTS_AREA = ["/portal/programs", "/portal/plans", "/portal/exercises"];
+
 // Staff menus live in `@/lib/internal-nav` (one role-aware registry for the
 // sidebar, More and the phone bar). These are the client portal's.
 
@@ -35,7 +43,8 @@ export const clientNav: NavItem[] = [
 // Crew (the coach is one thumb-reach away) and Nutrition takes the far right.
 export const clientBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
-  { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  // Programs and a plan's page are part of Workouts: the tab stays lit there
+  { to: "/portal/workouts", label: "Workouts", icon: Activity, activeOn: WORKOUTS_AREA },
   { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal/messages", label: "Messages", icon: MessageCircle },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
@@ -64,7 +73,7 @@ export const selfServeNav: NavItem[] = [
 // Members' bottom tabs: Crew in the middle; Support takes Messages' place.
 export const selfServeBottomNav: NavItem[] = [
   { to: "/portal", label: "Home", icon: LayoutDashboard },
-  { to: "/portal/workouts", label: "Workouts", icon: Activity },
+  { to: "/portal/workouts", label: "Workouts", icon: Activity, activeOn: WORKOUTS_AREA },
   { to: "/portal/community", label: "Crew", icon: UsersRound },
   { to: "/portal/nutrition-targets", label: "Nutrition", icon: Apple },
   { to: "/portal/support", label: "Support", icon: HelpCircle },

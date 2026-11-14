@@ -91,7 +91,7 @@ export function ManageProgramSheet({
           className="max-h-[90dvh] gap-0 overflow-y-auto rounded-t-[24px] px-0 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-5 sm:mx-auto sm:max-w-lg"
           data-manage-program
         >
-          <SheetHeader className="space-y-1 px-5 pb-4 text-left">
+          <SheetHeader className="space-y-0.5 pb-4 pr-5 text-left">
             <div className="text-[13px] font-medium text-muted-foreground">{origin.label}</div>
             <SheetTitle className="pr-8 text-xl leading-tight">{name}</SheetTitle>
             {progressLine ? (

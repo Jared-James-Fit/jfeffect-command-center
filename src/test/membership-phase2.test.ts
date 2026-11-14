@@ -78,7 +78,7 @@ describe("the Plan Library lives in the portal", () => {
     expect(detail).not.toContain("published_payload?.weeks_data");
     const dialog = read("src/components/programs/start-plan-dialog.tsx");
     expect(dialog).toContain("startLibraryPlan");
-    expect(dialog).toContain('navigate({ to: "/portal/workouts" })');
+    expect(dialog).toContain('navigate({ to: "/portal/workouts", replace: true });');
     expect(dialog).toContain("disabled={pending || isImpersonating || !plan || !daysReady}");
   });
 
@@ -104,6 +104,10 @@ describe("the Plan Library lives in the portal", () => {
     const workouts = read("src/components/workouts/WorkoutsExperience.tsx");
     expect(workouts).toContain('if (mode === "self") return <SelfEmptyState />;');
     expect(workouts).toContain("Your coach will publish your block soon.");
-    expect(workouts).toContain('<Link to="/portal/programs" search={{ tab: "jf" }}>Browse plans</Link>');
+    expect(workouts).toContain('<Link to="/portal/programs" search={{ tab: "mine" }}>Find a program</Link>');
+    expect(workouts).toContain('<Link to="/portal/programs/new">Build your own</Link>');
+    const pick = read("src/components/portal/pick-plan-card.tsx");
+    expect(pick).toContain('<Link to="/portal/programs" search={{ tab: "mine" }}>');
+    expect(pick).toContain('<Link to="/portal/programs/new">Build your own</Link>');
   });
 });

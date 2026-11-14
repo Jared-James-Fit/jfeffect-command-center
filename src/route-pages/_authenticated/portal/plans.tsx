@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Search as SearchIcon } from "lucide-react";
@@ -163,6 +164,27 @@ export function PlanLibraryBody({
     />
   );
   const clearAll = () => { setFilters({}); setQ(""); setCategory("all"); };
+
+  // Nothing in the library yet: say so plainly and point at what works now,
+  // never a search box, filters and "No plans match" over an empty shelf.
+  if (!isLoading && !isError && plans.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-card px-6 py-10 text-center" data-plan-library-empty>
+        <div className="text-[16px] font-semibold">JF Effect plans are on the way</div>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+          Coach-written plans will show up here. Until then, build your own or start one the crew shared.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Button asChild>
+            <Link to="/portal/programs/new">Build your own</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link to="/portal/programs" search={{ tab: "crew" } as any}>Crew programs</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4" data-plan-library>

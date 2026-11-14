@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-/** A member with no program yet: one tap to JF Effect's plans. Hides once a plan is running. */
+/** A member with no program yet: one tap to finding one (Programs → My programs lists every way). Hides once one is running. */
 export function PickPlanCard({ clientId }: { clientId: string }) {
   const { data: programs, isLoading } = useQuery({
     queryKey: ["my-program-count", clientId],
@@ -28,19 +28,19 @@ export function PickPlanCard({ clientId }: { clientId: string }) {
           <BookOpen className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold leading-tight">Pick your plan</h3>
+          <h3 className="text-base font-semibold leading-tight">Pick your program</h3>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Start a coach-written plan, or build your own. Pick your days and Week 1 lands on your calendar.
+            Start a JF Effect plan, copy one from the crew or build your own. Its workouts land on your training days.
           </p>
-          {/* a member with no plan: this is Home's one red action */}
+          {/* a member with no program: this is Home's one red action, the same two as Workouts' empty state */}
           <div className="mt-3 flex flex-wrap gap-2">
             <Button asChild className="h-10">
-              <Link to="/portal/programs" search={{ tab: "jf" }}>
-                Browse plans <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              <Link to="/portal/programs" search={{ tab: "mine" }}>
+                Find a program <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>
             </Button>
             <Button asChild variant="secondary" className="h-10">
-              <Link to="/portal/programs" search={{ tab: "mine" }}>Build or copy one</Link>
+              <Link to="/portal/programs/new">Build your own</Link>
             </Button>
           </div>
         </div>

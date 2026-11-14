@@ -313,7 +313,7 @@ export function MemberSetupWizard({
                 Which days will you train? <span className="text-destructive">*</span>
               </Label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Pick the days you commit to training each week. Your plan's workouts go on these days, and the Plan Library shows plans that fit this many. Change it anytime from Workouts.
+                Pick the days you commit to training each week. Your program's workouts go on these days. Change them any time from Workouts.
               </p>
             </div>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
