@@ -24,6 +24,7 @@ export type AppEvent =
   | "session_requested"
   | "lead_ready"
   | "health_updated"
+  | "support_message"
   // → client
   | "agreement_requested"
   | "checkin_requested"
@@ -33,7 +34,8 @@ export type AppEvent =
   | "nutrition_targets_updated"
   | "community_coach_recognition"
   | "session_request_answered"
-  | "session_booked";
+  | "session_booked"
+  | "support_reply";
 
 type EventSpec = {
   to: "staff" | "client";
@@ -45,7 +47,7 @@ type EventSpec = {
    */
   title: (name: string) => string;
   body: (name: string) => string;
-  url: (clientId: string, sourceId?: string) => string;
+  url: (clientId: string, sourceId?: string, target?: string) => string;
   /** Minutes in which repeats for the same client collapse into one push. */
   rateMinutes: number;
 };
@@ -72,6 +74,24 @@ export const APP_EVENTS: Record<AppEvent, EventSpec> = {
     title: (n) => `🚩 ${n} reported a chat`,
     body: () => "Tap to see what was said. They've blocked the other person.",
     url: (id) => `/admin/messages?client=${id}`, rateMinutes: 60,
+  },
+  // A JF member wrote to Support (member-support.functions.ts). Their Support
+  // chat is a row in the coach's 1:1 Chats; this opens it. Content-free, and a
+  // burst of messages is one push.
+  support_message: {
+    to: "staff", category: "messages",
+    title: (n) => `💬 ${n} wrote to Support`,
+    body: () => "Tap to read it and reply.",
+    url: (_id, _src, thread) => (thread ? `/admin/communication?tab=messages&support=${thread}` : "/admin/communication?tab=messages"),
+    rateMinutes: 10,
+  },
+  // The coach answered a member's Support chat. Opens their Support screen.
+  support_reply: {
+    to: "client", category: "messages",
+    title: () => "💬 JF Effect Support",
+    // `n` is whoever answered ("Coach Jared"), so they know a person read it.
+    body: (n) => `${n} replied to your message. Tap to read it.`,
+    url: () => "/portal/support", rateMinutes: 10,
   },
   // A client asked for a session from their Schedule; the request card is in their chat.
   session_requested: {
@@ -239,7 +259,7 @@ export async function staffUserIdsForClient(admin: SupabaseClient, clientId: str
 export async function notifyAppEvent(
   admin: SupabaseClient,
   event: AppEvent,
-  input: { clientId: string; sourceId: string; actorUserId?: string | null },
+  input: { clientId: string; sourceId: string; actorUserId?: string | null; /** What the push opens, when it isn't the client (a support thread). */ target?: string },
 ) {
   try {
     const spec = APP_EVENTS[event];
@@ -274,7 +294,7 @@ export async function notifyAppEvent(
         {
           title: spec.title(name),
           body: spec.body(name),
-          url: spec.url(input.clientId, input.sourceId),
+          url: spec.url(input.clientId, input.sourceId, input.target),
           tag: `${event}:${input.clientId}`,
           data: { kind: event, clientId: input.clientId, sourceId: input.sourceId },
         },

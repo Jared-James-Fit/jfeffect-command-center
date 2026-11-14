@@ -186,7 +186,7 @@ export const ADMIN_ROUTE_REGISTRY: AdminRouteEntry[] = [
   { id: "challenges", label: "Challenges", to: "/admin/challenges",
     category: "Communication", parent: "Admin → Crew", roles: ADMIN, icon: Swords,
     keywords: ["challenge", "competition", "event", "bench 225", "winnipeg 225", "leaderboard", "judge", "registration", "prizes", "sponsors"] },
-  { id: "support", label: "Support", to: "/admin/support-alerts",
+  { id: "support", label: "App alerts", to: "/admin/support-alerts",
     category: "Communication", parent: "Admin → Communication", roles: ADMIN_COACH, icon: AlertCircle, hidden: true },
   { id: "call-access", label: "Call Access", to: "/admin/call-access",
     category: "Communication", parent: "Admin → Communication", roles: ADMIN, icon: Phone, hidden: true },

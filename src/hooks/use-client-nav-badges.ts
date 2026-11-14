@@ -48,6 +48,7 @@ export function markNavSeen(userId: string | undefined, route: string) {
  *                             coach chat, so retired lift-video feedback isn't counted.
  *  - /portal/workouts       — program updated since client last opened (dot)
  *  - /portal/nutrition-targets — nutrition targets updated since client last opened (dot)
+ *  - /portal/support        — a JF member's Support chat: replies they haven't read (count)
  */
 export function useClientNavBadges(): Record<string, NavBadge> {
   const { user, role, viewOnly } = useAuth();
@@ -78,10 +79,12 @@ export function useClientNavBadges(): Record<string, NavBadge> {
         .eq("user_id", user!.id)
         .maybeSingle();
       if (!client) return null;
-      const [{ data: msgs }, { data: state }, { data: nut }] = await Promise.all([
+      const [{ data: msgs }, { data: state }, { data: nut }, { data: support }] = await Promise.all([
         (supabase.from("messages") as any).select("created_at").eq("client_id", client.id).eq("sender_role", "admin").eq("is_internal_note", false).is("deleted_at", null).order("created_at", { ascending: false }).limit(50),
         (supabase.from("conversation_state") as any).select("client_last_read_at").eq("client_id", client.id).maybeSingle(),
         (supabase.from("nutrition_targets") as any).select("updated_at, last_updated_at").eq("client_id", client.id).order("updated_at", { ascending: false }).limit(5),
+        // Their own Support chat (RLS: a member reads only theirs).
+        (supabase.from("member_support_threads") as any).select("unread_for_member").limit(1).maybeSingle(),
       ]);
       // Coach group chats (kind "group"); member 1:1s and crews come from their own lists.
       const { data: memberships } = await (supabase.from("chat_group_members") as any)
@@ -101,7 +104,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
           .limit(200);
         groupMsgs = (gm ?? []) as any[];
       }
-      return { client, msgs, state, nut, groupMemberships, groupMsgs };
+      return { client, msgs, state, nut, groupMemberships, groupMsgs, supportUnread: Number((support as any)?.unread_for_member ?? 0) };
     },
   });
 
@@ -122,6 +125,7 @@ export function useClientNavBadges(): Record<string, NavBadge> {
       .on("postgres_changes", { ...scoped, table: "conversation_state" }, invalidateBadges)
       .on("postgres_changes", { ...scoped, table: "nutrition_targets" }, invalidateBadges)
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_group_members", filter: `user_id=eq.${user.id}` }, invalidateBadges)
+      .on("postgres_changes", { event: "*", schema: "public", table: "member_support_threads" }, invalidateBadges)
       .subscribe();
     return () => {
       if (invalidationTimer) clearTimeout(invalidationTimer);
@@ -181,6 +185,9 @@ export function useClientNavBadges(): Record<string, NavBadge> {
   if (nutLatest > 0 && nutLatest > nutSeen) result["/portal/nutrition-targets"] = { dot: true };
 
   if (community?.enabled && community.unseen > 0) result["/portal/community"] = { count: community.unseen };
+
+  // Support: the team replied and they haven't read it yet.
+  if ((data.supportUnread ?? 0) > 0) result["/portal/support"] = { count: data.supportUnread };
 
   return result;
 }

@@ -89,8 +89,9 @@ const REGISTRY: Entry[] = [
   { to: "/admin/communication", label: "Communication Hub", icon: MessagesSquare, group: "Messages", searchOnly: true,
     visibleTo: ["admin", "coach", "assistant_coach", "media_manager", "sales", "support"],
     keywords: ["inbox", "chat", "direct messages", "group chat", "support inbox"] },
-  { to: "/admin/support-alerts", label: "Support", icon: AlertCircle, group: "Messages", searchOnly: true,
-    visibleTo: ["admin", "coach", "support"], keywords: ["support inbox", "help", "alerts", "tickets"] },
+  // Communication → Alerts: a client's app hit a problem (members' Support chats are 1:1 Chats rows).
+  { to: "/admin/support-alerts", label: "App alerts", icon: AlertCircle, group: "Messages", searchOnly: true,
+    visibleTo: ["admin", "coach", "support"], keywords: ["support", "help", "alerts", "app problems", "errors"] },
   // New coaching applications with the AI's read and a text to send (pinned in Messages, on Home).
   { to: "/admin/leads", label: "Coaching leads", icon: UserPlus, group: "Messages", searchOnly: true,
     visibleTo: ["admin"], keywords: ["leads", "applications", "prospects", "new clients", "sales", "follow up"] },
@@ -215,9 +216,9 @@ const REGISTRY: Entry[] = [
     visibleTo: ["admin"], keywords: ["plan library", "membership library", "member plans", "membership content"] },
   { to: "/admin/membership/sms-email", label: "SMS & Email", icon: MessageCircle, group: "Membership",
     visibleTo: ["admin"] },
-  // Members write in on Messages → Support.
+  // Members' Support chats are rows in Messages → 1:1 Chats; this lands there.
   { to: "/admin/membership/support", label: "Member Support", icon: MessagesSquare, group: "Membership", searchOnly: true,
-    visibleTo: ["admin"], keywords: ["support inbox", "member messages", "help"] },
+    visibleTo: ["admin"], keywords: ["support inbox", "member messages", "help", "tickets"] },
   // Pages that only say "coming soon" (Content Ideas, Testimonials, Challenges,
   // Welcome Messages, Promo Tools) are in no menu or search: a dead end isn't
   // worth finding. Their addresses still open.

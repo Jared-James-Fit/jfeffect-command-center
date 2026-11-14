@@ -25,7 +25,8 @@ describe("membership UX organization", () => {
     expect(support).toContain("JF Effect Support");
     expect(support).toContain("Message support…");
     expect(support).toContain("rounded-br-md bg-primary");
-    expect(support).toContain("rounded-bl-md border border-border bg-card");
+    // the team's replies read like the coach chat's incoming bubbles
+    expect(support).toContain("rounded-bl-md bg-secondary");
   });
 
   it("labels membership nutrition as suggested and shows a safety disclaimer", () => {
@@ -38,7 +39,8 @@ describe("membership UX organization", () => {
   it("keeps mobile nutrition and support controls unobstructed", () => {
     expect(macroCalc).toContain('safeTopClose className="h-[95dvh]');
     expect(macroCalc).toContain('SheetHeader className="py-4 pr-4 pl-28"');
-    expect(support).toContain('h-[calc(100dvh-14.25rem)]');
-    expect(support).toContain('sticky bottom-0 z-20');
+    // anchored to the visible screen like the coach chat: the box sits right above the keyboard
+    expect(support).toContain('top: "calc(var(--vv-top, 0px) + var(--app-top-chrome, 0px))"');
+    expect(support).toContain('var(--bottom-nav-clearance, 0px)');
   });
 });
