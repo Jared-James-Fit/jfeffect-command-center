@@ -999,7 +999,7 @@ function WorkoutDay({
           actual_reps, actual_rpe, actual_rir, entered_value, entered_unit,
           normalized_kg, normalized_lb, actual_load, actual_load_unit, is_working_set,
           is_bodyweight, load_type, completed_duration_seconds, actual_calories, actual_distance_m,
-          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, exercises(name))`;
+          pl_exercise_rows!inner(exercise_id, exercise_name_override, day_id, purpose_label, sort_order, exercises(name))`;
       // Confirmed sets only (drafts from "apply to remaining" are not history),
       // newest first, paged past the 1,000-row response cap so long-term
       // clients keep their full rep-max baselines.
@@ -1041,6 +1041,8 @@ function WorkoutDay({
           isWorkingSet: log.is_working_set ?? null,
           loadType: resolveLoadType(log.load_type, log.is_bodyweight),
           purposeLabel: historyRow?.purpose_label ?? null,
+          rowId: log.row_id ?? null,
+          rowOrder: historyRow?.sort_order ?? null,
           durationSeconds: log.completed_duration_seconds ?? null,
           calories: log.actual_calories ?? null,
           distanceM: log.actual_distance_m != null ? Number(log.actual_distance_m) : null,

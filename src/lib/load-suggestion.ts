@@ -63,6 +63,30 @@ import type { PreviousLiftLog } from "@/lib/workout-previous-lift";
 //      suggestion and rated harder never raises it. Every rated set counts;
 //      a set claims at most MAX_EASIER_CREDIT RPE "easier than the target",
 //      and today's sets are weighed by order and reps, never by their rating.
+//  11. A COLD SUGGESTION READS PAST BACK-OFFS AS THE TOP SET THEY IMPLY. For a
+//      card's first set of the day (nothing logged today, not a back-off read
+//      from today's top set) a past set on a back-off card (a card the program
+//      calls one, or a later card of the same exercise that day) counts at
+//      ÷ (1 − BACKOFF_FATIGUE), the inverse of note 9. Back-offs are done tired,
+//      so read as logged they pulled a fresh top set down: 425 lb × 4 @ 6 then
+//      2 × 405 × 4 @ 6 suggested 410–430 for the same 4 @ 6 the next week (now
+//      about 430). Once a set is logged today, and for the day read across cards
+//      (todayVsUsual), history is read as logged, as before.
+// Back-off history (note 11), backtested Nov 15 2026 on 674 real first sets of
+// a squat / bench / deadlift-family session (19 athletes, Jun–Nov 2026),
+// predicted from history alone at the reps and RPE logged: competition lifts
+// 7.57% → 7.02% median off, median bias −2.3% → −0.6% (trimmed of outliers
+// −2.9% → −1.6%, still on the light side), within 5% 36.6% → 42.9%, better in
+// both halves of the time range, 107 predictions better and 57 worse, 4 of 12
+// athletes better and none worse; deadlifts 9.05% → 7.50%; variations and
+// accessories unchanged. Tested and rejected on the same sets: projecting each
+// lift's estimated-max trend forward (Theil–Sen over 8 weeks, damped, capped,
+// gated on a clear trend) was no better in any form and made more predictions
+// worse than better, because a lift that's moving already rates the same load
+// easier, and a falling stretch is usually a light week athletes bounce back
+// from (the engine was already −3.6% light after one); dropping back-off sets
+// (more predictions worse); reading each session's first set only (accessories
+// worse).
 // Back-offs (note 9), backtested Nov 13 2026 on 214 real first back-off sets
 // after a top set on an earlier card (12 athletes, mostly SBD): the chart alone
 // read a median 8.3% off, +5.9% heavy, 54% more than 5% too heavy; athletes
@@ -346,6 +370,8 @@ export interface LoadModel {
   early: boolean;
   /** How this lift's history is read (HISTORY_PROFILES). */
   lift: LiftKind;
+  /** Past back-off sets read as the top set they imply for this cold suggestion (note 11). */
+  backoffsAsTopSet?: number;
 }
 
 function weightedMean(values: Array<{ v: number; w: number }>): number | null {
@@ -375,6 +401,12 @@ export function buildLoadModel(input: {
   carryToday?: SetSample[];
   /** How its history is read (liftKindOf); anything not a competition lift is "other". */
   lift?: LiftKind;
+  /**
+   * How past back-off sets are read for a cold suggestion (note 11): as the top
+   * set they imply (the default), or as logged (the day read across cards,
+   * which compares today's sets of every card with history).
+   */
+  backoffs?: "as_top_set" | "as_logged";
   now?: Date;
 }): LoadModel {
   const { unit } = input;
@@ -384,7 +416,24 @@ export function buildLoadModel(input: {
   const readiness = input.readiness ?? NEUTRAL_READINESS;
 
   // ── History: every valid working set, grouped by session ──
-  const bySession = new Map<string, { at: number; sets: Array<Omit<ModelSample, "weight">>; rated: boolean }>();
+  // Each past session's first card of this exercise (lowest place in the
+  // workout, else the earliest logged): a set on any later card of it that day
+  // is a back-off (note 11), as is a card the program calls one.
+  const firstCard = new Map<string, { rowId: string | null; order: number; at: number }>();
+  for (const log of input.history) {
+    const at = log.occurredAt ? Date.parse(log.occurredAt) : NaN;
+    const order = log.rowOrder != null && Number.isFinite(Number(log.rowOrder)) ? Number(log.rowOrder) : Infinity;
+    const cur = firstCard.get(log.sessionKey);
+    if (!cur || order < cur.order || (order === cur.order && Number.isFinite(at) && at < cur.at)) {
+      firstCard.set(log.sessionKey, { rowId: log.rowId ?? null, order, at: Number.isFinite(at) ? at : Infinity });
+    }
+  }
+  const onBackoffCard = (log: PreviousLiftLog) => {
+    if (BACKOFF_LABEL.test(log.purposeLabel ?? "")) return true;
+    const first = firstCard.get(log.sessionKey)?.rowId;
+    return !!log.rowId && !!first && log.rowId !== first;
+  };
+  const bySession = new Map<string, { at: number; sets: Array<Omit<ModelSample, "weight"> & { backoff: boolean }>; rated: boolean }>();
   const bwScales: number[] = [];
   for (const log of input.history) {
     if ((log.loadType ?? "external") !== "external" || log.isWorkingSet === false) continue;
@@ -401,7 +450,7 @@ export function buildLoadModel(input: {
     const s = bySession.get(log.sessionKey) ?? { at, sets: [], rated: false };
     s.at = Math.max(s.at, at);
     if (rpe != null) s.rated = true;
-    s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe == null ? 8.5 : Math.max(MIN_RPE, rpe), trust: est.trust });
+    s.sets.push({ e1rm: est.e1rm * bw, load: load * bw, reps, rpe: rpe == null ? 8.5 : Math.max(MIN_RPE, rpe), trust: est.trust, backoff: onBackoffCard(log) });
     bySession.set(log.sessionKey, s);
   }
   const sessions = Array.from(bySession.values()).sort((a, b) => b.at - a.at).slice(0, MAX_SESSIONS);
@@ -435,13 +484,23 @@ export function buildLoadModel(input: {
       staleDays = Math.round(daysSince);
     }
   }
+  // A cold suggestion (nothing logged today, not a back-off read from today's
+  // top set) is for a fresh first set, so a past back-off counts as the top set
+  // it implies (note 11). Once today's sets are in, history is read as logged.
+  const cold = !carried && !input.today.some((s) => s.rpe != null && setE1rm(s) != null);
+  const asTopSet = cold && input.backoffs !== "as_logged";
+  let backoffsAsTopSet = 0;
   const history: ModelSample[] = sessions.flatMap((s) =>
-    s.sets.map((x) => ({
-      ...x,
-      e1rm: x.e1rm * scale,
-      load: x.load * scale,
-      weight: Math.pow(0.5, (now - s.at) / DAY_MS / profile.halfLifeDays),
-    })),
+    s.sets.map(({ backoff, ...x }) => {
+      const k = asTopSet && backoff ? 1 / (1 - BACKOFF_FATIGUE) : 1;
+      if (k !== 1) backoffsAsTopSet++;
+      return {
+        ...x,
+        e1rm: x.e1rm * scale * k,
+        load: x.load * scale * k,
+        weight: Math.pow(0.5, (now - s.at) / DAY_MS / profile.halfLifeDays),
+      };
+    }),
   );
 
   // ── Today: sets already done on this row (need a logged RPE to calibrate) ──
@@ -474,6 +533,7 @@ export function buildLoadModel(input: {
     carried,
     carriedTop,
     lift,
+    backoffsAsTopSet,
   };
   if (today.length > 0) {
     return {
@@ -537,6 +597,8 @@ export const SET_FATIGUE = 0.035;
  * light, the safe side for volume after a heavy set).
  */
 export const BACKOFF_FATIGUE = 0.06;
+/** A card the program calls a back-off ("Primary Squat Backoff", "Back-offs"). */
+const BACKOFF_LABEL = /\bback[\s-]?offs?\b/i;
 
 export function estimateFor(model: LoadModel, reps: number, rpe: number): { load: number; spread: number } | null {
   if (model.status !== "ready") return null;
@@ -782,7 +844,9 @@ export function todayVsUsual(input: {
   lift?: LiftKind;
   now?: Date;
 }): number | null {
-  const model = buildLoadModel({ history: input.history, today: [], unit: input.unit, bodyweightKg: input.bodyweightKg, lift: input.lift, now: input.now });
+  // History as logged: today's sets compared here come from every card of the
+  // lift, back-offs included (note 11 is for a fresh first set only).
+  const model = buildLoadModel({ history: input.history, today: [], unit: input.unit, bodyweightKg: input.bodyweightKg, lift: input.lift, backoffs: "as_logged", now: input.now });
   if (model.status !== "ready" || model.source !== "history" || model.early) return null;
   let sum = 0;
   let weight = 0;
