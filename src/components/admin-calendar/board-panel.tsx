@@ -7,6 +7,7 @@ import { Filter, Calendar as CalIcon, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CalendarBoard, visibleRange, type ViewMode, type VisibleRange } from "@/components/calendar/calendar-board";
 import { useCalendarPrefs } from "@/lib/calendar-prefs";
+import { defaultTimelineView } from "@/lib/calendar-timeline";
 import { useAdminCalendarSources, useGoogleCalendarStatus, KIND_META, type CalendarKind, type CalendarItem } from "@/lib/calendar-sources";
 import { PtSessionDialog } from "@/components/pt-session-dialog";
 import { SessionActionsSheet, type ActionSession } from "@/components/schedule/session-actions-sheet";
@@ -14,19 +15,22 @@ import { ChangeRequestsCard } from "@/components/schedule/change-requests-card";
 import { cn } from "@/lib/utils";
 
 const ALL_KINDS: CalendarKind[] = ["event", "important_date", "appointment", "pt_session"];
+/** Google's order: the timelines first. */
+const BOARD_VIEWS: ViewMode[] = ["day", "week", "month", "upcoming"];
 
 export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string | null } = {}) {
   const [clientId, setClientId] = useState<string>("all");
   const [kinds, setKinds] = useState<Set<CalendarKind>>(() => new Set(ALL_KINDS));
   // The view and Coaching / + Google are remembered on the coach's account
-  // (every device). Default: Month, coaching only.
+  // (every device). Default: the week's timeline (the day's on a phone), coaching only.
   const { prefs, setPrefs } = useCalendarPrefs();
   const includeGoogle = prefs.includeGoogle ?? false;
   // A day tapped on the dashboard opens Day view on it for this visit only;
   // picking a view from the tabs is what gets remembered.
   const [dayOverride, setDayOverride] = useState<boolean>(!!initialDate);
-  const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? "month";
-  const [booking, setBooking] = useState<{ date: string } | null>(null);
+  const [fallbackView] = useState<ViewMode>(() => defaultTimelineView());
+  const view: ViewMode = dayOverride ? "day" : prefs.boardView ?? fallbackView;
+  const [booking, setBooking] = useState<{ date: string; time?: string } | null>(null);
   const [editing, setEditing] = useState<any>(null);
   const [acting, setActing] = useState<{ session: ActionSession; clientName: string | null } | null>(null);
   // Who / what filters fold away: the calendar itself comes first.
@@ -191,6 +195,8 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
         <ChangeRequestsCard onEdit={openEditor} />
         <section aria-label="Calendar">
           <CalendarBoard
+            timeline
+            views={BOARD_VIEWS}
             items={items}
             isLoading={isLoading}
             initialDate={initialDate}
@@ -198,7 +204,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
             onViewChange={chooseView}
             showClientName
             toolbar={toolbar}
-            onCreate={(date) => setBooking({ date })}
+            onCreate={(date, time) => setBooking({ date, time })}
             onItemSelect={onItemSelect}
             onRangeChange={setVisible}
             emptyHint={activeFilterCount > 0 ? "Nothing matches these filters." : "Nothing scheduled yet."}
@@ -213,6 +219,7 @@ export function AdminCalendarBoardPanel({ initialDate }: { initialDate?: string 
         initial={editing ?? undefined}
         clientId={editing?.client_id}
         initialDate={booking?.date ?? null}
+        initialTime={booking?.time ?? null}
       />
       <SessionActionsSheet
         session={acting?.session ?? null}

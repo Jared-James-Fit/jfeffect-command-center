@@ -184,7 +184,9 @@ describe("the Home card's Day / Week / Month", () => {
     const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
     const panel = readFileSync("src/components/admin-calendar/board-panel.tsx", "utf8");
     for (const src of [dash, panel]) expect(src).toContain("useCalendarPrefs()");
-    expect(dash).toContain('const view: HomeView = prefs.homeView ?? "day";');
+    expect(dash).toContain('const savedView: HomeView = prefs.homeView ?? "day";');
+    // A day tapped in Week or Month opens for the visit; only the tabs are remembered.
+    expect(dash).toContain('const view: HomeView = dayFocus ? "day" : savedView;');
     expect(dash).toContain('aria-label="Calendar view"');
     expect(panel).not.toContain("localStorage");
     expect(dash).not.toContain("localStorage");

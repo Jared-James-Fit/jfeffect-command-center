@@ -24,9 +24,9 @@ describe("clients can find their calendar", () => {
     expect(board).toContain("parseDay(initialDate) ?? startOfDay(new Date())");
   });
 
-  it("the coach's dashboard week opens the Calendar board on that day", () => {
+  it("the coach's dashboard shows a tapped day in place; a ?date link still opens the Calendar board on that day", () => {
     const card = read("src/components/admin-calendar/dashboard-schedule-card.tsx");
-    expect(card).toContain('link={(d) => ({ to: "/admin/calendar", search: { tab: "board", date: d } })}');
+    expect(card).toContain("onSelect={setAnchor}");
     const route = read("src/routes/_authenticated/admin/calendar.tsx");
     expect(route).toContain("<AdminCalendarBoardPanel key={search.date ?? \"today\"} initialDate={search.date ?? null} />");
   });

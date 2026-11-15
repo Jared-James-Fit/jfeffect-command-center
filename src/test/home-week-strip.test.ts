@@ -54,7 +54,7 @@ describe("every Home leads with its schedule", () => {
     const src = readFileSync("src/components/admin/finance/finance-home.tsx", "utf8");
     expect(at(src, "<MyCalendarCard")).toBeLessThan(at(src, "Today's money"));
   });
-  it("every Home (client and member in the portal, coach) is the same day agenda, built from the shared pieces; weeks live in Workouts", () => {
+  it("every Home (client and member in the portal, coach) is built from the shared pieces; the coach's day is a timeline", () => {
     for (const f of [
       "src/components/home/upcoming-schedule-card.tsx",
       "src/components/admin-calendar/dashboard-schedule-card.tsx",
@@ -62,12 +62,13 @@ describe("every Home leads with its schedule", () => {
       const src = readFileSync(f, "utf8");
       expect(src).not.toContain("<WeekStrip");
       expect(src).toContain('from "@/components/schedule/agenda"');
-      for (const piece of ["<AgendaCard>", "<AgendaHeader", "<AgendaRow", "<AgendaNextRow", "<AgendaFooter>"]) expect(src).toContain(piece);
+      for (const piece of ["<AgendaCard>", "<AgendaHeader", "<AgendaNextRow", "<AgendaFooter>"]) expect(src).toContain(piece);
     }
-    // Today on a clock: the client and coach Homes mark "Now".
-    for (const f of ["src/components/home/upcoming-schedule-card.tsx", "src/components/admin-calendar/dashboard-schedule-card.tsx"]) {
-      expect(readFileSync(f, "utf8")).toContain("<NowLine />");
-    }
+    // Today on a clock: the client's agenda marks "Now"; the coach's timeline draws its Now line in today's column.
+    expect(readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8")).toContain("<NowLine />");
+    expect(readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8")).toContain("<AgendaRow");
+    expect(readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8")).toContain("<TimeGrid");
+    expect(readFileSync("src/components/calendar/time-grid.tsx", "utf8")).toContain('aria-label="Now"');
     const client = readFileSync("src/components/home/upcoming-schedule-card.tsx", "utf8");
     expect(client).toContain("buildHomeAgenda(items, { today, days: HOME_CALENDAR_DAYS, maxUpcoming: HOME_UPCOMING_ROWS, upcoming: isCalendarItem })");
   });
