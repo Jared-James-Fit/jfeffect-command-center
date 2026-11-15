@@ -5,7 +5,7 @@ import { extraScene, type CommunityPost } from "@/lib/community";
 import { extraLesson } from "@/lib/lessons";
 import { canvasFile, paintInstagramCard, standaloneSvg, svgPicture } from "@/lib/instagram-cards";
 import { instagramFileName, postArtCard, type IgCard, type IgFormat } from "@/lib/instagram-export";
-import { findPostArt, loadPostArt, peekPostArt, postArtAlt, postArtKey, type PostArt } from "@/lib/post-art";
+import { findPostArt, loadPostArt, peekPostArt, postArtAlt, postArtKey, whenStill, type PostArt } from "@/lib/post-art";
 import { cn } from "@/lib/utils";
 
 /** The drawing a card paints in (a lesson's diagram, Saturday's scene), drawn off screen first; null when it has none. */
@@ -21,13 +21,18 @@ export function cardArtElement(post: CommunityPost, card: IgCard): ReactNode | n
   return null;
 }
 
-/** Paint a post's card as a JPEG file. `host`: where its drawing was put (cardArtElement), if it has one. */
-export async function paintCardFile(post: CommunityPost, card: IgCard, format: IgFormat, unit: "kg" | "lb", host: Element | null, index = 0): Promise<File | null> {
+/**
+ * Paint a post's card as a JPEG file. `host`: where its drawing was put (cardArtElement), if it has one.
+ * `pause` (the feed's paint): waited on between drawing the card and encoding it, so the main thread is
+ * held in two short stretches, each only while the screen is still, never one long one under a swipe.
+ */
+export async function paintCardFile(post: CommunityPost, card: IgCard, format: IgFormat, unit: "kg" | "lb", host: Element | null, index = 0, pause?: () => Promise<void>): Promise<File | null> {
   const svg = host?.querySelector("svg");
   // the card is light paper: the diagram goes on in its paper colours (dark ink), never the story's white
   const art = svg ? await svgPicture(standaloneSvg(svg, LESSON_PAPER_COLORS, 1080)) : null;
   const canvas = document.createElement("canvas");
   await paintInstagramCard(canvas, { card, format, post, unit, art });
+  if (pause) await pause();
   const file = await canvasFile(canvas, instagramFileName(post, index, "image/jpeg"));
   // let the phone have the memory back now, not whenever it collects
   canvas.width = 0;
@@ -58,12 +63,26 @@ function useNearScreen(ref: RefObject<HTMLElement | null>, eager: boolean): bool
   return near;
 }
 
+/** How far a box is from the screen, in px (0 when any of it is on it); a box no longer on the page is last. */
+function distanceFromScreen(el: Element | null): number {
+  if (!el?.isConnected) return Number.POSITIVE_INFINITY;
+  const r = el.getBoundingClientRect();
+  const h = window.innerHeight;
+  const w = window.innerWidth;
+  const dy = r.bottom < 0 ? -r.bottom : r.top > h ? r.top - h : 0;
+  const dx = r.right < 0 ? -r.right : r.left > w ? r.left - w : 0;
+  return dy + dx;
+}
+
 /**
  * The picture for this post's card (postArtCard), and what it's doing:
  * kept → shown at once; else painted once it's near the screen (`eager`:
- * right away). `host` is where its drawing goes while it's painted.
+ * right away), only while the screen is still and the nearest first
+ * (post-art.ts), so a swipe never lands on a post the phone hasn't finished
+ * drawing. `host` is where its drawing goes while it's painted; `box` is
+ * where the picture sits.
  */
-export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb", near: boolean) {
+export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb", near: boolean, box?: RefObject<HTMLElement | null>) {
   const key = useMemo(() => postArtKey(post, card, unit), [post, card, unit]);
   const name = instagramFileName(post, 0, "image/jpeg");
   const [art, setArt] = useState<PostArt | null>(() => peekPostArt(key));
@@ -98,7 +117,8 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
   useEffect(() => {
     if (!painting || (drawing && !host)) return;
     let alive = true;
-    void loadPostArt(key, name, () => paintCardFile(postRef.current, card, "feed", unit, host)).then((made) => {
+    const rank = () => distanceFromScreen(box?.current ?? null);
+    void loadPostArt(key, name, () => paintCardFile(postRef.current, card, "feed", unit, host, 0, whenStill), { whenStill: true, rank }).then((made) => {
       if (!alive) return;
       if (made) setArt(made);
       else setFailed(true);
@@ -107,7 +127,7 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
     return () => {
       alive = false;
     };
-  }, [painting, drawing, host, key, name, card, unit]);
+  }, [painting, drawing, host, key, name, card, unit, box]);
 
   return {
     art: art?.key === key ? art : null,
@@ -131,7 +151,7 @@ export function usePostArt(post: CommunityPost, card: IgCard, unit: "kg" | "lb",
 export function PostArtImage({ post, card, unit, eager = false, fill = false, zoom = true, className }: { post: CommunityPost; card: IgCard; unit: "kg" | "lb"; eager?: boolean; fill?: boolean; zoom?: boolean; className?: string }) {
   const box = useRef<HTMLDivElement | null>(null);
   const near = useNearScreen(box, eager);
-  const { art, failed, host } = usePostArt(post, card, unit, near);
+  const { art, failed, host } = usePostArt(post, card, unit, near, box);
   const alt = postArtAlt(post, card);
   return (
     <div

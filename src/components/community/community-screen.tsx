@@ -28,7 +28,7 @@ import { OPEN_ACTIVITY_EVENT } from "@/lib/crew-activity";
 import { BarBack, BarButton, BarTitle, CrewBar, CrewBrand, useBarHidden } from "@/components/community/crew-header";
 import { DualAccountSwitcher } from "@/components/dual-account-switcher";
 import { openAppMore } from "@/lib/shell-events";
-import { bubbleFold, ease, FIRST_POST_RADIUS, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
+import { bubbleFold, ease, FIRST_POST_RADIUS, FIRST_UNDER_MIN, setFeedPaging, storiesProgress, watchFeedViewport } from "@/lib/feed-paging";
 import { RankingsHub, rankingsFromHash } from "@/components/community/league-hub";
 import { manageTabFromHash, type ManageTab } from "@/lib/crew-manage";
 import { markCommunitySeen, useMyCommunityId, useCommunityFeed, useRankedFeed, useCommunityProfile, useHintsSeen, useMarkHintSeen, usePostMediaUrls, useReact, useViewerUnit } from "@/lib/community.queries";
@@ -926,15 +926,17 @@ function FeedPager({
 }) {
   const screen = (pg: { key: string; post?: CommunityPost; node: ReactNode }, i: number) =>
     pg.post ? (
-      <FeedItem
+      // a screen is simply there when you swipe to it (TikTok's, Reels'), never easing in: a screen fading or rising
+      // in is a layer of its own, which an iPhone paints a strip at a time, and a swipe that landed while the phone was
+      // busy showed the top of the post over black (Nov 15 2026: a lesson's card cut off mid-line, no words or buttons)
+      <div
         key={pg.key}
-        index={i}
         data-post-id={pg.post.id}
         data-feed-first-post={i === 0 ? "" : undefined}
         className={cn("feed-page transition-shadow duration-700", flash === pg.post.id && "ring-2 ring-inset ring-primary")}
       >
         {pg.node}
-      </FeedItem>
+      </div>
     ) : (
       <div key={pg.key} className="feed-page flex flex-col justify-center overflow-y-auto px-3" style={SCREEN_ROOM} data-feed-moment={pg.key}>
         {pg.node}
@@ -1122,9 +1124,11 @@ function useStoriesMotion(
       }
       // under the stories its picture sits right under them, not a bar's height lower (that room is the
       // bar's once it's up), so a picture shown whole shows whole above the tab bar; it eases down to its
-      // place as the post comes up (styles.css, --first-under: 1 under the stories, 0 up)
+      // place as the post comes up (styles.css, --first-under: 1 under the stories, 0 up). Up to within a
+      // hair (a snapped scroll lands a fraction of a pixel short), it's up: the moving layer goes, never
+      // left behind on a post at rest
       const u = reduce ? 0 : 1 - ease(p);
-      if (u > 0) {
+      if (u >= FIRST_UNDER_MIN) {
         first.style.setProperty("--first-under", u.toFixed(3));
         first.setAttribute("data-first-under", "");
       } else {

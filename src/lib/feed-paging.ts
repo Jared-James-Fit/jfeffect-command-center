@@ -166,3 +166,11 @@ export function ease(t: number): number {
 
 /** The first post's top corners, rounded like a card under the stories, square once it's up. */
 export const FIRST_POST_RADIUS = 18;
+
+/**
+ * Below this much "under" (--first-under), the first post is up: its picture's
+ * moving layer (a 3D transform, styles.css) comes off. A snapped scroll lands a
+ * fraction of a pixel short of where the post is up, which left a 3D layer of
+ * "0.000" on the post at rest.
+ */
+export const FIRST_UNDER_MIN = 0.005;
