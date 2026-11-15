@@ -11,11 +11,19 @@ function fmtNum(n: number): string {
 }
 
 /**
- * The load suggestion on an exercise card: one quiet line ("Suggested 190 kg ×
- * 4 @ 7") under "Last time", and an ⓘ holding the range, the "audible" (moving
- * fast → add, grinding → drop), the why, "just a suggestion" and the off
- * switch, so the card stays one glance.
+ * The load suggestion on an exercise card: one quiet line ("Suggested 190 kg")
+ * under "Last time", right below the prescription it's for, and an ⓘ holding
+ * the range, the "audible" (moving fast → add, grinding → drop), the why and
+ * the off switch, so the card stays one glance.
  */
+
+/**
+ * Last time and Suggested are two plain lines under the prescription, never
+ * boxes: a label column so their numbers line up, the prescription above them
+ * the one bold line (see ExerciseBlock's data-rx-refs).
+ */
+export const REF_ROW = "flex min-h-9 min-w-0 items-center gap-2 text-[13px] leading-tight";
+export const REF_LABEL = "w-[4.5rem] shrink-0 text-muted-foreground";
 export interface WarmupGauge {
   /** What the last warm-up should be (display unit), when a top-set target exists. */
   suggested: { load: number; reps: number } | null;
@@ -29,6 +37,7 @@ export function LoadSuggestionCard({
   fromName = null,
   picks = null,
   onApply = null,
+  showPlan = true,
 }: {
   hint: LoadSuggestion | null;
   model: LoadModel;
@@ -41,6 +50,8 @@ export function LoadSuggestionCard({
   picks?: { low: number; high: number; loads: number[] } | null;
   /** Puts a weight in every open set as a draft (never logs one); resolves to how many it filled. Null: nothing to fill. */
   onApply?: ((load: number) => Promise<number>) | null;
+  /** Say "× 5 @ 6" after the weight: only when the prescription right above it doesn't already (a range of reps or RPE, or RIR). */
+  showPlan?: boolean;
 }) {
   const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,9 +64,9 @@ export function LoadSuggestionCard({
       ? "log your last warm-up below and it sets today's weight."
       : "log your first set with an RPE and the rest get a live suggestion.";
     return (
-      <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-2 py-1.5 text-[11px] leading-snug text-muted-foreground" data-testid="load-suggestion-pending">
-        <Target className="mt-px h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span><span className="font-semibold text-foreground">{why}</span> · {next}</span>
+      <div className="flex min-w-0 items-start gap-2 px-1 py-2 text-[13px] leading-snug" data-testid="load-suggestion-pending">
+        <span className={REF_LABEL}>Suggested</span>
+        <span className="min-w-0 flex-1 text-xs leading-snug text-muted-foreground"><span className="font-medium text-foreground">{why}</span> · {next}</span>
       </div>
     );
   }
@@ -109,67 +120,61 @@ export function LoadSuggestionCard({
     }
   };
   const shown = picks ? `${fmtNum(picks.low)}–${fmtNum(picks.high)}` : fmtNum(hint.target);
-  const body = (
-    <>
-      <Target className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
-        <span className="shrink-0 text-muted-foreground">Suggested</span>
-        <span className="shrink-0 text-sm font-bold tabular-nums text-foreground" data-testid="load-target">{shown} {hint.unit}</span>
-        <span className="min-w-0 truncate tabular-nums text-muted-foreground">× {plan.reps} @ {fmtNum(plan.rpe)}</span>
-      </span>
-    </>
-  );
   return (
-    // One quiet line under "Last time": the number (or the weights to pick from
-    // on a first heavy set) and what it's for. The why, the fast / slow call and
-    // the off switch live behind ⓘ, so the card stays about the sets.
-    <div className="mt-1.5 rounded-lg border border-border bg-muted/40" data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
-    <div className="flex min-h-9 items-center gap-2 py-0.5 pl-2.5 pr-0.5">
-      {onApply ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => (picks ? setChoosing((v) => !v) : void apply(hint.target))}
-          aria-expanded={picks ? choosing : undefined}
-          aria-label={picks ? `Suggested ${shown} ${hint.unit}. Choose a weight for your sets` : `Suggested ${shown} ${hint.unit}. Put it in your sets`}
-          data-testid="load-apply"
-          className="-my-0.5 -ml-1 flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md pl-1 text-left active:bg-foreground/5 disabled:opacity-60"
-        >
-          {body}
-        </button>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-2">{body}</div>
-      )}
-      {badge && (
-        <span
-          data-testid="load-badge"
-          className="shrink-0 rounded-full bg-background px-1.5 py-px text-[10px] font-semibold text-muted-foreground"
-        >
-          {badge.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" aria-hidden="true" />}
-          {badge.text}
+    // One line under "Last time": the weight (or the weights to pick from on a
+    // first heavy set), how live it is, Use (or Pick) and ⓘ. The why, the fast /
+    // slow call and the off switch live behind ⓘ, so the card stays about the sets.
+    <div data-testid="load-suggestion" data-picks={picks ? "" : undefined}>
+      <div className={cn(REF_ROW, "px-1")}>
+        <span className={REF_LABEL}>Suggested</span>
+        {/* What's after the weight wraps under it on a narrow phone, never cut to "×." */}
+        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 py-1">
+          <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-foreground" data-testid="load-target">{shown} {hint.unit}</span>
+          {showPlan && <span className="whitespace-nowrap tabular-nums text-muted-foreground">× {plan.reps} @ {fmtNum(plan.rpe)}</span>}
+          {badge && (
+            <span data-testid="load-badge" className="whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+              {badge.live && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" aria-hidden="true" />}
+              {badge.text}
+            </span>
+          )}
         </span>
-      )}
-      <SuggestionWhy hint={hint} why={why} model={model} warmup={warmup} audible={audible} range={range} picks={picks} rpe={plan.rpe} canApply={!!onApply} />
-    </div>
-    {picks && choosing && onApply && (
-      <div className="flex gap-1.5 border-t border-border px-2 py-1.5" role="group" aria-label="Weights to choose from" data-testid="load-picks">
-        {picks.loads.map((l) => (
+        {onApply && (
+          // Puts the weight in every open set as a draft: nothing is logged until a set's number is tapped.
           <button
-            key={l}
             type="button"
             disabled={busy}
-            onClick={() => void apply(l)}
-            data-testid="load-pick"
-            className={cn(
-              "h-9 min-w-0 flex-1 rounded-md text-sm font-semibold tabular-nums transition active:scale-[0.97] disabled:opacity-60",
-              l === hint.target ? "bg-foreground text-background" : "bg-background text-foreground",
-            )}
+            onClick={() => (picks ? setChoosing((v) => !v) : void apply(hint.target))}
+            aria-expanded={picks ? choosing : undefined}
+            aria-label={picks ? `Suggested ${shown} ${hint.unit}. Choose a weight for your sets` : `Suggested ${shown} ${hint.unit}. Put it in your sets`}
+            data-testid="load-apply"
+            className="-my-0.5 flex h-10 shrink-0 items-center px-0.5 disabled:opacity-60"
           >
-            {fmtNum(l)}
+            <span className={cn("rounded-full px-3 py-1 text-xs font-semibold transition active:scale-[0.97]", picks && choosing ? "bg-foreground text-background" : "bg-secondary text-foreground")}>
+              {picks ? "Pick" : "Use"}
+            </span>
           </button>
-        ))}
+        )}
+        <SuggestionWhy hint={hint} why={why} model={model} warmup={warmup} audible={audible} range={range} picks={picks} rpe={plan.rpe} canApply={!!onApply} />
       </div>
-    )}
+      {picks && choosing && onApply && (
+        <div className="flex gap-1.5 px-1 pb-1" role="group" aria-label="Weights to choose from" data-testid="load-picks">
+          {picks.loads.map((l) => (
+            <button
+              key={l}
+              type="button"
+              disabled={busy}
+              onClick={() => void apply(l)}
+              data-testid="load-pick"
+              className={cn(
+                "h-9 min-w-0 flex-1 rounded-md text-sm font-semibold tabular-nums transition active:scale-[0.97] disabled:opacity-60",
+                l === hint.target ? "bg-foreground text-background" : "bg-muted text-foreground",
+              )}
+            >
+              {fmtNum(l)}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -361,18 +366,21 @@ export function LoadSuggestionsDone({
   const pct = own != null && Number.isFinite(own) ? Math.round((own - 1) * 100) : null;
   const read = pct == null ? null : Math.abs(own! - 1) < 0.015 ? "right on your usual" : `${Math.abs(pct)}% ${pct > 0 ? "above" : "below"} your usual`;
   return (
-    <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-muted px-2 py-1.5 text-[11px] leading-snug text-muted-foreground" data-testid="load-suggestion-done">
-      <Check className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden="true" />
-      <span>
+    <div className="flex min-w-0 items-start gap-2 px-1 py-2 text-[13px] leading-snug" data-testid="load-suggestion-done">
+      <span className={cn(REF_LABEL, "inline-flex items-center gap-1")}>
+        <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+        Today
+      </span>
+      <span className="min-w-0 flex-1 text-muted-foreground">
         All sets in
-        {read && <> · today ran <span className="font-semibold text-foreground">{read}</span></>}
+        {read && <> · ran <span className="font-medium text-foreground">{read}</span></>}
         {next && (
           <span className="block" data-testid="load-next-time">
-            Next time: <span className="text-sm font-bold tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
+            Next time: <span className="text-sm font-semibold tabular-nums text-foreground">{fmtNum(next.target)} {next.unit}</span>
             {plan && <> for {plan.reps} @ RPE {fmtNum(plan.rpe)}</>}
           </span>
         )}
-        {why && <span className="block" data-testid="load-next-why">{why}</span>}
+        {why && <span className="block text-xs" data-testid="load-next-why">{why}</span>}
       </span>
     </div>
   );
