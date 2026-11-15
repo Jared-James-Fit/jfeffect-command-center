@@ -6,6 +6,7 @@
  */
 import type { BuiltBlock, BuiltExercise } from "./generator-schemas";
 import { supersetGroup } from "./session-time";
+import { withoutFixedLoads } from "./loading";
 
 export type WeekRx = { sets: number; reps: string; rpe: string | null; rir: string | null; percentage: number | null; percentage_of?: "training_max" | "e1rm" | "1rm" | "top_set" | null; notes: string | null };
 
@@ -31,10 +32,11 @@ export function supersetNote(ex: BuiltExercise, day: readonly BuiltExercise[] | 
   return partners.length ? `Superset with ${partners.join(" and ")}: one set of each, then rest.` : null;
 }
 
-/** What the athlete reads under an exercise: its superset partner, the week's note, the progression rule and swap options. */
+/** What the athlete reads under an exercise: its superset partner, the week's note, the progression rule and swap options (never a fixed weight: withoutFixedLoads). */
 export function athleteNotes(ex: BuiltExercise, week: number, day?: readonly BuiltExercise[] | null): string | null {
   const rx = rxForWeek(ex, week);
-  const parts = [supersetNote(ex, day), rx.notes, ex.progression ? `Progress: ${ex.progression}` : null, ex.substitutions?.length ? `Swap if needed: ${ex.substitutions.map((s) => s.exercise_name).join(" or ")}` : null].filter(Boolean) as string[];
+  const progression = withoutFixedLoads(ex.progression);
+  const parts = [supersetNote(ex, day), withoutFixedLoads(rx.notes), progression ? `Progress: ${progression}` : null, ex.substitutions?.length ? `Swap if needed: ${ex.substitutions.map((s) => s.exercise_name).join(" or ")}` : null].filter(Boolean) as string[];
   const text = parts.join(" · ").trim();
   return text ? text.slice(0, 900) : null;
 }
