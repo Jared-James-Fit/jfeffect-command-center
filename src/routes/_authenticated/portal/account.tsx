@@ -24,7 +24,6 @@ import {
   KeyRound,
   Link2,
   Scale,
-  Settings,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
@@ -42,7 +41,6 @@ import { healthStoreProvider } from "@/platform/health";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DeleteAccountButton } from "@/components/account/delete-account";
-import { createCustomerPortalSession } from "@/lib/stripe-checkout.functions";
 import { ProfilePictureCapture } from "@/components/profile-picture-capture";
 import { SocialHandlesEditor } from "@/components/social-handles-editor";
 import { SOCIAL_FIELDS, SOCIAL_PLATFORMS } from "@/lib/social-handles";
@@ -65,6 +63,9 @@ import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 import { MyHealthSection, myHealthSummary, useMyHealthItems } from "@/components/health/my-health-section";
 import { UserAvatar } from "@/components/user-avatar";
 import { billingDay } from "@/lib/date-range";
+import { useMyBilling } from "@/components/billing/use-my-billing";
+import { UpdateCardButton } from "@/components/billing/my-purchases-view";
+import type { MySummary } from "@/lib/my-purchases";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -199,7 +200,9 @@ function AccountPage() {
   const { data: memberAgreement } = useMembershipAgreement();
   const wearablesQ = useWearableOverview();
   const wearables = wearablesQ.data;
-  const { data: primaryPurchase } = useActivePurchase(client?.id);
+  // Coaching clients' billing, from the same read as My Purchases (members' is the Membership page).
+  const billing = useMyBilling(tier === "coaching" && !isNative() ? client?.id : undefined);
+  const billingRow = accountBillingSummary(billing.view?.mine.summary ?? null, billing.view?.money);
 
   const buildPatch = (current: any) => {
     const updatedFields = PROFILE_FIELDS.filter((f) => current[f] !== client?.[f]);
@@ -588,15 +591,15 @@ function AccountPage() {
             )}
 
             {/* ── Billing & Subscription — hidden on native (purchases not available in Android app) ── */}
-            {!native && (
+            {!native && tier === "coaching" && (
               <SettingsSection
                 id="billing"
                 icon={CreditCard}
                 title="Billing"
-                summary={primaryPurchase?.offer_name ? { text: String(primaryPurchase.offer_name) } : null}
+                summary={billingRow}
               >
                 <SectionErrorBoundary label="Billing & Subscription">
-                  <BillingSection purchase={primaryPurchase ?? null} />
+                  <AccountBilling view={billing.view} loading={billing.isLoading} />
                 </SectionErrorBoundary>
               </SettingsSection>
             )}
@@ -858,76 +861,40 @@ function CoachingSetupRows({ rows }: { rows: { label: string; value: string }[] 
   );
 }
 
-type ActivePurchase = {
-  offer_name: string | null;
-  payment_status: string | null;
-  payment_structure: string | null;
-  payment_frequency: string | null;
-  term_end_date: string | null;
-  stripe_customer_id: string | null;
-  is_recurring: boolean | null;
-};
-
-/** The client's current purchase (the Billing row's name and its section). */
-function useActivePurchase(clientId?: string) {
-  return useQuery({
-    queryKey: ["billing-section-purchase", clientId],
-    enabled: !!clientId && !isNative(),
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("purchase_records")
-        .select("offer_name, payment_status, payment_structure, payment_frequency, term_end_date, stripe_customer_id, is_recurring")
-        .eq("client_id", clientId!)
-        .not("payment_status", "in", "(\"Cancelled\",\"Expired\",\"Refunded\")")
-        .order("purchased_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data as ActivePurchase | null;
-    },
-  });
+/** Billing's row in a word: what's owed, or that nothing is. */
+function accountBillingSummary(s: MySummary | null, money?: (c: number) => string): { text: string; warn?: boolean } | null {
+  if (!s || !money || s.state === "nothing") return null;
+  if (s.state === "action") return { text: "Needs you", warn: true };
+  if (s.outstandingCents > 0) return { text: `${money(s.outstandingCents)} left` };
+  return { text: "All paid up" };
 }
 
-function BillingSection({ purchase }: { purchase: ActivePurchase | null }) {
-  const portalFn = useServerFn(createCustomerPortalSession);
-  const [loading, setLoading] = useState(false);
-
-  const openPortal = async () => {
-    setLoading(true);
-    try {
-      const { url } = await portalFn({ data: { origin: window.location.origin } });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not open billing portal");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fmtDate = (d: any) => billingDay(d, { year: "always" }) ?? "—";
-
-  if (!purchase) {
-    return <p className="text-sm text-muted-foreground">No active billing found.</p>;
-  }
-  const plan = purchase.payment_frequency ?? purchase.payment_structure ?? "";
+/** Account's Billing: the line My Purchases leads with, a way there, and Stripe's card page when they pay by card. */
+function AccountBilling({ view, loading }: { view: ReturnType<typeof useMyBilling>["view"]; loading: boolean }) {
+  if (loading) return <div className="h-16 animate-pulse rounded-lg bg-muted" aria-busy="true" />;
+  const s = view?.mine.summary;
+  const money = view?.money;
+  const byCard = !!view?.sales.some((x: any) => x.stripe_customer_id || x.stripe_subscription_id);
   return (
     <div className="space-y-3">
-      <div className="space-y-0.5 text-sm">
-        <div className="font-semibold">{purchase.offer_name}</div>
-        <div className="text-muted-foreground">
-          {[plan, purchase.payment_status].filter(Boolean).join(" · ")}
+      {s && money && s.state !== "nothing" ? (
+        <div className="space-y-0.5 text-sm">
+          <div className="font-semibold">{s.outstandingCents > 0 ? `${money(s.outstandingCents)} left to pay` : "All paid up"}</div>
+          {s.next && (
+            <div className="text-muted-foreground">
+              {s.next.recurring ? "Next charge" : "Next payment"} {money(s.next.cents)} · {billingDay(s.next.date, { weekday: true })}{s.next.auto ? " · automatic" : ""}
+            </div>
+          )}
         </div>
-        {purchase.is_recurring && purchase.term_end_date && (
-          <div className="text-xs text-muted-foreground">Next billing: {fmtDate(purchase.term_end_date)}</div>
-        )}
-      </div>
-      {purchase.stripe_customer_id && (
-        <>
-          <Button variant="outline" onClick={openPortal} disabled={loading} className="h-10 gap-2">
-            <Settings className="h-4 w-4" />{loading ? "Opening..." : "Manage Billing"}
-          </Button>
-          <p className="text-xs text-muted-foreground">Update your card, see invoices or change your subscription.</p>
-        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">No purchases yet.</p>
       )}
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" className="h-10">
+          <Link to="/portal/purchases">My purchases and receipts</Link>
+        </Button>
+        {byCard && <UpdateCardButton label="Manage card" variant="outline" />}
+      </div>
     </div>
   );
 }
