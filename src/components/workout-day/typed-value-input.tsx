@@ -122,7 +122,7 @@ export function TypedValueInput({
             cellHeight,
             hasValue
               ? cn("border-border/60 bg-muted/40", planned ? "text-muted-foreground/80" : "text-foreground")
-              : "border-blue-500/40 bg-blue-500/10 text-muted-foreground",
+              : "border-border/60 bg-muted/40 text-muted-foreground/60",
             !disabled && "cursor-text hover:bg-muted/60",
           )}
         >
