@@ -149,7 +149,7 @@ export function AgendaWeek({
           <Cell
             key={d}
             role="listitem"
-            {...(onSelect ? { type: "button", onClick: () => onSelect(d), "aria-pressed": isSelected } : {})}
+            {...(onSelect ? { type: "button", onClick: () => onSelect(d), "aria-pressed": selected ? isSelected : undefined } : {})}
             {...(to ? { to: to.to, search: to.search } : {})}
             aria-label={`${date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}${isToday ? " (today)" : ""}${marks.length ? `, ${marks.length} scheduled` : ""}`}
             aria-current={isToday ? "date" : undefined}

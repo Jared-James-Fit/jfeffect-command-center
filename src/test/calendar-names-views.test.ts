@@ -141,7 +141,7 @@ describe("calendar choices are remembered on the account", () => {
   });
 });
 
-describe("the Home card's Day / Week / Month", () => {
+describe("the Home card's Day / Week / Month / List", () => {
   it("a month is whole Monday–Sunday weeks", () => {
     // November 2026 starts on a Sunday and ends on a Monday: 6 rows.
     const nov = monthGridDays("2026-11-18");
@@ -159,11 +159,13 @@ describe("the Home card's Day / Week / Month", () => {
     expect(addMonthsISO("2026-12-15", 1)).toBe("2027-01-15");
     expect(shiftAnchor("month", "2026-11-18", 1)).toBe("2026-12-01");
     expect(shiftAnchor("week", "2026-11-18", -1)).toBe("2026-11-11");
+    expect(shiftAnchor("list", "2026-11-18", 1)).toBe("2026-11-25");
   });
 
   it("each view loads just its days", () => {
-    expect(homeRange("day", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-25" });
+    expect(homeRange("day", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-30" });
     expect(homeRange("week", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-22" });
+    expect(homeRange("list", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-11-16", to: "2026-11-22" });
     expect(homeRange("month", "2026-11-18", "2026-11-18")).toEqual({ from: "2026-10-26", to: "2026-12-06" });
   });
 
@@ -173,11 +175,32 @@ describe("the Home card's Day / Week / Month", () => {
     expect(periodLabel("month", "2026-11-18", "2026-11-18")).toBe("November");
     expect(periodLabel("month", "2027-01-05", "2026-11-18")).toBe("January 2027");
     expect(isCurrentPeriod("week", "2026-11-20", "2026-11-18")).toBe(true);
+    expect(isCurrentPeriod("list", "2026-11-25", "2026-11-18")).toBe(false);
+    expect(periodLabel("list", "2026-11-18", "2026-11-18")).toBe(periodLabel("week", "2026-11-18", "2026-11-18"));
     expect(isCurrentPeriod("month", "2026-12-01", "2026-11-18")).toBe(false);
     expect(dayTag("2026-11-18", "2026-11-18")).toBe("Today");
     expect(dayTag("2026-11-19", "2026-11-18")).toBe("Tmrw");
     expect(dayTag("2026-11-20", "2026-11-18")).toMatch(/^Fri 20$/);
     expect(dayTag("2026-11-17", "2026-11-18")).toMatch(/^Tue 17$/);
+  });
+
+  it("List is the week's bookings one line each, by day, under the week's strip", async () => {
+    const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
+    expect(dash).toContain('{ id: "list", label: "List" }');
+    expect(dash).toContain("<AgendaWeek today={today} anchor={anchor} onSelect={openDay} dots={(d) => dotsByDay.get(d) ?? []} />");
+    expect(dash).toContain("dayText={firstOfDay ? dayTag(r.date, today) : \"\"}");
+    expect(dash).toContain("data-home-list");
+    // Remembered like the other tabs; an older value or junk falls back to nothing.
+    const { sanitizePrefs } = await import("@/lib/calendar-prefs");
+    expect(sanitizePrefs({ homeView: "list" })).toEqual({ homeView: "list" });
+    expect(sanitizePrefs({ homeView: "agenda" })).toEqual({});
+  });
+
+  it("the period is never cut short: it takes its own line when the switch leaves no room", () => {
+    const dash = readFileSync("src/components/admin-calendar/dashboard-schedule-card.tsx", "utf8");
+    expect(dash).toContain('<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">');
+    expect(dash).toContain('<span className="mr-auto whitespace-nowrap text-[13px] font-semibold tabular-nums" aria-live="polite">{label}</span>');
+    expect(dash).not.toMatch(/truncate text-center text-xs font-semibold tabular-nums">\{label\}/);
   });
 
   it("the card and the Calendar page share one remembered choice", () => {
