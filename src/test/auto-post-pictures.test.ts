@@ -409,7 +409,7 @@ describe("workout posts are plain and clean", () => {
     }
     const card = read("src/components/community/post-card.tsx");
     expect(card).toContain(
-      '<div className={cn("relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-7" : "py-5")} data-workout-hero={pr ? "pr" : "done"}>',
+      '<div className={cn("@container relative overflow-hidden bg-muted px-5 text-foreground", big ? "py-7" : "py-5")} data-workout-hero={pr ? "pr" : "done"}>',
     );
     expect(card).toContain('pr && "text-warning"');
     expect(card).toContain("text-success");
