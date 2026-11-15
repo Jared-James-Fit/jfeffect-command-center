@@ -24,8 +24,8 @@ import {
   fmtNum,
   liftFamily,
 } from "@/lib/analytics-format";
+import { strengthTrend, trendWords } from "@/lib/analytics/strength-read";
 import {
-  e1rmTrendPerWeek,
   fmtEffort,
   groupLiftSessions,
   repMaxes,
@@ -50,10 +50,10 @@ export type LiftHistoryPoint = LiftSetInput & {
 export type LiftHistory = { name: string; pr: LiftHistoryPoint | null; points: LiftHistoryPoint[] };
 
 const METRICS: { key: Metric; label: string }[] = [
-  { key: "est", label: "e1RM" },
+  { key: "est", label: "Est. max" },
   { key: "top", label: "Top set" },
   { key: "volume", label: "Volume" },
-  { key: "effort", label: "RPE" },
+  { key: "effort", label: "Effort" },
   { key: "velocity", label: "Velocity" },
 ];
 
@@ -86,7 +86,10 @@ export function LiftProgressCard({
   single?: boolean;
 }) {
   const [selectedEx, setSelectedEx] = useState("");
-  const [metric, setMetric] = useState<Metric>("est");
+  // null = this lift's default: the estimated max for a squat / bench / deadlift
+  // (or a variation), the top set for everything else (accessories progress by
+  // load and reps, and an estimated max says little about a lateral raise).
+  const [metric, setMetric] = useState<Metric | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [openSession, setOpenSession] = useState<string | null>(null);
   const [showAllSessions, setShowAllSessions] = useState(false);
@@ -116,13 +119,27 @@ export function LiftProgressCard({
   const sessions = useMemo(() => sessionsByEx.get(activeEx) ?? [], [sessionsByEx, activeEx]);
   const color = exerciseColor(activeEx, series?.points?.[0]?.muscle_group);
   const hasVelocity = sessions.some((s) => s.velocity != null);
-  const activeMetric: Metric = metric === "velocity" && !hasVelocity ? "est" : metric;
+  const defaultMetric: Metric = liftFamily(activeEx) ? "est" : "top";
+  const chosen = metric ?? defaultMetric;
+  const activeMetric: Metric = chosen === "velocity" && !hasVelocity ? defaultMetric : chosen;
+  // The estimated max from comparable sets (strength-read.ts) once 3+ sessions have
+  // one; until then every set, said under the chart, so it reads as a floor.
+  const comparable = sessions.filter((s) => s.strength != null).length >= 3;
+  const estOf = (s: LiftSession): number | null => (comparable ? s.strength : s.e1rm > 0 ? s.e1rm : null);
+  const leftOut = comparable ? sessions.filter((s) => s.strength == null).length : 0;
 
   const fmtLoad = (lb: number) => fmtNum(conv(lb));
-  const prKey = useMemo(
-    () =>
-      sessions.reduce<LiftSession | null>((b, s) => (!b || s.e1rm > b.e1rm ? s : b), null)?.key ??
-      null,
+  // An estimate is never more precise than a whole kg / lb.
+  const fmtEst = (lb: number) => String(Math.round(conv(lb)));
+  const bestEst = useMemo(
+    () => sessions.reduce<LiftSession | null>((b, s) => ((estOf(s) ?? 0) > (b ? estOf(b) ?? 0 : 0) ? s : b), null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, comparable],
+  );
+  const prKey = bestEst?.key ?? null;
+  // The heaviest weight actually lifted (any reps), so the header never passes an estimate off as a lift.
+  const heaviestLift = useMemo(
+    () => sessions.reduce<LiftSession | null>((b, s) => (!b || s.heaviest.load > b.heaviest.load ? s : b), null)?.heaviest ?? null,
     [sessions],
   );
 
@@ -130,13 +147,14 @@ export function LiftProgressCard({
     () =>
       sessions.map((s) => ({
         key: s.key,
-        est: round1(conv(s.e1rm)),
+        est: estOf(s) == null ? null : round1(conv(estOf(s)!)),
         top: round1(conv(s.heaviest.load)),
         volume: Math.round(conv(s.tonnage)),
         effort: s.avgEffort,
         velocity: s.velocity,
       })),
-    [sessions, conv],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, conv, comparable],
   );
 
   const selIdx = Math.max(
@@ -148,6 +166,7 @@ export function LiftProgressCard({
 
   function selectExercise(name: string) {
     setSelectedEx(name);
+    setMetric(null);
     setSelectedKey(null);
     setOpenSession(null);
     setShowAllSessions(false);
@@ -183,7 +202,7 @@ export function LiftProgressCard({
 
   const value = (s: LiftSession, m: Metric): number | null =>
     m === "est"
-      ? conv(s.e1rm)
+      ? estOf(s) == null ? null : conv(estOf(s)!)
       : m === "top"
         ? conv(s.heaviest.load)
         : m === "volume"
@@ -230,7 +249,11 @@ export function LiftProgressCard({
     return { sets, reps, tonnage, avgEffort: effortN ? effortSum / effortN : null };
   }, [sessions]);
 
-  const trend = useMemo(() => e1rmTrendPerWeek(sessions), [sessions]);
+  const trend = useMemo(
+    () => strengthTrend(sessions.filter((s) => estOf(s) != null).map((s) => ({ date: s.date, value: estOf(s)! }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, comparable],
+  );
   const maxes = useMemo(() => repMaxes(series?.points ?? []).slice(0, 6), [series]);
   const effortChange = useMemo(() => sameLoadEffortChange(sessions), [sessions]);
   const velocityInsight = useVelocityInsight(series?.points ?? [], activeEx, displayUnit, conv);
@@ -292,12 +315,23 @@ export function LiftProgressCard({
       {series && selected ? (
         <>
           <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
-            <span className="min-w-0 truncate">
-              <span className="font-bold text-foreground">
-                PR {fmtLoad(series.pr?.est_1rm ?? 0)} {displayUnit}
-              </span>{" "}
-              e1RM
-              {series.pr?.date ? ` · ${format(new Date(series.pr.date), "MMM d, yyyy")}` : ""}
+            <span className="min-w-0 truncate" data-lift-bests>
+              {bestEst && estOf(bestEst) != null && (
+                <>
+                  Best est. max{" "}
+                  <span className="font-bold text-foreground">
+                    ~{fmtEst(estOf(bestEst)!)} {displayUnit}
+                  </span>
+                </>
+              )}
+              {heaviestLift && (
+                <>
+                  {bestEst && estOf(bestEst) != null ? " · " : ""}Heaviest{" "}
+                  <span className="font-bold text-foreground">
+                    {fmtLoad(heaviestLift.load)} × {heaviestLift.reps}
+                  </span>
+                </>
+              )}
             </span>
             <span className="shrink-0 font-semibold">
               {sessions.length} {sessions.length === 1 ? "session" : "sessions"}
@@ -447,21 +481,26 @@ export function LiftProgressCard({
               Log this lift in another session to see a trend.
             </p>
           )}
+          {activeMetric === "est" && sessions.length > 1 && (
+            <p className="-mt-2 text-[11px] leading-snug text-muted-foreground" data-est-note>
+              {comparable
+                ? `Estimated from your hard sets (RPE 7+, up to 10 reps)${leftOut ? `. ${leftOut} lighter ${leftOut === 1 ? "session isn't" : "sessions aren't"} plotted` : ""}.`
+                : "Estimated from every set, so read it as a floor. Log RPE on your top sets for a truer read."}
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <Tile
-              label="e1RM trend"
-              value={
-                trend == null
-                  ? "—"
-                  : `${trend >= 0 ? "+" : ""}${fmtNum(conv(trend))} ${displayUnit}/wk`
-              }
+              label="Strength"
+              value={trendWords(trend)}
               sub={
-                trend == null
-                  ? "Needs 3+ sessions over 2+ weeks"
-                  : `Fitted across ${sessions.length} sessions`
+                trend.kind === "unclear"
+                  ? trend.reason === "few"
+                    ? "Needs 4+ hard sessions"
+                    : "Needs 3+ weeks"
+                  : `Best recent vs earlier sessions`
               }
-              tone={trend == null ? undefined : trend > 0 ? "up" : trend < 0 ? "down" : undefined}
+              tone={trend.kind === "up" ? "up" : trend.kind === "down" ? "down" : undefined}
             />
             <Tile
               label="Sets · Reps"
@@ -478,7 +517,7 @@ export function LiftProgressCard({
               }
             />
             <Tile
-              label="Avg RPE"
+              label="Avg effort"
               value={totals.avgEffort == null ? "—" : fmtNum(totals.avgEffort)}
               sub={totals.avgEffort == null ? "Not logged yet" : "All logged sets"}
             />
@@ -487,7 +526,7 @@ export function LiftProgressCard({
           {maxes.length > 0 && (
             <div>
               <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Rep maxes
+                Rep maxes · heaviest lifted
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {maxes.map((m) => (
@@ -544,7 +583,7 @@ export function LiftProgressCard({
               {visibleSessions.map((s) => {
                 const idx = sessions.indexOf(s);
                 const prev = idx > 0 ? sessions[idx - 1] : null;
-                const delta = prev ? conv(s.e1rm) - conv(prev.e1rm) : null;
+                const delta = prev && estOf(s) != null && estOf(prev) != null ? conv(estOf(s)!) - conv(estOf(prev)!) : null;
                 const expanded = openSession === s.key;
                 const isSel = s.key === selected.key;
                 return (
@@ -584,7 +623,7 @@ export function LiftProgressCard({
                       <span className="flex items-center gap-1.5">
                         <span className="text-right leading-tight">
                           <span className="block text-sm font-bold tabular-nums">
-                            {fmtLoad(s.e1rm)}
+                            {estOf(s) == null ? "—" : fmtEst(estOf(s)!)}
                           </span>
                           <span
                             className={cn(
@@ -597,7 +636,7 @@ export function LiftProgressCard({
                             )}
                           >
                             {delta == null || Math.abs(delta) < 0.05
-                              ? "e1RM"
+                              ? "est. max"
                               : `${delta > 0 ? "▲" : "▼"} ${fmtNum(Math.abs(delta))}`}
                           </span>
                         </span>
@@ -695,6 +734,8 @@ function SessionReadout({
   const main =
     v == null
       ? "—"
+      : metric === "est"
+        ? String(Math.round(v))
       : metric === "volume"
         ? Math.round(v).toLocaleString()
         : metric === "velocity"
@@ -702,7 +743,7 @@ function SessionReadout({
           : fmtNum(v);
   const unit =
     metric === "est"
-      ? `${displayUnit} e1RM`
+      ? `${displayUnit} est. max`
       : metric === "top"
         ? `${displayUnit} × ${session.heaviest.reps}${heaviestEffort ? ` · ${fmtEffort(heaviestEffort)}` : ""}`
         : metric === "volume"

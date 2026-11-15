@@ -9,8 +9,8 @@ describe("a set's PR indicator", () => {
   it("one record reads as its own name, with what it beat", () => {
     const items = setPrItems({ record: rec({ atpr: true, program_pr: true, prev_all_kg: 140 }), unit: "kg" });
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ title: "5-rep ATPR", detail: "145 kg × 5 · was 140 kg" });
-    expect(setPrSummary(items)).toBe("5-rep ATPR");
+    expect(items[0]).toMatchObject({ title: "5-rep all-time PR", detail: "145 kg × 5 · was 140 kg" });
+    expect(setPrSummary(items)).toBe("5-rep all-time PR");
   });
   it("a rep record and a weight record on one set are one indicator: 2 PRs", () => {
     const items = setPrItems({
@@ -19,7 +19,7 @@ describe("a set's PR indicator", () => {
       unit: "kg",
     });
     expect(setPrSummary(items)).toBe("2 PRs");
-    expect(items.map((i) => i.title)).toEqual(["5-rep ATPR", "Weight program PR"]);
+    expect(items.map((i) => i.title)).toEqual(["5-rep all-time PR", "Weight program PR"]);
     expect(items[1].detail).toBe("Heaviest yet · 145 kg · was 142.5 kg");
   });
   it("names the scope it actually is, never a bigger one", () => {
@@ -33,7 +33,7 @@ describe("a set's PR indicator", () => {
   });
   it("falls back to the on-phone check only when the server has nothing", () => {
     const local = { reps: 3, amount: 2.5, unit: "kg" as const };
-    expect(setPrItems({ localPr: local, unit: "kg" })[0]).toMatchObject({ title: "3-rep ATPR", detail: "+2.5 kg over your previous best" });
+    expect(setPrItems({ localPr: local, unit: "kg" })[0]).toMatchObject({ title: "3-rep all-time PR", detail: "+2.5 kg over your previous best" });
     expect(setPrItems({ localPr: local, assisted: true, unit: "kg" })[0].detail).toBe("2.5 kg less assistance than your best");
     expect(setPrItems({ record: rec({ atpr: true }), localPr: local, unit: "kg" })).toHaveLength(1);
   });

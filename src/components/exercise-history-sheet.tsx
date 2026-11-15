@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2 } from "lucide-react";
+import { History, CheckCircle2, Circle, StickyNote, Pencil, Loader2, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { matchingHistoryExerciseIds } from "@/lib/workout-previous-lift";
@@ -93,6 +93,14 @@ export function ExerciseHistorySheet({
   const [showPartial, setShowPartial] = useState(!excludePartial);
   // One day in edit mode at a time; drafts keyed by set id.
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  // A day reads as one line of coach shorthand; its set table opens on a tap.
+  const [openDays, setOpenDays] = useState<Set<string>>(() => new Set());
+  const toggleDay = (k: string) => setOpenDays((cur) => {
+    const next = new Set(cur);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    return next;
+  });
   const [drafts, setDrafts] = useState<Record<string, SetDraft>>({});
   const [cardioDrafts, setCardioDrafts] = useState<Record<string, CardioDraft>>({});
   const [saving, setSaving] = useState(false);
@@ -288,6 +296,36 @@ export function ExerciseHistorySheet({
     // resolveGroupDate reads completionMap, which `grouped` already depends on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardio, grouped]);
+
+  /**
+   * A day's sets as coach shorthand, in the units they were logged in: identical
+   * sets in a row collapse, "190×4 @7 · 175×4×2 @6" (the unit once, after it).
+   */
+  const daySummary = (sets: any[]): { text: string; unit: string | null } => {
+    const groups: { load: string; unit: string; reps: number | null; count: number; rpes: number[] }[] = [];
+    for (const set of sets) {
+      const [load, unit = ""] = fmtLoad(set).split(" ");
+      const reps = set.actual_reps ?? null;
+      const rpe = set.actual_rpe != null && set.actual_rpe !== "" ? Number(set.actual_rpe) : NaN;
+      const last = groups[groups.length - 1];
+      if (last && last.load === load && last.unit === unit && last.reps === reps) {
+        last.count += 1;
+        if (Number.isFinite(rpe)) last.rpes.push(rpe);
+      } else groups.push({ load, unit, reps, count: 1, rpes: Number.isFinite(rpe) ? [rpe] : [] });
+    }
+    const units = new Set(groups.map((g) => g.unit).filter(Boolean));
+    const one = units.size === 1 ? [...units][0] : null;
+    const text = groups
+      .map((g) => {
+        const base = `${g.load}${one || !g.unit ? "" : ` ${g.unit}`}×${g.reps ?? "—"}${g.count > 1 ? `×${g.count}` : ""}`;
+        if (!g.rpes.length) return base;
+        const lo = Math.min(...g.rpes);
+        const hi = Math.max(...g.rpes);
+        return `${base} @${lo === hi ? lo : `${lo}–${hi}`}`;
+      })
+      .join(" · ");
+    return { text, unit: one };
+  };
 
   const fmtLoad = (r: any): string => {
     // Always show the load in the unit the client actually entered on
@@ -493,11 +531,10 @@ export function ExerciseHistorySheet({
             const isSameTrainingDay = currentDayIndex != null && g.day?.day_index != null && g.day.day_index === currentDayIndex;
             return (
             <Card key={dayKey} className={cn("p-3", isSameTrainingDay && "border-l-4 border-l-primary/40")}>
-              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <div className={cn("truncate font-bold", isSameTrainingDay && "min-w-0 flex-1")}>
-                  {g.block?.name ?? "Block"} · Wk {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
-                </div>
-                <div className={cn("flex items-baseline gap-2", isSameTrainingDay && "flex-shrink-0")}>
+              {/* The date leads (what people scan by), then where it sat in the program
+                  on its own line, so a long block name never squeezes the date out. */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-foreground">
                   {(() => {
                     // Prefer the day's scheduled training date (what the
                     // client is meant to see on the calendar), then the
@@ -510,7 +547,7 @@ export function ExerciseHistorySheet({
                       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(scheduled);
                       if (m) {
                         const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-                        return format(d, "MMM d, yyyy");
+                        return format(d, "EEE, MMM d, yyyy");
                       }
                     }
                     const completionTs = completionMap.get(g.day?.id);
@@ -519,24 +556,27 @@ export function ExerciseHistorySheet({
                       .filter(Boolean)
                       .sort()[0];
                     const ts = completionTs ?? earliestCreated ?? g.sets[0]?.completed_at ?? g.sets[0]?.updated_at;
-                    return ts ? format(new Date(ts), "MMM d, yyyy") : "—";
+                    return ts ? format(new Date(ts), "EEE, MMM d, yyyy") : "—";
                   })()}
                   {isSameTrainingDay && (
-                    <Badge variant="outline" className="text-[10px] font-medium">Same training day</Badge>
-                  )}
-                  {editable && editingKey !== dayKey && (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(dayKey, g.sets)}
-                      disabled={saving}
-                      data-history-edit
-                      aria-label={`Edit this day's ${exerciseName} sets`}
-                      className="-my-2 inline-flex h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold normal-case tracking-normal text-foreground active:bg-secondary disabled:opacity-40"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </button>
+                    <Badge variant="outline" className="shrink-0 text-[10px] font-medium" title="The same day of the program as this workout">Same day</Badge>
                   )}
                 </div>
+                {editable && editingKey !== dayKey && (
+                  <button
+                    type="button"
+                    onClick={() => startEdit(dayKey, g.sets)}
+                    disabled={saving}
+                    data-history-edit
+                    aria-label={`Edit this day's ${exerciseName} sets`}
+                    className="-my-2 inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold text-foreground active:bg-secondary disabled:opacity-40"
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </button>
+                )}
+              </div>
+              <div className="mb-1 truncate text-[11px] text-muted-foreground">
+                {g.block?.name ?? "Block"} · Week {g.week?.week_index ?? "?"} · {g.day?.title || `Day ${g.day?.day_index ?? ""}`}
               </div>
               {editingKey === dayKey && cardio ? (
                 <div data-history-editor data-history-editor-cardio>
@@ -720,7 +760,31 @@ export function ExerciseHistorySheet({
                 ))}
               </div>
               ) : (
-              <div className="overflow-hidden rounded-md border border-border">
+              <>
+              {(() => {
+                const sum = daySummary(g.sets);
+                const open = openDays.has(dayKey);
+                return (
+                  <button
+                    type="button"
+                    onClick={() => toggleDay(dayKey)}
+                    aria-expanded={open}
+                    data-history-day-summary
+                    className="-mx-1 flex min-h-10 w-[calc(100%+0.5rem)] items-center gap-2 rounded-lg px-1 text-left active:bg-secondary/60"
+                  >
+                    <span className="min-w-0 flex-1 text-sm font-semibold tabular-nums">
+                      {sum.text}
+                      {sum.unit && <span className="ml-1 text-xs font-normal text-muted-foreground">{sum.unit}</span>}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {g.sets.length} {g.sets.length === 1 ? "set" : "sets"}
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden="true" />
+                  </button>
+                );
+              })()}
+              {openDays.has(dayKey) && (
+              <div className="mt-1.5 overflow-hidden rounded-md border border-border" data-history-day-sets>
                 <div className="grid grid-cols-[30px_minmax(64px,1fr)_40px_40px_48px_20px] gap-1.5 border-b border-border bg-muted/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                   <span>Set</span>
                   <span>Load</span>
@@ -774,6 +838,8 @@ export function ExerciseHistorySheet({
                   </div>
                 ))}
               </div>
+              )}
+              </>
               )}
             </Card>
           );

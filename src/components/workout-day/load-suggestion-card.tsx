@@ -195,57 +195,58 @@ function SuggestionWhy({ hint, why, model, warmup, audible, range, picks, rpe, c
         </button>
       </PopoverTrigger>
       <PopoverContent side="top" className="w-72 text-xs leading-relaxed">
-        <p className="font-semibold">Just a suggestion</p>
-        {picks ? (
-          <p className="mt-1 text-muted-foreground" data-testid="load-range">
-            Pick within{" "}
-            <span className="font-semibold tabular-nums text-foreground">{fmtNum(picks.low)}–{fmtNum(picks.high)} {hint.unit}</span>{" "}
-            by how your warm-ups move, aiming for RPE {fmtNum(rpe)}.
-          </p>
-        ) : range && (
-          <p className="mt-1 text-muted-foreground" data-testid="load-range">
-            A good day lands anywhere in <span className="font-semibold tabular-nums text-foreground">{range} {hint.unit}</span>.
-          </p>
-        )}
-        <p className="mt-1 text-muted-foreground">
-          Based on {why}.
-          {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
-            ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change.`}
+        {/* Two short lines a lifter reads between sets; the working-out is one tap
+            further, for whoever wants it. */}
+        <p className="text-foreground" data-testid="load-range">
+          {picks ? (
+            <>
+              Pick within{" "}
+              <span className="font-semibold tabular-nums">{fmtNum(picks.low)}–{fmtNum(picks.high)} {hint.unit}</span>{" "}
+              by how your warm-ups feel. Aim for RPE {fmtNum(rpe)}.
+            </>
+          ) : (
+            <>Aim for RPE {fmtNum(rpe)}. It's an estimate, so let the first set decide.</>
+          )}
         </p>
-        {model.carriedTop && (() => {
-          // The math behind a back-off, the way a coach would say it.
-          const top = model.carriedTop;
-          const step = loadStep(hint.unit, top.load);
-          return (
-            <p className="mt-1 text-muted-foreground" data-testid="load-backoff-math">
-              Top set today:{" "}
-              <span className="font-semibold text-foreground tabular-nums">
-                {fmtNum(roundToStep(top.load, step / 2))} {hint.unit} × {top.reps} @ {fmtNum(top.rpe)}
-              </span>{" "}
-              (e1RM about {fmtNum(roundToStep(top.e1rm, step))}). Back-offs sit about {Math.round(BACKOFF_FATIGUE * 100)}% under what that
-              says, for the fatigue a top set leaves.
+        <p className="mt-1 text-muted-foreground" data-testid="load-audible">
+          Bar flying? +{fmtNum(audible)} {hint.unit} next set. Slow? −{fmtNum(audible)}. Pain? Stop and tell your coach.
+        </p>
+        {canApply && <p className="mt-1 text-muted-foreground">Tap the weight to put it in your sets. Nothing is logged until you tap a set's number.</p>}
+        <details className="group mt-1.5 border-t border-border pt-1.5" data-testid="load-why">
+          <summary className="flex cursor-pointer list-none items-center justify-between py-1 font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+            How it's worked out
+            <span className="text-muted-foreground transition group-open:rotate-180" aria-hidden="true">⌄</span>
+          </summary>
+          <p className="mt-1 text-muted-foreground">
+            From {why}.
+            {Math.abs((model.bodyweightScale ?? 1) - 1) >= 0.01 &&
+              ` Adjusted ${model.bodyweightScale > 1 ? "up" : "down"} ${Math.abs(Math.round((model.bodyweightScale - 1) * 1000) / 10)}% for your bodyweight change (strength doesn't move one-for-one with bodyweight, so it's about two thirds of the change).`}
+            {!picks && range && <> A good day lands anywhere in <span className="tabular-nums">{range} {hint.unit}</span>.</>}
+          </p>
+          {model.carriedTop && (() => {
+            // The math behind a back-off, the way a coach would say it.
+            const top = model.carriedTop;
+            const step = loadStep(hint.unit, top.load);
+            return (
+              <p className="mt-1 text-muted-foreground" data-testid="load-backoff-math">
+                Top set today:{" "}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {fmtNum(roundToStep(top.load, step / 2))} {hint.unit} × {top.reps} @ {fmtNum(top.rpe)}
+                </span>{" "}
+                (estimated max about {fmtNum(roundToStep(top.e1rm, step))}). Back-offs sit about {Math.round(BACKOFF_FATIGUE * 100)}% under what that
+                says, for the fatigue a top set leaves.
+              </p>
+            );
+          })()}
+          {warmup && (
+            <p className="mt-1 text-muted-foreground">
+              {warmup.suggested
+                ? `Work up to about ${fmtNum(warmup.suggested.load)} ${hint.unit} × ${warmup.suggested.reps} and log how it felt: `
+                : "Log your heaviest warm-up and how it felt: "}
+              easier than usual nudges this up, harder nudges it down.
             </p>
-          );
-        })()}
-        <p className="mt-1 text-muted-foreground">Let your first set decide:</p>
-        <ul className="mt-1 space-y-0.5 text-muted-foreground" data-testid="load-audible">
-          <li><span className="font-semibold text-foreground">Bar flying?</span> Add {fmtNum(audible)} {hint.unit} next set.</li>
-          <li><span className="font-semibold text-foreground">Slow or form breaking?</span> Drop {fmtNum(audible)} {hint.unit}.</li>
-          <li><span className="font-semibold text-foreground">Pain?</span> Stop and message your coach.</li>
-        </ul>
-        <p className="mt-1 text-muted-foreground">
-          Log an honest RPE and the next suggestion updates.
-          {canApply && " Tap the weight to put it in your open sets; nothing is logged until you tap a set's number."}
-        </p>
-        {warmup && (
-          <p className="mt-1.5 border-t border-border pt-1.5 text-muted-foreground">
-            <span className="font-semibold text-foreground">Tip: use your last warm-up as a gauge.</span>{" "}
-            {warmup.suggested
-              ? `Work up to about ${fmtNum(warmup.suggested.load)} ${hint.unit} × ${warmup.suggested.reps}, then log how it felt. `
-              : "Log your heaviest warm-up and how it felt. "}
-            Moving easier than usual nudges this number up, harder nudges it down, before your first working set.
-          </p>
-        )}
+          )}
+        </details>
         <button
           type="button"
           onClick={() => setShow(false)}

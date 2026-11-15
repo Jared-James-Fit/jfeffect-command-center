@@ -9,6 +9,7 @@
  */
 
 import { epley1RM } from "./e1rm";
+import { comparableE1rm, strengthTrend } from "./strength-read";
 import {
   MUSCLE_GROUPS,
   resolveMuscleGroups,
@@ -272,7 +273,10 @@ export function powerliftingStats(sets: InsightSet[], window: WindowRange): Comp
     const weekly_volume = weekArr.reduce((sum, s) => sum + tonnage(s), 0);
     const weekly_sets = weekArr.length;
     const block_tonnage = arr.reduce((sum, s) => sum + tonnage(s), 0);
-    const maxE1RM = arr.reduce((m, s) => Math.max(m, epley1RM(s.load_lb, s.reps)), 0);
+    // The max the intensity is read against is the comparable one (strength-read.ts):
+    // a light set read as all-out would make every heavy set look lighter than it was.
+    const comparableMax = arr.reduce((m, s) => Math.max(m, comparableE1rm({ load: s.load_lb, reps: s.reps, rpe: s.rpe }) ?? 0), 0);
+    const maxE1RM = comparableMax > 0 ? comparableMax : arr.reduce((m, s) => Math.max(m, epley1RM(s.load_lb, s.reps)), 0);
     const withPct = arr.filter((s) => s.load_lb > 0 && maxE1RM > 0);
     const avg_intensity_pct = withPct.length
       ? Math.round((withPct.reduce((sum, s) => sum + (s.load_lb / maxE1RM), 0) / withPct.length) * 100)
@@ -282,12 +286,14 @@ export function powerliftingStats(sets: InsightSet[], window: WindowRange): Comp
     const top = [...arr].sort((a, b) => epley1RM(b.load_lb, b.reps) - epley1RM(a.load_lb, a.reps))[0];
     const top_set = top ? { load: top.load_lb, reps: top.reps, date: top.date } : null;
 
-    // Weekly max e1RM series
+    // Weekly best estimated max, from the sets that can show one (strength-read.ts);
+    // a week of only light or unrated sets has no point rather than a low one.
     const weekMap = new Map<string, number>();
     for (const s of arr) {
+      const e = comparableE1rm({ load: s.load_lb, reps: s.reps, rpe: s.rpe });
+      if (e == null) continue;
       const t = new Date(s.date).getTime();
       const key = String(Math.floor(t / (7 * DAY)));
-      const e = epley1RM(s.load_lb, s.reps);
       weekMap.set(key, Math.max(weekMap.get(key) ?? 0, e));
     }
     const e1rm_trend = [...weekMap.entries()]
@@ -389,17 +395,18 @@ export function generateInsights(
         metric: { label: `${s.lift} intensity`, value: `${s.avg_intensity_pct}%` },
       });
     }
-    if (s.e1rm_trend.length >= 3) {
-      const first = s.e1rm_trend[0].est_1rm;
-      const last = s.e1rm_trend[s.e1rm_trend.length - 1].est_1rm;
-      if (first > 0 && last > first) {
-        const pct = Math.round(((last - first) / first) * 100);
+    {
+      // The best recent weeks against the best early ones (strength-read.ts), never the
+      // window's first week against its last (a deload week at the start read as progress).
+      const t = strengthTrend(s.e1rm_trend.map((w) => ({ date: w.date, value: w.est_1rm })));
+      if (t.kind === "up") {
+        const pct = Math.round(t.pct);
         if (pct >= 3) {
           out.push({
             id: `e1rm-${s.lift}`,
             emoji: "💪",
-            headline: `${s.lift[0].toUpperCase() + s.lift.slice(1)} e1RM climbing`,
-            subline: `Up ${pct}% since the start of this window.`,
+            headline: `${s.lift[0].toUpperCase() + s.lift.slice(1)} getting stronger`,
+            subline: `Estimated max up ${pct}%: your best recent hard sets against your best early ones.`,
             shareable: true,
             metric: { label: `${s.lift} e1RM`, value: `+${pct}%` },
           });

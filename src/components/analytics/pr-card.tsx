@@ -49,7 +49,7 @@ export function PRCard({ pr, displayUnit, conv, dense = false }: PRCardProps) {
               : fmtDelta(conv(pr.delta), displayUnit)}
           </Badge>
           <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-            {assisted ? "assistance ATPR" : "e1RM ATPR"}
+            {assisted ? "least assistance ever" : "best est. max ever"}
           </Badge>
         </div>
       </div>

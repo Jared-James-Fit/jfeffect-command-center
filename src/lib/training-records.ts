@@ -53,7 +53,7 @@ export type WorkoutRecords = {
 };
 
 export const SCOPE_LABEL: Record<RecordScope, string> = {
-  atpr: "ATPR",
+  atpr: "ALL-TIME PR",
   program_pr: "PROGRAM PR",
   block_pr: "BLOCK PR",
 };
@@ -94,7 +94,7 @@ export function weightRecordLabel(r: { atpr: boolean; program_pr: boolean; block
 export function tonnageRecordLabel(t: TonnageRecord | null | undefined): string | null {
   if (!t) return null;
   const s = topScope(t);
-  return s === "atpr" ? "WORKOUT TONNAGE ATPR" : s === "program_pr" ? "PROGRAM TONNAGE PR" : s === "block_pr" ? "BLOCK TONNAGE PR" : null;
+  return s === "atpr" ? "WORKOUT TONNAGE ALL-TIME PR" : s === "program_pr" ? "PROGRAM TONNAGE PR" : s === "block_pr" ? "BLOCK TONNAGE PR" : null;
 }
 
 export function kgTo(unit: "kg" | "lb", kg: number): number {
