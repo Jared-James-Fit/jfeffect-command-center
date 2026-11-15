@@ -216,7 +216,8 @@ export function PackageSnapshot({ p, today, nextSession, onOpenSessions, onOpenB
 /** What they're on that isn't a session package: how it's paid, and when it renews or ends. */
 function CoachingRow({ plan, today, money, onClick }: { plan: CoachingPlan; today: string; money: (c: number) => string; onClick?: () => void }) {
   const left = timeLeftWords(plan, today);
-  const range = termRange(plan.start, plan.end);
+  const year = Number(today.slice(0, 4));
+  const range = termRange(plan.start, plan.end, year);
   const right =
     plan.state === "past_due" ? <StatusText tone="error">{plan.kind === "subscription" ? "Payment failed" : "Payment due"}</StatusText>
     : plan.kind === "subscription" ? plan.state === "cancelling" ? <StatusText tone="attention">Ending</StatusText> : null
@@ -226,7 +227,7 @@ function CoachingRow({ plan, today, money, onClick }: { plan: CoachingPlan; toda
   const aside =
     plan.kind === "subscription" ? <span className="text-[13px] tabular-nums"><span className="font-semibold">{money(plan.cents)}</span> <span className="text-muted-foreground">a {plan.per ?? "period"}</span></span>
     : plan.timing === "no_dates" ? <span className="text-[13px] text-warning">No dates set</span>
-    : plan.timing === "upcoming" && plan.start ? <span className="text-[13px] text-muted-foreground">Starts {termDate(plan.start)}</span>
+    : plan.timing === "upcoming" && plan.start ? <span className="text-[13px] text-muted-foreground">Starts {termDate(plan.start, year)}</span>
     : left ? <span className={cn("text-[13px] tabular-nums", plan.timing === "ending_soon" || plan.timing === "ended" ? "text-warning" : "text-muted-foreground")} data-time-left>{left}</span>
     : null;
 

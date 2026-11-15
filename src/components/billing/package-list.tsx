@@ -33,24 +33,16 @@ import { fmtWallClock } from "@/lib/schedule-time";
 import { coverageWords, orderPackages } from "@/lib/package-view";
 import type { Installment, PackageAccount } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
+import { billingDay, billingRange } from "@/lib/date-range";
 
 /** "Fri, Nov 13" (the year only when it isn't this year). */
 export function payDay(iso: string | null | undefined, thisYear = new Date().getFullYear()): string {
-  if (!iso) return "";
-  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", ...(d.getFullYear() === thisYear ? {} : { year: "numeric" }) });
+  return billingDay(iso ? iso.slice(0, 10) : null, { weekday: true, thisYear }) ?? "";
 }
 
-/** "Oct 5 – Nov 1", "Nov 2 – 29" in one month. */
+/** "Oct 5 – Nov 1", "Nov 2 – 29" in one month, "Dec 20, 2026 – Jan 8, 2027" across years (date-range.ts). */
 export function period(a: string | null, b: string | null): string | null {
-  const d = (iso: string) => new Date(`${iso}T00:00:00`);
-  const fmt = (iso: string) => d(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
-  if (a && b) {
-    const sameMonth = d(a).getMonth() === d(b).getMonth() && d(a).getFullYear() === d(b).getFullYear();
-    return sameMonth ? `${fmt(a)} – ${d(b).getDate()}` : `${fmt(a)} – ${fmt(b)}`;
-  }
-  return a ? `from ${fmt(a)}` : b ? `to ${fmt(b)}` : null;
+  return billingRange(a, b);
 }
 
 /** "16/16 done", or "7 done · 9 booked · 0 left". */
@@ -72,7 +64,7 @@ export function planLine(x: PackageAccount, money: (c: number) => string, opts: 
   if (!sc || sc.how === "none") return "No payment dates";
   const list = sc.installments;
   const n = list.length;
-  const when = n ? `${payDay(list[0].date)}${n > 1 ? ` – ${payDay(list[n - 1].date)}` : ""}` : "";
+  const when = n ? billingRange(list[0].date, list[n - 1].date) ?? "" : "";
   const by = sc.how === "auto_pay" ? "Auto-pay" : sc.how === "stripe" ? "Stripe" : "Collected by you";
   return `${by} · ${n} payment${n === 1 ? "" : "s"} of ${money(list[0]?.cents ?? 0)}${when && opts.dates !== false ? `, ${when}` : ""}`;
 }

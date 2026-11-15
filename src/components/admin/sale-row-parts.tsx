@@ -7,12 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { accessBadge } from "@/lib/service-access-status";
 import type { PaymentDisplay } from "@/lib/payment-display";
 import type { SaleMoney } from "@/lib/sale-money";
+import { billingDay } from "@/lib/date-range";
 
 export function fmtDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
+  return billingDay(iso, { year: "always" });
 }
 
 export const TONE = {

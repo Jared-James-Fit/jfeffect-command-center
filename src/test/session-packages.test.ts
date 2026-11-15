@@ -105,7 +105,7 @@ describe("Marc's packages", () => {
       [1, "p1", 16, 0, 0, "finished"],
     ]);
     expect(view.packages[0].sessions).toHaveLength(16);
-    expect(dayRange(view.packages[0].from, view.packages[0].to, 2026)).toBe("Oct 5 – Oct 30");
+    expect(dayRange(view.packages[0].from, view.packages[0].to, 2026)).toBe("Oct 5 – 30");
   });
 
   it("puts the 5 sessions since Nov 2 on his next 16, owed now since 4 are trained", () => {

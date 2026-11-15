@@ -21,6 +21,7 @@ import { AccessBadge, fmtDate, saleStatus } from "@/components/admin/sale-row-pa
 import { SaleCard } from "@/components/admin/sale-card";
 import { AddSessionsDialog, RecordPaymentDialog, RefundDialog, VoidPaymentDialog } from "@/components/admin/sale-payment-dialogs";
 import { downloadPurchasePdf } from "@/components/purchase-records-panel";
+import { billingRange } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/admin/purchases/$id")({ component: PurchaseDetail });
 
@@ -149,7 +150,7 @@ function PurchaseDetail() {
 function WhatTheyBought({ sale }: { sale: any }) {
   const rows: Array<[string, string | null]> = [
     ["Length", sale.term_duration_text ?? null],
-    ["Dates", sale.term_start_date || sale.term_end_date ? `${fmtDate(sale.term_start_date) ?? "?"} – ${fmtDate(sale.term_end_date) ?? "?"}` : null],
+    ["Dates", billingRange(sale.term_start_date, sale.term_end_date, { year: "always" })],
     ["Sessions", Number(sale.sessions_purchased ?? 0) > 0 ? String(sale.sessions_purchased) : null],
     ["Where", sale.location ?? null],
   ];

@@ -64,6 +64,7 @@ import { PushNotificationCard } from "@/components/push/push-notification-card";
 import { WeightUnitCard } from "@/components/portal/weight-unit-card";
 import { MyHealthSection, myHealthSummary, useMyHealthItems } from "@/components/health/my-health-section";
 import { UserAvatar } from "@/components/user-avatar";
+import { billingDay } from "@/lib/date-range";
 
 export const Route = createFileRoute("/_authenticated/portal/account")({
   component: AccountPage,
@@ -902,7 +903,7 @@ function BillingSection({ purchase }: { purchase: ActivePurchase | null }) {
     }
   };
 
-  const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString() : "—";
+  const fmtDate = (d: any) => billingDay(d, { year: "always" }) ?? "—";
 
   if (!purchase) {
     return <p className="text-sm text-muted-foreground">No active billing found.</p>;

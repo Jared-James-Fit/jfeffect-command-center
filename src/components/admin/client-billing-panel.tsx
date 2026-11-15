@@ -41,6 +41,7 @@ import { addPeriod } from "@/lib/session-packages";
 import { paymentPlans, type PaymentPlan } from "@/lib/package-view";
 import { saleLabels, type ClientPayments, type SaleSchedule } from "@/lib/payment-schedule";
 import { cn } from "@/lib/utils";
+import { billingRange } from "@/lib/date-range";
 
 export { payDay };
 
@@ -430,7 +431,7 @@ function PaymentPlans({ plans, p, money, isAdmin, onRecord }: {
                 <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold", i === 0 ? "bg-foreground text-background" : "bg-muted text-muted-foreground")}>{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px]">{st.label}<span className="text-muted-foreground"> · {st.payments} payment{st.payments === 1 ? "" : "s"}</span></div>
-                  <div className="text-[12px] text-muted-foreground">{st.payments > 1 ? `${payDay(st.first)} – ${payDay(st.last)}` : payDay(st.first)}</div>
+                  <div className="text-[12px] text-muted-foreground">{st.payments > 1 ? billingRange(st.first, st.last) : payDay(st.first)}</div>
                 </div>
                 <span className="shrink-0 text-[14px] font-semibold tabular-nums">{money(st.cents)}</span>
               </li>

@@ -11,6 +11,7 @@
  * plan; a session package is the package list's, never here.
  */
 import type { SaleMoney } from "@/lib/sale-money";
+import { billingDay, billingRange } from "@/lib/date-range";
 
 export type CoachingPlanSale = {
   id: string;
@@ -133,15 +134,14 @@ export function coachingPlans(sales: CoachingPlanSale[], money: Map<string, Sale
   return shown.sort((a, b) => rank(a) - rank(b) || String(a.start ?? "").localeCompare(String(b.start ?? "")));
 }
 
-/** "Jun 2, 2026". */
-export function termDate(iso: string): string {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+/** "Jun 2" this year, "Jun 2, 2027" another (date-range.ts). */
+export function termDate(iso: string, thisYear?: number): string {
+  return billingDay(iso, { thisYear }) ?? iso;
 }
 
-/** "Jun 2, 2026 – Jun 2, 2027", "from Jun 2, 2026", "to Jun 2, 2027". */
-export function termRange(start: string | null, end: string | null): string | null {
-  if (start && end) return `${termDate(start)} – ${termDate(end)}`;
-  return start ? `from ${termDate(start)}` : end ? `to ${termDate(end)}` : null;
+/** "Jun 2, 2026 – Jun 2, 2027" across years, "Jan 5 – Jul 5" inside this one (date-range.ts). */
+export function termRange(start: string | null, end: string | null, thisYear?: number): string | null {
+  return billingRange(start, end, { thisYear });
 }
 
 /** Whole calendar months from a to b (b on or after a). */
